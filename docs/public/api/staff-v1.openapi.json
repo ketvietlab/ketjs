@@ -444,13 +444,13 @@
                         "availableActions": {
                           "type": "array",
                           "items": {
-                            "type": "string"
+                            "type": "string",
+                            "enum": ["collect_payment", "post", "cancel_draft"]
                           },
-                          "maxItems": 0
+                          "maxItems": 3
                         },
                         "readOnly": {
-                          "type": "boolean",
-                          "const": true
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -742,6 +742,1244 @@
         "x-ket-capability": {
           "key": "accounting.invoices",
           "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/accounting/invoices/{id}/payments": {
+      "post": {
+        "operationId": "staff.accounting.invoices.collectPayment",
+        "summary": "Collect the complete reviewed residual through one allowed journal.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "journalId": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^aiv_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["journalId", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "const": "payment_registered"
+                        },
+                        "invoice": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "reference": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": ["invoice", "credit_note"]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["draft", "posted", "cancelled"]
+                            },
+                            "paymentStatus": {
+                              "type": "string",
+                              "enum": ["unpaid", "partial", "paid", "reversed"]
+                            },
+                            "customer": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "invoiceDate": {
+                              "type": ["string", "null"]
+                            },
+                            "dueAt": {
+                              "type": ["string", "null"]
+                            },
+                            "total": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "amountDue": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "sourceReference": {
+                              "type": ["string", "null"]
+                            },
+                            "totals": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "untaxed": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "tax": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "total": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "amountDue": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                }
+                              },
+                              "required": ["untaxed", "tax", "total", "amountDue"]
+                            },
+                            "postingLineCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "availableActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": ["collect_payment", "post", "cancel_draft"]
+                              },
+                              "maxItems": 3
+                            },
+                            "readOnly": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "reference",
+                            "kind",
+                            "state",
+                            "paymentStatus",
+                            "customer",
+                            "invoiceDate",
+                            "dueAt",
+                            "total",
+                            "amountDue",
+                            "sourceReference",
+                            "totals",
+                            "postingLineCount",
+                            "version",
+                            "availableActions",
+                            "readOnly"
+                          ]
+                        },
+                        "journal": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["bank", "cash"]
+                            }
+                          },
+                          "required": ["id", "name", "type"]
+                        }
+                      },
+                      "required": ["outcome", "invoice", "journal"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "accounting.invoices",
+          "action": "collect_payment"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/accounting/invoices/{id}/payment-commands/{idempotencyKey}": {
+      "get": {
+        "operationId": "staff.accounting.invoices.paymentCommand",
+        "summary": "Reconcile one completed payment command without collecting again.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotencyKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "journalId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedVersion",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^aiv_[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "const": "payment_registered"
+                        },
+                        "invoice": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "reference": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": ["invoice", "credit_note"]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["draft", "posted", "cancelled"]
+                            },
+                            "paymentStatus": {
+                              "type": "string",
+                              "enum": ["unpaid", "partial", "paid", "reversed"]
+                            },
+                            "customer": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "invoiceDate": {
+                              "type": ["string", "null"]
+                            },
+                            "dueAt": {
+                              "type": ["string", "null"]
+                            },
+                            "total": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "amountDue": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "sourceReference": {
+                              "type": ["string", "null"]
+                            },
+                            "totals": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "untaxed": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "tax": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "total": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "amountDue": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                }
+                              },
+                              "required": ["untaxed", "tax", "total", "amountDue"]
+                            },
+                            "postingLineCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "availableActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": ["collect_payment", "post", "cancel_draft"]
+                              },
+                              "maxItems": 3
+                            },
+                            "readOnly": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "reference",
+                            "kind",
+                            "state",
+                            "paymentStatus",
+                            "customer",
+                            "invoiceDate",
+                            "dueAt",
+                            "total",
+                            "amountDue",
+                            "sourceReference",
+                            "totals",
+                            "postingLineCount",
+                            "version",
+                            "availableActions",
+                            "readOnly"
+                          ]
+                        },
+                        "journal": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["bank", "cash"]
+                            }
+                          },
+                          "required": ["id", "name", "type"]
+                        }
+                      },
+                      "required": ["outcome", "invoice", "journal"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "accounting.invoices",
+          "action": "collect_payment"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/accounting/invoices/{id}/lifecycle": {
+      "post": {
+        "operationId": "staff.accounting.invoices.lifecycle",
+        "summary": "Execute one supported invoice lifecycle action under a strong version.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["post", "cancel_draft"]
+                  },
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^aiv_[0-9a-f]{64}$"
+                  }
+                },
+                "required": ["action", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["post", "cancel_draft"]
+                        },
+                        "invoice": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "reference": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": ["invoice", "credit_note"]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["draft", "posted", "cancelled"]
+                            },
+                            "paymentStatus": {
+                              "type": "string",
+                              "enum": ["unpaid", "partial", "paid", "reversed"]
+                            },
+                            "customer": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "invoiceDate": {
+                              "type": ["string", "null"]
+                            },
+                            "dueAt": {
+                              "type": ["string", "null"]
+                            },
+                            "total": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "amountDue": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "sourceReference": {
+                              "type": ["string", "null"]
+                            },
+                            "totals": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "untaxed": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "tax": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "total": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "amountDue": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                }
+                              },
+                              "required": ["untaxed", "tax", "total", "amountDue"]
+                            },
+                            "postingLineCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "availableActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": ["collect_payment", "post", "cancel_draft"]
+                              },
+                              "maxItems": 3
+                            },
+                            "readOnly": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "reference",
+                            "kind",
+                            "state",
+                            "paymentStatus",
+                            "customer",
+                            "invoiceDate",
+                            "dueAt",
+                            "total",
+                            "amountDue",
+                            "sourceReference",
+                            "totals",
+                            "postingLineCount",
+                            "version",
+                            "availableActions",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "invoice"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "accounting.invoices",
+          "action": "lifecycle"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/accounting/invoices/{id}/lifecycle-commands/{idempotencyKey}": {
+      "get": {
+        "operationId": "staff.accounting.invoices.lifecycleCommand",
+        "summary": "Reconcile one completed invoice lifecycle command without executing it again.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotencyKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["post", "cancel_draft"]
+            }
+          },
+          {
+            "name": "expectedVersion",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^aiv_[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["post", "cancel_draft"]
+                        },
+                        "invoice": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "reference": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": ["invoice", "credit_note"]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["draft", "posted", "cancelled"]
+                            },
+                            "paymentStatus": {
+                              "type": "string",
+                              "enum": ["unpaid", "partial", "paid", "reversed"]
+                            },
+                            "customer": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "invoiceDate": {
+                              "type": ["string", "null"]
+                            },
+                            "dueAt": {
+                              "type": ["string", "null"]
+                            },
+                            "total": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "amountDue": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "sourceReference": {
+                              "type": ["string", "null"]
+                            },
+                            "totals": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "untaxed": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "tax": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "total": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "amountDue": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "amount": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                }
+                              },
+                              "required": ["untaxed", "tax", "total", "amountDue"]
+                            },
+                            "postingLineCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "availableActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": ["collect_payment", "post", "cancel_draft"]
+                              },
+                              "maxItems": 3
+                            },
+                            "readOnly": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "reference",
+                            "kind",
+                            "state",
+                            "paymentStatus",
+                            "customer",
+                            "invoiceDate",
+                            "dueAt",
+                            "total",
+                            "amountDue",
+                            "sourceReference",
+                            "totals",
+                            "postingLineCount",
+                            "version",
+                            "availableActions",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "invoice"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "accounting.invoices",
+          "action": "lifecycle"
         },
         "x-ket-auth": "required",
         "x-ket-idempotent": false

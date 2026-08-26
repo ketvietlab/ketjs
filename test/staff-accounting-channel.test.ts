@@ -39,6 +39,12 @@ const boot = async (t: TestContext) => {
     'account.listMoveResiduals',
     'account.getMove',
     'account.listJournals',
+    'account.registerInvoicePayment',
+    'account.postMove',
+    'account.cancelMove',
+    'account_staff_channel.beginInvoiceCommand',
+    'account_staff_channel.completeInvoiceCommand',
+    'account_staff_channel.getInvoiceCommand',
     'partner.listPartners',
   ])
     await fixture('user.grantFunction', {
@@ -229,7 +235,7 @@ test('staff accounting channel pages customer invoices with residuals and filter
   assert.equal((await e2e.client.get('/api/staff/v1/accounting/invoices?query=x')).status, 422)
 })
 
-test('staff accounting channel returns versioned read-only invoice totals', async (t) => {
+test('staff accounting channel returns versioned actionable invoice totals', async (t) => {
   const e2e = await boot(t)
   await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
 
@@ -246,8 +252,8 @@ test('staff accounting channel returns versioned read-only invoice totals', asyn
     total: { currency: 'VND', amount: '200' },
     amountDue: { currency: 'VND', amount: '150' },
   })
-  assert.deepEqual(detail.data.availableActions, [])
-  assert.equal(detail.data.readOnly, true)
+  assert.deepEqual(detail.data.availableActions, ['collect_payment'])
+  assert.equal(detail.data.readOnly, false)
 
   assert.equal((await e2e.client.get('/api/staff/v1/accounting/invoices/bill-a')).status, 404)
   assert.equal((await e2e.client.get('/api/staff/v1/accounting/invoices/missing')).status, 404)
@@ -321,6 +327,110 @@ test('staff accounting channel reviews only generic lifecycle actions for the cu
   )
 })
 
+const mutationHeaders = (csrfToken: string, key: string, version: string) => ({
+  'content-type': 'application/json',
+  'x-csrf-token': csrfToken,
+  'idempotency-key': key,
+  'if-match': `"${version}"`,
+})
+
+test('staff accounting channel completes all eight operations with durable payment and lifecycle commands', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+
+  const invoice = await e2e.client.json<Envelope<Row>>('/api/staff/v1/accounting/invoices/invoice-a')
+  const paymentKey = 'account-payment-reviewed-1'
+  const paymentBody = {
+    journalId: 'cash-journal',
+    expectedVersion: invoice.data.version,
+  }
+  assert.equal(
+    (
+      await e2e.client.request('/api/staff/v1/accounting/invoices/invoice-a/payments', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': paymentKey,
+        },
+        body: JSON.stringify(paymentBody),
+      })
+    ).status,
+    403,
+  )
+
+  const paid = await e2e.client.request('/api/staff/v1/accounting/invoices/invoice-a/payments', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, paymentKey, String(invoice.data.version)),
+    body: JSON.stringify(paymentBody),
+  })
+  assert.equal(paid.status, 200)
+  const paidBody = (await paid.json()) as Envelope<Row>
+  assert.equal(paidBody.data.outcome, 'payment_registered')
+  assert.equal(((paidBody.data.invoice as Row).amountDue as Row).amount, '0')
+  assert.equal((paidBody.data.invoice as Row).paymentStatus, 'paid')
+  assert.deepEqual(paidBody.data.journal, { id: 'cash-journal', name: 'Tiền mặt', type: 'cash' })
+  assert.notEqual((paidBody.data.invoice as Row).version, invoice.data.version)
+
+  const paymentReplay = await e2e.client.request('/api/staff/v1/accounting/invoices/invoice-a/payments', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, paymentKey, String(invoice.data.version)),
+    body: JSON.stringify(paymentBody),
+  })
+  assert.equal(paymentReplay.status, 200)
+  assert.equal(((await paymentReplay.json()) as Envelope<Row>).data.outcome, 'payment_registered')
+
+  const paymentCommand = await e2e.client.get(
+    `/api/staff/v1/accounting/invoices/invoice-a/payment-commands/${paymentKey}?journalId=cash-journal&expectedVersion=${encodeURIComponent(String(invoice.data.version))}`,
+  )
+  assert.equal(paymentCommand.status, 200)
+  assert.equal(((await paymentCommand.json()) as Envelope<Row>).data.outcome, 'payment_registered')
+  assert.equal(
+    (
+      await e2e.client.get(
+        `/api/staff/v1/accounting/invoices/invoice-a/payment-commands/${paymentKey}?journalId=cash-journal&expectedVersion=${`aiv_${'0'.repeat(64)}`}`,
+      )
+    ).status,
+    409,
+  )
+
+  const stalePayment = await e2e.client.request('/api/staff/v1/accounting/invoices/invoice-a/payments', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'account-payment-stale-1', String(invoice.data.version)),
+    body: JSON.stringify(paymentBody),
+  })
+  assert.equal(stalePayment.status, 409)
+
+  const draft = await e2e.client.json<Envelope<Row>>('/api/staff/v1/accounting/invoices/credit-a')
+  assert.deepEqual(draft.data.availableActions, ['post', 'cancel_draft'])
+  const lifecycleKey = 'account-lifecycle-reviewed-1'
+  const lifecycleBody = { action: 'post', expectedVersion: draft.data.version }
+  const posted = await e2e.client.request('/api/staff/v1/accounting/invoices/credit-a/lifecycle', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, lifecycleKey, String(draft.data.version)),
+    body: JSON.stringify(lifecycleBody),
+  })
+  assert.equal(posted.status, 200)
+  const postedBody = (await posted.json()) as Envelope<Row>
+  assert.equal(postedBody.data.outcome, 'post')
+  assert.equal((postedBody.data.invoice as Row).state, 'posted')
+  assert.notEqual((postedBody.data.invoice as Row).version, draft.data.version)
+
+  const lifecycleReplay = await e2e.client.request('/api/staff/v1/accounting/invoices/credit-a/lifecycle', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, lifecycleKey, String(draft.data.version)),
+    body: JSON.stringify(lifecycleBody),
+  })
+  assert.equal(lifecycleReplay.status, 200)
+
+  const lifecycleCommand = await e2e.client.get(
+    `/api/staff/v1/accounting/invoices/credit-a/lifecycle-commands/${lifecycleKey}?action=post&expectedVersion=${encodeURIComponent(String(draft.data.version))}`,
+  )
+  assert.equal(lifecycleCommand.status, 200)
+  assert.equal(((await lifecycleCommand.json()) as Envelope<Row>).data.outcome, 'post')
+})
+
 test('staff invoice version tracks the names it resolves elsewhere', async (t) => {
   const e2e = await boot(t)
   await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
@@ -382,4 +492,39 @@ test('staff payment eligibility ETag tracks the journals and the day it was aske
   assert.notEqual(renamed.etag, dayOne.etag)
   // The invoice did not change, so the token a payment would check has not.
   assert.equal(renamed.body.expectedVersion, dayOne.body.expectedVersion)
+})
+
+test('staff payment reconciliation ETag tracks the journal it hands back', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+  const invoice = await e2e.client.json<Envelope<Row>>('/api/staff/v1/accounting/invoices/invoice-a')
+  const key = 'account-payment-etag-1'
+  const paid = await e2e.client.request('/api/staff/v1/accounting/invoices/invoice-a/payments', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, key, String(invoice.data.version)),
+    body: JSON.stringify({ journalId: 'cash-journal', expectedVersion: invoice.data.version }),
+  })
+  assert.equal(paid.status, 200)
+
+  // The reconciliation read is a GET, so a caller can and will act on its ETag.
+  // The journal in that body comes from the tenant, not the invoice.
+  const reconcile = `/api/staff/v1/accounting/invoices/invoice-a/payment-commands/${key}?journalId=cash-journal&expectedVersion=${encodeURIComponent(String(invoice.data.version))}`
+  const read = async () => {
+    const response = await e2e.client.get(reconcile)
+    const body = (await response.json()) as Envelope<{ journal: Row; invoice: Row }>
+    return { etag: response.headers.get('etag'), journal: String(body.data.journal.name) }
+  }
+  const before = await read()
+  assert.equal(before.journal, 'Tiền mặt')
+  await e2e.fixture.call<Row>(
+    'account.saveJournal',
+    { id: 'cash-journal', name: 'Quỹ tiền mặt', code: 'CSH', type: 'cash', defaultAccountId: 'cash' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  const after = await read()
+  assert.equal(after.journal, 'Quỹ tiền mặt')
+  assert.notEqual(after.etag, before.etag)
+  assert.match(String(after.etag), /^"aipr_[0-9a-f]{64}"$/)
 })

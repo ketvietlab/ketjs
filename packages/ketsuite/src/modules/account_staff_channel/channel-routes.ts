@@ -1,12 +1,12 @@
-// Read-only staff customer-invoice projections.
+// Staff customer-invoice projections and guarded commands.
 //
 // Account owns the ledger aggregate. This facade exposes document totals and
-// residuals, but never posting lines. Eligibility reads are safe to expose;
-// electronic invoicing and command execution stay absent until their workflows
-// have a proven capability, idempotency, and concurrency contract.
+// residuals, but never posting lines. Mutations are explicit, versioned and
+// durably reconcilable. Electronic-invoice provider actions remain outside this
+// public standard module.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, routesOf, sha256, stableHash } from '../channel_api/core.ts'
 
 type Req = Parameters<Route>[1]
 type Row = Record<string, unknown>
@@ -68,8 +68,12 @@ const detail = {
     totals,
     postingLineCount: { type: 'integer', minimum: 0 },
     version: string,
-    availableActions: { type: 'array', items: string, maxItems: 0 },
-    readOnly: { type: 'boolean', const: true },
+    availableActions: {
+      type: 'array',
+      items: { type: 'string', enum: ['collect_payment', 'post', 'cancel_draft'] },
+      maxItems: 3,
+    },
+    readOnly: { type: 'boolean' },
   },
   required: [
     ...summary.required,
@@ -132,6 +136,41 @@ const lifecycleEligibility = {
     actions: { type: 'array', items: lifecycleAction },
   },
   required: ['invoiceId', 'expectedVersion', 'actions'],
+}
+const paymentResult = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    outcome: { type: 'string', const: 'payment_registered' },
+    invoice: detail,
+    journal: paymentJournal,
+  },
+  required: ['outcome', 'invoice', 'journal'],
+}
+const lifecycleResult = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    outcome: { type: 'string', enum: ['post', 'cancel_draft'] },
+    invoice: detail,
+  },
+  required: ['outcome', 'invoice'],
+}
+const version = { type: 'string', pattern: '^aiv_[0-9a-f]{64}$' }
+const paymentBody = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { journalId: string, expectedVersion: version },
+  required: ['journalId', 'expectedVersion'],
+}
+const lifecycleBody = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    action: { type: 'string', enum: ['post', 'cancel_draft'] },
+    expectedVersion: version,
+  },
+  required: ['action', 'expectedVersion'],
 }
 const page = {
   type: 'object',
@@ -221,7 +260,27 @@ const contentOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
     postingLineCount: lines.length,
   }
 }
-const versionOf = (content: Row): string => `aiv_${sha256(JSON.stringify(content))}`
+const versionOf = (content: Row, row: Row): string =>
+  `aiv_${sha256(JSON.stringify({ ...content, revision: Number(row.revision ?? 0) }))}`
+
+const actionsOf = (row: Row, content: Row): string[] => {
+  const actions = lifecycleActionsOf(row).map((item) => item.action)
+  const amount = Number((content.amountDue as { amount?: unknown })?.amount ?? 0)
+  if (row.moveType === 'out_invoice' && row.state === 'posted' && amount > 1e-12)
+    actions.push('collect_payment')
+  return actions
+}
+
+const detailOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
+  const content = await contentOf(ctx, row, url, req)
+  const availableActions = actionsOf(row, content)
+  return {
+    ...content,
+    version: versionOf(content, row),
+    availableActions,
+    readOnly: availableActions.length === 0,
+  }
+}
 
 /**
  * Payment eligibility answers with more than the invoice.
@@ -236,7 +295,8 @@ const versionOf = (content: Row): string => `aiv_${sha256(JSON.stringify(content
  * Lifecycle eligibility keeps the shared invoice ETag, because its actions are
  * read from the invoice row and nowhere else.
  */
-const eligibilityEtag = (data: Row): string => `aipe_${sha256(JSON.stringify(data))}`
+const bodyEtag = (prefix: string, data: Row): string => `${prefix}_${sha256(JSON.stringify(data))}`
+const eligibilityEtag = (data: Row): string => bodyEtag('aipe', data)
 const lifecycleActionsOf = (row: Row): Array<{ action: string; destructive: boolean }> =>
   row.state === 'draft'
     ? [
@@ -259,6 +319,199 @@ const notFound = (ctx: ServeContext, url: URL, req: Req) => ({
     messageKey: 'account_staff_channel.error.invoiceNotFound',
   }),
 })
+
+const invoiceParams = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string },
+  required: ['id'],
+}
+const commandParams = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, idempotencyKey: string },
+  required: ['id', 'idempotencyKey'],
+}
+
+const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
+  const key = String(req.headers['idempotency-key'] ?? '').trim()
+  if (key.length >= 8 && key.length <= 200) return key
+  return {
+    status: 400,
+    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
+      messageKey: 'channel_api.error.idempotencyRequired',
+    }),
+  }
+}
+
+const requestVersion = (req: Req, body: Row): string | null => {
+  const expected = String(body.expectedVersion ?? '')
+  const header = String(req.headers['if-match'] ?? '').trim()
+  if (!header) return expected || null
+  return header === expected || header === `"${expected}"` ? expected : null
+}
+
+const versionFailure = (ctx: ServeContext, url: URL, req: Req) => ({
+  status: 409,
+  error: channelError(ctx, url, req, 'account_staff_channel.versionConflict', {
+    messageKey: 'account_staff_channel.error.versionConflict',
+    retryable: true,
+  }),
+})
+
+const commandFailure = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  kind: 'commandNotFound' | 'commandInProgress' | 'commandConflict',
+) => ({
+  status: kind === 'commandNotFound' ? 404 : 409,
+  error: channelError(ctx, url, req, `account_staff_channel.${kind}`, {
+    messageKey: `account_staff_channel.error.${kind}`,
+    retryable: kind === 'commandInProgress',
+  }),
+})
+
+const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown) => {
+  const issues = Array.isArray((result as { errors?: unknown })?.errors)
+    ? ((result as { errors: Row[] }).errors ?? [])
+    : []
+  const conflict = issues.some((issue) =>
+    ['expectedRevision', 'state', 'invoiceId'].includes(String(issue.field)),
+  )
+  return {
+    status: conflict ? 409 : 422,
+    error: channelError(
+      ctx,
+      url,
+      req,
+      conflict ? 'account_staff_channel.versionConflict' : 'account_staff_channel.invalidRequest',
+      {
+        messageKey: conflict
+          ? 'account_staff_channel.error.versionConflict'
+          : 'account_staff_channel.error.invalidRequest',
+        fieldErrors: Object.fromEntries(
+          issues
+            .filter((issue) => issue.field)
+            .map((issue) => [
+              String(issue.field),
+              {
+                code: String(issue.code ?? 'account_staff_channel.invalidField'),
+                messageKey: 'account_staff_channel.error.invalidRequest',
+                params: {},
+              },
+            ]),
+        ),
+      },
+    ),
+  }
+}
+
+const invoiceOf = async (ctx: ServeContext, id: string, url: URL, req: Req) => {
+  const row = (await ctx.call('account.getMove', { id }, url, req)) as Row | null
+  return row && customerInvoice(row) ? row : null
+}
+
+const commandIdentity = (
+  identity: { companyId: string | null; userId: string },
+  invoiceId: string,
+  operation: string,
+  key: string,
+) =>
+  `staff_aic_${stableHash(`${String(identity.companyId)}\n${identity.userId}\n${invoiceId}\n${operation}\n${key}`).slice(0, 32)}`
+
+const commandInput = (
+  request: { identity?: { companyId: string | null; userId: string } | null },
+  invoiceId: string,
+  operation: string,
+  key: string,
+  expectedVersion: string,
+  journalId?: string,
+) => {
+  const identity = request.identity!
+  return {
+    id: commandIdentity(identity, invoiceId, operation, key),
+    actorId: identity.userId,
+    invoiceId,
+    operation,
+    requestHash: stableHash({ invoiceId, operation, expectedVersion, journalId: journalId ?? null }),
+    expectedVersion,
+    ...(journalId ? { journalId } : {}),
+  }
+}
+
+const lookupCommand = async (ctx: ServeContext, input: Row, url: URL, req: Req): Promise<Row> =>
+  (await ctx.call('account_staff_channel.getInvoiceCommand', input, url, req)) as Row
+
+const beginCommand = async (
+  ctx: ServeContext,
+  input: Row,
+  expectedRevision: number,
+  url: URL,
+  req: Req,
+): Promise<Row> =>
+  (await ctx.call(
+    'account_staff_channel.beginInvoiceCommand',
+    { ...input, expectedRevision },
+    url,
+    req,
+  )) as Row
+
+const completeCommand = async (
+  ctx: ServeContext,
+  input: Row,
+  expectedRevision: number,
+  outcome: string,
+  url: URL,
+  req: Req,
+): Promise<Row> =>
+  (await ctx.call(
+    'account_staff_channel.completeInvoiceCommand',
+    { ...input, expectedRevision, outcome },
+    url,
+    req,
+  )) as Row
+
+const journalOf = async (ctx: ServeContext, id: string, url: URL, req: Req) =>
+  (await paymentJournals(ctx, url, req)).find((journal) => journal.id === id) ?? null
+
+const paymentResponse = async (
+  ctx: ServeContext,
+  invoiceId: string,
+  journalId: string,
+  url: URL,
+  req: Req,
+) => {
+  const [row, journal] = await Promise.all([
+    invoiceOf(ctx, invoiceId, url, req),
+    journalOf(ctx, journalId, url, req),
+  ])
+  if (!row) return notFound(ctx, url, req)
+  if (!journal) return domainFailure(ctx, url, req, { errors: [{ field: 'journalId' }] })
+  const invoice = await detailOf(ctx, row, url, req)
+  // The journal is read from the tenant, not from the invoice, so an ETag that
+  // only tracks the invoice answers "not modified" after a journal is renamed —
+  // and this body is served from a GET, where a caller acts on that answer.
+  // `invoice.version` stays inside it, so the invoice changing still moves it.
+  const data = { outcome: 'payment_registered', invoice, journal }
+  return { data, headers: { etag: `"${bodyEtag('aipr', data)}"` } }
+}
+
+const lifecycleResponse = async (
+  ctx: ServeContext,
+  invoiceId: string,
+  outcome: string,
+  url: URL,
+  req: Req,
+) => {
+  const row = await invoiceOf(ctx, invoiceId, url, req)
+  if (!row) return notFound(ctx, url, req)
+  const invoice = await detailOf(ctx, row, url, req)
+  return {
+    data: { outcome, invoice },
+    headers: { etag: `"${invoice.version}"` },
+  }
+}
 
 export const channelRoutes = routesOf(
   defineChannelRoute({
@@ -344,16 +597,10 @@ export const channelRoutes = routesOf(
       // The customer name and the residual are resolved from partner and payment
       // rows this move never mentions, so hashing the move alone answered "not
       // modified" after a rename. Hash what was actually built.
-      const content = await contentOf(ctx, row, url, req)
-      const version = versionOf(content)
+      const data = await detailOf(ctx, row, url, req)
       return {
-        data: {
-          ...content,
-          version,
-          availableActions: [],
-          readOnly: true,
-        },
-        headers: { etag: `"${version}"` },
+        data,
+        headers: { etag: `"${data.version}"` },
       }
     },
   }),
@@ -384,7 +631,7 @@ export const channelRoutes = routesOf(
       const row = (await ctx.call('account.getMove', { id: params.id }, url, req)) as Row | null
       if (!row || !customerInvoice(row)) return notFound(ctx, url, req)
       const content = await contentOf(ctx, row, url, req)
-      const expectedVersion = versionOf(content)
+      const expectedVersion = versionOf(content, row)
       const amount = content.amountDue as { currency: string; amount: string }
       let reason = 'available'
       if (row.moveType !== 'out_invoice') reason = 'unsupported_invoice_type'
@@ -425,7 +672,7 @@ export const channelRoutes = routesOf(
     handler: async (ctx, url, req, params) => {
       const row = (await ctx.call('account.getMove', { id: params.id }, url, req)) as Row | null
       if (!row || !customerInvoice(row)) return notFound(ctx, url, req)
-      const expectedVersion = versionOf(await contentOf(ctx, row, url, req))
+      const expectedVersion = versionOf(await contentOf(ctx, row, url, req), row)
       return {
         data: {
           invoiceId: String(row.id),
@@ -434,6 +681,201 @@ export const channelRoutes = routesOf(
         },
         headers: { etag: `"${expectedVersion}"` },
       }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'POST',
+    path: 'accounting/invoices/{id}/payments',
+    operationId: 'staff.accounting.invoices.collectPayment',
+    summary: 'Collect the complete reviewed residual through one allowed journal.',
+    auth: 'required',
+    capability: { key: 'accounting.invoices', action: 'collect_payment' },
+    request: { params: invoiceParams, body: paymentBody },
+    responses: {
+      '200': envelope(paymentResult),
+      '404': envelope({ type: 'null' }),
+      '409': envelope({ type: 'null' }),
+      '422': envelope({ type: 'null' }),
+    },
+    idempotent: true,
+    rateLimit: { action: 'staff.accounting.invoices.collectPayment', limit: 60, windowMs: 60_000 },
+    handler: async (ctx, url, req, params, request) => {
+      const key = idempotencyKey(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const row = await invoiceOf(ctx, params.id, url, req)
+      if (!row) return notFound(ctx, url, req)
+      const current = await detailOf(ctx, row, url, req)
+      const expectedVersion = requestVersion(req, request.body)
+      if (!expectedVersion) return versionFailure(ctx, url, req)
+      const journalId = String(request.body.journalId)
+      if (!(await journalOf(ctx, journalId, url, req)))
+        return domainFailure(ctx, url, req, { errors: [{ field: 'journalId' }] })
+      const input = commandInput(request, params.id, 'collect_payment', key, expectedVersion, journalId)
+      const existing = await lookupCommand(ctx, input, url, req)
+      if (existing.conflict === true) return commandFailure(ctx, url, req, 'commandConflict')
+      if (existing.found === true && existing.state === 'completed')
+        return paymentResponse(ctx, params.id, journalId, url, req)
+      let expectedRevision: number
+      if (existing.found === true) expectedRevision = Number(existing.expectedRevision)
+      else {
+        if (current.version !== expectedVersion) return versionFailure(ctx, url, req)
+        expectedRevision = Number(row.revision ?? 0)
+        const begun = await beginCommand(ctx, input, expectedRevision, url, req)
+        if (begun.ok !== true) return commandFailure(ctx, url, req, 'commandConflict')
+      }
+      const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:account.registerInvoicePayment:${params.id}`
+      const result = (await ctx.call(
+        'account.registerInvoicePayment',
+        {
+          id: `${String(input.id)}:payment`,
+          invoiceId: params.id,
+          journalId,
+          expectedRevision,
+        },
+        url,
+        req,
+        { idempotencyKey: key, idempotencyNamespace: namespace },
+      )) as Row
+      if (result.ok !== true) return domainFailure(ctx, url, req, result)
+      const completed = await completeCommand(ctx, input, expectedRevision, 'payment_registered', url, req)
+      if (completed.ok !== true) return commandFailure(ctx, url, req, 'commandConflict')
+      return paymentResponse(ctx, params.id, journalId, url, req)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'accounting/invoices/{id}/payment-commands/{idempotencyKey}',
+    operationId: 'staff.accounting.invoices.paymentCommand',
+    summary: 'Reconcile one completed payment command without collecting again.',
+    auth: 'required',
+    capability: { key: 'accounting.invoices', action: 'collect_payment' },
+    request: {
+      params: commandParams,
+      query: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { journalId: string, expectedVersion: version },
+        required: ['journalId', 'expectedVersion'],
+      },
+    },
+    responses: {
+      '200': envelope(paymentResult),
+      '404': envelope({ type: 'null' }),
+      '409': envelope({ type: 'null' }),
+    },
+    rateLimit: { action: 'staff.accounting.invoices.paymentCommand', limit: 120, windowMs: 60_000 },
+    handler: async (ctx, url, req, params, request) => {
+      if (params.idempotencyKey.length < 8 || params.idempotencyKey.length > 200)
+        return commandFailure(ctx, url, req, 'commandNotFound')
+      const expectedVersion = String(url.searchParams.get('expectedVersion'))
+      const journalId = String(url.searchParams.get('journalId'))
+      const input = commandInput(
+        request,
+        params.id,
+        'collect_payment',
+        params.idempotencyKey,
+        expectedVersion,
+        journalId,
+      )
+      const command = await lookupCommand(ctx, input, url, req)
+      if (command.conflict === true) return commandFailure(ctx, url, req, 'commandConflict')
+      if (command.found !== true) return commandFailure(ctx, url, req, 'commandNotFound')
+      if (command.state !== 'completed') return commandFailure(ctx, url, req, 'commandInProgress')
+      return paymentResponse(ctx, params.id, journalId, url, req)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'POST',
+    path: 'accounting/invoices/{id}/lifecycle',
+    operationId: 'staff.accounting.invoices.lifecycle',
+    summary: 'Execute one supported invoice lifecycle action under a strong version.',
+    auth: 'required',
+    capability: { key: 'accounting.invoices', action: 'lifecycle' },
+    request: { params: invoiceParams, body: lifecycleBody },
+    responses: {
+      '200': envelope(lifecycleResult),
+      '404': envelope({ type: 'null' }),
+      '409': envelope({ type: 'null' }),
+      '422': envelope({ type: 'null' }),
+    },
+    idempotent: true,
+    rateLimit: { action: 'staff.accounting.invoices.lifecycle', limit: 60, windowMs: 60_000 },
+    handler: async (ctx, url, req, params, request) => {
+      const key = idempotencyKey(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const row = await invoiceOf(ctx, params.id, url, req)
+      if (!row) return notFound(ctx, url, req)
+      const current = await detailOf(ctx, row, url, req)
+      const expectedVersion = requestVersion(req, request.body)
+      if (!expectedVersion) return versionFailure(ctx, url, req)
+      const action = String(request.body.action)
+      const input = commandInput(request, params.id, action, key, expectedVersion)
+      const existing = await lookupCommand(ctx, input, url, req)
+      if (existing.conflict === true) return commandFailure(ctx, url, req, 'commandConflict')
+      if (existing.found === true && existing.state === 'completed')
+        return lifecycleResponse(ctx, params.id, action, url, req)
+      let expectedRevision: number
+      if (existing.found === true) expectedRevision = Number(existing.expectedRevision)
+      else {
+        if (current.version !== expectedVersion) return versionFailure(ctx, url, req)
+        if (!lifecycleActionsOf(row).some((item) => item.action === action))
+          return domainFailure(ctx, url, req, { errors: [{ field: 'state' }] })
+        expectedRevision = Number(row.revision ?? 0)
+        const begun = await beginCommand(ctx, input, expectedRevision, url, req)
+        if (begun.ok !== true) return commandFailure(ctx, url, req, 'commandConflict')
+      }
+      const fn = action === 'post' ? 'account.postMove' : 'account.cancelMove'
+      const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:${fn}:${params.id}`
+      const result = (await ctx.call(fn, { id: params.id, expectedRevision }, url, req, {
+        idempotencyKey: key,
+        idempotencyNamespace: namespace,
+      })) as Row
+      if (result.ok !== true) return domainFailure(ctx, url, req, result)
+      const completed = await completeCommand(ctx, input, expectedRevision, action, url, req)
+      if (completed.ok !== true) return commandFailure(ctx, url, req, 'commandConflict')
+      return lifecycleResponse(ctx, params.id, action, url, req)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'GET',
+    path: 'accounting/invoices/{id}/lifecycle-commands/{idempotencyKey}',
+    operationId: 'staff.accounting.invoices.lifecycleCommand',
+    summary: 'Reconcile one completed invoice lifecycle command without executing it again.',
+    auth: 'required',
+    capability: { key: 'accounting.invoices', action: 'lifecycle' },
+    request: {
+      params: commandParams,
+      query: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          action: { type: 'string', enum: ['post', 'cancel_draft'] },
+          expectedVersion: version,
+        },
+        required: ['action', 'expectedVersion'],
+      },
+    },
+    responses: {
+      '200': envelope(lifecycleResult),
+      '404': envelope({ type: 'null' }),
+      '409': envelope({ type: 'null' }),
+    },
+    rateLimit: { action: 'staff.accounting.invoices.lifecycleCommand', limit: 120, windowMs: 60_000 },
+    handler: async (ctx, url, req, params, request) => {
+      if (params.idempotencyKey.length < 8 || params.idempotencyKey.length > 200)
+        return commandFailure(ctx, url, req, 'commandNotFound')
+      const action = String(url.searchParams.get('action'))
+      const expectedVersion = String(url.searchParams.get('expectedVersion'))
+      const input = commandInput(request, params.id, action, params.idempotencyKey, expectedVersion)
+      const command = await lookupCommand(ctx, input, url, req)
+      if (command.conflict === true) return commandFailure(ctx, url, req, 'commandConflict')
+      if (command.found !== true) return commandFailure(ctx, url, req, 'commandNotFound')
+      if (command.state !== 'completed') return commandFailure(ctx, url, req, 'commandInProgress')
+      return lifecycleResponse(ctx, params.id, action, url, req)
     },
   }),
 )
