@@ -2149,6 +2149,547 @@
         "x-ket-idempotent": false
       }
     },
+    "/reports/business-overview": {
+      "get": {
+        "operationId": "staff.reports.businessOverview",
+        "summary": "Read one bounded cross-domain business snapshot for the selected period.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["today", "yesterday", "this_week", "this_month", "last_month"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "generatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "company": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z0-9]{3,8}$"
+                            }
+                          },
+                          "required": ["name", "currency"]
+                        },
+                        "period": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "enum": ["today", "yesterday", "this_week", "this_month", "last_month"]
+                            },
+                            "timezone": {
+                              "type": "string"
+                            },
+                            "startAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "endAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "comparisonStartAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "comparisonEndAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "bucket": {
+                              "type": "string",
+                              "enum": ["hour", "day"]
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "timezone",
+                            "startAt",
+                            "endAt",
+                            "comparisonStartAt",
+                            "comparisonEndAt",
+                            "bucket"
+                          ]
+                        },
+                        "kpis": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "confirmedOrderValue": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "current": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z0-9]{3,8}$"
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "previous": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z0-9]{3,8}$"
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "change": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": ["increase", "decrease", "unchanged", "new_activity"]
+                                    },
+                                    "percent": {
+                                      "type": "string",
+                                      "pattern": "^\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["kind"]
+                                }
+                              },
+                              "required": ["current", "previous", "change"]
+                            },
+                            "invoicedRevenue": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "current": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z0-9]{3,8}$"
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "previous": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z0-9]{3,8}$"
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "change": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": ["increase", "decrease", "unchanged", "new_activity"]
+                                    },
+                                    "percent": {
+                                      "type": "string",
+                                      "pattern": "^\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["kind"]
+                                }
+                              },
+                              "required": ["current", "previous", "change"]
+                            },
+                            "receivables": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "value": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z0-9]{3,8}$"
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "asOf": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                }
+                              },
+                              "required": ["value", "asOf"]
+                            },
+                            "orderCount": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "current": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "previous": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "change": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": ["increase", "decrease", "unchanged", "new_activity"]
+                                    },
+                                    "percent": {
+                                      "type": "string",
+                                      "pattern": "^\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["kind"]
+                                }
+                              },
+                              "required": ["current", "previous", "change"]
+                            },
+                            "averageOrderValue": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "current": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z0-9]{3,8}$"
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "previous": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string",
+                                      "pattern": "^[A-Z0-9]{3,8}$"
+                                    },
+                                    "amount": {
+                                      "type": "string",
+                                      "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["currency", "amount"]
+                                },
+                                "change": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": ["increase", "decrease", "unchanged", "new_activity"]
+                                    },
+                                    "percent": {
+                                      "type": "string",
+                                      "pattern": "^\\d+(?:\\.\\d+)?$"
+                                    }
+                                  },
+                                  "required": ["kind"]
+                                }
+                              },
+                              "required": ["current", "previous", "change"]
+                            }
+                          },
+                          "required": [
+                            "confirmedOrderValue",
+                            "invoicedRevenue",
+                            "receivables",
+                            "orderCount",
+                            "averageOrderValue"
+                          ]
+                        },
+                        "trend": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 31,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "startAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "confirmedOrderValue": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z0-9]{3,8}$"
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              },
+                              "invoicedRevenue": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z0-9]{3,8}$"
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["startAt", "confirmedOrderValue", "invoicedRevenue"]
+                          }
+                        },
+                        "pipeline": {
+                          "type": "array",
+                          "minItems": 4,
+                          "maxItems": 4,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": ["draft", "sent", "confirmed", "cancelled"]
+                              },
+                              "count": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "value": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z0-9]{3,8}$"
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["state", "count", "value"]
+                          }
+                        },
+                        "operations": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "pendingOutboundPickings": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "activeDeliveries": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": ["pendingOutboundPickings", "activeDeliveries"]
+                        },
+                        "topCustomers": {
+                          "type": "array",
+                          "maxItems": 5,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "reference": {
+                                "type": "string",
+                                "pattern": "^customer_[0-9a-f]{64}$"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              },
+                              "orderCount": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "value": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z0-9]{3,8}$"
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["reference", "displayName", "orderCount", "value"]
+                          }
+                        },
+                        "recentOrders": {
+                          "type": "array",
+                          "maxItems": 5,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "customerName": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["draft", "sent", "confirmed"]
+                              },
+                              "orderedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "value": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "currency": {
+                                    "type": "string",
+                                    "pattern": "^[A-Z0-9]{3,8}$"
+                                  },
+                                  "amount": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                                  }
+                                },
+                                "required": ["currency", "amount"]
+                              }
+                            },
+                            "required": ["id", "name", "customerName", "state", "orderedAt", "value"]
+                          }
+                        },
+                        "drilldowns": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "salesOrders": {
+                              "type": "boolean"
+                            },
+                            "invoices": {
+                              "type": "boolean"
+                            },
+                            "customers": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": ["salesOrders", "invoices", "customers"]
+                        }
+                      },
+                      "required": [
+                        "generatedAt",
+                        "company",
+                        "period",
+                        "kpis",
+                        "trend",
+                        "pipeline",
+                        "operations",
+                        "topCustomers",
+                        "recentOrders",
+                        "drilldowns"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "reports.business",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
     "/crm/overview": {
       "get": {
         "operationId": "staff.crm.overview",
@@ -11061,6 +11602,636 @@
         },
         "x-ket-auth": "required",
         "x-ket-idempotent": false
+      }
+    },
+    "/quality/checks/{id}": {
+      "get": {
+        "operationId": "staff.quality.checks.get",
+        "summary": "Read one canonical quality requirement and its immutable inspection template.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "integer",
+                          "const": 1
+                        },
+                        "requirementPublicId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["pending", "passed", "failed", "waived"]
+                        },
+                        "expectedCheckVersion": {
+                          "type": "string",
+                          "pattern": "^qcv_[0-9a-f]{64}$"
+                        },
+                        "template": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "version": {
+                              "type": "string"
+                            },
+                            "hash": {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{64}$"
+                            }
+                          },
+                          "required": ["version", "hash"]
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "publicId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "sequence": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "instruction": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": ["pass_fail", "measure", "checklist", "photo"]
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "minimum": {
+                                "type": ["string", "null"]
+                              },
+                              "maximum": {
+                                "type": ["string", "null"]
+                              },
+                              "uom": {
+                                "type": ["string", "null"]
+                              },
+                              "photoMimeTypes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "photoMaxBytes": {
+                                "type": ["integer", "null"]
+                              }
+                            },
+                            "required": [
+                              "publicId",
+                              "sequence",
+                              "code",
+                              "label",
+                              "instruction",
+                              "type",
+                              "required",
+                              "minimum",
+                              "maximum",
+                              "uom",
+                              "photoMimeTypes",
+                              "photoMaxBytes"
+                            ]
+                          }
+                        },
+                        "attempts": {
+                          "type": "array",
+                          "maxItems": 100,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "publicId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "sequence": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "outcome": {
+                                "type": "string",
+                                "enum": ["passed", "failed"]
+                              },
+                              "submittedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": ["publicId", "sequence", "outcome", "submittedAt"]
+                          }
+                        },
+                        "reviews": {
+                          "type": "array",
+                          "maxItems": 100,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "publicId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "outcome": {
+                                "type": "string",
+                                "enum": ["rejected", "waived"]
+                              },
+                              "decidedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": ["publicId", "outcome", "decidedAt"]
+                          }
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "requirementPublicId",
+                        "state",
+                        "expectedCheckVersion",
+                        "template",
+                        "steps",
+                        "attempts",
+                        "reviews"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "quality.checks",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/quality/checks/{id}/photos": {
+      "post": {
+        "operationId": "staff.quality.checks.uploadPhoto",
+        "summary": "Store one bounded quality photograph against fresh check evidence.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "warehouseId": {
+                    "type": "string"
+                  },
+                  "stepPublicId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^qcv_[0-9a-f]{64}$"
+                  },
+                  "mimeType": {
+                    "type": "string",
+                    "enum": ["image/jpeg", "image/png", "image/webp"]
+                  },
+                  "contentBase64": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 349528
+                  },
+                  "checksum": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "altText": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 240
+                  }
+                },
+                "required": [
+                  "warehouseId",
+                  "stepPublicId",
+                  "expectedVersion",
+                  "mimeType",
+                  "contentBase64",
+                  "checksum",
+                  "altText"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "integer",
+                          "const": 1
+                        },
+                        "requirementPublicId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "stepPublicId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "uploadPublicId": {
+                          "type": "string",
+                          "pattern": "^qpu_[0-9a-f]{40}$"
+                        },
+                        "checksum": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "mimeType": {
+                          "type": "string",
+                          "enum": ["image/jpeg", "image/png", "image/webp"]
+                        },
+                        "byteCount": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 262144
+                        },
+                        "expectedCheckVersion": {
+                          "type": "string",
+                          "pattern": "^qcv_[0-9a-f]{64}$"
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "requirementPublicId",
+                        "stepPublicId",
+                        "uploadPublicId",
+                        "checksum",
+                        "mimeType",
+                        "byteCount",
+                        "expectedCheckVersion"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "quality.checks",
+          "action": "upload"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/quality/checks/{id}/submit": {
+      "post": {
+        "operationId": "staff.quality.checks.submit",
+        "summary": "Submit one complete inspection attempt against the canonical template and uploads.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "warehouseId": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "string",
+                    "pattern": "^qcv_[0-9a-f]{64}$"
+                  },
+                  "results": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "stepPublicId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "value": {
+                          "type": "boolean"
+                        },
+                        "measurementValue": {
+                          "type": "string",
+                          "pattern": "^-?\\d+(?:\\.\\d+)?$"
+                        },
+                        "uploadPublicId": {
+                          "type": "string"
+                        },
+                        "checksum": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "altText": {
+                          "type": "string",
+                          "minLength": 3,
+                          "maxLength": 240
+                        }
+                      },
+                      "required": ["stepPublicId"]
+                    }
+                  }
+                },
+                "required": ["warehouseId", "expectedVersion", "results"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "integer",
+                          "const": 1
+                        },
+                        "requirementPublicId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["passed", "failed"]
+                        },
+                        "checkVersion": {
+                          "type": "string",
+                          "pattern": "^qcv_[0-9a-f]{64}$"
+                        },
+                        "attempt": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "publicId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["passed", "failed"]
+                            },
+                            "submittedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": ["publicId", "outcome", "submittedAt"]
+                        }
+                      },
+                      "required": ["schemaVersion", "requirementPublicId", "state", "checkVersion", "attempt"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "quality.checks",
+          "action": "submit"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
       }
     },
     "/sales/customers": {

@@ -186,6 +186,21 @@ and the response carries the refreshed safe projection. Create cannot yet share 
 current router keys routes by path rather than method. Lost-reason and activity commands remain outside the
 channel because their legacy request shapes do not map one-to-one to the current domain.
 
+`quality_staff_channel` contributes the complete three-operation mobile inspection flow. Quality owns an
+immutable template snapshot, step requirements, the actor's attempt, photo metadata, and final review record;
+Storage owns the photo bytes. A photo is accepted only for the attempt actor, required MIME type, and bounded
+byte length, and the persisted SHA-256 digest is computed from the bytes received rather than trusted from the
+caller. Reads return a content-derived `qcv_` version and strong ETag. Upload and submit require bootstrap
+CSRF proof, an idempotency key, and `If-Match`; a stale attempt returns `409` before it can append evidence or
+finalize a superseded check.
+
+`business_report_staff_channel` contributes the business-overview report as a checked facade over Company,
+Sale, Account, Stock, and Partner functions. It supports the mobile contract's fixed UTC windows (`today`,
+`yesterday`, `this_week`, `this_month`, and `last_month`), fills every time bucket including zero-value days, and computes current-versus-previous
+changes without dividing by zero. Customer identifiers in the ranking are opaque hashes. The report never
+uses unchecked calls and does not manufacture delivery state when a deployment-owned delivery module is not
+installed; the standard report leaves that deployment-owned count at zero instead.
+
 ## Contract behavior
 
 Every response uses one envelope:
