@@ -1129,7 +1129,7 @@ try {
     if (screen.name === 'product-chatter') {
       const generalPadding = await evaluate(
         cdp,
-        `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`,
+        `getComputedStyle(document.querySelector('[data-ui="form-page-body"]')).padding`,
       )
       await navigate(cdp, `${e2e.baseUrl}/admin/product/templates/tpl-collab?tab=variants&lang=vi`)
       await waitFor(
@@ -1137,7 +1137,7 @@ try {
         `document.querySelector('[data-ui="tab"][data-active="true"]')?.textContent.includes('Thuộc tính')`,
       )
       assert.equal(
-        await evaluate(cdp, `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`),
+        await evaluate(cdp, `getComputedStyle(document.querySelector('[data-ui="form-page-body"]')).padding`),
         generalPadding,
       )
       await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
@@ -1153,15 +1153,14 @@ try {
         mobile: false,
       })
       await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
-      await waitFor(cdp, `document.querySelector('[data-ui="record-aside"]')`)
+      await waitFor(cdp, `document.querySelector('[data-ui="form-page-aside"]')`)
       assert.deepEqual(
         await evaluate(
           cdp,
           `(() => {
-            const workspace = document.querySelector('[data-ui="record-workspace"]')
-            const aside = document.querySelector('[data-ui="record-aside"]')
-            const gap = parseFloat(getComputedStyle(workspace).columnGap)
-            const available = workspace.getBoundingClientRect().width - gap
+            const workspace = document.querySelector('[data-ui="form-page-layout"]')
+            const aside = document.querySelector('[data-ui="form-page-aside"]')
+            const available = workspace.getBoundingClientRect().width
             const width = aside.getBoundingClientRect().width
             return { atLeast32Rem: width >= 512, oneThird: Math.abs(width / available - 1 / 3) <= 0.01 }
           })()`,
@@ -1179,32 +1178,29 @@ try {
           cdp,
           `({
             editorIdle: document.querySelector('ket-island[data-island="product.editor"]')?.hidden === true,
-            controllerCollapsed: document.querySelector('[data-ui="record-controller"]').getBoundingClientRect().height === 0,
-            headerToggles: document.querySelectorAll('[data-ui="record-header"] [data-ui="record-toggle"]').length,
-            bodyType: document.querySelectorAll('[data-ui="record-body"] [name="type"]').length,
-            bodyToggles: document.querySelectorAll('[data-ui="record-body"] input[type="checkbox"]').length,
-            gridRowsAtLeast28: Array.from(document.querySelectorAll('[data-ui="record-body"] [data-ui="form-grid"] > [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
-            collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
-            statusesAligned: (() => {
-              const items = Array.from(document.querySelectorAll('[data-ui="record-badges"] > *'))
-              return items.length === 3 && items.every((item) => Math.abs(item.getBoundingClientRect().top - items[0].getBoundingClientRect().top) <= 1)
-            })(),
-            statusesSpaced: (() => {
-              const boxes = Array.from(document.querySelectorAll('[data-ui="record-badges"] > *'), (item) => item.getBoundingClientRect())
-              return boxes.slice(1).every((box, index) => box.left - boxes[index].right >= 8)
+            controllerCollapsed: document.querySelector('[data-ui="form-page-controller"]').getBoundingClientRect().height === 0,
+            bodyType: document.querySelectorAll('[data-ui="form-page-body"] [name="type"]').length,
+            bodyToggles: document.querySelectorAll('[data-ui="form-page-body"] input[type="checkbox"]').length,
+            gridRowsAtLeast28: Array.from(document.querySelectorAll('[data-ui="form-page-body"] [data-ui="form-grid"] > [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            collaborationNarrower: document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="form-page-body"]').getBoundingClientRect().width,
+            noHeavyIdentity: !document.querySelector('[data-ui="record-thumbnail"], [data-ui="record-kicker"], [data-ui="record-facts"], [data-ui="breadcrumbs"]'),
+            businessUseFirst: (() => {
+              const field = document.querySelector('#product-detail-form [data-ui="form-field"]')
+              return field?.getAttribute('data-kind') === 'checkbox-group' &&
+                JSON.stringify([...field.querySelectorAll('input[type="checkbox"]')].map((input) => input.name)) ===
+                  JSON.stringify(['saleOk', 'purchaseOk', 'isStorable'])
             })()
           })`,
         ),
         {
           editorIdle: true,
           controllerCollapsed: true,
-          headerToggles: 3,
           bodyType: 2,
-          bodyToggles: 0,
+          bodyToggles: 3,
           gridRowsAtLeast28: true,
           collaborationNarrower: true,
-          statusesAligned: true,
-          statusesSpaced: true,
+          noHeavyIdentity: true,
+          businessUseFirst: true,
         },
       )
       await evaluate(
@@ -1221,7 +1217,7 @@ try {
       )
       await waitFor(
         cdp,
-        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]')`,
+        `document.querySelector('[data-ui="form-page-controller"] [data-ui="notice"][data-tone="positive"]')`,
       )
       assert.deepEqual(
         await evaluate(
@@ -1306,7 +1302,7 @@ try {
     if (screen.name === 'product-variant-chatter') {
       const generalPadding = await evaluate(
         cdp,
-        `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`,
+        `getComputedStyle(document.querySelector('[data-ui="form-page-body"]')).padding`,
       )
       await navigate(
         cdp,
@@ -1317,7 +1313,7 @@ try {
         `document.querySelector('[data-ui="tab"][data-active="true"]')?.textContent.includes('Hình ảnh')`,
       )
       assert.equal(
-        await evaluate(cdp, `getComputedStyle(document.querySelector('[data-ui="record-body"]')).padding`),
+        await evaluate(cdp, `getComputedStyle(document.querySelector('[data-ui="form-page-body"]')).padding`),
         generalPadding,
       )
       await navigate(cdp, `${e2e.baseUrl}${screen.path}`)
@@ -1331,10 +1327,11 @@ try {
           cdp,
           `({
             editorIdle: document.querySelector('ket-island[data-island="product.editor"]')?.hidden === true,
-            controllerCollapsed: document.querySelector('[data-ui="record-controller"]').getBoundingClientRect().height === 0,
-            tabs: document.querySelectorAll('[data-ui="record-navigation"] [data-ui="tab"]').length,
-            gridRowsAtLeast28: Array.from(document.querySelectorAll('[data-ui="record-body"] [data-ui="form-grid"] > [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
-            collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
+            controllerCollapsed: document.querySelector('[data-ui="form-page-controller"]').getBoundingClientRect().height === 0,
+            tabs: document.querySelectorAll('[data-ui="form-page-navigation"] [data-ui="tab"]').length,
+            gridRowsAtLeast28: Array.from(document.querySelectorAll('[data-ui="form-page-body"] [data-ui="form-grid"] > [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            collaborationNarrower: document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="form-page-body"]').getBoundingClientRect().width,
+            noHeavyIdentity: !document.querySelector('[data-ui="record-thumbnail"], [data-ui="record-kicker"], [data-ui="record-facts"], [data-ui="breadcrumbs"]'),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
@@ -1344,6 +1341,7 @@ try {
           tabs: 2,
           gridRowsAtLeast28: true,
           collaborationNarrower: true,
+          noHeavyIdentity: true,
           horizontalOverflow: false,
         },
       )
@@ -1361,7 +1359,7 @@ try {
       )
       await waitFor(
         cdp,
-        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]')`,
+        `document.querySelector('[data-ui="form-page-controller"] [data-ui="notice"][data-tone="positive"]')`,
       )
       assert.deepEqual(
         await evaluate(
@@ -1449,7 +1447,7 @@ try {
       )
       await waitFor(
         cdp,
-        `document.querySelector('[data-ui="record-heading"]')?.textContent.includes('Sản phẩm Browser E2E') && document.querySelector('[data-ui="chatter"][data-state="ready"]')`,
+        `document.querySelector('[data-ui="form-page-title"]')?.textContent.includes('Sản phẩm Browser E2E') && document.querySelector('[data-ui="chatter"][data-state="ready"]')`,
       )
     }
     if (screen.name === 'inventory-adjustment') {
@@ -1533,7 +1531,7 @@ try {
       )
       await waitFor(
         cdp,
-        `document.querySelector('[data-ui="record-heading"]')?.textContent.includes('TP/INT/BROWSER') && document.querySelector('[data-ui="chatter"][data-state="ready"]')`,
+        `document.querySelector('[data-ui="form-page-title"]')?.textContent.includes('TP/INT/BROWSER') && document.querySelector('[data-ui="chatter"][data-state="ready"]')`,
       )
     }
     if (screen.name === 'warehouse-list') {
