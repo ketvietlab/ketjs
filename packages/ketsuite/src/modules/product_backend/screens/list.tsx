@@ -2,6 +2,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 import {
   badge,
+  bulkActions,
   code,
   dataTable,
   emptyState,
@@ -10,6 +11,9 @@ import {
   inline,
   KanbanCard,
   KanbanGrid,
+  LinkButton,
+  ListPage,
+  listChrome,
   shell,
   thumbnail,
 } from '../../../ui/index.ts'
@@ -58,17 +62,20 @@ export type VariantDetailTab = (typeof VARIANT_DETAIL_TABS)[number]
  */
 export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
   {
-    key: 'image',
-    label: _('product_backend.col.image'),
+    key: 'name',
+    label: _('product_backend.col.name'),
     // The catalogue is looked at as much as it is read, and a thumbnail is the
     // fastest way to tell two similar names apart. The placeholder keeps the
-    // column's width steady so rows do not jog as images come and go.
+    // identity's width steady so rows do not jog as images come and go. Keeping
+    // image and name together also leaves one obvious first link for the record.
     cell: (r) =>
-      r.image ? thumbnail({ src: r.image.src, alt: r.image.alt }) : thumbnail({ fallback: icon('package') }),
-    kind: 'media',
+      inline([
+        r.image ? thumbnail({ src: r.image.src, alt: '' }) : thumbnail({ fallback: icon('package') }),
+        r.name,
+      ]),
     priority: 'primary',
+    width: 'wide',
   },
-  { key: 'name', label: _('product_backend.col.name'), cell: (r) => r.name, priority: 'primary' },
   {
     key: 'type',
     label: _('product_backend.col.type'),
@@ -152,10 +159,10 @@ const kanban = (_: Translator, rows: readonly TemplateRow[], locale: string): Te
 /**
  * The catalogue, in the frame the backend already owns.
  *
- * It reuses `framed` and `dataTable` rather than building its own: a second frame
- * is a frame that drifts, and the sidebar, chrome and row height are not this
- * module's to reinvent. The two views are two renderings of the same rows, not
- * two screens.
+ * `ListPage` owns the reusable collection hierarchy while the backend frame keeps
+ * the global sidebar and navigation slots. Search, grouping, paging and view
+ * choice stay URL-driven through the existing chrome; list and kanban remain two
+ * renderings of the same rows rather than two screens.
  */
 export const productsScreen = (
   _: Translator,
@@ -164,23 +171,63 @@ export const productsScreen = (
   frame: Frame = {},
   table: Partial<DataTable<TemplateRow>> = {},
   locale = '',
+  total = rows.length,
 ): TemplateResult =>
   shell(
     _,
     _('product_backend.screen.title'),
-    rows.length === 0 && !table.groups?.length
-      ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
-      : view === 'kanban'
-        ? kanban(_, rows, locale)
-        : dataTable(_, {
-            columns: templateColumns(_),
-            rows,
-            id: (r) => r.id,
-            gutter: 'compact',
-            rowHref: (r) => localized(`/admin/product/templates/${r.id}`, locale),
-            ...table,
-          }),
-    frame,
+    <ListPage
+      title={_('product_backend.screen.title')}
+      description={_('product_backend.screen.description')}
+      actions={
+        frame.chrome?.create || frame.chrome?.selection || frame.extras?.['topbar.end'] !== undefined
+          ? inline([
+              frame.chrome?.create ? (
+                <LinkButton
+                  label={frame.chrome.create.label}
+                  href={frame.chrome.create.path}
+                  variant="primary"
+                />
+              ) : (
+                ''
+              ),
+              frame.chrome?.selection ? bulkActions(_, frame.chrome.selection) : '',
+              frame.extras?.['topbar.end'] ?? '',
+            ])
+          : undefined
+      }
+      controls={
+        frame.chrome
+          ? listChrome(
+              _,
+              _('product_backend.screen.title'),
+              {
+                ...frame.chrome,
+                layout: 'command',
+                section: undefined,
+                create: null,
+                selection: null,
+              },
+              false,
+            )
+          : undefined
+      }
+      status={_('product_backend.screen.results', { count: total })}
+      body={
+        rows.length === 0 && !table.groups?.length
+          ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
+          : view === 'kanban'
+            ? kanban(_, rows, locale)
+            : dataTable(_, {
+                columns: templateColumns(_),
+                rows,
+                id: (r) => r.id,
+                rowHref: (r) => localized(`/admin/product/templates/${r.id}`, locale),
+                ...table,
+              })
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
   )
 
 export type { MenuNode }

@@ -201,6 +201,7 @@ const capture = async (cdp: Cdp, path: string): Promise<void> => {
 const e2e = await collaborationEvidenceDeployment()
 let chrome: ChromeHandle | null = null
 const artifactDir = resolve('docs/public/assets/collaboration')
+const productListEvidenceDir = resolve('docs/public/assets/product-list')
 const lotEvidenceDir = resolve('docs/public/assets/inventory-lot-list')
 const routeEvidenceDir = resolve('docs/public/assets/inventory-route-list')
 const routeDetailEvidenceDir = resolve('docs/public/assets/inventory-route-detail')
@@ -228,6 +229,7 @@ const onlyScreen = process.env.KET_E2E_SCREEN?.trim()
 const noArtifacts = process.env.KET_E2E_NO_ARTIFACTS === '1'
 try {
   await mkdir(artifactDir, { recursive: true })
+  await mkdir(productListEvidenceDir, { recursive: true })
   await mkdir(lotEvidenceDir, { recursive: true })
   await mkdir(routeEvidenceDir, { recursive: true })
   await mkdir(routeDetailEvidenceDir, { recursive: true })
@@ -272,6 +274,11 @@ try {
   assert.deepEqual(login, { status: 200, ok: true })
 
   for (const screen of [
+    {
+      name: 'product-list',
+      path: '/admin/product/templates?lang=vi',
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 6`,
+    },
     {
       name: 'product-chatter',
       path: '/admin/product/templates/tpl-collab?lang=vi',
@@ -489,6 +496,162 @@ try {
     await waitFor(cdp, screen.ready, 15_000)
     const readyMs = performance.now() - started
     report.push({ screen: screen.name, readyMs, navigationMs })
+
+    if (screen.name === 'product-list') {
+      const states = [
+        {
+          id: 'list',
+          query: '',
+          ready: `document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 6`,
+        },
+        {
+          id: 'kanban',
+          query: '&view=kanban',
+          ready: `document.querySelectorAll('[data-ui="kanban-card"]').length >= 6`,
+        },
+        {
+          id: 'empty',
+          query: '&q=__missing_product__',
+          ready: `document.querySelector('[data-ui="empty"]')`,
+        },
+      ]
+      const viewports = [
+        { id: 'wide', width: 3110, height: 900, mobile: false },
+        { id: 'desktop', width: 1440, height: 1000, mobile: false },
+        { id: 'mobile', width: 390, height: 844, mobile: true },
+      ]
+      for (const viewport of viewports) {
+        await cdp.send('Emulation.setDeviceMetricsOverride', {
+          width: viewport.width,
+          height: viewport.height,
+          deviceScaleFactor: 1,
+          mobile: viewport.mobile,
+        })
+        for (const lang of ['vi', 'en']) {
+          for (const state of states) {
+            await navigate(cdp, `${e2e.baseUrl}/admin/product/templates?lang=${lang}${state.query}`)
+            await waitFor(cdp, state.ready)
+            const layout = await evaluate<{
+              pageContained: boolean
+              noPageOverflow: boolean
+              titleVisible: boolean
+              actionVisible: boolean
+              controlsVisible: boolean
+              searchBounded: boolean
+              searchBesideStatus: boolean
+              tailAtRight: boolean
+              toolbarFullWidth: boolean
+              ordered: boolean
+              tableContained: boolean
+            }>(
+              cdp,
+              `(() => {
+                const page = document.querySelector('[data-ui="list-page"]')
+              const header = document.querySelector('[data-ui="list-page-header"]')
+              const title = document.querySelector('[data-ui="list-page-title"]')
+              const action = document.querySelector('[data-ui="list-page-actions"] [data-ui="action"]')
+              const toolbar = document.querySelector('[data-ui="list-page-toolbar"]')
+              const controls = document.querySelector('[data-ui="list-page-controls"]')
+                const search = document.querySelector('[data-ui="list-page-controls"] [data-ui="chrome-search"]')
+                const tail = document.querySelector('[data-ui="list-page-controls"] [data-ui="chrome-tail"]')
+                const status = document.querySelector('[data-ui="list-page-status"]')
+                const body = document.querySelector('[data-ui="list-page-body"]')
+                const table = document.querySelector('[data-ui="table-scroll"]')
+                const pageBox = page.getBoundingClientRect()
+                const headerBox = header.getBoundingClientRect()
+                const titleBox = title.getBoundingClientRect()
+              const actionBox = action.getBoundingClientRect()
+              const toolbarBox = toolbar.getBoundingClientRect()
+              const controlsBox = controls.getBoundingClientRect()
+                const searchBox = search.getBoundingClientRect()
+                const tailBox = tail.getBoundingClientRect()
+                const statusBox = status.getBoundingClientRect()
+                const bodyBox = body.getBoundingClientRect()
+                const tableBox = table?.getBoundingClientRect()
+                return {
+                  pageContained: pageBox.left >= -1 && pageBox.right <= innerWidth + 1,
+                  noPageOverflow: document.documentElement.scrollWidth <= innerWidth,
+                  titleVisible: titleBox.width > 0 && titleBox.height > 0 && title.scrollWidth <= title.clientWidth + 1,
+                  actionVisible: actionBox.width > 0 && actionBox.height >= 30,
+                  controlsVisible: controlsBox.width > 0 && controlsBox.height > 0,
+                  searchBounded: searchBox.width <= 801,
+                  searchBesideStatus: ${String(viewport.mobile)} ||
+                    (searchBox.left >= statusBox.right - 1 &&
+                      searchBox.left - statusBox.right <= 16),
+                  tailAtRight: ${String(viewport.mobile)} ||
+                    (tailBox.right <= toolbarBox.right &&
+                      toolbarBox.right - tailBox.right <= 12),
+                  toolbarFullWidth: Math.abs(toolbarBox.left - bodyBox.left) <= 1 &&
+                    Math.abs(toolbarBox.right - bodyBox.right) <= 1,
+                ordered: headerBox.bottom <= toolbarBox.top + 1 &&
+                  toolbarBox.bottom <= bodyBox.top + 1 &&
+                  statusBox.top >= toolbarBox.top - 1 && statusBox.bottom <= toolbarBox.bottom + 1 &&
+                  controlsBox.top >= toolbarBox.top - 1 && controlsBox.bottom <= toolbarBox.bottom + 1,
+                  tableContained: !tableBox || (tableBox.left >= pageBox.left - 1 && tableBox.right <= pageBox.right + 1)
+                }
+              })()`,
+            )
+            assert.deepEqual(
+              layout,
+              {
+                pageContained: true,
+                noPageOverflow: true,
+                titleVisible: true,
+                actionVisible: true,
+                controlsVisible: true,
+                searchBounded: true,
+                searchBesideStatus: true,
+                tailAtRight: true,
+                toolbarFullWidth: true,
+                ordered: true,
+                tableContained: true,
+              },
+              `${viewport.id}/${lang}/${state.id}`,
+            )
+            if (state.id === 'list') {
+              assert.deepEqual(
+                await evaluate(
+                  cdp,
+                  `(() => {
+                    const create = document.querySelector('[data-ui="list-page-actions"] [data-ui="action"]')
+                    const rowSelect = document.querySelector('[data-ui="row-select"]')
+                    const more = document.querySelector('[data-ui="list-page-actions"] [data-ui="bulk-actions-open"]')
+                    rowSelect.click()
+                    const createBox = create.getBoundingClientRect()
+                    const moreBox = more.getBoundingClientRect()
+                    const result = {
+                      visible: moreBox.width > 0 && moreBox.height > 0,
+                      besideCreate: Math.abs(moreBox.top - createBox.top) <= 1 &&
+                        moreBox.left >= createBox.right && moreBox.left - createBox.right <= 16,
+                      absentFromControls: !document.querySelector('[data-ui="list-page-controls"] [data-ui="bulk-form"]')
+                    }
+                    return result
+                  })()`,
+                ),
+                { visible: true, besideCreate: true, absentFromControls: true },
+              )
+              if (!noArtifacts)
+                await capture(
+                  cdp,
+                  join(productListEvidenceDir, `product-list-selected-${lang}-${viewport.id}.png`),
+                )
+              await evaluate(cdp, `document.querySelector('[data-ui="row-select"]')?.click()`)
+            }
+            if (!noArtifacts)
+              await capture(
+                cdp,
+                join(productListEvidenceDir, `product-list-${state.id}-${lang}-${viewport.id}.png`),
+              )
+          }
+        }
+      }
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+    }
 
     if (screen.name === 'my-activities') {
       const layout = await evaluate<{

@@ -52,10 +52,13 @@ export async function collaborationEvidenceDeployment(
     }
 
     await call('uom.saveUnit', { id: 'unit', name: 'Đơn vị', relativeFactor: '1' })
+    await call('product.saveCategory', { id: 'workwear', name: 'Đồng phục vận hành' })
+    await call('product.saveCategory', { id: 'services', name: 'Dịch vụ' })
     await call('product.saveTemplate', {
       id: 'tpl-collab',
       name: 'Áo khoác vận hành',
       type: 'goods',
+      categoryId: 'workwear',
       uomId: 'unit',
       listPrice: '1250000',
       description: 'Sản phẩm mẫu dùng để kiểm chứng Chatter trên Product.',
@@ -71,6 +74,82 @@ export async function collaborationEvidenceDeployment(
       isStorable: true,
       tracking: 'none',
     })
+    for (const product of [
+      {
+        id: 'safety-vest',
+        name: 'Áo phản quang công trường',
+        type: 'goods',
+        categoryId: 'workwear',
+        listPrice: '185000',
+        storable: true,
+      },
+      {
+        id: 'safety-helmet',
+        name: 'Mũ bảo hộ tiêu chuẩn',
+        type: 'goods',
+        categoryId: 'workwear',
+        listPrice: '320000',
+        storable: true,
+      },
+      {
+        id: 'thermal-bottle',
+        name: 'Bình giữ nhiệt nhân viên',
+        type: 'goods',
+        categoryId: 'workwear',
+        listPrice: '275000',
+        storable: true,
+      },
+      {
+        id: 'equipment-maintenance',
+        name: 'Bảo trì thiết bị định kỳ',
+        type: 'service',
+        categoryId: 'services',
+        listPrice: '950000',
+        storable: false,
+      },
+      {
+        id: 'operations-onboarding',
+        name: 'Triển khai quy trình vận hành',
+        type: 'service',
+        categoryId: 'services',
+        listPrice: '2500000',
+        storable: false,
+      },
+    ]) {
+      await call('product.saveTemplate', {
+        id: product.id,
+        name: product.name,
+        type: product.type,
+        categoryId: product.categoryId,
+        uomId: 'unit',
+        listPrice: product.listPrice,
+        description: 'Dữ liệu mẫu cho kiểm chứng danh mục sản phẩm.',
+      })
+      await call('product.saveVariant', {
+        id: `${product.id}:default`,
+        templateId: product.id,
+        defaultCode: product.id.toLocaleUpperCase('en'),
+        combinationKey: '',
+      })
+      if (product.storable)
+        await call('stock.configureProduct', {
+          templateId: product.id,
+          isStorable: true,
+          tracking: 'none',
+        })
+    }
+    // Keep the catalogue above one page so visual evidence always covers the
+    // pager together with search, filters and both view controls.
+    for (let index = 1; index <= 25; index++)
+      await call('product.saveTemplate', {
+        id: `catalogue-sample-${String(index).padStart(2, '0')}`,
+        name: `Sản phẩm kiểm thử ${String(index).padStart(2, '0')}`,
+        type: 'goods',
+        categoryId: 'workwear',
+        uomId: 'unit',
+        listPrice: String(100000 + index * 10000),
+        description: 'Dữ liệu mẫu để kiểm chứng phân trang danh mục sản phẩm.',
+      })
     for (const attribute of [
       { id: 'attribute-color', name: 'Màu sắc', displayType: 'pills', createVariant: 'always' },
       { id: 'attribute-size', name: 'Kích cỡ', displayType: 'radio', createVariant: 'always' },
@@ -203,7 +282,6 @@ export async function collaborationEvidenceDeployment(
       name: 'VAT 10%',
       description: 'Thuế GTGT bán ra 10%',
       typeTaxUse: 'sale',
-      taxScope: 'consu',
       amountType: 'percent',
       amount: '10',
       priceInclude: false,

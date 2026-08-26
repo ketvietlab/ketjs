@@ -79,8 +79,8 @@ export type SearchMenu = {
 }
 
 export type ListChrome = {
-  /** Optional visual treatment for catalogue-style operational lists. */
-  layout?: 'catalogue'
+  /** Optional visual treatment for catalogue topbars or in-page command bars. */
+  layout?: 'catalogue' | 'command'
   /** Small section label above the list title. */
   section?: string
   create?: { label: string; path: string } | null
@@ -287,6 +287,45 @@ export const listChrome = (
   </section>
 )
 
+/**
+ * Selection actions belong with page actions, not with query controls. Keeping
+ * this renderer public lets a self-titled ListPage place More directly beside
+ * Create while legacy topbars can continue to render the same form in chrome.
+ */
+export const bulkActions = (_: Translator, selection: TableSelection): TemplateResult => (
+  <form data-ui="bulk-form" id={selection.formId} method="post" action={selection.action}>
+    {each(
+      Object.entries(selection.hidden ?? {}),
+      ([key]) => key,
+      ([key, value]) => (
+        <input type="hidden" name={key} value={value} autocomplete="off" />
+      ),
+    )}
+    <details data-ui="bulk-actions">
+      <summary data-ui="bulk-actions-open" aria-label={_('backend.chrome.more')}>
+        …
+      </summary>
+      <div data-ui="bulk-actions-menu">
+        {each(
+          selection.actions,
+          (action) => action.id,
+          (action) => (
+            <button
+              data-ui="bulk-action"
+              data-tone={action.tone ?? 'default'}
+              type="submit"
+              name="action"
+              value={action.id}
+            >
+              {action.label}
+            </button>
+          ),
+        )}
+      </div>
+    </details>
+  </form>
+)
+
 const chromeLead = (_: Translator, title: string, chrome: ListChrome, titled: boolean): TemplateResult => (
   <div data-ui="chrome-lead">
     {titled && <h1 data-ui="title">{title}</h1>}
@@ -295,39 +334,7 @@ const chromeLead = (_: Translator, title: string, chrome: ListChrome, titled: bo
         {chrome.create.label}
       </a>
     )}
-    {!!chrome.selection && (
-      <form data-ui="bulk-form" id={chrome.selection.formId} method="post" action={chrome.selection.action}>
-        {each(
-          Object.entries(chrome.selection.hidden ?? {}),
-          ([key]) => key,
-          ([key, value]) => (
-            <input type="hidden" name={key} value={value} autocomplete="off" />
-          ),
-        )}
-        <details data-ui="bulk-actions">
-          <summary data-ui="bulk-actions-open" aria-label={_('backend.chrome.more')}>
-            …
-          </summary>
-          <div data-ui="bulk-actions-menu">
-            {each(
-              chrome.selection.actions,
-              (action) => action.id,
-              (action) => (
-                <button
-                  data-ui="bulk-action"
-                  data-tone={action.tone ?? 'default'}
-                  type="submit"
-                  name="action"
-                  value={action.id}
-                >
-                  {action.label}
-                </button>
-              ),
-            )}
-          </div>
-        </details>
-      </form>
-    )}
+    {!!chrome.selection && bulkActions(_, chrome.selection)}
   </div>
 )
 

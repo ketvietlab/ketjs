@@ -9,6 +9,7 @@ import { Progress } from '../primitives/progress.tsx'
 import { ContentCard, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
 import { AppShell, Page, PageHeader, RecordPage, RecordSection } from '../layouts/shell.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
+import { ListPage } from '../patterns/list-page.tsx'
 import { ModalSheet } from '../patterns/modal-sheet.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
 
@@ -432,6 +433,55 @@ export const componentGroups: readonly ComponentGroup[] = [
     name: 'Patterns',
     description: 'Generic workflows assembled from the same primitives.',
     examples: [
+      {
+        id: 'list-page',
+        name: 'List page',
+        description:
+          'The canonical collection hierarchy: identity, actions, URL-driven controls, result context and records.',
+        render: () => (
+          <ListPage
+            eyebrow="Sales"
+            title="Sales orders"
+            description="Review demand, fulfillment and payment state from one operational list."
+            actions={<Button label="Create order" variant="primary" />}
+            controls={
+              <ActionGroup
+                label="List controls"
+                actions={[
+                  <LinkButton label="All orders" href="#list-page" size="compact" />,
+                  <LinkButton label="Ready" href="#list-page" size="compact" variant="tertiary" />,
+                  <LinkButton label="Needs review" href="#list-page" size="compact" variant="tertiary" />,
+                ]}
+              />
+            }
+            status="3 of 148 orders · Updated just now"
+            body={
+              <DataTable
+                rows={orders}
+                id={(row) => row.id}
+                rowHref={(row) => `#${row.id}`}
+                columns={[
+                  {
+                    key: 'id',
+                    label: 'Order',
+                    cell: (row) => row.id,
+                    priority: 'primary',
+                    kind: 'identifier',
+                  },
+                  { key: 'customer', label: 'Customer', cell: (row) => row.customer },
+                  { key: 'total', label: 'Total', cell: (row) => row.total, align: 'end', kind: 'currency' },
+                  {
+                    key: 'state',
+                    label: 'State',
+                    cell: (row) => <Badge label={row.state} tone={toneOf(row.state)} />,
+                    kind: 'status',
+                  },
+                ]}
+              />
+            }
+          />
+        ),
+      },
       {
         id: 'data-table',
         name: 'Data table',

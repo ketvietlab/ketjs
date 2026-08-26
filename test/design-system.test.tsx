@@ -9,6 +9,7 @@ import {
   DataTable,
   Field,
   HOOKS,
+  ListPage,
   NavList,
   Progress,
   RecordForm,
@@ -84,6 +85,26 @@ test('design system: controls preserve their native semantics and accessible sta
 })
 
 test('design system: generic patterns need no translator or KetSuite domain', () => {
+  const listPage = renderToString(
+    <ListPage
+      eyebrow="Catalogue"
+      title="Products"
+      description="Manage the sellable catalogue."
+      actions={<Button label="Create" variant="primary" />}
+      controls="Search and filters"
+      status="24 products"
+      body="Product rows"
+      footer="End of results"
+    />,
+  )
+  assert.match(listPage, /<section data-ui="list-page">/)
+  assert.match(listPage, /data-ui="list-page-eyebrow"[^>]*>[\s\S]*?Catalogue/)
+  assert.match(listPage, /data-ui="list-page-title"[^>]*>[\s\S]*?Products/)
+  assert.match(listPage, /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"/)
+  assert.match(listPage, /data-ui="list-page-toolbar"/)
+  assert.match(listPage, /data-ui="list-page-controls"[^>]*>[\s\S]*?Search and filters/)
+  assert.match(listPage, /data-ui="list-page-status"[^>]*>[\s\S]*?24 products/)
+
   const table = renderToString(
     <DataTable
       rows={[{ id: 'one', state: 'Ready' }]}
@@ -145,6 +166,7 @@ test('design system: catalogue renders every registered specimen', () => {
   assert.match(catalogue, /data-density="compact"/)
   assert.match(catalogue, /Operational UI, kept honest/)
   assert.match(catalogue, /id="data-table"/)
+  assert.match(catalogue, /id="list-page"/)
   assert.match(catalogue, /id="record-form"/)
   assert.match(catalogue, /id="modal-sheet"/)
   assert.match(catalogue, /id="app-shell"/)

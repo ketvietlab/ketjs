@@ -14,6 +14,8 @@
 // public components. New shared UI must enter through that public contract.
 
 export * as designSystem from '@ketvietlab/design-system'
+export { LinkButton, ListPage } from '@ketvietlab/design-system'
+export type { LinkButtonProps, ListPageProps } from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
 export { formatMoney } from './format.ts'
@@ -85,7 +87,7 @@ export type {
 } from './record.tsx'
 export { sidebar, sidebarMain, sidebarFoot, navGroup } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
-export { listChrome, topbarSearch } from './chrome.tsx'
+export { bulkActions, listChrome, topbarSearch } from './chrome.tsx'
 export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
 export { backendPage, shell, framedPage, definitionList } from './layout.tsx'
 export type { Extras, Frame } from './layout.tsx'

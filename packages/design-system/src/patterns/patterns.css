@@ -1,4 +1,125 @@
 @layer ket.app {
+  :where([data-kv-design-system]) [data-ui="list-page"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-3);
+    padding: var(--kv-space-6) var(--kv-page-padding-x) var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-header"] {
+    min-width: 0;
+    padding-bottom: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-heading"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-title-row"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-eyebrow"] {
+    margin: 0 0 var(--kv-space-1-5);
+    color: var(--kv-accent);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-bold);
+    letter-spacing: 0.09em;
+    line-height: var(--kv-leading-tight);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-title"] {
+    margin: 0;
+    color: var(--kv-text-main);
+    font-size: var(--kv-text-2xl);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: -0.025em;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-description"] {
+    max-width: 48rem;
+    margin: var(--kv-space-2) 0 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-actions"] {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-toolbar"] {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-2);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-controls"] {
+    min-width: min(100%, 24rem);
+    flex: 1 1 40rem;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-status"] {
+    min-width: max-content;
+    flex: 0 0 auto;
+    padding-inline: var(--kv-space-2);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-body"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-footer"] {
+    min-width: 0;
+    padding-top: var(--kv-space-3);
+    border-top: 1px solid var(--kv-panel-divider);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+  }
+
+  /* Lists are page regions, not cards. More capable application tables may add
+     selection, grouping or configurable columns while retaining this surface. */
+  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="table-scroll"] {
+    margin: 0;
+    border-color: var(--kv-table-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-table-bg);
+    box-shadow: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="table"] th {
+    background: var(--kv-table-header-bg);
+    color: var(--kv-table-header-text);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="row"] td {
+    background: var(--kv-table-row-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="row"]:hover td {
+    background: var(--kv-table-row-hover);
+  }
+
   :where([data-kv-design-system]) [data-ui="table-scroll"] {
     width: 100%;
     overflow-x: auto;
@@ -189,6 +310,29 @@
   }
 
   @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="list-page"] {
+      gap: var(--kv-space-3);
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-header"] {
+      padding-bottom: var(--kv-space-1);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-toolbar"] {
+      gap: var(--kv-space-2);
+      padding: var(--kv-space-2);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-controls"] {
+      min-width: 0;
+      flex-basis: 15rem;
+    }
+
     :where([data-kv-design-system]) [data-ui="form-grid"] {
       grid-template-columns: 1fr;
     }
