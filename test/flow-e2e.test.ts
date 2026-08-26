@@ -770,3 +770,109 @@ test('flow: a mention notifies, subscribes, and can be undone', async () => {
     await e2e.close()
   }
 })
+
+/**
+ * What the project list shows across the top and beside each row.
+ *
+ * "Finished" is a column marked `terminalState`, the same definition the board
+ * and sub-task progress already use — a project carries no status of its own,
+ * so the state on screen has to be derived from something real.
+ */
+test('flow projects: counts come back per project, and a state is derived from them', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyễn Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyễn Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+
+    for (const [id, key] of [['mixed', 'MIX'], ['finished', 'FIN'], ['fresh', 'FRE'], ['bare', 'BAR']]) {
+      await call('flow.project.save', {
+        values: { id, key, name: id },
+        idempotencyKey: `project-save-${id}`,
+      })
+      // A project each, so a column of one never counts towards another.
+      await call('flow.column.save', {
+        values: { id: `${id}-todo`, projectId: id, code: 'todo', name: 'To do', sequence: 10 },
+        idempotencyKey: `column-todo-${id}`,
+      })
+      await call('flow.column.save', {
+        values: {
+          id: `${id}-done`,
+          projectId: id,
+          code: 'done',
+          name: 'Done',
+          sequence: 20,
+          terminalState: true,
+        },
+        idempotencyKey: `column-done-${id}`,
+      })
+    }
+
+    const issue = async (id: string, projectId: string, columnId: string) => {
+      const saved = await call<Row>('flow.issue.save', {
+        id,
+        projectId,
+        columnId,
+        title: id,
+        idempotencyKey: `issue-save-${id}`,
+      })
+      assert.equal(saved.ok, true, JSON.stringify(saved.errors))
+    }
+    // Two open and one finished; everything finished; nothing finished; nothing at all.
+    await issue('m1', 'mixed', 'mixed-todo')
+    await issue('m2', 'mixed', 'mixed-todo')
+    await issue('m3', 'mixed', 'mixed-done')
+    await issue('f1', 'finished', 'finished-done')
+    await issue('r1', 'fresh', 'fresh-todo')
+
+    const stats = await call<Row[]>('flow.project.stats', {
+      projectIds: ['mixed', 'finished', 'fresh', 'bare'],
+    })
+    const by = new Map(stats.map((row) => [String(row.id), row]))
+    assert.deepEqual(
+      [by.get('mixed')?.total, by.get('mixed')?.done, by.get('mixed')?.state],
+      [3, 1, 'active'],
+    )
+    assert.deepEqual(
+      [by.get('finished')?.total, by.get('finished')?.done, by.get('finished')?.state],
+      [1, 1, 'done'],
+    )
+    assert.deepEqual(
+      [by.get('fresh')?.total, by.get('fresh')?.done, by.get('fresh')?.state],
+      [1, 0, 'planned'],
+    )
+    // A project nobody has written an issue for still answers, with zeroes —
+    // the card would otherwise have to guess whether it was missing or empty.
+    assert.deepEqual(
+      [by.get('bare')?.total, by.get('bare')?.done, by.get('bare')?.state],
+      [0, 0, 'empty'],
+    )
+
+    // `projectStats` also filters on `Issue.active`, which is not covered here:
+    // the column exists and `saveIssue` always writes `true`, but no function
+    // ever writes `false` — Column, IssueType, FieldDef, Epic, Tag and Page all
+    // have an archive and Issue does not. The filter is there for when one
+    // arrives; until then there is no way to reach it from outside.
+
+    // Asking for nothing is not an error, and asking about a project that does
+    // not exist answers for the ones that do rather than failing the page.
+    assert.deepEqual(await call<Row[]>('flow.project.stats', { projectIds: [] }), [])
+    const partial = await call<Row[]>('flow.project.stats', { projectIds: ['mixed', 'no-such'] })
+    assert.equal(partial.length, 2)
+    assert.equal(Number(partial.find((row) => String(row.id) === 'no-such')?.total), 0)
+  } finally {
+    await e2e.close()
+  }
+})

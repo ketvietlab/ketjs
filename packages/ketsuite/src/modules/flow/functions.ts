@@ -22,6 +22,7 @@ import {
   startSprint,
 } from './operations.ts'
 import { emptyIssueListState } from './search.ts'
+import { projectStateOf, projectStats } from './projects.ts'
 import {
   archivePage,
   listPages,
@@ -168,6 +169,27 @@ export const functions: Record<string, FnSpec> = {
    * `optionRows` caps at 200 rows sorted by name — so the 201st project by
    * name would answer "not found" on its own board.
    */
+  /**
+   * The issue counts behind a list of projects, in two reads rather than one
+   * per project — see `projectStats`.
+   */
+  'project.stats': defineFn({
+    input: { projectIds: 'json' },
+    output: { id: 'id', total: 'int', done: 'int', state: 'text' },
+    effects: ['read:flow.Issue', 'read:flow.Column'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const ids = Array.isArray(args.projectIds) ? args.projectIds.map(String) : []
+      const stats = await projectStats(ctx, ids)
+      return [...stats].map(([id, counted]) => ({
+        id,
+        total: counted.total,
+        done: counted.done,
+        state: projectStateOf(counted),
+      }))
+    },
+  }),
+
   'project.get': defineFn({
     input: { id: 'id' },
     output: {
