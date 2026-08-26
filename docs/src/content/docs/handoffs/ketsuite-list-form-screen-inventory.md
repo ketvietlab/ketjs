@@ -113,7 +113,7 @@ rendering from `screens.tsx` to `screens/shared.tsx`, then remove the old file.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
-| STOCK-01 | ready | Inventory adjustment and balances | `/admin/stock/inventory` | `inventoryScreen` | Specialized | no | — |
+| STOCK-01 | keep | Inventory adjustment and balances | `/admin/stock/inventory` | `screens/inventory.tsx` | Specialized | no | Kant |
 | STOCK-02 | done | Transfers | `/admin/stock/transfers`, `/admin/stock/transfers/new` | `screens/transfers-list.tsx`, `screens/transfer-create.tsx` | Split | list/new: no | Huygens + Kant |
 | STOCK-03 | done | Transfer detail | `/admin/stock/transfers/{id}` | `screens/transfer-detail.tsx` | FormPage | `stock_mail_backend` | Curie |
 | STOCK-04 | done | Warehouses | `/admin/stock/warehouses`, `/admin/stock/warehouses/new` | `screens/warehouses-list.tsx`, `screens/warehouse-create.tsx` | Split | list/new: no | Huygens |
@@ -123,8 +123,8 @@ rendering from `screens.tsx` to `screens/shared.tsx`, then remove the old file.
 | STOCK-08 | done | Lot/serial detail | `/admin/stock/lots/{id}` | `screens/lot-detail.tsx` | FormPage | `stock_lot_mail_backend` | Curie |
 | STOCK-09 | done | Supply routes | `/admin/stock/routes`, `/admin/stock/routes/new` | `screens/stock-routes-list.tsx`, `screens/stock-route-create.tsx` | Split | list/new: no | Huygens + Kant |
 | STOCK-10 | done | Supply-route detail | `/admin/stock/routes/{id}` | `screens/stock-route-detail.tsx` | FormPage | no | Curie |
-| STOCK-11 | ready | Replenishment rules | `/admin/stock/replenishment` | `replenishmentScreen` | Split | no | — |
-| STOCK-12 | ready | Stock forecast | `/admin/stock/forecast` | `forecastScreen` | Specialized | no | — |
+| STOCK-11 | done | Replenishment rules | `/admin/stock/replenishment`, `/admin/stock/replenishment/new` | `screens/replenishment-list.tsx`, `screens/replenishment-create.tsx` | Split | list/new: no | Huygens |
+| STOCK-12 | keep | Stock forecast | `/admin/stock/forecast` | `screens/forecast.tsx` | Specialized | no | Curie |
 
 ### Product lane
 
@@ -552,3 +552,27 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 4 operation-type create evidence](/assets/inventory-operation-type-list/operation-type-create-browser-skill.png)
 
 ![Wave 4 operation-type mobile evidence](/assets/inventory-operation-type-list/operation-type-create-mobile-browser-skill.png)
+
+### Wave 5 — STOCK-01, STOCK-11 and STOCK-12
+
+- Replenishment is now a dedicated `ListPage` plus `/new` `FormPage`, preserving all nine operational
+  columns, per-row Run actions, eight create fields, product filtering, UoM/route options and validation.
+- Inventory Adjustment remains Specialized: the one-shot adjustment command, configuration gate, applied
+  result, live balances and summary must remain together for safe counting. Its renderer moved unchanged to
+  `screens/inventory.tsx`.
+- Forecast remains Specialized: it is a filter → calculation → single report flow rather than collection or
+  record editing. Its renderer moved unchanged to `screens/forecast.tsx`.
+- Browser evidence confirms all four surfaces have no Chatter or horizontal overflow. The mobile
+  Replenishment form preserves all eight fields with a 194 px control column at 390 px.
+- Validation scope: seven focused renderer tests, the affected stock HTTP scenario, four targeted browser
+  E2E flows, Biome on changed files, build/typecheck, and Astro docs validation.
+
+![Wave 5 inventory specialized evidence](/assets/inventory-adjustment/inventory-browser-skill.png)
+
+![Wave 5 forecast specialized evidence](/assets/inventory-forecast/forecast-browser-skill.png)
+
+![Wave 5 replenishment list evidence](/assets/inventory-replenishment/replenishment-list-browser-skill.png)
+
+![Wave 5 replenishment create evidence](/assets/inventory-replenishment/replenishment-create-browser-skill.png)
+
+![Wave 5 replenishment mobile evidence](/assets/inventory-replenishment/replenishment-create-mobile-browser-skill.png)

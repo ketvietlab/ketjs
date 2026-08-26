@@ -383,7 +383,12 @@ try {
     {
       name: 'replenishment',
       path: '/admin/stock/replenishment?lang=vi',
-      ready: `document.querySelector('#replenishment-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'replenishment-create',
+      path: '/admin/stock/replenishment/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#replenishment-create-form')`,
     },
     {
       name: 'forecast',
@@ -1489,7 +1494,7 @@ try {
           `({
             workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
             productSelector: document.querySelector('#inventory-adjustment-form [name="productId"]')?.tagName === 'SELECT',
-            stockRows: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length,
+            stockRowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
             formRowsAtLeast28: Array.from(document.querySelectorAll('#inventory-adjustment-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
@@ -1498,7 +1503,7 @@ try {
         {
           workspace: true,
           productSelector: true,
-          stockRows: 1,
+          stockRowsAtLeastOne: true,
           formRowsAtLeast28: true,
           chatter: false,
           horizontalOverflow: false,
@@ -2081,27 +2086,48 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
-            productSelector: document.querySelector('#replenishment-create-form [name="productId"]')?.tagName === 'SELECT',
-            storableProduct: document.querySelector('#replenishment-create-form [name="productId"]')?.textContent.includes('Áo khoác vận hành · OPS-JACKET'),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
             forecast: document.querySelector('[data-ui="table"]')?.textContent.includes('Dự báo'),
             proposal: Boolean(document.querySelector('[data-ui="table"] [data-ui="badge"][data-tone="warning"]')),
             runAction: Boolean(document.querySelector('[data-ui="table"] form[action*="/admin/stock/replenishment/"]')),
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#replenishment-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            createHref: document.querySelector('[data-ui="list-page"] a[href*="/admin/stock/replenishment/new"]')?.getAttribute('href') ?? '',
+            inlineForm: Boolean(document.querySelector('#replenishment-create-form')),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
         {
-          workspace: true,
-          productSelector: true,
-          storableProduct: true,
+          listPage: true,
           rowsAtLeastOne: true,
           forecast: true,
           proposal: true,
           runAction: true,
-          formRowsAtLeast28: true,
+          createHref: '/admin/stock/replenishment/new?lang=vi',
+          inlineForm: false,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+    }
+    if (screen.name === 'replenishment-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            productSelector: document.querySelector('#replenishment-create-form [name="productId"]')?.tagName === 'SELECT',
+            storableProduct: document.querySelector('#replenishment-create-form [name="productId"]')?.textContent.includes('Áo khoác vận hành · OPS-JACKET'),
+            fields: document.querySelectorAll('#replenishment-create-form [data-ui="form-field"]').length,
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          formPage: true,
+          productSelector: true,
+          storableProduct: true,
+          fields: 8,
           chatter: false,
           horizontalOverflow: false,
         },
@@ -2137,7 +2163,7 @@ try {
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/replenishment?lang=vi`)
       await waitFor(
         cdp,
-        `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'vi'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'vi'`,
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-vi-desktop.png'))
@@ -2145,9 +2171,9 @@ try {
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/replenishment?lang=en`)
       await waitFor(
         cdp,
-        `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'en'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'en'`,
       )
-      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Reordering rules')`), true)
+      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Replenishment')`), true)
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-en-desktop.png'))
 
@@ -2160,18 +2186,17 @@ try {
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/replenishment?lang=vi`)
       await waitFor(
         cdp,
-        `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'vi'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'vi'`,
       )
       assert.deepEqual(
         await evaluate(
           cdp,
           `({
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#replenishment-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             listVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
           })`,
         ),
-        { horizontalOverflow: false, formRowsAtLeast28: true, listVisible: true },
+        { horizontalOverflow: false, listVisible: true },
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(replenishmentEvidenceDir, 'replenishment-vi-mobile.png'))
@@ -2179,7 +2204,7 @@ try {
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/replenishment?lang=en`)
       await waitFor(
         cdp,
-        `document.querySelector('#replenishment-create-form') && document.documentElement.lang === 'en'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'en'`,
       )
       assert.equal(
         await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),

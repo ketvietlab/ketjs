@@ -807,14 +807,21 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const replenishmentHtml = await replenishmentPage.text()
-  assert.match(replenishmentHtml, /data-ui="record-workspace"/)
-  assert.match(replenishmentHtml, /id="replenishment-create-form"/)
-  assert.match(replenishmentHtml, /data-scope="stock-replenishment-create"/)
-  assert.match(replenishmentHtml, /<select[^>]*name="productId"/)
-  assert.match(replenishmentHtml, /Áo thun · AO/)
-  assert.doesNotMatch(replenishmentHtml, /Dịch vụ tư vấn/)
+  assert.match(replenishmentHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(replenishmentHtml, /id="replenishment-create-form"/)
+  assert.match(replenishmentHtml, /href="\/admin\/stock\/replenishment\/new\?lang=vi"/)
   assert.doesNotMatch(replenishmentHtml, /data-island="mail\.chatter"/)
-  const replenishmentWithRule = await e2e.client.form<string>('/admin/stock/replenishment?lang=vi', {
+  const replenishmentCreatePage = await e2e.client.get('/admin/stock/replenishment/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const replenishmentCreateHtml = await replenishmentCreatePage.text()
+  assert.match(replenishmentCreateHtml, /data-ui="form-page"/)
+  assert.match(replenishmentCreateHtml, /id="replenishment-create-form"/)
+  assert.match(replenishmentCreateHtml, /data-scope="stock-replenishment-create"/)
+  assert.match(replenishmentCreateHtml, /<select[^>]*name="productId"/)
+  assert.match(replenishmentCreateHtml, /Áo thun · AO/)
+  assert.doesNotMatch(replenishmentCreateHtml, /Dịch vụ tư vấn|data-island="mail\.chatter"/)
+  const replenishmentWithRule = await e2e.client.form<string>('/admin/stock/replenishment/new?lang=vi', {
     productId: 'p1',
     warehouseId: 'wh',
     locationId: 'wh:stock',
@@ -824,7 +831,7 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     replenishmentUomId: 'dozen',
     routeId: 'wh:receipt-route',
   })
-  assert.match(replenishmentWithRule, /Đề xuất bổ sung/)
+  assert.match(replenishmentWithRule, /Cần đặt/)
   assert.match(replenishmentWithRule, /Áo thun · AO/)
   assert.match(replenishmentWithRule, /data-ui="badge" data-tone="warning"[\s\S]{0,80}1/)
   assert.match(replenishmentWithRule, /Dozen/)

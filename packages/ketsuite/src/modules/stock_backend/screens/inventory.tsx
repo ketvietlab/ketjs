@@ -14,8 +14,8 @@ import {
   Section,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { Column, FormOption, Frame } from '../../ui/index.ts'
+} from '../../../ui/index.ts'
+import type { Column, FormOption, Frame } from '../../../ui/index.ts'
 
 export type InventoryBalanceRow = {
   id: string

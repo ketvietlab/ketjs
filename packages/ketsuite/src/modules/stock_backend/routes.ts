@@ -4,9 +4,9 @@ import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
 import { backendPage } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
-import { inventoryScreen } from './inventory-screen.tsx'
-import { forecastScreen } from './forecast-screen.tsx'
 import {
+  forecastScreen,
+  inventoryScreen,
   lotCreateScreen,
   lotDetailScreen,
   lotsListScreen,
@@ -14,6 +14,8 @@ import {
   locationsListScreen,
   pickingTypeCreateScreen,
   pickingTypesListScreen,
+  replenishmentCreateScreen,
+  replenishmentListScreen,
   stockRouteCreateScreen,
   stockRouteDetailScreen,
   stockRoutesListScreen,
@@ -23,7 +25,6 @@ import {
   warehouseCreateScreen,
   warehousesListScreen,
 } from './screens/index.ts'
-import { replenishmentScreen } from './replenishment-screen.tsx'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -1250,7 +1251,9 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/stock/replenishment'))
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/replenishment'))
+          : seeOther(inLocale(url, '/admin/stock/replenishment/new?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [points, data, templates] = (await Promise.all([
@@ -1288,7 +1291,7 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'stock_backend.replenishment',
         body: (_, frame) =>
-          replenishmentScreen(
+          replenishmentListScreen(
             _,
             {
               rows: points.map((row, index) => {
@@ -1324,6 +1327,62 @@ export const routes: Record<string, RouteEntry> = {
                   runAction: inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`),
                 }
               }),
+              createHref: inLocale(url, '/admin/stock/replenishment/new'),
+            },
+            frame,
+          ),
+      })
+    },
+
+  '/admin/stock/replenishment/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const result = await ctx.call(
+          'stock.saveOrderpoint',
+          {
+            id: randomUUID(),
+            productId: form.productId ?? '',
+            warehouseId: form.warehouseId ?? '',
+            locationId: form.locationId ?? '',
+            trigger: form.trigger || 'auto',
+            minQuantity: form.minQuantity || '0',
+            maxQuantity: form.maxQuantity || '0',
+            ...(form.replenishmentUomId ? { replenishmentUomId: form.replenishmentUomId } : {}),
+            ...(form.routeId ? { routeId: form.routeId } : {}),
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/replenishment'))
+          : seeOther(inLocale(url, '/admin/stock/replenishment/new?invalid=1'))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const [data, templates] = (await Promise.all([
+        common(ctx, url, req),
+        ctx.call('stock.listStorableProducts', {}, url, req),
+      ])) as [Awaited<ReturnType<typeof common>>, AnyRow[]]
+      const products = templates.flatMap((template) =>
+        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+          .filter((variant) => variant.active !== false)
+          .map((variant) => ({
+            value: String(variant.id),
+            label: variant.defaultCode
+              ? `${String(template.name)} · ${String(variant.defaultCode)}`
+              : String(template.name),
+          })),
+      )
+      return adminPage(ctx, url, req, {
+        title: 'stock_backend.replenishment.create.title',
+        body: (_, frame) =>
+          replenishmentCreateScreen(
+            _,
+            {
               products,
               warehouses: options(data.warehouses),
               locations: options(data.locations),
@@ -1332,7 +1391,8 @@ export const routes: Record<string, RouteEntry> = {
                 value: String(row.id),
                 label: localizedGeneratedRouteName(_, row),
               })),
-              action: inLocale(url, '/admin/stock/replenishment'),
+              action: inLocale(url, '/admin/stock/replenishment/new'),
+              cancelHref: inLocale(url, '/admin/stock/replenishment'),
               errors: invalid(url, _),
             },
             frame,
