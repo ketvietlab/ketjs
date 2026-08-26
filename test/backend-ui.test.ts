@@ -1108,10 +1108,10 @@ test('sidebar: the footer is pinned to the window, not to the end of the page', 
   assert.match(css, /\[data-ui="sidebar-nav"\] \{[^}]*overflow-y:\s*auto;/)
 })
 
-test('design density: fields use a 32px minimum without enlarging operational controls', () => {
+test('design density: controls and fields follow the canonical component dimensions', () => {
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const css = ADMIN_CSS
-  assert.match(tokens, /--admin-control-height:\s*1\.75rem;/)
+  assert.match(tokens, /--admin-control-height:\s*var\(--kv-control-height-md\);/)
   assert.match(tokens, /--admin-field-height:\s*2rem;/)
   assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
   assert.match(css, /\[data-ui="field-input"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
