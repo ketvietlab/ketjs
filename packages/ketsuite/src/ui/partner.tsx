@@ -2,47 +2,6 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export type PartnerFact = { label: string; value: JSXChild }
-export type PartnerStat = { label: string; value: string | number; href?: string }
-
-export const PartnerListLayout = (props: {
-  tabs: Array<{ id: string; label: string; count: number; href: string; active: boolean }>
-  table: JSXChild
-  title: string
-  stats: PartnerStat[]
-}): TemplateResult => (
-  <div data-ui="partner-list-layout">
-    <section data-ui="partner-list-main">
-      <nav data-ui="partner-list-tabs" aria-label={props.title}>
-        {each(
-          props.tabs,
-          (tab) => tab.id,
-          (tab) => (
-            <a data-ui="partner-list-tab" data-active={String(tab.active)} href={tab.href}>
-              <span>{tab.label}</span>
-              <span data-ui="partner-list-count">{String(tab.count)}</span>
-            </a>
-          ),
-        )}
-      </nav>
-      {props.table}
-    </section>
-    <aside data-ui="partner-list-rail" aria-label={props.title}>
-      <h2 data-ui="partner-panel-title">{props.title}</h2>
-      <div data-ui="partner-stat-grid">
-        {each(
-          props.stats,
-          (stat) => stat.label,
-          (stat) => (
-            <div data-ui="partner-stat">
-              <span>{stat.label}</span>
-              <strong>{String(stat.value)}</strong>
-            </div>
-          ),
-        )}
-      </div>
-    </aside>
-  </div>
-)
 
 export const PartnerPanel = (props: {
   id?: string

@@ -203,6 +203,7 @@ export type { AddressInput, AddressIssue, ResolvedAddress } from './modules/addr
 export { default as addressBackend } from './modules/address_backend/index.ts'
 export { default as partner } from './modules/partner/index.ts'
 export { default as partnerBackend } from './modules/partner_backend/index.ts'
+export { default as partnerMailBackend } from './modules/partner_mail_backend/index.ts'
 export { default as accountPartner } from './modules/account_partner/index.ts'
 export { default as accountPartnerBackend } from './modules/account_partner_backend/index.ts'
 export { default as company } from './modules/company/index.ts'

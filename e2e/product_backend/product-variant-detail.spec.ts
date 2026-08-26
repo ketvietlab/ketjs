@@ -43,7 +43,7 @@ for (const viewport of [
           // reader actually sees and clicks is its trigger button.
           visibleControls: [
             ...document.querySelectorAll<HTMLElement>(
-              '[data-ui="record-body"] input:not([type="hidden"]):not([type="file"]), [data-ui="record-body"] select:not([data-ui="relation-native"]), [data-ui="record-body"] [data-ui="relation-trigger"]',
+              '[data-ui="form-page-body"] input:not([type="hidden"]):not([type="file"]), [data-ui="form-page-body"] select:not([data-ui="relation-native"]), [data-ui="form-page-body"] [data-ui="relation-trigger"]',
             ),
           ]
             .filter((control) => control.getBoundingClientRect().height > 0)
@@ -76,9 +76,9 @@ for (const viewport of [
 
 test('updates variant fields and manages variant media', async ({ page }) => {
   await page.goto(`${variantPath}?tab=general&lang=vi`)
-  await expect(page.locator('[data-ket-slot="product.record-header"] [data-ui="record-heading"]')).toHaveText(
-    'JACKET-REVIEW',
-  )
+  await expect(
+    page.locator('[data-ket-slot="product.record-header"] [data-ui="form-page-title"]'),
+  ).toHaveText('JACKET-REVIEW')
   await expect(page.locator('[data-ui="chatter-error"]')).toHaveCount(0)
 
   await page.locator('input[name="defaultCode"]').fill('JACKET-REVIEW-UPDATED')

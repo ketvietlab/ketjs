@@ -4,12 +4,10 @@ import {
   badge,
   button,
   FormCluster,
+  FormPage,
   linkButton,
-  PartnerFacts,
-  PartnerInitials,
-  PartnerPanel,
   RecordForm,
-  RecordWorkspace,
+  RecordMore,
   Section,
   shell,
   stack,
@@ -28,6 +26,7 @@ export const partnerFormScreen = (
     terms?: { creditLimit?: string | number | null; note?: string | null } | null
     errors?: string[]
     integration?: JSXChild
+    collaboration: JSXChild
     addressForms: Array<{ title: string; body: JSXChild }>
   },
   frame: Frame,
@@ -41,13 +40,32 @@ export const partnerFormScreen = (
   const identityForm = (
     <RecordForm
       id="partner-identity-form"
+      scope="partner-identity"
       action={localized(`/admin/partner/partners/${row.id}`, locale)}
       submit={_('partner_backend.action.save')}
       submitVariant="primary"
       submitPlacement="external"
       errors={options.errors}
       fields={[
-        { name: 'name', label: _('partner_backend.field.name'), value: row.name, required: true },
+        {
+          name: 'roles',
+          label: _('partner_backend.roles.title'),
+          type: 'checkbox-group',
+          span: 'full',
+          options: ['customer', 'supplier', 'employee'].map((role) => ({
+            name: role,
+            value: '1',
+            label: _(`partner.role.${role}`),
+            checked: heldRoles.has(role),
+          })),
+        },
+        {
+          name: 'name',
+          label: _('partner_backend.field.name'),
+          value: row.name,
+          required: true,
+          span: 'full',
+        },
         {
           name: 'kind',
           label: _('partner_backend.field.kind'),
@@ -65,31 +83,17 @@ export const partnerFormScreen = (
         },
         { name: 'ref', label: _('partner_backend.field.ref'), value: row.ref },
         { name: 'vat', label: _('partner_backend.field.vat'), value: row.vat },
-        { name: 'email', label: _('partner_backend.field.email'), value: row.email },
-        { name: 'phone', label: _('partner_backend.field.phone'), value: row.phone },
+        { name: 'email', label: _('partner_backend.field.email'), type: 'email', value: row.email },
+        { name: 'phone', label: _('partner_backend.field.phone'), type: 'tel', value: row.phone },
         { name: 'lang', label: _('partner_backend.field.lang'), value: row.lang },
       ]}
     />
   )
-  const rolesForm = (
-    <RecordForm
-      action={localized(`/admin/partner/partners/${row.id}/roles`, locale)}
-      submit={_('partner_backend.action.saveRoles')}
-      submitVariant="secondary"
-      fields={['customer', 'supplier', 'employee'].map((role) => ({
-        name: role,
-        label: _(`partner.role.${role}`),
-        type: 'checkbox' as const,
-        value: heldRoles.has(role),
-      }))}
-    />
-  )
   const body = stack([
-    <Section title={_('partner_backend.detail.identity')} body={<Surface body={identityForm} />} />,
     <Section
-      title={_('partner_backend.roles.title')}
-      description={_('partner_backend.roles.hint')}
-      body={<Surface body={rolesForm} />}
+      title={_('partner_backend.detail.identity')}
+      description={_('partner_backend.detail.identityHint')}
+      body={<Surface body={identityForm} />}
     />,
     <Section
       title={_('partner_backend.addresses.title')}
@@ -135,83 +139,57 @@ export const partnerFormScreen = (
     <FormCluster
       label={_('partner_backend.detail.actions')}
       forms={[
-        ...(options.integration ? [options.integration] : []),
-        ...(row.email
-          ? [
-              linkButton({
-                label: _('partner_backend.action.email'),
-                href: `mailto:${row.email}`,
-                icon: 'mail',
-                variant: 'secondary',
-              }),
-            ]
-          : []),
-        ...(row.phone
-          ? [
-              linkButton({
-                label: _('partner_backend.action.call'),
-                href: `tel:${row.phone}`,
-                icon: 'phone',
-                variant: 'secondary',
-              }),
-            ]
-          : []),
         button({
           label: _('partner_backend.action.save'),
           type: 'submit',
           form: 'partner-identity-form',
           variant: 'primary',
         }),
+        <RecordMore
+          label={_('partner_backend.action.more')}
+          body={
+            <FormCluster
+              label={_('partner_backend.action.more')}
+              forms={[
+                ...(options.integration ? [options.integration] : []),
+                ...(row.email
+                  ? [
+                      linkButton({
+                        label: _('partner_backend.action.email'),
+                        href: `mailto:${row.email}`,
+                        icon: 'mail',
+                        variant: 'secondary',
+                      }),
+                    ]
+                  : []),
+                ...(row.phone
+                  ? [
+                      linkButton({
+                        label: _('partner_backend.action.call'),
+                        href: `tel:${row.phone}`,
+                        icon: 'phone',
+                        variant: 'secondary',
+                      }),
+                    ]
+                  : []),
+              ]}
+            />
+          }
+        />,
       ]}
-    />
-  )
-  const quickFacts = (
-    <PartnerPanel
-      title={_('partner_backend.detail.quick')}
-      body={
-        <PartnerFacts
-          items={[
-            { label: _('partner_backend.field.kind'), value: _(`partner.kind.${row.kind}`) },
-            { label: _('partner_backend.field.ref'), value: row.ref || '—' },
-            { label: _('partner_backend.field.vat'), value: row.vat || '—' },
-            { label: _('partner_backend.field.phone'), value: row.phone || '—' },
-            { label: _('partner_backend.field.email'), value: row.email || '—' },
-            { label: _('partner_backend.field.state'), value: status },
-          ]}
-        />
-      }
     />
   )
   return shell(
     _,
     row.name,
-    <RecordWorkspace
-      breadcrumbs={{
-        label: _('partner_backend.detail.navigation'),
-        items: [
-          {
-            label: _('partner_backend.menu.app'),
-            href: localized('/admin/partner/partners', locale),
-          },
-          {
-            label: _('partner_backend.menu.directory'),
-            href: localized('/admin/partner/partners', locale),
-          },
-          { label: row.name },
-        ],
-      }}
-      kicker={_('partner_backend.menu.app')}
+    <FormPage
       title={row.name}
-      subtitle={row.ref || _(`partner.kind.${row.kind}`)}
-      imageFallback={<PartnerInitials name={row.name} />}
-      badges={[status]}
-      summary={[
-        { id: 'roles', label: _('partner_backend.roles.title'), value: row.roles.length },
-        { id: 'addresses', label: _('partner_backend.addresses.title'), value: row.addresses.length },
-      ]}
-      controller={actions}
+      description={row.ref || _(`partner.kind.${row.kind}`)}
+      status={status}
+      actions={actions}
       body={body}
-      aside={quickFacts}
+      aside={options.collaboration}
+      asideLabel={_('partner_backend.collaboration.label')}
     />,
     { ...frame, topbar: false, titled: false },
   )

@@ -382,6 +382,29 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  archivePartners: defineFn({
+    input: { ids: 'json', active: 'bool' },
+    output: { ok: 'bool', updated: 'int?', errors: 'json?' },
+    effects: ['read:partner.Partner', 'write:partner.Partner'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, a) => {
+      if (
+        !Array.isArray(a.ids) ||
+        !a.ids.length ||
+        a.ids.length > 2_000 ||
+        a.ids.some((id) => typeof id !== 'string' || !id.trim())
+      )
+        return invalid([issue('ids', 'partner.error.invalid')])
+      const ids = [...new Set(a.ids.map((id) => id.trim()))]
+      const P = ctx.table('partner.Partner')
+      const rows = await ctx.db.all(from(P).select(P.id).where(inArray(P.id, ids)))
+      for (const row of rows)
+        await ctx.db.update('partner.Partner', { id: row.id }, { active: a.active } as Row)
+      return { ok: true, updated: rows.length }
+    },
+  }),
+
   saveAddress: defineFn({
     input: {
       id: 'id',

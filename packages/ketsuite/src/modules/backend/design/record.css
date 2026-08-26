@@ -408,8 +408,13 @@
   }
   [data-ui="record-more-menu"] [data-ui="record-form"],
   [data-ui="record-more-menu"] [data-ui="form-actions"],
-  [data-ui="record-more-menu"] [data-ui="action-group"] {
+  [data-ui="record-more-menu"] [data-ui="action-group"],
+  [data-ui="record-more-menu"] [data-ui="form-cluster"] {
     inline-size: 100%;
+  }
+  [data-ui="record-more-menu"] [data-ui="form-cluster"] {
+    display: grid;
+    align-items: stretch;
   }
   [data-ui="record-more-menu"] [data-ui="action"] {
     inline-size: 100%;
