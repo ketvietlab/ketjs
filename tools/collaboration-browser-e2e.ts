@@ -353,7 +353,12 @@ try {
     {
       name: 'route-list',
       path: '/admin/stock/routes?lang=vi',
-      ready: `document.querySelector('#stock-route-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'route-create',
+      path: '/admin/stock/routes/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#stock-route-create-form')`,
     },
     {
       name: 'route-detail',
@@ -1772,56 +1777,35 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
             detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/stock/routes/"]')),
             ruleCount: [...document.querySelectorAll('[data-ui="table"] [data-ui="row"]')].some((row) => /[1-9]/.test(row.lastElementChild?.textContent ?? '')),
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            createHref: document.querySelector('[data-ui="list-page"] a[href*="/admin/stock/routes/new"]')?.getAttribute('href') ?? '',
+            inlineForm: Boolean(document.querySelector('#stock-route-create-form')),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
         {
-          workspace: true,
+          listPage: true,
           rowsAtLeastOne: true,
           detailLink: true,
           ruleCount: true,
-          formRowsAtLeast28: true,
+          createHref: '/admin/stock/routes/new?lang=vi',
+          inlineForm: false,
           chatter: false,
           horizontalOverflow: false,
         },
-      )
-      await evaluate(
-        cdp,
-        `(() => {
-          const form = document.querySelector('#stock-route-create-form')
-          form.querySelector('[name="name"]').value = 'Tuyến Browser hai bước'
-          form.querySelector('[name="sequence"]').value = '15'
-          form.requestSubmit()
-          return true
-        })()`,
-      )
-      await waitFor(cdp, `location.pathname.startsWith('/admin/stock/routes/')`)
-      await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes?lang=vi`)
-      await waitFor(
-        cdp,
-        `document.querySelector('[data-ui="table"]')?.textContent.includes('Tuyến Browser hai bước')`,
-      )
-      assert.equal(
-        await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
-        false,
       )
       if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-vi-desktop.png'))
 
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes?lang=en`)
       await waitFor(
         cdp,
-        `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'en'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'en'`,
       )
-      assert.equal(
-        await evaluate(cdp, `document.body.textContent.includes('Configured inventory routes')`),
-        true,
-      )
+      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Inventory routes')`), true)
       if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-en-desktop.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -1833,25 +1817,24 @@ try {
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes?lang=vi`)
       await waitFor(
         cdp,
-        `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'vi'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'vi'`,
       )
       assert.deepEqual(
         await evaluate(
           cdp,
           `({
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             listVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
           })`,
         ),
-        { horizontalOverflow: false, formRowsAtLeast28: true, listVisible: true },
+        { horizontalOverflow: false, listVisible: true },
       )
       if (!noArtifacts) await capture(cdp, join(routeEvidenceDir, 'route-list-vi-mobile.png'))
 
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/routes?lang=en`)
       await waitFor(
         cdp,
-        `document.querySelector('#stock-route-create-form') && document.documentElement.lang === 'en'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'en'`,
       )
       assert.equal(
         await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
@@ -1866,25 +1849,54 @@ try {
         mobile: false,
       })
     }
+    if (screen.name === 'route-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        { formPage: true, formRowsAtLeast28: true, chatter: false, horizontalOverflow: false },
+      )
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#stock-route-create-form')
+          form.querySelector('[name="name"]').value = 'Tuyến Browser hai bước'
+          form.querySelector('[name="sequence"]').value = '15'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `location.pathname.startsWith('/admin/stock/routes/') && !location.pathname.endsWith('/new')`,
+      )
+      assert.equal(await evaluate(cdp, `Boolean(document.querySelector('[data-ui="form-page"]'))`), true)
+    }
     if (screen.name === 'route-detail') {
       assert.deepEqual(
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
             routeForm: Boolean(document.querySelector('#stock-route-detail-form[data-scope="stock-route"]')),
             ruleForm: Boolean(document.querySelector('#stock-route-rule-form[data-scope="stock-route-rule"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
             localizedRoute: document.body.textContent.includes('Nhận hàng trực tiếp'),
             localizedRule: document.querySelector('[data-ui="table"]')?.textContent.includes('Cung ứng theo nhu cầu'),
-            rawSelectionCode: /one_step|make_to_stock/.test(document.querySelector('[data-ui="record-workspace"]')?.textContent ?? ''),
+            rawSelectionCode: /one_step|make_to_stock/.test(document.querySelector('[data-ui="form-page"]')?.textContent ?? ''),
             formRowsAtLeast28: Array.from(document.querySelectorAll('#stock-route-detail-form [data-ui="form-field"], #stock-route-rule-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
         {
-          workspace: true,
+          formPage: true,
           routeForm: true,
           ruleForm: true,
           rowsAtLeastOne: true,

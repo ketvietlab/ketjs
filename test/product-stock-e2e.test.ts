@@ -699,20 +699,28 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
   })
   const routesHtml = await routesPage.text()
   assert.equal(routesPage.status, 200)
-  assert.match(routesHtml, /data-ui="record-workspace"/)
-  assert.match(routesHtml, /id="stock-route-create-form"/)
-  assert.match(routesHtml, /data-scope="stock-route-create"/)
-  assert.match(routesHtml, /Tuyến cung ứng đã cấu hình/)
+  assert.match(routesHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(routesHtml, /id="stock-route-create-form"/)
+  assert.match(routesHtml, /href="\/admin\/stock\/routes\/new\?lang=vi"/)
   assert.match(routesHtml, /Kho chính: Nhận hàng trực tiếp/)
   assert.doesNotMatch(routesHtml, /one_step|ship_only/)
   assert.match(routesHtml, />Quy tắc</)
   assert.doesNotMatch(routesHtml, /data-island="mail\.chatter"/)
 
-  const createdRoutePage = await e2e.client.form<string>('/admin/stock/routes?lang=vi', {
+  const routeCreatePage = await e2e.client.get('/admin/stock/routes/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const routeCreateHtml = await routeCreatePage.text()
+  assert.match(routeCreateHtml, /data-ui="form-page"/)
+  assert.match(routeCreateHtml, /id="stock-route-create-form"/)
+  assert.match(routeCreateHtml, /data-scope="stock-route-create"/)
+  assert.doesNotMatch(routeCreateHtml, /data-island="mail\.chatter"/)
+
+  const createdRoutePage = await e2e.client.form<string>('/admin/stock/routes/new?lang=vi', {
     name: 'Tuyến HTTP hai bước',
     sequence: '15',
   })
-  assert.match(createdRoutePage, /data-ui="record-workspace"/)
+  assert.match(createdRoutePage, /data-ui="form-page"/)
   assert.match(createdRoutePage, /id="stock-route-detail-form"/)
   assert.match(createdRoutePage, /data-scope="stock-route"/)
   assert.match(createdRoutePage, /id="stock-route-rule-form"/)
@@ -763,7 +771,7 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
   )
   assert.match(await (await e2e.client.get('/admin/stock/routes?lang=vi')).text(), /Tuyến HTTP ưu tiên/)
 
-  const invalidRoutePage = await e2e.client.form<string>('/admin/stock/routes?lang=vi', {
+  const invalidRoutePage = await e2e.client.form<string>('/admin/stock/routes/new?lang=vi', {
     name: '',
     sequence: '10',
   })

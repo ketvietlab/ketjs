@@ -2,17 +2,20 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  button,
   dataTable,
   emptyState,
-  Framed,
+  FormCluster,
+  FormPage,
   icon,
+  inline,
   RecordForm,
-  RecordWorkspace,
   Section,
+  shell,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { Column, FormOption, Frame } from '../../ui/index.ts'
+} from '../../../ui/index.ts'
+import type { Column, FormOption, Frame } from '../../../ui/index.ts'
 
 export type StockRouteRuleRow = {
   id: string
@@ -85,6 +88,7 @@ const routeForm = (_: Translator, options: StockRouteDetailOptions): TemplateRes
     hidden={{ intent: 'route' }}
     submit={_('stock_backend.action.save')}
     submitVariant="primary"
+    submitPlacement="external"
     errors={options.routeErrors}
     fields={[
       {
@@ -184,57 +188,57 @@ export const stockRouteDetailScreen = (
       )}
     />
   )
-
-  return (
-    <Framed
-      translator={_}
-      title={_('stock_backend.routeDetail')}
-      frame={frame}
-      body={
-        <RecordWorkspace
-          kicker={_('stock_backend.stockRoute.detail.kicker')}
-          title={options.route.name}
-          subtitle={`${_('stock_backend.field.sequence')}: ${options.route.sequence}`}
-          imageFallback={icon('sliders-horizontal')}
-          badges={[
-            badge(
-              options.route.active
-                ? _('stock_backend.stockRoute.status.active')
-                : _('stock_backend.stockRoute.status.archived'),
-              options.route.active ? 'positive' : 'danger',
-            ),
+  const page = (
+    <FormPage
+      scope="stock-route-form-page"
+      title={options.route.name}
+      description={`${_('stock_backend.field.sequence')}: ${options.route.sequence}`}
+      status={badge(
+        options.route.active
+          ? _('stock_backend.stockRoute.status.active')
+          : _('stock_backend.stockRoute.status.archived'),
+        options.route.active ? 'positive' : 'neutral',
+      )}
+      actions={
+        <FormCluster
+          label={_('stock_backend.action.save')}
+          forms={[
+            button({
+              label: _('stock_backend.action.save'),
+              type: 'submit',
+              form: 'stock-route-detail-form',
+              variant: 'primary',
+            }),
           ]}
-          summary={[
-            {
-              id: 'rules',
-              label: _('stock_backend.stockRoute.detail.summary.rules'),
-              value: options.rows.length,
-            },
-            { id: 'pull', label: _('stock_backend.stockRoute.detail.summary.pull'), value: pullCount },
-            { id: 'push', label: _('stock_backend.stockRoute.detail.summary.push'), value: pushCount },
-          ]}
-          body={stack(
-            [
-              <Section
-                title={_('stock_backend.stockRoute.detail.information.title')}
-                description={_('stock_backend.stockRoute.detail.information.hint')}
-                body={<Surface padding="compact" body={routeForm(_, options)} />}
-              />,
-              <Section
-                title={_('stock_backend.stockRoute.detail.rules.title')}
-                description={_('stock_backend.stockRoute.detail.rules.hint')}
-                body={rules}
-              />,
-              <Section
-                title={_('stock_backend.stockRoute.rule.create.title')}
-                description={_('stock_backend.stockRoute.rule.create.hint')}
-                body={<Surface padding="compact" body={ruleForm(_, options)} />}
-              />,
-            ],
-            'loose',
-          )}
         />
       }
+      meta={inline([
+        badge(`${_('stock_backend.stockRoute.detail.summary.rules')}: ${options.rows.length}`, 'neutral'),
+        badge(`${_('stock_backend.stockRoute.detail.summary.pull')}: ${pullCount}`, 'neutral'),
+        badge(`${_('stock_backend.stockRoute.detail.summary.push')}: ${pushCount}`, 'info'),
+      ])}
+      body={stack(
+        [
+          <Section
+            title={_('stock_backend.stockRoute.detail.information.title')}
+            description={_('stock_backend.stockRoute.detail.information.hint')}
+            body={<Surface body={routeForm(_, options)} />}
+          />,
+          <Section
+            title={_('stock_backend.stockRoute.detail.rules.title')}
+            description={_('stock_backend.stockRoute.detail.rules.hint')}
+            body={rules}
+          />,
+          <Section
+            title={_('stock_backend.stockRoute.rule.create.title')}
+            description={_('stock_backend.stockRoute.rule.create.hint')}
+            body={<Surface body={ruleForm(_, options)} />}
+          />,
+        ],
+        'loose',
+      )}
     />
   )
+
+  return shell(_, options.route.name, page, { ...frame, topbar: false, titled: false })
 }

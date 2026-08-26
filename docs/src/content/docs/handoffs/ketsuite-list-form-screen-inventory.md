@@ -38,6 +38,9 @@ All sub-agents work in the same checkout and on the same feature branch.
    controllers, validation, empty/error states, responsive behavior, and existing Chatter/Activity islands.
 10. Completion requires a focused render/HTTP test and desktop/mobile browser evidence. A visual change
    without behavioral coverage remains `review`.
+11. Validation follows CI's affected-group planner. Module changes run their focused tests and owning group
+   (`stock_backend` is `catalog`); shared UI, framework, build, tooling, workflow, or otherwise unclassified
+   code expands to all groups. Do not rerun unrelated domain groups inside every wave.
 
 Statuses: `ready`, `in-progress`, `blocked`, `review`, `done`, `keep` (intentional specialized layout).
 
@@ -118,8 +121,8 @@ rendering from `screens.tsx` to `screens/shared.tsx`, then remove the old file.
 | STOCK-06 | ready | Operation types | `/admin/stock/picking-types` | `pickingTypesScreen` | Split | no | — |
 | STOCK-07 | done | Lots and serials | `/admin/stock/lots`, `/admin/stock/lots/new` | `screens/lots-list.tsx`, `screens/lot-create.tsx` | Split | list/new: no | Huygens + Kant |
 | STOCK-08 | done | Lot/serial detail | `/admin/stock/lots/{id}` | `screens/lot-detail.tsx` | FormPage | `stock_lot_mail_backend` | Curie |
-| STOCK-09 | ready | Supply routes | `/admin/stock/routes` | `stockRoutesScreen` | Split | no | — |
-| STOCK-10 | ready | Supply-route detail | `/admin/stock/routes/{id}` | `stockRouteDetailScreen` | FormPage | no | — |
+| STOCK-09 | done | Supply routes | `/admin/stock/routes`, `/admin/stock/routes/new` | `screens/stock-routes-list.tsx`, `screens/stock-route-create.tsx` | Split | list/new: no | Huygens + Kant |
+| STOCK-10 | done | Supply-route detail | `/admin/stock/routes/{id}` | `screens/stock-route-detail.tsx` | FormPage | no | Curie |
 | STOCK-11 | ready | Replenishment rules | `/admin/stock/replenishment` | `replenishmentScreen` | Split | no | — |
 | STOCK-12 | ready | Stock forecast | `/admin/stock/forecast` | `forecastScreen` | Specialized | no | — |
 
@@ -501,3 +504,25 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 2 transfer detail evidence](/assets/inventory-transfer-list/transfer-detail-browser-skill.png)
 
 ![Wave 2 transfer detail mobile evidence](/assets/inventory-transfer-list/transfer-detail-mobile-browser-skill.png)
+
+### Wave 3 — STOCK-09 and STOCK-10
+
+- List: dedicated `ListPage` with row-wide detail links and a localized create action to
+  `/admin/stock/routes/new`; the inline create form was removed.
+- Create: dedicated `FormPage` preserving name, sequence, validation and cancel semantics. At 1280 px the
+  standard input measures 280 px, with no horizontal overflow.
+- Detail: dedicated `FormPage` preserving route editing, the complete rules table, and all seven add-rule
+  fields. Summary stays compact in header metadata; there is no redundant quick-info rail or Chatter for a
+  domain without a mail bridge.
+- Responsive evidence: at 390 px the route name input measures 250 px inside a 358 px form row, both forms
+  remain rendered, and the document has no horizontal overflow.
+- Validation scope: six focused renderer tests, the affected stock-route HTTP scenario, three targeted
+  browser E2E flows, Biome on changed files, build/typecheck, and Astro docs validation.
+
+![Wave 3 route list evidence](/assets/inventory-route-list/route-list-browser-skill.png)
+
+![Wave 3 route create evidence](/assets/inventory-route-list/route-create-browser-skill.png)
+
+![Wave 3 route detail evidence](/assets/inventory-route-detail/route-detail-browser-skill.png)
+
+![Wave 3 route detail mobile evidence](/assets/inventory-route-detail/route-detail-mobile-browser-skill.png)

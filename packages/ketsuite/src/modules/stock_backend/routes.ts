@@ -11,14 +11,15 @@ import {
   lotCreateScreen,
   lotDetailScreen,
   lotsListScreen,
+  stockRouteCreateScreen,
+  stockRouteDetailScreen,
+  stockRoutesListScreen,
   transferCreateScreen,
   transferDetailScreen,
   transfersListScreen,
 } from './screens/index.ts'
 import { pickingTypesScreen } from './picking-types-screen.tsx'
 import { replenishmentScreen } from './replenishment-screen.tsx'
-import { stockRouteDetailScreen } from './stock-route-screen.tsx'
-import { stockRoutesScreen } from './stock-routes-screen.tsx'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -928,7 +929,7 @@ export const routes: Record<string, RouteEntry> = {
         )
         return (result as { ok?: boolean }).ok
           ? seeOther(inLocale(url, `/admin/stock/routes/${id}`))
-          : seeOther(inLocale(url, '/admin/stock/routes?invalid=1'))
+          : seeOther(inLocale(url, '/admin/stock/routes/new?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [rows, rules] = (await Promise.all([
@@ -943,7 +944,7 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'stock_backend.routes',
         body: (_, frame) =>
-          stockRoutesScreen(
+          stockRoutesListScreen(
             _,
             {
               rows: rows.map((row) => ({
@@ -953,7 +954,41 @@ export const routes: Record<string, RouteEntry> = {
                 ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
                 href: inLocale(url, `/admin/stock/routes/${String(row.id)}`),
               })),
-              action: inLocale(url, '/admin/stock/routes'),
+              createHref: inLocale(url, '/admin/stock/routes/new'),
+            },
+            frame,
+          ),
+      })
+    },
+
+  '/admin/stock/routes/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const id = randomUUID()
+        const result = await ctx.call(
+          'stock.saveRoute',
+          { id, name: form.name ?? '', sequence: Number(form.sequence || 10) },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, `/admin/stock/routes/${id}`))
+          : seeOther(inLocale(url, '/admin/stock/routes/new?invalid=1'))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      return adminPage(ctx, url, req, {
+        title: 'stock_backend.stockRoute.create.title',
+        body: (_, frame) =>
+          stockRouteCreateScreen(
+            _,
+            {
+              action: inLocale(url, '/admin/stock/routes/new'),
+              cancelHref: inLocale(url, '/admin/stock/routes'),
               errors: invalid(url, _),
             },
             frame,
