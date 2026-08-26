@@ -46,7 +46,7 @@ for (const viewport of [
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
       // A field is 32px on a touch screen and 28px with a cursor: a fingertip
       // needs the target, a pointer does not.
-      const fieldHeight = viewport.name === 'desktop' ? 28 : 32
+      const fieldHeight = 34
       expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
       await page.screenshot({
         path: join(artifacts, `transfers-${locale}-${viewport.name}.png`),

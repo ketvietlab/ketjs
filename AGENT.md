@@ -9,6 +9,15 @@
 - All new or updated documentation pages belong under `docs/src/content/docs/`; never add documentation Markdown at the root of `docs/`. `docs/README.md` is reserved for maintaining the docs application, and existing root-level Markdown is legacy material to migrate into the content collection rather than extend.
 - Every fenced code block in the documentation must begin with a language-valid location comment. Use `// File: path` for TypeScript, JavaScript, TSX, and JSONC; `# Run from: path` for shell commands; `%% File: path` for Mermaid; `{% comment %} File: path {% endcomment %}` for Liquid/KTL; `<!-- File: path -->` for Markdown and HTML; and `# File: path` for text, HTTP, and other plain examples. Use a concrete repository or example-project path, not a vague label. Run `npm --prefix docs run check:snippets` before handoff.
 
+## Design system contract
+
+- `packages/design-system` and the public `@ketvietlab/design-system` package are the single source of truth for KetSuite UI tokens, typography, primitives, layouts, patterns, and `data-ui` contracts. Use `npm run design:system` to inspect the canonical catalogue.
+- Every new or modified KetSuite UI must consume the design system before introducing local components or CSS. Inter is the canonical UI typeface; colour, spacing, density, radius, shadow, and motion must come from design-system tokens.
+- KetSuite modules own business data, translated labels, routes, and domain behaviour. Reusable presentation belongs in `packages/design-system`, which must remain domain-neutral and depend only on `@ketvietlab/ketjs-view`.
+- Do not create or retain parallel token scales, generic primitives, or copied component styles. When a reusable capability is missing, add it to the design system first, expose its states in the catalogue, and then migrate the consuming UI.
+- Every design-system component or visual-state change requires contract/unit coverage plus browser E2E at desktop and mobile widths. Read the generated visual evidence before handoff and never commit that evidence.
+- When touching legacy KetSuite UI, bring the affected surface onto the design-system contract within the same change; unrelated screens do not require a big-bang migration.
+
 ## Documentation index
 
 | Change area | Documentation owner |

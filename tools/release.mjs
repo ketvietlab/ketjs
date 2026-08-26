@@ -1,5 +1,5 @@
 // Release preparation is executable evidence, not a checklist someone can forget.
-// It verifies the four public workspaces, packs exactly what npm would receive,
+// It verifies the five public workspaces, packs exactly what npm would receive,
 // installs those tarballs into a clean consumer, and boots a generated project.
 
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -16,6 +16,11 @@ const command = process.argv[2] ?? 'check'
 
 const workspaces = [
   { name: '@ketvietlab/ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
+  {
+    name: '@ketvietlab/design-system',
+    dir: 'packages/design-system',
+    maxPackedBytes: 150_000,
+  },
   { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 500_000 },
   { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
   { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 2_000_000 },
@@ -142,7 +147,11 @@ const pack = (destination, version) => {
     if (result.size > workspace.maxPackedBytes)
       fail(`${workspace.name} grew to ${result.size} packed bytes (limit ${workspace.maxPackedBytes})`)
     const paths = new Set(result.files.map((file) => file.path))
-    for (const required of ['LICENSE', 'README.md', 'package.json', 'dist/index.js', 'dist/index.d.ts'])
+    const requiredPaths = ['LICENSE', 'README.md', 'package.json', 'dist/index.js', 'dist/index.d.ts']
+    if (workspace.name === '@ketvietlab/design-system') {
+      requiredPaths.push('dist/styles.css', 'dist/foundations/tokens.css')
+    }
+    for (const required of requiredPaths)
       if (!paths.has(required)) {
         fail(`${workspace.name} tarball omitted ${required}`)
       }
@@ -185,7 +194,7 @@ const smoke = (tarballs, version, parent) => {
     [
       '--input-type=module',
       '--eval',
-      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend')])`,
+      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend')])`,
     ],
     { cwd: consumer },
   )

@@ -823,8 +823,8 @@
   }
   [data-scope="product-media"] [data-product-media-pagination="true"] select {
     inline-size: 4rem;
-    min-block-size: 2rem;
-    block-size: 2rem;
+    min-block-size: var(--control-height-sm, 30px);
+    block-size: var(--control-height-sm, 30px);
   }
   [data-scope="product-media"] [data-product-media-pagination="true"] [data-ui="action"] {
     min-block-size: var(--control-height-sm, 30px);

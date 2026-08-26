@@ -388,6 +388,7 @@
   }
   [data-ui="modal-backdrop"] {
     position: absolute;
+    z-index: 0;
     inset: 0;
     display: block;
     background: color-mix(in srgb, #000 36%, transparent);

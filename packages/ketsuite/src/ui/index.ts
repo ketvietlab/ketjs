@@ -9,9 +9,11 @@
 // no client state: the backend renders on the server and keeps what it knows in the
 // URL (D43). Interactivity, where a screen genuinely needs it, is an island.
 //
-// The stylesheet lives with the `backend` module, not here. A deployment that uses
-// the kit without installing the admin gets correct markup and no styles — a
-// deliberate trade, noted in design/HANDOFF.md.
+// The public foundation lives in @ketvietlab/design-system. The backend module
+// loads its CSS first, then this compatibility kit while screens migrate to the
+// public components. New shared UI must enter through that public contract.
+
+export * as designSystem from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
 export { formatMoney } from './format.ts'

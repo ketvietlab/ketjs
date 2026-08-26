@@ -27,6 +27,7 @@ export default defineModule({
   // selects this module; it never reaches into the module's file layout.
   assets: new URL('./design/', import.meta.url),
   styles: [
+    'design-system/styles.css',
     'tokens.css',
     'foundation.css',
     'lists.css',

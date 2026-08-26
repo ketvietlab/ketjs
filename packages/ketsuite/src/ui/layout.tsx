@@ -95,7 +95,7 @@ export const shell = (
       </ket-fragments>
     )
   return (
-    <div data-ui="shell">
+    <div data-ui="shell" data-kv-design-system>
       {sidebar(_, sidebarOptions)}
       <main data-ui="main">
         {extras.runtime ?? ''}
