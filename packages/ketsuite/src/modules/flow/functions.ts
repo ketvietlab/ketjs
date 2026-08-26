@@ -23,15 +23,7 @@ import {
 } from './operations.ts'
 import { emptyIssueListState } from './search.ts'
 import { projectStateOf, projectStats } from './projects.ts'
-import {
-  archivePage,
-  listPages,
-  movePage,
-  pageDetail,
-  reorderPage,
-  restorePage,
-  savePage,
-} from './pages.ts'
+import { archivePage, listPages, movePage, pageDetail, reorderPage, restorePage, savePage } from './pages.ts'
 
 const flowReadEffects = [
   'read:flow.Project',

@@ -120,12 +120,7 @@ export const functions: Record<string, FnSpec> = {
   'sync.commitEpicContent': defineFn({
     input: { id: 'id', storeKey: 'text', checksum: 'text', size: 'int', previewText: 'text?' },
     output: { ok: 'bool', attachmentId: 'id?' },
-    effects: [
-      'read:flow.Epic',
-      'write:flow.Epic',
-      'read:storage.Attachment',
-      'write:storage.Attachment',
-    ],
+    effects: ['read:flow.Epic', 'write:flow.Epic', 'read:storage.Attachment', 'write:storage.Attachment'],
     idempotent: true,
     exposure: 'internal',
     handler: async (ctx, args) => {

@@ -20,17 +20,12 @@ import type { Ctx } from '@ketvietlab/ketjs'
  */
 export type ProjectStats = { total: number; done: number }
 
-export async function projectStats(
-  ctx: Ctx,
-  projectIds: string[],
-): Promise<Map<string, ProjectStats>> {
+export async function projectStats(ctx: Ctx, projectIds: string[]): Promise<Map<string, ProjectStats>> {
   const tally = new Map<string, ProjectStats>()
   if (!projectIds.length) return tally
   for (const id of projectIds) tally.set(id, { total: 0, done: 0 })
   const I = ctx.table('flow.Issue')
-  const issues = await ctx.db.all(
-    from(I).where(inArray(I.projectId, projectIds), eq(I.active, true)),
-  )
+  const issues = await ctx.db.all(from(I).where(inArray(I.projectId, projectIds), eq(I.active, true)))
   if (!issues.length) return tally
   const C = ctx.table('flow.Column')
   const columns = await ctx.db.all(

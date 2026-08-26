@@ -209,10 +209,7 @@ const writerFor = (topic: string): Promise<Writer> => {
 }
 
 /** Applies a client's update and reports whether the update-count threshold was crossed. */
-export async function publishUpdate(
-  ref: DocRef,
-  updateBase64: string,
-): Promise<{ shouldFlatten: boolean }> {
+export async function publishUpdate(ref: DocRef, updateBase64: string): Promise<{ shouldFlatten: boolean }> {
   const { doc } = getOrCreateLive(ref)
   Y.applyUpdate(doc, new Uint8Array(Buffer.from(updateBase64, 'base64')))
   const entry = live.get(keyFor(ref))!
