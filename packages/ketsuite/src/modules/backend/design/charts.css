@@ -67,8 +67,11 @@
     font-size: var(--admin-size-sm);
     color: var(--admin-ink-secondary);
   }
+  /* A line legend runs along one row, so its item is swatch, name and total in
+     three columns — two left the total wrapping onto an implicit second row,
+     out from under the name it belonged to. */
   [data-ui="chart"][data-kind="line"] [data-ui="chart-legend-item"] {
-    grid-template-columns: auto auto;
+    grid-template-columns: auto auto auto;
   }
   [data-ui="chart-legend-item"][data-series="comparison"] [data-ui="chart-legend-swatch"] {
     background: var(--admin-chart-comparison);
