@@ -98,6 +98,22 @@ export const models: Record<string, ModelDef> = {
       active: 'bool',
     },
   },
+  /**
+   * The default sales tax of a shared product in one legal entity.
+   *
+   * Tax belongs to a company's chart while the product template is shared, so
+   * the mapping cannot live on `product.Template` without leaking one company's
+   * accounting setup into another.
+   */
+  ProductTax: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      templateId: 'ref:product.Template',
+      taxId: 'ref:account.Tax',
+    },
+    indexes: { company_template: { fields: ['companyId', 'templateId'], unique: true } },
+  },
   PaymentTerm: {
     scope: 'company',
     fields: { id: 'id', name: 'text', note: 'text?', active: 'bool' },

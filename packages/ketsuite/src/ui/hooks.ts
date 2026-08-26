@@ -26,6 +26,7 @@ import { HOOKS as mail } from './mail.ts'
 import { HOOKS as activity } from './activity.ts'
 import { HOOKS as calendar } from './calendar.ts'
 import { HOOKS as record } from './record.tsx'
+import { HOOKS as recordDetail } from './record-detail.tsx'
 import { HOOKS as modal } from './modal.tsx'
 import { HOOKS as auth } from './auth.tsx'
 
@@ -51,6 +52,7 @@ const ALL = [
   ...activity,
   ...calendar,
   ...record,
+  ...recordDetail,
   ...modal,
   ...auth,
 ]
@@ -86,6 +88,7 @@ export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
           ['activity', activity],
           ['calendar', calendar],
           ['record', record],
+          ['record-detail', recordDetail],
           ['modal', modal],
           ['auth', auth],
         ] as Array<[string, readonly string[]]>

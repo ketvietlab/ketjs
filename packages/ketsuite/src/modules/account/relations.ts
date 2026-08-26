@@ -14,6 +14,10 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     expenseAccount: { belongsTo: 'account.Account', by: 'expenseAccountId' },
   },
   'account.Tax': { account: { belongsTo: 'account.Account', by: 'accountId' } },
+  'account.ProductTax': {
+    template: { belongsTo: 'product.Template', by: 'templateId' },
+    tax: { belongsTo: 'account.Tax', by: 'taxId' },
+  },
   'account.Journal': {
     defaultAccount: { belongsTo: 'account.Account', by: 'defaultAccountId' },
     moves: { hasMany: 'account.Move', by: 'journalId' },

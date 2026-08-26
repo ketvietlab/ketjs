@@ -29,7 +29,13 @@ import {
 } from './screens/index.ts'
 import { attributesScreen } from './attributes-screen.tsx'
 import { newProductScreen } from './create-screen.tsx'
-import { attributeControl, attributeValuesControl, categoryControl, uomControl } from './relation-control.ts'
+import {
+  attributeControl,
+  attributeValuesControl,
+  brandControl,
+  categoryControl,
+  uomControl,
+} from './relation-control.ts'
 import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens/index.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
 import type { SearchMenu, TableGroup, TableSelection } from '../../ui/index.ts'
@@ -42,6 +48,8 @@ import { adminPage, frameOf, inLocale, localeQuery, timezoneOf } from '../backen
 type MediaRow = {
   id: string
   attachmentId: string
+  templateId?: string | null
+  productId?: string | null
   alt?: string | null
   primary: boolean
   attachment?: { name?: string; mimetype?: string }
@@ -85,6 +93,16 @@ const productTabOf = (url: URL): ProductDetailTab => {
     ? (asked as ProductDetailTab)
     : 'general'
 }
+const MEDIA_VARIANT_PAGE_SIZE = 25
+const VARIANT_PAGE_SIZE = 10
+const positivePage = (value: string | null): number => {
+  const page = Number.parseInt(value ?? '1', 10)
+  return Number.isFinite(page) && page > 0 ? page : 1
+}
+const requestedVariantMediaPage = (url: URL): number => {
+  return positivePage(url.searchParams.get('variantPage'))
+}
+const requestedVariantPage = (url: URL): number => positivePage(url.searchParams.get('page'))
 const variantTabOf = (url: URL): VariantDetailTab => {
   const asked = url.searchParams.get('tab')
   return (VARIANT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
@@ -105,11 +123,22 @@ const seeVariant = (
 ) => seeOther(inLocale(url, `/admin/product/templates/${templateId}/variants/${productId}?tab=${tab}`))
 
 const optionsFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
-  const [units, categories, attributes] = (await Promise.all([
+  const live = await ctx.live(req)
+  const taxEnabled = Boolean(live.functions['account.listTaxes'])
+  const [units, categories, attributes, brands, taxes] = (await Promise.all([
     ctx.call('uom.listUnits', {}, url, req),
     ctx.call('product.listCategories', {}, url, req),
     ctx.call('product.listAttributes', {}, url, req),
-  ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>, Array<Record<string, unknown>>]
+    ctx.call('product.listBrands', {}, url, req),
+    taxEnabled ? ctx.call('account.listTaxes', { typeTaxUse: 'sale' }, url, req) : Promise.resolve([]),
+  ])) as [
+    Array<Record<string, unknown>>,
+    Array<Record<string, unknown>>,
+    Array<Record<string, unknown>>,
+    Array<Record<string, unknown>>,
+    Array<Record<string, unknown>>,
+  ]
+  const variantAttributes = attributes.filter((row) => row.createVariant !== 'no_variant')
   return {
     // Kept raw alongside the options so a caller can reach `parentPath` and work
     // out which unit tree a template sits in.
@@ -121,11 +150,17 @@ const optionsFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]
       // The ancestry, so two "Shirts" under different parents stay distinguishable.
       description: row.path == null ? null : String(row.path),
     })),
-    attributes: attributes.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    brands: brands.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    taxes: taxes.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    taxEnabled,
+    variantAttributes: variantAttributes.map((row) => ({
+      value: String(row.id),
+      label: String(row.name),
+    })),
     // Values come nested inside their attribute here, and carry the attribute's
     // name as their description — the value picker spans every attribute, so
     // "Đỏ" on its own would not say which attribute it belongs to.
-    attributeValues: attributes.flatMap((attribute) =>
+    attributeValues: variantAttributes.flatMap((attribute) =>
       (Array.isArray(attribute.values) ? (attribute.values as Array<Record<string, unknown>>) : []).map(
         (value) => ({
           value: String(value.id),
@@ -824,10 +859,14 @@ export const routes: Record<string, RouteEntry> = {
             // a no-op and the field impossible to clear once set.
             uomId: form.uomId || null,
             categoryId: form.categoryId || null,
+            brandId: form.brandId || null,
+            origin: form.origin || null,
             description: form.description || null,
             listPrice: form.listPrice || '0',
             saleOk: form.saleOk === '1',
             purchaseOk: form.purchaseOk === '1',
+            ...(Object.hasOwn(form, 'defaultCode') ? { defaultCode: form.defaultCode || null } : {}),
+            ...(Object.hasOwn(form, 'barcode') ? { barcode: form.barcode || null } : {}),
           },
           url,
           req,
@@ -927,7 +966,11 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
+      const live = await ctx.live(req)
       const hasStock = await stockEnabled(ctx, req)
+      const hasProductTax = Boolean(
+        live.functions['account.getProductTax'] && live.functions['account.setProductTax'],
+      )
       const activeTab = productTabOf(url)
       let savedPartial = false
       if (req.method === 'POST') {
@@ -953,10 +996,14 @@ export const routes: Record<string, RouteEntry> = {
             // a no-op and the field impossible to clear once set.
             uomId: form.uomId || null,
             categoryId: form.categoryId || null,
+            brandId: form.brandId || null,
+            origin: form.origin || null,
             description: form.description || null,
             listPrice: form.listPrice || '0',
             saleOk: form.saleOk === '1',
             purchaseOk: form.purchaseOk === '1',
+            ...(Object.hasOwn(form, 'defaultCode') ? { defaultCode: form.defaultCode || null } : {}),
+            ...(Object.hasOwn(form, 'barcode') ? { barcode: form.barcode || null } : {}),
           },
           url,
           req,
@@ -991,6 +1038,31 @@ export const routes: Record<string, RouteEntry> = {
             )
           }
         }
+        if (hasProductTax && Object.hasOwn(form, 'taxId')) {
+          const taxResult = await ctx.call(
+            'account.setProductTax',
+            { templateId: params.id, taxId: form.taxId || null },
+            url,
+            req,
+          )
+          if (!(taxResult as { ok?: boolean }).ok) {
+            if (partial)
+              return json(
+                {
+                  ok: false,
+                  message: _('product_backend.error.invalid'),
+                  errors: errorsOf(taxResult),
+                },
+                { status: 422 },
+              )
+            return seeOther(
+              inLocale(
+                url,
+                `/admin/product/templates/${params.id}?invalid=1&count=${errorsOf(taxResult).length}`,
+              ),
+            )
+          }
+        }
         if (!partial) return seeProduct(params.id, url)
         savedPartial = true
       }
@@ -1003,25 +1075,109 @@ export const routes: Record<string, RouteEntry> = {
         listPrice: number
         uomId: string | null
         categoryId?: string | null
+        brandId?: string | null
+        origin?: string | null
         saleOk?: boolean
         purchaseOk?: boolean
         active?: boolean
+        variants?: Array<{
+          id: string
+          defaultCode?: string | null
+          barcode?: string | null
+          combinationKey?: string | null
+          active?: boolean
+        }>
+        createdAt?: string | Date | null
+        updatedAt?: string | Date | null
       } | null
       if (!row) return text('Product not found', { status: 404 })
-      const [mediaRows, variants, options, stockConfig, attributeLines] = await Promise.all([
-        mediaFor(ctx, url, req, row.id),
-        ctx.call('product.listVariants', { templateId: row.id }, url, req) as Promise<
-          Array<{ id: string; defaultCode?: string | null; barcode?: string | null; active?: boolean }>
-        >,
-        optionsFor(ctx, url, req),
-        hasStock
-          ? ctx.call('stock.getProductConfig', { templateId: row.id }, url, req)
-          : Promise.resolve(null),
-        ctx.call('product.listAttributeLines', { templateId: row.id }, url, req),
-      ])
+      const [mediaRows, listedVariants, options, stockConfig, attributeLines, currentTax] = await Promise.all(
+        [
+          mediaFor(ctx, url, req, row.id),
+          ctx.call('product.listVariants', { templateId: row.id }, url, req) as Promise<
+            Array<{
+              id: string
+              name?: string | null
+              defaultCode?: string | null
+              barcode?: string | null
+              combinationKey?: string | null
+              active?: boolean
+              values?: Array<{ value?: string | null; attribute?: string | null }>
+            }>
+          >,
+          optionsFor(ctx, url, req),
+          hasStock
+            ? ctx.call('stock.getProductConfig', { templateId: row.id }, url, req)
+            : Promise.resolve(null),
+          ctx.call('product.listAttributeLines', { templateId: row.id }, url, req),
+          hasProductTax
+            ? ctx.call('account.getProductTax', { templateId: row.id }, url, req)
+            : Promise.resolve(null),
+        ],
+      )
+      const defaultVariant = (row.variants ?? []).find(
+        (variant) => String(variant.combinationKey ?? '') === '',
+      )
+      const variants = listedVariants.filter((variant) => String(variant.combinationKey ?? '') !== '')
+      const variantPageCount = Math.max(1, Math.ceil(variants.length / VARIANT_PAGE_SIZE))
+      const variantPage = Math.min(requestedVariantPage(url), variantPageCount)
+      const variantStart = (variantPage - 1) * VARIANT_PAGE_SIZE
+      const visibleVariants = variants.slice(variantStart, variantStart + VARIANT_PAGE_SIZE)
+      const stockByVariant = new Map<string, string>()
+      if (activeTab === 'variants' && hasStock && live.functions['stock.forecast']) {
+        const forecasts = await Promise.all(
+          visibleVariants.map(async (variant) => ({
+            id: variant.id,
+            forecast: (await ctx.call('stock.forecast', { productId: variant.id }, url, req)) as {
+              onHand?: string | number
+            },
+          })),
+        )
+        for (const entry of forecasts)
+          stockByVariant.set(String(entry.id), String(entry.forecast.onHand ?? '0'))
+      }
+      const variantMediaPageCount = Math.max(1, Math.ceil(variants.length / MEDIA_VARIANT_PAGE_SIZE))
+      const variantMediaPage = Math.min(requestedVariantMediaPage(url), variantMediaPageCount)
+      const variantMediaStart = (variantMediaPage - 1) * MEDIA_VARIANT_PAGE_SIZE
+      const visibleMediaVariants =
+        activeTab === 'media'
+          ? variants.slice(variantMediaStart, variantMediaStart + MEDIA_VARIANT_PAGE_SIZE)
+          : variants
+      const variantMediaRows =
+        activeTab === 'media'
+          ? ((await ctx.call(
+              'product_media.listMediaByProducts',
+              { productIds: visibleMediaVariants.map((variant) => variant.id) },
+              url,
+              req,
+            )) as MediaRow[])
+          : []
+      const variantMedia = visibleMediaVariants.map((variant) => ({
+        variantId: variant.id,
+        images: variantMediaRows
+          .filter((image) => image.productId === variant.id)
+          .map((image) => ({
+            id: image.id,
+            src: `/files/${image.attachmentId}`,
+            alt: image.alt || image.attachment?.name || variant.defaultCode || variant.name || variant.id,
+            primary: image.primary,
+            actions: {
+              remove: inLocale(
+                url,
+                `/admin/product/templates/${row.id}/variants/${variant.id}/media/${image.id}/remove?tab=media`,
+              ),
+            },
+          })),
+      }))
       const body = productDetailScreen(
         _,
-        { ...row, ...(stockConfig as Record<string, unknown> | null) },
+        {
+          ...row,
+          ...(stockConfig as Record<string, unknown> | null),
+          defaultCode: defaultVariant?.defaultCode ?? null,
+          barcode: defaultVariant?.barcode ?? null,
+          taxId: (currentTax as { taxId?: string | null } | null)?.taxId ?? null,
+        },
         {
           status: 'ready',
           uploadAction: inLocale(url, `/admin/product/templates/${row.id}/media?tab=media`),
@@ -1069,13 +1225,38 @@ export const routes: Record<string, RouteEntry> = {
         },
         {
           ...options,
-          variants,
-          attributeLines: attributeLines as Array<{
-            id: string
-            attributeId: string
-            attribute?: string | null
-            values: Array<{ id: string; name: string }>
-          }>,
+          variants: (activeTab === 'media'
+            ? visibleMediaVariants
+            : activeTab === 'variants'
+              ? visibleVariants
+              : variants
+          ).map((variant) => ({
+            ...variant,
+            ...(stockByVariant.has(String(variant.id))
+              ? { stock: stockByVariant.get(String(variant.id)) }
+              : {}),
+          })),
+          variantPage: {
+            page: variantPage,
+            pageSize: VARIANT_PAGE_SIZE,
+            total: variants.length,
+          },
+          variantMedia,
+          variantMediaPage: {
+            page: variantMediaPage,
+            pageSize: MEDIA_VARIANT_PAGE_SIZE,
+            total: variants.length,
+          },
+          attributeLines: (
+            attributeLines as Array<{
+              id: string
+              attributeId: string
+              attribute?: string | null
+              values: Array<{ id: string; name: string }>
+            }>
+          ).filter((line) =>
+            options.variantAttributes.some((attribute) => attribute.value === line.attributeId),
+          ),
           stockEnabled: hasStock,
           errors: invalidErrors(url, _),
           controls: {
@@ -1089,9 +1270,14 @@ export const routes: Record<string, RouteEntry> = {
               value: row.categoryId,
               categories: options.categories,
             }),
+            brand: await brandControl(ctx, url, req, _, {
+              id: `product-brand:${row.id}`,
+              value: row.brandId,
+              brands: options.brands,
+            }),
             attribute: await attributeControl(ctx, url, req, _, {
               id: `product-attribute:${row.id}`,
-              attributes: options.attributes,
+              attributes: options.variantAttributes,
               required: true,
             }),
             // The value picker cannot be scoped to an attribute yet — the two are

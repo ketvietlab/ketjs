@@ -6,10 +6,9 @@ import { reportFunctions, reports } from './reports.ts'
 
 export default defineModule({
   name: 'account',
-  // 0.5.0: currency-scaled amounts, several taxes per line, reverseMove, `group`
-  // removed from TAX_AMOUNT_TYPES, refusals that carry a translatable code, and
-  // invoice accounts resolved from category, partner and company defaults.
-  version: '0.5.0',
+  // 0.7.0 adds a company-scoped product-to-sales-tax mapping. Products remain
+  // shared catalogue data while the tax belongs to one legal entity's chart.
+  version: '0.7.0',
   depends: ['company', 'partner', 'product', 'uom'],
   title: 'Kế toán',
   summary: 'Sổ cái, hoá đơn, thanh toán và hệ thống tài khoản Việt Nam theo TT99.',
@@ -73,6 +72,7 @@ export default defineModule({
         'Một dòng không thể vừa có thuế đã gồm trong giá vừa có thuế chưa gồm trong giá.',
       'error.taxManyPriceInclude': 'Mỗi dòng chỉ chịu tối đa một sắc thuế đã gồm trong giá.',
       'error.taxDivisionFull': 'Thuế tính ngược từ 100% trở lên không có cơ sở tính hữu hạn.',
+      'error.productMissing': 'Mẫu sản phẩm không tồn tại.',
 
       'error.partnerMissing': 'Đối tác không tồn tại.',
       'error.paymentTermMissing': 'Điều khoản thanh toán không tồn tại.',
@@ -164,6 +164,7 @@ export default defineModule({
       'error.taxMixedPriceInclude': 'A line cannot mix price-included and price-excluded taxes.',
       'error.taxManyPriceInclude': 'A line carries at most one price-included tax.',
       'error.taxDivisionFull': 'A division tax of 100% or more has no finite base.',
+      'error.productMissing': 'The product template does not exist.',
 
       'error.partnerMissing': 'The partner does not exist.',
       'error.paymentTermMissing': 'The payment term does not exist.',
