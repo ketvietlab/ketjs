@@ -41,6 +41,7 @@ import {
   TEMPLATE_OPTIONS,
 } from './screens/index.ts'
 import type { IssueDetailControls } from './screens/index.ts'
+import { receiveAttachment } from '../storage/routes.ts'
 import { documentRoutes } from '../livedoc/index.ts'
 import type { DocumentOwner } from '../livedoc/index.ts'
 
@@ -492,6 +493,30 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/flow': () => async (url, req) =>
     req.method === 'GET' ? seeOther(inLocale(url, '/admin/flow/projects')) : text('GET', { status: 405 }),
 
+  /**
+   * Where a file on an issue is posted.
+   *
+   * `receiveAttachment` is storage's own reader — it is the one thing on this
+   * screen that needs the raw request body, which a `defineFn` handler cannot
+   * reach (`Ctx.storage` exists only on a job context). The read check runs
+   * first so a caller who cannot see the issue cannot attach to it either.
+   */
+  '/admin/flow/issues/{id}/attachments':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const refused = onlyPost(req)
+      if (refused) return refused
+      const issueId = String(params.id)
+      if (!(await readable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
+      await receiveAttachment(ctx, url, req, {
+        resModel: 'flow.Issue',
+        resId: issueId,
+        resField: 'attachment',
+        public: false,
+      })
+      return seeOther(inLocale(url, `/admin/flow/issues/${encodeURIComponent(issueId)}`))
+    },
+
   '/admin/flow/issues/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
@@ -651,6 +676,21 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('flow.sprint.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.issueType.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
       ])
+      // Files on this issue. `storage.listAttachments` is the same read the CRM
+      // case screen makes; nothing about it is Flow's.
+      const [attachments, fieldDefs] = await Promise.all([
+        // `resField` is not optional here in practice: the same record also
+        // carries `content`, which is Live Doc's flattened CRDT snapshot.
+        // Listing without it put those blobs in the attachment panel as though
+        // somebody had uploaded them, and offered them for download.
+        ctx.call(
+          'storage.listAttachments',
+          { resModel: 'flow.Issue', resId: issueId, resField: 'attachment' },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
+        ctx.call('flow.field.list', { projectId: String(issue.projectId) }, url, req) as Promise<AnyRow[]>,
+      ])
       const editor = await ctx.joint(url, req, 'flow_backend:screen.issue', {
         docId: issueId,
         base: '/admin/flow/issues',
@@ -707,6 +747,8 @@ export const routes: Record<string, RouteEntry> = {
             columns,
             sprints,
             controls,
+            attachments,
+            fieldDefs,
             editor,
             errors,
           }),
