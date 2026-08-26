@@ -14,8 +14,8 @@
 // public components. New shared UI must enter through that public contract.
 
 export * as designSystem from '@ketvietlab/design-system'
-export { LinkButton, ListPage } from '@ketvietlab/design-system'
-export type { LinkButtonProps, ListPageProps } from '@ketvietlab/design-system'
+export { LinkButton, ListPage, Tabs as CollectionTabs } from '@ketvietlab/design-system'
+export type { LinkButtonProps, ListPageProps, TabItem as CollectionTabItem } from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
 export { formatMoney } from './format.ts'
@@ -98,10 +98,9 @@ export { calendarContractCases } from './calendar.ts'
 export {
   PartnerFacts,
   PartnerInitials,
-  PartnerListLayout,
   PartnerPanel,
 } from './partner.tsx'
-export type { PartnerFact, PartnerStat } from './partner.tsx'
+export type { PartnerFact } from './partner.tsx'
 
 /**
  * The same components, under the names JSX wants.

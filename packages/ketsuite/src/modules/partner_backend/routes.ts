@@ -7,6 +7,24 @@ import { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/i
 import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+import type { TableSelection } from '../../ui/index.ts'
+
+const crossSite = (req: Req): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+const onlyPost = (req: Req) =>
+  req.method !== 'POST'
+    ? text('POST', { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
 
 const partnerOptions = async (ctx: ServeContext, url: URL, req: Req, exclude?: string) =>
   (
@@ -272,6 +290,15 @@ export const routes: Record<string, RouteEntry> = {
           req,
         ) as Promise<{ count: number }>,
       ])
+      const selection: TableSelection = {
+        formId: 'partner-directory-bulk',
+        action: inLocale(url, '/admin/partner/partners/bulk'),
+        hidden: { returnTo: `${url.pathname}${url.search}` },
+        actions: [
+          { id: 'archive', label: _('partner_backend.action.bulkArchive') },
+          ...(includeArchived ? [{ id: 'restore', label: _('partner_backend.action.bulkRestore') }] : []),
+        ],
+      }
       return adminPage(ctx, url, req, {
         title: 'partner_backend.screen.title',
         body: (_, frame) =>
@@ -281,12 +308,11 @@ export const routes: Record<string, RouteEntry> = {
             {
               ...frame,
               chrome: {
-                layout: 'catalogue',
-                section: _('partner_backend.menu.app'),
                 create: {
                   label: _('partner_backend.action.create'),
                   path: inLocale(url, '/admin/partner/partners/new'),
                 },
+                selection,
                 search: {
                   name: 'q',
                   value: search ?? '',
@@ -329,7 +355,7 @@ export const routes: Record<string, RouteEntry> = {
                 pager: pager(url, current, rows.length, total.count),
               },
             },
-            {},
+            { selection },
             url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
             {
               total: activeTotal.count,
@@ -348,8 +374,38 @@ export const routes: Record<string, RouteEntry> = {
                     ? 'suppliers'
                     : 'all',
             },
+            total.count,
           ),
       })
+    },
+
+  '/admin/partner/partners/bulk':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const denied = onlyPost(req)
+      if (denied) return denied
+      const form = await readForm(req)
+      const ids = Object.keys(form)
+        .filter((key) => key.startsWith('selected.'))
+        .map((key) => key.slice('selected.'.length))
+        .filter(Boolean)
+      const fallback = inLocale(url, '/admin/partner/partners')
+      const requested = new URL(form.returnTo || fallback, 'http://ket.local')
+      const returnTo =
+        requested.pathname === '/admin/partner/partners'
+          ? `${requested.pathname}${requested.search}`
+          : fallback
+      if (!ids.length) return seeOther(returnTo)
+      if (form.action !== 'archive' && form.action !== 'restore')
+        return text('Unknown bulk action', { status: 400 })
+      const result = (await ctx.call(
+        'partner.archivePartners',
+        { ids, active: form.action === 'restore' },
+        url,
+        req,
+      )) as { ok?: boolean }
+      if (result.ok === false) return text('Invalid bulk selection', { status: 400 })
+      return seeOther(returnTo)
     },
 
   '/admin/partner/partners/new':
