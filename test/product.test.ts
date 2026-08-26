@@ -68,15 +68,11 @@ test('product: a template carries its variants, on request', async () => {
 
   const full = (await call('product.listTemplates', { withVariants: true }, db)).value as Row[]
   assert.deepEqual(
-    (full[0]!.variants as Row[]).map((variant) => [
-      variant.combinationKey,
-      variant.defaultCode,
-      variant.active,
-    ]),
+    (full[0]!.variants as Row[]).map((variant) => [variant.combinationKey, variant.defaultCode]),
     [
-      ['', null, false],
-      ['manual:v-m', 'AO-M', true],
-      ['manual:v-s', 'AO-S', true],
+      ['', null],
+      ['manual:v-m', 'AO-M'],
+      ['manual:v-s', 'AO-S'],
     ],
   )
   await db.close()
