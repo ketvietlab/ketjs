@@ -245,7 +245,9 @@ rather than merely untidy:
   tomorrow. Typed dates win over a name, and are the only thing that produces a window
   the chips do not offer;
 - the years on offer are the years the ledger covers, newest first and capped at six;
-  anything older is reachable by typing the dates;
+- date fields appear with a year and with nothing else. A relative window is already
+  exact — "the last 30 days" has nothing left to narrow — while a year is the coarse
+  frame that does, and a typed range is what narrowing one produces;
 - a draft has no journal number yet, so lists and titles name it by its kind and date
   rather than by the raw id it was created under;
 - a payment state is shown only on documents that have one, never on a manual entry;
