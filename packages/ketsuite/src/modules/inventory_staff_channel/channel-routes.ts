@@ -474,10 +474,13 @@ const projectDetail = async (
     ...content,
     inventoryRevision: Number(config.inventoryRevision ?? 0),
   })}`
+  // `delete` is withheld until a product's references can be checked. The guard
+  // behind it only sees stock history, so a product still named by a draft
+  // quotation could be erased under it, leaving the order line pointing at
+  // nothing. Advertising the action would invite exactly that call.
   const availableActions = [
     'update',
     base.active ? 'archive' : 'restore',
-    'delete',
     ...(base.kind === 'storable' && base.active ? ['adjust_stock'] : []),
   ]
   return {
@@ -744,47 +747,6 @@ export const channelRoutes = routesOf(
       },
     }),
   ),
-  defineChannelRoute({
-    profile: 'staff',
-    method: 'DELETE',
-    path: 'inventory/products/{id}/delete',
-    operationId: 'staff.inventory.products.delete',
-    summary: 'Delete one pristine product aggregate under a strong version.',
-    auth: 'required',
-    capability: { key: 'inventory.products', action: 'delete' },
-    request: { params: idParams, body: versionBody },
-    responses: {
-      '200': envelope({
-        type: 'object',
-        additionalProperties: false,
-        properties: { outcome: { type: 'string', const: 'deleted' }, productId: string },
-        required: ['outcome', 'productId'],
-      }),
-      '404': envelope({ type: 'null' }),
-      '409': envelope({ type: 'null' }),
-    },
-    idempotent: true,
-    rateLimit: { action: 'staff.inventory.products.delete', limit: 30, windowMs: 60_000 },
-    handler: async (ctx, url, req, params, request) => {
-      const key = idempotencyKey(ctx, url, req)
-      if (typeof key !== 'string') return key
-      const companyId = String(request.identity!.companyId)
-      const current = await readDetail(ctx, params.id, companyId, url, req)
-      if (!current) return notFound(ctx, url, req)
-      const expected = requestVersion(req, request.body)
-      if (!expected || expected !== current.data.version) return versionFailure(ctx, url, req)
-      const namespace = `staff:${companyId}:${request.identity!.userId}:stock.deleteInventoryProduct`
-      const result = (await ctx.call(
-        'stock.deleteInventoryProduct',
-        { id: params.id, expectedRevision: current.revision },
-        url,
-        req,
-        { idempotencyKey: key, idempotencyNamespace: namespace },
-      )) as Row
-      if (result.ok !== true) return domainFailure(ctx, url, req, result)
-      return { data: { outcome: 'deleted', productId: params.id } }
-    },
-  }),
   defineChannelRoute({
     profile: 'staff',
     method: 'POST',
