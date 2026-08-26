@@ -22,6 +22,7 @@ export const HOOKS = [
   'card-meta',
   'card-actions',
   'metric',
+  'metric-icon',
   'metric-label',
   'metric-value',
   'metric-detail',
@@ -121,8 +122,18 @@ export const Metric = (props: {
   value: string | number
   detail?: string | null
   tone?: Tone
+  /**
+   * A glyph naming the quantity, in a tile beside it. Decorative: the label is
+   * the name of the number, so this is hidden from assistive technology.
+   */
+  icon?: JSXChild
 }): TemplateResult => (
   <article data-ui="metric" data-tone={props.tone ?? 'neutral'}>
+    {props.icon !== undefined && (
+      <span data-ui="metric-icon" aria-hidden="true">
+        {props.icon}
+      </span>
+    )}
     <p data-ui="metric-label">{props.label}</p>
     <p data-ui="metric-value">{String(props.value)}</p>
     {!!props.detail && <p data-ui="metric-detail">{props.detail}</p>}

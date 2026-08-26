@@ -284,6 +284,54 @@ trong HTML.
 | `[data-ui="kanban"]`, `[data-ui="kanban-card"]`, `[data-ui="kanban-title"]`, `[data-ui="kanban-meta"]`, `[data-ui="kanban-uom"]`, `[data-ui="kanban-variants"]` | kiểu xem thẻ |
 | `[data-ui="table"] [data-align="end"]` | cột số — canh phải, `tabular-nums` |
 
+## Thẻ số liệu
+
+`metric` nhận thêm một glyph không bắt buộc. Glyph là **trang trí**: nhãn vẫn là tên
+của con số, nên tile mang `aria-hidden` và không bao giờ là chỗ duy nhất nói ý nghĩa.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="metric-icon"]` | tile chứa glyph, cột trái của thẻ; chỉ render khi screen truyền `icon` |
+
+Ba điều đã chốt trong CSS, đừng bỏ khi chỉnh:
+
+- các dòng chữ được ghim vào `grid-column: 2`. Không ghim thì auto-placement đẩy con số
+  xuống dưới tile ngay khi thẻ có dòng thứ ba;
+- lưới thẻ có glyph dùng sàn `12.5rem` thay vì `13.5rem` của thẻ tiền, vì tile ăn mất
+  `2.75rem` cố định — để nguyên `13.5rem` thì hàng bốn thẻ rớt xuống còn ba;
+- dưới `29.9375rem` tile bị **ẩn**. Trên hai thẻ một hàng điện thoại, `2.75rem` là
+  khoảng cách giữa một số tiền vừa khít và một số tiền bị cắt — mà số bị cắt đọc thành
+  số khác.
+
+## Bảng pipeline CRM — module tự sở hữu
+
+Bàn cờ pipeline là island, nên markup của nó nằm ở
+`modules/crm_backend/client/crm-kanban-view.mjs` và CSS ở `client/crm.css`. Nó dùng
+token của `@ketvietlab/design-system` như mọi chỗ khác; chỉ chấm màu giai đoạn lấy
+`--admin-chart-1..6`.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="crm-kanban-board"]`, `[data-ui="crm-kanban-column"][data-tone]` | vùng cuộn ngang và một cột; `data-tone` là `1`–`6`, `won` hoặc `lost` |
+| `[data-ui="crm-kanban-stage"]`, `[data-ui="crm-stage-dot"]`, `[data-ui="crm-stage-name"]` | đầu cột |
+| `[data-ui="crm-stage-count"]`, `[data-ui="crm-stage-weight"]`, `[data-ui="crm-stage-value"]` | số hồ sơ, tỷ trọng dự báo, tổng tiền của cột |
+| `[data-ui="crm-stage-menu"]`, `[data-ui="crm-stage-menu-open"]`, `[data-ui="crm-stage-menu-content"]`, `[data-ui="crm-stage-menu-item"]` | `<details>` thao tác giai đoạn |
+| `[data-ui="crm-kanban-card"][data-priority][data-busy]` | một thẻ; `data-priority` `2`/`3` là vạch màu bên trái |
+| `[data-ui="crm-card-title"]`, `[data-ui="crm-card-party"]`, `[data-ui="crm-card-contact"]` | tiêu đề và bên liên quan |
+| `[data-ui="crm-card-tags"]`, `[data-ui="crm-card-tag"]` | nhãn của hồ sơ |
+| `[data-ui="crm-card-figures"]`, `[data-ui="crm-card-amount"]`, `[data-ui="crm-card-odds"]` | tiền và xác suất |
+| `[data-ui="crm-card-foot"]`, `[data-ui="crm-card-activity"][data-overdue][data-empty]`, `[data-ui="crm-card-activity-summary"]`, `[data-ui="crm-card-activity-due"]` | việc kế tiếp; quá hạn đổi sang màu `danger` |
+| `[data-ui="crm-card-owner"][data-assigned]` | chữ đầu người phụ trách |
+| `[data-ui="crm-card-move"]`, `[data-ui="crm-card-move-open"]`, `[data-ui="crm-card-move-form"]` | `<details>` chứa select chuyển giai đoạn |
+| `[data-ui="crm-kanban-add"]`, `[data-ui="crm-kanban-more"]`, `[data-ui="crm-kanban-empty"]`, `[data-ui="crm-kanban-error"]` | chân cột, link xem tất cả, rỗng và lỗi |
+
+Hai điều đừng đổi mà không đọc lại code:
+
+- form chuyển giai đoạn nằm trong `<details>` chứ không phải chỉ kéo–thả. Kéo–thả không
+  tồn tại với bàn phím, với screen reader, và với một trang mà script hỏng;
+- popover mở **lên trên** từ chân thẻ. Bàn cờ có `overflow-x: auto`, nghĩa là nó cũng
+  cắt theo trục dọc — mọi thứ mở ra phải nằm trong hộp của cột.
+
 ## Bảng dữ liệu
 
 Cột là **dữ liệu** do module khai báo, không phải markup. Nên mọi danh sách trong sản

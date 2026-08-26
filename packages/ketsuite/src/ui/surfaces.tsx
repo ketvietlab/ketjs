@@ -24,6 +24,7 @@ export const HOOKS = [
   'card-meta',
   'card-actions',
   'metric',
+  'metric-icon',
   'metric-label',
   'metric-value',
   'metric-detail',
@@ -144,8 +145,23 @@ export const metric = (o: {
   detail?: string | null
   trend?: JSXChild
   tone?: string
+  /**
+   * A glyph naming the quantity, in a tile beside it.
+   *
+   * Decorative and therefore optional: a row of four figures is scanned by
+   * position, and the icon is what makes the fourth one findable again after the
+   * eye leaves the row. It carries no meaning the label does not already carry,
+   * so it is hidden from assistive technology by the stylesheet's own contract —
+   * the label remains the name of the number.
+   */
+  icon?: JSXChild
 }): TemplateResult => (
   <article data-ui="metric" data-tone={o.tone ?? 'neutral'}>
+    {o.icon !== undefined && (
+      <span data-ui="metric-icon" aria-hidden="true">
+        {o.icon}
+      </span>
+    )}
     <p data-ui="metric-label">{o.label}</p>
     <p data-ui="metric-value">{o.value}</p>
     {o.trend !== undefined && <p data-ui="metric-trend">{o.trend}</p>}

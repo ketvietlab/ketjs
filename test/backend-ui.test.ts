@@ -562,6 +562,8 @@ const everything = [
   delta({ label: '-6,3%', direction: 'down', sentiment: 'good' }),
   delta({ label: '0%', direction: 'flat', sentiment: 'neutral' }),
   metric({ label: 'Doanh thu thuần', value: '2.450.680 ₫', trend: 'x', detail: 'so với kỳ trước' }),
+  // The same card with its optional glyph, which is a different set of hooks.
+  metric({ label: 'Hoạt động quá hạn', value: '4', icon: icon('alert-triangle') }),
   // The token list, which no admin screen renders any more now that the design-token
   // dump has left /admin/settings. Modules still reach for it on record detail.
   definitionList({

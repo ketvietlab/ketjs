@@ -42,6 +42,7 @@ export {
   now,
   ownedKinds,
   ownsKind,
+  pipelineSummary,
   saveCase,
   seededId,
   serializeCaseList,
