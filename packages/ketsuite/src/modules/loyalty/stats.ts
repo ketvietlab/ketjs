@@ -24,10 +24,18 @@ const all = (...parts: Array<Expr | null>): Expr | null => {
 
 const where = (query: Query, expr: Expr | null): Query => (expr ? query.where(expr) : query)
 
-/** `SUM` of one column, or zero when the filter matches nothing. */
-const sumOf = async (ctx: Ctx, query: Query, col: Col): Promise<number> => {
-  const [row] = await ctx.db.group(query.aggregate({ fn: 'sum', col, as: 'total' }))
-  return row ? n(row.aggregates.total) : 0
+/**
+ * `SUM` over everything the filter matches, computed by the store.
+ *
+ * The query layer only aggregates inside a grouping — there is no grand total
+ * without one — so the sum is taken per group and the handful of groups added
+ * up here. `by` is therefore always a column with a few distinct values:
+ * `operation` has five, `unit` has two. The rows themselves never reach this
+ * process, which is the whole point.
+ */
+const sumOf = async (ctx: Ctx, query: Query, col: Col, by: Col): Promise<number> => {
+  const rows = await ctx.db.group(query.groupBy({ col: by }).aggregate({ fn: 'sum', col, as: 'total' }))
+  return rows.reduce((sum, row) => sum + n(row.aggregates.total), 0)
 }
 
 /**
@@ -101,7 +109,7 @@ export const statsFunctions: Record<string, FnSpec> = {
       const live = and(eq(W.active, true), or(gt(W.expiresAt, at), isNull(W.expiresAt)))
       return {
         total: await ctx.db.count(where(from(W), scope)),
-        balance: await sumOf(ctx, where(from(W), scope), W.balance),
+        balance: await sumOf(ctx, where(from(W), scope), W.balance, W.unit),
         active: await ctx.db.count(where(from(W), all(scope)).where(live)),
         locked: await ctx.db.count(where(from(W), all(scope)).where(eq(W.active, false))),
         expired: await ctx.db.count(
@@ -130,8 +138,8 @@ export const statsFunctions: Record<string, FnSpec> = {
         total: await ctx.db.count(where(from(M), scope)),
         active: await ctx.db.count(where(from(M), all(scope)).where(gt(M.rollingSpend, 0))),
         dormant: await ctx.db.count(where(from(M), all(scope)).where(lte(M.rollingSpend, 0))),
-        points: await sumOf(ctx, where(from(M), scope), M.points),
-        spend: await sumOf(ctx, where(from(M), scope), M.rollingSpend),
+        points: await sumOf(ctx, where(from(M), scope), M.points, M.windowMonths),
+        spend: await sumOf(ctx, where(from(M), scope), M.rollingSpend, M.windowMonths),
       }
     },
   }),
@@ -176,15 +184,21 @@ export const statsFunctions: Record<string, FnSpec> = {
       const inPeriod = where(where(where(from(L), scope), window), kind)
       return {
         entries: await ctx.db.count(inPeriod),
-        credit: await sumOf(ctx, inPeriod.where(gt(L.balanceDelta, 0)), L.balanceDelta),
-        debit: await sumOf(ctx, inPeriod.where(lt(L.balanceDelta, 0)), L.balanceDelta),
+        credit: await sumOf(ctx, inPeriod.where(gt(L.balanceDelta, 0)), L.balanceDelta, L.operation),
+        debit: await sumOf(ctx, inPeriod.where(lt(L.balanceDelta, 0)), L.balanceDelta, L.operation),
         opening: args.from
-          ? await sumOf(ctx, where(from(L), scope).where(lt(L.createdAt, args.from)), L.balanceDelta)
+          ? await sumOf(
+              ctx,
+              where(from(L), scope).where(lt(L.createdAt, args.from)),
+              L.balanceDelta,
+              L.operation,
+            )
           : 0,
         closing: await sumOf(
           ctx,
           args.to ? where(from(L), scope).where(lte(L.createdAt, args.to)) : where(from(L), scope),
           L.balanceDelta,
+          L.operation,
         ),
       }
     },
