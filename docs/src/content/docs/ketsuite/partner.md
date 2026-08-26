@@ -21,7 +21,7 @@ Cụm Partner quản lý:
 - vai trò `customer`, `supplier`, `employee`;
 - hạn mức tín dụng và ghi chú riêng theo từng company;
 - điều khoản thanh toán và tài khoản công nợ khi Accounting được cài;
-- giao diện danh sách, tạo mới, chi tiết, archive/restore và thiết lập kế toán.
+- giao diện danh sách, tạo mới, chỉnh sửa trực tiếp, archive/restore và thiết lập kế toán.
 
 Country và đơn vị hành chính nay tham chiếu module `address`; `divisionText` và
 input text cũ chỉ là fallback tương thích khi catalog của quốc gia chưa được cài.
@@ -192,13 +192,16 @@ tiếng Việt hardcode.
 
 - danh sách có search, lọc customer/supplier và tùy chọn hiện archived;
 - form tạo Partner;
-- màn hình chi tiết với contact, roles, addresses/default và company terms;
+- form Partner duy nhất tại `/admin/partner/partners/:id`, gồm contact, roles,
+  addresses/default và company terms;
 - archive/restore;
 - trạng thái empty và lỗi validation có dịch.
 
 `account_partner_backend` chỉ thêm hành động và màn hình Accounting setup khi bridge
 được cài. Toàn bộ link nội bộ giữ query `lang`, nên người dùng không mất locale khi
-đổi màn hình. Giao diện đã được kiểm tra ở desktop 1440×900 và mobile 390×844 bằng
+đổi màn hình. Route `/admin/partner/partners/:id/edit` cũ chỉ redirect về form chuẩn
+để bookmark cũ tiếp tục hoạt động; không còn màn hình Partner read-only song song.
+Giao diện đã được kiểm tra ở desktop 1440×900 và mobile 390×844 bằng
 trình duyệt headless thật, cả tiếng Việt và tiếng Anh.
 
 ## Kiểm thử thay đổi liên quan
