@@ -329,6 +329,28 @@ export const channelRoutes = routesOf(
       if (typeof key !== 'string') return key
       const before = (await ctx.call('quality.getCheck', { id: params.id }, url, req)) as Row | null
       if (!before) return notFound(ctx, url, req)
+      // The upload id is the content's own identity, so a photo already carrying
+      // it is this request arriving twice. Uploading moved the check version, so
+      // without this the retry is told its own upload conflicted — the domain
+      // function already answers a replay, and the precondition never let it.
+      const replayId = `qpu_${sha256(`${params.id}\0${String(request.body.stepPublicId)}\0${String(request.body.checksum)}`).slice(0, 40)}`
+      const replayedUpload = ((before.photos as Row[]) ?? []).find((photo) => photo.id === replayId)
+      if (replayedUpload) {
+        const held = project(before).expectedCheckVersion
+        return {
+          data: {
+            schemaVersion: 1,
+            requirementPublicId: params.id,
+            stepPublicId: String(replayedUpload.stepId),
+            uploadPublicId: String(replayedUpload.id),
+            checksum: String(replayedUpload.checksum),
+            mimeType: String(replayedUpload.mimeType),
+            byteCount: Number(replayedUpload.byteCount),
+            expectedCheckVersion: held,
+          },
+          headers: { etag: `"${held}"` },
+        }
+      }
       const expected = requestVersion(req, request.body)
       if (!expected || expected !== project(before).expectedCheckVersion) return conflict(ctx, url, req)
       let content: Buffer
@@ -428,11 +450,36 @@ export const channelRoutes = routesOf(
       if (typeof key !== 'string') return key
       const before = (await ctx.call('quality.getCheck', { id: params.id }, url, req)) as Row | null
       if (!before) return notFound(ctx, url, req)
+      // Submitting moves the check version, so a replay of this POST carries an
+      // `expectedVersion` that is by then stale. Refusing it 409 tells a caller
+      // its own successful submission conflicted, and leaves it unable to tell
+      // that from a real conflict. The command is recognised by its key first.
+      const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:quality.submit`
+      const attemptId = `qat_${sha256(`${namespace}\n${params.id}\n${key}`).slice(0, 40)}`
+      const replayed = ((before.attempts as Row[]) ?? []).find((entry) => entry.id === attemptId)
+      if (replayed) {
+        const held = project(before).expectedCheckVersion
+        return {
+          data: {
+            schemaVersion: 1,
+            requirementPublicId: params.id,
+            state: String((before.requirement as Row).state),
+            checkVersion: held,
+            attempt: {
+              publicId: String(replayed.id),
+              outcome: String(replayed.outcome),
+              submittedAt: String(replayed.submittedAt),
+            },
+          },
+          headers: { etag: `"${held}"` },
+        }
+      }
       const expected = requestVersion(req, request.body)
       if (!expected || expected !== project(before).expectedCheckVersion) return conflict(ctx, url, req)
       const result = (await ctx.call(
         'quality.submit',
         {
+          id: attemptId,
           requirementId: params.id,
           warehouseId: request.body.warehouseId,
           expectedRevision: Number((before.requirement as Row).revision),
@@ -443,7 +490,7 @@ export const channelRoutes = routesOf(
         req,
         {
           idempotencyKey: key,
-          idempotencyNamespace: `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:quality.submit`,
+          idempotencyNamespace: namespace,
         },
       )) as Row
       if (result.ok !== true) return domainFailure(ctx, url, req, result)
