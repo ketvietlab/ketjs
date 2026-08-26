@@ -117,6 +117,19 @@ export const ContentCard = (props: {
   </article>
 )
 
+/**
+ * One number, with the context that makes it mean something.
+ *
+ * `tone` colours a dot beside the label and nothing else. The number itself stays
+ * in the page's ink: a KPI row is read by comparing figures, and four differently
+ * coloured figures are compared by colour instead. The dot is drawn only when a
+ * tone is passed, so a metric that has no state to report does not grow a grey
+ * bullet that means nothing.
+ *
+ * `href` makes the whole card the link rather than the label, because the card is
+ * what the pointer is already over. There is nothing else inside a metric to
+ * click, which is exactly why `ContentCard` does the opposite.
+ */
 export const Metric = (props: {
   label: string
   value: string | number
@@ -127,15 +140,35 @@ export const Metric = (props: {
    * the name of the number, so this is hidden from assistive technology.
    */
   icon?: JSXChild
-}): TemplateResult => (
-  <article data-ui="metric" data-tone={props.tone ?? 'neutral'}>
-    {props.icon !== undefined && (
-      <span data-ui="metric-icon" aria-hidden="true">
-        {props.icon}
-      </span>
-    )}
-    <p data-ui="metric-label">{props.label}</p>
-    <p data-ui="metric-value">{String(props.value)}</p>
-    {!!props.detail && <p data-ui="metric-detail">{props.detail}</p>}
-  </article>
-)
+  href?: string | null
+}): TemplateResult => {
+  const attributes = {
+    'data-ui': 'metric',
+    'data-tone': props.tone ?? 'neutral',
+    // One marker to a card, never two. The dot reports state for a metric that
+    // has no glyph; where there is a glyph, the glyph is already the thing the
+    // eye lands on, and a coloured bullet beside the label competes with it.
+    'data-dot': String(props.tone !== undefined && props.icon === undefined),
+  }
+  const body = (
+    <>
+      {props.icon !== undefined && (
+        <span data-ui="metric-icon" aria-hidden="true">
+          {props.icon}
+        </span>
+      )}
+      <p data-ui="metric-label">{props.label}</p>
+      <p data-ui="metric-value">{String(props.value)}</p>
+      {!!props.detail && <p data-ui="metric-detail">{props.detail}</p>}
+    </>
+  )
+  return props.href ? (
+    <a {...attributes} data-interactive="true" href={props.href}>
+      {body}
+    </a>
+  ) : (
+    <article {...attributes} data-interactive="false">
+      {body}
+    </article>
+  )
+}

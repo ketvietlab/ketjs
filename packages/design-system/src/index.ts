@@ -26,6 +26,8 @@ export type { ListPageProps } from './patterns/list-page.tsx'
 export { FormPage } from './patterns/form-page.tsx'
 export type { FormPageProps, FormPageSlots } from './patterns/form-page.tsx'
 export { ModalSheet } from './patterns/modal-sheet.tsx'
+export { Pipeline } from './patterns/pipeline.tsx'
+export type { PipelineStep } from './patterns/pipeline.tsx'
 export { RecordForm } from './patterns/record-form.tsx'
 export type { RecordFormProps } from './patterns/record-form.tsx'
 

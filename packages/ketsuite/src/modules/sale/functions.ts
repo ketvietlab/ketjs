@@ -1,5 +1,18 @@
-import { defineFn, deleteFrom, desc, eq, from, ilike, inArray, or } from '@ketvietlab/ketjs'
-import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import {
+  dateBucket,
+  defineFn,
+  deleteFrom,
+  desc,
+  eq,
+  from,
+  gte,
+  ilike,
+  inArray,
+  localDayRange,
+  lt,
+  or,
+} from '@ketvietlab/ketjs'
+import type { Ctx, Expr, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
 import { company, companyKey, ours } from './scope.ts'
@@ -354,20 +367,67 @@ export const functions: Record<string, FnSpec> = {
    * the list is bounded, counting a page would simply be wrong.
    */
   countOrders: defineFn({
-    input: {},
-    output: { draft: 'int', sent: 'int', sale: 'int', toInvoice: 'int' },
-    effects: ['read:sale.Order'],
+    input: { timezone: 'text?' },
+    output: {
+      draft: 'int',
+      sent: 'int',
+      sale: 'int',
+      toInvoice: 'int',
+      draftToday: 'int',
+      sentTotal: 'decimal',
+      saleTotal: 'decimal',
+      toInvoiceTotal: 'decimal',
+      currency: 'text',
+    },
+    effects: ['read:sale.Order', 'read:company.Company'],
     agent: true,
-    handler: async (ctx) => {
+    handler: async (ctx, args) => {
       const O = ctx.table('sale.Order')
       const mine = eq(O.companyId, company(ctx))
-      const [draft, sent, sale, toInvoice] = await Promise.all([
-        ctx.db.count(from(O).where(mine, eq(O.state, 'draft'))),
-        ctx.db.count(from(O).where(mine, eq(O.state, 'sent'))),
-        ctx.db.count(from(O).where(mine, eq(O.state, 'sale'))),
-        ctx.db.count(from(O).where(mine, eq(O.invoiceStatus, 'to invoice'))),
-      ])
-      return { draft, sent, sale, toInvoice }
+      const currency = await companyCurrency(ctx)
+      // Amounts are summed for the company's own currency and no other. Every
+      // order takes that currency when it is raised, so in practice this is all
+      // of them; what it rules out is a company that changed currency later
+      // having its old đồng added to its new dollars and shown as one figure.
+      const priced = eq(O.currency, currency)
+      // "Today" is the reader's today. The timezone is the viewer's, so a
+      // quotation raised at nine in Ho Chi Minh City counts on the day it was
+      // raised rather than on the day it was in London.
+      const timezone = String(args.timezone ?? 'UTC')
+      const [dayStart, dayEnd] = localDayRange(dateBucket(now(), 'day', timezone) ?? '1970-01-01', timezone)
+      const total = (rows: Array<{ aggregates: Record<string, unknown> }>) =>
+        decimal(rows.reduce((sum, row) => sum + n(row.aggregates.total), 0))
+      const summed = (condition: Expr) =>
+        ctx.db.group(
+          from(O)
+            .where(mine, priced, condition)
+            .groupBy({ col: O.currency })
+            .aggregate({ fn: 'sum', col: O.amountTotal, as: 'total' }),
+        )
+      const [draft, sent, sale, toInvoice, draftToday, sentTotal, saleTotal, toInvoiceTotal] =
+        await Promise.all([
+          ctx.db.count(from(O).where(mine, eq(O.state, 'draft'))),
+          ctx.db.count(from(O).where(mine, eq(O.state, 'sent'))),
+          ctx.db.count(from(O).where(mine, eq(O.state, 'sale'))),
+          ctx.db.count(from(O).where(mine, eq(O.invoiceStatus, 'to invoice'))),
+          ctx.db.count(
+            from(O).where(mine, eq(O.state, 'draft'), gte(O.dateOrder, dayStart), lt(O.dateOrder, dayEnd)),
+          ),
+          summed(eq(O.state, 'sent')),
+          summed(eq(O.state, 'sale')),
+          summed(eq(O.invoiceStatus, 'to invoice')),
+        ])
+      return {
+        draft,
+        sent,
+        sale,
+        toInvoice,
+        draftToday,
+        sentTotal: total(sentTotal),
+        saleTotal: total(saleTotal),
+        toInvoiceTotal: total(toInvoiceTotal),
+        currency,
+      }
     },
   }),
   getOrder: defineFn({
