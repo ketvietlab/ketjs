@@ -878,3 +878,104 @@ test('flow projects: counts come back per project, and a state is derived from t
     await e2e.close()
   }
 })
+
+/**
+ * The figures beside the task list.
+ *
+ * They have to be disjoint and add up, because a row of counts against one
+ * list is unreadable otherwise — and the same reading of "late" has to serve
+ * the count, the list and the rail, or the screen contradicts itself.
+ */
+test('flow issues: the overview buckets are disjoint, add up, and agree with the list', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyễn Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyễn Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+
+    await call('flow.project.save', {
+      values: { id: 'proj1', key: 'PRJ', name: 'Flagship' },
+      idempotencyKey: 'project-save-1',
+    })
+    // Three columns, so "first" and "terminal" are different places and the
+    // middle one is neither.
+    for (const [id, code, name, sequence, terminal] of [
+      ['col-todo', 'todo', 'To do', 10, false],
+      ['col-doing', 'doing', 'Doing', 20, false],
+      ['col-done', 'done', 'Done', 30, true],
+    ] as const) {
+      await call('flow.column.save', {
+        values: { id, projectId: 'proj1', code, name, sequence, terminalState: terminal },
+        idempotencyKey: `column-${id}`,
+      })
+    }
+
+    const issue = async (id: string, columnId: string, dueDate: string | null) => {
+      const saved = await call<Row>('flow.issue.save', {
+        id,
+        projectId: 'proj1',
+        columnId,
+        title: id,
+        ...(dueDate ? { dueDate } : {}),
+        idempotencyKey: `issue-save-${id}`,
+      })
+      assert.equal(saved.ok, true, JSON.stringify(saved.errors))
+    }
+    const today = '2026-06-15'
+    await issue('waiting-1', 'col-todo', null)
+    await issue('waiting-2', 'col-todo', '2026-07-01') // due later
+    await issue('working-1', 'col-doing', null)
+    await issue('late-1', 'col-doing', '2026-06-01') // due before today
+    await issue('late-2', 'col-todo', '2026-05-01') // late even in the first column
+    await issue('done-1', 'col-done', null)
+    // Finished, with a date long past. Work that is done is not late, however
+    // old the deadline was — this is the row that a naive `dueDate < today`
+    // would miscount.
+    await issue('done-2', 'col-done', '2026-01-01')
+
+    const buckets = await call<Row>('flow.issue.buckets', {
+      listState: emptyIssueListState(),
+      today,
+    })
+    assert.equal(Number(buckets.total), 7)
+    assert.equal(Number(buckets.done), 2, 'both terminal-column issues')
+    assert.equal(Number(buckets.overdue), 2, 'the finished one with an old date is not late')
+    assert.equal(Number(buckets.waiting), 2, 'first column, and not already late')
+    assert.equal(Number(buckets.working), 1)
+    assert.equal(
+      Number(buckets.done) + Number(buckets.overdue) + Number(buckets.waiting) + Number(buckets.working),
+      Number(buckets.total),
+      'the four buckets partition the total',
+    )
+
+    // The list has to name exactly the issues the count counted.
+    const late = await call<Row>('flow.issue.list', {
+      listState: emptyIssueListState(),
+      overdueOn: today,
+      limit: 50,
+    })
+    assert.equal(Number(late.total), Number(buckets.overdue))
+    assert.deepEqual(((late.rows as Row[]) ?? []).map((row) => String(row.id)).sort(), ['late-1', 'late-2'])
+
+    // And a row says whether its own column is a finished one, so a screen can
+    // mark a late date without re-reading the columns it was just handed.
+    const all = await call<Row>('flow.issue.list', { listState: emptyIssueListState(), limit: 50 })
+    const by = new Map(((all.rows as Row[]) ?? []).map((row) => [String(row.id), row]))
+    assert.equal(by.get('done-2')?.terminal, true)
+    assert.equal(by.get('late-1')?.terminal, false)
+  } finally {
+    await e2e.close()
+  }
+})

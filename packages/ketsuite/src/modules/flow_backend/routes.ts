@@ -41,6 +41,7 @@ import {
   TEMPLATE_OPTIONS,
 } from './screens/index.ts'
 import type { IssueDetailControls } from './screens/index.ts'
+import { receiveAttachment } from '../storage/routes.ts'
 import { documentRoutes } from '../livedoc/index.ts'
 import type { DocumentOwner } from '../livedoc/index.ts'
 
@@ -343,6 +344,44 @@ const crossProjectIssues =
           label: (_field, value) => String(value ?? '\u2014'),
         })
       : []
+    // The figures beside the list, over the same filter the list is showing —
+    // counted, not listed, so a thousand issues cost four counts.
+    const today = new Date().toISOString().slice(0, 10)
+    const buckets = (await ctx.call(
+      'flow.issue.buckets',
+      { ...scoped, listState: state, today },
+      url,
+      req,
+    )) as AnyRow
+    const mineCount = options.mine
+      ? Number(buckets.total ?? 0)
+      : Number(
+          (
+            (await ctx.call(
+              'flow.issue.buckets',
+              { mine: true, listState: emptyIssueListState(), today },
+              url,
+              req,
+            )) as AnyRow
+          ).total ?? 0,
+        )
+    const late = (await ctx.call(
+      'flow.issue.list',
+      {
+        ...scoped,
+        listState: { ...emptyIssueListState(), sort: [{ key: 'dueDate', dir: 'asc' }] },
+        overdueOn: today,
+        limit: 5,
+      },
+      url,
+      req,
+    )) as AnyRow
+    // Which rows the due-date column should mark. Done is not late, however
+    // long ago the date was.
+    const marked = ((result.rows as AnyRow[]) ?? []).map((row) => ({
+      ...row,
+      overdue: row.terminal !== true && !!row.dueDate && String(row.dueDate) < today,
+    }))
     return adminPage(ctx, url, req, {
       title: options.title,
       body: (_, frame) => {
@@ -359,13 +398,31 @@ const crossProjectIssues =
             ? null
             : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
         }
-        return crossProjectScreen(
-          _,
-          frame,
-          _(options.title),
-          grouped ? [] : ((result.rows as AnyRow[]) ?? []),
-          groups,
-        )
+        const at = url.searchParams.get('view') ?? 'all'
+        return crossProjectScreen(_, frame, _(options.title), grouped ? [] : marked, groups, {
+          total: Number(buckets.total ?? 0),
+          done: Number(buckets.done ?? 0),
+          overdue: Number(buckets.overdue ?? 0),
+          waiting: Number(buckets.waiting ?? 0),
+          working: Number(buckets.working ?? 0),
+          mine: mineCount,
+          late: ((late.rows as AnyRow[]) ?? []).slice(0, 5),
+          tab: at,
+          tabs: [
+            {
+              id: 'all',
+              label: _('flow_backend.issues.tabAll'),
+              href: '/admin/flow/issues',
+              count: Number(buckets.total ?? 0),
+            },
+            {
+              id: 'mine',
+              label: _('flow_backend.issues.tabMine'),
+              href: '/admin/flow/mine',
+              count: mineCount,
+            },
+          ],
+        })
       },
     })
   }
@@ -435,6 +492,30 @@ export const routes: Record<string, RouteEntry> = {
 
   '/admin/flow': () => async (url, req) =>
     req.method === 'GET' ? seeOther(inLocale(url, '/admin/flow/projects')) : text('GET', { status: 405 }),
+
+  /**
+   * Where a file on an issue is posted.
+   *
+   * `receiveAttachment` is storage's own reader — it is the one thing on this
+   * screen that needs the raw request body, which a `defineFn` handler cannot
+   * reach (`Ctx.storage` exists only on a job context). The read check runs
+   * first so a caller who cannot see the issue cannot attach to it either.
+   */
+  '/admin/flow/issues/{id}/attachments':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const refused = onlyPost(req)
+      if (refused) return refused
+      const issueId = String(params.id)
+      if (!(await readable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
+      await receiveAttachment(ctx, url, req, {
+        resModel: 'flow.Issue',
+        resId: issueId,
+        resField: 'attachment',
+        public: false,
+      })
+      return seeOther(inLocale(url, `/admin/flow/issues/${encodeURIComponent(issueId)}`))
+    },
 
   '/admin/flow/issues/{id}':
     (ctx: ServeContext): Route =>
@@ -595,6 +676,21 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('flow.sprint.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.issueType.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
       ])
+      // Files on this issue. `storage.listAttachments` is the same read the CRM
+      // case screen makes; nothing about it is Flow's.
+      const [attachments, fieldDefs] = await Promise.all([
+        // `resField` is not optional here in practice: the same record also
+        // carries `content`, which is Live Doc's flattened CRDT snapshot.
+        // Listing without it put those blobs in the attachment panel as though
+        // somebody had uploaded them, and offered them for download.
+        ctx.call(
+          'storage.listAttachments',
+          { resModel: 'flow.Issue', resId: issueId, resField: 'attachment' },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
+        ctx.call('flow.field.list', { projectId: String(issue.projectId) }, url, req) as Promise<AnyRow[]>,
+      ])
       const editor = await ctx.joint(url, req, 'flow_backend:screen.issue', {
         docId: issueId,
         base: '/admin/flow/issues',
@@ -651,6 +747,8 @@ export const routes: Record<string, RouteEntry> = {
             columns,
             sprints,
             controls,
+            attachments,
+            fieldDefs,
             editor,
             errors,
           }),
