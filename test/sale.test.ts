@@ -723,3 +723,49 @@ test('sale: the order list is bounded and filters where the rows live', async ()
     await adapter.close()
   }
 })
+
+test('sale: the overview counts every order and adds up one currency', async () => {
+  const adapter = await boot()
+  try {
+    const week = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    for (const [id, dateOrder] of [
+      ['ov-sale', undefined],
+      ['ov-old', week],
+      ['ov-today', undefined],
+    ] as const) {
+      await call(
+        'sale.createOrder',
+        { id, partnerId: 'customer', warehouseId: 'wh', ...(dateOrder ? { dateOrder } : {}) },
+        adapter,
+      )
+      await call(
+        'sale.addLine',
+        { id: `${id}:line`, orderId: id, productId: 'goods-1', productUomQty: '2', productUomId: 'unit' },
+        adapter,
+      )
+    }
+    await call('sale.confirmOrder', { id: 'ov-sale' }, adapter)
+
+    const counted = (await call('sale.countOrders', { timezone: 'Asia/Ho_Chi_Minh' }, adapter)).value as Row
+    assert.equal(counted.currency, 'VND')
+    assert.equal(counted.sale, 1)
+    assert.equal(counted.draft, 2)
+    // The week-old draft is not new today, whichever side of midnight the server
+    // happens to be on: the day is bounded in the reader's timezone.
+    assert.equal(counted.draftToday, 1)
+    assert.equal(Number(counted.saleTotal), 200)
+    // Two drafts at 200 apiece, and neither is confirmed, so the confirmed total
+    // is not simply every order in the table.
+    assert.equal(Number(counted.sentTotal), 0)
+
+    // The company moves to another currency. The orders it already raised stay in
+    // đồng, so they are still counted — and deliberately not added to dollars.
+    await call('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'USD' }, adapter)
+    const after = (await call('sale.countOrders', { timezone: 'Asia/Ho_Chi_Minh' }, adapter)).value as Row
+    assert.equal(after.currency, 'USD')
+    assert.equal(after.sale, 1)
+    assert.equal(Number(after.saleTotal), 0)
+  } finally {
+    await adapter.close()
+  }
+})
