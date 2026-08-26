@@ -240,6 +240,12 @@ rather than merely untidy:
   which way it went — total liabilities falling is a fall and an improvement;
 - the period a screen compares against is the window of equal length immediately before
   the one asked for, so narrowing the filter to ten days compares ten days;
+- a named window travels by its name — `?period=last7`, not the dates that meant this
+  morning — so a bookmark of "the last seven days" is still the last seven days
+  tomorrow. Typed dates win over a name, and are the only thing that produces a window
+  the chips do not offer;
+- the years on offer are the years the ledger covers, newest first and capped at six;
+  anything older is reachable by typing the dates;
 - a draft has no journal number yet, so lists and titles name it by its kind and date
   rather than by the raw id it was created under;
 - a payment state is shown only on documents that have one, never on a manual entry;

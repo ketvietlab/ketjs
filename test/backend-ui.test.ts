@@ -521,6 +521,15 @@ const everything = [
   // Two things read against each other. Equal columns above a threshold, one
   // below it, decided by the space rather than by the device.
   columns([surface({ body: 'Cơ cấu doanh thu' }), surface({ body: 'Chi phí theo tài khoản' })], 'loose'),
+  // A filter row: every choice visible, wrapping rather than scrolling past the edge.
+  tabs({
+    label: 'Kỳ báo cáo',
+    wrap: true,
+    items: [
+      { id: 'today', label: 'Hôm nay', href: '?period=today' },
+      { id: 'last30', label: '30 ngày qua', href: '?period=last30', active: true },
+    ],
+  }),
   // A chart is two halves: the canvas the island mounts, and the legend that
   // carries the same numbers as text. Rendered here with a stand-in for the
   // plot, because the island needs a request and this contract needs neither.

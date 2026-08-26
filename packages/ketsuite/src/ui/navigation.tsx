@@ -38,8 +38,17 @@ export const breadcrumbs = (o: { label: string; items: readonly Breadcrumb[] }):
   </nav>
 )
 
-export const tabs = (o: { label: string; items: readonly Tab[] }): TemplateResult => (
-  <nav data-ui="tabs" aria-label={o.label}>
+/**
+ * One row of mutually exclusive links, one of them current.
+ *
+ * `wrap` decides what happens when they do not fit. A navigation row scrolls,
+ * because its order carries meaning and the tab you are on is the one you just
+ * clicked. A filter row wraps, because the current choice can be any of them and
+ * one sitting past the edge of a phone, with nothing to say so, is a choice that
+ * does not exist as far as the reader is concerned.
+ */
+export const tabs = (o: { label: string; items: readonly Tab[]; wrap?: boolean }): TemplateResult => (
+  <nav data-ui="tabs" data-wrap={String(o.wrap === true)} aria-label={o.label}>
     {each(
       o.items,
       (item) => item.id,
