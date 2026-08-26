@@ -109,6 +109,30 @@ test('accounting: customer invoice computes tax, due date, and balanced posting'
   }
 })
 
+test('accounting: a product keeps its company-scoped sales tax in the account module', async () => {
+  const adapter = await boot()
+  try {
+    await call('product.saveTemplate', { id: 'product-tax-template', name: 'Taxed', type: 'goods' }, adapter)
+    const saved = (
+      await call('account.setProductTax', { templateId: 'product-tax-template', taxId: 'vat10' }, adapter)
+    ).value as Row
+    assert.equal(saved.ok, true)
+    assert.equal(
+      ((await call('account.getProductTax', { templateId: 'product-tax-template' }, adapter)).value as Row)
+        .taxId,
+      'vat10',
+    )
+
+    await call('account.setProductTax', { templateId: 'product-tax-template', taxId: null }, adapter)
+    assert.equal(
+      (await call('account.getProductTax', { templateId: 'product-tax-template' }, adapter)).value,
+      null,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('accounting: draft entries refuse imbalance and journal sequences advance without gaps', async () => {
   const adapter = await boot()
   try {

@@ -19,7 +19,7 @@ import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
 export default defineModule({
   name: 'backend',
-  version: '0.1.0',
+  version: '0.2.0',
   title: 'Quản trị',
   summary: 'Khung quản trị và cấu hình hệ thống.',
   category: 'Hệ thống',
@@ -45,7 +45,7 @@ export default defineModule({
   islands,
   fills: {
     'backend:relation.select': `{% island "backend.relation-select" %}`,
-    'backend:topbar.end': `{% island "backend.table-selection" %}`,
+    'backend:runtime': `{% island "backend.table-selection" %}`,
   },
   messages,
 })
@@ -143,6 +143,11 @@ export {
   recordList,
   recordWorkspace,
   recordToggle,
+  readonlyField,
+  readonlyTextarea,
+  recordFieldGrid,
+  recordRail,
+  recordHeaderActions,
   breadcrumbs,
   tabs,
   mediaPanel,
@@ -196,4 +201,7 @@ export type {
   ScheduleTone,
   RecordSummaryItem,
   RecordWorkspaceSlots,
+  RecordRailFact,
+  RecordRailSwitch,
+  RecordRailActivity,
 } from '../../ui/index.ts'

@@ -1,4 +1,4 @@
-import { asc, defineFn, deleteFrom, eq, from, KetError } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 const mediaOutput = {
@@ -84,6 +84,25 @@ export const functions: Record<string, FnSpec> = {
           productId: row.productId,
           alt: row.alt,
         }))
+    },
+  }),
+
+  /** All images for a bounded set of variants, used by the template media tab. */
+  listMediaByProducts: defineFn({
+    input: { productIds: 'json?' },
+    output: mediaOutput,
+    effects: ['read:product_media.Media', 'read:storage.Attachment'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const productIds = [...new Set((Array.isArray(args.productIds) ? args.productIds : []).map(String))]
+      if (!productIds.length) return []
+      const M = ctx.table('product_media.Media')
+      return ctx.db.all(
+        from(M)
+          .where(inArray(M.productId, productIds))
+          .orderBy(asc(M.sequence), asc(M.id))
+          .preload('attachment'),
+      )
     },
   }),
 

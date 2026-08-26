@@ -26,6 +26,7 @@ export const HOOKS = [
 ] as const
 
 export type Extras = {
+  runtime?: JSXChild
   'topbar.end'?: JSXChild
   'sidebar.foot'?: JSXChild
   'nav.items'?: JSXChild
@@ -97,6 +98,7 @@ export const shell = (
     <div data-ui="shell">
       {sidebar(_, sidebarOptions)}
       <main data-ui="main">
+        {extras.runtime ?? ''}
         {frame.topbar === false ? (
           ''
         ) : (

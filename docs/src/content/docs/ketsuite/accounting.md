@@ -127,6 +127,18 @@ still say otherwise; they are simply no longer required.
   than depending on the module: without it they are simply absent and resolution falls
   through to the company default.
 
+### Product sales tax
+
+The product form can also choose a default sales tax. That choice lives in
+`account.ProductTax`, not on the shared product template: tax configuration belongs to a legal
+entity and two companies can sell the same catalogue item under different taxes. The row is unique
+per `(companyId, templateId)`. `account.getProductTax` reads the mapping and
+`account.setProductTax` creates, replaces or clears it after checking that the tax is a sales tax.
+
+`product_backend` treats this integration as optional. It renders and saves the tax control only when
+those Account functions are installed, so the Product module remains usable in a headless or
+non-accounting deployment.
+
 A default is checked when it is saved, not when an invoice fails: a receivable default
 must be a receivable account, a revenue default an income account. `account.saveDefaults`
 and `account.saveCategoryAccount` refuse anything else, and `account.previewAccounts`

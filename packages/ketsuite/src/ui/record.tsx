@@ -18,7 +18,9 @@ export const HOOKS = [
   'record-identity',
   'record-thumbnail',
   'record-kicker',
+  'record-heading-row',
   'record-heading',
+  'record-status',
   'record-subtitle',
   'record-badges',
   'record-toggle',
@@ -94,6 +96,8 @@ export type RecordWorkspaceOptions = {
    */
   breadcrumbs?: RecordBreadcrumbs
   subtitle?: string | null
+  /** Compact state shown beside the record title. */
+  status?: JSXChild
   image?: { src: string; alt: string } | null
   imageFallback: JSXChild
   badges?: readonly JSXChild[]
@@ -123,7 +127,10 @@ const recordHeader = (options: RecordWorkspaceOptions): TemplateResult => (
       </div>
       <div>
         {!!options.kicker && <p data-ui="record-kicker">{options.kicker}</p>}
-        <h1 data-ui="record-heading">{options.title}</h1>
+        <div data-ui="record-heading-row">
+          <h1 data-ui="record-heading">{options.title}</h1>
+          {options.status !== undefined && <span data-ui="record-status">{options.status}</span>}
+        </div>
         {!!options.subtitle && <p data-ui="record-subtitle">{options.subtitle}</p>}
       </div>
     </div>

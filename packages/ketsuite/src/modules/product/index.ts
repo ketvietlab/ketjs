@@ -9,7 +9,7 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'product',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: ['uom'],
   title: 'Sản phẩm',
   summary: 'Danh mục, mẫu sản phẩm và biến thể.',

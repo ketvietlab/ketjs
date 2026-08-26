@@ -9,6 +9,16 @@ import type { ModelDef } from '@ketvietlab/ketjs'
  * map one to one, and a comment costs less than a translation table.
  */
 export const models: Record<string, ModelDef> = {
+  Brand: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      name: 'text',
+      active: 'bool',
+    },
+    indexes: { name: { fields: ['name'] } },
+  },
+
   Category: {
     scope: 'shared',
     fields: {
@@ -30,7 +40,9 @@ export const models: Record<string, ModelDef> = {
       // the column, because the type vocabulary is deliberately small.
       type: 'text',
       categoryId: 'ref:product.Category?',
+      brandId: 'ref:product.Brand?',
       uomId: 'ref:uom.Unit?',
+      origin: 'text?',
       description: 'text?',
       listPrice: 'decimal',
       saleOk: 'bool',

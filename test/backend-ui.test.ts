@@ -51,7 +51,11 @@ import {
   person,
   recordList,
   recordActions,
+  recordFieldGrid,
   recordForm,
+  recordHeaderActions,
+  recordRail,
+  readonlyField,
   qrCode,
   recordToggle,
   recordWorkspace,
@@ -172,6 +176,7 @@ const componentContract = [
     kicker: 'Product',
     title: 'Linen shirt',
     subtitle: 'LINEN-01 · Unit',
+    status: badge('Active', 'positive'),
     image: null,
     imageFallback: icon('package'),
     badges: [
@@ -190,6 +195,40 @@ const componentContract = [
     body: surface({ body: 'Product form', padding: 'compact' }),
     aside: surface({ body: 'Collaboration', padding: 'compact' }),
     asideLabel: 'Collaboration',
+  }),
+  recordFieldGrid({
+    fields: [readonlyField({ id: 'future-code', label: 'Future code', future: true })],
+  }),
+  recordHeaderActions({
+    label: 'Record actions',
+    form: 'product-form',
+    moreLabel: 'More',
+    more: recordForm({
+      action: '/admin/products/archive',
+      fields: [],
+      submit: 'Archive',
+      submitVariant: 'destructive',
+      layout: 'inline',
+    }),
+    noteLabel: 'Internal note',
+    saveLabel: 'Save & close',
+    saveOptionsLabel: 'Save options',
+  }),
+  recordRail({
+    system: {
+      title: 'System information',
+      facts: [{ id: 'id', label: 'ID', value: 'record-1', divider: true }],
+    },
+    switches: {
+      title: 'Channels',
+      items: [{ id: 'web', label: 'Website', icon: 'globe', future: true }],
+      actionLabel: 'Manage channels',
+    },
+    activity: {
+      title: 'Activity',
+      items: [{ id: 'created', label: 'Created', detail: 'Today', icon: 'package' }],
+      actionLabel: 'View all',
+    },
   }),
   modalSheet({
     title: 'Follow-up',

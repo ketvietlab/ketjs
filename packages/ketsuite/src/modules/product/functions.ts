@@ -201,8 +201,10 @@ const templateSummary = (template: Row) => ({
   name: String(template.name),
   type: String(template.type),
   categoryId: template.categoryId == null ? null : String(template.categoryId),
+  brandId: template.brandId == null ? null : String(template.brandId),
   uomId: template.uomId == null ? null : String(template.uomId),
   listPrice: String(template.listPrice),
+  origin: template.origin == null ? null : String(template.origin),
   saleOk: template.saleOk === true,
   purchaseOk: template.purchaseOk === true,
   active: template.active !== false,
@@ -453,13 +455,19 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   listAttributes: defineFn({
-    input: { search: 'text?', limit: 'int?' },
+    input: { search: 'text?', limit: 'int?', variantsOnly: 'bool?' },
     effects: ['read:product.Attribute', 'read:product.AttributeValue'],
     agent: true,
     handler: async (ctx, args) => {
       const A = ctx.table('product.Attribute')
       const rows = await ctx.db.all(from(A).orderBy(asc(A.sequence), asc(A.name)).preload('values'))
-      return narrow(rows, args, ['name'])
+      return narrow(
+        args.variantsOnly === true
+          ? rows.filter((attribute) => attribute.createVariant !== 'no_variant')
+          : rows,
+        args,
+        ['name'],
+      )
     },
   }),
 
@@ -560,7 +568,9 @@ export const functions: Record<string, FnSpec> = {
       name: 'text',
       type: 'text',
       categoryId: 'id?',
+      brandId: 'id?',
       uomId: 'id?',
+      origin: 'text?',
       description: 'text?',
       listPrice: 'decimal',
       saleOk: 'bool',
@@ -570,11 +580,13 @@ export const functions: Record<string, FnSpec> = {
       category: 'json?',
       uoms: 'json?',
       attributeLines: 'json?',
+      brand: 'json?',
     },
     effects: [
       'read:product.Template',
       'read:product.Product',
       'read:product.Category',
+      'read:product.Brand',
       'read:product.TemplateUom',
       'read:product.TemplateAttributeLine',
     ],
@@ -582,7 +594,7 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const T = ctx.table('product.Template')
       const row = await ctx.db.one(
-        from(T).where(eq(T.id, args.id)).preload('variants', 'category', 'uoms', 'attributeLines'),
+        from(T).where(eq(T.id, args.id)).preload('variants', 'category', 'brand', 'uoms', 'attributeLines'),
       )
       return row
     },
@@ -594,14 +606,26 @@ export const functions: Record<string, FnSpec> = {
       name: 'text',
       type: 'text',
       categoryId: 'id?',
+      brandId: 'id?',
       uomId: 'id?',
+      origin: 'text?',
       description: 'text?',
       listPrice: 'decimal?',
       saleOk: 'bool?',
       purchaseOk: 'bool?',
+      defaultCode: 'text?',
+      barcode: 'text?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:product.Template', 'write:product.Template', 'read:uom.Unit', 'write:uom.Unit'],
+    effects: [
+      'read:product.Template',
+      'write:product.Template',
+      'read:product.Product',
+      'write:product.Product',
+      'read:product.Brand',
+      'read:uom.Unit',
+      'write:uom.Unit',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -612,7 +636,16 @@ export const functions: Record<string, FnSpec> = {
         }
       if (args.uomId && !(await ctx.db.select('uom.Unit', { id: args.uomId }))[0])
         return { ok: false, errors: [{ field: 'uomId', message: 'không có đơn vị nào mang id này' }] }
+      if (args.brandId && !(await ctx.db.select('product.Brand', { id: args.brandId }))[0])
+        return { ok: false, errors: [{ field: 'brandId', message: 'thương hiệu không tồn tại' }] }
       const existing = (await ctx.db.select('product.Template', { id: args.id }))[0]
+      const products = await ctx.db.select('product.Product', { templateId: args.id })
+      const defaultVariant = products.find((product) => String(product.combinationKey) === '')
+      if (args.barcode) {
+        const collision = (await ctx.db.select('product.Product', { barcode: args.barcode }))[0]
+        if (collision && collision.id !== defaultVariant?.id)
+          return { ok: false, errors: [{ field: 'barcode', message: 'barcode đã được dùng' }] }
+      }
       let changes = ctx
         .change('product.Template', args, existing ?? null)
         .cast([
@@ -620,7 +653,9 @@ export const functions: Record<string, FnSpec> = {
           'name',
           'type',
           'categoryId',
+          'brandId',
           'uomId',
+          'origin',
           'description',
           'listPrice',
           'saleOk',
@@ -637,8 +672,62 @@ export const functions: Record<string, FnSpec> = {
       if (!changes.valid) return { ok: false, errors: changes.errors }
       await ctx.tx(async (tx) => {
         await tx.db.commit(changes, existing ? { id: args.id } : undefined)
+        const generated = products.some(
+          (product) => String(product.combinationKey) !== '' && product.active !== false,
+        )
+        const identity = {
+          ...(Object.hasOwn(args, 'defaultCode') ? { defaultCode: args.defaultCode ?? null } : {}),
+          ...(Object.hasOwn(args, 'barcode') ? { barcode: args.barcode ?? null } : {}),
+          active: !generated,
+        }
+        if (defaultVariant) await tx.db.update('product.Product', { id: defaultVariant.id }, identity)
+        else
+          await tx.db.insert('product.Product', {
+            id: `${String(args.id)}:default`,
+            templateId: args.id,
+            defaultCode: args.defaultCode ?? null,
+            barcode: args.barcode ?? null,
+            weight: '0',
+            volume: '0',
+            combinationKey: '',
+            active: !generated,
+          })
         if (args.uomId) await tx.db.update('uom.Unit', { id: args.uomId }, { locked: true })
       })
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  listBrands: defineFn({
+    input: { search: 'text?', limit: 'int?', includeArchived: 'bool?' },
+    output: { id: 'id', name: 'text', active: 'bool' },
+    effects: ['read:product.Brand'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const B = ctx.table('product.Brand')
+      const rows = await ctx.db.all(from(B).orderBy(asc(B.name)))
+      return narrow(
+        args.includeArchived === true ? rows : rows.filter((brand) => brand.active !== false),
+        args,
+        ['name'],
+      )
+    },
+  }),
+
+  saveBrand: defineFn({
+    input: { id: 'id', name: 'text', active: 'bool?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:product.Brand', 'write:product.Brand'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('product.Brand', { id: args.id }))[0]
+      const changes = ctx
+        .change('product.Brand', { ...args, active: args.active ?? true }, existing ?? null)
+        .cast(['id', 'name', 'active'])
+        .required(['name'])
+      if (!changes.valid) return { ok: false, errors: changes.errors }
+      await ctx.db.commit(changes, existing ? { id: args.id } : undefined)
       return { ok: true, id: args.id }
     },
   }),
@@ -662,9 +751,15 @@ export const functions: Record<string, FnSpec> = {
       if (!(await ctx.db.select('product.Template', { id: args.templateId }))[0])
         return { ok: false, errors: [{ field: 'templateId', message: 'không có template nào mang id này' }] }
       const existing = (await ctx.db.select('product.Product', { id: args.id }))[0]
+      const implicitDefault =
+        !existing && args.combinationKey === ''
+          ? (await ctx.db.select('product.Product', { templateId: args.templateId })).find(
+              (product) => String(product.combinationKey) === '',
+            )
+          : null
       if (args.barcode) {
         const collision = (await ctx.db.select('product.Product', { barcode: args.barcode }))[0]
-        if (collision && collision.id !== args.id)
+        if (collision && collision.id !== args.id && collision.id !== implicitDefault?.id)
           return { ok: false, errors: [{ field: 'barcode', message: 'barcode đã được dùng' }] }
       }
       const values = {
@@ -688,7 +783,17 @@ export const functions: Record<string, FnSpec> = {
           .put('volume', args.volume ?? '0')
           .put('active', true)
       if (!changes.valid) return { ok: false, errors: changes.errors }
-      await ctx.db.commit(changes, existing ? { id: args.id } : undefined)
+      await ctx.tx(async (tx) => {
+        // Older integrations create the no-combination variant under their own
+        // business id immediately after saving a template. Replace the fresh,
+        // deterministic implicit row before anything can reference it, keeping
+        // that public workflow compatible with the new default-variant model.
+        if (implicitDefault) {
+          const Product = tx.table('product.Product')
+          await tx.db.del(deleteFrom(Product).where(eq(Product.id, implicitDefault.id)))
+        }
+        await tx.db.commit(changes, existing ? { id: args.id } : undefined)
+      })
       return { ok: true, id: args.id }
     },
   }),

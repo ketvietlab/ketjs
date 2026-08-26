@@ -8,7 +8,15 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 export const HOOKS = ['breadcrumbs', 'breadcrumb', 'tabs', 'tab'] as const
 
 export type Breadcrumb = { label: string; href?: string | null }
-export type Tab = { id: string; label: string; href: string; active?: boolean; count?: number | null }
+export type Tab = {
+  id: string
+  label: string
+  href?: string | null
+  active?: boolean
+  count?: number | null
+  /** Keeps a future section visible in the information architecture without making it navigable yet. */
+  disabled?: boolean
+}
 
 export const breadcrumbs = (o: { label: string; items: readonly Breadcrumb[] }): TemplateResult => (
   <nav data-ui="breadcrumbs" aria-label={o.label}>
@@ -35,22 +43,38 @@ export const tabs = (o: { label: string; items: readonly Tab[] }): TemplateResul
     {each(
       o.items,
       (item) => item.id,
-      (item) => (
-        <a
-          data-ui="tab"
-          data-active={String(item.active === true)}
-          href={item.href}
-          aria-current={item.active ? 'page' : null}
-        >
-          {item.label}
-          {item.count !== undefined && item.count !== null && (
-            <>
-              {' '}
-              <span>{String(item.count)}</span>
-            </>
-          )}
-        </a>
-      ),
+      (item) =>
+        item.disabled || !item.href ? (
+          <span
+            data-ui="tab"
+            data-active={String(item.active === true)}
+            data-disabled="true"
+            aria-disabled="true"
+          >
+            {item.label}
+            {item.count !== undefined && item.count !== null && (
+              <>
+                {' '}
+                <span>{String(item.count)}</span>
+              </>
+            )}
+          </span>
+        ) : (
+          <a
+            data-ui="tab"
+            data-active={String(item.active === true)}
+            href={item.href}
+            aria-current={item.active ? 'page' : null}
+          >
+            {item.label}
+            {item.count !== undefined && item.count !== null && (
+              <>
+                {' '}
+                <span>{String(item.count)}</span>
+              </>
+            )}
+          </a>
+        ),
     )}
   </nav>
 )

@@ -2,16 +2,14 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
-  button,
-  dataTable,
-  emptyState,
   Framed,
-  FormCluster,
+  formatMoney,
   icon,
-  inline,
-  linkButton,
   MediaPanel,
+  ProductMediaManagement,
+  ProductVariantManagement,
   RecordForm,
+  RecordHeaderActions,
   RecordToggle,
   RecordWorkspace,
   Section,
@@ -19,7 +17,7 @@ import {
   Surface,
   Tabs,
 } from '../../../ui/index.ts'
-import type { FormOption, Frame, MediaPanelProps } from '../../../ui/index.ts'
+import type { FormOption, Frame, MediaItem, MediaPanelProps } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import { selectionLabel as resolveSelection } from '../../backend/screen.ts'
 
@@ -45,6 +43,16 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
 export const PRODUCT_DETAIL_TABS = ['general', 'variants', 'media'] as const
 export type ProductDetailTab = (typeof PRODUCT_DETAIL_TABS)[number]
 
+const formattedDateTime = (value: string | Date | null | undefined, locale: string): string => {
+  if (!value) return '—'
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat(locale.toLowerCase().startsWith('vi') ? 'vi-VN' : 'en-US', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date)
+}
+
 export const productDetailScreen = (
   _: Translator,
   row: {
@@ -55,23 +63,38 @@ export const productDetailScreen = (
     listPrice: number
     uomId: string | null
     categoryId?: string | null
+    brandId?: string | null
+    origin?: string | null
+    defaultCode?: string | null
+    barcode?: string | null
+    taxId?: string | null
     saleOk?: boolean
     purchaseOk?: boolean
     active?: boolean
     isStorable?: boolean
     tracking?: string
+    createdAt?: string | Date | null
+    updatedAt?: string | Date | null
   },
   media: MediaPanelProps,
   management: {
     uoms: FormOption[]
     categories: FormOption[]
-    attributes: FormOption[]
+    brands: FormOption[]
+    taxes: FormOption[]
+    taxEnabled?: boolean
+    variantAttributes: FormOption[]
     variants: Array<{
       id: string
       name?: string | null
       defaultCode?: string | null
       barcode?: string | null
+      stock?: string | number | null
       active?: boolean
+      values?: Array<{
+        value?: string | null
+        attribute?: string | null
+      }>
     }>
     /** What the template already carries, so the reader can see and undo it. */
     attributeLines: Array<{
@@ -80,6 +103,17 @@ export const productDetailScreen = (
       attribute?: string | null
       values: Array<{ id: string; name: string }>
     }>
+    variantMedia?: Array<{ variantId: string; images: MediaItem[] }>
+    variantMediaPage?: {
+      page: number
+      pageSize: number
+      total: number
+    }
+    variantPage?: {
+      page: number
+      pageSize: number
+      total: number
+    }
     stockEnabled?: boolean
     errors?: string[]
     editor?: JSXChild
@@ -91,6 +125,7 @@ export const productDetailScreen = (
     controls?: {
       uom?: JSXChild
       category?: JSXChild
+      brand?: JSXChild
       attribute?: JSXChild
       attributeValues?: JSXChild
     }
@@ -103,13 +138,22 @@ export const productDetailScreen = (
 ): TemplateResult => {
   const images = media.images ?? []
   const primaryImage = images.find((image) => image.primary) ?? images[0]
-  const unit = management.uoms.find((option) => option.value === row.uomId)?.label
+  const variantTotal = management.variantPage?.total ?? management.variants.length
+  const hasRealVariants = variantTotal > 0
   const category = management.categories.find((option) => option.value === row.categoryId)?.label
-  const reference =
-    management.variants.length === 1 && management.variants[0]?.defaultCode
-      ? `${_('product_backend.field.defaultCode')}: ${management.variants[0].defaultCode}`
-      : null
-  const subtitle = [reference, category, unit].filter(Boolean).join(' · ')
+  const unit = management.uoms.find((option) => option.value === row.uomId)?.label
+  const subtitle = (
+    activeTab === 'variants'
+      ? [
+          `${_('product_backend.field.type')}: ${selectionLabel(_, 'type', row.type)}`,
+          `${_('product_backend.field.uom')}: ${unit || '—'}`,
+          `${_('product_backend.field.listPrice')}: ${formatMoney(_, row.listPrice, 'VND')}`,
+        ]
+      : [
+          `${_('product_backend.field.type')}: ${selectionLabel(_, 'type', row.type)}`,
+          `${_('product_backend.col.category')}: ${category || '—'}`,
+        ]
+  ).join(' · ')
   const tabHref = (tab: ProductDetailTab) =>
     localized(`/admin/product/templates/${row.id}?tab=${tab}`, locale)
   const productFormId = 'product-detail-form'
@@ -131,6 +175,14 @@ export const productDetailScreen = (
       submitPlacement="external"
       scope="product-detail"
       errors={management.errors}
+      hidden={
+        hasRealVariants
+          ? {
+              defaultCode: String(row.defaultCode ?? ''),
+              barcode: String(row.barcode ?? ''),
+            }
+          : undefined
+      }
       fields={[
         {
           name: 'type',
@@ -138,7 +190,6 @@ export const productDetailScreen = (
           type: 'radio',
           value: row.type,
           required: true,
-          span: 'full',
           options: ['goods', 'service'].map((value) => ({
             value,
             label: selectionLabel(_, 'type', value),
@@ -154,18 +205,18 @@ export const productDetailScreen = (
           ...(management.controls?.uom ? { control: management.controls.uom } : {}),
         },
         {
+          name: 'listPrice',
+          label: _('product_backend.field.listPrice'),
+          type: 'decimal',
+          value: row.listPrice,
+        },
+        {
           name: 'categoryId',
           label: _('product_backend.field.category'),
           type: 'select',
           value: row.categoryId,
           options: [{ value: '', label: '—' }, ...management.categories],
           ...(management.controls?.category ? { control: management.controls.category } : {}),
-        },
-        {
-          name: 'listPrice',
-          label: _('product_backend.field.listPrice'),
-          type: 'decimal',
-          value: row.listPrice,
         },
         ...(management.stockEnabled
           ? [
@@ -188,196 +239,254 @@ export const productDetailScreen = (
           value: row.description,
           span: 'full',
         },
+        {
+          name: 'defaultCode',
+          label: _('product_backend.field.defaultCode'),
+          value: row.defaultCode,
+          disabled: hasRealVariants,
+          help: hasRealVariants ? _('product_backend.field.variantIdentityHint') : null,
+        },
+        {
+          name: 'barcode',
+          label: _('product_backend.field.barcode'),
+          value: row.barcode,
+          disabled: hasRealVariants,
+          help: hasRealVariants ? _('product_backend.field.variantIdentityHint') : null,
+        },
+        {
+          name: 'brandId',
+          label: _('product_backend.field.brand'),
+          type: 'select',
+          value: row.brandId,
+          options: [{ value: '', label: '—' }, ...management.brands],
+          ...(management.controls?.brand ? { control: management.controls.brand } : {}),
+        },
+        ...(management.taxEnabled
+          ? [
+              {
+                name: 'taxId',
+                label: _('product_backend.field.taxRate'),
+                type: 'select' as const,
+                value: row.taxId,
+                options: [{ value: '', label: '—' }, ...management.taxes],
+              },
+            ]
+          : []),
+        {
+          name: 'origin',
+          label: _('product_backend.field.origin'),
+          value: row.origin,
+          span: 'full',
+        },
       ]}
     />
   )
 
-  // Archiving is the only way out of the catalogue that keeps the history, and
-  // the list already offers to include archived products — so the screen that
-  // owns the product has to be the one that can archive it.
   const archived = row.active === false
+  const archiveAction = (
+    <RecordForm
+      action={localized(`/admin/product/templates/${row.id}/archive?tab=${activeTab}`, locale)}
+      submit={_(archived ? 'product_backend.archive.restore' : 'product_backend.archive.action')}
+      submitVariant={archived ? 'secondary' : 'destructive'}
+      submitSize="compact"
+      layout="inline"
+      hidden={{ active: archived ? '1' : '0' }}
+      fields={[]}
+    />
+  )
   const generalTab = stack(
-    [
-      <Section title={_('product_backend.tabs.general')} body={<Surface body={general} />} />,
-      <Section
-        title={_(archived ? 'product_backend.archive.restoreTitle' : 'product_backend.archive.title')}
-        description={_(archived ? 'product_backend.archive.restoreHint' : 'product_backend.archive.hint')}
-        body={
-          <Surface
-            padding="compact"
-            body={
-              <RecordForm
-                action={localized(`/admin/product/templates/${row.id}/archive?tab=general`, locale)}
-                submit={_(archived ? 'product_backend.archive.restore' : 'product_backend.archive.action')}
-                submitVariant={archived ? 'secondary' : 'destructive'}
-                submitSize="compact"
-                hidden={{ active: archived ? '1' : '0' }}
-                fields={[]}
-              />
-            }
-          />
-        }
-      />,
-    ],
+    [<Section title={_('product_backend.tabs.general')} body={<Surface body={general} />} />],
     'loose',
   )
 
-  const variants = stack([
-    <Section
-      title={_('product_backend.variants.title')}
-      actions={
-        <RecordForm
-          action={localized(`/admin/product/templates/${row.id}/variants/generate?tab=variants`, locale)}
-          submit={_('product_backend.variants.generate')}
-          submitVariant="secondary"
-          fields={[]}
-        />
-      }
-      body={
-        management.variants.length === 0
-          ? emptyState(_('product_backend.variants.empty'), _('product_backend.variants.generate'))
-          : dataTable(_, {
-              rows: management.variants,
-              id: (variant) => variant.id,
-              columns: [
-                {
-                  key: 'variant',
-                  label: _('product_backend.variants.title'),
-                  priority: 'primary',
-                  // A generated variant has no name of its own; what identifies it
-                  // is the combination it stands for. Falling back to the id last
-                  // means the row is only ever unreadable when there is genuinely
-                  // nothing else to say.
-                  cell: (variant) =>
-                    linkButton({
-                      label: variant.name || variant.defaultCode || variant.id,
-                      href: localized(`/admin/product/templates/${row.id}/variants/${variant.id}`, locale),
-                      variant: 'tertiary',
-                    }),
-                },
-                {
-                  key: 'code',
-                  label: _('product_backend.field.defaultCode'),
-                  kind: 'identifier',
-                  cell: (variant) => variant.defaultCode || '—',
-                },
-                {
-                  key: 'barcode',
-                  label: _('product_backend.field.barcode'),
-                  kind: 'identifier',
-                  cell: (variant) => variant.barcode ?? '—',
-                },
-                {
-                  key: 'active',
-                  label: _('product_backend.col.state'),
-                  cell: (variant) => {
-                    const state = variant.active === false ? 'archived' : 'active'
-                    return badge(selectionLabel(_, 'state', state), 'neutral', state)
-                  },
-                },
-              ],
-            })
-      }
-    />,
-    <Section
-      title={_('product_backend.attributes.lines')}
-      description={_('product_backend.attributes.linesHint')}
-      body={stack(
-        [
-          // What is already configured, before the form that adds more. Without
-          // this the reader adds a line and the screen says nothing back — there
-          // was no way to see, let alone undo, what a template already carried.
-          management.attributeLines.length
-            ? dataTable(_, {
-                rows: management.attributeLines,
-                id: (line) => line.id,
-                columns: [
-                  {
-                    key: 'attribute',
-                    label: _('product_backend.attributes.attribute'),
-                    priority: 'primary',
-                    cell: (line) => line.attribute || line.attributeId,
-                  },
-                  {
-                    key: 'values',
-                    label: _('product_backend.attributes.values'),
-                    cell: (line) =>
-                      line.values.length
-                        ? inline(line.values.map((value) => badge(value.name)))
-                        : badge(_('product_backend.attributes.noValues')),
-                  },
-                  {
-                    key: 'remove',
-                    label: _('product_backend.attributes.removeLine'),
-                    align: 'end',
-                    cell: (line) => (
-                      <RecordForm
-                        action={localized(
-                          `/admin/product/templates/${row.id}/attribute-lines/${line.id}/remove?tab=variants`,
-                          locale,
-                        )}
-                        submit={_('product_backend.attributes.removeLine')}
-                        submitVariant="tertiary"
-                        submitSize="compact"
-                        fields={[]}
-                      />
-                    ),
-                  },
-                ],
-              })
-            : emptyState(
-                _('product_backend.attributes.linesEmpty'),
-                _('product_backend.attributes.linesEmptyHint'),
-              ),
-          <Surface
-            padding="compact"
-            body={
-              <RecordForm
-                action={localized(`/admin/product/templates/${row.id}/attribute-lines?tab=variants`, locale)}
-                submit={_('product_backend.action.add')}
-                submitVariant="secondary"
-                fields={[
-                  {
-                    name: 'attributeId',
-                    label: _('product_backend.attributes.attribute'),
-                    type: 'select',
-                    // The empty option matters on a required field: without it the
-                    // browser preselects the first attribute, and a reader who
-                    // never opened the control still submits one.
-                    options: [{ value: '', label: '—' }, ...management.attributes],
-                    required: true,
-                    ...(management.controls?.attribute ? { control: management.controls.attribute } : {}),
-                  },
-                  {
-                    name: 'valueIds',
-                    label: _('product_backend.attributes.values'),
-                    help: _('product_backend.attributes.valuesHint'),
-                    required: true,
-                    // Its own row: the chips grow downward, and a half-width
-                    // neighbour would be left centred against a stack of them.
-                    span: 'full' as const,
-                    ...(management.controls?.attributeValues
-                      ? { control: management.controls.attributeValues }
-                      : {}),
-                  },
-                ]}
-              />
-            }
-          />,
-        ],
-        'compact',
-      )}
-    />,
-  ])
-
-  const mediaTab = (
-    <Section
-      title={_('product_backend.media.title')}
-      description={_('product_backend.media.description')}
-      body={<MediaPanel {...media} labels={mediaLabels(_)} />}
+  const variantCount = variantTotal
+  const variantPage = management.variantPage ?? {
+    page: 1,
+    pageSize: 10,
+    total: variantTotal,
+  }
+  const variantFrom = variantPage.total ? (variantPage.page - 1) * variantPage.pageSize + 1 : 0
+  const variantTo = Math.min(variantPage.page * variantPage.pageSize, variantPage.total)
+  const variantPageHref = (page: number) =>
+    localized(`/admin/product/templates/${row.id}?tab=variants&page=${page}`, locale)
+  const variants = (
+    <ProductVariantManagement
+      attributes={{
+        title: _('product_backend.attributes.panelTitle'),
+        description: _('product_backend.attributes.panelHint'),
+        sortLabel: _('product_backend.attributes.sort'),
+        columns: {
+          name: _('product_backend.attributes.nameColumn'),
+          values: _('product_backend.attributes.values'),
+          actions: _('product_backend.attributes.actions'),
+        },
+        lines: management.attributeLines.map((line) => ({
+          id: line.id,
+          name: line.attribute || line.attributeId,
+          values: line.values.map((value) => value.name),
+          editHref: localized('/admin/product/attributes', locale),
+          removeAction: localized(
+            `/admin/product/templates/${row.id}/attribute-lines/${line.id}/remove?tab=variants`,
+            locale,
+          ),
+        })),
+        empty: _('product_backend.attributes.linesEmptyHint'),
+        editLabel: _('product_backend.attributes.editLine'),
+        removeLabel: _('product_backend.attributes.removeLine'),
+        addLabel: _('product_backend.attributes.addLine'),
+        addForm: (
+          <RecordForm
+            action={localized(`/admin/product/templates/${row.id}/attribute-lines?tab=variants`, locale)}
+            submit={_('product_backend.action.add')}
+            submitVariant="secondary"
+            fields={[
+              {
+                name: 'attributeId',
+                label: _('product_backend.attributes.attribute'),
+                type: 'select',
+                options: [{ value: '', label: '—' }, ...management.variantAttributes],
+                required: true,
+                ...(management.controls?.attribute ? { control: management.controls.attribute } : {}),
+              },
+              {
+                name: 'valueIds',
+                label: _('product_backend.attributes.values'),
+                help: _('product_backend.attributes.valuesHint'),
+                required: true,
+                span: 'full' as const,
+                ...(management.controls?.attributeValues
+                  ? { control: management.controls.attributeValues }
+                  : {}),
+              },
+            ]}
+          />
+        ),
+      }}
+      variants={{
+        title: _('product_backend.variants.title'),
+        description: _('product_backend.variants.panelHint'),
+        generateLabel: _('product_backend.variants.generate'),
+        generateAction: localized(
+          `/admin/product/templates/${row.id}/variants/generate?tab=variants`,
+          locale,
+        ),
+        refreshLabel: _('product_backend.variants.refresh'),
+        columns: {
+          code: _('product_backend.variants.code'),
+          values: _('product_backend.variants.values'),
+          sku: _('product_backend.variants.sku'),
+          price: _('product_backend.field.listPrice'),
+          stock: _('product_backend.variants.stock'),
+          state: _('product_backend.col.state'),
+          actions: _('product_backend.variants.actions'),
+        },
+        rows: management.variants.map((variant) => {
+          const href = localized(`/admin/product/templates/${row.id}/variants/${variant.id}`, locale)
+          const code = variant.defaultCode || variant.name || variant.id
+          return {
+            id: variant.id,
+            code,
+            values: (variant.values ?? []).map((value) => String(value.value ?? '')).filter(Boolean),
+            sku: variant.defaultCode || '—',
+            price: formatMoney(_, row.listPrice, 'VND'),
+            stock: variant.stock == null ? '—' : String(variant.stock),
+            active: variant.active !== false,
+            stateLabel: _(
+              variant.active === false
+                ? 'product_backend.state.archived'
+                : 'product_backend.variants.selling',
+            ),
+            href,
+          }
+        }),
+        empty: _('product_backend.variants.empty'),
+        editLabel: _('product_backend.variants.edit'),
+        moreLabel: _('product_backend.action.more'),
+        selectAllLabel: _('backend.table.selectAll'),
+        selectRowLabel: _('backend.table.selectRow'),
+        displayLabel: _('product_backend.variants.display'),
+        rangeLabel: _('product_backend.variants.range', {
+          from: variantFrom,
+          to: variantTo,
+          total: variantCount,
+        }),
+        pageLabel: String(variantPage.page),
+        previousLabel: _('product_backend.variants.previous'),
+        nextLabel: _('product_backend.variants.next'),
+        previousHref: variantPage.page > 1 ? variantPageHref(variantPage.page - 1) : null,
+        nextHref: variantTo < variantPage.total ? variantPageHref(variantPage.page + 1) : null,
+      }}
     />
   )
 
+  const mediaOfVariant = (variantId: string) =>
+    management.variantMedia?.find((entry) => entry.variantId === variantId)?.images ?? []
+  const mediaPage = management.variantMediaPage ?? {
+    page: 1,
+    pageSize: 25,
+    total: management.variants.length,
+  }
+  const mediaFrom = mediaPage.total ? (mediaPage.page - 1) * mediaPage.pageSize + 1 : 0
+  const mediaTo = Math.min(mediaPage.page * mediaPage.pageSize, mediaPage.total)
+  const mediaPageHref = (page: number) =>
+    localized(`/admin/product/templates/${row.id}?tab=media&variantPage=${page}`, locale)
+  const mediaTab = (
+    <ProductMediaManagement
+      gallery={{
+        title: _('product_backend.media.panelTitle'),
+        description: _('product_backend.media.panelHint'),
+        sortLabel: _('product_backend.media.sortAutomatic'),
+        hint: _('product_backend.media.primaryHint'),
+        panel: <MediaPanel {...media} labels={mediaLabels(_)} />,
+      }}
+      variants={{
+        title: _('product_backend.media.variantTitle'),
+        description: _('product_backend.media.variantHint'),
+        columns: {
+          variant: _('product_backend.media.variantColumn'),
+          primary: _('product_backend.media.representative'),
+          gallery: _('product_backend.media.library'),
+          actions: _('product_backend.variants.actions'),
+        },
+        rows: management.variants.map((variant) => {
+          const images = mediaOfVariant(variant.id)
+          return {
+            id: variant.id,
+            label: variant.defaultCode || variant.name || variant.id,
+            detail: (variant.values ?? [])
+              .map((value) => String(value.value ?? ''))
+              .filter(Boolean)
+              .join(' · '),
+            href: localized(`/admin/product/templates/${row.id}/variants/${variant.id}?tab=media`, locale),
+            images: images.map((image) => ({
+              id: image.id,
+              src: image.src,
+              alt: image.alt,
+              primary: image.primary,
+              removeAction: image.actions?.remove,
+            })),
+          }
+        }),
+        empty: _('product_backend.media.variantEmpty'),
+        addLabel: _('product_backend.media.variantAdd'),
+        editLabel: _('product_backend.media.variantEdit'),
+        removeLabel: _('product_backend.media.variantRemove'),
+        displayLabel: _('product_backend.variants.display'),
+        rangeLabel: _('product_backend.variants.range', {
+          from: mediaFrom,
+          to: mediaTo,
+          total: mediaPage.total,
+        }),
+        pageLabel: String(mediaPage.page),
+        previousLabel: _('product_backend.variants.previous'),
+        nextLabel: _('product_backend.variants.next'),
+        previousHref: mediaPage.page > 1 ? mediaPageHref(mediaPage.page - 1) : null,
+        nextHref: mediaTo < mediaPage.total ? mediaPageHref(mediaPage.page + 1) : null,
+      }}
+    />
+  )
+
+  const updatedAt = formattedDateTime(row.updatedAt, locale)
   const workspace = (
     <RecordWorkspace
       breadcrumbs={{
@@ -394,46 +503,60 @@ export const productDetailScreen = (
           { label: row.name },
         ],
       }}
-      kicker={_('product_backend.detail.kicker')}
       title={row.name}
       subtitle={subtitle}
+      status={badge(
+        selectionLabel(_, 'state', archived ? 'archived' : 'active'),
+        archived ? 'neutral' : 'positive',
+        archived ? 'archived' : 'active',
+      )}
       image={primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null}
       imageFallback={icon('package')}
-      badges={[
-        productToggle('saleOk', _('product_backend.field.saleOk'), row.saleOk === true),
-        productToggle('purchaseOk', _('product_backend.field.purchaseOk'), row.purchaseOk === true),
-        ...(management.stockEnabled
-          ? [productToggle('isStorable', _('product_backend.field.isStorable'), row.isStorable === true)]
-          : []),
-      ]}
-      summary={[
-        {
-          id: 'variants',
-          label: _('product_backend.summary.variants'),
-          value: management.variants.length,
-          href: tabHref('variants'),
-        },
-        {
-          id: 'media',
-          label: _('product_backend.summary.images'),
-          value: images.length,
-          href: tabHref('media'),
-        },
-        {
-          id: 'state',
-          label: _('product_backend.col.state'),
-          value: selectionLabel(_, 'state', archived ? 'archived' : 'active'),
-        },
-        ...(management.stockEnabled
+      badges={
+        activeTab === 'media'
+          ? []
+          : [
+              productToggle('saleOk', _('product_backend.field.saleOk'), row.saleOk === true),
+              productToggle('purchaseOk', _('product_backend.field.purchaseOk'), row.purchaseOk === true),
+              ...(management.stockEnabled
+                ? [
+                    productToggle(
+                      'isStorable',
+                      _('product_backend.field.isStorable'),
+                      row.isStorable === true,
+                    ),
+                  ]
+                : []),
+            ]
+      }
+      summary={
+        activeTab === 'general'
           ? [
               {
-                id: 'tracking',
-                label: _('product_backend.summary.tracking'),
-                value: selectionLabel(_, 'tracking', row.tracking ?? 'none'),
+                id: 'variants',
+                label: _('product_backend.summary.variants'),
+                value: variantTotal,
+                href: tabHref('variants'),
+              },
+              {
+                id: 'images',
+                label: _('product_backend.summary.images'),
+                value: images.length,
+                href: tabHref('media'),
+              },
+              {
+                id: 'state',
+                label: _('product_backend.col.state'),
+                value: selectionLabel(_, 'state', archived ? 'archived' : 'active'),
+              },
+              {
+                id: 'updated',
+                label: _('product_backend.summary.updated'),
+                value: updatedAt,
               },
             ]
-          : []),
-      ]}
+          : []
+      }
       navigation={
         <Tabs
           label={_('product_backend.tabs.label')}
@@ -449,7 +572,7 @@ export const productDetailScreen = (
               label: _('product_backend.tabs.variants'),
               href: tabHref('variants'),
               active: activeTab === 'variants',
-              count: management.variants.length,
+              count: variantTotal,
             },
             {
               id: 'media',
@@ -464,16 +587,36 @@ export const productDetailScreen = (
       controller={
         <>
           {activeTab === 'general' && (
-            <FormCluster
-              label={_('product_backend.action.save')}
-              forms={[
-                button({
-                  label: _('product_backend.action.save'),
-                  type: 'submit',
-                  form: productFormId,
-                  variant: 'primary',
-                }),
-              ]}
+            <RecordHeaderActions
+              label={_('product_backend.action.actions')}
+              form={productFormId}
+              more={archiveAction}
+              moreLabel={_('product_backend.action.more')}
+              noteLabel={_('product_backend.action.internalNote')}
+              saveLabel={_('product_backend.action.saveClose')}
+              saveOptionsLabel={_('product_backend.action.saveOptions')}
+            />
+          )}
+          {activeTab === 'variants' && (
+            <RecordHeaderActions
+              label={_('product_backend.action.actions')}
+              saveHref={localized('/admin/product/templates', locale)}
+              more={archiveAction}
+              moreLabel={_('product_backend.action.more')}
+              noteLabel={_('product_backend.action.internalNote')}
+              saveLabel={_('product_backend.action.saveClose')}
+              saveOptionsLabel={_('product_backend.action.saveOptions')}
+            />
+          )}
+          {activeTab === 'media' && (
+            <RecordHeaderActions
+              label={_('product_backend.action.actions')}
+              saveHref={localized('/admin/product/templates', locale)}
+              more={archiveAction}
+              moreLabel={_('product_backend.action.more')}
+              noteLabel={_('product_backend.action.internalNote')}
+              saveLabel={_('product_backend.action.saveClose')}
+              saveOptionsLabel={_('product_backend.action.saveOptions')}
             />
           )}
           {management.editor}
