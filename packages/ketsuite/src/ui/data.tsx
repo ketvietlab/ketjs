@@ -163,9 +163,7 @@ export const docTree = <T,>(o: {
             {!!o.summary?.(row) && <span data-ui="doc-summary">{o.summary!(row)}</span>}
             {!!o.count?.(row) && <span data-ui="doc-count">{o.count!(row)}</span>}
           </a>
-          {depth < limit &&
-          !open.includes(o.id(row)) &&
-          (byParent.get(o.id(row)) ?? []).length > 0
+          {depth < limit && !open.includes(o.id(row)) && (byParent.get(o.id(row)) ?? []).length > 0
             ? branch(o.id(row), depth + 1, [...open, o.id(row)])
             : null}
         </li>

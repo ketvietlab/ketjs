@@ -370,7 +370,6 @@ const crossProjectIssues =
     })
   }
 
-
 /**
  * The "new page" form: a title, and optionally somewhere to put it.
  *
@@ -393,12 +392,7 @@ const pageFields = (_: Translator, pages: readonly AnyRow[]): FormField[] => [
 ]
 
 /** The move form's one control: every page except this one and its descendants. */
-const parentField = (
-  _: Translator,
-  pages: readonly AnyRow[],
-  pageId: string,
-  current: string,
-): FormField => {
+const parentField = (_: Translator, pages: readonly AnyRow[], pageId: string, current: string): FormField => {
   // A page cannot move under itself or under anything below it. The server
   // refuses that anyway (`movePage`), but offering the choice and then
   // rejecting it is a worse screen than not offering it.
@@ -774,9 +768,7 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )) as AnyRow
-      const mineProjects = new Set(
-        ((mine.rows as AnyRow[]) ?? []).map((issue) => String(issue.projectId)),
-      )
+      const mineProjects = new Set(((mine.rows as AnyRow[]) ?? []).map((issue) => String(issue.projectId)))
       const rows = tab === 'mine' ? counted.filter((p) => mineProjects.has(String(p.id))) : counted
 
       // The one rail the design asks for: what changed most recently, across
@@ -1086,7 +1078,6 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
-
   /**
    * A project's documents, and the form that starts a new one.
    *
@@ -1143,7 +1134,8 @@ export const routes: Record<string, RouteEntry> = {
    * Every epic, across projects. Reached from the menu, and the base the epic
    * document endpoints above hang off.
    */
-  '/admin/flow/epics': (ctx: ServeContext): Route =>
+  '/admin/flow/epics':
+    (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
@@ -1196,8 +1188,7 @@ export const routes: Record<string, RouteEntry> = {
         title: String(epic.title ?? ''),
         translate: false,
         active: `/admin/flow/projects/${String(epic.projectId)}/epics`,
-        body: (t, frame) =>
-          epicDetailScreen(t, frame, epic, document, ((issues.rows as AnyRow[]) ?? [])),
+        body: (t, frame) => epicDetailScreen(t, frame, epic, document, (issues.rows as AnyRow[]) ?? []),
       })
     },
 
@@ -1205,7 +1196,8 @@ export const routes: Record<string, RouteEntry> = {
    * Every document, across projects — the counterpart of `/admin/flow/issues`,
    * and the base the document endpoints above hang off.
    */
-  '/admin/flow/pages': (ctx: ServeContext): Route =>
+  '/admin/flow/pages':
+    (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const pages = (await ctx.call(

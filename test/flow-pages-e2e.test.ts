@@ -117,7 +117,10 @@ test('flow pages: the tree refuses to eat itself', async () => {
     const codeOf = (result: unknown) =>
       ((result as { errors?: Array<{ code: string }> }).errors ?? [])[0]?.code
 
-    assert.equal(codeOf(await call('flow.page.move', { id: 'a', parentPageId: 'a' })), 'flow.error.pageSelfParent')
+    assert.equal(
+      codeOf(await call('flow.page.move', { id: 'a', parentPageId: 'a' })),
+      'flow.error.pageSelfParent',
+    )
     assert.equal(codeOf(await call('flow.page.move', { id: 'a', parentPageId: 'c' })), 'flow.error.pageCycle')
     assert.equal(
       codeOf(await call('flow.page.move', { id: 'a', parentPageId: 'nope' })),
@@ -196,7 +199,11 @@ test('flow pages: archive hides a branch, restore never returns one to a hidden 
 
     await call('flow.page.archive', { id: 'top' })
     const visible = await call<Row[]>('flow.page.list', { projectId: 'proj1' })
-    assert.deepEqual(visible.map((row) => String(row.id)), ['under'], 'the archived page is gone')
+    assert.deepEqual(
+      visible.map((row) => String(row.id)),
+      ['under'],
+      'the archived page is gone',
+    )
     assert.equal(visible[0]?.parentPageId, 'top', 'but its child still points at it')
 
     const all = await call<Row[]>('flow.page.list', { projectId: 'proj1', includeArchived: true })
@@ -274,7 +281,10 @@ test('flow pages: listing without a project answers across projects', async () =
     })
 
     const scoped = await call<Row[]>('flow.page.list', { projectId: 'proj1' })
-    assert.deepEqual(scoped.map((row) => String(row.id)), ['one'])
+    assert.deepEqual(
+      scoped.map((row) => String(row.id)),
+      ['one'],
+    )
 
     const everywhere = await call<Row[]>('flow.page.list', {})
     assert.deepEqual(
@@ -398,7 +408,11 @@ test('flow pages: reordering a branch that shares one sequence moves one place, 
   try {
     const call = await seed(e2e)
     // Written the way rows predating the ordering work are: all at one value.
-    for (const [id, title] of [['a', 'A'], ['b', 'B'], ['c', 'C']] as const) {
+    for (const [id, title] of [
+      ['a', 'A'],
+      ['b', 'B'],
+      ['c', 'C'],
+    ] as const) {
       await created(call, { ...page(id, title), sequence: 10 })
     }
     const order = async () =>
