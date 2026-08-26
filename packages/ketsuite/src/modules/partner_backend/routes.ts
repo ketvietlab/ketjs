@@ -3,7 +3,7 @@ import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
-import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens/index.ts'
+import { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/index.ts'
 import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
@@ -158,13 +158,12 @@ const addressFormsFor = async (
   ])
 }
 
-const renderDetail = async (
+const renderPartnerForm = async (
   ctx: ServeContext,
   url: URL,
   req: Req,
   id: string,
   errors?: string[],
-  editing = false,
 ) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
@@ -196,7 +195,7 @@ const renderDetail = async (
     title: String(row.name),
     translate: false,
     body: (_, frame) =>
-      partnerDetailScreen(
+      partnerFormScreen(
         _,
         row as never,
         {
@@ -206,10 +205,6 @@ const renderDetail = async (
           integration,
           addressForms,
           parentControl,
-          editing,
-          activeTab: ['addresses', 'roles'].includes(url.searchParams.get('tab') ?? '')
-            ? (url.searchParams.get('tab') as 'addresses' | 'roles')
-            : 'overview',
         },
         frame,
         url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
@@ -411,18 +406,17 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/partner/partners/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method === 'GET') return renderDetail(ctx, url, req, params.id)
+      if (req.method === 'GET') return renderPartnerForm(ctx, url, req, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       const result = await savePartner(ctx, url, req, params.id, await readForm(req))
       if ((result as { ok?: boolean }).ok)
         return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
-      return renderDetail(
+      return renderPartnerForm(
         ctx,
         url,
         req,
         params.id,
         translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
-        true,
       )
     },
 
@@ -430,7 +424,7 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      return renderDetail(ctx, url, req, params.id, undefined, true)
+      return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
     },
 
   '/admin/partner/partners/{id}/roles':
@@ -479,7 +473,7 @@ export const routes: Record<string, RouteEntry> = {
       )
       return (result as { ok?: boolean }).ok
         ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
-        : renderDetail(
+        : renderPartnerForm(
             ctx,
             url,
             req,
@@ -512,7 +506,7 @@ export const routes: Record<string, RouteEntry> = {
       )
       return (result as { ok?: boolean }).ok
         ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
-        : renderDetail(
+        : renderPartnerForm(
             ctx,
             url,
             req,
@@ -539,7 +533,7 @@ export const routes: Record<string, RouteEntry> = {
       )
       return (result as { ok?: boolean }).ok
         ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
-        : renderDetail(
+        : renderPartnerForm(
             ctx,
             url,
             req,

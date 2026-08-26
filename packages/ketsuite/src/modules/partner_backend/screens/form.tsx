@@ -4,9 +4,7 @@ import {
   badge,
   button,
   FormCluster,
-  inline,
   linkButton,
-  PartnerDetailLayout,
   PartnerFacts,
   PartnerInitials,
   PartnerPanel,
@@ -16,13 +14,12 @@ import {
   shell,
   stack,
   Surface,
-  Tabs,
 } from '../../../ui/index.ts'
 import type { FormOption, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { PartnerDetail } from './types.ts'
 
-export const partnerDetailScreen = (
+export const partnerFormScreen = (
   _: Translator,
   row: PartnerDetail,
   options: {
@@ -32,8 +29,6 @@ export const partnerDetailScreen = (
     errors?: string[]
     integration?: JSXChild
     addressForms: Array<{ title: string; body: JSXChild }>
-    editing?: boolean
-    activeTab?: 'overview' | 'addresses' | 'roles'
   },
   frame: Frame,
   locale = '',
@@ -89,7 +84,7 @@ export const partnerDetailScreen = (
       }))}
     />
   )
-  const editBody = stack([
+  const body = stack([
     <Section title={_('partner_backend.detail.identity')} body={<Surface body={identityForm} />} />,
     <Section
       title={_('partner_backend.roles.title')}
@@ -139,51 +134,35 @@ export const partnerDetailScreen = (
   const actions = (
     <FormCluster
       label={_('partner_backend.detail.actions')}
-      forms={
-        options.editing
+      forms={[
+        ...(options.integration ? [options.integration] : []),
+        ...(row.email
           ? [
               linkButton({
-                label: _('partner_backend.action.cancel'),
-                href: localized(`/admin/partner/partners/${row.id}`, locale),
+                label: _('partner_backend.action.email'),
+                href: `mailto:${row.email}`,
+                icon: 'mail',
                 variant: 'secondary',
               }),
-              button({
-                label: _('partner_backend.action.save'),
-                type: 'submit',
-                form: 'partner-identity-form',
-                variant: 'primary',
-              }),
             ]
-          : [
-              options.integration ?? '',
-              ...(row.email
-                ? [
-                    linkButton({
-                      label: _('partner_backend.action.email'),
-                      href: `mailto:${row.email}`,
-                      icon: 'mail',
-                      variant: 'secondary',
-                    }),
-                  ]
-                : []),
-              ...(row.phone
-                ? [
-                    linkButton({
-                      label: _('partner_backend.action.call'),
-                      href: `tel:${row.phone}`,
-                      icon: 'phone',
-                      variant: 'secondary',
-                    }),
-                  ]
-                : []),
+          : []),
+        ...(row.phone
+          ? [
               linkButton({
-                label: _('partner_backend.action.edit'),
-                href: localized(`/admin/partner/partners/${row.id}/edit`, locale),
-                icon: 'pencil',
-                variant: 'primary',
+                label: _('partner_backend.action.call'),
+                href: `tel:${row.phone}`,
+                icon: 'phone',
+                variant: 'secondary',
               }),
             ]
-      }
+          : []),
+        button({
+          label: _('partner_backend.action.save'),
+          type: 'submit',
+          form: 'partner-identity-form',
+          variant: 'primary',
+        }),
+      ]}
     />
   )
   const quickFacts = (
@@ -203,82 +182,6 @@ export const partnerDetailScreen = (
       }
     />
   )
-  const activeTab = options.activeTab ?? 'overview'
-  const identityPanel = (
-    <PartnerPanel
-      title={_('partner_backend.detail.identity')}
-      body={
-        <PartnerFacts
-          items={[
-            { label: _('partner_backend.field.name'), value: row.name },
-            { label: _('partner_backend.field.email'), value: row.email || '—' },
-            { label: _('partner_backend.field.kind'), value: _(`partner.kind.${row.kind}`) },
-            { label: _('partner_backend.field.lang'), value: row.lang || '—' },
-            { label: _('partner_backend.field.vat'), value: row.vat || '—' },
-            { label: _('partner_backend.field.phone'), value: row.phone || '—' },
-          ]}
-        />
-      }
-    />
-  )
-  const rolesPanel = (
-    <PartnerPanel
-      id="partner-roles"
-      title={_('partner_backend.roles.title')}
-      description={_('partner_backend.roles.hint')}
-      body={inline([...heldRoles].map((role) => badge(_(`partner.role.${role}`), 'info')))}
-    />
-  )
-  const addressesPanel = (
-    <PartnerPanel
-      id="partner-addresses"
-      title={_('partner_backend.addresses.title')}
-      body={
-        <PartnerFacts
-          items={
-            row.addresses.length
-              ? row.addresses.map((address, index) => ({
-                  label: `${_(`partner.use.${address.use}`)}${address.isDefault ? ` · ${_('partner_backend.address.default')}` : ''}`,
-                  value:
-                    address.oneLine ||
-                    [address.street1, address.locality, address.countryCode].filter(Boolean).join(', ') ||
-                    `#${index + 1}`,
-                }))
-              : [{ label: _('partner_backend.addresses.title'), value: '—' }]
-          }
-        />
-      }
-    />
-  )
-  const termsPanel = (
-    <PartnerPanel
-      title={_('partner_backend.terms.title')}
-      body={
-        <PartnerFacts
-          items={[
-            {
-              label: _('partner_backend.terms.creditLimit'),
-              value: String(options.terms?.creditLimit ?? '—'),
-            },
-            { label: _('partner_backend.terms.note'), value: options.terms?.note || '—' },
-          ]}
-        />
-      }
-    />
-  )
-  const detailBody = (
-    <PartnerDetailLayout
-      main={
-        activeTab === 'addresses'
-          ? addressesPanel
-          : activeTab === 'roles'
-            ? rolesPanel
-            : stack([identityPanel, rolesPanel, addressesPanel])
-      }
-      secondary={activeTab === 'overview' ? termsPanel : ''}
-      aside={quickFacts}
-    />
-  )
   return shell(
     _,
     row.name,
@@ -294,13 +197,11 @@ export const partnerDetailScreen = (
             label: _('partner_backend.menu.directory'),
             href: localized('/admin/partner/partners', locale),
           },
-          {
-            label: options.editing ? _('partner_backend.detail.editKicker') : row.name,
-          },
+          { label: row.name },
         ],
       }}
-      kicker={options.editing ? _('partner_backend.detail.editKicker') : _('partner_backend.menu.app')}
-      title={options.editing ? `${_('partner_backend.action.edit')} · ${row.name}` : row.name}
+      kicker={_('partner_backend.menu.app')}
+      title={row.name}
       subtitle={row.ref || _(`partner.kind.${row.kind}`)}
       imageFallback={<PartnerInitials name={row.name} />}
       badges={[status]}
@@ -308,38 +209,9 @@ export const partnerDetailScreen = (
         { id: 'roles', label: _('partner_backend.roles.title'), value: row.roles.length },
         { id: 'addresses', label: _('partner_backend.addresses.title'), value: row.addresses.length },
       ]}
-      navigation={
-        options.editing ? undefined : (
-          <Tabs
-            label={_('partner_backend.detail.navigation')}
-            items={[
-              {
-                id: 'overview',
-                label: _('partner_backend.detail.overview'),
-                href: localized(`/admin/partner/partners/${row.id}`, locale),
-                active: activeTab === 'overview',
-              },
-              {
-                id: 'addresses',
-                label: _('partner_backend.addresses.title'),
-                href: localized(`/admin/partner/partners/${row.id}?tab=addresses`, locale),
-                count: row.addresses.length,
-                active: activeTab === 'addresses',
-              },
-              {
-                id: 'roles',
-                label: _('partner_backend.roles.title'),
-                href: localized(`/admin/partner/partners/${row.id}?tab=roles`, locale),
-                count: row.roles.length,
-                active: activeTab === 'roles',
-              },
-            ]}
-          />
-        )
-      }
       controller={actions}
-      body={options.editing ? editBody : detailBody}
-      aside={options.editing ? quickFacts : undefined}
+      body={body}
+      aside={quickFacts}
     />,
     { ...frame, topbar: false, titled: false },
   )

@@ -118,35 +118,19 @@ for (const viewport of [
     ).toBeVisible()
   })
 
-  test(`renders the partner detail and edit screens on ${viewport.name}`, async ({ page }) => {
+  test(`uses the partner form as the record screen on ${viewport.name}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' })
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await page.goto('/admin/partner/partners?lang=vi')
     const detailPath = await page.locator('[data-row-href]').first().getAttribute('data-row-href')
     expect(detailPath).toBeTruthy()
     await page.goto(detailPath!)
-    await expect(page.locator('[data-ui="partner-detail-layout"]')).toBeVisible()
-    await expect(page.locator('[data-ui="topbar"]')).toHaveCount(0)
-    await expect(page.locator('a[href*="tab=addresses"]')).toBeVisible()
-    await expect(page.locator('a[href*="tab=roles"]')).toBeVisible()
-    await page.locator('a[href*="tab=addresses"]').click()
-    await expect(page).toHaveURL(/[?&]tab=addresses(?:&|$)/)
-    await expect(page.locator('#partner-addresses')).toBeVisible()
-    await expect(page.locator('#partner-roles')).toHaveCount(0)
-    await page.locator('a[href*="tab=roles"]').click()
-    await expect(page).toHaveURL(/[?&]tab=roles(?:&|$)/)
-    await expect(page.locator('#partner-roles')).toBeVisible()
-    await expect(page.locator('#partner-addresses')).toHaveCount(0)
-    const editLink = page.locator('a[href*="/edit"]').first()
-    await expect(editLink).toBeVisible()
-    await page.screenshot({
-      path: join(artifacts, `partner-detail-${viewport.name}.png`),
-      fullPage: true,
-    })
-
-    await editLink.click()
     await expect(page.locator('#partner-identity-form')).toBeVisible()
     await expect(page.locator('[data-ui="topbar"]')).toHaveCount(0)
+    await expect(page.locator('[data-ui="partner-detail-layout"]')).toHaveCount(0)
+    await expect(page.locator('a[href*="/edit"]')).toHaveCount(0)
+    await expect(page.locator('a[href*="tab=addresses"]')).toHaveCount(0)
+    await expect(page.locator('a[href*="tab=roles"]')).toHaveCount(0)
     await expect(page.locator('body')).not.toContainText('<!--k-->')
     await expect(page.locator('body')).not.toContainText('<ket-island')
     await expect(page.locator('ket-island[data-island="partner.address-form"]')).not.toHaveAttribute(
@@ -154,7 +138,7 @@ for (const viewport of [
       /address-country-/,
     )
     await page.screenshot({
-      path: join(artifacts, `partner-edit-${viewport.name}.png`),
+      path: join(artifacts, `partner-form-${viewport.name}.png`),
       fullPage: true,
     })
   })
