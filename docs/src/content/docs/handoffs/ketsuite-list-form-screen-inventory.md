@@ -116,9 +116,9 @@ rendering from `screens.tsx` to `screens/shared.tsx`, then remove the old file.
 | STOCK-01 | ready | Inventory adjustment and balances | `/admin/stock/inventory` | `inventoryScreen` | Specialized | no | — |
 | STOCK-02 | done | Transfers | `/admin/stock/transfers`, `/admin/stock/transfers/new` | `screens/transfers-list.tsx`, `screens/transfer-create.tsx` | Split | list/new: no | Huygens + Kant |
 | STOCK-03 | done | Transfer detail | `/admin/stock/transfers/{id}` | `screens/transfer-detail.tsx` | FormPage | `stock_mail_backend` | Curie |
-| STOCK-04 | ready | Warehouses | `/admin/stock/warehouses` | `warehousesScreen` | Split | no | — |
-| STOCK-05 | ready | Locations | `/admin/stock/locations` | `locationsScreen` | Split | no | — |
-| STOCK-06 | ready | Operation types | `/admin/stock/picking-types` | `pickingTypesScreen` | Split | no | — |
+| STOCK-04 | done | Warehouses | `/admin/stock/warehouses`, `/admin/stock/warehouses/new` | `screens/warehouses-list.tsx`, `screens/warehouse-create.tsx` | Split | list/new: no | Huygens |
+| STOCK-05 | done | Locations | `/admin/stock/locations`, `/admin/stock/locations/new` | `screens/locations-list.tsx`, `screens/location-create.tsx` | Split | list/new: no | Kant |
+| STOCK-06 | done | Operation types | `/admin/stock/picking-types`, `/admin/stock/picking-types/new` | `screens/picking-types-list.tsx`, `screens/picking-type-create.tsx` | Split | list/new: no | Curie |
 | STOCK-07 | done | Lots and serials | `/admin/stock/lots`, `/admin/stock/lots/new` | `screens/lots-list.tsx`, `screens/lot-create.tsx` | Split | list/new: no | Huygens + Kant |
 | STOCK-08 | done | Lot/serial detail | `/admin/stock/lots/{id}` | `screens/lot-detail.tsx` | FormPage | `stock_lot_mail_backend` | Curie |
 | STOCK-09 | done | Supply routes | `/admin/stock/routes`, `/admin/stock/routes/new` | `screens/stock-routes-list.tsx`, `screens/stock-route-create.tsx` | Split | list/new: no | Huygens + Kant |
@@ -526,3 +526,29 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 3 route detail evidence](/assets/inventory-route-detail/route-detail-browser-skill.png)
 
 ![Wave 3 route detail mobile evidence](/assets/inventory-route-detail/route-detail-mobile-browser-skill.png)
+
+### Wave 4 — STOCK-04, STOCK-05 and STOCK-06
+
+- Warehouses, Locations and Operation Types now use dedicated `ListPage` collection screens and dedicated
+  `/new` `FormPage` screens; all three lists have localized create actions and no inline form.
+- Existing POST endpoints remain compatible while the new forms post to their locale-aware `/new` routes.
+- All warehouse step radios, location hierarchy/options, and operation-type flow/backorder/default-location
+  controls are preserved. The operation-type form avoids repeating its page title inside the body.
+- Desktop evidence contains no horizontal overflow or Chatter. At 390 px the six-field operation-type form
+  retains a 194 px control column next to its labels and has no document overflow.
+- Validation scope: nine focused renderer tests, the affected stock HTTP scenario, six targeted browser E2E
+  flows, Biome on changed files, build/typecheck, and Astro docs validation.
+
+![Wave 4 warehouse list evidence](/assets/inventory-warehouse-list/warehouse-list-browser-skill.png)
+
+![Wave 4 warehouse create evidence](/assets/inventory-warehouse-list/warehouse-create-browser-skill.png)
+
+![Wave 4 location list evidence](/assets/inventory-location-list/location-list-browser-skill.png)
+
+![Wave 4 location create evidence](/assets/inventory-location-list/location-create-browser-skill.png)
+
+![Wave 4 operation-type list evidence](/assets/inventory-operation-type-list/operation-type-list-browser-skill.png)
+
+![Wave 4 operation-type create evidence](/assets/inventory-operation-type-list/operation-type-create-browser-skill.png)
+
+![Wave 4 operation-type mobile evidence](/assets/inventory-operation-type-list/operation-type-create-mobile-browser-skill.png)

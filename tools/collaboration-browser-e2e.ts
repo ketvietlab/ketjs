@@ -338,17 +338,32 @@ try {
     {
       name: 'warehouse-list',
       path: '/admin/stock/warehouses?lang=vi',
-      ready: `document.querySelector('#warehouse-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'warehouse-create',
+      path: '/admin/stock/warehouses/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#warehouse-create-form')`,
     },
     {
       name: 'location-list',
       path: '/admin/stock/locations?lang=vi',
-      ready: `document.querySelector('#location-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'location-create',
+      path: '/admin/stock/locations/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#location-create-form')`,
     },
     {
       name: 'operation-type-list',
       path: '/admin/stock/picking-types?lang=vi',
-      ready: `document.querySelector('#picking-type-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'operation-type-create',
+      path: '/admin/stock/picking-types/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#picking-type-create-form')`,
     },
     {
       name: 'route-list',
@@ -1636,8 +1651,30 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            createHref: document.querySelector('[data-ui="list-page"] a[href*="/admin/stock/warehouses/new"]')?.getAttribute('href') ?? '',
+            inlineForm: Boolean(document.querySelector('#warehouse-create-form')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          listPage: true,
+          rowsAtLeastOne: true,
+          createHref: '/admin/stock/warehouses/new?lang=vi',
+          inlineForm: false,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+    }
+    if (screen.name === 'warehouse-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
             receiptRadios: document.querySelectorAll('#warehouse-create-form [name="receptionSteps"]').length,
             deliveryRadios: document.querySelectorAll('#warehouse-create-form [name="deliverySteps"]').length,
             formRowsAtLeast28: Array.from(document.querySelectorAll('#warehouse-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
@@ -1646,8 +1683,7 @@ try {
           })`,
         ),
         {
-          workspace: true,
-          rowsAtLeastOne: true,
+          formPage: true,
           receiptRadios: 3,
           deliveryRadios: 3,
           formRowsAtLeast28: true,
@@ -1667,6 +1703,7 @@ try {
           return true
         })()`,
       )
+      await waitFor(cdp, `location.pathname === '/admin/stock/warehouses'`)
       await waitFor(
         cdp,
         `document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Browser') && document.querySelector('[data-ui="table"]')?.textContent.includes('BRW')`,
@@ -1681,9 +1718,32 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
             completeName: document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Thành Phẩm / Tồn kho'),
+            createHref: document.querySelector('[data-ui="list-page"] a[href*="/admin/stock/locations/new"]')?.getAttribute('href') ?? '',
+            inlineForm: Boolean(document.querySelector('#location-create-form')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          listPage: true,
+          rowsAtLeastOne: true,
+          completeName: true,
+          createHref: '/admin/stock/locations/new?lang=vi',
+          inlineForm: false,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+    }
+    if (screen.name === 'location-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
             parentOptions: document.querySelectorAll('#location-create-form [name="parentId"] option').length > 1,
             usageOptions: document.querySelectorAll('#location-create-form [name="usage"] option').length,
             formRowsAtLeast28: Array.from(document.querySelectorAll('#location-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
@@ -1692,9 +1752,7 @@ try {
           })`,
         ),
         {
-          workspace: true,
-          rowsAtLeastOne: true,
-          completeName: true,
+          formPage: true,
           parentOptions: true,
           usageOptions: 7,
           formRowsAtLeast28: true,
@@ -1714,6 +1772,7 @@ try {
           return true
         })()`,
       )
+      await waitFor(cdp, `location.pathname === '/admin/stock/locations'`)
       await waitFor(
         cdp,
         `document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Thành Phẩm / Tồn kho / Kệ A-01')`,
@@ -1728,9 +1787,32 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
             completeLocations: document.querySelector('[data-ui="table"]')?.textContent.includes('Kho Thành Phẩm / Tồn kho'),
+            createHref: document.querySelector('[data-ui="list-page"] a[href*="/admin/stock/picking-types/new"]')?.getAttribute('href') ?? '',
+            inlineForm: Boolean(document.querySelector('#picking-type-create-form')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          listPage: true,
+          rowsAtLeastOne: true,
+          completeLocations: true,
+          createHref: '/admin/stock/picking-types/new?lang=vi',
+          inlineForm: false,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+    }
+    if (screen.name === 'operation-type-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
             codeRadios: document.querySelectorAll('#picking-type-create-form [name="code"]').length,
             sourceOptions: document.querySelectorAll('#picking-type-create-form [name="defaultLocationSrcId"] option').length > 1,
             formRowsAtLeast28: Array.from(document.querySelectorAll('#picking-type-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
@@ -1739,9 +1821,7 @@ try {
           })`,
         ),
         {
-          workspace: true,
-          rowsAtLeastOne: true,
-          completeLocations: true,
+          formPage: true,
           codeRadios: 3,
           sourceOptions: true,
           formRowsAtLeast28: true,
@@ -1763,6 +1843,7 @@ try {
           return true
         })()`,
       )
+      await waitFor(cdp, `location.pathname === '/admin/stock/picking-types'`)
       await waitFor(
         cdp,
         `document.querySelector('[data-ui="table"]')?.textContent.includes('Điều chuyển Browser')`,
