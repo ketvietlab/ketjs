@@ -56,6 +56,9 @@ export default defineModule({
       'chrome.search': 'Tìm sản phẩm…',
       openCatalogue: 'Mở danh mục',
       'screen.title': 'Danh mục sản phẩm',
+      'screen.description':
+        'Quản lý hàng hoá, dịch vụ, giá bán và cách theo dõi tồn kho trong một danh mục thống nhất.',
+      'screen.results': '{count} sản phẩm',
       'screen.empty.message': 'Chưa có sản phẩm nào.',
       'screen.empty.hint': 'Tạo mẫu sản phẩm đầu tiên để bắt đầu.',
       'col.image': 'Ảnh',
@@ -264,6 +267,9 @@ export default defineModule({
       'chrome.search': 'Search products…',
       openCatalogue: 'Open catalogue',
       'screen.title': 'Product catalogue',
+      'screen.description':
+        'Manage goods, services, sales prices and inventory tracking in one consistent catalogue.',
+      'screen.results': { one: '{count} product', other: '{count} products' },
       'screen.empty.message': 'No products yet.',
       'screen.empty.hint': 'Create the first template to begin.',
       'col.image': 'Image',

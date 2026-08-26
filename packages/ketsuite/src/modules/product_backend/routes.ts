@@ -731,8 +731,6 @@ export const routes: Record<string, RouteEntry> = {
             {
               ...frame,
               chrome: {
-                layout: 'catalogue',
-                section: _('product_backend.menu.app'),
                 create: {
                   label: _('product_backend.action.create'),
                   path: inLocale(url, '/admin/product/templates/new'),
@@ -758,6 +756,7 @@ export const routes: Record<string, RouteEntry> = {
             },
             { shown: colsOf(url), colsHref: colsHref(url), groups, selection },
             localeQuery(url),
+            count,
           ),
       })
     },

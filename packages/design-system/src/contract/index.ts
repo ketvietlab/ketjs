@@ -7,6 +7,7 @@ import { HOOKS as progressHooks } from '../primitives/progress.tsx'
 import { HOOKS as layoutHooks } from '../layouts/index.tsx'
 import { HOOKS as shellHooks } from '../layouts/shell.tsx'
 import { HOOKS as tableHooks } from '../patterns/data-table.tsx'
+import { HOOKS as listPageHooks } from '../patterns/list-page.tsx'
 import { HOOKS as modalHooks } from '../patterns/modal-sheet.tsx'
 import { HOOKS as formHooks } from '../patterns/record-form.tsx'
 
@@ -20,6 +21,7 @@ const GROUPS = {
   layouts: layoutHooks,
   shell: shellHooks,
   table: tableHooks,
+  listPage: listPageHooks,
   modal: modalHooks,
   form: formHooks,
 } as const
