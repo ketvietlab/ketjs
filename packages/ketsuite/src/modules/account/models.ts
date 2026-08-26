@@ -135,6 +135,8 @@ export const models: Record<string, ModelDef> = {
       amountTax: 'decimal',
       amountTotal: 'decimal',
       postedAt: 'datetime?',
+      /** Optimistic token for commands that must claim an invoice before writing. */
+      revision: 'int?',
     },
     indexes: { journal_name: { fields: ['companyId', 'journalId', 'name'], unique: true } },
   },
@@ -190,6 +192,8 @@ export const models: Record<string, ModelDef> = {
       state: 'text',
       currency: 'text',
       moveId: 'ref:account.Move?',
+      /** The invoice this payment was collected for, when it was registered as an aggregate. */
+      invoiceId: 'ref:account.Move?',
     },
   },
 }
