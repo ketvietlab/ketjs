@@ -19,6 +19,7 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   BarChart,
   CardGrid,
+  columns,
   changeOf,
   Chart,
   dataTable,
@@ -298,32 +299,37 @@ export const accountingOverviewScreen = (
                   />
                 }
               />,
-              <Section
-                title={_('account_backend.overview.mix')}
-                description={`${_('account_backend.overview.revenue')}: ${money(options.current.revenue)}`}
-                body={
-                  <Surface
-                    body={
-                      <Chart
-                        plot={options.mix.plot}
-                        keys={options.mix.keys}
-                        kind="doughnut"
-                        empty={_('account_backend.overview.noRevenue')}
-                      />
-                    }
-                  />
-                }
-              />,
-              <Section
-                title={_('account_backend.overview.expenses')}
-                description={`${_('account_backend.overview.totalExpense')}: ${money(
-                  options.current.expense,
-                )} · ${_('account_backend.overview.grossMargin')}: ${ratioText(
-                  _,
-                  options.current.grossMargin,
-                )} (${_('account_backend.overview.previous')}: ${ratioText(_, options.previous.grossMargin)})`}
-                body={<Surface body={expenses(_, options)} />}
-              />,
+              // Where the money came from and where it went, side by side:
+              // the two are read against each other, and stacked they were a
+              // scroll apart.
+              columns([
+                <Section
+                  title={_('account_backend.overview.mix')}
+                  description={`${_('account_backend.overview.revenue')}: ${money(options.current.revenue)}`}
+                  body={
+                    <Surface
+                      body={
+                        <Chart
+                          plot={options.mix.plot}
+                          keys={options.mix.keys}
+                          kind="doughnut"
+                          empty={_('account_backend.overview.noRevenue')}
+                        />
+                      }
+                    />
+                  }
+                />,
+                <Section
+                  title={_('account_backend.overview.expenses')}
+                  description={`${_('account_backend.overview.totalExpense')}: ${money(
+                    options.current.expense,
+                  )} · ${_('account_backend.overview.grossMargin')}: ${ratioText(
+                    _,
+                    options.current.grossMargin,
+                  )} (${_('account_backend.overview.previous')}: ${ratioText(_, options.previous.grossMargin)})`}
+                  body={<Surface body={expenses(_, options)} />}
+                />,
+              ]),
               <Section
                 title={_('account_backend.overview.receivable')}
                 description={aging(receivable)}

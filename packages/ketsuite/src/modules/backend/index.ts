@@ -139,6 +139,7 @@ export {
   loadingState,
   loginScreen,
   stack,
+  columns,
   section,
   surface,
   cardGrid,

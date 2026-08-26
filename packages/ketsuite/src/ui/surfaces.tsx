@@ -6,6 +6,7 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'stack',
+  'columns',
   'section',
   'section-head',
   'section-eyebrow',
@@ -34,6 +35,33 @@ export const stack = (
   gap: 'compact' | 'default' | 'loose' = 'default',
 ): TemplateResult => (
   <div data-ui="stack" data-gap={gap}>
+    {each(
+      items,
+      (_, i) => i,
+      (item) => (
+        <>{item}</>
+      ),
+    )}
+  </div>
+)
+
+/**
+ * Things read against each other, side by side.
+ *
+ * Equal columns rather than content-sized: a revenue mix and the expense
+ * breakdown beside it are compared, and a ring that took the width it wanted
+ * left the bars in a gutter. Collapses to one column when there is not room for
+ * two — a width question rather than a device one, so the stylesheet asks it
+ * with a container-relative minimum and not with a device breakpoint.
+ *
+ * Positional, like `stack`, and for the same reason: it takes a list, which is
+ * not what JSX hands a component.
+ */
+export const columns = (
+  items: readonly JSXChild[],
+  gap: 'default' | 'loose' = 'default',
+): TemplateResult => (
+  <div data-ui="columns" data-gap={gap}>
     {each(
       items,
       (_, i) => i,

@@ -25,6 +25,7 @@ import {
   datePicker,
   definitionList,
   gantt,
+  columns,
   chart,
   barChart,
   delta,
@@ -517,6 +518,9 @@ const everything = [
     labels: { today: 'Hôm nay', empty: 'Trống' },
   }),
   gantt({ items: [], labels: { today: 'Hôm nay', empty: 'Trống' } }),
+  // Two things read against each other. Equal columns above a threshold, one
+  // below it, decided by the space rather than by the device.
+  columns([surface({ body: 'Cơ cấu doanh thu' }), surface({ body: 'Chi phí theo tài khoản' })], 'loose'),
   // A chart is two halves: the canvas the island mounts, and the legend that
   // carries the same numbers as text. Rendered here with a stand-in for the
   // plot, because the island needs a request and this contract needs neither.
