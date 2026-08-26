@@ -870,9 +870,9 @@
     justify-content: flex-end;
   }
 
-  /* Record forms use the label/value rhythm of operational ERP screens.
-     Labels stay scannable in a narrow rail while controls consume the remaining
-     measure. Narrow screens return to the simpler stacked field. */
+  /* Desktop record forms use the compact ERP label/value rhythm. The control
+     column stays flexible while labels share a bounded measure; the mobile rule
+     below returns fields to a vertical stack before either side becomes cramped. */
   [data-ui="record-form"][data-layout="default"]
     > [data-ui="form-grid"]
     > [data-ui="form-field"]:not([data-kind="checkbox"]) {
@@ -915,9 +915,8 @@
     margin-block-start: 0.375rem;
   }
 
-  /* A relation holding several records grows downward, so its label goes to the
-     top of the control the way a textarea's does. Centring it against a stack of
-     chips leaves the label floating beside the middle of the list. */
+  /* Multi-value relations grow downward while preserving the inline label
+     anchor at the first control. */
   [data-ui="record-form"][data-layout="default"]
     > [data-ui="form-grid"]
     > [data-ui="form-field"][data-kind="relation"]:has([data-ui="relation-chips"]) {
@@ -928,8 +927,6 @@
     > [data-ui="form-grid"]
     > [data-ui="form-field"][data-kind="relation"]:has([data-ui="relation-chips"])
     > [data-ui="form-label"] {
-    /* The shared label rule sets `align-self: center`, which outranks the
-       container's alignment — so the override has to be on the item too. */
     align-self: start;
     margin-block-start: 0.375rem;
   }

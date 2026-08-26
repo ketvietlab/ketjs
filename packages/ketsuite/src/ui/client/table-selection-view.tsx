@@ -8,6 +8,7 @@ const dismissibleDropdown = [
   '[data-ui="col-config"]',
   '[data-ui="bulk-actions"]',
   '[data-ui="viewer"]',
+  '[data-ui="record-more"]',
 ].join(', ')
 
 type KetBrowserGlobals = typeof globalThis & {

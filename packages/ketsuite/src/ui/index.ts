@@ -44,6 +44,17 @@ export { mediaPanel } from './media.tsx'
 export type { MediaItem, MediaLabels, MediaPanelProps } from './media.tsx'
 export { attachmentPanel } from './attachments.tsx'
 export type { AttachmentItem } from './attachments.tsx'
+export { productVariantManagement } from './product-variants.tsx'
+export type {
+  ProductAttributeLineView,
+  ProductVariantManagementOptions,
+  ProductVariantRowView,
+} from './product-variants.tsx'
+export { productMediaManagement } from './product-media.tsx'
+export type {
+  ProductMediaManagementOptions,
+  ProductMediaVariantView,
+} from './product-media.tsx'
 export { recordForm, recordActions, formCluster } from './form.tsx'
 export { authTokenScreen, loginScreen } from './auth.tsx'
 export type { FormField, FormOption, RecordFormOptions } from './form.tsx'
@@ -52,6 +63,14 @@ export type { DatePickerField, DatePickerOptions } from './date-picker.tsx'
 export { breadcrumbs, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
 export { recordWorkspace, recordToggle } from './record.tsx'
+export {
+  readonlyField,
+  readonlyTextarea,
+  recordFieldGrid,
+  recordRail,
+  recordHeaderActions,
+} from './record-detail.tsx'
+export type { RecordRailFact, RecordRailSwitch, RecordRailActivity } from './record-detail.tsx'
 export { modalSheet } from './modal.tsx'
 export type {
   RecordBreadcrumbs,
@@ -100,12 +119,21 @@ export { cardGrid as CardGrid, metric as Metric } from './surfaces.tsx'
 export { recordForm as RecordForm, formCluster as FormCluster } from './form.tsx'
 export { recordActions as RecordActions } from './form.tsx'
 export { recordWorkspace as RecordWorkspace, recordToggle as RecordToggle } from './record.tsx'
+export {
+  readonlyField as ReadonlyField,
+  readonlyTextarea as ReadonlyTextarea,
+  recordFieldGrid as RecordFieldGrid,
+  recordRail as RecordRail,
+  recordHeaderActions as RecordHeaderActions,
+} from './record-detail.tsx'
 export { notice as Notice } from './state.tsx'
 export { breadcrumbs as Breadcrumbs, tabs as Tabs } from './navigation.tsx'
 export { modalSheet as ModalSheet } from './modal.tsx'
 export { datePicker as DatePicker } from './date-picker.tsx'
 export { mediaPanel as MediaPanel } from './media.tsx'
 export { attachmentPanel as AttachmentPanel } from './attachments.tsx'
+export { productVariantManagement as ProductVariantManagement } from './product-variants.tsx'
+export { productMediaManagement as ProductMediaManagement } from './product-media.tsx'
 export { scheduleBoard as ScheduleBoard } from './schedule.tsx'
 export { gantt as Gantt } from './gantt.tsx'
 export {

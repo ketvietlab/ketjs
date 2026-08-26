@@ -67,7 +67,14 @@ test('product: a template carries its variants, on request', async () => {
   assert.equal(bare[0]!.variants, undefined, 'nothing arrives unless it was asked for')
 
   const full = (await call('product.listTemplates', { withVariants: true }, db)).value as Row[]
-  assert.deepEqual((full[0]!.variants as Row[]).map((v) => v.defaultCode).sort(), ['AO-M', 'AO-S'])
+  assert.deepEqual(
+    (full[0]!.variants as Row[]).map((variant) => [variant.combinationKey, variant.defaultCode]),
+    [
+      ['', null],
+      ['manual:v-m', 'AO-M'],
+      ['manual:v-s', 'AO-S'],
+    ],
+  )
   await db.close()
 })
 
@@ -116,7 +123,50 @@ test('product: a template carries its category, and the category its children', 
   await call('product.saveTemplate', { id: 'tpl', name: 'Áo thun', type: 'goods', categoryId: 'c1' }, db)
   const t = (await call('product.getTemplate', { id: 'tpl' }, db)).value as Row
   assert.equal((t.category as Row).name, 'Áo')
-  assert.deepEqual(t.variants, [])
+  assert.deepEqual(
+    (t.variants as Row[]).map((variant) => variant.combinationKey),
+    [''],
+  )
+  await db.close()
+})
+
+test('product: brand, origin and product-level identifiers belong to the default variant', async () => {
+  const db = await boot()
+  await call('product.saveBrand', { id: 'ket', name: 'Kết Việt' }, db)
+  const saved = await call(
+    'product.saveTemplate',
+    {
+      id: 'tpl',
+      name: 'Áo khoác',
+      type: 'goods',
+      brandId: 'ket',
+      origin: 'Việt Nam',
+      defaultCode: 'JACKET-01',
+      barcode: '8938500000100',
+    },
+    db,
+  )
+  assert.equal((saved.value as Row).ok, true)
+
+  const template = (await call('product.getTemplate', { id: 'tpl' }, db)).value as Row
+  assert.equal(template.origin, 'Việt Nam')
+  assert.equal((template.brand as Row).name, 'Kết Việt')
+  assert.deepEqual(
+    (template.variants as Row[]).map((variant) => ({
+      combinationKey: variant.combinationKey,
+      defaultCode: variant.defaultCode,
+      barcode: variant.barcode,
+      active: variant.active,
+    })),
+    [
+      {
+        combinationKey: '',
+        defaultCode: 'JACKET-01',
+        barcode: '8938500000100',
+        active: true,
+      },
+    ],
+  )
   await db.close()
 })
 

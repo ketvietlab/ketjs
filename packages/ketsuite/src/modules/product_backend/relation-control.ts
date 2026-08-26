@@ -38,6 +38,26 @@ export const categoryControl = (
     },
   })
 
+export const brandControl = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  _: Translator,
+  options: { id: string; value?: string | null; brands: RelationOption[] },
+): Promise<JSXChild> =>
+  relationControl(ctx, url, req, options.id, {
+    name: 'brandId',
+    ariaLabel: _('product_backend.field.brand'),
+    value: options.value,
+    options: [{ value: '', label: '—' }, ...options.brands],
+    labels: relationLabels(_, _('product_backend.relation.brands')),
+    manager: {
+      listFunction: 'product.listBrands',
+      saveFunction: 'product.saveBrand',
+      fields: [{ name: 'name', label: _('product_backend.field.brand'), required: true }],
+    },
+  })
+
 export const uomControl = (
   ctx: ServeContext,
   url: URL,
@@ -95,6 +115,7 @@ export const attributeControl = (
     labels: relationLabels(_, _('product_backend.relation.attributes')),
     manager: {
       listFunction: 'product.listAttributes',
+      listInput: { variantsOnly: true },
       saveFunction: 'product.saveAttribute',
       fields: [{ name: 'name', label: _('product_backend.field.name'), required: true }],
     },

@@ -126,6 +126,18 @@
     letter-spacing: -0.025em;
     line-height: 1.15;
   }
+  [data-ui="record-heading-row"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-status"] {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
   [data-ui="record-subtitle"] {
     margin-block-start: var(--admin-gap-xs);
     color: var(--admin-ink-secondary);
@@ -272,12 +284,130 @@
     padding: var(--admin-gap);
     box-shadow: none;
   }
+
+  /* Reusable supporting composition for record forms. Modules only provide
+     values; the kit preserves one rail, action and forward-field contract. */
+  [data-ui="record-field-grid"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--admin-gap-sm) var(--admin-gap-lg);
+  }
+  [data-ui="record-rail"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+  }
+  [data-ui="record-rail-card"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap-md);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+  }
+  [data-ui="record-system-facts"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+    margin: 0;
+  }
+  [data-ui="record-switches"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-switch"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap);
+  }
+  [data-ui="record-switch-input"] {
+    flex: none;
+  }
+  [data-ui="record-activity-list"] {
+    display: grid;
+    gap: var(--admin-gap);
+  }
+  [data-ui="record-activity-item"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-header-actions"] {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-more"] {
+    position: relative;
+    flex: 0 0 auto;
+  }
+  [data-ui="record-more-open"] {
+    display: inline-grid;
+    inline-size: var(--control-height-lg, 40px);
+    min-block-size: var(--control-height-lg, 40px);
+    padding: 0;
+    place-items: center;
+    border: 1px solid var(--admin-control-border);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-control-bg);
+    color: var(--admin-ink-secondary);
+    list-style: none;
+    cursor: pointer;
+  }
+  [data-ui="record-more-open"]::-webkit-details-marker {
+    display: none;
+  }
+  [data-ui="record-more-open"]:is(:hover, :focus-visible) {
+    border-color: var(--admin-control-border-hover);
+    background: var(--admin-control-hover);
+    color: var(--admin-ink);
+    outline: none;
+  }
+  [data-ui="record-more-open"]:focus-visible {
+    box-shadow: 0 0 0 3px var(--admin-focus-ring);
+  }
+  [data-ui="record-more-open"] [data-ui="icon"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+  [data-ui="record-more-menu"] {
+    position: absolute;
+    inset-block-start: calc(100% + var(--admin-gap-xs));
+    inset-inline-end: 0;
+    z-index: var(--z-dropdown, 40);
+    display: grid;
+    min-inline-size: 10rem;
+    padding: var(--admin-gap-xs);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-card-raised);
+    box-shadow: var(--shadow-popover, 0 12px 32px rgba(0, 0, 0, 0.42));
+  }
+  [data-ui="record-more-menu"] [data-ui="record-form"],
+  [data-ui="record-more-menu"] [data-ui="form-actions"],
+  [data-ui="record-more-menu"] [data-ui="action-group"] {
+    inline-size: 100%;
+  }
+  [data-ui="record-more-menu"] [data-ui="action"] {
+    inline-size: 100%;
+    justify-content: flex-start;
+  }
+  [data-ui="record-save-split"] {
+    display: inline-flex;
+  }
   @media (min-width: 96rem) {
     [data-ui="record-workspace"][data-has-aside="true"] {
       grid-template-columns: minmax(0, 2fr) minmax(32rem, 1fr);
     }
   }
-  @media (max-width: 72rem) {
+  /* The sidebar already consumes part of the viewport. Below 1344px the main
+     column is too narrow for a business form and a 22rem collaboration rail to
+     coexist without the rail covering controls, so the rail follows the form. */
+  @media (max-width: 83.9375rem) {
     [data-ui="record-workspace"] {
       grid-template-areas:
         "record-top"
@@ -367,6 +497,9 @@
     }
     [data-ui="record-body"] {
       padding: var(--admin-gap);
+    }
+    [data-ui="record-field-grid"] {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 }

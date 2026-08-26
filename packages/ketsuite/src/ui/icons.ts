@@ -74,10 +74,19 @@ const PATHS: Record<string, string> = {
   'chevron-right': '<path d="m9 18 6-6-6-6" />',
   'chevron-left': '<path d="m15 18-6-6 6-6" />',
   plus: '<path d="M5 12h14" /> <path d="M12 5v14" />',
+  'more-horizontal':
+    '<circle cx="5" cy="12" r="1" fill="currentColor" /> <circle cx="12" cy="12" r="1" fill="currentColor" /> <circle cx="19" cy="12" r="1" fill="currentColor" />',
   x: '<path d="M18 6 6 18" /> <path d="m6 6 12 12" />',
   list: '<path d="M3 5h.01" /> <path d="M3 12h.01" /> <path d="M3 19h.01" /> <path d="M8 5h13" /> <path d="M8 12h13" /> <path d="M8 19h13" />',
   'sliders-horizontal':
     '<path d="M10 5H3" /> <path d="M12 19H3" /> <path d="M14 3v4" /> <path d="M16 17v4" /> <path d="M21 12h-9" /> <path d="M21 19h-5" /> <path d="M21 5h-7" /> <path d="M8 10v4" /> <path d="M8 12H3" />',
+  'grip-vertical':
+    '<circle cx="9" cy="5" r="1" fill="currentColor" /> <circle cx="9" cy="12" r="1" fill="currentColor" /> <circle cx="9" cy="19" r="1" fill="currentColor" /> <circle cx="15" cy="5" r="1" fill="currentColor" /> <circle cx="15" cy="12" r="1" fill="currentColor" /> <circle cx="15" cy="19" r="1" fill="currentColor" />',
+  pencil: '<path d="M12 20h9" /> <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />',
+  'trash-2':
+    '<path d="M3 6h18" /> <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /> <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /> <path d="M10 11v6" /> <path d="M14 11v6" />',
+  'refresh-cw':
+    '<path d="M21 12a9 9 0 0 0-15.38-6.36L3 8" /> <path d="M3 3v5h5" /> <path d="M3 12a9 9 0 0 0 15.38 6.36L21 16" /> <path d="M16 16h5v5" />',
   'arrow-up': '<path d="m18 15-6-6-6 6" />',
   'arrow-down': '<path d="m6 9 6 6 6-6" />',
   check: '<path d="M20 6 9 17l-5-5" />',

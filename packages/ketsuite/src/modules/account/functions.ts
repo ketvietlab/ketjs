@@ -1,4 +1,17 @@
-import { and, asc, defineFn, desc, eq, from, gte, ilike, inArray, lte, or } from '@ketvietlab/ketjs'
+import {
+  and,
+  asc,
+  defineFn,
+  deleteFrom,
+  desc,
+  eq,
+  from,
+  gte,
+  ilike,
+  inArray,
+  lte,
+  or,
+} from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { moneyText, roundMoney, scaleOf, toleranceOf } from './money.ts'
 import { ACCOUNT_SETUP_EFFECTS, ensureCompanyAccounting } from './setup.ts'
@@ -108,6 +121,7 @@ const REFUSALS = {
   taxMixedPriceInclude: 'a line cannot mix price-included and price-excluded taxes',
   taxManyPriceInclude: 'a line supports at most one price-included tax',
   taxDivisionFull: 'a division tax of 100% or more has no finite base',
+  productMissing: 'product template does not exist',
   taxFixedExceedsLine: 'a price-included fixed tax cannot be larger than the line it is inside',
 
   partnerMissing: 'partner does not exist',
@@ -729,6 +743,53 @@ export const functions: Record<string, FnSpec> = {
         ...(args.includeArchived ? {} : { active: true }),
       })
       return narrow(rows.sort(taxOrder), args, ['name'])
+    },
+  }),
+  getProductTax: defineFn({
+    input: { templateId: 'id' },
+    output: { id: 'id', templateId: 'id', taxId: 'id' },
+    effects: ['read:account.ProductTax'],
+    agent: true,
+    handler: async (ctx, args) =>
+      (await ctx.db.select('account.ProductTax', { templateId: args.templateId }))[0] ?? null,
+  }),
+  setProductTax: defineFn({
+    input: { templateId: 'id', taxId: 'id?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:product.Template',
+      'read:account.Tax',
+      'read:account.ProductTax',
+      'write:account.ProductTax',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!(await ctx.db.select('product.Template', { id: args.templateId }))[0])
+        return invalid('templateId', 'productMissing')
+      const held = (await ctx.db.select('account.ProductTax', { templateId: args.templateId }))[0]
+      if (!args.taxId) {
+        if (held) {
+          const ProductTax = ctx.table('account.ProductTax')
+          await ctx.db.del(deleteFrom(ProductTax).where(eq(ProductTax.id, held.id)))
+        }
+        return { ok: true }
+      }
+      const tax = (await ctx.db.select('account.Tax', { id: args.taxId }))[0]
+      if (!tax) return invalid('taxId', 'taxMissing')
+      if (!['sale', 'none'].includes(String(tax.typeTaxUse)))
+        return invalid('taxId', 'taxDirectionMismatch', { name: tax.name })
+      if (held) {
+        await ctx.db.update('account.ProductTax', { id: held.id }, { taxId: args.taxId })
+        return { ok: true, id: held.id }
+      }
+      const id = `product-tax:${String(ctx.scope.company ?? '')}:${String(args.templateId)}`
+      await ctx.db.insert('account.ProductTax', {
+        id,
+        templateId: args.templateId,
+        taxId: args.taxId,
+      })
+      return { ok: true, id }
     },
   }),
   saveTax: defineFn({

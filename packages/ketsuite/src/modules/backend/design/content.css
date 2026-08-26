@@ -151,6 +151,9 @@
     border-block-end-color: var(--admin-accent);
     color: var(--admin-accent-text);
   }
+  [data-ui="tab"][data-disabled="true"] {
+    cursor: default;
+  }
 
   /* Compact operational records for mobile and narrow side panels. */
   /* A document hierarchy. The nesting is the markup, so the indent comes from
