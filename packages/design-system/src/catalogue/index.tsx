@@ -1,0 +1,644 @@
+import { each, html } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { ActionGroup, Button, LinkButton } from '../primitives/actions.tsx'
+import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
+import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
+import { Field } from '../primitives/field.tsx'
+import { NavList, Tabs } from '../primitives/navigation.tsx'
+import { Progress } from '../primitives/progress.tsx'
+import { ContentCard, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
+import { AppShell, Page, PageHeader, RecordPage, RecordSection } from '../layouts/shell.tsx'
+import { DataTable } from '../patterns/data-table.tsx'
+import { ModalSheet } from '../patterns/modal-sheet.tsx'
+import { RecordForm } from '../patterns/record-form.tsx'
+
+export type ComponentExample = {
+  id: string
+  name: string
+  description: string
+  render: () => JSXChild
+}
+
+export type ComponentGroup = {
+  id: string
+  name: string
+  description: string
+  examples: readonly ComponentExample[]
+}
+
+type OrderRow = {
+  id: string
+  customer: string
+  total: string
+  state: 'Ready' | 'Review' | 'Blocked'
+}
+
+const orders: OrderRow[] = [
+  { id: 'SO-1042', customer: 'Công ty Ánh Dương', total: '18.450.000 ₫', state: 'Ready' },
+  { id: 'SO-1041', customer: 'Khách sạn Mùa Hạ', total: '6.800.000 ₫', state: 'Review' },
+  { id: 'SO-1039', customer: 'Nguyễn Minh Châu', total: '2.150.000 ₫', state: 'Blocked' },
+]
+
+const toneOf = (state: OrderRow['state']) =>
+  state === 'Ready' ? ('positive' as const) : state === 'Review' ? ('warning' as const) : ('danger' as const)
+
+export const componentGroups: readonly ComponentGroup[] = [
+  {
+    id: 'actions',
+    name: 'Actions',
+    description: 'Business hierarchy expressed independently from colour.',
+    examples: [
+      {
+        id: 'button',
+        name: 'Button',
+        description: 'Primary, secondary, tertiary, destructive, loading and disabled states.',
+        render: () => (
+          <ActionGroup
+            label="Button variants"
+            actions={[
+              <Button label="Create order" variant="primary" leading="+" />,
+              <Button label="Save draft" variant="secondary" />,
+              <Button label="More details" variant="tertiary" />,
+              <Button label="Terminate" variant="destructive" />,
+              <Button label="Saving" loading />,
+              <Button label="Unavailable" disabled />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'action-sizes',
+        name: 'Action sizes',
+        description: 'Density changes target size without changing hierarchy.',
+        render: () => (
+          <ActionGroup
+            label="Action sizes"
+            actions={[
+              <Button label="Compact" size="compact" />,
+              <Button label="Default" />,
+              <Button label="Prominent decision" size="prominent" variant="primary" />,
+              <LinkButton label="Open record" href="#data-table" variant="tertiary" leading="↗" />,
+            ]}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'status',
+    name: 'Status & identity',
+    description: 'Compact objects for operational scanning.',
+    examples: [
+      {
+        id: 'badges',
+        name: 'Badge and tag',
+        description: 'Tones carry meaning; tags represent categories and active filters.',
+        render: () => (
+          <Inline
+            items={[
+              <Badge label="Neutral" />,
+              <Badge label="Synchronized" tone="info" />,
+              <Badge label="Ready" tone="positive" />,
+              <Badge label="Needs review" tone="warning" />,
+              <Badge label="Failed" tone="danger" />,
+              <Tag label="Hà Nội" removeHref="#status" removeLabel="Remove Hà Nội filter" />,
+              <CountBadge count={12} label="12 pending items" />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'identity',
+        name: 'Avatar and code',
+        description: 'Stable fallbacks for people and exact machine-readable values.',
+        render: () => (
+          <Inline
+            items={[
+              <Avatar name="Nguyễn Minh Châu" size="small" />,
+              <Avatar name="Nguyễn Minh Châu" />,
+              <Avatar name="Nguyễn Minh Châu" size="large" />,
+              <Code value="tenant-vn-hn-0042" context="tenant" />,
+            ]}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'feedback',
+    name: 'Feedback',
+    description: 'Complete operational states, including the paths nobody screenshots first.',
+    examples: [
+      {
+        id: 'notice',
+        name: 'Notice',
+        description: 'Status, warning and recovery information with an optional action.',
+        render: () => (
+          <Stack
+            gap="compact"
+            items={[
+              <Notice title="Sync complete" message="42 records are ready for review." tone="positive" />,
+              <Notice title="Release drift" message="Two tenants are one release behind." tone="warning" />,
+              <Notice
+                title="Connection failed"
+                message="The provider rejected the stored credential. Rotate it before retrying."
+                tone="danger"
+                actions={<Button label="Rotate" size="compact" />}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'empty-loading',
+        name: 'Empty and loading',
+        description: 'Explicit state preserves layout and gives the reader a next step.',
+        render: () => (
+          <Grid
+            columns={2}
+            items={[
+              <Surface
+                padding="none"
+                body={
+                  <EmptyState
+                    title="No saved views"
+                    message="Save the current filters to reuse them later."
+                    actions={<Button label="Save current view" size="compact" />}
+                  />
+                }
+              />,
+              <Surface padding="none" body={<LoadingState label="Loading order history" lines={3} />} />,
+            ]}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'fields',
+    name: 'Fields',
+    description: 'Native controls with one label, help and error contract.',
+    examples: [
+      {
+        id: 'field',
+        name: 'Field',
+        description: 'Text, select, checkbox and error states without application-owned markup.',
+        render: () => (
+          <Grid
+            columns={2}
+            items={[
+              <Field id="company-name" name="company" label="Company name" value="Két Việt" required />,
+              <Field
+                id="deployment"
+                name="deployment"
+                label="Deployment"
+                type="select"
+                value="commerce"
+                options={[
+                  { value: 'commerce', label: 'Commerce' },
+                  { value: 'cosmetic', label: 'Cosmetic' },
+                  { value: 'hospitality', label: 'Hospitality' },
+                ]}
+                help="A tenant belongs to exactly one deployment."
+              />,
+              <Field
+                id="database-key"
+                name="databaseKey"
+                label="Database key"
+                value="Invalid Key"
+                error="Use lowercase letters, numbers and hyphens only."
+              />,
+              <Field id="active" name="active" label="Active for new orders" type="checkbox" value />,
+            ]}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'layouts',
+    name: 'Layouts',
+    description: 'Quiet hierarchy for dense application screens.',
+    examples: [
+      {
+        id: 'surface-section',
+        name: 'Surface and section',
+        description: 'Layout components establish rhythm without domain assumptions.',
+        render: () => (
+          <Section
+            eyebrow="Operations"
+            title="Daily overview"
+            description="The section owns hierarchy; its body remains application data."
+            actions={<LinkButton label="View report" href="#patterns" size="compact" />}
+            body={
+              <Grid
+                columns={3}
+                items={[
+                  <Metric label="Orders" value="148" detail="+12 today" tone="positive" />,
+                  <Metric label="Review queue" value="7" detail="Oldest 42 min" tone="warning" />,
+                  <Metric label="Blocked" value="2" detail="Credential required" tone="danger" />,
+                ]}
+              />
+            }
+          />
+        ),
+      },
+      {
+        id: 'content-card',
+        name: 'Content card',
+        description: 'A composable record summary with valid nested actions.',
+        render: () => (
+          <Grid
+            columns={3}
+            items={[
+              <ContentCard
+                title="Commerce"
+                summary="General retail operations"
+                body="24 ready tenants"
+                meta={<Badge label="Stable" tone="positive" />}
+                href="#content-card"
+              />,
+              <ContentCard
+                title="Cosmetic"
+                summary="Care and marketplace workflows"
+                body="9 ready tenants"
+                meta={<Badge label="Review" tone="warning" />}
+                selected
+              />,
+              <ContentCard
+                title="Hospitality"
+                summary="Property and OTA operations"
+                body="6 ready tenants"
+                actions={<Button label="Open cohort" size="compact" />}
+              />,
+            ]}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'application-structure',
+    name: 'Application structure',
+    description: 'Sidebar, content and context rail are peer regions—not cards nested inside a card.',
+    examples: [
+      {
+        id: 'app-shell',
+        name: 'App shell',
+        description: 'The sidebar and right rail stay square while independent KPI objects use a 7px radius.',
+        render: () => (
+          <AppShell
+            mode="embedded"
+            sidebar={
+              <div data-ui="shell-demo-sidebar">
+                <strong>KétSuite</strong>
+                <NavList
+                  label="Workspace"
+                  items={[
+                    { label: 'Overview', href: '#app-shell', leading: '⌂', active: true },
+                    { label: 'Orders', href: '#data-table', leading: '□', count: 148 },
+                    { label: 'Products', href: '#record-page', leading: '◇' },
+                  ]}
+                />
+              </div>
+            }
+            main={
+              <Page
+                title="Operations"
+                description="Today across all active tenants"
+                actions={<Button label="Create order" variant="primary" />}
+                body={
+                  <Grid
+                    columns={3}
+                    items={[
+                      <Metric label="Orders" value="148" detail="+12 today" tone="positive" />,
+                      <Metric label="Review queue" value="7" detail="Oldest 42 min" tone="warning" />,
+                      <Metric label="Blocked" value="2" detail="Credential required" tone="danger" />,
+                    ]}
+                  />
+                }
+              />
+            }
+            rightRail={
+              <div data-ui="shell-demo-rail">
+                <p data-ui="catalogue-kicker">Context</p>
+                <strong>Today</strong>
+                <p>Three items need an operational decision.</p>
+                <Progress label="Daily target" value={72} />
+              </div>
+            }
+          />
+        ),
+      },
+      {
+        id: 'record-page',
+        name: 'Record page',
+        description:
+          'Sections use separators and spacing instead of a rounded container around the whole record.',
+        render: () => (
+          <RecordPage
+            body={
+              <>
+                <PageHeader
+                  title="Mùa Hạ Riverside"
+                  description="Customer · CUS-0042"
+                  actions={<Button label="Edit" size="compact" />}
+                />
+                <RecordSection
+                  title="Overview"
+                  body="Stable customer with six active locations and no overdue invoices."
+                />
+                <RecordSection
+                  title="Delivery"
+                  body={<Progress label="Onboarding complete" value={84} tone="positive" />}
+                />
+              </>
+            }
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'navigation',
+    name: 'Navigation & progress',
+    description: 'Low-luminance selection and compact progress keep attention on the working content.',
+    examples: [
+      {
+        id: 'navigation-items',
+        name: 'Navigation and tabs',
+        description: 'The active indigo remains restrained in both vertical and horizontal navigation.',
+        render: () => (
+          <Stack
+            items={[
+              <NavList
+                label="Product"
+                items={[
+                  { label: 'Details', href: '#navigation-items', leading: '◇', active: true },
+                  { label: 'Variants', href: '#navigation-items', leading: '□', count: 12 },
+                  { label: 'Inventory', href: '#navigation-items', leading: '≡' },
+                ]}
+              />,
+              <Tabs
+                label="Record views"
+                items={[
+                  { id: 'summary', label: 'Summary', href: '#navigation-items', active: true },
+                  { id: 'activity', label: 'Activity', href: '#navigation-items', count: 8 },
+                  { id: 'files', label: 'Files', href: '#navigation-items', count: 3 },
+                ]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'progress',
+        name: 'Progress',
+        description: 'A four-pixel track communicates state without becoming another panel.',
+        render: () => (
+          <Stack
+            gap="compact"
+            items={[
+              <Progress label="Project completion" value={68} />,
+              <Progress label="Approved" value={92} tone="positive" />,
+              <Progress label="At risk" value={54} tone="warning" />,
+              <Progress label="Overdue" value={31} tone="danger" />,
+            ]}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'patterns',
+    name: 'Patterns',
+    description: 'Generic workflows assembled from the same primitives.',
+    examples: [
+      {
+        id: 'data-table',
+        name: 'Data table',
+        description: 'Columns are data; rows remain semantic and horizontally contained.',
+        render: () => (
+          <DataTable
+            caption="Recent sales orders"
+            rows={orders}
+            id={(row) => row.id}
+            rowHref={(row) => `#${row.id}`}
+            columns={[
+              { key: 'id', label: 'Order', cell: (row) => row.id, priority: 'primary', kind: 'identifier' },
+              { key: 'customer', label: 'Customer', cell: (row) => row.customer },
+              { key: 'total', label: 'Total', cell: (row) => row.total, align: 'end', kind: 'currency' },
+              {
+                key: 'state',
+                label: 'State',
+                cell: (row) => <Badge label={row.state} tone={toneOf(row.state)} />,
+                kind: 'status',
+              },
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'record-form',
+        name: 'Record form',
+        description: 'Application supplies translated labels and values, not form markup.',
+        render: () => (
+          <Surface
+            body={
+              <RecordForm
+                action="#record-form"
+                fields={[
+                  { id: 'record-name', name: 'name', label: 'Display name', value: 'Mùa Hạ Riverside' },
+                  {
+                    id: 'record-status',
+                    name: 'status',
+                    label: 'Lifecycle',
+                    type: 'select',
+                    value: 'ready',
+                    options: [
+                      { value: 'draft', label: 'Draft' },
+                      { value: 'ready', label: 'Ready' },
+                    ],
+                  },
+                  {
+                    id: 'record-note',
+                    name: 'note',
+                    label: 'Internal note',
+                    type: 'textarea',
+                    value: 'Migration approved by the operations team.',
+                    span: 'full',
+                  },
+                ]}
+                submitLabel="Save record"
+                cancelHref="#patterns"
+                cancelLabel="Cancel"
+              />
+            }
+          />
+        ),
+      },
+      {
+        id: 'modal-sheet',
+        name: 'Modal sheet',
+        description: 'Shown embedded here; the production mode occupies the viewport.',
+        render: () => (
+          <ModalSheet
+            id="release-drift-modal"
+            mode="embedded"
+            title="Resolve release drift"
+            closeHref="#modal-sheet"
+            closeLabel="Close modal"
+            body={
+              <Stack
+                items={[
+                  <Notice
+                    title="Two tenants are behind"
+                    message="Migration runs separately for each database and preserves failed tenants for retry."
+                    tone="warning"
+                  />,
+                  <ActionGroup
+                    actions={[
+                      <Button label="Start migration" variant="primary" />,
+                      <LinkButton label="Review plan" href="#data-table" variant="tertiary" />,
+                    ]}
+                  />,
+                ]}
+              />
+            }
+          />
+        ),
+      },
+    ],
+  },
+]
+
+export const CATALOGUE_HOOKS = [
+  'catalogue',
+  'catalogue-rail',
+  'catalogue-brand',
+  'catalogue-kicker',
+  'catalogue-nav',
+  'catalogue-nav-group',
+  'catalogue-nav-count',
+  'catalogue-main',
+  'catalogue-hero',
+  'catalogue-title',
+  'catalogue-intro',
+  'catalogue-controls',
+  'catalogue-group',
+  'catalogue-group-head',
+  'catalogue-specimen',
+  'catalogue-specimen-head',
+  'catalogue-specimen-name',
+  'catalogue-specimen-description',
+  'catalogue-stage',
+] as const
+
+export const CatalogueHead = (): TemplateResult =>
+  html`<meta name="description" content="Két Việt public component catalogue"><link rel="stylesheet" href="/design-system/catalogue/styles.css">`
+
+export const CataloguePage = (
+  props: { theme?: 'light' | 'dark' | 'system'; density?: 'compact' | 'default' | 'comfortable' } = {},
+): TemplateResult => {
+  const theme = props.theme ?? 'system'
+  const density = props.density ?? 'default'
+  const count = componentGroups.reduce((total, group) => total + group.examples.length, 0)
+  return (
+    <main
+      data-kv-design-system
+      data-ui="catalogue"
+      data-theme={theme === 'system' ? null : theme}
+      data-density={density}
+    >
+      <aside data-ui="catalogue-rail">
+        <a data-ui="catalogue-brand" href="#top">
+          <span aria-hidden="true">K</span>
+          <strong>Két Việt</strong>
+        </a>
+        <p data-ui="catalogue-kicker">Design system · 0.1.3</p>
+        <nav data-ui="catalogue-nav" aria-label="Component groups">
+          {each(
+            componentGroups,
+            (group) => group.id,
+            (group) => (
+              <a data-ui="catalogue-nav-group" href={`#${group.id}`}>
+                <span>{group.name}</span>
+                <span data-ui="catalogue-nav-count">{String(group.examples.length)}</span>
+              </a>
+            ),
+          )}
+        </nav>
+      </aside>
+      <div data-ui="catalogue-main" id="top">
+        <header data-ui="catalogue-hero">
+          <div>
+            <p data-ui="catalogue-kicker">Public components · server rendered</p>
+            <h1 data-ui="catalogue-title">Operational UI, kept honest.</h1>
+            <p data-ui="catalogue-intro">
+              {String(count)} specimens from one markup, token and state contract. Dense enough for daily
+              work; quiet enough for decisions.
+            </p>
+          </div>
+          <div data-ui="catalogue-controls" role="group" aria-label="Catalogue preferences">
+            <span>Theme</span>
+            <a href={`/?theme=light&density=${density}`} aria-current={theme === 'light' ? 'page' : null}>
+              Light
+            </a>
+            <a href={`/?theme=dark&density=${density}`} aria-current={theme === 'dark' ? 'page' : null}>
+              Dark
+            </a>
+            <a href={`/?theme=system&density=${density}`} aria-current={theme === 'system' ? 'page' : null}>
+              System
+            </a>
+            <span>Density</span>
+            <a href={`/?theme=${theme}&density=compact`} aria-current={density === 'compact' ? 'page' : null}>
+              Compact
+            </a>
+            <a href={`/?theme=${theme}&density=default`} aria-current={density === 'default' ? 'page' : null}>
+              Default
+            </a>
+            <a
+              href={`/?theme=${theme}&density=comfortable`}
+              aria-current={density === 'comfortable' ? 'page' : null}
+            >
+              Comfort
+            </a>
+          </div>
+        </header>
+        {each(
+          componentGroups,
+          (group) => group.id,
+          (group) => (
+            <section data-ui="catalogue-group" id={group.id}>
+              <header data-ui="catalogue-group-head">
+                <div>
+                  <p data-ui="catalogue-kicker">
+                    {String(group.examples.length).padStart(2, '0')} components
+                  </p>
+                  <h2>{group.name}</h2>
+                </div>
+                <p>{group.description}</p>
+              </header>
+              {each(
+                group.examples,
+                (example) => example.id,
+                (example) => (
+                  <article data-ui="catalogue-specimen" id={example.id}>
+                    <header data-ui="catalogue-specimen-head">
+                      <div>
+                        <h3 data-ui="catalogue-specimen-name">{example.name}</h3>
+                        <p data-ui="catalogue-specimen-description">{example.description}</p>
+                      </div>
+                      <Code value={`@ketvietlab/design-system/${example.name}`} context="component" />
+                    </header>
+                    <div data-ui="catalogue-stage">{example.render()}</div>
+                  </article>
+                ),
+              )}
+            </section>
+          ),
+        )}
+      </div>
+    </main>
+  )
+}

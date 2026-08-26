@@ -1,0 +1,42 @@
+@layer ket.reset {
+  :where([data-kv-design-system]),
+  :where([data-kv-design-system]) *,
+  :where([data-kv-design-system]) *::before,
+  :where([data-kv-design-system]) *::after {
+    box-sizing: border-box;
+  }
+
+  :where([data-kv-design-system]) {
+    min-width: 0;
+    color: var(--kv-color-ink);
+    font-family: var(--kv-font-sans);
+    font-size: var(--kv-text-base);
+    line-height: var(--kv-leading-normal);
+    text-rendering: optimizeLegibility;
+  }
+
+  :where([data-kv-design-system]) :where(button, input, select, textarea) {
+    font: inherit;
+  }
+
+  :where([data-kv-design-system]) :where(a, button, input, select, textarea, summary):focus-visible {
+    outline: 2px solid var(--kv-color-focus);
+    outline-offset: 2px;
+    box-shadow: var(--kv-focus-ring);
+  }
+
+  :where([data-kv-design-system]) :where(h1, h2, h3, p) {
+    margin-block-start: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-kv-design-system]) *,
+    :where([data-kv-design-system]) *::before,
+    :where([data-kv-design-system]) *::after {
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}

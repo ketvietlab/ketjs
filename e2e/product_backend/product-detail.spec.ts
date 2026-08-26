@@ -305,9 +305,9 @@ for (const viewport of [
             .map((control) => control.getBoundingClientRect().height),
         }))
         expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-        // Fields share the same 32px rhythm across desktop and touch layouts.
-        const fieldHeight = 32
-        expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
+        // Public dimensions distinguish 34px default fields from 30px compact pagination controls.
+        const fieldHeight = tab === 'media' ? 30 : 34
+        expect(metrics.visibleControls).toEqual(metrics.visibleControls.map(() => fieldHeight))
         await page.screenshot({
           path: join(artifacts, `detail-${tab}-${locale}-${viewport.name}.png`),
           fullPage: true,
@@ -352,12 +352,16 @@ test('uses the semantic dark shell, rail and control surfaces', async ({ page })
   const colors = await page.evaluate(() => {
     const background = (selector: string) =>
       getComputedStyle(document.querySelector<HTMLElement>(selector)!).backgroundColor
+    const radius = (selector: string) =>
+      getComputedStyle(document.querySelector<HTMLElement>(selector)!).borderRadius
     return {
       sidebar: background('[data-ui="sidebar"]'),
       shell: background('[data-ui="shell"]'),
       sheet: background('[data-ui="record-sheet"]'),
       rail: background('[data-ui="record-aside"]'),
       control: background('[data-ui="form-control"]'),
+      railRadius: radius('[data-ui="record-aside"]'),
+      chatterRadius: radius('[data-ui="record-aside"] [data-ui="chatter"]'),
     }
   })
   expect(colors).toEqual({
@@ -366,6 +370,8 @@ test('uses the semantic dark shell, rail and control surfaces', async ({ page })
     sheet: 'rgba(0, 0, 0, 0)',
     rail: 'rgb(24, 28, 33)',
     control: 'rgb(32, 37, 43)',
+    railRadius: '0px',
+    chatterRadius: '0px',
   })
   await page.screenshot({ path: join(artifacts, 'detail-general-vi-desktop-dark.png'), fullPage: true })
 })
