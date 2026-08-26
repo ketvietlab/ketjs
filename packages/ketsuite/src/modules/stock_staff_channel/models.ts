@@ -1,0 +1,120 @@
+import type { ModelDef } from '@ketvietlab/ketjs'
+
+/** Durable staff-owned work around the canonical stock aggregate. */
+export const models: Record<string, ModelDef> = {
+  PickingClaim: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      pickingId: 'ref:stock.Picking',
+      actorUserId: 'ref:user.User',
+      state: 'text',
+      activePickingKey: 'text?',
+      claimReason: 'text',
+      claimedAt: 'datetime',
+      releasedByUserId: 'ref:user.User?',
+      releaseReason: 'text?',
+      releasedAt: 'datetime?',
+      version: 'int',
+    },
+    indexes: {
+      active_picking: { fields: ['companyId', 'activePickingKey'], unique: true },
+      picking_history: { fields: ['companyId', 'pickingId', 'claimedAt'] },
+    },
+  },
+  ScanSession: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      pickingId: 'ref:stock.Picking',
+      actorUserId: 'ref:user.User',
+      state: 'text',
+      version: 'int',
+      startedAt: 'datetime',
+      updatedAt: 'datetime',
+      expiresAt: 'datetime',
+      feedbackKind: 'text?',
+      feedbackReason: 'text?',
+      feedbackAnnounce: 'text?',
+    },
+    indexes: {
+      picking_actor: { fields: ['companyId', 'pickingId', 'actorUserId', 'state'] },
+      expires: { fields: ['companyId', 'state', 'expiresAt'] },
+    },
+  },
+  ScanEvent: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      sessionId: 'ref:stock_staff_channel.ScanSession',
+      actorUserId: 'ref:user.User',
+      moveId: 'ref:stock.Move',
+      productId: 'ref:product.Product',
+      barcodeFingerprint: 'text',
+      quantity: 'decimal',
+      occurredAt: 'datetime',
+      idempotencyKey: 'text',
+      sessionVersion: 'int',
+    },
+    indexes: {
+      replay: { fields: ['companyId', 'sessionId', 'idempotencyKey'], unique: true },
+      timeline: { fields: ['companyId', 'sessionId', 'occurredAt'] },
+    },
+  },
+  CountSession: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      warehouseId: 'ref:stock.Warehouse',
+      locationId: 'ref:stock.Location',
+      productId: 'ref:product.Product',
+      mode: 'text',
+      state: 'text',
+      requiredAttemptCount: 'int',
+      completedAttemptCount: 'int',
+      cutoffAt: 'datetime',
+      expiresAt: 'datetime',
+      version: 'int',
+    },
+    indexes: {
+      worklist: { fields: ['companyId', 'state', 'expiresAt'] },
+      scope: { fields: ['companyId', 'warehouseId', 'locationId', 'productId', 'state'] },
+    },
+  },
+  CountAttempt: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      sessionId: 'ref:stock_staff_channel.CountSession',
+      actorUserId: 'ref:user.User',
+      state: 'text',
+      deviceRef: 'text?',
+      leaseExpiresAt: 'datetime?',
+      submittedAt: 'datetime?',
+      version: 'int',
+    },
+    indexes: {
+      session_actor: { fields: ['companyId', 'sessionId', 'actorUserId'], unique: true },
+      actor_state: { fields: ['companyId', 'actorUserId', 'state'] },
+    },
+  },
+  CountLine: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      attemptId: 'ref:stock_staff_channel.CountAttempt',
+      productId: 'ref:product.Product',
+      locationId: 'ref:stock.Location',
+      lotId: 'ref:stock.Lot?',
+      productUomId: 'ref:uom.Unit',
+      systemQuantity: 'decimal',
+      isCounted: 'bool',
+      countedQuantity: 'decimal?',
+      version: 'int',
+    },
+    indexes: {
+      attempt: { fields: ['companyId', 'attemptId'] },
+      position: { fields: ['companyId', 'attemptId', 'locationId', 'lotId'] },
+    },
+  },
+}

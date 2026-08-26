@@ -134,13 +134,21 @@ Product lookup applies the same active variant, live UOM, and product-kind rules
 withholds supplier prices, tax setup, and barcodes. Purchase mutations remain outside this module until their
 mobile concurrency and workflow contracts can be represented without guessing.
 
-`stock_staff_channel` contributes a bounded warehouse-transfer queue and one transfer detail under the
-`warehouse.pickings` read capability. Stock batches the picking type, warehouse, location, move, move-line,
-lot, and tracking joins so the facade does not issue one query per row; Product, UOM, and Company remain the
-owners of their display labels. The projection carries the canonical line quantities, tracking requirements,
-an opaque content-derived `pkv_` version, and a matching strong ETag. Quality is reported as unavailable and
-the next action remains explicitly unsupported. Claim, release, completion, scan, and return execution stay
-outside the module until ownership, quality, and optimistic-concurrency models exist in the domain.
+`stock_staff_channel` contributes the complete 19-operation staff warehouse system. Stock still owns the
+transfer and quant ledger; the channel module owns the staff work around it: one unique active claim per
+transfer, actor-scoped scan sessions and fingerprint-only scan events, and leased inventory-count attempts.
+Stock batches the picking type, warehouse, location, move, move-line, lot, and tracking joins so the facade
+does not issue one query per transfer row; Product, UOM, Company, and User remain the owners of their display
+labels.
+
+Picking reads and claim mutations carry a content-derived `pkv_` version. Canonical execution and reverse
+execution use their own `opv_`/`rpv_` and `orv_` evidence hashes, while every scan session changes its `msv_`
+version when an event or transition lands. Count sessions, attempts, and lines have independent monotonic
+`ics_`, `ica_`, and `icl_` versions, so renewing a lease does not create a false conflict on an unrelated line.
+All mutations require bootstrap CSRF proof and an idempotency key, bind ownership to the verified session
+actor, and return `409` before a stale version can write. Barcode input is never persisted: the audit event
+stores only a SHA-256 fingerprint and the resolved product/move identity. Quality remains explicitly
+`unavailable`; the execution preview exposes that fact instead of inventing a passed inspection.
 
 `inventory_staff_channel` contributes a bounded goods catalogue and one read-only stock detail under the
 `inventory.products` read capability. Product owns variant identity and channel eligibility, Stock owns the
