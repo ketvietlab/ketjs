@@ -151,6 +151,22 @@ test('loyalty HTTP E2E: admin screens create, edit, archive and localize program
   assert.equal(empty.status, 200)
   assert.match(await empty.text(), /Chương trình Loyalty/)
 
+  // Every list, on an empty database, before anything exists to show. The
+  // figures above each one are aggregate queries, and an aggregate the store
+  // refuses is a 500 nobody sees until they open the page — which is how the
+  // ledger shipped broken while every other loyalty test passed.
+  for (const path of [
+    '/admin/loyalty',
+    '/admin/loyalty/programs',
+    '/admin/loyalty/wallets',
+    '/admin/loyalty/memberships',
+    '/admin/loyalty/ledger',
+    '/admin/loyalty/ledger?period=all',
+  ]) {
+    const page = await e2e.client.get(path)
+    assert.equal(page.status, 200, `${path} answered ${page.status}`)
+  }
+
   const created = await e2e.client.post(
     '/admin/loyalty/programs',
     new URLSearchParams({ name: 'Mua X tặng Y', programType: 'buy_x_get_y' }),
@@ -187,9 +203,17 @@ test('loyalty HTTP E2E: admin screens create, edit, archive and localize program
     discountMode: 'percent',
     discountApplicability: 'order',
   })
+  // Rules and rewards are set up on separate occasions and each carries its own
+  // form, so each has its own tab — stacked, adding a reward meant scrolling past
+  // every rule to reach the form for it.
+  const rulesTab = await (await e2e.client.get(`${location}?tab=rules`)).text()
+  assert.match(rulesTab, />5</)
+  const rewardsTab = await (await e2e.client.get(`${location}?tab=rewards`)).text()
+  assert.match(rewardsTab, /Tặng giỏ trái cây/)
+  // And the counts are on the tabs themselves, so the overview says what is
+  // there without anyone opening either.
   const populated = await (await e2e.client.get(location)).text()
-  assert.match(populated, /Tặng giỏ trái cây/)
-  assert.match(populated, />5</)
+  assert.match(populated, /data-ui="tabs"/)
 
   await e2e.client.form(location, { action: 'archive' })
   const archived = await (await e2e.client.get(location)).text()

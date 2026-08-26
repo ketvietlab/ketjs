@@ -1,5 +1,5 @@
-import { defineFn } from '@ketvietlab/ketjs'
-import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { and, asc, defineFn, desc, eq, from, gt, lte } from '@ketvietlab/ketjs'
+import type { Ctx, Expr, FnSpec, Row } from '@ketvietlab/ketjs'
 import { decimal, invalid, issue, n, now } from './engine.ts'
 
 const cutoffFor = (date: string, months: number): number => {
@@ -81,21 +81,37 @@ const membershipEffects = [
 ] as const
 
 export const membershipFunctions: Record<string, FnSpec> = {
+  /**
+   * Members, ranked by what they have spent in the window.
+   *
+   * `state` splits the base by whether the rolling window still holds anything:
+   * a membership that has emptied is a customer who stopped coming, and it is
+   * the half of the list worth acting on.
+   */
   'membership.list': defineFn({
-    input: { tierId: 'id?', limit: 'int?' },
+    input: { tierId: 'id?', state: 'text?', limit: 'int?', offset: 'int?' },
     effects: ['read:loyalty.Membership', 'read:loyalty.Tier'],
     agent: true,
     handler: async (ctx, args) => {
+      const M = ctx.table('loyalty.Membership')
+      const parts: Expr[] = []
+      if (args.tierId) parts.push(eq(M.tierId, args.tierId))
+      if (args.state === 'active') parts.push(gt(M.rollingSpend, 0))
+      else if (args.state === 'dormant') parts.push(lte(M.rollingSpend, 0))
+
+      let query = from(M).orderBy(desc(M.rollingSpend), asc(M.id))
+      if (parts.length) query = query.where(and(...parts))
+      const size = Math.min(1000, Math.max(1, n(args.limit ?? 100)))
+      const skip = Math.max(0, n(args.offset ?? 0))
+
       const tiers = new Map((await ctx.db.select('loyalty.Tier')).map((tier) => [String(tier.id), tier]))
-      return (await ctx.db.select('loyalty.Membership'))
-        .filter((membership) => !args.tierId || membership.tierId === args.tierId)
-        .sort((a, b) => n(b.rollingSpend) - n(a.rollingSpend) || String(a.id).localeCompare(String(b.id)))
-        .slice(0, Math.min(1000, Math.max(1, n(args.limit ?? 100))))
-        .map((membership) => ({
+      return (await ctx.db.all(skip ? query.limit(size).offset(skip) : query.limit(size))).map(
+        (membership) => ({
           ...membership,
           tierCode: membership.tierId ? tiers.get(String(membership.tierId))?.code : null,
           tierName: membership.tierId ? tiers.get(String(membership.tierId))?.name : null,
-        }))
+        }),
+      )
     },
   }),
 

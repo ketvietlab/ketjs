@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import type { FormField } from '../../ui/index.ts'
+import type { FormField, SearchMenu } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import {
   DISCOUNT_APPLICABILITY,
   DISCOUNT_MODES,
   POINT_MODES,
   PROGRAM_APPLIES_ON,
   PROGRAM_TRIGGERS,
+  LEDGER_OPERATIONS,
   PROGRAM_TYPES,
   REWARD_TYPES,
   TAX_MODES,
@@ -27,6 +29,64 @@ import {
 } from './screens.tsx'
 import { adminPage, choices, inLocale, optional } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+
+/**
+ * One filter dimension, as the chrome's dropdown wants it.
+ *
+ * Every option toggles: choosing the one already chosen clears it, so a filter
+ * can always be undone from the same place it was set. The URL is the state, so
+ * the back button and a pasted link both do the obvious thing.
+ */
+const filterMenu = (
+  url: URL,
+  id: string,
+  label: string,
+  param: string,
+  current: string | undefined,
+  options: Array<{ value: string; label: string }>,
+): SearchMenu => ({
+  id,
+  label,
+  items: options.map((option) => ({
+    id: `${id}:${option.value}`,
+    label: option.label,
+    path: withParam(url, param, current === option.value ? null : option.value),
+    active: current === option.value,
+  })),
+})
+
+/** The chips above the table saying which filters are on, each one removable. */
+const filterFacets = (
+  url: URL,
+  active: Array<{ param: string; label: string | null }>,
+): Array<{ label: string; without: string }> =>
+  active
+    .filter((entry): entry is { param: string; label: string } => Boolean(entry.label))
+    .map((entry) => ({ label: entry.label, without: withParam(url, entry.param, null) }))
+
+/**
+ * A window over a ledger, chosen by name rather than by date.
+ *
+ * A statement is nearly always read by month or by year, and naming the period
+ * keeps the link shareable — `?period=month` still means this month next week,
+ * which a pair of dates in the URL would not. A free date range would need a
+ * control the shared chrome does not have yet.
+ */
+const PERIODS = ['month', 'quarter', 'year', 'all'] as const
+
+const periodWindow = (period: string): { from?: string; to?: string } => {
+  const at = new Date()
+  const year = at.getUTCFullYear()
+  if (period === 'year') return { from: new Date(Date.UTC(year, 0, 1)).toISOString(), to: at.toISOString() }
+  if (period === 'quarter')
+    return {
+      from: new Date(Date.UTC(year, Math.floor(at.getUTCMonth() / 3) * 3, 1)).toISOString(),
+      to: at.toISOString(),
+    }
+  if (period === 'month')
+    return { from: new Date(Date.UTC(year, at.getUTCMonth(), 1)).toISOString(), to: at.toISOString() }
+  return {}
+}
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -312,17 +372,87 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         if ((result as AnyRow).ok)
           return seeOther(inLocale(url, `/admin/loyalty/programs/${String((result as AnyRow).id)}`))
         const _ = ctx.translate(ctx.localeOf(url, req))
-        const rows = (await ctx.call('loyalty.program.list', { includeArchived: true }, url, req)) as AnyRow[]
+        const [rows, totals] = await Promise.all([
+          ctx.call('loyalty.program.list', { includeArchived: true, limit: PAGE_SIZE }, url, req) as Promise<
+            AnyRow[]
+          >,
+          ctx.call('loyalty.program.stats', {}, url, req) as Promise<AnyRow>,
+        ])
         return adminPage(ctx, url, req, {
           title: 'loyalty_backend.programs.title',
-          body: (_, frame) => programsScreen(_, frame, rows, createProgramFields(_), resultErrors(result, _)),
+          body: (_, frame) =>
+            programsScreen(_, frame, rows, totals, createProgramFields(_), resultErrors(result, _)),
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('loyalty.program.list', { includeArchived: true }, url, req)) as AnyRow[]
+      const page = pageOf(url)
+      const search = searchOf(url)
+      const state = url.searchParams.get('state') ?? undefined
+      const programType = url.searchParams.get('type') ?? undefined
+      const [rows, totals] = await Promise.all([
+        ctx.call(
+          'loyalty.program.list',
+          {
+            includeArchived: true,
+            ...(search ? { search } : {}),
+            ...(state ? { state } : {}),
+            ...(programType ? { programType } : {}),
+            limit: PAGE_SIZE,
+            offset: (page - 1) * PAGE_SIZE,
+          },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
+        ctx.call('loyalty.program.stats', {}, url, req) as Promise<AnyRow>,
+      ])
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.programs.title',
-        body: (_, frame) => programsScreen(_, frame, rows, createProgramFields(_)),
+        body: (_, frame) =>
+          programsScreen(
+            _,
+            {
+              ...frame,
+              chrome: {
+                section: _('loyalty_backend.menu.app'),
+                search: {
+                  name: 'q',
+                  value: search ?? '',
+                  placeholder: _('loyalty_backend.chrome.searchPrograms'),
+                  keep: {
+                    ...(state ? { state } : {}),
+                    ...(programType ? { type: programType } : {}),
+                  },
+                  facets: filterFacets(url, [
+                    { param: 'state', label: state ? _(`loyalty_backend.state.${state}`) : null },
+                    {
+                      param: 'type',
+                      label: programType ? _(`loyalty_backend.programType.${programType}`) : null,
+                    },
+                  ]),
+                  menus: [
+                    filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
+                      { value: 'running', label: _('loyalty_backend.state.running') },
+                      { value: 'upcoming', label: _('loyalty_backend.state.upcoming') },
+                      { value: 'archived', label: _('loyalty_backend.state.archived') },
+                      { value: 'ended', label: _('loyalty_backend.state.ended') },
+                    ]),
+                    filterMenu(
+                      url,
+                      'type',
+                      _('loyalty_backend.field.programType'),
+                      'type',
+                      programType,
+                      options(_, PROGRAM_TYPES, 'programType'),
+                    ),
+                  ],
+                },
+                pager: pager(url, page, rows.length, Number(totals.total ?? 0)),
+              },
+            },
+            rows,
+            totals,
+            createProgramFields(_),
+          ),
       })
     },
 
@@ -400,6 +530,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
             programFields: programFields(_, program),
             ruleFields: ruleFields(_, data.products),
             rewardFields: rewardFields(_, data.products),
+            tab: url.searchParams.get('tab') ?? 'overview',
             errors,
           }),
       })
@@ -430,15 +561,82 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         if ((result as AnyRow).ok) return seeOther(inLocale(url, `/admin/loyalty/wallets/${id}`))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const wallets = (await ctx.call('loyalty.wallet.list', { includeArchived: true }, url, req)) as AnyRow[]
+      const page = pageOf(url)
+      const search = searchOf(url)
+      const state = url.searchParams.get('state') ?? undefined
+      const programId = url.searchParams.get('program') ?? undefined
+      const [wallets, totals] = await Promise.all([
+        ctx.call(
+          'loyalty.wallet.list',
+          {
+            includeArchived: true,
+            ...(search ? { search } : {}),
+            ...(state ? { state } : {}),
+            ...(programId ? { programId } : {}),
+            limit: PAGE_SIZE,
+            offset: (page - 1) * PAGE_SIZE,
+          },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
+        ctx.call(
+          'loyalty.wallet.stats',
+          { ...(programId ? { programId } : {}) },
+          url,
+          req,
+        ) as Promise<AnyRow>,
+      ])
       const names = new Map(data.partners.map((partner) => [String(partner.id), String(partner.name)]))
+      const programNames = new Map(data.programs.map((program) => [String(program.id), String(program.name)]))
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.wallets.title',
         body: (_, frame) =>
           walletsScreen(
             _,
-            frame,
-            wallets.map((wallet) => ({ ...wallet, partnerName: names.get(String(wallet.partnerId)) })),
+            {
+              ...frame,
+              chrome: {
+                section: _('loyalty_backend.menu.app'),
+                search: {
+                  name: 'q',
+                  value: search ?? '',
+                  placeholder: _('loyalty_backend.chrome.searchWallets'),
+                  keep: {
+                    ...(state ? { state } : {}),
+                    ...(programId ? { program: programId } : {}),
+                  },
+                  facets: filterFacets(url, [
+                    { param: 'state', label: state ? _(`loyalty_backend.state.${state}`) : null },
+                    { param: 'program', label: programId ? (programNames.get(programId) ?? null) : null },
+                  ]),
+                  menus: [
+                    filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
+                      { value: 'active', label: _('loyalty_backend.state.running') },
+                      { value: 'locked', label: _('loyalty_backend.state.locked') },
+                      { value: 'expired', label: _('loyalty_backend.state.expired') },
+                    ]),
+                    filterMenu(
+                      url,
+                      'program',
+                      _('loyalty_backend.field.program'),
+                      'program',
+                      programId,
+                      data.programs.map((program) => ({
+                        value: String(program.id),
+                        label: String(program.name),
+                      })),
+                    ),
+                  ],
+                },
+                pager: pager(url, page, wallets.length, Number(totals.total ?? 0)),
+              },
+            },
+            wallets.map((wallet) => ({
+              ...wallet,
+              partnerName: names.get(String(wallet.partnerId)),
+              programName: programNames.get(String(wallet.programId)),
+            })),
+            totals,
             [
               {
                 name: 'programId',
@@ -488,9 +686,23 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const wallet = (await ctx.call('loyalty.wallet.get', { id: params.id }, url, req)) as AnyRow | null
-      if (!wallet)
+      const held = (await ctx.call('loyalty.wallet.get', { id: params.id }, url, req)) as AnyRow | null
+      if (!held)
         return text(ctx.translate(ctx.localeOf(url, req))('loyalty_backend.error.notFound'), { status: 404 })
+      // The wallet carries ids; the screen names a guest and a program, so the
+      // two are resolved here rather than in a summary every other caller pays
+      // for.
+      const [holder, program] = await Promise.all([
+        held.partnerId
+          ? (ctx.call('partner.getPartner', { id: held.partnerId }, url, req) as Promise<AnyRow | null>)
+          : Promise.resolve(null),
+        ctx.call('loyalty.program.get', { id: held.programId }, url, req) as Promise<AnyRow | null>,
+      ])
+      const wallet = {
+        ...held,
+        partnerName: holder?.name ?? null,
+        programName: program?.name ?? null,
+      }
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.wallets.title',
         body: (_, frame) =>
@@ -508,6 +720,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               },
               { name: 'note', label: _('loyalty_backend.field.note'), type: 'textarea', span: 'full' },
             ],
+            url.searchParams.get('tab') ?? 'overview',
             errors,
           ),
       })
@@ -517,18 +730,99 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
     (ctx): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const [rows, wallets] = await Promise.all([
-        ctx.call('loyalty.ledger.list', { limit: 500 }, url, req) as Promise<AnyRow[]>,
-        ctx.call('loyalty.wallet.list', { includeArchived: true }, url, req) as Promise<AnyRow[]>,
+      const page = pageOf(url)
+      const period = PERIODS.includes((url.searchParams.get('period') ?? '') as (typeof PERIODS)[number])
+        ? (url.searchParams.get('period') as string)
+        : 'month'
+      const window = periodWindow(period)
+      const operation = url.searchParams.get('operation') ?? undefined
+      const programId = url.searchParams.get('program') ?? undefined
+      const walletId = url.searchParams.get('wallet') ?? undefined
+      const filters = {
+        ...window,
+        ...(operation ? { operation } : {}),
+        ...(programId ? { programId } : {}),
+        ...(walletId ? { walletId } : {}),
+      }
+      const [rows, totals, programs, wallets] = await Promise.all([
+        ctx.call(
+          'loyalty.ledger.list',
+          { ...filters, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
+        ctx.call('loyalty.ledger.stats', filters, url, req) as Promise<AnyRow>,
+        ctx.call('loyalty.program.list', { includeArchived: true }, url, req) as Promise<AnyRow[]>,
+        ctx.call('loyalty.wallet.list', { includeArchived: true, limit: 200 }, url, req) as Promise<AnyRow[]>,
       ])
       const codes = new Map(wallets.map((wallet) => [String(wallet.id), String(wallet.code)]))
+      const programNames = new Map(programs.map((program) => [String(program.id), String(program.name)]))
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.ledger.title',
         body: (_, frame) =>
           ledgerScreen(
             _,
-            frame,
+            {
+              ...frame,
+              chrome: {
+                section: _('loyalty_backend.menu.app'),
+                search: {
+                  name: 'q',
+                  value: '',
+                  placeholder: _('loyalty_backend.chrome.searchLedger'),
+                  keep: {
+                    period,
+                    ...(operation ? { operation } : {}),
+                    ...(programId ? { program: programId } : {}),
+                    ...(walletId ? { wallet: walletId } : {}),
+                  },
+                  facets: filterFacets(url, [
+                    { param: 'period', label: _(`loyalty_backend.period.${period}`) },
+                    {
+                      param: 'operation',
+                      label: operation ? _(`loyalty_backend.operation.${operation}`) : null,
+                    },
+                    { param: 'program', label: programId ? (programNames.get(programId) ?? null) : null },
+                    { param: 'wallet', label: walletId ? (codes.get(walletId) ?? null) : null },
+                  ]),
+                  menus: [
+                    filterMenu(
+                      url,
+                      'period',
+                      _('loyalty_backend.field.period'),
+                      'period',
+                      period,
+                      PERIODS.map((value) => ({
+                        value,
+                        label: _(`loyalty_backend.period.${value}`),
+                      })),
+                    ),
+                    filterMenu(
+                      url,
+                      'operation',
+                      _('loyalty_backend.field.operation'),
+                      'operation',
+                      operation,
+                      options(_, LEDGER_OPERATIONS, 'operation'),
+                    ),
+                    filterMenu(
+                      url,
+                      'program',
+                      _('loyalty_backend.field.program'),
+                      'program',
+                      programId,
+                      programs.map((program) => ({
+                        value: String(program.id),
+                        label: String(program.name),
+                      })),
+                    ),
+                  ],
+                },
+                pager: pager(url, page, rows.length, Number(totals.entries ?? 0)),
+              },
+            },
             rows.map((row) => ({ ...row, walletCode: codes.get(String(row.walletId)) })),
+            totals,
           ),
       })
     },
@@ -577,22 +871,68 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [tiers, memberships, config] = await Promise.all([
+      const page = pageOf(url)
+      const state = url.searchParams.get('state') ?? undefined
+      const tierId = url.searchParams.get('tier') ?? undefined
+      const [tiers, memberships, totals, config] = await Promise.all([
         ctx.call('loyalty.tier.list', { includeArchived: true }, url, req) as Promise<AnyRow[]>,
-        ctx.call('loyalty.membership.list', { limit: 500 }, url, req) as Promise<AnyRow[]>,
+        ctx.call(
+          'loyalty.membership.list',
+          {
+            ...(state ? { state } : {}),
+            ...(tierId ? { tierId } : {}),
+            limit: PAGE_SIZE,
+            offset: (page - 1) * PAGE_SIZE,
+          },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
+        ctx.call('loyalty.membership.stats', { ...(tierId ? { tierId } : {}) }, url, req) as Promise<AnyRow>,
         ctx.call('loyalty.membership.config.get', {}, url, req) as Promise<AnyRow | null>,
       ])
       const names = new Map(data.partners.map((partner) => [String(partner.id), String(partner.name)]))
+      const tierNames = new Map(tiers.map((tier) => [String(tier.id), String(tier.name)]))
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.memberships.title',
         body: (_, frame) =>
           membershipsScreen(
             _,
-            frame,
+            {
+              ...frame,
+              chrome: {
+                section: _('loyalty_backend.menu.app'),
+                search: {
+                  name: 'q',
+                  value: '',
+                  placeholder: _('loyalty_backend.chrome.searchMembers'),
+                  keep: { ...(state ? { state } : {}), ...(tierId ? { tier: tierId } : {}) },
+                  facets: filterFacets(url, [
+                    { param: 'state', label: state ? _(`loyalty_backend.state.${state}`) : null },
+                    { param: 'tier', label: tierId ? (tierNames.get(tierId) ?? null) : null },
+                  ]),
+                  menus: [
+                    filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
+                      { value: 'active', label: _('loyalty_backend.state.active') },
+                      { value: 'dormant', label: _('loyalty_backend.state.dormant') },
+                    ]),
+                    filterMenu(
+                      url,
+                      'tier',
+                      _('loyalty_backend.field.tier'),
+                      'tier',
+                      tierId,
+                      tiers.map((tier) => ({ value: String(tier.id), label: String(tier.name) })),
+                    ),
+                  ],
+                },
+                pager: pager(url, page, memberships.length, Number(totals.total ?? 0)),
+              },
+            },
             memberships.map((membership) => ({
               ...membership,
               partnerName: names.get(String(membership.partnerId)),
             })),
+            totals,
             tiers,
             [
               { name: 'name', label: _('loyalty_backend.field.name'), required: true },
