@@ -6,6 +6,21 @@ import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 type Envelope<T> = { data: T; error: { code: string } | null }
 
+const hotelDate = (): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(new Date())
+    .replaceAll('/', '-')
+const hotelInstant = (dayOffset: number, hour: number): string => {
+  const instant = new Date(Date.parse(`${hotelDate()}T00:00:00.000Z`) + dayOffset * 86_400_000)
+  instant.setUTCHours(hour)
+  return instant.toISOString()
+}
+
 const boot = async (t: TestContext) => {
   const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
@@ -67,10 +82,10 @@ const boot = async (t: TestContext) => {
     roomTypeId: 'deluxe',
     partnerId: 'guest',
     bookingType: 'nightly',
-    checkIn: '2026-08-25T07:00:00.000Z',
-    checkOut: '2026-08-27T05:00:00.000Z',
+    checkIn: hotelInstant(0, 7),
+    checkOut: hotelInstant(2, 5),
     rate: '100',
-    createdAt: '2026-08-24T00:00:00.000Z',
+    createdAt: hotelInstant(-1, 0),
   })
   assert.equal(reservation.value.ok, true, JSON.stringify(reservation.value))
   const task = await fixture('hospitality_core.createCleaningTask', {

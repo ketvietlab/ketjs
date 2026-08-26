@@ -202,6 +202,7 @@ const templateSummary = (template: Row) => ({
   type: String(template.type),
   categoryId: template.categoryId == null ? null : String(template.categoryId),
   uomId: template.uomId == null ? null : String(template.uomId),
+  listPrice: String(template.listPrice),
   saleOk: template.saleOk === true,
   purchaseOk: template.purchaseOk === true,
   active: template.active !== false,
@@ -432,6 +433,22 @@ export const functions: Record<string, FnSpec> = {
         // ORDER BY of its own.
         uoms: mine(uoms).sort((a, b) => String(a.id).localeCompare(String(b.id))),
       }
+    },
+  }),
+
+  /** Company-scoped batch cost evidence for bounded operational catalogues. */
+  listVariantCosts: defineFn({
+    input: { productIds: 'json' },
+    output: { productId: 'id', standardPrice: 'decimal' },
+    effects: ['read:product.Cost'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const productIds = [
+        ...new Set(Array.isArray(args.productIds) ? args.productIds.map(String).slice(0, 2_000) : []),
+      ]
+      if (!productIds.length || !ctx.scope.company) return []
+      const C = ctx.table('product.Cost')
+      return ctx.db.all(from(C).where(eq(C.companyId, ctx.scope.company), inArray(C.productId, productIds)))
     },
   }),
 
