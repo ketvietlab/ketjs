@@ -207,6 +207,31 @@ Authored `.ts` and `.tsx` paths are mapped to `--out-dir`, `.build`, and then `d
 build-first error when an artifact is absent; production-style tests never execute TypeScript implicitly.
 Pass additional Node test arguments after `--`.
 
+## Repository CI groups
+
+Pull requests do not run the repository's entire test suite as one job. CI discovers
+the authored files under `test/` and divides them into domain groups such as
+`identity`, `catalog`, `orders`, and `hospitality`. A change below
+`packages/ketsuite/src/modules/<module>/` selects the group that owns that module;
+a changed test selects the group that owns the test. Documentation-only changes do
+not schedule test jobs.
+
+Shared framework, UI, build, workflow, or tooling changes select every group. An
+unknown code path also selects every group, so adding a new area cannot silently
+skip tests. Tests and modules are classified by their names rather than a maintained
+file list, so adding another test or bridge module does not require editing CI.
+
+Inspect or run the same groups locally:
+
+```bash
+npm run test:groups
+npm run test:group -- catalog
+```
+
+Each selected group runs once with SQLite and once with PostgreSQL. The `framework`
+SQLite job also starts MinIO for the live S3 contract tests. `npm test` and
+`npm run verify` remain the explicit full-suite commands for release verification.
+
 ## Smoke-test a function
 
 `ket call` uses the same HTTP and cookie behavior:

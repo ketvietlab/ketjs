@@ -73,7 +73,9 @@ npm run dev                                 # …restarted on every change
 npm run dev -- --all                       # HTTP + worker, still one tsx watcher
 npm run build:watch                         # rebuild dist for a linked consumer
 npm run design                              # the backend UI catalogue, for designers
-npm run verify                              # audit + typecheck + tests + type proof
+npm run verify                              # audit + typecheck + full tests + type proof
+npm run test:groups                         # list auto-discovered CI test groups
+npm run test:group -- catalog               # build and run one domain group
 npm run test:one -- test/e2e.test.ts        # one emitted test file
 npm run bench:modules                       # custom module catalogue + selected closure
 npm run bench:queue                         # queue across many physical databases
