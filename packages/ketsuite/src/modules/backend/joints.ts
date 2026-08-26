@@ -11,6 +11,8 @@ import type { JointDef } from '@ketvietlab/ketjs'
  * `props` says what a fill receives, and receives nothing else.
  */
 export const joints: Record<string, JointDef> = {
+  /** Behaviour shared by every backend page, even when the screen has no topbar. */
+  runtime: { multiple: true },
   /** Function-backed relational selector; owning screens supply model-specific capabilities. */
   'relation.select': { props: { id: 'id', config: 'json' } },
   /**

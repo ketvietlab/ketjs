@@ -32,7 +32,8 @@ from the domain contract maps one to one.
 flowchart LR
   subgraph Shared["Tenant-wide catalogue"]
     C["Category<br/>self-referencing tree"]
-    T["Template"]
+    T["Template<br/>brand + origin"]
+    B["Brand"]
     P["Product<br/>one sellable combination"]
     A["Attribute"]
     AV["AttributeValue"]
@@ -42,6 +43,7 @@ flowchart LR
 
     C -->|parent| C
     T -->|category| C
+    T -->|brand| B
     T -->|has many| P
     T -->|has many| TAL
     A -->|has many| AV
@@ -116,6 +118,16 @@ values rather than stored, and `listVariants` and `getVariant` return it alongsi
 caller names it explicitly: casting it on every edit meant setting a barcode on a generated variant
 replaced its combination with a manual key and silently unhooked it from its values.
 
+A template with no configured variant combination still owns one implicit `Product` whose
+`combinationKey` is empty. Product-level SKU and barcode edit that default variant. The admin hides it
+from the variant table because it is an implementation detail, not a choice the reader can sell. As
+soon as real combinations exist, the default variant becomes inactive and the template form keeps its
+SKU and barcode read-only with an explanation; identity then belongs on each visible variant.
+
+Brand and origin are template fields. Brand is a managed relation, so another module can reuse the
+catalogue without copying brand names into free text; origin remains text because no country-of-origin
+catalogue is required by the product domain.
+
 ## Units of measure
 
 A template has one default unit. `addProductUom` adds an alternate packaging unit for a variant, and
@@ -160,6 +172,11 @@ back button and a shared link keep their meaning, and nothing holds state betwee
 Every mutating route refuses a cross-origin POST, and the two detail screens support a partial save
 that replaces the record header and body while chatter, activities and the save controller keep their
 DOM and their local state.
+
+The template detail has three tabs only: general, attributes and variants, and images. Secondary or
+destructive record actions such as archive live in the header's **More** menu instead of consuming a
+form section. Variant rows are paged by ten; variant-image rows are paged by 25. On desktop record
+forms use inline labels and controls, while the same fields stack on narrow screens.
 
 ## Verification
 
