@@ -189,7 +189,7 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   })
   assert.equal(productCreatePage.status, 200)
   const productCreateHtml = await productCreatePage.text()
-  assert.match(productCreateHtml, /data-ui="record-workspace"/)
+  assert.match(productCreateHtml, /data-ui="form-page"/)
   assert.match(productCreateHtml, /id="product-create-form"/)
   assert.match(productCreateHtml, /data-scope="product-create"/)
   assert.equal((productCreateHtml.match(/name="type"/g) ?? []).length, 2)
@@ -198,6 +198,19 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   assert.match(productCreateHtml, /name="purchaseOk"[^>]*form="product-create-form"/)
   assert.match(productCreateHtml, /name="isStorable"[^>]*form="product-create-form"/)
   assert.doesNotMatch(productCreateHtml, /data-island="mail\.chatter"/)
+
+  const favoritePage = await e2e.client.get(
+    '/admin/product/templates/favorites/new?returnTo=%2Fadmin%2Fproduct%2Ftemplates%3Fq%3DAO&lang=vi',
+    { headers: { accept: 'text/html' } },
+  )
+  assert.equal(favoritePage.status, 200)
+  const favoriteHtml = await favoritePage.text()
+  assert.match(favoriteHtml, /data-ui="form-page"/)
+  assert.match(favoriteHtml, /id="product-favorite-create-form"/)
+  assert.match(favoriteHtml, /name="returnTo"[^>]*value="\/admin\/product\/templates\?q=AO"/)
+  assert.match(favoriteHtml, /name="name"[^>]*required/)
+  assert.match(favoriteHtml, /name="default"[^>]*type="checkbox"|type="checkbox"[^>]*name="default"/)
+  assert.doesNotMatch(favoriteHtml, /data-island="mail\.chatter"/)
 
   const invalidProductPage = await e2e.client.post(
     '/admin/product/templates/new?lang=vi',

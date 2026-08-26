@@ -134,9 +134,9 @@ rendering from `screens.tsx` to `screens/shared.tsx`, then remove the old file.
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
 | PROD-01 | done | Product list | `/admin/product/templates` | `screens/list.tsx::productsScreen` | ListPage | no | — |
-| PROD-02 | ready | Save favorite filter | `/admin/product/templates/favorites/new` | `screens/favorite.tsx::favoriteScreen` | FormPage | no | — |
-| PROD-03 | ready | Product create | `/admin/product/templates/new` | `create-screen.tsx::newProductScreen` | FormPage | no | — |
-| PROD-04 | ready | Attributes and values | `/admin/product/attributes` | `attributes-screen.tsx::attributesScreen` | Specialized | no | — |
+| PROD-02 | done | Save favorite filter | `/admin/product/templates/favorites/new` | `screens/favorite.tsx::favoriteScreen` | FormPage | no | Huygens |
+| PROD-03 | done | Product create | `/admin/product/templates/new` | `screens/create.tsx::newProductScreen` | FormPage | no | Kant |
+| PROD-04 | keep | Attributes and values | `/admin/product/attributes` | `screens/attributes.tsx::attributesScreen` | Specialized | no | Curie |
 | PROD-05 | done | Product detail | `/admin/product/templates/{id}` | `screens/detail.tsx::productDetailScreen` | FormPage | `product_mail_backend` | — |
 | PROD-06 | done | Product variant detail | `/admin/product/templates/{id}/variants/{variantId}` | `screens/variant.tsx::variantScreen` | FormPage | `product_variant_mail_backend` | — |
 
@@ -576,3 +576,30 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 5 replenishment create evidence](/assets/inventory-replenishment/replenishment-create-browser-skill.png)
 
 ![Wave 5 replenishment mobile evidence](/assets/inventory-replenishment/replenishment-create-mobile-browser-skill.png)
+
+### Wave 6 — PROD-02, PROD-03 and PROD-04
+
+- Save Favorite is now a compact `FormPage` with an external Save action, locale-aware cancel link and
+  preserved `returnTo` list state. It retains the name/default controls and validation without adding
+  record-only Chatter.
+- Product Create is now a public `FormPage`: the three commercial/stock toggles remain visible in header
+  metadata, all seven product fields and relation controls preserve their order and defaults, and stock-only
+  controls still disappear when Stock is disabled.
+- Attributes and Values remains Specialized. Its parent attribute-create form, configured attribute cards
+  and one child value form per card are a single configuration workflow; splitting them into list/form
+  pages would hide the relationship the operator is editing. Both root-level renderers moved into
+  `product_backend/screens/` and routes now consume the barrel.
+- Browser evidence confirms both FormPages and the specialized Attributes surface have no Chatter or
+  horizontal overflow. At 390 px, Product Create retains all seven fields, all three toggles and a control
+  column wider than its labels.
+- Validation scope: six focused renderer tests, three affected Product i18n tests, the owning Product HTTP
+  scenario, three targeted browser E2E flows, Biome on changed files, build/typecheck, and Astro docs
+  validation. Unrelated domain groups were not rerun in this wave.
+
+![Wave 6 favorite FormPage evidence](/assets/product-favorite/product-favorite-browser-skill.png)
+
+![Wave 6 product create evidence](/assets/product-create/product-create-browser-skill.png)
+
+![Wave 6 product create mobile evidence](/assets/product-create/product-create-mobile-browser-skill.png)
+
+![Wave 6 product attributes specialized evidence](/assets/product-attributes/product-attributes-browser-skill.png)

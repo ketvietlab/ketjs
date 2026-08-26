@@ -1,3 +1,5 @@
+export { attributesScreen } from './attributes.tsx'
+export { newProductScreen, type ProductCreateOptions } from './create.tsx'
 export {
   productsScreen,
   templateColumns,

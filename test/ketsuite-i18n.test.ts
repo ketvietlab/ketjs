@@ -29,7 +29,7 @@ import {
   uom,
   user,
 } from '@ketvietlab/ketsuite'
-import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/attributes-screen.tsx'
+import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/screens/attributes.tsx'
 import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens.tsx'
 import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens/index.ts'
 

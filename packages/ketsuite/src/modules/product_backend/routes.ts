@@ -19,7 +19,9 @@ import type {
   ServeContext,
 } from '@ketvietlab/ketjs'
 import {
+  attributesScreen,
   favoriteScreen,
+  newProductScreen,
   PRODUCT_DETAIL_TABS,
   productDetailScreen,
   productsScreen,
@@ -27,8 +29,6 @@ import {
   variantScreen,
   VIEWS,
 } from './screens/index.ts'
-import { attributesScreen } from './attributes-screen.tsx'
-import { newProductScreen } from './create-screen.tsx'
 import {
   attributeControl,
   attributeValuesControl,

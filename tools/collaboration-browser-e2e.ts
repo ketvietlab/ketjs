@@ -306,6 +306,11 @@ try {
       ready: `document.querySelector('[data-ui="chatter"][data-state="ready"]') && document.querySelectorAll('[data-ui="chatter-message"]').length >= 2 && document.querySelector('[data-ui="activity-record"][data-state="ready"]') && document.querySelectorAll('[data-ui="activity-item"]').length >= 1`,
     },
     {
+      name: 'product-favorite',
+      path: '/admin/product/templates/favorites/new?returnTo=%2Fadmin%2Fproduct%2Ftemplates%3Fq%3DOPS&lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#product-favorite-create-form')`,
+    },
+    {
       name: 'product-attributes',
       path: '/admin/product/attributes?lang=vi',
       ready: `document.querySelector('#product-attribute-create') && document.querySelectorAll('[data-ui="content-card"]').length >= 3`,
@@ -1450,13 +1455,36 @@ try {
       )
       assert.equal(await evaluate(cdp, `document.querySelectorAll('[data-ui="content-card"]').length`), 4)
     }
+    if (screen.name === 'product-favorite') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            fields: document.querySelectorAll('#product-favorite-create-form [data-ui="form-field"]').length,
+            returnTo: document.querySelector('#product-favorite-create-form [name="returnTo"]')?.value,
+            cancelPath: document.querySelector('[data-ui="form-page-actions"] a')?.getAttribute('href'),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          formPage: true,
+          fields: 2,
+          returnTo: '/admin/product/templates?q=OPS',
+          cancelPath: '/admin/product/templates?q=OPS&lang=vi',
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+    }
     if (screen.name === 'product-create') {
       assert.deepEqual(
         await evaluate(
           cdp,
           `({
             typeRadios: document.querySelectorAll('#product-create-form [name="type"][type="radio"]').length,
-            headerToggles: document.querySelectorAll('[data-ui="record-badges"] [data-ui="record-toggle-input"][form="product-create-form"]').length,
+            headerToggles: document.querySelectorAll('[data-ui="form-page-meta"] [data-ui="record-toggle-input"][form="product-create-form"]').length,
             gridRowsAtLeast28: Array.from(document.querySelectorAll('#product-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth

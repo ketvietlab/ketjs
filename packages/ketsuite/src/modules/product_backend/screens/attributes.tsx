@@ -1,6 +1,6 @@
+import type { Translator } from '@ketvietlab/ketjs'
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   CardGrid,
@@ -13,10 +13,10 @@ import {
   Section,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { Frame } from '../../ui/index.ts'
-import { localized } from '../backend/screen.ts'
-import { selectionLabel as resolveSelection } from '../backend/screen.ts'
+} from '../../../ui/index.ts'
+import type { Frame } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
+import { selectionLabel as resolveSelection } from '../../backend/screen.ts'
 
 type AttributeRow = Record<string, unknown>
 
