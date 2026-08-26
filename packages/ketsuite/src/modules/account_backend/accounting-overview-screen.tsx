@@ -303,8 +303,9 @@ export const accountingOverviewScreen = (
                     body={stack([
                       <Tabs label={_('account_backend.overview.period')} items={presets(_, options)} wrap />,
                       // A year is offered even when the ledger covers only one:
-                      // "2026" is the whole year, which is a different question
-                      // from "this month" and the only way to ask it in one click.
+                      // 2026 means the whole year, which asks something the
+                      // month in progress does not, and there is no other way
+                      // to ask it in one click.
                       <Tabs label={_('account_backend.overview.byYear')} items={years(_, options)} wrap />,
                       // The date fields belong to a year and appear with one.
                       //

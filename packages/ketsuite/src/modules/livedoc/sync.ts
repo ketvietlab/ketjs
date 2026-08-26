@@ -44,8 +44,8 @@ type LiveDoc = {
   /**
    * Whether the durable snapshot has been read into this document.
    *
-   * Separate from "the registry has an entry", which is what hydration used to
-   * test. `getOrCreateLive` publishes the entry before the snapshot is
+   * Separate from whether the registry has an entry, which is what hydration
+   * used to test. `getOrCreateLive` publishes the entry before the snapshot is
    * fetched, so a storage read that failed — or one still in flight — left a
    * blank document that every later caller treated as fully loaded. The next
    * push then merged into nothing and flattened the result over the real
