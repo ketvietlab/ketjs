@@ -90,19 +90,19 @@ unrouted legacy exports from the old `screens.tsx` only after confirming the rou
 | SALE-01 | keep | Sales overview | `/admin/sales` | `screens/overview.tsx::overviewScreen` | Specialized | no | Kant |
 | SALE-02 | done | Quotations | `/admin/sales/quotations`, `/admin/sales/quotations/new` | `screens/quotations-list.tsx`, `screens/quotation-create.tsx` | Split | list/new: no | Kant |
 | SALE-03 | done | Sales orders | `/admin/sales/orders` | `screens/sales-orders-list.tsx::salesOrdersListScreen` | ListPage | no | Kant |
-| SALE-04 | ready | Quotation/order detail | `/admin/sales/quotations/{id}`, `/admin/sales/orders/{id}` | `orderDetailScreen` | FormPage | `sale_mail_backend` | — |
+| SALE-04 | done | Quotation/order detail | `/admin/sales/quotations/{id}`, `/admin/sales/orders/{id}` | `screens/order-detail.tsx::orderDetailScreen` | FormPage | `sale_mail_backend` | Kant |
 | SALE-05 | ready | Invoicing policies | `/admin/sales/invoicing-policies` | `invoicingPoliciesScreen` | Split | no | — |
 
 ### Purchase lane
 
-Structure debt: `purchase_backend/screens.tsx` is monolithic. Each row moves its renderer into
-`purchase_backend/screens/`; shared labels and rejection/setup notices belong in `screens/shared.tsx`.
+Structure debt resolved in Wave 10: `purchase_backend/screens.tsx` was removed after every routed renderer
+moved into `purchase_backend/screens/`; shared labels, list columns and rejection/setup notices live in shared leaves.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
 | PUR-01 | keep | Purchase overview | `/admin/purchase` | `screens/overview.tsx::purchaseOverviewScreen` | Specialized | no | Curie |
-| PUR-02 | ready | Requests for quotation | `/admin/purchase/rfqs` | `ordersScreen` (RFQ variant) | Split | no | — |
-| PUR-03 | ready | Purchase orders | `/admin/purchase/orders` | `ordersScreen` (order variant) | ListPage | no | — |
+| PUR-02 | done | Requests for quotation | `/admin/purchase/rfqs`, `/admin/purchase/rfqs/new` | `screens/rfqs-list.tsx`, `screens/rfq-create.tsx` | Split | no | Curie |
+| PUR-03 | done | Purchase orders | `/admin/purchase/orders` | `screens/purchase-orders-list.tsx::purchaseOrdersListScreen` | ListPage | no | Curie |
 | PUR-04 | done | RFQ/purchase-order detail | `/admin/purchase/rfqs/{id}`, `/admin/purchase/orders/{id}` | `screens/order-detail.tsx::purchaseOrderDetailScreen` | FormPage | bridge missing | Curie |
 | PUR-05 | done | Vendor pricelists | `/admin/purchase/vendor-pricelists`, `/admin/purchase/vendor-pricelists/new` | `screens/vendor-pricelists-list.tsx`, `screens/vendor-pricelist-create.tsx` | Split | no | Curie |
 
@@ -160,7 +160,7 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 | CRM-01 | keep | Pipeline | `/admin/crm/pipeline` | `screens/pipeline.tsx::pipelineScreen` | Specialized | Huygens |
 | CRM-02 | done | Cases list/create | `/admin/crm/cases`, `/admin/crm/cases/new` | `screens/cases-list.tsx`, `screens/case-create.tsx` | Split | Huygens |
 | CRM-03 | keep | Case detail | `/admin/crm/cases/{id}` | `screens/case-detail.tsx::caseDetailScreen`, `permissionScreen` | Specialized | Huygens |
-| CRM-04 | ready | Activity planner | `/admin/crm/activities` | `plannerScreen` | Specialized | — |
+| CRM-04 | keep | Activity planner | `/admin/crm/activities` | `screens/activity-planner.tsx::plannerScreen` | Specialized | Huygens |
 | CRM-05 | ready | Leaderboard | `/admin/crm/leaderboard` | `leaderboardScreen` | ListPage | — |
 | CRM-06 | ready | CRM configuration | `/admin/crm/configuration` | `configurationScreen` | Specialized | — |
 
@@ -707,3 +707,44 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 9 Purchase RFQ detail evidence](/assets/purchase-order-detail/purchase-rfq-detail-browser-skill.png)
 
 ![Wave 9 Purchase RFQ detail mobile evidence](/assets/purchase-order-detail/purchase-rfq-detail-mobile-browser-skill.png)
+
+### Wave 10 — CRM-04, SALE-04, PUR-02 and PUR-03
+
+- CRM Activity Planner moved to `screens/activity-planner.tsx` and remains Specialized. The mine/plans/calendar
+  tabs, schedule controls, action tables and locale-aware links are one planning workspace rather than a
+  collection or record form.
+- Sales quotation/order detail moved to `screens/order-detail.tsx` and now uses the public `FormPage` with the
+  operational editor in the 2/3 body and `sale_mail_backend` Chatter/activity in the 1/3 rail. All workflow,
+  line, invoice, loyalty, print, fragment and validation behavior remains intact.
+- Visual QA reproduced the missing space when the FormPage rail wraps. The shared design-system breakpoint now
+  adds `row-gap: var(--kv-space-5)`; browser measurements at 900 px confirm a one-column layout, 20 px gap and
+  no horizontal overflow between the business body and Chatter.
+- Purchase RFQs are now a dedicated `ListPage` plus `/new` `FormPage`; Purchase Orders is a dedicated
+  `ListPage`. Search, state/invoice filters, grouping, paging, vendor hydration, locale and backward-compatible
+  safe POST/redirect behavior remain. The final legacy `purchase_backend/screens.tsx` was removed.
+- Browser QA created a real RFQ through `/new` and verified RFQ list/create, Purchase Orders empty state,
+  CRM Planner and Sales detail at desktop and 390 px. No surface overflows horizontally.
+- Because this wave changes shared design-system CSS, validation expanded beyond module tests: the complete
+  local suite passed with 1,170 tests (1,142 passed, 28 skipped, 0 failed), together with Biome, build/typecheck
+  and Astro docs validation. The full rerun also corrected a stale relation-select test that still targeted the
+  old inline Sales/Purchase create forms.
+
+![Wave 10 Sales detail evidence](/assets/sales-order-detail/sale-order-detail-browser-skill.png)
+
+![Wave 10 Sales detail wrapped Chatter evidence](/assets/sales-order-detail/sale-order-detail-wrap-gap-browser-skill.png)
+
+![Wave 10 Sales detail mobile evidence](/assets/sales-order-detail/sale-order-detail-mobile-browser-skill.png)
+
+![Wave 10 CRM Activity Planner evidence](/assets/crm-activity-planner/crm-activity-planner-browser-skill.png)
+
+![Wave 10 CRM Activity Planner mobile evidence](/assets/crm-activity-planner/crm-activity-planner-mobile-browser-skill.png)
+
+![Wave 10 Purchase RFQ list evidence](/assets/purchase-rfq-list-create/purchase-rfq-list-browser-skill.png)
+
+![Wave 10 Purchase RFQ list mobile evidence](/assets/purchase-rfq-list-create/purchase-rfq-list-mobile-browser-skill.png)
+
+![Wave 10 Purchase RFQ create evidence](/assets/purchase-rfq-list-create/purchase-rfq-create-browser-skill.png)
+
+![Wave 10 Purchase RFQ create mobile evidence](/assets/purchase-rfq-list-create/purchase-rfq-create-mobile-browser-skill.png)
+
+![Wave 10 Purchase Orders evidence](/assets/purchase-rfq-list-create/purchase-orders-list-browser-skill.png)

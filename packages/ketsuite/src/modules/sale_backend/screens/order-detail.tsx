@@ -7,23 +7,49 @@ import {
   emptyState,
   formatMoney,
   FormCluster,
-  Framed,
+  FormPage,
   icon,
+  inline,
   linkButton,
   RecordActions,
   RecordForm,
-  RecordWorkspace,
   Section,
+  shell,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { ActionVariant, FormField, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.tsx'
+} from '../../../ui/index.ts'
+import type { ActionVariant, FormField, Frame } from '../../../ui/index.ts'
+import { labelOf } from '../screens.tsx'
 
-type AnyRow = Record<string, unknown>
+type SaleDetailRow = Record<string, unknown>
 
-export type SaleOrderDetailOptions = {
-  order: AnyRow
+export type SaleOrderDetail = SaleDetailRow & {
+  id?: unknown
+  name?: unknown
+  state?: unknown
+  locked?: unknown
+  partnerId?: unknown
+  partnerName?: unknown
+  dateOrder?: unknown
+  validityDate?: unknown
+  clientOrderRef?: unknown
+  warehouseId?: unknown
+  warehouseName?: unknown
+  pricelistName?: unknown
+  paymentTermName?: unknown
+  notes?: unknown
+  invoiceStatus?: unknown
+  amountUntaxed?: unknown
+  amountTax?: unknown
+  amountTotal?: unknown
+  currency?: unknown
+  lines?: SaleDetailRow[]
+  moves?: SaleDetailRow[]
+  invoices?: SaleDetailRow[]
+}
+
+export type SaleOrderDetailScreenOptions = {
+  order: SaleOrderDetail
   action: string
   lineFields: FormField[]
   invoiceFields: FormField[]
@@ -60,7 +86,7 @@ const ActionForm = ({
   />
 )
 
-const actionForms = (_: Translator, order: AnyRow, action: string): TemplateResult[] => {
+const actionForms = (_: Translator, order: SaleOrderDetail, action: string): TemplateResult[] => {
   const state = String(order.state)
   const actions: TemplateResult[] = []
   if (state === 'draft')
@@ -89,7 +115,6 @@ const actionForms = (_: Translator, order: AnyRow, action: string): TemplateResu
       />,
     )
   }
-  // A cancelled order rendered no actions at all, so one mis-click was final.
   if (state === 'cancel')
     actions.push(
       <ActionForm action={action} value="reset" label={_('sale_backend.action.reset')} variant="primary" />,
@@ -106,21 +131,14 @@ const actionForms = (_: Translator, order: AnyRow, action: string): TemplateResu
   return actions
 }
 
-export const orderDetailScreen = (
+const orderLineTable = (
   _: Translator,
-  options: SaleOrderDetailOptions,
-  frame: Frame,
-  partial = false,
+  options: SaleOrderDetailScreenOptions,
+  editable: boolean,
 ): TemplateResult => {
   const { order } = options
-  const state = String(order.state)
-  const lines = (order.lines as AnyRow[] | undefined) ?? []
-  const moves = (order.moves as AnyRow[] | undefined) ?? []
-  const invoices = (order.invoices as AnyRow[] | undefined) ?? []
-  const actions = actionForms(_, order, options.action)
-  // Lines were add-only: a wrong product could not be taken off a quotation.
-  const editable = (state === 'draft' || state === 'sent') && !order.locked
-  const lineTable = lines.length
+  const lines = order.lines ?? []
+  return lines.length
     ? dataTable(_, {
         rows: lines,
         id: (row) => String(row.id),
@@ -172,7 +190,7 @@ export const orderDetailScreen = (
                   key: 'actions',
                   label: _('sale_backend.field.actions'),
                   align: 'end' as const,
-                  cell: (row: AnyRow) => (
+                  cell: (row: SaleDetailRow) => (
                     <RecordActions
                       action={options.action}
                       hidden={{ action: 'remove-line', lineId: String(row.id) }}
@@ -193,107 +211,182 @@ export const orderDetailScreen = (
     : emptyState(_('sale_backend.lines.empty'), _('sale_backend.lines.emptyHint'), {
         icon: icon('shopping-bag'),
       })
+}
 
-  const workspace = (
-    <RecordWorkspace
-      kicker={state === 'sale' ? _('sale_backend.order.kicker') : _('sale_backend.quotation.kicker')}
+const orderInformation = (_: Translator, order: SaleOrderDetail): TemplateResult => (
+  <DefinitionList
+    title={_('sale_backend.order.information.title')}
+    items={[
+      {
+        key: 'customer',
+        term: _('sale_backend.field.customer'),
+        value: String(order.partnerName ?? order.partnerId),
+      },
+      {
+        key: 'date',
+        term: _('sale_backend.field.dateOrder'),
+        value: String(order.dateOrder ?? '').slice(0, 10) || '—',
+      },
+      {
+        key: 'validity',
+        term: _('sale_backend.field.validityDate'),
+        value: String(order.validityDate ?? '').slice(0, 10) || '—',
+      },
+      {
+        key: 'reference',
+        term: _('sale_backend.field.clientOrderRef'),
+        value: String(order.clientOrderRef ?? '—'),
+      },
+      {
+        key: 'warehouse',
+        term: _('sale_backend.field.warehouse'),
+        value: String(order.warehouseName ?? order.warehouseId),
+      },
+      {
+        key: 'pricelist',
+        term: _('sale_backend.field.pricelist'),
+        value: String(order.pricelistName ?? '—'),
+      },
+      {
+        key: 'payment-term',
+        term: _('sale_backend.field.paymentTerm'),
+        value: String(order.paymentTermName ?? '—'),
+      },
+      {
+        key: 'notes',
+        term: _('sale_backend.field.notes'),
+        value: String(order.notes ?? '—'),
+      },
+    ]}
+  />
+)
+
+const deliveryTable = (_: Translator, rows: SaleDetailRow[], locale: string): TemplateResult =>
+  dataTable(_, {
+    rows,
+    id: (row) => String(row.id),
+    columns: [
+      {
+        key: 'name',
+        label: _('sale_backend.field.name'),
+        cell: (row) =>
+          linkButton({
+            label: String(row.origin ?? row.id),
+            href: `/admin/stock/transfers/${String(row.pickingId)}${locale}`,
+            variant: 'tertiary',
+          }),
+        priority: 'primary',
+      },
+      {
+        key: 'state',
+        label: _('sale_backend.field.state'),
+        cell: (row) => String(row.state),
+      },
+      {
+        key: 'quantity',
+        label: _('sale_backend.field.delivered'),
+        cell: (row) => String(row.quantity),
+        align: 'end',
+        kind: 'number',
+      },
+    ],
+  })
+
+const invoiceTable = (
+  _: Translator,
+  rows: SaleDetailRow[],
+  orderCurrency: unknown,
+  locale: string,
+): TemplateResult =>
+  dataTable(_, {
+    rows,
+    id: (row) => String(row.id),
+    columns: [
+      {
+        key: 'name',
+        label: _('sale_backend.field.name'),
+        cell: (row) =>
+          linkButton({
+            label: String(row.name),
+            href: `/admin/accounting/customer-invoices/${String(row.id)}${locale}`,
+            variant: 'tertiary',
+          }),
+        priority: 'primary',
+      },
+      {
+        key: 'state',
+        label: _('sale_backend.field.state'),
+        cell: (row) => String(row.state),
+      },
+      {
+        key: 'total',
+        label: _('sale_backend.field.amountTotal'),
+        cell: (row) => formatMoney(_, row.amountTotal, row.currency ?? orderCurrency),
+        align: 'end',
+        kind: 'currency',
+      },
+    ],
+  })
+
+export const orderDetailScreen = (
+  _: Translator,
+  options: SaleOrderDetailScreenOptions,
+  frame: Frame,
+  partial = false,
+): TemplateResult => {
+  const { order } = options
+  const state = String(order.state)
+  const editable = (state === 'draft' || state === 'sent') && !order.locked
+  const moves = order.moves ?? []
+  const invoices = order.invoices ?? []
+  const forms: JSXChild[] = [
+    ...actionForms(_, order, options.action),
+    ...(options.printActions === undefined ? [] : [options.printActions]),
+  ]
+  const documentKind = state === 'sale' ? _('sale_backend.order.kicker') : _('sale_backend.quotation.kicker')
+  const page = (
+    <FormPage
+      scope="sale-order-form-page"
       title={String(order.name)}
-      subtitle={String(order.partnerName ?? order.partnerId)}
-      imageFallback={icon('shopping-bag')}
-      badges={[
+      description={`${documentKind} · ${String(order.partnerName ?? order.partnerId)}`}
+      status={inline([
         badge(labelOf(_, 'state', order.state), stateTone(state), state),
         ...(order.locked ? [badge(_('sale_backend.order.locked'), 'warning', 'locked')] : []),
-      ]}
-      summary={[
-        {
-          id: 'untaxed',
-          label: _('sale_backend.field.amountUntaxed'),
-          value: formatMoney(_, order.amountUntaxed, order.currency),
-        },
-        {
-          id: 'tax',
-          label: _('sale_backend.field.amountTax'),
-          value: formatMoney(_, order.amountTax, order.currency),
-        },
-        {
-          id: 'total',
-          label: _('sale_backend.field.amountTotal'),
-          value: formatMoney(_, order.amountTotal, order.currency),
-        },
-        {
-          id: 'invoice',
-          label: _('sale_backend.field.invoiceStatus'),
-          value: labelOf(_, 'invoiceStatus', order.invoiceStatus),
-        },
-      ]}
+      ])}
+      actions={
+        forms.length ? <FormCluster forms={forms} label={_('sale_backend.order.actions.label')} /> : undefined
+      }
+      meta={inline([
+        badge(
+          `${_('sale_backend.field.amountUntaxed')}: ${formatMoney(_, order.amountUntaxed, order.currency)}`,
+          'neutral',
+        ),
+        badge(
+          `${_('sale_backend.field.amountTax')}: ${formatMoney(_, order.amountTax, order.currency)}`,
+          'neutral',
+        ),
+        badge(
+          `${_('sale_backend.field.amountTotal')}: ${formatMoney(_, order.amountTotal, order.currency)}`,
+          'info',
+        ),
+        badge(
+          `${_('sale_backend.field.invoiceStatus')}: ${labelOf(_, 'invoiceStatus', order.invoiceStatus)}`,
+          order.invoiceStatus === 'to invoice' ? 'warning' : 'neutral',
+        ),
+      ])}
       controller={options.editor}
       body={stack(
         [
-          actions.length ? (
-            <FormCluster forms={actions} label={_('sale_backend.order.actions.label')} />
-          ) : null,
-          options.printActions === undefined ? null : <Surface body={options.printActions} />,
           options.integration,
           <Section
             title={_('sale_backend.order.information.title')}
             description={_('sale_backend.order.information.hint')}
-            body={
-              <Surface
-                padding="compact"
-                body={
-                  <DefinitionList
-                    title={_('sale_backend.order.information.title')}
-                    items={[
-                      {
-                        key: 'customer',
-                        term: _('sale_backend.field.customer'),
-                        value: String(order.partnerName ?? order.partnerId),
-                      },
-                      {
-                        key: 'date',
-                        term: _('sale_backend.field.dateOrder'),
-                        value: String(order.dateOrder ?? '').slice(0, 10) || '—',
-                      },
-                      {
-                        key: 'validity',
-                        term: _('sale_backend.field.validityDate'),
-                        value: String(order.validityDate ?? '').slice(0, 10) || '—',
-                      },
-                      {
-                        key: 'reference',
-                        term: _('sale_backend.field.clientOrderRef'),
-                        value: String(order.clientOrderRef ?? '—'),
-                      },
-                      {
-                        key: 'warehouse',
-                        term: _('sale_backend.field.warehouse'),
-                        value: String(order.warehouseName ?? order.warehouseId),
-                      },
-                      {
-                        key: 'pricelist',
-                        term: _('sale_backend.field.pricelist'),
-                        value: String(order.pricelistName ?? '—'),
-                      },
-                      {
-                        key: 'payment-term',
-                        term: _('sale_backend.field.paymentTerm'),
-                        value: String(order.paymentTermName ?? '—'),
-                      },
-                      {
-                        key: 'notes',
-                        term: _('sale_backend.field.notes'),
-                        value: String(order.notes ?? '—'),
-                      },
-                    ]}
-                  />
-                }
-              />
-            }
+            body={<Surface padding="compact" body={orderInformation(_, order)} />}
           />,
           <Section
             title={_('sale_backend.lines.title')}
             description={_('sale_backend.lines.hint')}
-            body={lineTable}
+            body={orderLineTable(_, options, editable)}
           />,
           editable ? (
             <Section
@@ -344,69 +437,13 @@ export const orderDetailScreen = (
           moves.length ? (
             <Section
               title={_('sale_backend.deliveries.title')}
-              body={dataTable(_, {
-                rows: moves,
-                id: (row) => String(row.id),
-                columns: [
-                  {
-                    key: 'name',
-                    label: _('sale_backend.field.name'),
-                    cell: (row) =>
-                      linkButton({
-                        label: String(row.origin ?? row.id),
-                        href: `/admin/stock/transfers/${String(row.pickingId)}${options.locale ?? ''}`,
-                        variant: 'tertiary',
-                      }),
-                    priority: 'primary',
-                  },
-                  {
-                    key: 'state',
-                    label: _('sale_backend.field.state'),
-                    cell: (row) => String(row.state),
-                  },
-                  {
-                    key: 'quantity',
-                    label: _('sale_backend.field.delivered'),
-                    cell: (row) => String(row.quantity),
-                    align: 'end',
-                    kind: 'number',
-                  },
-                ],
-              })}
+              body={deliveryTable(_, moves, options.locale ?? '')}
             />
           ) : null,
           invoices.length ? (
             <Section
               title={_('sale_backend.invoices.title')}
-              body={dataTable(_, {
-                rows: invoices,
-                id: (row) => String(row.id),
-                columns: [
-                  {
-                    key: 'name',
-                    label: _('sale_backend.field.name'),
-                    cell: (row) =>
-                      linkButton({
-                        label: String(row.name),
-                        href: `/admin/accounting/customer-invoices/${String(row.id)}${options.locale ?? ''}`,
-                        variant: 'tertiary',
-                      }),
-                    priority: 'primary',
-                  },
-                  {
-                    key: 'state',
-                    label: _('sale_backend.field.state'),
-                    cell: (row) => String(row.state),
-                  },
-                  {
-                    key: 'total',
-                    label: _('sale_backend.field.amountTotal'),
-                    cell: (row) => formatMoney(_, row.amountTotal, row.currency ?? order.currency),
-                    align: 'end',
-                    kind: 'currency',
-                  },
-                ],
-              })}
+              body={invoiceTable(_, invoices, order.currency, options.locale ?? '')}
             />
           ) : null,
         ],
@@ -421,9 +458,5 @@ export const orderDetailScreen = (
       }}
     />
   )
-  return partial ? (
-    workspace
-  ) : (
-    <Framed translator={_} title={_('sale_backend.detail.title')} frame={frame} body={workspace} />
-  )
+  return partial ? page : shell(_, String(order.name), page, { ...frame, topbar: false, titled: false })
 }

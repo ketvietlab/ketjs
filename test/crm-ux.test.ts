@@ -274,7 +274,13 @@ test('crm backend: an activity can be completed from the case and from the plann
   assert.match(caseHtml, /name="action" value="completeActivity"/)
 
   const planner = await app.client.get('/admin/crm/activities?tab=mine&lang=en')
-  assert.match(await planner.text(), /name="action" value="complete"/)
+  const plannerHtml = await planner.text()
+  assert.match(plannerHtml, /data-ui="record-workspace"/)
+  assert.doesNotMatch(plannerHtml, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(plannerHtml, /name="action" value="complete"/)
+  assert.match(plannerHtml, /action="\/admin\/crm\/activities\?tab=mine&amp;lang=en"/)
+  assert.match(plannerHtml, /href="\/admin\/crm\/activities\?tab=calendar&amp;lang=en"/)
+  assert.match(plannerHtml, /href="\/admin\/crm\/cases\/follow-up\?lang=en"/)
 
   const completed = await app.client.post(
     '/admin/crm/cases/follow-up?tab=activities&lang=en',

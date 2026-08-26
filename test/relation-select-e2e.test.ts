@@ -34,8 +34,8 @@ test('relational select HTTP: empty partner relations keep create flows availabl
   const e2e = await boot(t)
   for (const [path, identity, title] of [
     ['/admin/partner/partners/new', 'partner-parent-new', 'Quản lý tổ chức'],
-    ['/admin/sales/quotations', 'sale-customer', 'Quản lý khách hàng'],
-    ['/admin/purchase/rfqs', 'purchase-vendor', 'Quản lý nhà cung cấp'],
+    ['/admin/sales/quotations/new', 'sale-customer', 'Quản lý khách hàng'],
+    ['/admin/purchase/rfqs/new', 'purchase-vendor', 'Quản lý nhà cung cấp'],
   ]) {
     const response = await e2e.client.get(path)
     assert.equal(response.status, 200, path)
@@ -49,7 +49,7 @@ test('relational select HTTP: empty partner relations keep create flows availabl
     assert.doesNotMatch(html, /partner\.archivePartner/, path)
   }
 
-  const english = await e2e.client.get('/admin/sales/quotations?lang=en')
+  const english = await e2e.client.get('/admin/sales/quotations/new?lang=en')
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Manage customers/)
 })

@@ -20,12 +20,13 @@ import {
   tagsControl,
   teamControl,
 } from './relation-control.ts'
-import { CONFIGURATION_TABS, configurationScreen, leaderboardScreen, plannerScreen } from './screens.tsx'
+import { CONFIGURATION_TABS, configurationScreen, leaderboardScreen } from './screens.tsx'
 import type { ConfigurationTab } from './screens.tsx'
 import {
   caseCreateScreen,
   caseDetailScreen,
   casesListScreen,
+  plannerScreen,
   permissionScreen,
   pipelineScreen,
 } from './screens/index.ts'
@@ -1106,6 +1107,7 @@ export const routes: Record<string, RouteEntry> = {
             activityTypes,
             controls,
             errors,
+            locale: localeQuery(url),
           }),
       })
     },

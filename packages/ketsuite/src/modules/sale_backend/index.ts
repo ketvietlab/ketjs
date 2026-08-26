@@ -9,8 +9,8 @@ import { templateRelationControl, variantRelationControl } from '../product_back
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
 import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
-import { orderDetailScreen } from './order-detail-screen.tsx'
 import {
+  orderDetailScreen,
   overviewScreen,
   quotationCreateScreen,
   quotationsListScreen,

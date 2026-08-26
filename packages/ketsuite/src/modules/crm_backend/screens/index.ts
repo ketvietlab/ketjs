@@ -9,3 +9,5 @@ export type { CaseCreateScreenOptions } from './case-create.tsx'
 
 export { caseDetailScreen, permissionScreen } from './case-detail.tsx'
 export type { CaseDetailControls } from './case-detail.tsx'
+
+export { plannerScreen } from './activity-planner.tsx'

@@ -7,16 +7,19 @@ import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
-import { ordersScreen } from './screens.tsx'
 import {
   labelOf,
   purchaseOrderDetailScreen,
+  purchaseOrdersListScreen,
   purchaseOverviewScreen,
+  rfqCreateScreen,
+  rfqsListScreen,
   vendorPricelistCreateScreen,
   vendorPricelistsListScreen,
 } from './screens/index.ts'
 import { adminPage, choices, inLocale, localeQuery, optional, printGroup } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -49,6 +52,67 @@ const redirect = (result: unknown, ok: string, rejected = ok) => {
   const field = held.errors?.[0]?.field
   const query = `invalid=${encodeURIComponent(field ?? '1')}`
   return seeOther(`${rejected}${rejected.includes('?') ? '&' : '?'}${query}`)
+}
+
+const createPurchaseOrder = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  form: Awaited<ReturnType<typeof readForm>>,
+) =>
+  ctx.call(
+    'purchase.createOrder',
+    {
+      id: randomUUID(),
+      partnerId: form.partnerId ?? '',
+      partnerRef: form.partnerRef ?? '',
+      pickingTypeId: form.pickingTypeId ?? '',
+      ...optional(form, 'dateOrder'),
+      ...optional(form, 'datePlanned'),
+      ...optional(form, 'notes'),
+    },
+    url,
+    req,
+  )
+
+const safeRfqReturnTo = (url: URL): string => {
+  const fallback = inLocale(url, '/admin/purchase/rfqs')
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/purchase/rfqs'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const rfqCreatePath = (url: URL, returnTo: string): string => {
+  const target = new URL(inLocale(url, '/admin/purchase/rfqs/new'), 'http://ket.local')
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+
+const listKeep = (url: URL, omitted: string[] = []): Record<string, string> => {
+  const keep: Record<string, string> = {}
+  for (const [key, value] of url.searchParams) if (!['q', 'page', ...omitted].includes(key)) keep[key] = value
+  return keep
+}
+
+const listGroups = (_: Translator, url: URL, rows: AnyRow[], group: string | null) => {
+  if (group !== 'state' && group !== 'vendor') return undefined
+  const grouped = new Map<string, AnyRow[]>()
+  for (const row of rows) {
+    const key = group === 'state' ? String(row.state) : String(row.partnerName ?? row.partnerId)
+    grouped.set(key, [...(grouped.get(key) ?? []), row])
+  }
+  return [...grouped.entries()].map(([key, groupedRows]) => ({
+    id: `${group}:${key}`,
+    label: group === 'state' ? labelOf(_, 'state', key) : key,
+    count: groupedRows.length,
+    depth: 0,
+    open: true,
+    href: withParam(url, 'group', null),
+    rows: groupedRows,
+  }))
 }
 
 const saveSupplierInfo = async (
@@ -664,48 +728,134 @@ export default defineModule({
     '/admin/purchase/rfqs':
       (ctx): Route =>
       async (url, req) => {
-        const rfqPath = `/admin/purchase/rfqs${localeQuery(url)}`
+        const returnTo = `${url.pathname}${url.search}`
+        const createPath = rfqCreatePath(url, returnTo)
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const result = await ctx.call(
-            'purchase.createOrder',
+          return redirect(await createPurchaseOrder(ctx, url, req, form), returnTo, createPath)
+        }
+        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const requestedState = url.searchParams.get('state')
+        const state = ['draft', 'sent', 'to approve'].includes(String(requestedState)) ? requestedState : null
+        const requestedGroup = url.searchParams.get('group')
+        const group = requestedGroup === 'state' || requestedGroup === 'vendor' ? requestedGroup : null
+        const [orders, data] = await Promise.all([
+          ctx.call(
+            'purchase.listOrders',
             {
-              id: randomUUID(),
-              partnerId: form.partnerId ?? '',
-              partnerRef: form.partnerRef ?? '',
-              pickingTypeId: form.pickingTypeId ?? '',
-              ...optional(form, 'dateOrder'),
-              ...optional(form, 'datePlanned'),
-              ...optional(form, 'notes'),
+              states: ['draft', 'sent', 'to approve'],
+              ...(search ? { search } : {}),
+              limit: 2_000,
             },
             url,
             req,
-          )
-          return redirect(result, rfqPath)
-        }
-        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const [orders, data] = await Promise.all([
-          ctx.call('purchase.listOrders', {}, url, req) as Promise<AnyRow[]>,
+          ) as Promise<AnyRow[]>,
           common(ctx, url, req),
         ])
-        const state = url.searchParams.get('state')
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
-        const rows = orders
+        const matching = orders
           .filter(
             (row) =>
               ['draft', 'sent', 'to approve'].includes(String(row.state)) && (!state || row.state === state),
           )
           .map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) }))
+        const rows = group ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'purchase_backend.rfqs.title',
-          body: async (_, shell) =>
-            ordersScreen(_, {
-              title: _('purchase_backend.rfqs.title'),
-              frame: shell,
+          body: (_, shell) =>
+            rfqsListScreen(_, {
+              frame: {
+                ...shell,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('purchase_backend.rfqs.title'),
+                    keep: listKeep(url),
+                    facets: [
+                      ...(state
+                        ? [
+                            {
+                              label: labelOf(_, 'state', state),
+                              without: withParam(url, 'state', null),
+                            },
+                          ]
+                        : []),
+                      ...(group
+                        ? [
+                            {
+                              label: `${_('backend.chrome.groupBy')}: ${group === 'state' ? _('purchase_backend.field.state') : _('purchase_backend.field.vendor')}`,
+                              without: withParam(url, 'group', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: ['draft', 'sent', 'to approve'].map((value) => ({
+                          id: `state:${value}`,
+                          label: labelOf(_, 'state', value),
+                          path: withParam(url, 'state', state === value ? null : value),
+                          active: state === value,
+                        })),
+                      },
+                      {
+                        id: 'group',
+                        label: _('backend.chrome.groupBy'),
+                        items: [
+                          {
+                            id: 'group:state',
+                            label: _('purchase_backend.field.state'),
+                            path: withParam(url, 'group', group === 'state' ? null : 'state'),
+                            active: group === 'state',
+                          },
+                          {
+                            id: 'group:vendor',
+                            label: _('purchase_backend.field.vendor'),
+                            path: withParam(url, 'group', group === 'vendor' ? null : 'vendor'),
+                            active: group === 'vendor',
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  pager: group ? null : pager(url, page, rows.length, matching.length),
+                },
+              },
               rows,
-              createFields: await orderFields(ctx, url, req, _, data),
-              createAction: rfqPath,
+              total: matching.length,
+              createHref: createPath,
+              detailSuffix: localeQuery(url),
+              setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
+              table: { groups: listGroups(_, url, matching, group) },
+            }),
+        })
+      },
+    '/admin/purchase/rfqs/new':
+      (ctx): Route =>
+      async (url, req) => {
+        const returnTo = safeRfqReturnTo(url)
+        const createPath = rfqCreatePath(url, returnTo)
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          return redirect(await createPurchaseOrder(ctx, url, req, form), returnTo, createPath)
+        }
+        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        return adminPage(ctx, url, req, {
+          title: 'purchase_backend.action.createRfq',
+          body: async (_, shell) =>
+            rfqCreateScreen(_, {
+              frame: shell,
+              action: createPath,
+              cancelHref: returnTo,
+              fields: await orderFields(ctx, url, req, _, data),
               invalid: url.searchParams.get('invalid'),
               setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
             }),
@@ -715,22 +865,87 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const invoice = url.searchParams.get('invoice')
+        const group = url.searchParams.get('group') === 'vendor' ? 'vendor' : null
         const [orders, data] = await Promise.all([
-          ctx.call('purchase.listOrders', { state: 'purchase' }, url, req) as Promise<AnyRow[]>,
+          ctx.call(
+            'purchase.listOrders',
+            { state: 'purchase', ...(search ? { search } : {}), limit: 2_000 },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
           common(ctx, url, req),
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
+        const matching = orders
+          .filter((row) => !invoice || row.invoiceStatus === invoice)
+          .map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) }))
+        const rows = group ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'purchase_backend.orders.title',
           body: (_, shell) =>
-            ordersScreen(_, {
-              title: _('purchase_backend.orders.title'),
-              frame: shell,
-              rows: orders.map((row) => ({ ...row, partnerName: vendors.get(String(row.partnerId)) })),
-              invalid: url.searchParams.get('invalid'),
-              // A purchase order is not raised here; it is a request that was
-              // confirmed. Saying "create the first record" pointed at nothing.
-              originPath: `/admin/purchase/rfqs${localeQuery(url)}`,
+            purchaseOrdersListScreen(_, {
+              frame: {
+                ...shell,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('purchase_backend.orders.title'),
+                    keep: listKeep(url),
+                    facets: [
+                      ...(invoice
+                        ? [
+                            {
+                              label: labelOf(_, 'invoiceStatus', invoice),
+                              without: withParam(url, 'invoice', null),
+                            },
+                          ]
+                        : []),
+                      ...(group
+                        ? [
+                            {
+                              label: `${_('backend.chrome.groupBy')}: ${_('purchase_backend.field.vendor')}`,
+                              without: withParam(url, 'group', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: ['no', 'to invoice', 'invoiced'].map((value) => ({
+                          id: `invoice:${value}`,
+                          label: labelOf(_, 'invoiceStatus', value),
+                          path: withParam(url, 'invoice', invoice === value ? null : value),
+                          active: invoice === value,
+                        })),
+                      },
+                      {
+                        id: 'group',
+                        label: _('backend.chrome.groupBy'),
+                        items: [
+                          {
+                            id: 'group:vendor',
+                            label: _('purchase_backend.field.vendor'),
+                            path: withParam(url, 'group', group === 'vendor' ? null : 'vendor'),
+                            active: group === 'vendor',
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  pager: group ? null : pager(url, page, rows.length, matching.length),
+                },
+              },
+              rows,
+              total: matching.length,
+              detailSuffix: localeQuery(url),
+              originHref: inLocale(url, '/admin/purchase/rfqs'),
+              table: { groups: listGroups(_, url, matching, group) },
             }),
         })
       },

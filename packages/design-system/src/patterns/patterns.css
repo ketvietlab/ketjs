@@ -710,6 +710,7 @@
   @media (max-width: 63.9375rem) {
     :where([data-kv-design-system]) [data-ui="form-page-layout"] {
       grid-template-columns: minmax(0, 1fr);
+      row-gap: var(--kv-space-5);
     }
 
     :where([data-kv-design-system]) [data-ui="form-page-aside"] {

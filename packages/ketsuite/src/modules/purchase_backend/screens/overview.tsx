@@ -39,7 +39,7 @@ export const purchaseOverviewScreen = (
         inline([
           linkButton({
             label: _('purchase_backend.action.createRfq'),
-            href: `${localized('/admin/purchase/rfqs', locale)}#rfq-create-form`,
+            href: localized('/admin/purchase/rfqs/new', locale),
             variant: 'primary',
           }),
         ]),

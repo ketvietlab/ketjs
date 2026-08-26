@@ -15,3 +15,8 @@ export {
   salesOrdersListScreen,
   type SalesOrdersListScreenOptions,
 } from './sales-orders-list.tsx'
+export {
+  orderDetailScreen,
+  type SaleOrderDetail,
+  type SaleOrderDetailScreenOptions,
+} from './order-detail.tsx'

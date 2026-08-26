@@ -6,7 +6,7 @@ import backend, { formatMoney } from '@ketvietlab/ketsuite/backend'
 import { customerInvoicesScreen } from '../packages/ketsuite/src/modules/account_backend/customer-invoices-screen.tsx'
 import { roomTypesScreen } from '../packages/ketsuite/src/modules/hospitality_core/screens.tsx'
 import { ordersScreen as posOrdersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.tsx'
-import { ordersScreen as purchaseOrdersScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens.tsx'
+import { purchaseOrdersListScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens/purchase-orders-list.tsx'
 import { ordersScreen as saleOrdersScreen } from '../packages/ketsuite/src/modules/sale_backend/screens.tsx'
 
 const manifest = compose([backend], { headless: true })
@@ -44,9 +44,10 @@ test('money format: every money-bearing backend module renders formatted list va
         },
       ],
     }),
-    purchaseOrdersScreen(vi, {
-      title: 'Purchase',
+    purchaseOrdersListScreen(vi, {
       frame: {},
+      detailSuffix: '',
+      originHref: '/admin/purchase/rfqs',
       rows: [
         {
           id: 'purchase-1',
