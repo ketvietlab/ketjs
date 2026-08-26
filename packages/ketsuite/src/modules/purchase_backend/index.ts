@@ -7,8 +7,9 @@ import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
-import { dashboard, labelOf, orderDetail, ordersScreen, supplierInfoScreen } from './screens.tsx'
-import { adminPage, choices, localeQuery, optional, printGroup } from '../backend/screen.ts'
+import { dashboard, labelOf, orderDetail, ordersScreen } from './screens.tsx'
+import { vendorPricelistCreateScreen, vendorPricelistsListScreen } from './screens/index.ts'
+import { adminPage, choices, inLocale, localeQuery, optional, printGroup } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
@@ -36,13 +37,41 @@ type Translator = ReturnType<ServeContext['translate']>
  * unit that does not fit the product, a bill with nothing left to bill — landed
  * on an unchanged page with no message at all.
  */
-const redirect = (result: unknown, ok: string) => {
+const redirect = (result: unknown, ok: string, rejected = ok) => {
   const held = result as { ok?: boolean; errors?: Array<{ field?: string }> }
   if (held.ok) return seeOther(ok)
   const field = held.errors?.[0]?.field
   const query = `invalid=${encodeURIComponent(field ?? '1')}`
-  return seeOther(`${ok}${ok.includes('?') ? '&' : '?'}${query}`)
+  return seeOther(`${rejected}${rejected.includes('?') ? '&' : '?'}${query}`)
 }
+
+const saveSupplierInfo = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  form: Awaited<ReturnType<typeof readForm>>,
+) =>
+  ctx.call(
+    'purchase.saveSupplierInfo',
+    {
+      id: randomUUID(),
+      partnerId: form.partnerId ?? '',
+      productTemplateId: form.productTemplateId ?? '',
+      ...optional(form, 'productId'),
+      productUomId: form.productUomId ?? '',
+      minQty: form.minQty || '0',
+      price: form.price || '0',
+      discount: form.discount || '0',
+      delay: Number(form.delay || 1),
+      sequence: Number(form.sequence || 1),
+      ...optional(form, 'productName'),
+      ...optional(form, 'productCode'),
+      ...optional(form, 'dateStart'),
+      ...optional(form, 'dateEnd'),
+    },
+    url,
+    req,
+  )
 
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, pickingTypes, taxes, journals, accounts] = await Promise.all([
@@ -704,6 +733,7 @@ export default defineModule({
     '/admin/purchase/vendor-pricelists':
       (ctx): Route =>
       async (url, req) => {
+        const listPath = inLocale(url, '/admin/purchase/vendor-pricelists')
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
@@ -715,28 +745,8 @@ export default defineModule({
                   url,
                   req,
                 )
-              : await ctx.call(
-                  'purchase.saveSupplierInfo',
-                  {
-                    id: randomUUID(),
-                    partnerId: form.partnerId ?? '',
-                    productTemplateId: form.productTemplateId ?? '',
-                    ...optional(form, 'productId'),
-                    productUomId: form.productUomId ?? '',
-                    minQty: form.minQty || '0',
-                    price: form.price || '0',
-                    discount: form.discount || '0',
-                    delay: Number(form.delay || 1),
-                    sequence: Number(form.sequence || 1),
-                    ...optional(form, 'productName'),
-                    ...optional(form, 'productCode'),
-                    ...optional(form, 'dateStart'),
-                    ...optional(form, 'dateEnd'),
-                  },
-                  url,
-                  req,
-                )
-          return redirect(result, '/admin/purchase/vendor-pricelists')
+              : await saveSupplierInfo(ctx, url, req, form)
+          return redirect(result, listPath)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const _ = ctx.translate(ctx.localeOf(url, req))
@@ -746,6 +756,70 @@ export default defineModule({
         ])
         const vendors = new Map(data.partners.map((row) => [String(row.id), row.name]))
         const templates = new Map(data.templates.map((row) => [String(row.id), row.name]))
+        const methodFields: FormField[] = [
+          {
+            name: 'templateId',
+            label: _('purchase_backend.field.template'),
+            type: 'select',
+            options: choices(data.templates),
+            required: true,
+            control: await templateRelationControl(ctx, url, req, _, {
+              id: 'purchase-policy-template',
+              name: 'templateId',
+              label: _('purchase_backend.field.template'),
+              templates: choices(data.templates),
+              required: true,
+            }),
+          },
+          {
+            name: 'purchaseMethod',
+            label: _('purchase_backend.field.purchaseMethod'),
+            type: 'select',
+            options: PURCHASE_METHODS.map((value) => ({ value, label: labelOf(_, 'purchaseMethod', value) })),
+          },
+        ]
+        return adminPage(ctx, url, req, {
+          title: 'purchase_backend.pricelists.title',
+          body: (_, shell) =>
+            vendorPricelistsListScreen(_, {
+              frame: shell,
+              action: listPath,
+              createHref: inLocale(url, '/admin/purchase/vendor-pricelists/new'),
+              currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
+              methodFields,
+              invalid: url.searchParams.get('invalid'),
+              setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
+              rows: rows.map((row) => ({
+                ...row,
+                id: String(row.id),
+                partnerId: String(row.partnerId),
+                productTemplateId: String(row.productTemplateId),
+                minQty: String(row.minQty),
+                price: String(row.price),
+                discount: String(row.discount),
+                delay: String(row.delay),
+                partnerName: vendors.has(String(row.partnerId))
+                  ? String(vendors.get(String(row.partnerId)))
+                  : undefined,
+                productNameDisplay: templates.has(String(row.productTemplateId))
+                  ? String(templates.get(String(row.productTemplateId)))
+                  : undefined,
+              })),
+            }),
+        })
+      },
+    '/admin/purchase/vendor-pricelists/new':
+      (ctx): Route =>
+      async (url, req) => {
+        const listPath = inLocale(url, '/admin/purchase/vendor-pricelists')
+        const createPath = inLocale(url, '/admin/purchase/vendor-pricelists/new')
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          return redirect(await saveSupplierInfo(ctx, url, req, await readForm(req)), listPath, createPath)
+        }
+        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const _ = ctx.translate(ctx.localeOf(url, req))
+        const data = await common(ctx, url, req)
         const fields: FormField[] = [
           {
             name: 'partnerId',
@@ -803,44 +877,23 @@ export default defineModule({
           { name: 'dateStart', label: _('purchase_backend.field.dateStart'), type: 'date' },
           { name: 'dateEnd', label: _('purchase_backend.field.dateEnd'), type: 'date' },
         ]
-        const methodFields: FormField[] = [
-          {
-            name: 'templateId',
-            label: _('purchase_backend.field.template'),
-            type: 'select',
-            options: choices(data.templates),
-            required: true,
-            control: await templateRelationControl(ctx, url, req, _, {
-              id: 'purchase-policy-template',
-              name: 'templateId',
-              label: _('purchase_backend.field.template'),
-              templates: choices(data.templates),
-              required: true,
-            }),
-          },
-          {
-            name: 'purchaseMethod',
-            label: _('purchase_backend.field.purchaseMethod'),
-            type: 'select',
-            options: PURCHASE_METHODS.map((value) => ({ value, label: labelOf(_, 'purchaseMethod', value) })),
-          },
-        ]
         return adminPage(ctx, url, req, {
-          title: 'purchase_backend.pricelists.title',
-          body: (_, shell) =>
-            supplierInfoScreen(_, {
+          title: 'purchase_backend.action.addVendorPrice',
+          body: (_, shell) => {
+            const company = data.companies.find((entry) => entry.id === shell.viewer?.company)
+            return vendorPricelistCreateScreen(_, {
               frame: shell,
-              currency: data.companies.find((company) => company.id === shell.viewer?.company)?.currency,
               fields,
-              methodFields,
+              action: createPath,
+              cancelHref: listPath,
+              companyLabel: company
+                ? String(company.name ?? company.code ?? company.id)
+                : shell.viewer?.company,
+              currency: company?.currency,
               invalid: url.searchParams.get('invalid'),
               setup: { pickingTypes: data.pickingTypes.length, vendors: data.partners.length },
-              rows: rows.map((row) => ({
-                ...row,
-                partnerName: vendors.get(String(row.partnerId)),
-                productNameDisplay: templates.get(String(row.productTemplateId)),
-              })),
-            }),
+            })
+          },
         })
       },
   },

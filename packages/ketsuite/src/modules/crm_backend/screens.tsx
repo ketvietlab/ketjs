@@ -7,10 +7,8 @@ import {
   dataTable,
   DefinitionList,
   emptyState,
-  CardGrid,
   Framed,
   icon,
-  Metric,
   linkButton,
   RecordActions,
   RecordForm,
@@ -58,60 +56,6 @@ const state = (_: Translator, value: unknown) => {
     raw,
   )
 }
-
-/** One figure above the board. `icon` is a glyph name, not markup: screens own markup. */
-export type PipelineFigure = {
-  id: string
-  label: string
-  value: string
-  detail?: string
-  icon: string
-}
-
-/**
- * The board, under the figures it adds up to.
- *
- * The filters used to be a form stacked above the columns — a label, a text
- * input, a select and a submit button, four rows of chrome before the first
- * card. They are the list chrome now, which is the same row every other list in
- * the product filters from, so a search here behaves like a search anywhere.
- */
-export const pipelineScreen = (
-  _: Translator,
-  frame: Frame,
-  board: JSXChild,
-  figures: readonly PipelineFigure[] = [],
-) => (
-  <Framed
-    translator={_}
-    title={_('crm_backend.pipeline.title')}
-    subtitle={_('crm_backend.pipeline.subtitle')}
-    frame={frame}
-    body={stack(
-      [
-        ...(figures.length
-          ? [
-              <CardGrid
-                items={figures}
-                id={(figure: PipelineFigure) => figure.id}
-                card={(figure: PipelineFigure) => (
-                  <Metric
-                    label={figure.label}
-                    value={figure.value}
-                    detail={figure.detail ?? null}
-                    icon={icon(figure.icon)}
-                    tone="money"
-                  />
-                )}
-              />,
-            ]
-          : []),
-        board,
-      ],
-      'compact',
-    )}
-  />
-)
 
 export const permissionScreen = (_: Translator, frame: Frame): TemplateResult => (
   <Framed

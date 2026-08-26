@@ -52,6 +52,7 @@ export const overviewScreen = (
     // point. The full amount is one click away, on the record it belongs to.
     money = (value: unknown) => formatMoney(_, value, o.counts.currency, { compact: true })
   const quotations = at('/admin/sales/quotations'),
+    newQuotation = at('/admin/sales/quotations/new'),
     orders = at('/admin/sales/orders')
   const cards = [
     {
@@ -95,7 +96,7 @@ export const overviewScreen = (
       frame={o.frame}
       actions={linkButton({
         label: _('sale_backend.action.create'),
-        href: `${quotations}#quotation-create-form`,
+        href: newQuotation,
         variant: 'primary',
       })}
       body={stack(

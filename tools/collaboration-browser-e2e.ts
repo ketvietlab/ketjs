@@ -211,6 +211,9 @@ const routeDetailEvidenceDir = resolve('docs/public/assets/inventory-route-detai
 const replenishmentEvidenceDir = resolve('docs/public/assets/inventory-replenishment')
 const forecastEvidenceDir = resolve('docs/public/assets/inventory-forecast')
 const quotationEvidenceDir = resolve('docs/public/assets/sales-quotation-list')
+const quotationCreateEvidenceDir = resolve('docs/public/assets/sales-quotation-create')
+const vendorPricelistEvidenceDir = resolve('docs/public/assets/purchase-vendor-pricelists')
+const crmPipelineEvidenceDir = resolve('docs/public/assets/crm-pipeline')
 const saleOrderEvidenceDir = resolve('docs/public/assets/sales-order-detail')
 const salesOrderListEvidenceDir = resolve('docs/public/assets/sales-order-list')
 const invoicingPolicyEvidenceDir = resolve('docs/public/assets/sales-invoicing-policy')
@@ -242,6 +245,9 @@ try {
   await mkdir(replenishmentEvidenceDir, { recursive: true })
   await mkdir(forecastEvidenceDir, { recursive: true })
   await mkdir(quotationEvidenceDir, { recursive: true })
+  await mkdir(quotationCreateEvidenceDir, { recursive: true })
+  await mkdir(vendorPricelistEvidenceDir, { recursive: true })
+  await mkdir(crmPipelineEvidenceDir, { recursive: true })
   await mkdir(saleOrderEvidenceDir, { recursive: true })
   await mkdir(salesOrderListEvidenceDir, { recursive: true })
   await mkdir(invoicingPolicyEvidenceDir, { recursive: true })
@@ -403,7 +409,27 @@ try {
     {
       name: 'quotation-list',
       path: '/admin/sales/quotations?lang=vi',
-      ready: `document.querySelector('#quotation-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'quotation-create',
+      path: '/admin/sales/quotations/new?state=draft&lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#quotation-create-form')`,
+    },
+    {
+      name: 'vendor-pricelist-list',
+      path: '/admin/purchase/vendor-pricelists?lang=vi',
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelector('form [name="action"][value="method"]')`,
+    },
+    {
+      name: 'vendor-pricelist-create',
+      path: '/admin/purchase/vendor-pricelists/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#purchase-vendor-pricelist-create')`,
+    },
+    {
+      name: 'crm-pipeline',
+      path: '/admin/crm/pipeline?lang=vi',
+      ready: `document.querySelector('ket-island[data-island="crm.pipeline"]') && document.querySelector('[data-ui="record-workspace"]')`,
     },
     {
       name: 'sale-order-detail',
@@ -2371,25 +2397,46 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
-            form: Boolean(document.querySelector('#quotation-create-form[data-scope="sale-quotation-create"]')),
-            customerBlank: document.querySelector('#quotation-create-form [name="partnerId"]')?.value === '',
-            warehouseBlank: document.querySelector('#quotation-create-form [name="warehouseId"]')?.value === '',
-            customerLabel: document.querySelector('#quotation-create-form [name="partnerId"]')?.textContent.includes('Trần Điều Phối'),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#quotation-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            createHref: document.querySelector('[data-ui="list-page"] a[href*="/admin/sales/quotations/new"]')?.getAttribute('href'),
+            inlineForm: Boolean(document.querySelector('#quotation-create-form')),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
         {
-          workspace: true,
-          form: true,
+          listPage: true,
+          rowsAtLeastOne: true,
+          createHref: '/admin/sales/quotations/new?lang=vi',
+          inlineForm: false,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      await evaluate(cdp, `scrollTo(0, 0)`)
+      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-list-vi-desktop.png'))
+    }
+    if (screen.name === 'quotation-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            fields: document.querySelectorAll('#quotation-create-form [data-ui="form-field"]').length,
+            customerBlank: document.querySelector('#quotation-create-form [name="partnerId"]')?.value === '',
+            warehouseBlank: document.querySelector('#quotation-create-form [name="warehouseId"]')?.value === '',
+            cancelHref: document.querySelector('[data-ui="form-page-actions"] a')?.getAttribute('href'),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          formPage: true,
+          fields: 7,
           customerBlank: true,
           warehouseBlank: true,
-          customerLabel: true,
-          rowsAtLeastOne: true,
-          formRowsAtLeast28: true,
+          cancelHref: '/admin/sales/quotations?state=draft&lang=vi',
           chatter: false,
           horizontalOverflow: false,
         },
@@ -2403,78 +2450,90 @@ try {
           return true
         })()`,
       )
-      await waitFor(cdp, `location.search.includes('invalid=1')`)
-      assert.deepEqual(
-        await evaluate(
-          cdp,
-          `({
-            error: Boolean(document.querySelector('#quotation-create-form [data-ui="form-errors"][role="alert"]')),
-            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))
-          })`,
-        ),
-        { error: true, chatter: false },
-      )
-
-      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations?lang=vi`)
       await waitFor(
         cdp,
-        `document.querySelector('#quotation-create-form') && document.documentElement.lang === 'vi'`,
-      )
-      await evaluate(cdp, `scrollTo(0, 0)`)
-      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-vi-desktop.png'))
-
-      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations?lang=en`)
-      await waitFor(
-        cdp,
-        `document.querySelector('#quotation-create-form') && document.documentElement.lang === 'en'`,
-      )
-      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Current quotations')`), true)
-      await evaluate(cdp, `scrollTo(0, 0)`)
-      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-en-desktop.png'))
-
-      await cdp.send('Emulation.setDeviceMetricsOverride', {
-        width: 390,
-        height: 844,
-        deviceScaleFactor: 1,
-        mobile: true,
-      })
-      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations?lang=vi`)
-      await waitFor(
-        cdp,
-        `document.querySelector('#quotation-create-form') && document.documentElement.lang === 'vi'`,
-      )
-      assert.deepEqual(
-        await evaluate(
-          cdp,
-          `({
-            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#quotation-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
-            listVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
-          })`,
-        ),
-        { horizontalOverflow: false, formRowsAtLeast28: true, listVisible: true },
-      )
-      await evaluate(cdp, `scrollTo(0, 0)`)
-      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-vi-mobile.png'))
-
-      await navigate(cdp, `${e2e.baseUrl}/admin/sales/quotations?lang=en`)
-      await waitFor(
-        cdp,
-        `document.querySelector('#quotation-create-form') && document.documentElement.lang === 'en'`,
+        `location.pathname === '/admin/sales/quotations/new' && location.search.includes('invalid=1')`,
       )
       assert.equal(
-        await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
-        false,
+        await evaluate(
+          cdp,
+          `Boolean(document.querySelector('#quotation-create-form [data-ui="form-errors"]'))`,
+        ),
+        true,
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
-      if (!noArtifacts) await capture(cdp, join(quotationEvidenceDir, 'quotations-en-mobile.png'))
-
-      await cdp.send('Emulation.setDeviceMetricsOverride', {
-        width: 1440,
-        height: 1100,
-        deviceScaleFactor: 1,
-        mobile: false,
-      })
+      if (!noArtifacts)
+        await capture(cdp, join(quotationCreateEvidenceDir, 'quotation-create-vi-desktop.png'))
+    }
+    if (screen.name === 'vendor-pricelist-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
+            methodForm: Boolean(document.querySelector('form [name="action"][value="method"]')),
+            createHref: document.querySelector('[data-ui="list-page"] a[href*="/admin/purchase/vendor-pricelists/new"]')?.getAttribute('href'),
+            inlineCreate: Boolean(document.querySelector('#purchase-vendor-pricelist-create')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          listPage: true,
+          methodForm: true,
+          createHref: '/admin/purchase/vendor-pricelists/new?lang=vi',
+          inlineCreate: false,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(vendorPricelistEvidenceDir, 'vendor-pricelists-list.png'))
+    }
+    if (screen.name === 'vendor-pricelist-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            fields: document.querySelectorAll('#purchase-vendor-pricelist-create [data-ui="form-field"]').length,
+            cancelHref: document.querySelector('[data-ui="form-page-actions"] a')?.getAttribute('href'),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          formPage: true,
+          fields: 13,
+          cancelHref: '/admin/purchase/vendor-pricelists?lang=vi',
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(vendorPricelistEvidenceDir, 'vendor-pricelist-create.png'))
+    }
+    if (screen.name === 'crm-pipeline') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            board: Boolean(document.querySelector('ket-island[data-island="crm.pipeline"]')),
+            metricsAtLeastOne: document.querySelectorAll('[data-ui="metric"]').length >= 1,
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          board: true,
+          metricsAtLeastOne: true,
+          listPage: false,
+          formPage: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(crmPipelineEvidenceDir, 'crm-pipeline.png'))
     }
     if (screen.name === 'sale-order-detail') {
       await cdp.send('Emulation.setDeviceMetricsOverride', {

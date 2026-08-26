@@ -10,8 +10,8 @@ import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
 import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
 import { orderDetailScreen } from './order-detail-screen.tsx'
-import { quotationsScreen } from './quotations-screen.tsx'
 import { salesOrdersScreen } from './sales-orders-screen.tsx'
+import { quotationCreateScreen, quotationsListScreen } from './screens/index.ts'
 import { overviewScreen } from './overview-screen.tsx'
 import type { SaleCounts } from './overview-screen.tsx'
 import { labelOf } from './screens.tsx'
@@ -55,6 +55,32 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
 type Translator = ReturnType<ServeContext['translate']>
 const redirect = (result: unknown, ok: string) =>
   (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
+const quotationListQuery = (url: URL): string => {
+  const query = new URLSearchParams(url.searchParams)
+  query.delete('invalid')
+  const value = query.toString()
+  return value ? `?${value}` : ''
+}
+const quotationListPath = (url: URL): string => `/admin/sales/quotations${quotationListQuery(url)}`
+const quotationCreatePath = (url: URL): string => `/admin/sales/quotations/new${quotationListQuery(url)}`
+const createQuotation = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<unknown> => {
+  const form = await readForm(req)
+  return ctx.call(
+    'sale.createOrder',
+    {
+      id: randomUUID(),
+      partnerId: form.partnerId ?? '',
+      warehouseId: form.warehouseId ?? '',
+      ...optional(form, 'clientOrderRef'),
+      ...optional(form, 'pricelistId'),
+      ...optional(form, 'paymentTermId'),
+      ...optional(form, 'validityDate'),
+      ...optional(form, 'notes'),
+    },
+    url,
+    req,
+  )
+}
 const callIfInstalled = async (
   ctx: ServeContext,
   url: URL,
@@ -808,60 +834,74 @@ export default defineModule({
     '/admin/sales/quotations':
       (ctx): Route =>
       async (url, req) => {
-        const detailSuffix = url.searchParams.get('lang')
-          ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
-          : ''
-        const quotationPath = `/admin/sales/quotations${detailSuffix}`
+        const detailSuffix = localeQuery(url)
+        const listPath = quotationListPath(url)
+        const createPath = quotationCreatePath(url)
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
-          const form = await readForm(req),
-            result = await ctx.call(
-              'sale.createOrder',
-              {
-                id: randomUUID(),
-                partnerId: form.partnerId ?? '',
-                warehouseId: form.warehouseId ?? '',
-                ...optional(form, 'clientOrderRef'),
-                ...optional(form, 'pricelistId'),
-                ...optional(form, 'paymentTermId'),
-                ...optional(form, 'validityDate'),
-                ...optional(form, 'notes'),
-              },
-              url,
-              req,
-            )
-          return redirect(result, quotationPath)
+          const result = await createQuotation(ctx, url, req)
+          return (result as AnyRow).ok
+            ? seeOther(listPath)
+            : seeOther(`${createPath}${createPath.includes('?') ? '&' : '?'}invalid=1`)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const state = url.searchParams.get('state')
-        const [rows, d] = await Promise.all([
-          ctx.call(
-            'sale.listOrders',
-            {
-              ...(state ? { state } : { states: ['draft', 'sent', 'cancel'] }),
-            },
-            url,
-            req,
-          ) as Promise<AnyRow[]>,
-          common(ctx, url, req),
-        ])
+        const rows = (await ctx.call(
+          'sale.listOrders',
+          {
+            ...(state ? { state } : { states: ['draft', 'sent', 'cancel'] }),
+          },
+          url,
+          req,
+        )) as AnyRow[]
         const names = await partnerNames(ctx, url, req, rows)
         return adminPage(ctx, url, req, {
           title: 'sale_backend.quotations.title',
           body: async (_, shell) =>
-            quotationsScreen(_, {
-              frame: shell,
-              printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
-                (report) => report.id === 'sale.quotation',
-              ),
-              fields: await orderFields(ctx, url, req, _, d),
-              rows: rows
-                .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
-                .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-              action: quotationPath,
-              detailSuffix,
-              errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
-            }),
+            quotationsListScreen(
+              _,
+              {
+                createHref: createPath,
+                printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
+                  (report) => report.id === 'sale.quotation',
+                ),
+                rows: rows
+                  .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
+                  .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                detailSuffix,
+              },
+              shell,
+            ),
+        })
+      },
+    '/admin/sales/quotations/new':
+      (ctx): Route =>
+      async (url, req) => {
+        const listPath = quotationListPath(url)
+        const createPath = quotationCreatePath(url)
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const result = await createQuotation(ctx, url, req)
+          return (result as AnyRow).ok
+            ? seeOther(listPath)
+            : seeOther(`${createPath}${createPath.includes('?') ? '&' : '?'}invalid=1`)
+        }
+        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.quotation.create.title',
+          body: async (_, shell) =>
+            quotationCreateScreen(
+              _,
+              {
+                fields: await orderFields(ctx, url, req, _, data),
+                action: createPath,
+                cancelHref: listPath,
+                errors:
+                  url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
+              },
+              shell,
+            ),
         })
       },
     '/admin/sales/orders':

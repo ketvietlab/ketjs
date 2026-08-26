@@ -88,7 +88,7 @@ unrouted legacy exports from the old `screens.tsx` only after confirming the rou
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
 | SALE-01 | ready | Sales overview | `/admin/sales` | `dashboard` | Specialized | no | — |
-| SALE-02 | ready | Quotations | `/admin/sales/quotations` | `quotationsScreen` | Split | list/new: no | — |
+| SALE-02 | done | Quotations | `/admin/sales/quotations`, `/admin/sales/quotations/new` | `screens/quotations-list.tsx`, `screens/quotation-create.tsx` | Split | list/new: no | Kant |
 | SALE-03 | ready | Sales orders | `/admin/sales/orders` | `salesOrdersScreen` | ListPage | no | — |
 | SALE-04 | ready | Quotation/order detail | `/admin/sales/quotations/{id}`, `/admin/sales/orders/{id}` | `orderDetailScreen` | FormPage | `sale_mail_backend` | — |
 | SALE-05 | ready | Invoicing policies | `/admin/sales/invoicing-policies` | `invoicingPoliciesScreen` | Split | no | — |
@@ -104,7 +104,7 @@ Structure debt: `purchase_backend/screens.tsx` is monolithic. Each row moves its
 | PUR-02 | ready | Requests for quotation | `/admin/purchase/rfqs` | `ordersScreen` (RFQ variant) | Split | no | — |
 | PUR-03 | ready | Purchase orders | `/admin/purchase/orders` | `ordersScreen` (order variant) | ListPage | no | — |
 | PUR-04 | ready | RFQ/purchase-order detail | `/admin/purchase/rfqs/{id}`, `/admin/purchase/orders/{id}` | `orderDetail` | FormPage | bridge missing | — |
-| PUR-05 | ready | Vendor pricelists | `/admin/purchase/vendor-pricelists` | `supplierInfoScreen` | Split | no | — |
+| PUR-05 | done | Vendor pricelists | `/admin/purchase/vendor-pricelists`, `/admin/purchase/vendor-pricelists/new` | `screens/vendor-pricelists-list.tsx`, `screens/vendor-pricelist-create.tsx` | Split | no | Curie |
 
 ### Stock lane
 
@@ -157,7 +157,7 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| CRM-01 | ready | Pipeline | `/admin/crm/pipeline` | `pipelineScreen` | Specialized | — |
+| CRM-01 | keep | Pipeline | `/admin/crm/pipeline` | `screens/pipeline.tsx::pipelineScreen` | Specialized | Huygens |
 | CRM-02 | ready | Cases list/create | `/admin/crm/cases` | `casesScreen` | Split | — |
 | CRM-03 | ready | Case detail | `/admin/crm/cases/{id}` | `caseDetailScreen`, `permissionScreen` | FormPage/Specialized | — |
 | CRM-04 | ready | Activity planner | `/admin/crm/activities` | `plannerScreen` | Specialized | — |
@@ -603,3 +603,39 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 6 product create mobile evidence](/assets/product-create/product-create-mobile-browser-skill.png)
 
 ![Wave 6 product attributes specialized evidence](/assets/product-attributes/product-attributes-browser-skill.png)
+
+### Wave 7 — CRM-01, SALE-02 and PUR-05
+
+- CRM Pipeline remains Specialized. Its metrics, list chrome and route-owned Kanban island form one
+  operational board; forcing it into `ListPage` or `FormPage` would remove drag/move and per-stage creation
+  affordances. The renderer moved alone into `crm_backend/screens/pipeline.tsx` while the monolithic file
+  keeps the other CRM screens.
+- Quotations now have a dedicated `ListPage` and `/new` `FormPage`. State/list query values survive
+  create/cancel/redirect, all seven dynamic relation-backed fields remain intact, the legacy list POST stays
+  compatible, and the Sales overview now links directly to the new create route.
+- Vendor Pricelists now have a dedicated `ListPage` and `/new` `FormPage`. The list retains its invoicing
+  policy form, setup/rejection notices and six price columns; the create form preserves all 13 fields,
+  defaults, company/currency context, legacy POST compatibility and invalid-field redirect semantics.
+  Shared Purchase setup/rejection helpers moved into `screens/shared.tsx` instead of creating a dependency
+  back to the legacy `screens.tsx`.
+- Browser evidence confirms all five surfaces have no unexpected Chatter or horizontal overflow. Mobile
+  evidence at 390 px retains every Quotation/Vendor Pricelist field and keeps Pipeline metrics readable.
+- Validation scope: eight focused renderer/route tests, the affected Sales HTTP scenario, three CRM
+  Pipeline HTTP scenarios, five targeted browser E2E flows, Biome on changed files, build/typecheck, and
+  Astro docs validation. Only CI owners `orders` and `crm-loyalty` were exercised locally.
+
+![Wave 7 quotation list evidence](/assets/sales-quotation-list/quotation-list-browser-skill.png)
+
+![Wave 7 quotation create evidence](/assets/sales-quotation-create/quotation-create-browser-skill.png)
+
+![Wave 7 quotation create mobile evidence](/assets/sales-quotation-create/quotation-create-mobile-browser-skill.png)
+
+![Wave 7 vendor pricelist list evidence](/assets/purchase-vendor-pricelists/vendor-pricelist-list-browser-skill.png)
+
+![Wave 7 vendor pricelist create evidence](/assets/purchase-vendor-pricelists/vendor-pricelist-create-browser-skill.png)
+
+![Wave 7 vendor pricelist create mobile evidence](/assets/purchase-vendor-pricelists/vendor-pricelist-create-mobile-browser-skill.png)
+
+![Wave 7 CRM Pipeline evidence](/assets/crm-pipeline/crm-pipeline-browser-skill.png)
+
+![Wave 7 CRM Pipeline mobile evidence](/assets/crm-pipeline/crm-pipeline-mobile-browser-skill.png)

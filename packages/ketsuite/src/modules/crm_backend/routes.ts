@@ -27,10 +27,11 @@ import {
   configurationScreen,
   leaderboardScreen,
   permissionScreen,
-  pipelineScreen,
   plannerScreen,
 } from './screens.tsx'
-import type { CaseDetailControls, ConfigurationTab, PipelineFigure } from './screens.tsx'
+import type { CaseDetailControls, ConfigurationTab } from './screens.tsx'
+import { pipelineScreen } from './screens/index.ts'
+import type { PipelineFigure } from './screens/index.ts'
 import {
   keepForListSearch,
   LIST_PAGE_SIZE,

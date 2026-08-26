@@ -11,7 +11,6 @@ import {
   inline,
   linkButton,
   Metric,
-  Notice,
   RecordActions,
   RecordForm,
   Section,
@@ -20,6 +19,7 @@ import {
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
 import { localized, selectionLabel } from '../backend/screen.ts'
+import { missingSetup, rejection } from './screens/shared.tsx'
 
 type AnyRow = Record<string, unknown>
 
@@ -99,50 +99,6 @@ export const dashboard = (
           )}
         />,
       ])}
-    />
-  )
-}
-
-/**
- * A refused action has to say so. Every purchase route redirects on failure, and
- * until now the screen it redirected to looked exactly like the one the operator
- * had just submitted.
- */
-export const rejection = (_: Translator, invalid?: string | null): TemplateResult | null =>
-  invalid ? (
-    <Notice
-      tone="danger"
-      title={_('purchase_backend.feedback.rejected')}
-      message={
-        invalid === '1'
-          ? _('purchase_backend.feedback.rejectedHint')
-          : _('purchase_backend.feedback.rejectedField', { field: invalid })
-      }
-    />
-  ) : null
-
-/** What the app needs configured elsewhere before a request can be raised. */
-export const missingSetup = (
-  _: Translator,
-  o: { pickingTypes: number; vendors: number },
-): TemplateResult | null => {
-  if (o.pickingTypes && o.vendors) return null
-  const missing = [
-    ...(o.vendors ? [] : [_('purchase_backend.setup.vendors')]),
-    ...(o.pickingTypes ? [] : [_('purchase_backend.setup.pickingTypes')]),
-  ]
-  return (
-    <Notice
-      tone="warning"
-      title={_('purchase_backend.setup.title')}
-      message={_('purchase_backend.setup.hint', { missing: missing.join(', ') })}
-      actions={linkButton({
-        label: o.vendors
-          ? _('purchase_backend.setup.openInventory')
-          : _('purchase_backend.setup.openPartners'),
-        href: o.vendors ? '/admin/stock/picking-types' : '/admin/partner/partners',
-        variant: 'primary',
-      })}
     />
   )
 }
@@ -236,90 +192,6 @@ export const ordersScreen = (
                 }),
               })
             : empty(_),
-    ])}
-  />
-)
-
-export const supplierInfoScreen = (
-  _: Translator,
-  o: {
-    frame: Frame
-    rows: AnyRow[]
-    fields: FormField[]
-    methodFields: FormField[]
-    currency?: unknown
-    invalid?: string | null
-    setup?: { pickingTypes: number; vendors: number }
-  },
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('purchase_backend.pricelists.title')}
-    frame={o.frame}
-    body={stack([
-      rejection(_, o.invalid),
-      o.setup ? missingSetup(_, o.setup) : null,
-      <Surface
-        body={
-          <RecordForm
-            action="/admin/purchase/vendor-pricelists"
-            submit={_('purchase_backend.action.addVendorPrice')}
-            submitVariant="secondary"
-            fields={o.fields}
-          />
-        }
-      />,
-      <Section
-        title={_('purchase_backend.method.title')}
-        body={
-          <Surface
-            body={
-              <RecordForm
-                action="/admin/purchase/vendor-pricelists"
-                submit={_('purchase_backend.action.saveMethod')}
-                submitVariant="primary"
-                hidden={{ action: 'method' }}
-                fields={o.methodFields}
-              />
-            }
-          />
-        }
-      />,
-      o.rows.length
-        ? dataTable(_, {
-            rows: o.rows,
-            id: (row) => String(row.id),
-            columns: [
-              {
-                key: 'vendor',
-                label: _('purchase_backend.field.vendor'),
-                cell: (row) => String(row.partnerName ?? row.partnerId),
-                priority: 'primary',
-              },
-              {
-                key: 'product',
-                label: _('purchase_backend.field.product'),
-                cell: (row) => String(row.productNameDisplay ?? row.productTemplateId),
-              },
-              { key: 'min', label: _('purchase_backend.field.minQty'), cell: (row) => String(row.minQty) },
-              {
-                key: 'price',
-                label: _('purchase_backend.field.priceUnit'),
-                cell: (row) => formatMoney(_, row.price, o.currency),
-                align: 'end',
-                kind: 'currency',
-              },
-              {
-                key: 'discount',
-                label: _('purchase_backend.field.discount'),
-                cell: (row) => `${String(row.discount)}%`,
-              },
-              { key: 'delay', label: _('purchase_backend.field.delay'), cell: (row) => String(row.delay) },
-            ],
-          })
-        : o.setup && (!o.setup.vendors || !o.setup.pickingTypes)
-          ? null
-          : empty(_),
     ])}
   />
 )
