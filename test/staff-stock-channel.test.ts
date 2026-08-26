@@ -40,6 +40,23 @@ const boot = async (t: TestContext) => {
     'company.getCompany',
     'product.listVariants',
     'uom.listUnits',
+    'user.listUsers',
+    'stock_staff_channel.listActiveClaims',
+    'stock_staff_channel.getScanContext',
+    'stock_staff_channel.listCountSessions',
+    'stock_staff_channel.getCountContext',
+    'stock_staff_channel.claimPicking',
+    'stock_staff_channel.releasePicking',
+    'stock_staff_channel.completeGuidedPicking',
+    'stock_staff_channel.completeExecution',
+    'stock_staff_channel.completeReturnExecution',
+    'stock_staff_channel.startScanSession',
+    'stock_staff_channel.submitScanEvent',
+    'stock_staff_channel.transitionScanSession',
+    'stock_staff_channel.claimCountSession',
+    'stock_staff_channel.resumeCountAttempt',
+    'stock_staff_channel.recordCountLine',
+    'stock_staff_channel.submitCountAttempt',
   ])
     await fixture('user.grantFunction', {
       id: `warehouse-reader:${fnKey}`,
@@ -64,6 +81,7 @@ const boot = async (t: TestContext) => {
     id: 'mango',
     templateId: 'mango-template',
     defaultCode: 'XCAT-01',
+    barcode: '893000000001',
     combinationKey: '',
   })
   await fixture('stock.configureProduct', {
@@ -93,6 +111,38 @@ const boot = async (t: TestContext) => {
     })
   }
   return e2e
+}
+
+const mutationHeaders = (csrfToken: string, key: string, version: string) => ({
+  'content-type': 'application/json',
+  'x-csrf-token': csrfToken,
+  'idempotency-key': key,
+  'if-match': `"${version}"`,
+})
+
+const detail = async (e2e: Awaited<ReturnType<typeof boot>>, id = 'pick-a') =>
+  (await e2e.client.json<Envelope<Row>>(`/api/staff/v1/warehouse/pickings/${id}`)).data
+
+const prepareAssignedPicking = async (e2e: Awaited<ReturnType<typeof boot>>) => {
+  const scope = { company: 'acme', branches: null }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    e2e.fixture.call<Row>(name, input, { scope })
+  await fixture('stock.saveLocation', {
+    id: 'inventory-loss',
+    name: 'Inventory loss',
+    usage: 'inventory',
+  })
+  await fixture('stock.adjustInventory', {
+    id: 'warehouse-opening-stock',
+    productId: 'mango',
+    locationId: 'wh:stock',
+    inventoryLocationId: 'inventory-loss',
+    countedQuantity: '20',
+    productUomId: 'unit',
+  })
+  await fixture('stock.confirmPicking', { id: 'pick-a' })
+  const assigned = await fixture('stock.assignPicking', { id: 'pick-a' })
+  assert.equal(assigned.value.ok, true, JSON.stringify(assigned.value))
 }
 
 test('staff warehouse channel pages company-scoped transfer summaries', async (t) => {
@@ -161,7 +211,8 @@ test('staff warehouse channel returns canonical transfer lines and a strong ETag
     allRequirementsSatisfied: true,
   })
   assert.deepEqual(detail.data.quality, { status: 'unavailable', requirements: [] })
-  assert.equal((detail.data.nextAction as Row).supported, false)
+  assert.equal((detail.data.nextAction as Row).supported, true, JSON.stringify(detail.data.nextAction))
+  assert.equal((detail.data.nextAction as Row).code, 'claim')
 
   const missing = await e2e.client.get('/api/staff/v1/warehouse/pickings/missing')
   assert.equal(missing.status, 404)
@@ -207,4 +258,222 @@ test('staff warehouse version tracks every label the projection resolves', async
   assert.notEqual(after.version, before.version)
   assert.equal(after.etag, `"${after.version}"`)
   assert.equal(await listedVersion(), after.version)
+})
+
+test('staff warehouse channel covers claim, scanning, execution, and return as one fenced lifecycle', async (t) => {
+  const e2e = await boot(t)
+  await prepareAssignedPicking(e2e)
+  await e2e.client.login({ login: 'warehouse-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+
+  const ready = await detail(e2e)
+  const claim = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/claim', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-claim-1', String(ready.version)),
+    body: JSON.stringify({ expectedVersion: ready.version, reason: 'Start picking the transfer' }),
+  })
+  assert.equal(claim.status, 200)
+  const claimed = (await claim.json()) as Envelope<Row>
+  assert.equal((claimed.data.claim as Row).ownedByCurrentActor, true)
+  assert.equal((claimed.data.claim as Row).state, 'active')
+  assert.notEqual((claimed.data.picking as Row).version, ready.version)
+
+  const staleRelease = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/release', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-release-stale', String(ready.version)),
+    body: JSON.stringify({ expectedVersion: ready.version, reason: 'Stale release must fail' }),
+  })
+  assert.equal(staleRelease.status, 409)
+
+  const claimedPicking = claimed.data.picking as Row
+  const scanStart = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/scan-sessions', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-scan-start-1', String(claimedPicking.version)),
+    body: JSON.stringify({ expectedVersion: claimedPicking.version }),
+  })
+  assert.equal(scanStart.status, 200)
+  const scan = (await scanStart.json()) as Envelope<Row>
+  assert.match(String(scan.data.version), /^msv_[0-9a-f]{64}$/)
+  assert.equal((scan.data.progress as Row).scanned, '0')
+
+  const rejectedResponse = await e2e.client.request(
+    `/api/staff/v1/warehouse/scan-sessions/${String(scan.data.publicId)}/events`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-scan-event-rejected', String(scan.data.version)),
+      body: JSON.stringify({ expectedVersion: scan.data.version, scan: 'PRIVATE-NOT-EXPECTED' }),
+    },
+  )
+  assert.equal(rejectedResponse.status, 200)
+  const rejected = (await rejectedResponse.json()) as Envelope<Row>
+  assert.equal((rejected.data.feedback as Row).reason, 'PRODUCT_NOT_EXPECTED')
+  assert.equal(JSON.stringify(rejected).includes('PRIVATE-NOT-EXPECTED'), false)
+  assert.notEqual(rejected.data.version, scan.data.version)
+
+  const scannedResponse = await e2e.client.request(
+    `/api/staff/v1/warehouse/scan-sessions/${String(scan.data.publicId)}/events`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-scan-event-1', String(rejected.data.version)),
+      body: JSON.stringify({ expectedVersion: rejected.data.version, scan: '893000000001' }),
+    },
+  )
+  assert.equal(scannedResponse.status, 200)
+  const scanned = (await scannedResponse.json()) as Envelope<Row>
+  assert.equal((scanned.data.progress as Row).scanned, '1')
+  assert.notEqual(scanned.data.version, scan.data.version)
+
+  const pause = await e2e.client.request(
+    `/api/staff/v1/warehouse/scan-sessions/${String(scan.data.publicId)}/transitions`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-scan-pause-1', String(scanned.data.version)),
+      body: JSON.stringify({ expectedVersion: scanned.data.version, targetState: 'paused' }),
+    },
+  )
+  assert.equal(pause.status, 200)
+  assert.equal(((await pause.json()) as Envelope<Row>).data.state, 'paused')
+
+  const preview = await e2e.client.json<Envelope<Row>>('/api/staff/v1/warehouse/pickings/pick-a/execution')
+  assert.match(String(preview.data.expectedVersion), /^opv_[0-9a-f]{64}$/)
+  const move = (preview.data.moves as Row[])[0]!
+  const reservation = (move.reservations as Row[])[0]!
+  const execution = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/execution/complete', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-execution-1', String(preview.data.expectedVersion)),
+    body: JSON.stringify({
+      expectedVersion: preview.data.expectedVersion,
+      lines: [
+        {
+          moveId: move.moveId,
+          moveLineId: reservation.moveLineId,
+          productId: move.productId,
+          quantity: '10',
+          sourceLocationId: reservation.sourceLocationId,
+          destinationLocationId: move.destinationLocationId,
+        },
+      ],
+    }),
+  })
+  assert.equal(execution.status, 200)
+  assert.equal(((await execution.json()) as Envelope<Row>).data.status, 'done')
+  assert.equal((await detail(e2e)).state, 'done')
+
+  const done = await detail(e2e)
+  const returnClaimResponse = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/claim', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-return-claim-1', String(done.version)),
+    body: JSON.stringify({ expectedVersion: done.version, reason: 'Prepare customer return' }),
+  })
+  assert.equal(returnClaimResponse.status, 200)
+  const returnPreviewResponse = await e2e.client.get(
+    '/api/staff/v1/warehouse/pickings/pick-a/return-execution',
+  )
+  assert.equal(returnPreviewResponse.status, 200)
+  const reverse = (await returnPreviewResponse.json()) as Envelope<Row>
+  assert.match(String(reverse.data.expectedVersion), /^orv_[0-9a-f]{64}$/)
+  const reverseLine = (reverse.data.lines as Row[])[0]!
+  const returnInput = {
+    sourceMoveLineId: reverseLine.sourceMoveLineId,
+    productId: reverseLine.productId,
+    quantity: reverseLine.quantity,
+    sourceLocationId: reverseLine.sourceLocationId,
+    destinationLocationId: reverseLine.destinationLocationId,
+    ...(reverseLine.lotId ? { lotId: reverseLine.lotId } : {}),
+  }
+  const returned = await e2e.client.request(
+    '/api/staff/v1/warehouse/pickings/pick-a/return-execution/complete',
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-return-1', String(reverse.data.expectedVersion)),
+      body: JSON.stringify({ expectedVersion: reverse.data.expectedVersion, lines: [returnInput] }),
+    },
+  )
+  const returnedBody = (await returned.json()) as Envelope<Row>
+  assert.equal(returned.status, 200, JSON.stringify(returnedBody))
+  assert.equal(returnedBody.data.status, 'done')
+  assert.match(String(returnedBody.data.returnPickingId), /^staff_wreturn_[0-9a-f]{64}$/)
+})
+
+test('staff warehouse channel covers the complete inventory count lease and submit flow', async (t) => {
+  const e2e = await boot(t)
+  await prepareAssignedPicking(e2e)
+  const scope = { company: 'acme', branches: null }
+  const created = await e2e.fixture.call<Row>(
+    'stock_staff_channel.createCountSession',
+    {
+      id: 'count-session-1',
+      warehouseId: 'wh',
+      locationId: 'wh:stock',
+      productId: 'mango',
+      mode: 'guided',
+      requiredAttemptCount: 1,
+    },
+    { scope },
+  )
+  assert.equal(created.value.ok, true, JSON.stringify(created.value))
+  await e2e.client.login({ login: 'warehouse-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+
+  const worklist = await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/warehouse/count-sessions')
+  assert.equal(worklist.data.items[0]?.publicId, 'count-session-1')
+  assert.equal(worklist.data.items[0]?.claimable, true)
+
+  const count = await e2e.client.json<Envelope<Row>>('/api/staff/v1/warehouse/count-sessions/count-session-1')
+  const claim = await e2e.client.request('/api/staff/v1/warehouse/count-sessions/count-session-1/claim', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-count-claim-1', String(count.data.version)),
+    body: JSON.stringify({ expectedVersion: count.data.version }),
+  })
+  assert.equal(claim.status, 200)
+  const claimed = (await claim.json()) as Envelope<Row>
+  assert.match(String(claimed.data.attemptPublicId), /^staff_wcount_attempt_[0-9a-f]{64}$/)
+  assert.equal(claimed.data.attemptVersion, 'ica_1')
+
+  const resume = await e2e.client.request(
+    `/api/staff/v1/warehouse/count-attempts/${String(claimed.data.attemptPublicId)}/resume`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-count-resume-1', 'ica_1'),
+      body: JSON.stringify({ expectedVersion: 'ica_1' }),
+    },
+  )
+  assert.equal(resume.status, 200)
+  const resumed = (await resume.json()) as Envelope<Row>
+  assert.equal(resumed.data.attemptVersion, 'ica_2')
+
+  const current = await e2e.client.json<Envelope<Row>>(
+    '/api/staff/v1/warehouse/count-sessions/count-session-1',
+  )
+  const attempt = current.data.attempt as Row
+  const line = (attempt.lines as Row[])[0]!
+  assert.equal(line.systemQuantity, '20')
+  const entry = await e2e.client.request(
+    `/api/staff/v1/warehouse/count-lines/${String(line.publicId)}/entries`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-count-entry-1', String(line.version)),
+      body: JSON.stringify({ expectedVersion: line.version, quantity: '20' }),
+    },
+  )
+  assert.equal(entry.status, 200)
+  const recorded = (await entry.json()) as Envelope<Row>
+  assert.equal(recorded.data.countedQuantity, '20')
+  assert.equal(recorded.data.attemptVersion, 'ica_3')
+
+  const submit = await e2e.client.request(
+    `/api/staff/v1/warehouse/count-attempts/${String(claimed.data.attemptPublicId)}/submit`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-count-submit-1', 'ica_3'),
+      body: JSON.stringify({ expectedVersion: 'ica_3' }),
+    },
+  )
+  assert.equal(submit.status, 200)
+  const submitted = (await submit.json()) as Envelope<Row>
+  assert.equal(submitted.data.attemptState, 'submitted')
+  assert.equal(submitted.data.sessionState, 'review_ready')
+  assert.equal(submitted.data.completedAttemptCount, 1)
 })

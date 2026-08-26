@@ -13518,6 +13518,72 @@
                               },
                               "scheduledAt": {
                                 "type": "string"
+                              },
+                              "claim": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "pickingId": {
+                                    "type": "string"
+                                  },
+                                  "state": {
+                                    "type": "string",
+                                    "enum": ["active", "released"]
+                                  },
+                                  "claimant": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "ownedByCurrentActor": {
+                                    "type": "boolean"
+                                  },
+                                  "claimReason": {
+                                    "type": "string"
+                                  },
+                                  "claimedAt": {
+                                    "type": "string"
+                                  },
+                                  "releasedBy": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "releaseReason": {
+                                    "type": "string"
+                                  },
+                                  "releasedAt": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "pickingId",
+                                  "state",
+                                  "claimant",
+                                  "ownedByCurrentActor",
+                                  "claimReason",
+                                  "claimedAt"
+                                ]
                               }
                             },
                             "required": [
@@ -13782,6 +13848,72 @@
                         "scheduledAt": {
                           "type": "string"
                         },
+                        "claim": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "pickingId": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["active", "released"]
+                            },
+                            "claimant": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "ownedByCurrentActor": {
+                              "type": "boolean"
+                            },
+                            "claimReason": {
+                              "type": "string"
+                            },
+                            "claimedAt": {
+                              "type": "string"
+                            },
+                            "releasedBy": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "releaseReason": {
+                              "type": "string"
+                            },
+                            "releasedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "pickingId",
+                            "state",
+                            "claimant",
+                            "ownedByCurrentActor",
+                            "claimReason",
+                            "claimedAt"
+                          ]
+                        },
                         "lines": {
                           "type": "array",
                           "items": {
@@ -13920,6 +14052,3968 @@
         },
         "x-ket-auth": "required",
         "x-ket-idempotent": false
+      }
+    },
+    "/warehouse/pickings/{id}/claim": {
+      "post": {
+        "operationId": "staff.warehouse.pickings.claim",
+        "summary": "Claim a warehouse transfer for the verified staff actor.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  }
+                },
+                "required": ["expectedVersion", "reason"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "picking": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["waiting", "ready", "in_progress", "blocked", "done", "cancelled"]
+                            },
+                            "context": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "company": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "warehouse": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "sourceLocation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "destinationLocation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "operation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "code": {
+                                      "type": "string",
+                                      "enum": ["incoming", "outgoing", "internal"]
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["code", "name"]
+                                },
+                                "sourceDocument": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": ["other", "none"]
+                                    },
+                                    "reference": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["type"]
+                                }
+                              },
+                              "required": [
+                                "company",
+                                "sourceLocation",
+                                "destinationLocation",
+                                "operation",
+                                "sourceDocument"
+                              ]
+                            },
+                            "progress": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "lineCount": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "completedLineCount": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              },
+                              "required": ["lineCount", "completedLineCount"]
+                            },
+                            "tracking": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "lotOrSerialRequired": {
+                                  "type": "boolean"
+                                },
+                                "allRequirementsSatisfied": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": ["lotOrSerialRequired", "allRequirementsSatisfied"]
+                            },
+                            "quality": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "enum": ["not_required", "pending", "passed", "failed", "unavailable"]
+                                },
+                                "requirements": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": ["status", "requirements"]
+                            },
+                            "nextAction": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "supported": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["code", "label", "supported"]
+                            },
+                            "sourceReference": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "stock_picking"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "displayName": {
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["type", "id", "displayName", "version"]
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "scheduledAt": {
+                              "type": "string"
+                            },
+                            "claim": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "pickingId": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": ["active", "released"]
+                                },
+                                "claimant": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "ownedByCurrentActor": {
+                                  "type": "boolean"
+                                },
+                                "claimReason": {
+                                  "type": "string"
+                                },
+                                "claimedAt": {
+                                  "type": "string"
+                                },
+                                "releasedBy": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "releaseReason": {
+                                  "type": "string"
+                                },
+                                "releasedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "pickingId",
+                                "state",
+                                "claimant",
+                                "ownedByCurrentActor",
+                                "claimReason",
+                                "claimedAt"
+                              ]
+                            },
+                            "lines": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "product": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "uom": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "expectedQuantity": {
+                                    "type": "string"
+                                  },
+                                  "doneQuantity": {
+                                    "type": "string"
+                                  },
+                                  "remainingQuantity": {
+                                    "type": "string"
+                                  },
+                                  "tracking": {
+                                    "type": "string",
+                                    "enum": ["none", "lot", "serial"]
+                                  },
+                                  "trackingRequirement": {
+                                    "type": "string",
+                                    "enum": ["not_required", "required", "satisfied"]
+                                  },
+                                  "lots": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "quantity": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": ["name", "quantity"]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "product",
+                                  "uom",
+                                  "expectedQuantity",
+                                  "doneQuantity",
+                                  "remainingQuantity",
+                                  "tracking",
+                                  "trackingRequirement",
+                                  "lots"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "title",
+                            "state",
+                            "context",
+                            "progress",
+                            "tracking",
+                            "quality",
+                            "nextAction",
+                            "sourceReference",
+                            "version",
+                            "lines"
+                          ]
+                        },
+                        "claim": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "pickingId": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["active", "released"]
+                            },
+                            "claimant": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "ownedByCurrentActor": {
+                              "type": "boolean"
+                            },
+                            "claimReason": {
+                              "type": "string"
+                            },
+                            "claimedAt": {
+                              "type": "string"
+                            },
+                            "releasedBy": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "releaseReason": {
+                              "type": "string"
+                            },
+                            "releasedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "pickingId",
+                            "state",
+                            "claimant",
+                            "ownedByCurrentActor",
+                            "claimReason",
+                            "claimedAt"
+                          ]
+                        }
+                      },
+                      "required": ["picking", "claim"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "claim"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/pickings/{id}/release": {
+      "post": {
+        "operationId": "staff.warehouse.pickings.release",
+        "summary": "Release a transfer claim owned by the verified staff actor.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  }
+                },
+                "required": ["expectedVersion", "reason"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "picking": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["waiting", "ready", "in_progress", "blocked", "done", "cancelled"]
+                            },
+                            "context": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "company": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "warehouse": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "sourceLocation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "destinationLocation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "operation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "code": {
+                                      "type": "string",
+                                      "enum": ["incoming", "outgoing", "internal"]
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["code", "name"]
+                                },
+                                "sourceDocument": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": ["other", "none"]
+                                    },
+                                    "reference": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["type"]
+                                }
+                              },
+                              "required": [
+                                "company",
+                                "sourceLocation",
+                                "destinationLocation",
+                                "operation",
+                                "sourceDocument"
+                              ]
+                            },
+                            "progress": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "lineCount": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "completedLineCount": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              },
+                              "required": ["lineCount", "completedLineCount"]
+                            },
+                            "tracking": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "lotOrSerialRequired": {
+                                  "type": "boolean"
+                                },
+                                "allRequirementsSatisfied": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": ["lotOrSerialRequired", "allRequirementsSatisfied"]
+                            },
+                            "quality": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "enum": ["not_required", "pending", "passed", "failed", "unavailable"]
+                                },
+                                "requirements": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": ["status", "requirements"]
+                            },
+                            "nextAction": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "supported": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["code", "label", "supported"]
+                            },
+                            "sourceReference": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "stock_picking"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "displayName": {
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["type", "id", "displayName", "version"]
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "scheduledAt": {
+                              "type": "string"
+                            },
+                            "claim": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "pickingId": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": ["active", "released"]
+                                },
+                                "claimant": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "ownedByCurrentActor": {
+                                  "type": "boolean"
+                                },
+                                "claimReason": {
+                                  "type": "string"
+                                },
+                                "claimedAt": {
+                                  "type": "string"
+                                },
+                                "releasedBy": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "releaseReason": {
+                                  "type": "string"
+                                },
+                                "releasedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "pickingId",
+                                "state",
+                                "claimant",
+                                "ownedByCurrentActor",
+                                "claimReason",
+                                "claimedAt"
+                              ]
+                            },
+                            "lines": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "product": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "uom": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "expectedQuantity": {
+                                    "type": "string"
+                                  },
+                                  "doneQuantity": {
+                                    "type": "string"
+                                  },
+                                  "remainingQuantity": {
+                                    "type": "string"
+                                  },
+                                  "tracking": {
+                                    "type": "string",
+                                    "enum": ["none", "lot", "serial"]
+                                  },
+                                  "trackingRequirement": {
+                                    "type": "string",
+                                    "enum": ["not_required", "required", "satisfied"]
+                                  },
+                                  "lots": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "quantity": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": ["name", "quantity"]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "product",
+                                  "uom",
+                                  "expectedQuantity",
+                                  "doneQuantity",
+                                  "remainingQuantity",
+                                  "tracking",
+                                  "trackingRequirement",
+                                  "lots"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "title",
+                            "state",
+                            "context",
+                            "progress",
+                            "tracking",
+                            "quality",
+                            "nextAction",
+                            "sourceReference",
+                            "version",
+                            "lines"
+                          ]
+                        },
+                        "claim": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "pickingId": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["active", "released"]
+                            },
+                            "claimant": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "ownedByCurrentActor": {
+                              "type": "boolean"
+                            },
+                            "claimReason": {
+                              "type": "string"
+                            },
+                            "claimedAt": {
+                              "type": "string"
+                            },
+                            "releasedBy": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "releaseReason": {
+                              "type": "string"
+                            },
+                            "releasedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "pickingId",
+                            "state",
+                            "claimant",
+                            "ownedByCurrentActor",
+                            "claimReason",
+                            "claimedAt"
+                          ]
+                        }
+                      },
+                      "required": ["picking", "claim"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "claim"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/pickings/{id}/complete": {
+      "post": {
+        "operationId": "staff.warehouse.pickings.complete",
+        "summary": "Complete a claimed outgoing transfer from exact barcode evidence.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  },
+                  "lines": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "lineId": {
+                          "type": "string"
+                        },
+                        "barcode": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,6})?$"
+                        }
+                      },
+                      "required": ["lineId", "barcode", "quantity"]
+                    }
+                  }
+                },
+                "required": ["expectedVersion", "lines", "reason"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "complete"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/pickings/{id}/execution": {
+      "get": {
+        "operationId": "staff.warehouse.pickings.execution.get",
+        "summary": "Read the canonical execution preview for a warehouse transfer.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string",
+                          "const": "mobile.warehouse.execution/1"
+                        },
+                        "pickingId": {
+                          "type": "string"
+                        },
+                        "operation": {
+                          "type": "string",
+                          "enum": ["incoming", "outgoing", "internal"]
+                        },
+                        "expectedVersion": {
+                          "type": "string"
+                        },
+                        "policy": {
+                          "type": "object"
+                        },
+                        "quality": {
+                          "type": "object"
+                        },
+                        "moves": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "moveId": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "tracking": {
+                                "type": "string",
+                                "enum": ["none", "lot", "serial"]
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "destinationLocationId": {
+                                "type": "string"
+                              },
+                              "reservations": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "moveLineId": {
+                                      "type": "string"
+                                    },
+                                    "quantity": {
+                                      "type": "string"
+                                    },
+                                    "sourceLocationId": {
+                                      "type": "string"
+                                    },
+                                    "destinationLocationId": {
+                                      "type": "string"
+                                    },
+                                    "uomId": {
+                                      "type": "string"
+                                    },
+                                    "lotId": {
+                                      "type": "string"
+                                    },
+                                    "sourcePackageId": {
+                                      "type": "string"
+                                    },
+                                    "resultPackageId": {
+                                      "type": "string"
+                                    },
+                                    "entirePackage": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "moveLineId",
+                                    "quantity",
+                                    "sourceLocationId",
+                                    "destinationLocationId",
+                                    "uomId"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": ["moveId", "productId", "quantity", "tracking", "uomId"]
+                          }
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "pickingId",
+                        "operation",
+                        "expectedVersion",
+                        "policy",
+                        "quality",
+                        "moves"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "complete"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/warehouse/pickings/{id}/execution/complete": {
+      "post": {
+        "operationId": "staff.warehouse.pickings.execution.complete",
+        "summary": "Complete a claimed transfer with canonical move-line evidence.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  },
+                  "lines": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "moveId": {
+                          "type": "string"
+                        },
+                        "moveLineId": {
+                          "type": "string"
+                        },
+                        "productId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,6})?$"
+                        },
+                        "sourceLocationId": {
+                          "type": "string"
+                        },
+                        "destinationLocationId": {
+                          "type": "string"
+                        },
+                        "lotId": {
+                          "type": "string"
+                        },
+                        "lotName": {
+                          "type": "string"
+                        },
+                        "expirationDate": {
+                          "type": "string"
+                        },
+                        "sourcePackageId": {
+                          "type": "string"
+                        },
+                        "packageName": {
+                          "type": "string"
+                        },
+                        "resultPackageName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["quantity", "destinationLocationId"]
+                    }
+                  }
+                },
+                "required": ["expectedVersion", "lines"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string",
+                          "const": "mobile.warehouse.execution/1"
+                        },
+                        "status": {
+                          "type": "string",
+                          "const": "done"
+                        },
+                        "pickingId": {
+                          "type": "string"
+                        },
+                        "backorderIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "moveLineId": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "sourceLocationId": {
+                                "type": "string"
+                              },
+                              "destinationLocationId": {
+                                "type": "string"
+                              },
+                              "lotId": {
+                                "type": "string"
+                              },
+                              "packageId": {
+                                "type": "string"
+                              },
+                              "sourcePackageId": {
+                                "type": "string"
+                              },
+                              "resultPackageId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["moveLineId", "productId", "quantity", "destinationLocationId"]
+                          }
+                        }
+                      },
+                      "required": ["schemaVersion", "status", "pickingId", "backorderIds", "lines"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "complete"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/pickings/{id}/return-execution": {
+      "get": {
+        "operationId": "staff.warehouse.pickings.returnExecution.get",
+        "summary": "Read the reverse-movement preview for a completed transfer.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string",
+                          "const": "mobile.warehouse.return-execution/1"
+                        },
+                        "sourcePickingId": {
+                          "type": "string"
+                        },
+                        "destinationLocationId": {
+                          "type": "string"
+                        },
+                        "expectedVersion": {
+                          "type": "string"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "moveLineId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "sourceLocationId": {
+                                "type": "string"
+                              },
+                              "destinationLocationId": {
+                                "type": "string"
+                              },
+                              "uomId": {
+                                "type": "string"
+                              },
+                              "sourceMoveLineId": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "tracking": {
+                                "type": "string",
+                                "enum": ["none", "lot", "serial"]
+                              },
+                              "lotId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "moveLineId",
+                              "quantity",
+                              "sourceLocationId",
+                              "destinationLocationId",
+                              "uomId",
+                              "sourceMoveLineId",
+                              "productId",
+                              "tracking"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "sourcePickingId",
+                        "destinationLocationId",
+                        "expectedVersion",
+                        "lines"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "complete"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/warehouse/pickings/{id}/return-execution/complete": {
+      "post": {
+        "operationId": "staff.warehouse.pickings.returnExecution.complete",
+        "summary": "Complete a claimed reverse warehouse movement.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  },
+                  "lines": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "sourceMoveLineId": {
+                          "type": "string"
+                        },
+                        "productId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "string",
+                          "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,6})?$"
+                        },
+                        "sourceLocationId": {
+                          "type": "string"
+                        },
+                        "destinationLocationId": {
+                          "type": "string"
+                        },
+                        "lotId": {
+                          "type": "string"
+                        },
+                        "sourcePackageId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "sourceMoveLineId",
+                        "productId",
+                        "quantity",
+                        "sourceLocationId",
+                        "destinationLocationId"
+                      ]
+                    }
+                  }
+                },
+                "required": ["expectedVersion", "lines"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string",
+                          "const": "mobile.warehouse.return-execution/1"
+                        },
+                        "status": {
+                          "type": "string",
+                          "const": "done"
+                        },
+                        "sourcePickingId": {
+                          "type": "string"
+                        },
+                        "returnPickingId": {
+                          "type": "string"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "moveLineId": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "sourceLocationId": {
+                                "type": "string"
+                              },
+                              "destinationLocationId": {
+                                "type": "string"
+                              },
+                              "lotId": {
+                                "type": "string"
+                              },
+                              "packageId": {
+                                "type": "string"
+                              },
+                              "sourcePackageId": {
+                                "type": "string"
+                              },
+                              "resultPackageId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["moveLineId", "productId", "quantity", "destinationLocationId"]
+                          }
+                        }
+                      },
+                      "required": ["schemaVersion", "status", "sourcePickingId", "returnPickingId", "lines"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "complete"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/pickings/{id}/scan-sessions": {
+      "post": {
+        "operationId": "staff.warehouse.scanSessions.start",
+        "summary": "Start or replay a scan session for a claimed transfer.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "publicId": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["active", "paused", "ready", "expired", "cancelled"]
+                        },
+                        "operation": {
+                          "type": "string",
+                          "enum": ["incoming", "outgoing", "internal"]
+                        },
+                        "operationLabel": {
+                          "type": "string"
+                        },
+                        "origin": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        },
+                        "warehouse": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "picking": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "progress": {
+                          "type": "object"
+                        },
+                        "prompt": {
+                          "type": "object"
+                        },
+                        "feedback": {
+                          "type": "object"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "uomName": {
+                                "type": "string"
+                              },
+                              "expectedQuantity": {
+                                "type": "string"
+                              },
+                              "scannedQuantity": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["pending", "complete"]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "productName",
+                              "uomName",
+                              "expectedQuantity",
+                              "scannedQuantity",
+                              "state"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "publicId",
+                        "version",
+                        "state",
+                        "operation",
+                        "operationLabel",
+                        "expiresAt",
+                        "warehouse",
+                        "picking",
+                        "progress",
+                        "prompt",
+                        "lines"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "scan"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/scan-sessions/{publicId}": {
+      "get": {
+        "operationId": "staff.warehouse.scanSessions.get",
+        "summary": "Read a scan session owned by the verified staff actor.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "publicId": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["active", "paused", "ready", "expired", "cancelled"]
+                        },
+                        "operation": {
+                          "type": "string",
+                          "enum": ["incoming", "outgoing", "internal"]
+                        },
+                        "operationLabel": {
+                          "type": "string"
+                        },
+                        "origin": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        },
+                        "warehouse": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "picking": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "progress": {
+                          "type": "object"
+                        },
+                        "prompt": {
+                          "type": "object"
+                        },
+                        "feedback": {
+                          "type": "object"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "uomName": {
+                                "type": "string"
+                              },
+                              "expectedQuantity": {
+                                "type": "string"
+                              },
+                              "scannedQuantity": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["pending", "complete"]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "productName",
+                              "uomName",
+                              "expectedQuantity",
+                              "scannedQuantity",
+                              "state"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "publicId",
+                        "version",
+                        "state",
+                        "operation",
+                        "operationLabel",
+                        "expiresAt",
+                        "warehouse",
+                        "picking",
+                        "progress",
+                        "prompt",
+                        "lines"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "scan"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/warehouse/scan-sessions/{publicId}/events": {
+      "post": {
+        "operationId": "staff.warehouse.scanSessions.events.submit",
+        "summary": "Submit one private barcode event to an active scan session.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  },
+                  "scan": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 65536,
+                    "writeOnly": true
+                  }
+                },
+                "required": ["expectedVersion", "scan"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "publicId": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["active", "paused", "ready", "expired", "cancelled"]
+                        },
+                        "operation": {
+                          "type": "string",
+                          "enum": ["incoming", "outgoing", "internal"]
+                        },
+                        "operationLabel": {
+                          "type": "string"
+                        },
+                        "origin": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        },
+                        "warehouse": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "picking": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "progress": {
+                          "type": "object"
+                        },
+                        "prompt": {
+                          "type": "object"
+                        },
+                        "feedback": {
+                          "type": "object"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "uomName": {
+                                "type": "string"
+                              },
+                              "expectedQuantity": {
+                                "type": "string"
+                              },
+                              "scannedQuantity": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["pending", "complete"]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "productName",
+                              "uomName",
+                              "expectedQuantity",
+                              "scannedQuantity",
+                              "state"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "publicId",
+                        "version",
+                        "state",
+                        "operation",
+                        "operationLabel",
+                        "expiresAt",
+                        "warehouse",
+                        "picking",
+                        "progress",
+                        "prompt",
+                        "lines"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "scan"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/scan-sessions/{publicId}/transitions": {
+      "post": {
+        "operationId": "staff.warehouse.scanSessions.transition",
+        "summary": "Pause, resume, or cancel a scan session.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  },
+                  "targetState": {
+                    "type": "string",
+                    "enum": ["active", "paused", "cancelled"]
+                  }
+                },
+                "required": ["expectedVersion", "targetState"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "publicId": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["active", "paused", "ready", "expired", "cancelled"]
+                        },
+                        "operation": {
+                          "type": "string",
+                          "enum": ["incoming", "outgoing", "internal"]
+                        },
+                        "operationLabel": {
+                          "type": "string"
+                        },
+                        "origin": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        },
+                        "warehouse": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "picking": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "progress": {
+                          "type": "object"
+                        },
+                        "prompt": {
+                          "type": "object"
+                        },
+                        "feedback": {
+                          "type": "object"
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "uomName": {
+                                "type": "string"
+                              },
+                              "expectedQuantity": {
+                                "type": "string"
+                              },
+                              "scannedQuantity": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": ["pending", "complete"]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "productName",
+                              "uomName",
+                              "expectedQuantity",
+                              "scannedQuantity",
+                              "state"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "publicId",
+                        "version",
+                        "state",
+                        "operation",
+                        "operationLabel",
+                        "expiresAt",
+                        "warehouse",
+                        "picking",
+                        "progress",
+                        "prompt",
+                        "lines"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.pickings",
+          "action": "scan"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/count-sessions": {
+      "get": {
+        "operationId": "staff.warehouse.countSessions.list",
+        "summary": "List inventory count sessions visible in the signed-in company.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "publicId": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "mode": {
+                                "type": "string",
+                                "enum": ["guided", "blind", "double_blind"]
+                              },
+                              "expiresAt": {
+                                "type": "string"
+                              },
+                              "cutoffAt": {
+                                "type": "string"
+                              },
+                              "warehouse": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "location": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "product": {
+                                "type": "object"
+                              },
+                              "lineCount": {
+                                "type": "integer"
+                              },
+                              "countedLineCount": {
+                                "type": "integer"
+                              },
+                              "claimable": {
+                                "type": "boolean"
+                              },
+                              "attemptPublicId": {
+                                "type": ["string", "null"]
+                              },
+                              "attempt": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "publicId": {
+                                    "type": "string"
+                                  },
+                                  "version": {
+                                    "type": "string"
+                                  },
+                                  "state": {
+                                    "type": "string"
+                                  },
+                                  "leaseExpiresAt": {
+                                    "type": ["string", "null"]
+                                  },
+                                  "lineCount": {
+                                    "type": "integer"
+                                  },
+                                  "countedLineCount": {
+                                    "type": "integer"
+                                  },
+                                  "lines": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "publicId": {
+                                          "type": "string"
+                                        },
+                                        "version": {
+                                          "type": "string"
+                                        },
+                                        "product": {
+                                          "type": "object"
+                                        },
+                                        "location": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "name": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": ["id", "name"]
+                                        },
+                                        "lot": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "name": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": ["id", "name"]
+                                        },
+                                        "package": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "name": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": ["id", "name"]
+                                        },
+                                        "owner": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "name": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": ["id", "name"]
+                                        },
+                                        "uom": {
+                                          "type": "object",
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "id": {
+                                              "type": "string"
+                                            },
+                                            "name": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": ["id", "name"]
+                                        },
+                                        "isCounted": {
+                                          "type": "boolean"
+                                        },
+                                        "countedQuantity": {
+                                          "type": ["string", "null"]
+                                        },
+                                        "systemQuantity": {
+                                          "type": ["string", "null"]
+                                        }
+                                      },
+                                      "required": [
+                                        "publicId",
+                                        "version",
+                                        "product",
+                                        "location",
+                                        "uom",
+                                        "isCounted"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "publicId",
+                                  "version",
+                                  "state",
+                                  "lineCount",
+                                  "countedLineCount",
+                                  "lines"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "publicId",
+                              "version",
+                              "state",
+                              "mode",
+                              "expiresAt",
+                              "cutoffAt",
+                              "warehouse",
+                              "location",
+                              "product",
+                              "lineCount",
+                              "countedLineCount",
+                              "claimable"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["items", "nextCursor"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.counts",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/warehouse/count-sessions/{publicId}": {
+      "get": {
+        "operationId": "staff.warehouse.countSessions.get",
+        "summary": "Read one inventory count session and the actor own attempt.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "publicId": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": ["guided", "blind", "double_blind"]
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        },
+                        "cutoffAt": {
+                          "type": "string"
+                        },
+                        "warehouse": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "location": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "product": {
+                          "type": "object"
+                        },
+                        "lineCount": {
+                          "type": "integer"
+                        },
+                        "countedLineCount": {
+                          "type": "integer"
+                        },
+                        "claimable": {
+                          "type": "boolean"
+                        },
+                        "attemptPublicId": {
+                          "type": ["string", "null"]
+                        },
+                        "attempt": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "publicId": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string"
+                            },
+                            "leaseExpiresAt": {
+                              "type": ["string", "null"]
+                            },
+                            "lineCount": {
+                              "type": "integer"
+                            },
+                            "countedLineCount": {
+                              "type": "integer"
+                            },
+                            "lines": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "publicId": {
+                                    "type": "string"
+                                  },
+                                  "version": {
+                                    "type": "string"
+                                  },
+                                  "product": {
+                                    "type": "object"
+                                  },
+                                  "location": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "lot": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "package": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "owner": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "uom": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "isCounted": {
+                                    "type": "boolean"
+                                  },
+                                  "countedQuantity": {
+                                    "type": ["string", "null"]
+                                  },
+                                  "systemQuantity": {
+                                    "type": ["string", "null"]
+                                  }
+                                },
+                                "required": ["publicId", "version", "product", "location", "uom", "isCounted"]
+                              }
+                            }
+                          },
+                          "required": [
+                            "publicId",
+                            "version",
+                            "state",
+                            "lineCount",
+                            "countedLineCount",
+                            "lines"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "publicId",
+                        "version",
+                        "state",
+                        "mode",
+                        "expiresAt",
+                        "cutoffAt",
+                        "warehouse",
+                        "location",
+                        "product",
+                        "lineCount",
+                        "countedLineCount",
+                        "claimable"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.counts",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/warehouse/count-sessions/{publicId}/claim": {
+      "post": {
+        "operationId": "staff.warehouse.countSessions.claim",
+        "summary": "Claim an inventory count session and snapshot its positions.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string"
+                        },
+                        "sessionPublicId": {
+                          "type": "string"
+                        },
+                        "sessionVersion": {
+                          "type": "string"
+                        },
+                        "attemptPublicId": {
+                          "type": "string"
+                        },
+                        "attemptVersion": {
+                          "type": "string"
+                        },
+                        "attemptState": {
+                          "type": "string"
+                        },
+                        "leaseExpiresAt": {
+                          "type": ["string", "null"]
+                        },
+                        "lineCount": {
+                          "type": "integer"
+                        },
+                        "countedLineCount": {
+                          "type": "integer"
+                        },
+                        "linePublicId": {
+                          "type": "string"
+                        },
+                        "lineVersion": {
+                          "type": "string"
+                        },
+                        "countedQuantity": {
+                          "type": "string"
+                        },
+                        "requiredAttemptCount": {
+                          "type": "integer"
+                        },
+                        "completedAttemptCount": {
+                          "type": "integer"
+                        },
+                        "sessionState": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "sessionPublicId",
+                        "sessionVersion",
+                        "attemptPublicId",
+                        "attemptVersion"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.counts",
+          "action": "claim"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/count-attempts/{publicId}/resume": {
+      "post": {
+        "operationId": "staff.warehouse.countAttempts.resume",
+        "summary": "Renew the verified actor lease on an inventory count attempt.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string"
+                        },
+                        "sessionPublicId": {
+                          "type": "string"
+                        },
+                        "sessionVersion": {
+                          "type": "string"
+                        },
+                        "attemptPublicId": {
+                          "type": "string"
+                        },
+                        "attemptVersion": {
+                          "type": "string"
+                        },
+                        "attemptState": {
+                          "type": "string"
+                        },
+                        "leaseExpiresAt": {
+                          "type": ["string", "null"]
+                        },
+                        "lineCount": {
+                          "type": "integer"
+                        },
+                        "countedLineCount": {
+                          "type": "integer"
+                        },
+                        "linePublicId": {
+                          "type": "string"
+                        },
+                        "lineVersion": {
+                          "type": "string"
+                        },
+                        "countedQuantity": {
+                          "type": "string"
+                        },
+                        "requiredAttemptCount": {
+                          "type": "integer"
+                        },
+                        "completedAttemptCount": {
+                          "type": "integer"
+                        },
+                        "sessionState": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "sessionPublicId",
+                        "sessionVersion",
+                        "attemptPublicId",
+                        "attemptVersion"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.counts",
+          "action": "count"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/count-lines/{publicId}/entries": {
+      "post": {
+        "operationId": "staff.warehouse.countLines.entries.record",
+        "summary": "Record one canonical non-negative quantity on an owned count line.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,6})?$"
+                  }
+                },
+                "required": ["expectedVersion", "quantity"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string"
+                        },
+                        "sessionPublicId": {
+                          "type": "string"
+                        },
+                        "sessionVersion": {
+                          "type": "string"
+                        },
+                        "attemptPublicId": {
+                          "type": "string"
+                        },
+                        "attemptVersion": {
+                          "type": "string"
+                        },
+                        "attemptState": {
+                          "type": "string"
+                        },
+                        "leaseExpiresAt": {
+                          "type": ["string", "null"]
+                        },
+                        "lineCount": {
+                          "type": "integer"
+                        },
+                        "countedLineCount": {
+                          "type": "integer"
+                        },
+                        "linePublicId": {
+                          "type": "string"
+                        },
+                        "lineVersion": {
+                          "type": "string"
+                        },
+                        "countedQuantity": {
+                          "type": "string"
+                        },
+                        "requiredAttemptCount": {
+                          "type": "integer"
+                        },
+                        "completedAttemptCount": {
+                          "type": "integer"
+                        },
+                        "sessionState": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "sessionPublicId",
+                        "sessionVersion",
+                        "attemptPublicId",
+                        "attemptVersion"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.counts",
+          "action": "count"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/warehouse/count-attempts/{publicId}/submit": {
+      "post": {
+        "operationId": "staff.warehouse.countAttempts.submit",
+        "summary": "Submit a fully counted attempt for review.",
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "expectedVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": ["expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "schemaVersion": {
+                          "type": "string"
+                        },
+                        "sessionPublicId": {
+                          "type": "string"
+                        },
+                        "sessionVersion": {
+                          "type": "string"
+                        },
+                        "attemptPublicId": {
+                          "type": "string"
+                        },
+                        "attemptVersion": {
+                          "type": "string"
+                        },
+                        "attemptState": {
+                          "type": "string"
+                        },
+                        "leaseExpiresAt": {
+                          "type": ["string", "null"]
+                        },
+                        "lineCount": {
+                          "type": "integer"
+                        },
+                        "countedLineCount": {
+                          "type": "integer"
+                        },
+                        "linePublicId": {
+                          "type": "string"
+                        },
+                        "lineVersion": {
+                          "type": "string"
+                        },
+                        "countedQuantity": {
+                          "type": "string"
+                        },
+                        "requiredAttemptCount": {
+                          "type": "integer"
+                        },
+                        "completedAttemptCount": {
+                          "type": "integer"
+                        },
+                        "sessionState": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "sessionPublicId",
+                        "sessionVersion",
+                        "attemptPublicId",
+                        "attemptVersion"
+                      ]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "warehouse.counts",
+          "action": "submit"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
       }
     }
   },
