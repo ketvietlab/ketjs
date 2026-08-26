@@ -214,6 +214,9 @@ const quotationEvidenceDir = resolve('docs/public/assets/sales-quotation-list')
 const quotationCreateEvidenceDir = resolve('docs/public/assets/sales-quotation-create')
 const vendorPricelistEvidenceDir = resolve('docs/public/assets/purchase-vendor-pricelists')
 const crmPipelineEvidenceDir = resolve('docs/public/assets/crm-pipeline')
+const crmCasesEvidenceDir = resolve('docs/public/assets/crm-cases')
+const salesOverviewEvidenceDir = resolve('docs/public/assets/sales-overview')
+const purchaseOverviewEvidenceDir = resolve('docs/public/assets/purchase-overview')
 const saleOrderEvidenceDir = resolve('docs/public/assets/sales-order-detail')
 const salesOrderListEvidenceDir = resolve('docs/public/assets/sales-order-list')
 const invoicingPolicyEvidenceDir = resolve('docs/public/assets/sales-invoicing-policy')
@@ -248,6 +251,9 @@ try {
   await mkdir(quotationCreateEvidenceDir, { recursive: true })
   await mkdir(vendorPricelistEvidenceDir, { recursive: true })
   await mkdir(crmPipelineEvidenceDir, { recursive: true })
+  await mkdir(crmCasesEvidenceDir, { recursive: true })
+  await mkdir(salesOverviewEvidenceDir, { recursive: true })
+  await mkdir(purchaseOverviewEvidenceDir, { recursive: true })
   await mkdir(saleOrderEvidenceDir, { recursive: true })
   await mkdir(salesOrderListEvidenceDir, { recursive: true })
   await mkdir(invoicingPolicyEvidenceDir, { recursive: true })
@@ -430,6 +436,26 @@ try {
       name: 'crm-pipeline',
       path: '/admin/crm/pipeline?lang=vi',
       ready: `document.querySelector('ket-island[data-island="crm.pipeline"]') && document.querySelector('[data-ui="record-workspace"]')`,
+    },
+    {
+      name: 'crm-cases-list',
+      path: '/admin/crm/cases?lang=vi',
+      ready: `document.querySelector('[data-ui="list-page"]')`,
+    },
+    {
+      name: 'crm-case-create',
+      path: '/admin/crm/cases/new?kind=lead&lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#crm-case-create-form')`,
+    },
+    {
+      name: 'sales-overview',
+      path: '/admin/sales?lang=vi',
+      ready: `document.querySelector('[data-ui="record-workspace"]') && document.querySelectorAll('[data-ui="metric"]').length === 4`,
+    },
+    {
+      name: 'purchase-overview',
+      path: '/admin/purchase?lang=vi',
+      ready: `document.querySelector('[data-ui="record-workspace"]') && document.querySelectorAll('[data-ui="metric"]').length === 5`,
     },
     {
       name: 'sale-order-detail',
@@ -2534,6 +2560,110 @@ try {
         },
       )
       if (!noArtifacts) await capture(cdp, join(crmPipelineEvidenceDir, 'crm-pipeline.png'))
+    }
+    if (screen.name === 'crm-cases-list') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
+            createHref: document.querySelector('[data-ui="list-page"] a[href*="/admin/crm/cases/new"]')?.getAttribute('href') ?? '',
+            inlineForm: Boolean(document.querySelector('#crm-case-create-form')),
+            columns: document.querySelectorAll('[data-ui="table"] [data-ui="column-header"]').length,
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          listPage: true,
+          createHref: '/admin/crm/cases/new?lang=vi&returnTo=%2Fadmin%2Fcrm%2Fcases%3Flang%3Dvi',
+          inlineForm: false,
+          columns: 0,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(crmCasesEvidenceDir, 'crm-cases-list.png'))
+    }
+    if (screen.name === 'crm-case-create') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            fields: document.querySelectorAll('#crm-case-create-form [data-ui="form-field"]').length,
+            kind: document.querySelector('#crm-case-create-form [name="kind"]')?.value,
+            returnTo: document.querySelector('#crm-case-create-form [name="returnTo"]')?.value,
+            relationIslandsAtLeastFive: document.querySelectorAll('#crm-case-create-form ket-island[data-island="backend.relation-select"]').length >= 5,
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          formPage: true,
+          fields: 15,
+          kind: 'lead',
+          returnTo: '/admin/crm/cases?lang=vi',
+          relationIslandsAtLeastFive: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(crmCasesEvidenceDir, 'crm-case-create.png'))
+    }
+    if (screen.name === 'sales-overview') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            metrics: document.querySelectorAll('[data-ui="metric"]').length,
+            createHref: document.querySelector('a[href*="/admin/sales/quotations/new"]')?.getAttribute('href'),
+            recentRowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          metrics: 4,
+          createHref: '/admin/sales/quotations/new?lang=vi',
+          recentRowsAtLeastOne: true,
+          listPage: false,
+          formPage: false,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(salesOverviewEvidenceDir, 'sales-overview.png'))
+    }
+    if (screen.name === 'purchase-overview') {
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `({
+            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            metrics: document.querySelectorAll('[data-ui="metric"]').length,
+            rfqHref: document.querySelector('a[href*="/admin/purchase/rfqs"][href*="#rfq-create-form"]')?.getAttribute('href'),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+          })`,
+        ),
+        {
+          workspace: true,
+          metrics: 5,
+          rfqHref: '/admin/purchase/rfqs?lang=vi#rfq-create-form',
+          listPage: false,
+          formPage: false,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(purchaseOverviewEvidenceDir, 'purchase-overview.png'))
     }
     if (screen.name === 'sale-order-detail') {
       await cdp.send('Emulation.setDeviceMetricsOverride', {

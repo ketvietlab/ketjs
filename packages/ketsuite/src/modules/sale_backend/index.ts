@@ -11,9 +11,8 @@ import { islands } from './islands.ts'
 import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
 import { orderDetailScreen } from './order-detail-screen.tsx'
 import { salesOrdersScreen } from './sales-orders-screen.tsx'
-import { quotationCreateScreen, quotationsListScreen } from './screens/index.ts'
-import { overviewScreen } from './overview-screen.tsx'
-import type { SaleCounts } from './overview-screen.tsx'
+import { overviewScreen, quotationCreateScreen, quotationsListScreen } from './screens/index.ts'
+import type { SaleCounts } from './screens/index.ts'
 import { labelOf } from './screens.tsx'
 import {
   accountOptions,

@@ -87,7 +87,7 @@ unrouted legacy exports from the old `screens.tsx` only after confirming the rou
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
-| SALE-01 | ready | Sales overview | `/admin/sales` | `dashboard` | Specialized | no | — |
+| SALE-01 | keep | Sales overview | `/admin/sales` | `screens/overview.tsx::overviewScreen` | Specialized | no | Kant |
 | SALE-02 | done | Quotations | `/admin/sales/quotations`, `/admin/sales/quotations/new` | `screens/quotations-list.tsx`, `screens/quotation-create.tsx` | Split | list/new: no | Kant |
 | SALE-03 | ready | Sales orders | `/admin/sales/orders` | `salesOrdersScreen` | ListPage | no | — |
 | SALE-04 | ready | Quotation/order detail | `/admin/sales/quotations/{id}`, `/admin/sales/orders/{id}` | `orderDetailScreen` | FormPage | `sale_mail_backend` | — |
@@ -100,7 +100,7 @@ Structure debt: `purchase_backend/screens.tsx` is monolithic. Each row moves its
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
-| PUR-01 | ready | Purchase overview | `/admin/purchase` | `dashboard` | Specialized | no | — |
+| PUR-01 | keep | Purchase overview | `/admin/purchase` | `screens/overview.tsx::purchaseOverviewScreen` | Specialized | no | Curie |
 | PUR-02 | ready | Requests for quotation | `/admin/purchase/rfqs` | `ordersScreen` (RFQ variant) | Split | no | — |
 | PUR-03 | ready | Purchase orders | `/admin/purchase/orders` | `ordersScreen` (order variant) | ListPage | no | — |
 | PUR-04 | ready | RFQ/purchase-order detail | `/admin/purchase/rfqs/{id}`, `/admin/purchase/orders/{id}` | `orderDetail` | FormPage | bridge missing | — |
@@ -158,7 +158,7 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
 | CRM-01 | keep | Pipeline | `/admin/crm/pipeline` | `screens/pipeline.tsx::pipelineScreen` | Specialized | Huygens |
-| CRM-02 | ready | Cases list/create | `/admin/crm/cases` | `casesScreen` | Split | — |
+| CRM-02 | done | Cases list/create | `/admin/crm/cases`, `/admin/crm/cases/new` | `screens/cases-list.tsx`, `screens/case-create.tsx` | Split | Huygens |
 | CRM-03 | ready | Case detail | `/admin/crm/cases/{id}` | `caseDetailScreen`, `permissionScreen` | FormPage/Specialized | — |
 | CRM-04 | ready | Activity planner | `/admin/crm/activities` | `plannerScreen` | Specialized | — |
 | CRM-05 | ready | Leaderboard | `/admin/crm/leaderboard` | `leaderboardScreen` | ListPage | — |
@@ -639,3 +639,37 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 7 CRM Pipeline evidence](/assets/crm-pipeline/crm-pipeline-browser-skill.png)
 
 ![Wave 7 CRM Pipeline mobile evidence](/assets/crm-pipeline/crm-pipeline-mobile-browser-skill.png)
+
+### Wave 8 — CRM-02, SALE-01 and PUR-01
+
+- CRM Cases is now a dedicated `ListPage` plus `/new` `FormPage`. The list keeps parseListState search,
+  facets, grouping, pager and all seven columns without loading create-only references. The create form
+  preserves all 15 fields, five relation islands, stage/kind presets, validation values, locale and a safe
+  `returnTo` restricted to the Cases list or Pipeline. Both legacy and new POST routes retain cross-site
+  protection and detail redirects.
+- Sales Overview remains Specialized: four KPI cards, the four-step sales pipeline and recent-order task
+  table are one dashboard hierarchy rather than a collection or record form. Its root renderer moved into
+  `sale_backend/screens/overview.tsx` and the obsolete root file was removed.
+- Purchase Overview remains Specialized: five operational queues and setup guidance form a workflow
+  dashboard. Its renderer moved out of the legacy monolith into `purchase_backend/screens/overview.tsx`.
+- Visual QA caught and fixed the missing Vietnamese/English CRM Cancel message before evidence was accepted.
+  Browser evidence confirms no unexpected Chatter or horizontal overflow; mobile 390 px retains all create
+  fields and keeps both dashboards' KPI hierarchy readable.
+- Validation scope: nine focused renderer/route tests, one affected CRM Pipeline UX scenario, one Sales and
+  one Purchase HTTP scenario, one CRM i18n parity test, four targeted browser E2E flows, Biome on changed
+  files, build/typecheck, and Astro docs validation. Only CI owners `orders` and `crm-loyalty` were exercised
+  locally.
+
+![Wave 8 CRM cases list evidence](/assets/crm-cases/crm-cases-list-browser-skill.png)
+
+![Wave 8 CRM case create evidence](/assets/crm-cases/crm-case-create-browser-skill.png)
+
+![Wave 8 CRM case create mobile evidence](/assets/crm-cases/crm-case-create-mobile-browser-skill.png)
+
+![Wave 8 Sales overview evidence](/assets/sales-overview/sales-overview-browser-skill.png)
+
+![Wave 8 Sales overview mobile evidence](/assets/sales-overview/sales-overview-mobile-browser-skill.png)
+
+![Wave 8 Purchase overview evidence](/assets/purchase-overview/purchase-overview-browser-skill.png)
+
+![Wave 8 Purchase overview mobile evidence](/assets/purchase-overview/purchase-overview-mobile-browser-skill.png)

@@ -13,11 +13,11 @@ import {
   Section,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { Frame } from '../../ui/index.ts'
-import { localized } from '../backend/screen.ts'
-import type { AnyRow } from '../backend/screen.ts'
-import { salesOrderColumns } from './sales-orders-screen.tsx'
+} from '../../../ui/index.ts'
+import type { Frame } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
+import type { AnyRow } from '../../backend/screen.ts'
+import { salesOrderColumns } from '../sales-orders-screen.tsx'
 
 /**
  * What the dashboard is counted from.

@@ -793,10 +793,13 @@ test('crm pipeline: a column offers only the record kind that column can hold', 
 
   // And the form the column points at arrives with that stage already chosen.
   const create = await app.client.get(
-    '/admin/crm/cases?stageId=crm-stage-proposition&kind=opportunity&lang=en',
+    '/admin/crm/cases/new?stageId=crm-stage-proposition&kind=opportunity&lang=en',
   )
   const html = await create.text()
-  assert.match(html, /name="stageId"[^>]*value="crm-stage-proposition"/)
+  assert.match(
+    html,
+    /<select[^>]*name="stageId"[\s\S]*?<option[^>]*value="crm-stage-proposition"[^>]*selected/,
+  )
 
   const made = await app.client.post(
     '/admin/crm/cases?lang=en',

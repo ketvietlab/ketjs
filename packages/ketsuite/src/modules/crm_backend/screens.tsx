@@ -18,7 +18,7 @@ import {
   Surface,
   Tabs,
 } from '../../ui/index.ts'
-import type { FormField, Frame, TableGroup } from '../../ui/index.ts'
+import type { FormField, Frame } from '../../ui/index.ts'
 
 type AnyRow = Record<string, unknown>
 const empty = (_: Translator) => emptyState(_('crm_backend.empty.title'), _('crm_backend.empty.hint'))
@@ -63,82 +63,6 @@ export const permissionScreen = (_: Translator, frame: Frame): TemplateResult =>
     title={_('crm_backend.permission.title')}
     frame={frame}
     body={emptyState(_('crm_backend.permission.title'), _('crm_backend.permission.hint'))}
-  />
-)
-
-export const casesScreen = (
-  _: Translator,
-  frame: Frame,
-  rows: AnyRow[],
-  fields: FormField[],
-  errors: string[] = [],
-  groups: TableGroup<AnyRow>[] = [],
-) => (
-  <Framed
-    translator={_}
-    title={_('crm_backend.cases.title')}
-    frame={frame}
-    body={stack([
-      <Surface
-        body={
-          <RecordForm
-            action="/admin/crm/cases"
-            fields={fields}
-            errors={errors}
-            submit={_('crm_backend.action.create')}
-            submitVariant="primary"
-          />
-        }
-      />,
-      rows.length || groups.length
-        ? dataTable(_, {
-            rows,
-            groups,
-            id: (row) => String(row.id),
-            columns: [
-              {
-                key: 'name',
-                label: _('crm_backend.field.name'),
-                priority: 'primary',
-                cell: (row) =>
-                  linkButton({
-                    href: `/admin/crm/cases/${String(row.id)}`,
-                    label: String(row.name),
-                    variant: 'tertiary',
-                    size: 'compact',
-                  }),
-              },
-              { key: 'kind', label: _('crm_backend.field.kind'), cell: (row) => local(_, 'kind', row.kind) },
-              {
-                key: 'partner',
-                label: _('crm_backend.field.partner'),
-                cell: (row) => String(row.partnerName ?? '—'),
-              },
-              {
-                key: 'stage',
-                label: _('crm_backend.field.stage'),
-                cell: (row) => String(row.stageName ?? '—'),
-              },
-              {
-                key: 'assignee',
-                label: _('crm_backend.field.assignee'),
-                cell: (row) => String(row.assigneeName ?? '—'),
-              },
-              {
-                key: 'revenue',
-                label: _('crm_backend.field.expectedRevenue'),
-                align: 'end',
-                cell: (row) => formatMoney(_, row.expectedRevenue ?? 0, row.currency),
-              },
-              {
-                key: 'state',
-                label: _('crm_backend.field.state'),
-                cell: (row) => state(_, row.terminalState),
-              },
-            ],
-          })
-        : empty(_),
-    ])}
   />
 )
 

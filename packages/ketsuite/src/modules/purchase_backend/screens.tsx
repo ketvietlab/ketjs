@@ -8,7 +8,6 @@ import {
   emptyState,
   formatMoney,
   Framed,
-  inline,
   linkButton,
   Metric,
   RecordActions,
@@ -18,7 +17,7 @@ import {
   Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { localized, selectionLabel } from '../backend/screen.ts'
+import { selectionLabel } from '../backend/screen.ts'
 import { missingSetup, rejection } from './screens/shared.tsx'
 
 type AnyRow = Record<string, unknown>
@@ -33,75 +32,6 @@ const pathOf = (order: AnyRow) =>
     : `/admin/purchase/orders/${String(order.id)}`
 
 const empty = (_: Translator) => emptyState(_('purchase_backend.empty'), _('purchase_backend.emptyHint'))
-
-export const dashboard = (
-  _: Translator,
-  orders: AnyRow[],
-  frame: Frame,
-  locale = '',
-  setup?: { pickingTypes: number; vendors: number },
-): TemplateResult => {
-  const count = (states: string[]) => orders.filter((row) => states.includes(String(row.state))).length
-  return (
-    <Framed
-      translator={_}
-      title={_('purchase_backend.dashboard.title')}
-      frame={frame}
-      body={stack([
-        setup ? missingSetup(_, setup) : null,
-        inline([
-          linkButton({
-            label: _('purchase_backend.action.createRfq'),
-            href: `${localized('/admin/purchase/rfqs', locale)}#rfq-create-form`,
-            variant: 'primary',
-          }),
-        ]),
-        <CardGrid
-          items={[
-            {
-              id: 'draft',
-              title: _('purchase_backend.dashboard.toSend'),
-              value: count(['draft']),
-              href: localized('/admin/purchase/rfqs?state=draft', locale),
-            },
-            {
-              id: 'waiting',
-              title: _('purchase_backend.dashboard.waiting'),
-              value: count(['sent']),
-              href: localized('/admin/purchase/rfqs?state=sent', locale),
-            },
-            {
-              id: 'approval',
-              title: _('purchase_backend.dashboard.toApprove'),
-              value: count(['to approve']),
-              href: localized('/admin/purchase/rfqs?state=to%20approve', locale),
-            },
-            {
-              id: 'orders',
-              title: _('purchase_backend.menu.orders'),
-              value: count(['purchase']),
-              href: localized('/admin/purchase/orders', locale),
-            },
-            {
-              id: 'bill',
-              title: _('purchase_backend.dashboard.toBill'),
-              value: orders.filter((row) => row.invoiceStatus === 'to invoice').length,
-              href: localized('/admin/purchase/orders', locale),
-            },
-          ]}
-          id={(item) => item.id}
-          card={(item) => (
-            <ContentCard
-              title={item.title}
-              href={item.href}
-              body={<Metric label={_('purchase_backend.dashboard.records')} value={String(item.value)} />}
-            />
-          )}
-        />,
-      ])}
-    />
-  )
-}
 
 export const ordersScreen = (
   _: Translator,

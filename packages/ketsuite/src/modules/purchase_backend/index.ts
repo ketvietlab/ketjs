@@ -7,8 +7,12 @@ import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { accountOptions, accountRelationControl } from '../account_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { PURCHASE_METHODS } from '../purchase/functions.ts'
-import { dashboard, labelOf, orderDetail, ordersScreen } from './screens.tsx'
-import { vendorPricelistCreateScreen, vendorPricelistsListScreen } from './screens/index.ts'
+import { labelOf, orderDetail, ordersScreen } from './screens.tsx'
+import {
+  purchaseOverviewScreen,
+  vendorPricelistCreateScreen,
+  vendorPricelistsListScreen,
+} from './screens/index.ts'
 import { adminPage, choices, inLocale, localeQuery, optional, printGroup } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
 
@@ -648,7 +652,7 @@ export default defineModule({
                   ctx.call('purchase.listOrders', {}, url, req) as Promise<AnyRow[]>,
                   common(ctx, url, req),
                 ])
-                return dashboard(_, orders, shell, localeQuery(url), {
+                return purchaseOverviewScreen(_, orders, shell, localeQuery(url), {
                   pickingTypes: data.pickingTypes.length,
                   vendors: data.partners.length,
                 })
