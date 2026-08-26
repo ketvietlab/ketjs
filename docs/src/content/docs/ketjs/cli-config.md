@@ -81,7 +81,9 @@ ket dev --all --deployment backoffice --workspace dist/ket.workspace.js
 ```
 
 `serve` owns HTTP traffic. `worker` consumes durable queues. `dev` watches emitted artifacts and restarts the
-selected roles; it does not turn the production process into a TypeScript loader.
+selected roles; it does not turn the production process into a TypeScript loader. For `dev --all`, restart
+shutdown stops accepting HTTP connections before draining the worker and is serialized across repeated file
+events. The next process can therefore bind the same port without racing the previous listener.
 
 Operational commands include:
 

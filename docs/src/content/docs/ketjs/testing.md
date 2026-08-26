@@ -224,6 +224,7 @@ file list, so adding another test or bridge module does not require editing CI.
 Inspect or run the same groups locally:
 
 ```bash
+# Run from: /path/to/ketjs
 npm run test:groups
 npm run test:group -- catalog
 ```
