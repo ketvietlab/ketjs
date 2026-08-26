@@ -6,6 +6,7 @@ import { messages } from './messages.ts'
 import { models } from './models.ts'
 import { orderFunctions } from './order-functions.ts'
 import { relations } from './relations.ts'
+import { statsFunctions } from './stats.ts'
 
 export default defineModule({
   name: 'loyalty',
@@ -16,7 +17,13 @@ export default defineModule({
   category: 'Bán hàng',
   models,
   relations,
-  functions: { ...adminFunctions, ...orderFunctions, ...membershipFunctions, ...maintenanceFunctions },
+  functions: {
+    ...adminFunctions,
+    ...orderFunctions,
+    ...membershipFunctions,
+    ...maintenanceFunctions,
+    ...statsFunctions,
+  },
   jobs,
   messages,
 })
