@@ -187,8 +187,9 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/accounts') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="account-create-form"/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.doesNotMatch(html, /id="account-create-form"/)
+      assert.match(html, /href="\/admin\/accounting\/accounts\/new\?returnTo=/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/journals') {
@@ -245,7 +246,68 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
   const target = accounts.find((row) => row.code === '111')!
   const path = '/admin/accounting/accounts'
 
-  // The list is also the editor: following a row prefills the form with that row.
+  const createPage = await e2e.client.get(`${path}/new?lang=vi`, {
+    headers: { accept: 'text/html' },
+  })
+  const createHtml = await createPage.text()
+  assert.equal(createPage.status, 200)
+  assert.match(createHtml, /data-ui="form-page"/)
+  assert.match(createHtml, /id="account-create-form"/)
+  assert.doesNotMatch(createHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(createHtml, /data-island="mail\.chatter"/)
+
+  const invalid = await e2e.client.post(
+    `${path}/new?lang=vi`,
+    new URLSearchParams({
+      code: 'ACC INVALID',
+      name: 'Tài khoản nhập dở',
+      accountType: 'asset_cash',
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  const invalidHtml = await invalid.text()
+  assert.equal(invalid.status, 200)
+  assert.match(invalidHtml, /data-ui="form-page"/)
+  assert.match(invalidHtml, /value="ACC INVALID"/)
+  assert.match(invalidHtml, /value="Tài khoản nhập dở"/)
+
+  const crossSite = await e2e.client.post(
+    `${path}/new?lang=vi`,
+    new URLSearchParams({ code: 'ACC999', name: 'Tài khoản HTTP', accountType: 'asset_cash' }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'https://evil.example',
+      },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(crossSite.status, 403)
+
+  const create = await e2e.client.post(
+    `${path}/new?lang=vi&returnTo=${encodeURIComponent('https://evil.example/steal')}`,
+    new URLSearchParams({
+      code: 'ACC999',
+      name: 'Tài khoản HTTP',
+      accountType: 'asset_cash',
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(create.status, 303)
+  assert.equal(create.headers.get('location'), '/admin/accounting/accounts?lang=vi')
+
+  const filtered = await e2e.client.get(`${path}?lang=vi&q=ACC999&status=active&family=asset&group=type`, {
+    headers: { accept: 'text/html' },
+  })
+  const filteredHtml = await filtered.text()
+  assert.equal(filtered.status, 200)
+  assert.match(filteredHtml, /data-ui="group-row"/)
+  assert.match(filteredHtml, /data-ui="facet"/)
+  assert.match(filteredHtml, /ACC999/)
+
+  // Legacy edit links still land on the dedicated form route and prefill the record.
   const editor = await e2e.client.get(`${path}?edit=${encodeURIComponent(String(target.id))}`, {
     headers: { accept: 'text/html' },
   })
@@ -264,7 +326,7 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
   assert.equal(corrected.find((row) => row.id === target.id)!.name, 'Tiền mặt tại quỹ')
   // Corrected in place — not duplicated into a second row nobody can remove.
   assert.equal(corrected.filter((row) => row.code === '111').length, 1)
-  assert.equal(corrected.length, accounts.length)
+  assert.equal(corrected.length, accounts.length + 1)
 
   const archive = await e2e.client.post(
     `${path}?edit=${encodeURIComponent(String(target.id))}`,

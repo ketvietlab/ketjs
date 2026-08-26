@@ -297,12 +297,24 @@ test('crm backend: an activity can be completed from the case and from the plann
 
 test('crm backend: configuration records can be edited and archived, not only created', async (t) => {
   const { app, call } = await boot(t)
+  const invalid = await app.client.post(
+    '/admin/crm/configuration?tab=tags&lang=en',
+    new URLSearchParams({ name: '', active: 'on' }),
+    post,
+  )
+  const invalidHtml = await invalid.text()
+  assert.equal(invalid.status, 200)
+  assert.match(invalidHtml, /data-ui="form-errors"/)
+  assert.match(invalidHtml, /action="\/admin\/crm\/configuration\?tab=tags&amp;lang=en"/)
+  assert.match(invalidHtml, /href="\/admin\/crm\/configuration\?tab=members&amp;lang=en"/)
+
   const created = await app.client.post(
     '/admin/crm/configuration?tab=teams&lang=en',
     new URLSearchParams({ name: 'Field sales', code: 'field', active: 'on', assignmentMode: 'round_robin' }),
     post,
   )
   assert.equal(created.status, 303)
+  assert.equal(created.headers.get('location'), '/admin/crm/configuration?tab=teams&lang=en')
   const teamOf = async () =>
     (await call<Record<string, Row[]>>('crm.configuration.get')).teams.find((row) => row.code === 'field')!
   let team = await teamOf()
@@ -311,6 +323,8 @@ test('crm backend: configuration records can be edited and archived, not only cr
   const page = await app.client.get(`/admin/crm/configuration?tab=teams&edit=${String(team.id)}&lang=en`)
   const html = await page.text()
   assert.match(html, /value="Field sales"/, 'the edit form is pre-filled from the row')
+  assert.match(html, /href="\/admin\/crm\/configuration\?tab=teams&amp;lang=en"/)
+  assert.match(html, /action="\/admin\/crm\/configuration\?tab=teams&amp;lang=en"/)
 
   const renamed = await app.client.post(
     '/admin/crm/configuration?tab=teams&lang=en',
@@ -508,6 +522,12 @@ test('crm backend: a cross-origin POST is refused', async (t) => {
     { headers: { ...form, origin: 'https://evil.test' }, redirect: 'manual' },
   )
   assert.equal(forged.status, 403)
+  const forgedConfiguration = await app.client.post(
+    '/admin/crm/configuration?tab=teams&lang=en',
+    new URLSearchParams({ name: 'Forged team', code: 'forged' }),
+    { headers: { ...form, origin: 'https://evil.test' }, redirect: 'manual' },
+  )
+  assert.equal(forgedConfiguration.status, 403)
 })
 
 test('crm: a second company in the tenant gets its own pipeline', async (t) => {

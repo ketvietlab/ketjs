@@ -16,10 +16,15 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import { moveTitle, optionsOf } from './screens.tsx'
 import { accountDefaultsScreen } from './account-defaults-screen.tsx'
-import { accountingOverviewScreen } from './screens/index.ts'
-import { accountsScreen } from './accounts-screen.tsx'
+import {
+  accountFormScreen,
+  accountingOverviewScreen,
+  accountsListScreen,
+  labelOf,
+  moveTitle,
+  optionsOf,
+} from './screens/index.ts'
 import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
@@ -32,6 +37,7 @@ import { taxesScreen } from './taxes-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { overviewCharts, periodOf, yearsOf } from './overview.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
@@ -188,6 +194,113 @@ const targetId = (url: URL): string => editingId(url) || randomUUID()
  */
 const accountName = (_: Translator, account: AnyRow): string =>
   String((_.locale.startsWith('en') && account.nameEn) || account.name)
+
+const accountListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/accounts'
+  for (const key of ['edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safeAccountReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/accounts${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/accounts'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const accountFormPath = (url: URL, returnTo: string, edit?: unknown): string => {
+  const target = new URL('/admin/accounting/accounts/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  if (edit) target.searchParams.set('edit', String(edit))
+  return `${target.pathname}${target.search}`
+}
+
+const accountSummary = (rows: AnyRow[]) => {
+  const count = (prefixes: string[]) =>
+    rows.filter((row) => prefixes.some((prefix) => String(row.accountType).startsWith(prefix))).length
+  return {
+    total: rows.length,
+    asset: count(['asset']),
+    liability: count(['liability', 'equity']),
+    profit: count(['income', 'expense']),
+  }
+}
+
+const accountGroups = (_: Translator, url: URL, rows: AnyRow[], grouped: boolean) => {
+  if (!grouped) return undefined
+  const groups = new Map<string, AnyRow[]>()
+  for (const row of rows) {
+    const type = String(row.accountType)
+    groups.set(type, [...(groups.get(type) ?? []), row])
+  }
+  return [...groups.entries()].map(([type, groupRows]) => ({
+    id: `type:${type}`,
+    label: labelOf(_, 'accountType', type),
+    count: groupRows.length,
+    depth: 0,
+    open: true,
+    href: withParam(url, 'group', null),
+    rows: groupRows,
+  }))
+}
+
+const saveAccount = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  form: Awaited<ReturnType<typeof readForm>>,
+) =>
+  ctx.call(
+    'account.saveAccount',
+    {
+      id: targetId(url),
+      code: form.code ?? '',
+      name: form.name ?? '',
+      accountType: form.accountType ?? '',
+      reconcile: form.reconcile === '1',
+      active: form.active === '1',
+    },
+    url,
+    req,
+  )
+
+const accountFields = (_: Translator, editing: AnyRow | null, rejected?: Rejection): FormField[] =>
+  formState(
+    [
+      { name: 'code', label: _('account_backend.field.code'), required: true },
+      {
+        name: 'name',
+        label: _('account_backend.field.name'),
+        required: true,
+        // A bundled account reads under its English name in an English session,
+        // so say which name this field is editing.
+        help: editing?.nameEn ? `${_('account_backend.field.nameEn')}: ${String(editing.nameEn)}` : undefined,
+      },
+      {
+        name: 'accountType',
+        label: _('account_backend.field.accountType'),
+        type: 'select',
+        options: optionsOf(_, 'accountType', ACCOUNT_TYPES),
+      },
+      { name: 'reconcile', label: _('account_backend.field.reconcile'), type: 'checkbox' },
+      {
+        name: 'active',
+        label: _('account_backend.field.active'),
+        type: 'checkbox',
+        value: true,
+        help: _('account_backend.field.activeHint'),
+      },
+    ],
+    editing,
+    rejected,
+  )
 
 const accountChoices = (_: Translator, rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
@@ -787,68 +900,181 @@ export default defineModule({
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const result = await ctx.call(
-            'account.saveAccount',
-            {
-              id: targetId(url),
-              code: form.code ?? '',
-              name: form.name ?? '',
-              accountType: form.accountType ?? '',
-              reconcile: form.reconcile === '1',
-              active: form.active === '1',
-            },
-            url,
-            req,
+          const result = await saveAccount(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(accountListPath(url))
+          rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const all = (await ctx.call('account.listAccounts', { includeArchived: true }, url, req)) as AnyRow[]
+        const editing = editTarget(all, url)
+        const returnTo = accountListPath(url)
+        const formPath = accountFormPath(url, returnTo, editing?.id ?? editingId(url))
+        if (req.method === 'POST' || editingId(url)) {
+          if (req.method === 'GET') return seeOther(formPath)
+          return adminPage(ctx, url, req, {
+            title: editing ? 'account_backend.account.edit.title' : 'account_backend.account.create.title',
+            body: (_, frame) =>
+              accountFormScreen(_, {
+                frame,
+                action: formPath,
+                cancelHref: returnTo,
+                editing,
+                displayName: (row) => accountName(_, row),
+                errors: rejected?.messages,
+                fields: accountFields(_, editing, rejected),
+              }),
+          })
+        }
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
+          ? url.searchParams.get('status')
+          : null
+        const family = ['asset', 'liability', 'profit'].includes(String(url.searchParams.get('family')))
+          ? url.searchParams.get('family')
+          : null
+        const grouped = url.searchParams.get('group') === 'type'
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          const active = row.active === true
+          if (status === 'active' && !active) return false
+          if (status === 'archived' && active) return false
+          const type = String(row.accountType)
+          if (family === 'asset' && !type.startsWith('asset')) return false
+          if (family === 'liability' && !['liability', 'equity'].some((prefix) => type.startsWith(prefix)))
+            return false
+          if (family === 'profit' && !['income', 'expense'].some((prefix) => type.startsWith(prefix)))
+            return false
+          return (
+            !needle ||
+            `${String(row.code)} ${accountName(ctx.translate(ctx.localeOf(url, req)), row)}`
+              .toLocaleLowerCase()
+              .includes(needle)
           )
-          if (succeeded(result)) return seeOther(`/admin/accounting/accounts${localeQuery(url)}`)
+        })
+        const rows = grouped ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.accounts.title',
+          body: (_, frame) =>
+            accountsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.accounts.title'),
+                    keep: {
+                      ...(status ? { status } : {}),
+                      ...(family ? { family } : {}),
+                      ...(grouped ? { group: 'type' } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(status
+                        ? [
+                            {
+                              label:
+                                status === 'active'
+                                  ? _('account_backend.active')
+                                  : _('account_backend.archived'),
+                              without: withParam(url, 'status', null),
+                            },
+                          ]
+                        : []),
+                      ...(family
+                        ? [
+                            {
+                              label: _(`account_backend.account.summary.${family}`),
+                              without: withParam(url, 'family', null),
+                            },
+                          ]
+                        : []),
+                      ...(grouped
+                        ? [
+                            {
+                              label: `${_('backend.chrome.groupBy')}: ${_('account_backend.field.accountType')}`,
+                              without: withParam(url, 'group', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          {
+                            id: 'status:active',
+                            label: _('account_backend.active'),
+                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
+                            active: status === 'active',
+                          },
+                          {
+                            id: 'status:archived',
+                            label: _('account_backend.archived'),
+                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
+                            active: status === 'archived',
+                          },
+                          ...(['asset', 'liability', 'profit'] as const).map((value) => ({
+                            id: `family:${value}`,
+                            label: _(`account_backend.account.summary.${value}`),
+                            path: withParam(url, 'family', family === value ? null : value),
+                            active: family === value,
+                          })),
+                        ],
+                      },
+                      {
+                        id: 'group',
+                        label: _('backend.chrome.groupBy'),
+                        items: [
+                          {
+                            id: 'group:type',
+                            label: _('account_backend.field.accountType'),
+                            path: withParam(url, 'group', grouped ? null : 'type'),
+                            active: grouped,
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  pager: grouped ? null : pager(url, page, rows.length, matching.length),
+                },
+              },
+              rows,
+              createHref: accountFormPath(url, returnTo),
+              rowHref: (row) => accountFormPath(url, returnTo, row.id),
+              displayName: (row) => accountName(_, row),
+              summary: accountSummary(all),
+              table: { groups: accountGroups(_, url, matching, grouped) },
+            }),
+        })
+      },
+    '/admin/accounting/accounts/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const result = await saveAccount(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(safeAccountReturnTo(url))
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('account.listAccounts', { includeArchived: true }, url, req)) as AnyRow[]
         const editing = editTarget(rows, url)
+        const returnTo = safeAccountReturnTo(url)
+        const formPath = accountFormPath(url, returnTo, editing?.id ?? editingId(url))
         return adminPage(ctx, url, req, {
-          title: 'account_backend.accounts.title',
+          title: editing ? 'account_backend.account.edit.title' : 'account_backend.account.create.title',
           body: (_, frame) =>
-            accountsScreen(_, {
-              frame: frame,
-              action: configAction(url, '/admin/accounting/accounts'),
-              rows,
+            accountFormScreen(_, {
+              frame,
+              action: formPath,
+              cancelHref: returnTo,
               editing,
-              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
-              rowHref: (row) => editHref(url, '/admin/accounting/accounts', row.id),
-              cancelHref: `/admin/accounting/accounts${localeQuery(url)}`,
               displayName: (row) => accountName(_, row),
               errors: rejected?.messages,
-              fields: formState(
-                [
-                  { name: 'code', label: _('account_backend.field.code'), required: true },
-                  {
-                    name: 'name',
-                    label: _('account_backend.field.name'),
-                    required: true,
-                    // A bundled account reads under its English name in an English
-                    // session, so say which name this field is editing.
-                    help: editing?.nameEn
-                      ? `${_('account_backend.field.nameEn')}: ${String(editing.nameEn)}`
-                      : undefined,
-                  },
-                  {
-                    name: 'accountType',
-                    label: _('account_backend.field.accountType'),
-                    type: 'select',
-                    options: optionsOf(_, 'accountType', ACCOUNT_TYPES),
-                  },
-                  { name: 'reconcile', label: _('account_backend.field.reconcile'), type: 'checkbox' },
-                  {
-                    name: 'active',
-                    label: _('account_backend.field.active'),
-                    type: 'checkbox',
-                    value: true,
-                    help: _('account_backend.field.activeHint'),
-                  },
-                ],
-                editing,
-                rejected,
-              ),
+              fields: accountFields(_, editing, rejected),
             }),
         })
       },

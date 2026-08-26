@@ -17,7 +17,7 @@ import {
   Surface,
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
-import { labelOf, moveTitle } from './screens.tsx'
+import { labelOf, moveTitle } from './screens/shared.tsx'
 
 type Row = Record<string, unknown>
 

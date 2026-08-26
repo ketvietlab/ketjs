@@ -14,3 +14,6 @@ export { plannerScreen } from './activity-planner.tsx'
 
 export { leaderboardColumns, leaderboardScreen } from './leaderboard.tsx'
 export type { LeaderboardProfile, LeaderboardScreenOptions } from './leaderboard.tsx'
+
+export { CONFIGURATION_TABS, configurationScreen } from './configuration.tsx'
+export type { ConfigurationTab } from './configuration.tsx'

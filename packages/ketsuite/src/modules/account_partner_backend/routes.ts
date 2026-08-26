@@ -2,9 +2,19 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { accountingTermsScreen } from './screens.tsx'
+import { accountingTermsScreen } from './screens/index.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+
+const crossSite = (req: Req): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
 
 const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, errors?: string[]) => {
   const lang = ctx.localeOf(url, req)
@@ -48,6 +58,7 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method === 'GET') return render(ctx, url, req, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       const result = await ctx.call(
         'account_partner.saveAccountingTerms',

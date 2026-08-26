@@ -15,7 +15,7 @@ import {
   Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { labelOf } from './screens.tsx'
+import { labelOf } from './screens/shared.tsx'
 
 type Row = Record<string, unknown>
 

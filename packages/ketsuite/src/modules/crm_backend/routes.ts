@@ -20,18 +20,18 @@ import {
   tagsControl,
   teamControl,
 } from './relation-control.ts'
-import { CONFIGURATION_TABS, configurationScreen } from './screens.tsx'
-import type { ConfigurationTab } from './screens.tsx'
 import {
+  CONFIGURATION_TABS,
   caseCreateScreen,
   caseDetailScreen,
   casesListScreen,
+  configurationScreen,
   leaderboardScreen,
   plannerScreen,
   permissionScreen,
   pipelineScreen,
 } from './screens/index.ts'
-import type { CaseDetailControls, PipelineFigure } from './screens/index.ts'
+import type { CaseDetailControls, ConfigurationTab, PipelineFigure } from './screens/index.ts'
 import {
   keepForListSearch,
   LIST_PAGE_SIZE,
@@ -1148,7 +1148,7 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       const _ = ctx.translate(ctx.localeOf(url, req))
       const tab = configurationTabOf(url)
-      const back = `/admin/crm/configuration?tab=${tab}`
+      const back = inLocale(url, `/admin/crm/configuration?tab=${tab}`)
       let errors: string[] = []
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
@@ -1184,6 +1184,7 @@ export const routes: Record<string, RouteEntry> = {
             rows,
             editing,
             errors,
+            locale: localeQuery(url),
             fields: configurationFields(_, tab, editing, teams, users),
             ...(tab === 'members'
               ? {

@@ -11,11 +11,13 @@ import {
   stack,
   Surface,
   Tabs,
-} from '../../ui/index.ts'
-import type { FormField, Frame } from '../../ui/index.ts'
+} from '../../../ui/index.ts'
+import type { FormField, Frame } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 const empty = (_: Translator) => emptyState(_('crm_backend.empty.title'), _('crm_backend.empty.hint'))
+
 export const CONFIGURATION_TABS = [
   'teams',
   'members',
@@ -44,11 +46,12 @@ export const configurationScreen = (
     fields: FormField[]
     editing: AnyRow | null
     errors?: string[]
+    locale?: string
     label?: (row: AnyRow) => string
     detail?: (row: AnyRow) => string
   },
 ): TemplateResult => {
-  const endpoint = `/admin/crm/configuration?tab=${options.tab}`
+  const endpoint = localized(`/admin/crm/configuration?tab=${options.tab}`, options.locale ?? '')
   const label = options.label ?? ((row: AnyRow) => String(row.name ?? row.code ?? row.id))
   return (
     <Framed
@@ -61,7 +64,7 @@ export const configurationScreen = (
           items={CONFIGURATION_TABS.map((id) => ({
             id,
             label: _(`crm_backend.configuration.${id}`),
-            href: `/admin/crm/configuration?tab=${id}`,
+            href: localized(`/admin/crm/configuration?tab=${id}`, options.locale ?? ''),
             active: options.tab === id,
           }))}
         />,
@@ -114,7 +117,10 @@ export const configurationScreen = (
                   priority: 'primary',
                   cell: (row) =>
                     linkButton({
-                      href: `${endpoint}&edit=${encodeURIComponent(String(row.id))}`,
+                      href: localized(
+                        `/admin/crm/configuration?tab=${options.tab}&edit=${encodeURIComponent(String(row.id))}`,
+                        options.locale ?? '',
+                      ),
                       label: label(row),
                       variant: 'tertiary',
                       size: 'compact',

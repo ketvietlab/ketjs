@@ -65,7 +65,7 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
 | ACC-01 | keep | Accounting overview | `/admin/accounting` | `screens/overview.tsx::accountingOverviewScreen` | Specialized | no | Curie |
-| ACC-02 | ready | Chart of accounts | `/admin/accounting/accounts` | `accountsScreen` | Split | no | — |
+| ACC-02 | done | Chart of accounts | `/admin/accounting/accounts`, `/admin/accounting/accounts/new` | `screens/accounts-list.tsx`, `screens/account-form.tsx` | Split | no | Curie |
 | ACC-03 | ready | Journals | `/admin/accounting/journals` | `journalsScreen` | Split | no | — |
 | ACC-04 | ready | Taxes | `/admin/accounting/taxes` | `taxesScreen` | Split | no | — |
 | ACC-05 | ready | Payment terms | `/admin/accounting/terms` | `paymentTermsScreen` | Split | no | — |
@@ -78,7 +78,7 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 | ACC-12 | ready | Trial balance | `/admin/accounting/trial-balance` | `trialBalanceScreen` | Specialized | no | — |
 | ACC-13 | ready | General ledger | `/admin/accounting/general-ledger` | `generalLedgerScreen` | Specialized | no | — |
 | ACC-14 | ready | Partner statement | `/admin/accounting/partner-statement` | `partnerLedgerScreen` | Specialized | no | — |
-| AP-01 | ready | Partner accounting terms | `/admin/partner/partners/{id}/accounting` | `accountingTermsScreen` | FormPage | no | — |
+| AP-01 | done | Partner accounting terms | `/admin/partner/partners/{id}/accounting` | `screens/accounting-terms.tsx::accountingTermsScreen` | FormPage | no | Kant |
 
 ### Sales lane
 
@@ -162,7 +162,7 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 | CRM-03 | keep | Case detail | `/admin/crm/cases/{id}` | `screens/case-detail.tsx::caseDetailScreen`, `permissionScreen` | Specialized | Huygens |
 | CRM-04 | keep | Activity planner | `/admin/crm/activities` | `screens/activity-planner.tsx::plannerScreen` | Specialized | Huygens |
 | CRM-05 | done | Leaderboard | `/admin/crm/leaderboard` | `screens/leaderboard.tsx::leaderboardScreen` | ListPage | Huygens |
-| CRM-06 | ready | CRM configuration | `/admin/crm/configuration` | `configurationScreen` | Specialized | — |
+| CRM-06 | keep | CRM configuration | `/admin/crm/configuration` | `screens/configuration.tsx::configurationScreen` | Specialized | Huygens |
 
 ### Flow lane
 
@@ -764,9 +764,10 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 - Browser QA verified all three surfaces at desktop and 390 px with no horizontal overflow. Accounting keeps
   its dashboard hierarchy readable; the Sales create form keeps label/control alignment; CRM retains its
   refreshable empty state.
-- Validation scope followed the CI ownership policy: 40 affected Accounting, CRM and Sales renderer/HTTP
-  tests passed, together with Biome on changed files, build/typecheck and Astro docs validation. This wave did
-  not change shared UI, framework or other global code, so unrelated test groups were not run locally.
+- Validation scope followed the CI ownership policy: 40 focused Accounting, CRM and Sales renderer/HTTP
+  tests passed, together with Biome on changed files, build/typecheck and Astro docs validation. The next
+  coordinator pass also ran the planner-selected owning groups `orders`, `accounting` and `crm-loyalty`; no
+  unrelated domain group was added because this wave did not change shared UI, framework or global code.
 
 ![Wave 11 Accounting overview evidence](/assets/accounting-overview/accounting-overview-browser-skill.png)
 
@@ -781,3 +782,39 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 11 Sales invoicing policy create evidence](/assets/sales-invoicing-policies/sales-invoicing-policies-create-browser-skill.png)
 
 ![Wave 11 Sales invoicing policy create mobile evidence](/assets/sales-invoicing-policies/sales-invoicing-policies-create-mobile-browser-skill.png)
+
+### Wave 12 — ACC-02, AP-01 and CRM-06
+
+- Chart of Accounts is now a dedicated `ListPage` plus `/new` `FormPage` under
+  `account_backend/screens/`. Search, active/family filters, grouping, paging, summary counts, all account
+  fields, reconciliation/archive semantics, validation values, locale, safe return targets and legacy
+  edit/POST compatibility remain. The old root renderer was removed.
+- The helper-only `account_backend/screens.tsx` was replaced by `screens/shared.tsx`. Seven existing accounting
+  renderers only changed their import path for the same three pure helpers; their markup and behavior did not
+  change.
+- Partner Accounting Terms moved to `account_partner_backend/screens/accounting-terms.tsx` and now uses the
+  public `FormPage` without Chatter. Payment term, receivable/payable defaults, unset choices, validation,
+  locale and redirects remain; cross-site POSTs are now refused consistently with the parent Partner module.
+- CRM Configuration moved out of the final legacy monolith into `screens/configuration.tsx`. It intentionally
+  remains Specialized: six configuration tabs, create/edit flows, archive/restore, membership/tag rules,
+  assignment and scoring are one dense administration workspace. Locale and all route actions remain intact.
+- Browser QA verified all three surfaces at desktop and 390 px with no horizontal overflow. The two FormPages
+  keep label/control alignment on mobile, and CRM's configuration tabs retain a horizontally scrollable
+  navigation without widening the document.
+- Validation followed CI's affected-group planner. Build/typecheck passed; owning groups passed with Orders
+  80/80 (Wave 11 follow-through), Accounting 62/62, Identity 99 passed/1 environment skip, and CRM/Loyalty
+  60 passed/1 environment skip. Biome and Astro docs validation also passed; no unrelated groups were run.
+
+![Wave 12 Chart of Accounts list evidence](/assets/accounting-chart-of-accounts/chart-of-accounts-list-wave12-browser-skill.png)
+
+![Wave 12 Chart of Accounts create evidence](/assets/accounting-chart-of-accounts/chart-of-accounts-create-wave12-browser-skill.png)
+
+![Wave 12 Chart of Accounts create mobile evidence](/assets/accounting-chart-of-accounts/chart-of-accounts-create-mobile-wave12-browser-skill.png)
+
+![Wave 12 Partner Accounting Terms evidence](/assets/partner-accounting-terms/partner-accounting-terms-wave12-browser-skill.png)
+
+![Wave 12 Partner Accounting Terms mobile evidence](/assets/partner-accounting-terms/partner-accounting-terms-mobile-wave12-browser-skill.png)
+
+![Wave 12 CRM Configuration evidence](/assets/crm-configuration/crm-configuration-wave12-browser-skill.png)
+
+![Wave 12 CRM Configuration mobile evidence](/assets/crm-configuration/crm-configuration-mobile-wave12-browser-skill.png)
