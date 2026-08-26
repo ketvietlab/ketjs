@@ -257,7 +257,7 @@ test('staff purchasing channel pages and searches bounded order summaries', asyn
   assert.deepEqual(searched.items[0]?.vendor, { id: 'vendor-a', name: 'An Phát' })
 })
 
-test('staff purchasing channel returns a narrow read-only order detail', async (t) => {
+test('staff purchasing channel returns a narrow versioned order detail', async (t) => {
   const e2e = await boot(t)
   await seedOrdersAndBills(e2e)
   await e2e.client.login({ login: 'purchaser', password: 'correct horse battery' })
@@ -265,7 +265,9 @@ test('staff purchasing channel returns a narrow read-only order detail', async (
   const response = await e2e.client.json<Envelope<Row>>('/api/staff/v1/purchasing/orders/po-a')
   assert.equal(response.data.id, 'po-a')
   assert.equal(response.data.vendorReference, 'SPECIAL-RFQ')
-  assert.equal(response.data.readOnly, true)
+  assert.equal(response.data.readOnly, false)
+  assert.deepEqual(response.data.availableActions, ['update', 'cancel', 'confirm'])
+  assert.match(String(response.data.version), /^pov_[0-9a-f]{64}$/)
   assert.deepEqual(response.data.lines, [
     {
       id: 'po-a:line',
@@ -369,4 +371,173 @@ test('staff purchasing channel lists and reads vendor bills without ledger lines
   assert.equal(detail.data.lineCount, 2)
   assert.equal(detail.data.readOnly, true)
   assert.equal((await e2e.client.get('/api/staff/v1/purchasing/vendor-bills/missing')).status, 404)
+})
+
+const mutationHeaders = (csrfToken: string, key: string, version?: string) => ({
+  'content-type': 'application/json',
+  'x-csrf-token': csrfToken,
+  'idempotency-key': key,
+  ...(version ? { 'if-match': `"${version}"` } : {}),
+})
+
+test('staff purchasing channel completes all fourteen operations with one reviewed receipt lifecycle', async (t) => {
+  const e2e = await boot(t)
+  await seedOrdersAndBills(e2e)
+  await e2e.client.login({ login: 'purchaser', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+  const draft = { vendorId: 'vendor-a', lines: [{ productId: 'desk', quantity: '2' }] }
+
+  assert.equal(
+    (
+      await e2e.client.request('/api/staff/v1/purchasing/orders/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'idempotency-key': 'purchase-create-no-csrf' },
+        body: JSON.stringify(draft),
+      })
+    ).status,
+    403,
+  )
+
+  const create = await e2e.client.request('/api/staff/v1/purchasing/orders/create', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'purchase-create-reviewed-1'),
+    body: JSON.stringify(draft),
+  })
+  assert.equal(create.status, 200)
+  const created = (await create.json()) as Envelope<Row>
+  assert.equal(created.data.state, 'draft')
+  assert.equal((created.data.lines as Row[])[0]?.quantity, '2')
+  assert.match(String(created.data.version), /^pov_[0-9a-f]{64}$/)
+  assert.equal(create.headers.get('etag'), `"${String(created.data.version)}"`)
+
+  const replay = await e2e.client.request('/api/staff/v1/purchasing/orders/create', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'purchase-create-reviewed-1'),
+    body: JSON.stringify(draft),
+  })
+  assert.equal(replay.status, 200)
+  assert.equal(((await replay.json()) as Envelope<Row>).data.id, created.data.id)
+
+  const id = String(created.data.id)
+  const updateBody = {
+    vendorId: 'vendor-b',
+    lines: [{ productId: 'desk', quantity: '3' }],
+    expectedVersion: created.data.version,
+  }
+  const update = await e2e.client.request(`/api/staff/v1/purchasing/orders/${id}/update`, {
+    method: 'PUT',
+    headers: mutationHeaders(csrf, 'purchase-update-reviewed-1', String(created.data.version)),
+    body: JSON.stringify(updateBody),
+  })
+  assert.equal(update.status, 200)
+  const updated = (await update.json()) as Envelope<Row>
+  assert.deepEqual(updated.data.vendor, { id: 'vendor-b', name: 'Bình An' })
+  assert.equal((updated.data.lines as Row[])[0]?.quantity, '3')
+  assert.notEqual(updated.data.version, created.data.version)
+
+  const stale = await e2e.client.request(`/api/staff/v1/purchasing/orders/${id}/update`, {
+    method: 'PUT',
+    headers: mutationHeaders(csrf, 'purchase-update-stale-1', String(created.data.version)),
+    body: JSON.stringify(updateBody),
+  })
+  assert.equal(stale.status, 409)
+  assert.equal(((await stale.json()) as Envelope<null>).error?.code, 'purchase_staff_channel.versionConflict')
+
+  const confirmation = await e2e.client.request(`/api/staff/v1/purchasing/orders/${id}/confirm`, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'purchase-confirm-reviewed-1', String(updated.data.version)),
+    body: JSON.stringify({ expectedVersion: updated.data.version }),
+  })
+  assert.equal(confirmation.status, 200)
+  const confirmed = (await confirmation.json()) as Envelope<Row>
+  assert.equal(confirmed.data.state, 'to approve')
+  assert.deepEqual(confirmed.data.availableActions, ['approve'])
+
+  const staleConfirmation = await e2e.client.request(`/api/staff/v1/purchasing/orders/${id}/confirm`, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'purchase-confirm-stale-1', String(updated.data.version)),
+    body: JSON.stringify({ expectedVersion: updated.data.version }),
+  })
+  assert.equal(staleConfirmation.status, 409)
+
+  const approve = await e2e.client.request(`/api/staff/v1/purchasing/orders/${id}/approve`, {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'purchase-approve-reviewed-1', String(confirmed.data.version)),
+    body: JSON.stringify({ expectedVersion: confirmed.data.version }),
+  })
+  assert.equal(approve.status, 200)
+  const approved = (await approve.json()) as Envelope<Row>
+  assert.equal(approved.data.state, 'purchase')
+  assert.equal((approved.data.receipts as Row[]).length, 1)
+  assert.deepEqual((approved.data.receipts as Row[])[0]?.availableActions, [])
+
+  const receiptId = String((approved.data.receipts as Row[])[0]?.id)
+
+  // Withholding the action above is a hint. This is the boundary: goods that the
+  // warehouse has not counted must not be receivable by asking directly. The
+  // refusal comes from the domain — removing the channel's own check leaves this
+  // answer byte-identical — which is the right place for it, because it holds for
+  // every caller and not just this route.
+  const beforeReview = await e2e.client.json<Envelope<Row>>(`/api/staff/v1/purchasing/orders/${id}`)
+  const premature = await e2e.client.request(
+    `/api/staff/v1/purchasing/orders/${id}/receipts/${receiptId}/receive`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'purchase-receive-premature', String(beforeReview.data.version)),
+      body: JSON.stringify({ expectedVersion: beforeReview.data.version }),
+    },
+  )
+  assert.equal(premature.status, 409)
+  const refusal = (await premature.json()) as { error: { fieldErrors?: Record<string, unknown> } | null }
+  assert.ok(Object.keys(refusal.error?.fieldErrors ?? {}).includes('receiptId'))
+
+  const scope = { company: 'acme', branches: null }
+  const picking = (await e2e.fixture.call<Row>('stock.getPicking', { id: receiptId }, { scope })).value
+  const move = (picking.moves as Row[])[0]!
+  await e2e.fixture.call<Row>(
+    'stock.saveMoveLine',
+    {
+      id: `${String(move.id)}:mobile-prepared`,
+      moveId: move.id,
+      quantity: move.productUomQty,
+      picked: true,
+    },
+    { scope },
+  )
+  const prepared = await e2e.client.json<Envelope<Row>>(`/api/staff/v1/purchasing/orders/${id}`)
+  assert.deepEqual((prepared.data.receipts as Row[])[0]?.availableActions, ['receive'])
+
+  const receive = await e2e.client.request(
+    `/api/staff/v1/purchasing/orders/${id}/receipts/${receiptId}/receive`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'purchase-receive-reviewed-1', String(prepared.data.version)),
+      body: JSON.stringify({ expectedVersion: prepared.data.version }),
+    },
+  )
+  assert.equal(receive.status, 200)
+  const received = (await receive.json()) as Envelope<Row>
+  assert.equal(received.data.outcome, 'received')
+  assert.equal(received.data.receiptId, receiptId)
+  assert.equal(received.data.lineCount, 1)
+  assert.equal(((received.data.order as Row).lines as Row[])[0]?.receivedQuantity, '3')
+
+  const cancelCreate = await e2e.client.request('/api/staff/v1/purchasing/orders/create', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'purchase-create-cancel-1'),
+    body: JSON.stringify(draft),
+  })
+  assert.equal(cancelCreate.status, 200)
+  const cancellable = (await cancelCreate.json()) as Envelope<Row>
+  const cancel = await e2e.client.request(
+    `/api/staff/v1/purchasing/orders/${String(cancellable.data.id)}/cancel`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'purchase-cancel-reviewed-1', String(cancellable.data.version)),
+      body: JSON.stringify({ expectedVersion: cancellable.data.version }),
+    },
+  )
+  assert.equal(cancel.status, 200)
+  assert.equal(((await cancel.json()) as Envelope<Row>).data.state, 'cancel')
 })
