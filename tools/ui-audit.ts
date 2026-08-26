@@ -91,6 +91,7 @@ const JSX_NAME: Record<string, string> = {
   framedPage: 'Framed',
   progressBar: 'Progress',
   gantt: 'Gantt',
+  barChart: 'BarChart',
 }
 
 type Finding = { file: string; line: number; what: string; text: string; fix?: string }
@@ -107,7 +108,7 @@ const DATA_UI = /data-ui\s*=/
  * export in `ui/index.ts` — there is nothing left to alias.
  */
 const SCREEN_COMPONENT_CALL =
-  /\b(framedPage|recordWorkspace|recordForm|recordActions|recordToggle|section|surface|contentCard|cardGrid|formCluster|notice|modalSheet|datePicker|scheduleBoard|kanbanGrid|kanbanCard|progressBar|gantt|recordList|tabs|breadcrumbs|metric|mediaPanel|attachmentPanel|definitionList)\s*\(/g
+  /\b(framedPage|recordWorkspace|recordForm|recordActions|recordToggle|section|surface|contentCard|cardGrid|formCluster|notice|modalSheet|datePicker|scheduleBoard|kanbanGrid|kanbanCard|progressBar|gantt|chart|barChart|delta|recordList|tabs|breadcrumbs|metric|mediaPanel|attachmentPanel|definitionList)\s*\(/g
 
 const skipQuoted = (source: string, start: number, quote: string): number => {
   for (let i = start + 1; i < source.length; i++) {

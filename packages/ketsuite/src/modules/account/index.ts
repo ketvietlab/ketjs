@@ -1,4 +1,5 @@
 import { defineModule } from '@ketvietlab/ketjs'
+import { analyticsFunctions } from './analytics.ts'
 import { functions } from './functions.ts'
 import { models } from './models.ts'
 import { relations } from './relations.ts'
@@ -6,16 +7,18 @@ import { reportFunctions, reports } from './reports.ts'
 
 export default defineModule({
   name: 'account',
+  // 0.8.0 adds ledger analytics — performance, position, revenueTimeline,
+  // openItemSummary and cashFlow, the aggregates an overview screen is made of.
   // 0.7.0 adds a company-scoped product-to-sales-tax mapping. Products remain
   // shared catalogue data while the tax belongs to one legal entity's chart.
-  version: '0.7.0',
+  version: '0.8.0',
   depends: ['company', 'partner', 'product', 'uom'],
   title: 'Kế toán',
   summary: 'Sổ cái, hoá đơn, thanh toán và hệ thống tài khoản Việt Nam theo TT99.',
   category: 'Tài chính',
   models,
   relations,
-  functions: { ...functions, ...reportFunctions },
+  functions: { ...functions, ...reportFunctions, ...analyticsFunctions },
   reports,
   messages: {
     vi: {

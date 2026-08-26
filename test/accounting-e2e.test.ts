@@ -157,8 +157,13 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     }
     if (path === '/admin/accounting') {
       assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /Nghiệp vụ hằng ngày/)
-      assert.match(html, /Báo cáo tài chính/)
+      // The overview reports the ledger now; the card grid that used to be here
+      // only counted the lists the sidebar already links to.
+      assert.match(html, /Chỉ số chính/)
+      assert.match(html, /Doanh thu thuần/)
+      assert.match(html, /Tổng nợ phải trả/)
+      assert.match(html, /data-ui="delta"/)
+      assert.match(html, /data-island="backend\.chart"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/vendor-bills') {
@@ -384,47 +389,75 @@ test('e2e accounting: a payment can only be pointed at an account it could settl
   )
 })
 
-test('e2e accounting: every dashboard count is the list its card opens', async (t) => {
+test('e2e accounting: the overview reports posted moves, and never a draft', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
   const accounts = (await call<Row[]>('account.listAccounts')).value
   const journals = (await call<Row[]>('account.listJournals')).value
   const accountId = (code: string) => String(accounts.find((row) => row.code === code)?.id)
+  const salesJournalId = String(journals.find((row) => row.type === 'sale')?.id)
   await call('account.createInvoice', {
-    id: 'invoice-count',
-    journalId: String(journals.find((row) => row.type === 'sale')?.id),
+    id: 'invoice-overview',
+    journalId: salesJournalId,
     moveType: 'out_invoice',
     partnerId: 'customer',
+    invoiceDate: '2026-06-10T00:00:00.000Z',
     description: 'Dịch vụ',
     quantity: '1',
     priceUnit: '100000',
     lineAccountId: accountId('511'),
     counterpartAccountId: accountId('1311'),
   })
-  await call('account.createMove', {
-    id: 'entry-count',
-    journalId: String(journals.find((row) => row.type === 'general')?.id),
-    moveType: 'entry',
+  // A second document that is never posted. The card that used to be here
+  // counted rows, so a draft moved it; this screen reports the ledger, and a
+  // draft is not in the ledger.
+  await call('account.createInvoice', {
+    id: 'invoice-draft',
+    journalId: salesJournalId,
+    moveType: 'out_invoice',
+    partnerId: 'customer',
+    invoiceDate: '2026-06-12T00:00:00.000Z',
+    description: 'Chưa ghi sổ',
+    quantity: '1',
+    priceUnit: '900000',
+    lineAccountId: accountId('511'),
+    counterpartAccountId: accountId('1311'),
   })
 
-  const dashboard = (
-    await (await e2e.client.get('/admin/accounting?lang=vi', { headers: { accept: 'text/html' } })).text()
-  ).replace(/<!--[^>]*-->/g, '')
-  // Card titles repeat in the sidebar menu, so read each card's own block.
-  const cards = [...dashboard.matchAll(/<article data-ui="content-card"[\s\S]*?<\/article>/g)].map(
-    (match) => match[0],
-  )
-  const cardValue = (title: string) => {
-    const card = cards.find((held) => held.includes(title))
-    assert.ok(card, title)
-    return Number(/data-ui="metric-value"[^>]*>([^<]*)</.exec(card)?.[1] ?? NaN)
+  const june = 'dateFrom=2026-06-01&dateTo=2026-06-30'
+  const read = async (): Promise<string> =>
+    (
+      await (
+        await e2e.client.get(`/admin/accounting?lang=vi&${june}`, { headers: { accept: 'text/html' } })
+      ).text()
+    ).replace(/<!--[^>]*-->/g, '')
+
+  const metricNamed = (html: string, label: string): string => {
+    const cards = [...html.matchAll(/<article data-ui="metric"[\s\S]*?<\/article>/g)].map((match) => match[0])
+    const card = cards.find((held) => held.includes(label))
+    assert.ok(card, label)
+    return /data-ui="metric-value"[^>]*>([^<]*)</.exec(card)?.[1] ?? ''
   }
-  // The customer-invoice card used to show the unpaid count under a "records"
-  // label, and the entries card counted every move of every type.
-  assert.equal(cardValue('Hoá đơn khách hàng'), 1)
-  assert.equal(cardValue('Bút toán'), 1)
-  assert.equal(cardValue('Hoá đơn nhà cung cấp'), 0)
-  assert.equal((await call<Row[]>('account.listMoves', { moveType: 'entry' })).value.length, 1)
+  const digits = (value: string): number => Number(value.replace(/[^0-9-]/g, ''))
+
+  const drafted = await read()
+  assert.equal(digits(metricNamed(drafted, 'Doanh thu thuần')), 0)
+
+  await call('account.postMove', { id: 'invoice-overview' })
+  const posted = await read()
+  assert.equal(digits(metricNamed(posted, 'Doanh thu thuần')), 100000)
+  // And the same number the trial balance reports over the same window.
+  const trial = (
+    await call<Row[]>('account.trialBalance', {
+      dateFrom: '2026-06-01T00:00:00.000Z',
+      dateTo: '2026-06-30T23:59:59.999Z',
+    })
+  ).value
+  assert.equal(Number(trial.find((row) => row.code === '511')?.credit), 100000)
+  // The expense breakdown links into the ledger behind each account, and the
+  // window travels with it: a figure nobody can open is one to trust blindly.
+  assert.match(posted, /data-island="backend\.chart"/)
+  assert.doesNotMatch(posted, /account_backend\.[A-Za-z]/)
 })
 
 test('e2e accounting: the ledger names the account, and a draft is not titled by its id', async (t) => {

@@ -36,6 +36,7 @@ export default defineModule({
     'record.css',
     'forms.css',
     'content.css',
+    'charts.css',
   ],
   routes,
   models: savedSearchModels,
@@ -46,6 +47,7 @@ export default defineModule({
   fills: {
     'backend:relation.select': `{% island "backend.relation-select" %}`,
     'backend:runtime': `{% island "backend.table-selection" %}`,
+    'backend:screen.chart': `{% island "backend.chart" %}`,
   },
   messages,
 })
@@ -119,6 +121,11 @@ export {
   definitionList,
   progressBar,
   gantt,
+  chart,
+  barChart,
+  delta,
+  changeOf,
+  axisCeiling,
   code,
   qrCode,
   inline,
@@ -166,6 +173,8 @@ export {
 } from '../../ui/index.ts'
 export type {
   Cell,
+  ChartBar,
+  ChartKey,
   Column,
   DataTable,
   TableGroup,

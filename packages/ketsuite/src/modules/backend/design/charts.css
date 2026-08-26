@@ -1,0 +1,226 @@
+/* Charts.
+
+   Every colour a chart uses is named here and nowhere else. The server half
+   (`ui/charts.tsx`) emits a `data-series` slot and lets these rules colour it;
+   the canvas half reads the same `--admin-chart-N` tokens off the document when
+   it mounts. One palette, two consumers, and a scheme change re-read rather than
+   baked in.
+
+   A canvas has no intrinsic size worth having: Chart.js sizes its backing store
+   from the element's laid-out box, so the box is what these rules set, and
+   `maintainAspectRatio: false` on the client side is what makes it obey. */
+
+@layer ket.app {
+  [data-ui="chart"] {
+    display: grid;
+    gap: var(--admin-gap);
+    min-inline-size: 0;
+  }
+  [data-ui="chart"][data-kind="doughnut"] {
+    grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--admin-gap-md);
+  }
+  [data-ui="chart-plot"] {
+    position: relative;
+    min-inline-size: 0;
+  }
+  [data-ui="chart-canvas"] {
+    display: block;
+    inline-size: 100%;
+    max-inline-size: 100%;
+  }
+  [data-ui="chart-canvas"][data-kind="line"] {
+    block-size: 13rem;
+  }
+  [data-ui="chart-canvas"][data-kind="doughnut"] {
+    block-size: 10rem;
+  }
+  [data-ui="chart-canvas"][data-kind="sparkline"] {
+    block-size: 2.25rem;
+  }
+  [data-ui="chart-empty"] {
+    margin: 0;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+  }
+
+  /* Legend */
+  [data-ui="chart-legend"] {
+    display: grid;
+    gap: var(--admin-gap-xs);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    min-inline-size: 0;
+  }
+  [data-ui="chart"][data-kind="line"] [data-ui="chart-legend"] {
+    grid-auto-flow: column;
+    justify-content: start;
+    gap: var(--admin-gap-md);
+  }
+  [data-ui="chart-legend-item"] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    font-size: var(--admin-size-sm);
+    color: var(--admin-ink-secondary);
+  }
+  [data-ui="chart"][data-kind="line"] [data-ui="chart-legend-item"] {
+    grid-template-columns: auto auto;
+  }
+  [data-ui="chart-legend-item"][data-series="comparison"] [data-ui="chart-legend-swatch"] {
+    background: var(--admin-chart-comparison);
+  }
+  [data-ui="chart-legend-swatch"] {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--admin-radius-xs);
+  }
+  [data-ui="chart-legend-label"] {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="chart-legend-value"] {
+    color: var(--admin-ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* Bars */
+  [data-ui="bar-chart"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+    min-inline-size: 0;
+  }
+  [data-ui="bar-chart-row"] {
+    display: grid;
+    grid-template-columns: minmax(6rem, 11rem) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    font-size: var(--admin-size-sm);
+  }
+  [data-ui="bar-chart-label"] {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--admin-ink-secondary);
+  }
+  [data-ui="bar-chart-label"] a {
+    color: inherit;
+    text-decoration: none;
+  }
+  [data-ui="bar-chart-label"] a:hover {
+    color: var(--admin-accent-text);
+    text-decoration: underline;
+  }
+  [data-ui="bar-chart-track"] {
+    display: block;
+    block-size: 0.625rem;
+    border-radius: var(--admin-radius-full);
+    background: var(--admin-chart-track);
+    overflow: hidden;
+  }
+  [data-ui="bar-chart-fill"] {
+    display: block;
+    block-size: 100%;
+    min-inline-size: 2px;
+    border-radius: inherit;
+  }
+  [data-ui="bar-chart-value"] {
+    color: var(--admin-ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  [data-ui="bar-chart-scale"] {
+    display: flex;
+    justify-content: space-between;
+    grid-column: 2 / -1;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Change against a previous period.
+
+     Direction draws the arrow, sentiment picks the colour. They are separate
+     because falling debt is a fall and good news — colouring by direction alone
+     painted every reduction in what the company owes the same red as lost
+     revenue. */
+  [data-ui="delta"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    font-size: var(--admin-size-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  [data-ui="delta"][data-sentiment="good"] {
+    color: var(--admin-success-icon);
+  }
+  [data-ui="delta"][data-sentiment="bad"] {
+    color: var(--admin-danger-strong);
+  }
+  [data-ui="delta"][data-sentiment="neutral"] {
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="delta"][data-direction="up"]::before {
+    content: "▲";
+    font-size: 0.625em;
+  }
+  [data-ui="delta"][data-direction="down"]::before {
+    content: "▼";
+    font-size: 0.625em;
+  }
+  [data-ui="delta"][data-direction="flat"]::before {
+    content: "—";
+    font-size: 0.75em;
+  }
+
+  /* Series colours. The only place a chart hue is named — the canvas reads the
+     same tokens at mount, so this stays the single source. */
+  [data-ui="bar-chart-fill"][data-series="1"],
+  [data-ui="chart-legend-item"][data-series="1"] [data-ui="chart-legend-swatch"] {
+    background: var(--admin-chart-1);
+  }
+  [data-ui="bar-chart-fill"][data-series="2"],
+  [data-ui="chart-legend-item"][data-series="2"] [data-ui="chart-legend-swatch"] {
+    background: var(--admin-chart-2);
+  }
+  [data-ui="bar-chart-fill"][data-series="3"],
+  [data-ui="chart-legend-item"][data-series="3"] [data-ui="chart-legend-swatch"] {
+    background: var(--admin-chart-3);
+  }
+  [data-ui="bar-chart-fill"][data-series="4"],
+  [data-ui="chart-legend-item"][data-series="4"] [data-ui="chart-legend-swatch"] {
+    background: var(--admin-chart-4);
+  }
+  [data-ui="bar-chart-fill"][data-series="5"],
+  [data-ui="chart-legend-item"][data-series="5"] [data-ui="chart-legend-swatch"] {
+    background: var(--admin-chart-5);
+  }
+  [data-ui="bar-chart-fill"][data-series="6"],
+  [data-ui="chart-legend-item"][data-series="6"] [data-ui="chart-legend-swatch"] {
+    background: var(--admin-chart-6);
+  }
+
+  @media (max-width: 48rem) {
+    [data-ui="chart"][data-kind="doughnut"] {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
+    }
+    [data-ui="chart"][data-kind="doughnut"] [data-ui="chart-legend"] {
+      inline-size: 100%;
+    }
+    [data-ui="bar-chart-row"] {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    [data-ui="bar-chart-track"] {
+      grid-column: 1 / -1;
+    }
+  }
+}

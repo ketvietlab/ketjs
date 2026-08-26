@@ -25,6 +25,9 @@ import {
   datePicker,
   definitionList,
   gantt,
+  chart,
+  barChart,
+  delta,
   progressBar,
   emptyState,
   errorState,
@@ -514,6 +517,34 @@ const everything = [
     labels: { today: 'Hôm nay', empty: 'Trống' },
   }),
   gantt({ items: [], labels: { today: 'Hôm nay', empty: 'Trống' } }),
+  // A chart is two halves: the canvas the island mounts, and the legend that
+  // carries the same numbers as text. Rendered here with a stand-in for the
+  // plot, because the island needs a request and this contract needs neither.
+  chart({
+    plot: surface({ body: 'canvas' }),
+    kind: 'line',
+    keys: [
+      { id: 'now', label: 'Kỳ này', series: 1, value: '2.450.680 ₫' },
+      { id: 'was', label: 'Kỳ trước', series: 'comparison', value: '2.073.620 ₫' },
+    ],
+  }),
+  // And the case a deployment without the admin gets: no canvas, legend only.
+  chart({ plot: null, kind: 'doughnut', keys: [{ id: 'a', label: 'Bán hàng hoá', series: 1 }] }),
+  chart({ plot: null, kind: 'line', keys: [], empty: 'Chưa có số liệu' }),
+  barChart({
+    bars: [
+      { id: 'cogs', label: '632 · Giá vốn hàng bán', value: 1_320_000_000, href: '/admin/accounting' },
+      { id: 'admin', label: '642 · Chi phí quản lý', value: 160_000_000 },
+    ],
+    value: (bar) => String(bar.value),
+    scale: ['0', '1.5 tỷ'],
+  }),
+  barChart({ bars: [], value: () => '', empty: 'Chưa có chi phí' }),
+  // Both halves of a change: which way it went, and whether that is good news.
+  delta({ label: '+18,2%', direction: 'up', sentiment: 'good' }),
+  delta({ label: '-6,3%', direction: 'down', sentiment: 'good' }),
+  delta({ label: '0%', direction: 'flat', sentiment: 'neutral' }),
+  metric({ label: 'Doanh thu thuần', value: '2.450.680 ₫', trend: 'x', detail: 'so với kỳ trước' }),
   // The token list, which no admin screen renders any more now that the design-token
   // dump has left /admin/settings. Modules still reach for it on record detail.
   definitionList({
@@ -557,6 +588,7 @@ const ADMIN_STYLESHEETS = [
   'packages/ketsuite/src/modules/backend/design/record.css',
   'packages/ketsuite/src/modules/backend/design/forms.css',
   'packages/ketsuite/src/modules/backend/design/content.css',
+  'packages/ketsuite/src/modules/backend/design/charts.css',
 ]
 
 /** Every stylesheet the kit's hooks are styled by. */
