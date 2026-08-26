@@ -11,6 +11,7 @@ import {
   commandKey,
   dependenciesFor,
   groupIssues,
+  issueBuckets,
   issue,
   invalid,
   issueDetail,
@@ -813,6 +814,8 @@ export const functions: Record<string, FnSpec> = {
 
   'issue.list': defineFn({
     input: {
+      /** A day; narrows to issues due before it that are not finished. */
+      overdueOn: 'text?',
       projectId: 'id?',
       columnId: 'id?',
       epicId: 'id?',
@@ -831,6 +834,29 @@ export const functions: Record<string, FnSpec> = {
     effects: [...flowReadEffects],
     agent: true,
     handler: (ctx, args) => listIssues(ctx, args),
+  }),
+
+  /**
+   * How the issues under the same filter divide up — see `issueBuckets`.
+   *
+   * Four counts, not a page of rows, so the figures beside a list of a
+   * thousand issues cost four queries.
+   */
+  'issue.buckets': defineFn({
+    input: {
+      projectId: 'id?',
+      epicId: 'id?',
+      sprintId: 'id?',
+      assigneeUserId: 'id?',
+      mine: 'bool?',
+      includeArchived: 'bool?',
+      listState: 'json',
+      today: 'text',
+    },
+    output: { total: 'int', done: 'int', overdue: 'int', waiting: 'int', working: 'int' },
+    effects: ['read:flow.Issue', 'read:flow.Column', 'read:flow.FieldDef'],
+    agent: true,
+    handler: (ctx, args) => issueBuckets(ctx, args, String(args.today)),
   }),
 
   'issue.group': defineFn({
