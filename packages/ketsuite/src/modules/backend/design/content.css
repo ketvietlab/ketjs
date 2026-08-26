@@ -186,6 +186,18 @@
   }
 
   /* Compact operational records for mobile and narrow side panels. */
+  /* A deadline. Plain until it has passed, then it is the thing on the row
+     that needs acting on, so the date itself carries the colour rather than a
+     badge beside it — the badges in these tables are priority. */
+  [data-ui="deadline"] {
+    color: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+  [data-ui="deadline"][data-late="true"] {
+    color: var(--admin-danger);
+    font-weight: 600;
+  }
+
   /* A document hierarchy. The nesting is the markup, so the indent comes from
      the nested list rather than from padding baked into each label. */
   [data-ui="doc-tree"] {

@@ -343,6 +343,45 @@ const crossProjectIssues =
           label: (_field, value) => String(value ?? '\u2014'),
         })
       : []
+    // The figures beside the list, over the same filter the list is showing —
+    // counted, not listed, so a thousand issues cost four counts.
+    const today = new Date().toISOString().slice(0, 10)
+    const buckets = (await ctx.call(
+      'flow.issue.buckets',
+      { ...scoped, listState: state, today },
+      url,
+      req,
+    )) as AnyRow
+    const mineCount = options.mine
+      ? Number(buckets.total ?? 0)
+      : Number(
+          (
+            (await ctx.call(
+              'flow.issue.buckets',
+              { mine: true, listState: emptyIssueListState(), today },
+              url,
+              req,
+            )) as AnyRow
+          ).total ?? 0,
+        )
+    const late = (await ctx.call(
+      'flow.issue.list',
+      {
+        ...scoped,
+        listState: { ...emptyIssueListState(), sort: [{ key: 'dueDate', dir: 'asc' }] },
+        overdueOn: today,
+        limit: 5,
+      },
+      url,
+      req,
+    )) as AnyRow
+    // Which rows the due-date column should mark. Done is not late, however
+    // long ago the date was.
+    const marked = ((result.rows as AnyRow[]) ?? []).map((row) => ({
+      ...row,
+      overdue:
+        row.terminal !== true && !!row.dueDate && String(row.dueDate) < today,
+    }))
     return adminPage(ctx, url, req, {
       title: options.title,
       body: (_, frame) => {
@@ -359,13 +398,31 @@ const crossProjectIssues =
             ? null
             : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
         }
-        return crossProjectScreen(
-          _,
-          frame,
-          _(options.title),
-          grouped ? [] : ((result.rows as AnyRow[]) ?? []),
-          groups,
-        )
+        const at = url.searchParams.get('view') ?? 'all'
+        return crossProjectScreen(_, frame, _(options.title), grouped ? [] : marked, groups, {
+          total: Number(buckets.total ?? 0),
+          done: Number(buckets.done ?? 0),
+          overdue: Number(buckets.overdue ?? 0),
+          waiting: Number(buckets.waiting ?? 0),
+          working: Number(buckets.working ?? 0),
+          mine: mineCount,
+          late: ((late.rows as AnyRow[]) ?? []).slice(0, 5),
+          tab: at,
+          tabs: [
+            {
+              id: 'all',
+              label: _('flow_backend.issues.tabAll'),
+              href: '/admin/flow/issues',
+              count: Number(buckets.total ?? 0),
+            },
+            {
+              id: 'mine',
+              label: _('flow_backend.issues.tabMine'),
+              href: '/admin/flow/mine',
+              count: mineCount,
+            },
+          ],
+        })
       },
     })
   }
