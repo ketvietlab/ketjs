@@ -57,7 +57,7 @@ export const statsFunctions: Record<string, FnSpec> = {
       total: 'int',
       running: 'int',
       upcoming: 'int',
-      paused: 'int',
+      archived: 'int',
       ended: 'int',
     },
     effects: ['read:loyalty.Program'],
@@ -71,7 +71,7 @@ export const statsFunctions: Record<string, FnSpec> = {
         total: await ctx.db.count(from(P)),
         running: await ctx.db.count(from(P).where(and(eq(P.active, true), started, notFinished))),
         upcoming: await ctx.db.count(from(P).where(and(eq(P.active, true), gt(P.dateFrom, at)))),
-        paused: await ctx.db.count(from(P).where(eq(P.active, false))),
+        archived: await ctx.db.count(from(P).where(eq(P.active, false))),
         ended: await ctx.db.count(from(P).where(and(eq(P.active, true), lt(P.dateTo, at)))),
       }
     },
