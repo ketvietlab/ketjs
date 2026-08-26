@@ -201,7 +201,7 @@ test('staff inventory channel returns managed stock positions and strong version
   assert.equal(detail.data.tracking, 'none')
   assert.equal(detail.data.categoryId, null)
   assert.equal(detail.data.readOnly, false)
-  assert.deepEqual(detail.data.availableActions, ['update', 'archive', 'delete', 'adjust_stock'])
+  assert.deepEqual(detail.data.availableActions, ['update', 'archive', 'adjust_stock'])
   const stock = (detail.data.stockPositions as Row[]).find((position) => position.locationId === 'wh:stock')
   assert.deepEqual(stock, {
     locationId: 'wh:stock',
@@ -263,7 +263,7 @@ const inventoryDraft = (name: string) => ({
   barcode: null,
 })
 
-test('staff inventory channel completes the nine-operation module with one versioned lifecycle', async (t) => {
+test('staff inventory channel completes the eight-operation module with one versioned lifecycle', async (t) => {
   const e2e = await boot(t)
   await e2e.client.login({ login: 'inventory-user', password: 'correct horse battery' })
   const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
@@ -372,7 +372,7 @@ test('staff inventory channel completes the nine-operation module with one versi
   assert.equal(archive.status, 200)
   const archived = (await archive.json()) as Envelope<Row>
   assert.equal(archived.data.active, false)
-  assert.deepEqual(archived.data.availableActions, ['update', 'restore', 'delete'])
+  assert.deepEqual(archived.data.availableActions, ['update', 'restore'])
 
   const restore = await e2e.client.request(`/api/staff/v1/inventory/products/${id}/restore`, {
     method: 'POST',
@@ -382,6 +382,10 @@ test('staff inventory channel completes the nine-operation module with one versi
   assert.equal(restore.status, 200)
   assert.equal(((await restore.json()) as Envelope<Row>).data.active, true)
 
+  // Deleting a product is withheld. The guard behind it reads stock history and
+  // nothing else, so a product a draft quotation still names passes it and the
+  // order line is left pointing at nothing. The route is absent until the
+  // reference check exists, and its absence is the thing worth holding.
   const pristineCreate = await e2e.client.request('/api/staff/v1/inventory/products/create', {
     method: 'POST',
     headers: mutationHeaders(csrf, 'inventory-create-pristine'),
@@ -395,10 +399,11 @@ test('staff inventory channel completes the nine-operation module with one versi
     headers: mutationHeaders(csrf, 'inventory-delete-pristine', String(pristine.data.version)),
     body: JSON.stringify({ expectedVersion: pristine.data.version }),
   })
-  assert.equal(deletion.status, 200)
-  assert.deepEqual(((await deletion.json()) as Envelope<Row>).data, {
-    outcome: 'deleted',
-    productId: pristineId,
-  })
-  assert.equal((await e2e.client.get(`/api/staff/v1/inventory/products/${pristineId}`)).status, 404)
+  // Nothing under the prefix answers for that path any more, so the request
+  // falls through to the site rather than the channel. What matters is the
+  // product: it is still there, and the detail still does not offer the action.
+  assert.equal(deletion.headers.get('content-type')?.startsWith('application/json'), false)
+  const survivor = await e2e.client.json<Envelope<Row>>(`/api/staff/v1/inventory/products/${pristineId}`)
+  assert.equal(survivor.data.id, pristineId)
+  assert.equal((survivor.data.availableActions as string[]).includes('delete'), false)
 })

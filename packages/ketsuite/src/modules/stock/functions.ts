@@ -445,7 +445,18 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id, revision: n(template?.inventoryRevision) }
     },
   }),
+  /**
+   * Withheld from the public surface until it can refuse a referenced product.
+   *
+   * The guard below sees stock history and nothing else, because this module
+   * cannot read sale, purchase or account tables. A product named only by a
+   * draft quotation therefore passes it, and deleting one leaves the order line
+   * pointing at a row that no longer exists — proven, not supposed. Until the
+   * reference check exists this stays off HTTP and off the agent surface, where
+   * it would answer without even the channel's CSRF and rate limit.
+   */
   deleteInventoryProduct: defineFn({
+    exposure: 'internal',
     input: { id: 'id', expectedRevision: 'int' },
     output: { ok: 'bool', id: 'id?', deleted: 'bool?', errors: 'json?' },
     effects: [
@@ -469,7 +480,6 @@ export const functions: Record<string, FnSpec> = {
       'read:stock.Move',
     ],
     idempotent: true,
-    agent: true,
     handler: async (ctx, args) => {
       try {
         await ctx.tx(async (tx) => {
