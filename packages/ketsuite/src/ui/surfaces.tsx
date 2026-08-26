@@ -6,6 +6,7 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'stack',
+  'columns',
   'section',
   'section-head',
   'section-eyebrow',
@@ -26,6 +27,7 @@ export const HOOKS = [
   'metric-label',
   'metric-value',
   'metric-detail',
+  'metric-trend',
 ] as const
 
 export const stack = (
@@ -33,6 +35,30 @@ export const stack = (
   gap: 'compact' | 'default' | 'loose' = 'default',
 ): TemplateResult => (
   <div data-ui="stack" data-gap={gap}>
+    {each(
+      items,
+      (_, i) => i,
+      (item) => (
+        <>{item}</>
+      ),
+    )}
+  </div>
+)
+
+/**
+ * Things read against each other, side by side.
+ *
+ * Equal columns rather than content-sized: a revenue mix and the expense
+ * breakdown beside it are compared, and a ring that took the width it wanted
+ * left the bars in a gutter. Collapses to one column when there is not room for
+ * two — a width question rather than a device one, so the stylesheet asks it
+ * with a container-relative minimum and not with a device breakpoint.
+ *
+ * Positional, like `stack`, and for the same reason: it takes a list, which is
+ * not what JSX hands a component.
+ */
+export const columns = (items: readonly JSXChild[], gap: 'default' | 'loose' = 'default'): TemplateResult => (
+  <div data-ui="columns" data-gap={gap}>
     {each(
       items,
       (_, i) => i,
@@ -104,16 +130,25 @@ export const contentCard = (o: {
   </article>
 )
 
-/** One operational fact, with context rather than colour carrying its meaning. */
+/**
+ * One operational fact, with context rather than colour carrying its meaning.
+ *
+ * `trend` is a node rather than more text because the one thing that legitimately
+ * carries colour here is a change against a previous period, and whether a change
+ * is good news depends on the metric — see `delta` in `charts.tsx`. Everything
+ * else on the card stays in the ink the rest of the page uses.
+ */
 export const metric = (o: {
   label: string
   value: string
   detail?: string | null
+  trend?: JSXChild
   tone?: string
 }): TemplateResult => (
   <article data-ui="metric" data-tone={o.tone ?? 'neutral'}>
     <p data-ui="metric-label">{o.label}</p>
     <p data-ui="metric-value">{o.value}</p>
+    {o.trend !== undefined && <p data-ui="metric-trend">{o.trend}</p>}
     {!!o.detail && <p data-ui="metric-detail">{o.detail}</p>}
   </article>
 )

@@ -60,8 +60,7 @@ export const pagesScreen = (
               title={(page) => String(page.title ?? '')}
               href={(page) => `/admin/flow/pages/${String(page.id)}`}
               summary={(page) =>
-                String(page.previewText ?? '').slice(0, 140) ||
-                _('flow_backend.pages.emptyDocument')
+                String(page.previewText ?? '').slice(0, 140) || _('flow_backend.pages.emptyDocument')
               }
               count={(page) =>
                 Number(page.childCount ?? 0) > 0
@@ -107,8 +106,7 @@ export const allPagesScreen = (
               title={(page) => String(page.title ?? '')}
               href={(page) => `/admin/flow/pages/${String(page.id)}`}
               summary={(page) =>
-                String(page.previewText ?? '').slice(0, 140) ||
-                _('flow_backend.pages.emptyDocument')
+                String(page.previewText ?? '').slice(0, 140) || _('flow_backend.pages.emptyDocument')
               }
               value={(page) => String(page.projectName ?? '')}
             />
@@ -183,8 +181,7 @@ export const pageDetailScreen = (
                 title={(child) => String(child.title ?? '')}
                 href={(child) => `/admin/flow/pages/${String(child.id)}`}
                 summary={(child) =>
-                  String(child.previewText ?? '').slice(0, 140) ||
-                  _('flow_backend.pages.emptyDocument')
+                  String(child.previewText ?? '').slice(0, 140) || _('flow_backend.pages.emptyDocument')
                 }
               />
             ) : (

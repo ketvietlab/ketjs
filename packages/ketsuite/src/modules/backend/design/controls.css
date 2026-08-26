@@ -17,6 +17,39 @@
     gap: var(--admin-gap-md);
   }
 
+  /* Equal columns that become one when there is not room for two.
+
+     `auto-fit` with a `min(100%, …)` floor asks the question about the space
+     actually available rather than about the device: the same layout is two
+     columns in a page and one inside a rail, with no breakpoint to keep in
+     sync with the shell's own widths. `1fr` after the floor is what keeps the
+     two equal — without it the column with a ring in it takes the width the
+     ring wants and leaves the other in a gutter. */
+  [data-ui="columns"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+    align-items: stretch;
+    gap: var(--admin-gap-md);
+  }
+  [data-ui="columns"][data-gap="loose"] {
+    gap: var(--admin-gap-lg);
+  }
+  [data-ui="columns"] > * {
+    min-inline-size: 0;
+  }
+  /* Equal height as well as equal width: two panels read as a pair, and one
+     ending halfway up the other reads as the shorter one having run out rather
+     than as it simply having less in it. */
+  [data-ui="columns"] > [data-ui="section"] {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  [data-ui="columns"] > [data-ui="section"] > [data-ui="section-body"],
+  [data-ui="columns"] > [data-ui="section"] [data-ui="section-body"] > [data-ui="surface"] {
+    block-size: 100%;
+  }
+
   [data-ui="inline"] {
     display: inline-flex;
     min-inline-size: 0;

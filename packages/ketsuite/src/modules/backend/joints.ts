@@ -16,6 +16,12 @@ export const joints: Record<string, JointDef> = {
   /** Function-backed relational selector; owning screens supply model-specific capabilities. */
   'relation.select': { props: { id: 'id', config: 'json' } },
   /**
+   * One canvas chart. The config carries numbers that are already computed and
+   * text that is already translated and formatted, because the island is handed
+   * props and nothing else — no context, no translator, no company currency.
+   */
+  'screen.chart': { props: { id: 'id', config: 'json' } },
+  /**
    * Sidebar entries, after the ones backend owns.
    *
    * `active` is the screen currently shown, so a fill can mark itself. It is a

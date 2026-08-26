@@ -19,6 +19,7 @@ import { createHash } from 'node:crypto'
 import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildBackendClients } from './build-backend-client.mjs'
+import { buildChartClient } from './build-chart-client.mjs'
 import { buildFlowClient } from './build-flow-client.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -148,6 +149,7 @@ try {
   // itself part of what the fingerprint covers — a fresh checkout and a
   // no-op rebuild both land on a self-consistent state.
   await buildBackendClients()
+  await buildChartClient()
   await buildFlowClient()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null

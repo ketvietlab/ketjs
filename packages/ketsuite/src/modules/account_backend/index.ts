@@ -32,6 +32,7 @@ import { taxesScreen } from './taxes-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
+import { overviewCharts, periodOf, yearsOf } from './overview.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -672,50 +673,111 @@ export default defineModule({
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         await ctx.call('account.initializeCompany', {}, url, req)
-        // Counting in the database rather than fetching every move to measure the
-        // list: a dashboard must not get slower as the ledger grows. Each card
-        // counts exactly the list it opens — a card labelled "records" that showed
-        // the unpaid count, or every move under "journal entries", disagreed with
-        // the screen one click away.
-        const counted = (input: Record<string, unknown>) =>
-          ctx.call('account.countMoves', input, url, req) as Promise<AnyRow>
-        const [accounts, journals, taxes, terms, payments, setup] = (await Promise.all([
-          ctx.call('account.listAccounts', {}, url, req),
-          ctx.call('account.listJournals', {}, url, req),
-          ctx.call('account.listTaxes', {}, url, req),
-          ctx.call('account.listPaymentTerms', {}, url, req),
-          ctx.call('account.listPayments', {}, url, req),
-          ctx.call('account.getSetup', {}, url, req),
-        ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow[], AnyRow[], AnyRow]
-        const [draft, posted, unpaid, customerInvoices, vendorBills, entries] = await Promise.all([
-          counted({ state: 'draft' }),
-          counted({ state: 'posted' }),
-          counted({ state: 'posted', paymentState: 'not_paid' }),
-          counted({ moveTypes: ['out_invoice', 'out_refund', 'out_receipt'] }),
-          counted({ moveTypes: ['in_invoice', 'in_refund', 'in_receipt'] }),
-          counted({ moveType: 'entry' }),
+        const period = periodOf(url)
+        const read = async (name: string, args: AnyRow): Promise<AnyRow> =>
+          (await ctx.call(name, args, url, req)) as AnyRow
+        // Nine reads, one round of latency. A balance is as at a date and a
+        // result is over a window, so they are separate calls rather than one
+        // "dashboard" function: the same split the trial balance and the general
+        // ledger already make, and the reason narrowing the filter cannot make
+        // total assets shrink.
+        const [
+          current,
+          previous,
+          position,
+          opening,
+          timeline,
+          openItems,
+          cashFlow,
+          setup,
+          companies,
+          oldest,
+        ] = await Promise.all([
+          read('account.performance', { dateFrom: period.from, dateTo: period.to }),
+          read('account.performance', { dateFrom: period.previousFrom, dateTo: period.previousTo }),
+          read('account.position', { asOf: period.to }),
+          read('account.position', { asOf: period.previousTo }),
+          read('account.revenueTimeline', { dateFrom: period.from, dateTo: period.to }),
+          read('account.openItemSummary', { asOf: period.to, partnerLimit: 5 }),
+          read('account.cashFlow', { dateFrom: period.from, dateTo: period.to }),
+          read('account.getSetup', {}),
+          ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
+          // The oldest posted move, and only that one: the year chips offer
+          // the years the ledger actually covers, and asking the database for
+          // the earliest date is cheaper than every year deriving from a scan.
+          ctx.call('account.listMoves', { state: 'posted', order: 'asc', limit: 1 }, url, req) as Promise<
+            AnyRow[]
+          >,
         ])
+        // The comparison line has to be bucketed the way this one was, or the
+        // two are not comparable: a previous window one day shorter would
+        // otherwise pick days where this picked months and draw a shape that
+        // shares an axis with nothing.
+        const previousTimeline = await read('account.revenueTimeline', {
+          dateFrom: period.previousFrom,
+          dateTo: period.previousTo,
+          granularity: String(timeline.granularity ?? 'day'),
+        })
         return adminPage(ctx, url, req, {
-          title: 'account_backend.dashboard.title',
-          body: (_, frame) =>
-            accountingOverviewScreen(_, {
-              counts: {
-                accounts: accounts.length,
-                journals: journals.length,
-                taxes: taxes.length,
-                terms: terms.length,
-                draft: Number(draft.count),
-                posted: Number(posted.count),
-                unpaid: Number(unpaid.count),
-                customerInvoices: Number(customerInvoices.count),
-                vendorBills: Number(vendorBills.count),
-                entries: Number(entries.count),
-                payments: payments.length,
+          title: 'account_backend.overview.title',
+          body: async (_, frame) => {
+            const currency = currencyOf(companies as AnyRow[], frame)
+            const charts = await overviewCharts(ctx, url, req, _, {
+              currency,
+              current,
+              timeline,
+              previousTimeline,
+            })
+            return accountingOverviewScreen(_, {
+              frame,
+              action: '/admin/accounting',
+              preset: period.preset,
+              years: yearsOf(String((oldest as AnyRow[])[0]?.date ?? '')),
+              presetHref: (name) => {
+                const target = new URL('/admin/accounting', url)
+                target.searchParams.set('period', name)
+                const lang = url.searchParams.get('lang')
+                if (lang) target.searchParams.set('lang', lang)
+                return `${target.pathname}${target.search}`
               },
-              frame: frame,
-              locale: localeQuery(url),
+              // The language rides as a hidden field: a GET form discards the
+              // query string its action carried, which silently sent a reader
+              // filtering in Vietnamese back to the negotiated locale.
+              hidden: url.searchParams.get('lang')
+                ? { lang: String(url.searchParams.get('lang')) }
+                : undefined,
+              fields: [
+                { name: 'dateFrom', label: _('account_backend.field.dateFrom'), value: period.fromDay },
+                { name: 'dateTo', label: _('account_backend.field.dateTo'), value: period.toDay },
+              ],
+              current,
+              previous,
+              position,
+              opening,
+              openItems,
+              cashFlow,
+              revenue: charts.revenue,
+              mix: charts.mix,
+              currency,
               standard: String(setup.standard),
-            }),
+              ledgerHref: (accountId) => {
+                const target = new URL('/admin/accounting/general-ledger', url)
+                target.searchParams.set('accountId', accountId)
+                target.searchParams.set('dateFrom', period.from)
+                target.searchParams.set('dateTo', period.to)
+                const lang = url.searchParams.get('lang')
+                if (lang) target.searchParams.set('lang', lang)
+                return `${target.pathname}${target.search}`
+              },
+              partnerHref: (partnerId) => {
+                const target = new URL('/admin/accounting/partner-statement', url)
+                target.searchParams.set('partnerId', partnerId)
+                const lang = url.searchParams.get('lang')
+                if (lang) target.searchParams.set('lang', lang)
+                return `${target.pathname}${target.search}`
+              },
+            })
+          },
         })
       },
     '/admin/accounting/accounts':
@@ -1690,6 +1752,62 @@ const vi: Record<string, string> = {
   'defaults.categories.hint': 'Mở một dòng để sửa. Nhóm không có ở đây sẽ dùng mặc định của công ty.',
   'defaults.categories.empty': 'Chưa nhóm nào có tài khoản riêng',
   'defaults.categories.emptyHint': 'Mọi hàng hoá đang hạch toán theo mặc định của công ty.',
+  'overview.title': 'Tổng quan kế toán',
+  'overview.subtitle': 'Kết quả kinh doanh, tình hình tài chính và công nợ lấy thẳng từ sổ đã ghi.',
+  'overview.period': 'Kỳ báo cáo',
+  'overview.periodHint':
+    'Chọn một khoảng có sẵn, hoặc chọn năm rồi thu hẹp bằng ngày cụ thể. Số liệu kết quả tính trong kỳ; số dư tính đến ngày cuối kỳ. Kỳ so sánh là khoảng thời gian cùng độ dài liền trước.',
+  'overview.preset.today': 'Hôm nay',
+  'overview.preset.yesterday': 'Hôm qua',
+  'overview.preset.last7': '7 ngày qua',
+  'overview.preset.last14': '14 ngày qua',
+  'overview.preset.last30': '30 ngày qua',
+  'overview.preset.month': 'Tháng này',
+  'overview.preset.lastMonth': 'Tháng trước',
+  'overview.preset.last90': '90 ngày qua',
+  'overview.byYear': 'Theo năm',
+  'overview.custom': 'Thu hẹp trong năm',
+  'overview.headline': 'Chỉ số chính',
+  'overview.headlineHint': 'So với kỳ liền trước cùng độ dài.',
+  'overview.revenue': 'Doanh thu thuần',
+  'overview.profit': 'Lợi nhuận trước thuế',
+  'overview.cash': 'Tiền và tương đương tiền',
+  'overview.assets': 'Tổng tài sản',
+  'overview.liabilities': 'Tổng nợ phải trả',
+  'overview.versusPrevious': 'so với kỳ trước',
+  'overview.noComparison': 'chưa có kỳ so sánh',
+  'overview.previous': 'kỳ trước',
+  'overview.thisPeriod': 'Kỳ này',
+  'overview.lastPeriod': 'Kỳ trước',
+  'overview.revenueTrend': 'Doanh thu theo thời gian',
+  'overview.revenueTrendHint': 'Mỗi điểm là doanh thu phát sinh trong khoảng đó, không phải luỹ kế.',
+  'overview.mix': 'Cơ cấu doanh thu',
+  'overview.otherRevenue': 'Doanh thu khác',
+  'overview.expenses': 'Chi phí theo tài khoản',
+  'overview.totalExpense': 'Tổng chi phí',
+  'overview.grossMargin': 'Tỷ lệ lợi nhuận gộp',
+  'overview.receivable': 'Công nợ phải thu',
+  'overview.payable': 'Công nợ phải trả',
+  'overview.partner': 'Đối tác',
+  'overview.outstanding': 'Còn phải thanh toán',
+  'overview.notYetDue': 'Trong hạn',
+  'overview.overdue': 'Quá hạn',
+  'overview.cashFlow': 'Dòng tiền',
+  'overview.cashFlowHint':
+    'Tiền thực tế đi qua tài khoản tiền mặt và ngân hàng, phân loại theo tài khoản đối ứng.',
+  'overview.movement': 'Khoản mục',
+  'overview.cashSales': 'Tiền thu từ bán hàng',
+  'overview.cashPurchases': 'Tiền chi cho mua hàng',
+  'overview.cashOperating': 'Tiền chi phí hoạt động',
+  'overview.cashOther': 'Tiền thu chi khác',
+  'overview.cashNet': 'Lưu chuyển tiền thuần',
+  'overview.noRevenue': 'Kỳ này chưa có doanh thu ghi sổ.',
+  'overview.noExpense': 'Kỳ này chưa có chi phí ghi sổ.',
+  'overview.noReceivable': 'Không còn khoản phải thu nào đang mở.',
+  'overview.noPayable': 'Không còn khoản phải trả nào đang mở.',
+  'overview.unitBillion': ' tỷ',
+  'overview.unitMillion': ' tr',
+  'overview.unitThousand': ' ng',
   'dashboard.title': 'Tổng quan kế toán',
   'dashboard.kicker': 'Không gian tài chính',
   'dashboard.subtitle': 'Theo dõi chứng từ, công nợ, báo cáo và cấu hình kế toán tại một nơi.',
@@ -1996,6 +2114,62 @@ const en: Record<string, string> = {
   'menu.journals': 'Journals',
   'menu.taxes': 'Taxes',
   'menu.paymentTerms': 'Payment terms',
+  'overview.title': 'Accounting overview',
+  'overview.subtitle': 'Result, position, and what is still owed, read straight from the posted ledger.',
+  'overview.period': 'Reporting period',
+  'overview.periodHint':
+    'Pick a named window, or pick a year and narrow it to exact dates. Results are for the window; balances are as at its last day. The comparison is the window of equal length immediately before it.',
+  'overview.preset.today': 'Today',
+  'overview.preset.yesterday': 'Yesterday',
+  'overview.preset.last7': 'Last 7 days',
+  'overview.preset.last14': 'Last 14 days',
+  'overview.preset.last30': 'Last 30 days',
+  'overview.preset.month': 'This month',
+  'overview.preset.lastMonth': 'Last month',
+  'overview.preset.last90': 'Last 90 days',
+  'overview.byYear': 'By year',
+  'overview.custom': 'Narrow to exact dates',
+  'overview.headline': 'Headline figures',
+  'overview.headlineHint': 'Against the preceding window of equal length.',
+  'overview.revenue': 'Net revenue',
+  'overview.profit': 'Profit before tax',
+  'overview.cash': 'Cash and equivalents',
+  'overview.assets': 'Total assets',
+  'overview.liabilities': 'Total liabilities',
+  'overview.versusPrevious': 'against the previous period',
+  'overview.noComparison': 'no period to compare',
+  'overview.previous': 'previous',
+  'overview.thisPeriod': 'This period',
+  'overview.lastPeriod': 'Previous period',
+  'overview.revenueTrend': 'Revenue over time',
+  'overview.revenueTrendHint': 'Each point is what was earned in that bucket, not a running total.',
+  'overview.mix': 'Revenue mix',
+  'overview.otherRevenue': 'Other revenue',
+  'overview.expenses': 'Expenses by account',
+  'overview.totalExpense': 'Total expense',
+  'overview.grossMargin': 'Gross margin',
+  'overview.receivable': 'Receivables',
+  'overview.payable': 'Payables',
+  'overview.partner': 'Partner',
+  'overview.outstanding': 'Outstanding',
+  'overview.notYetDue': 'Not yet due',
+  'overview.overdue': 'Overdue',
+  'overview.cashFlow': 'Cash flow',
+  'overview.cashFlowHint':
+    'Money that actually moved through cash and bank accounts, filed by its counterpart.',
+  'overview.movement': 'Movement',
+  'overview.cashSales': 'Received from sales',
+  'overview.cashPurchases': 'Paid for purchases',
+  'overview.cashOperating': 'Paid for operating expenses',
+  'overview.cashOther': 'Other movements',
+  'overview.cashNet': 'Net cash movement',
+  'overview.noRevenue': 'No revenue was posted in this period.',
+  'overview.noExpense': 'No expense was posted in this period.',
+  'overview.noReceivable': 'Nothing is outstanding from customers.',
+  'overview.noPayable': 'Nothing is outstanding to suppliers.',
+  'overview.unitBillion': 'B',
+  'overview.unitMillion': 'M',
+  'overview.unitThousand': 'K',
   'dashboard.title': 'Accounting overview',
   'dashboard.kicker': 'Finance workspace',
   'dashboard.subtitle': 'Track documents, balances, reports, and accounting configuration in one place.',

@@ -102,9 +102,7 @@ const overviewCards = (_: Translator, o: ProjectsOverview): TemplateResult => {
     <CardGrid
       items={cards}
       id={(card) => card.id}
-      card={(card) => (
-        <Metric label={card.label} value={card.value} detail={card.detail} tone={card.tone} />
-      )}
+      card={(card) => <Metric label={card.label} value={card.value} detail={card.detail} tone={card.tone} />}
     />
   )
 }
@@ -132,9 +130,7 @@ export const projectsScreen = (
               id={(row) => String(row.id)}
               title={(row) => String(row.title ?? '')}
               href={(row) => `/admin/flow/issues/${String(row.id)}`}
-              summary={(row) =>
-                [row.projectName, row.columnName].filter(Boolean).map(String).join(' · ')
-              }
+              summary={(row) => [row.projectName, row.columnName].filter(Boolean).map(String).join(' · ')}
               value={(row) => String(row.assigneeName ?? '')}
             />
           ) : (
