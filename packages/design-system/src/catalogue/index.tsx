@@ -12,6 +12,7 @@ import { DataTable } from '../patterns/data-table.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
 import { FormPage } from '../patterns/form-page.tsx'
 import { ModalSheet } from '../patterns/modal-sheet.tsx'
+import { Pipeline } from '../patterns/pipeline.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
 
 export type ComponentExample = {
@@ -234,7 +235,7 @@ export const componentGroups: readonly ComponentGroup[] = [
             actions={<LinkButton label="View report" href="#patterns" size="compact" />}
             body={
               <Grid
-                columns={3}
+                columns={4}
                 items={[
                   <Metric
                     label="Orders"
@@ -255,8 +256,15 @@ export const componentGroups: readonly ComponentGroup[] = [
                       </svg>
                     }
                   />,
-                  <Metric label="Review queue" value="7" detail="Oldest 42 min" tone="warning" />,
+                  <Metric
+                    label="Review queue"
+                    value="7"
+                    detail="Oldest 42 min"
+                    tone="warning"
+                    href="#surface-section"
+                  />,
                   <Metric label="Blocked" value="2" detail="Credential required" tone="danger" />,
+                  <Metric label="Archived" value="1 204" detail="No state to report" />,
                 ]}
               />
             }
@@ -480,6 +488,23 @@ export const componentGroups: readonly ComponentGroup[] = [
                 ]}
               />
             }
+          />
+        ),
+      },
+      {
+        id: 'pipeline',
+        name: 'Pipeline',
+        description:
+          'Stages of a process and the work sitting in each. A later stage may hold more than the one before it.',
+        render: () => (
+          <Pipeline
+            label="Order pipeline"
+            steps={[
+              { id: 'draft', label: 'Draft', value: 24, href: '#pipeline' },
+              { id: 'sent', label: 'Sent', value: 9, href: '#pipeline', tone: 'info' },
+              { id: 'confirmed', label: 'Confirmed', value: 18, href: '#pipeline', tone: 'positive' },
+              { id: 'to-invoice', label: 'To invoice', value: 6, href: '#pipeline', tone: 'warning' },
+            ]}
           />
         ),
       },

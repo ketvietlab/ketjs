@@ -23,6 +23,18 @@ export type {
   TabItem as CollectionTabItem,
 } from '@ketvietlab/design-system'
 
+/**
+ * Public components a screen uses directly, with no compatibility copy here.
+ *
+ * The rule in the header is that new shared UI enters through the public
+ * contract; a mirror of it in this file would be a second place for the markup
+ * to drift. `Pipeline` owns its own hooks, stylesheet and catalogue specimen in
+ * `@ketvietlab/design-system`, and the backend already loads that stylesheet and
+ * marks its root with `data-kv-design-system`.
+ */
+export { Pipeline } from '@ketvietlab/design-system'
+export type { PipelineStep } from '@ketvietlab/design-system'
+
 export { icon, hasIcon } from './icons.ts'
 export { formatMoney } from './format.ts'
 export { button, linkButton, iconButton, actionGroup } from './actions.tsx'

@@ -10,6 +10,7 @@ import { HOOKS as tableHooks } from '../patterns/data-table.tsx'
 import { HOOKS as listPageHooks } from '../patterns/list-page.tsx'
 import { HOOKS as formPageHooks } from '../patterns/form-page.tsx'
 import { HOOKS as modalHooks } from '../patterns/modal-sheet.tsx'
+import { HOOKS as pipelineHooks } from '../patterns/pipeline.tsx'
 import { HOOKS as formHooks } from '../patterns/record-form.tsx'
 
 const GROUPS = {
@@ -25,6 +26,7 @@ const GROUPS = {
   listPage: listPageHooks,
   formPage: formPageHooks,
   modal: modalHooks,
+  pipeline: pipelineHooks,
   form: formHooks,
 } as const
 
