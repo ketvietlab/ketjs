@@ -172,10 +172,11 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/sales/invoicing-policies') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="invoicing-policy-form"/)
-      assert.match(html, /type="radio" name="invoicePolicy" autocomplete="off" value="delivery"/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.match(html, /data-ui="table"/)
       assert.match(html, /Theo số lượng giao/)
+      assert.match(html, /href="\/admin\/sales\/invoicing-policies\/new\?returnTo=/)
+      assert.doesNotMatch(html, /id="invoicing-policy-form"|data-ui="record-workspace"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/sales/orders/so-1') {
@@ -270,10 +271,61 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     headers: { accept: 'text/html' },
   })
   const englishPoliciesHtml = await englishPolicies.text()
-  assert.match(englishPoliciesHtml, /Policies by product/)
+  assert.match(englishPoliciesHtml, /data-ui="list-page"/)
   assert.match(englishPoliciesHtml, /Delivered quantities/)
-  assert.match(englishPoliciesHtml, /action="\/admin\/sales\/invoicing-policies\?lang=en"/)
+  assert.match(
+    englishPoliciesHtml,
+    /href="\/admin\/sales\/invoicing-policies\/new\?lang=en&amp;returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Den"/,
+  )
+  assert.doesNotMatch(englishPoliciesHtml, /id="invoicing-policy-form"/)
   assert.doesNotMatch(englishPoliciesHtml, /data-island="mail\.chatter"/)
+  const englishPolicyForm = await e2e.client.get(
+    '/admin/sales/invoicing-policies/new?lang=en&returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Den',
+    { headers: { accept: 'text/html' } },
+  )
+  const englishPolicyFormHtml = await englishPolicyForm.text()
+  assert.match(
+    englishPolicyFormHtml,
+    /data-ui="form-page" data-scope="sales-invoicing-policy-form-page" data-has-aside="false"/,
+  )
+  assert.match(englishPolicyFormHtml, /id="invoicing-policy-form"/)
+  assert.match(englishPolicyFormHtml, /type="radio" name="invoicePolicy" autocomplete="off" value="delivery"/)
+  assert.match(englishPolicyFormHtml, /Delivered quantities/)
+  assert.match(
+    englishPolicyFormHtml,
+    /action="\/admin\/sales\/invoicing-policies\/new\?lang=en&amp;returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Den"/,
+  )
+  assert.match(englishPolicyFormHtml, /href="\/admin\/sales\/invoicing-policies\?lang=en"/)
+  assert.doesNotMatch(englishPolicyFormHtml, /data-island="mail\.chatter"/)
+  const rejectedPolicy = await e2e.client.post(
+    '/admin/sales/invoicing-policies/new?lang=en&returnTo=https%3A%2F%2Fevil.example%2Fsteal',
+    new URLSearchParams({ templateId: '', invoicePolicy: '' }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(rejectedPolicy.status, 303)
+  assert.equal(
+    rejectedPolicy.headers.get('location'),
+    '/admin/sales/invoicing-policies/new?lang=en&returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Den&invalid=1',
+  )
+  const rejectedPolicyForm = await e2e.client.get(rejectedPolicy.headers.get('location') ?? '', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(
+    await rejectedPolicyForm.text(),
+    /The form is invalid\. Check the required fields and try again\./,
+  )
+  const crossSitePolicy = await e2e.client.post(
+    '/admin/sales/invoicing-policies/new?lang=en',
+    new URLSearchParams({ templateId: 'goods', invoicePolicy: 'order' }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://evil.example' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(crossSitePolicy.status, 403)
   const updatePolicy = await e2e.client.post(
     '/admin/sales/invoicing-policies?lang=en',
     new URLSearchParams({ templateId: 'goods', invoicePolicy: 'order' }),

@@ -8,8 +8,9 @@ import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
-import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
 import {
+  invoicingPoliciesListScreen,
+  invoicingPolicyCreateScreen,
   orderDetailScreen,
   overviewScreen,
   quotationCreateScreen,
@@ -66,6 +67,34 @@ const quotationListQuery = (url: URL): string => {
 }
 const quotationListPath = (url: URL): string => `/admin/sales/quotations${quotationListQuery(url)}`
 const quotationCreatePath = (url: URL): string => `/admin/sales/quotations/new${quotationListQuery(url)}`
+const invoicingPoliciesPath = (url: URL): string => `/admin/sales/invoicing-policies${localeQuery(url)}`
+const safeInvoicingPoliciesReturnTo = (url: URL): string => {
+  const fallback = invoicingPoliciesPath(url)
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/sales/invoicing-policies'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+const invoicingPolicyCreatePath = (url: URL, returnTo: string): string => {
+  const target = new URL(`/admin/sales/invoicing-policies/new${localeQuery(url)}`, 'http://ket.local')
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+const setInvoicingPolicy = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+): Promise<unknown> => {
+  const form = await readForm(req)
+  return ctx.call(
+    'sale.setInvoicePolicy',
+    { templateId: form.templateId ?? '', invoicePolicy: form.invoicePolicy ?? '' },
+    url,
+    req,
+  )
+}
 const createQuotation = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<unknown> => {
   const form = await readForm(req)
   return ctx.call(
@@ -935,55 +964,84 @@ export default defineModule({
     '/admin/sales/invoicing-policies':
       (ctx): Route =>
       async (url, req) => {
+        const returnTo = invoicingPoliciesPath(url)
+        const createPath = invoicingPolicyCreatePath(url, returnTo)
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
-          const form = await readForm(req)
-          const target = `/admin/sales/invoicing-policies${localeQuery(url)}`
-          return redirect(
-            await ctx.call(
-              'sale.setInvoicePolicy',
-              { templateId: form.templateId ?? '', invoicePolicy: form.invoicePolicy ?? '' },
-              url,
-              req,
+          const result = await setInvoicingPolicy(ctx, url, req)
+          return (result as AnyRow).ok
+            ? seeOther(returnTo)
+            : seeOther(`${createPath}${createPath.includes('?') ? '&' : '?'}invalid=1`)
+        }
+        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[]
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.policies.title',
+          body: async (_, shell) =>
+            invoicingPoliciesListScreen(
+              _,
+              {
+                createHref: createPath,
+                rows,
+              },
+              shell,
             ),
-            target,
-          )
+        })
+      },
+    '/admin/sales/invoicing-policies/new':
+      (ctx): Route =>
+      async (url, req) => {
+        const returnTo = safeInvoicingPoliciesReturnTo(url)
+        const createPath = invoicingPolicyCreatePath(url, returnTo)
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const result = await setInvoicingPolicy(ctx, url, req)
+          return (result as AnyRow).ok
+            ? seeOther(returnTo)
+            : seeOther(`${createPath}${createPath.includes('?') ? '&' : '?'}invalid=1`)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[],
           _ = ctx.translate(ctx.localeOf(url, req))
         return adminPage(ctx, url, req, {
-          title: 'sale_backend.policies.title',
+          title: 'sale_backend.policy.edit.title',
           body: async (_, shell) =>
-            invoicingPoliciesScreen(_, {
-              frame: shell,
-              action: `/admin/sales/invoicing-policies${localeQuery(url)}`,
-              errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
-              fields: [
-                {
-                  name: 'templateId',
-                  label: _('sale_backend.field.product'),
-                  type: 'select',
-                  options: choices(rows),
-                  required: true,
-                  control: await templateRelationControl(ctx, url, req, _, {
-                    id: 'sale-invoicing-template',
+            invoicingPolicyCreateScreen(
+              _,
+              {
+                action: createPath,
+                cancelHref: returnTo,
+                errors:
+                  url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
+                fields: [
+                  {
                     name: 'templateId',
                     label: _('sale_backend.field.product'),
-                    templates: choices(rows),
+                    type: 'select',
+                    options: choices(rows),
                     required: true,
-                  }),
-                },
-                {
-                  name: 'invoicePolicy',
-                  label: _('sale_backend.field.invoicePolicy'),
-                  type: 'radio',
-                  options: INVOICE_POLICIES.map((v) => ({ value: v, label: labelOf(_, 'invoicePolicy', v) })),
-                  required: true,
-                },
-              ],
-              rows,
-            }),
+                    control: await templateRelationControl(ctx, url, req, _, {
+                      id: 'sale-invoicing-template',
+                      name: 'templateId',
+                      label: _('sale_backend.field.product'),
+                      templates: choices(rows),
+                      required: true,
+                    }),
+                  },
+                  {
+                    name: 'invoicePolicy',
+                    label: _('sale_backend.field.invoicePolicy'),
+                    type: 'radio',
+                    options: INVOICE_POLICIES.map((v) => ({
+                      value: v,
+                      label: labelOf(_, 'invoicePolicy', v),
+                    })),
+                    required: true,
+                  },
+                ],
+              },
+              shell,
+            ),
         })
       },
   },

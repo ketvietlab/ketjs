@@ -20,12 +20,13 @@ import {
   tagsControl,
   teamControl,
 } from './relation-control.ts'
-import { CONFIGURATION_TABS, configurationScreen, leaderboardScreen } from './screens.tsx'
+import { CONFIGURATION_TABS, configurationScreen } from './screens.tsx'
 import type { ConfigurationTab } from './screens.tsx'
 import {
   caseCreateScreen,
   caseDetailScreen,
   casesListScreen,
+  leaderboardScreen,
   plannerScreen,
   permissionScreen,
   pipelineScreen,
@@ -1131,7 +1132,12 @@ export const routes: Record<string, RouteEntry> = {
       const listed = (await ctx.call('crm.gamification.list', { limit: 50 }, url, req)) as AnyRow
       return adminPage(ctx, url, req, {
         title: 'crm_backend.leaderboard.title',
-        body: (_, frame) => leaderboardScreen(_, frame, (listed.profiles as AnyRow[]) ?? [], errors),
+        body: (_, frame) =>
+          leaderboardScreen(_, frame, {
+            profiles: (listed.profiles as AnyRow[]) ?? [],
+            errors,
+            locale: localeQuery(url),
+          }),
       })
     },
 

@@ -409,6 +409,12 @@ test('crm backend: the leaderboard is reachable and refreshes', async (t) => {
   assert.equal(page.status, 200)
   assert.match(html, /Leaderboard/)
   assert.match(html, /Administrator/)
+  assert.match(html, /data-ui="list-page"/)
+  assert.match(html, /data-col="rank"/)
+  assert.match(html, /data-col="points"/)
+  assert.match(html, /href="\/admin\/users\/admin\?lang=en"/)
+  assert.match(html, /action="\/admin\/crm\/leaderboard\?lang=en"/)
+  assert.match(html, /name="action" value="refresh"/)
 })
 
 test('crm: a case kind another module owns stays out of the CRM screens', async (t) => {

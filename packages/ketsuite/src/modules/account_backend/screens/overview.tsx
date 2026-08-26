@@ -35,9 +35,9 @@ import {
   stack,
   Surface,
   Tabs,
-} from '../../ui/index.ts'
-import type { ChartBar, ChartKey, DatePickerField, Frame, Tab } from '../../ui/index.ts'
-import { PERIOD_PRESETS } from './overview.ts'
+} from '../../../ui/index.ts'
+import type { ChartBar, ChartKey, DatePickerField, Frame, Tab } from '../../../ui/index.ts'
+import { PERIOD_PRESETS } from '../overview.ts'
 
 type Row = Record<string, unknown>
 

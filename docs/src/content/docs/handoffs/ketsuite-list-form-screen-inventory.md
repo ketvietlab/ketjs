@@ -64,7 +64,7 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
-| ACC-01 | ready | Accounting overview | `/admin/accounting` | `accountingOverviewScreen` | Specialized | no | — |
+| ACC-01 | keep | Accounting overview | `/admin/accounting` | `screens/overview.tsx::accountingOverviewScreen` | Specialized | no | Curie |
 | ACC-02 | ready | Chart of accounts | `/admin/accounting/accounts` | `accountsScreen` | Split | no | — |
 | ACC-03 | ready | Journals | `/admin/accounting/journals` | `journalsScreen` | Split | no | — |
 | ACC-04 | ready | Taxes | `/admin/accounting/taxes` | `taxesScreen` | Split | no | — |
@@ -91,7 +91,7 @@ unrouted legacy exports from the old `screens.tsx` only after confirming the rou
 | SALE-02 | done | Quotations | `/admin/sales/quotations`, `/admin/sales/quotations/new` | `screens/quotations-list.tsx`, `screens/quotation-create.tsx` | Split | list/new: no | Kant |
 | SALE-03 | done | Sales orders | `/admin/sales/orders` | `screens/sales-orders-list.tsx::salesOrdersListScreen` | ListPage | no | Kant |
 | SALE-04 | done | Quotation/order detail | `/admin/sales/quotations/{id}`, `/admin/sales/orders/{id}` | `screens/order-detail.tsx::orderDetailScreen` | FormPage | `sale_mail_backend` | Kant |
-| SALE-05 | ready | Invoicing policies | `/admin/sales/invoicing-policies` | `invoicingPoliciesScreen` | Split | no | — |
+| SALE-05 | done | Invoicing policies | `/admin/sales/invoicing-policies`, `/admin/sales/invoicing-policies/new` | `screens/invoicing-policies-list.tsx`, `screens/invoicing-policy-create.tsx` | Split | no | Kant |
 
 ### Purchase lane
 
@@ -161,7 +161,7 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 | CRM-02 | done | Cases list/create | `/admin/crm/cases`, `/admin/crm/cases/new` | `screens/cases-list.tsx`, `screens/case-create.tsx` | Split | Huygens |
 | CRM-03 | keep | Case detail | `/admin/crm/cases/{id}` | `screens/case-detail.tsx::caseDetailScreen`, `permissionScreen` | Specialized | Huygens |
 | CRM-04 | keep | Activity planner | `/admin/crm/activities` | `screens/activity-planner.tsx::plannerScreen` | Specialized | Huygens |
-| CRM-05 | ready | Leaderboard | `/admin/crm/leaderboard` | `leaderboardScreen` | ListPage | — |
+| CRM-05 | done | Leaderboard | `/admin/crm/leaderboard` | `screens/leaderboard.tsx::leaderboardScreen` | ListPage | Huygens |
 | CRM-06 | ready | CRM configuration | `/admin/crm/configuration` | `configurationScreen` | Specialized | — |
 
 ### Flow lane
@@ -748,3 +748,36 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 10 Purchase RFQ create mobile evidence](/assets/purchase-rfq-list-create/purchase-rfq-create-mobile-browser-skill.png)
 
 ![Wave 10 Purchase Orders evidence](/assets/purchase-rfq-list-create/purchase-orders-list-browser-skill.png)
+
+### Wave 11 — ACC-01, CRM-05 and SALE-05
+
+- Accounting Overview remains Specialized because its period controls, five financial KPIs, trend and mix
+  charts, receivable/payable drilldowns and cash-flow summary form one analytical workspace. Its renderer now
+  lives in `account_backend/screens/overview.tsx`; the root-level screen file was removed and a screens barrel
+  now owns the export.
+- CRM Leaderboard moved out of the legacy monolith into `screens/leaderboard.tsx` and now uses `ListPage`.
+  Rank, user links, score, won/lost/assigned/activity metrics, refresh behavior, locale and the empty state are
+  preserved.
+- Sales Invoicing Policies is now a dedicated `ListPage` plus `/new` `FormPage`. The list retains bulk policy
+  editing and the create form preserves the product relation picker, invoice basis choices, locale, validation,
+  same-origin return target and cross-site POST protection. The obsolete root renderer was removed.
+- Browser QA verified all three surfaces at desktop and 390 px with no horizontal overflow. Accounting keeps
+  its dashboard hierarchy readable; the Sales create form keeps label/control alignment; CRM retains its
+  refreshable empty state.
+- Validation scope followed the CI ownership policy: 40 affected Accounting, CRM and Sales renderer/HTTP
+  tests passed, together with Biome on changed files, build/typecheck and Astro docs validation. This wave did
+  not change shared UI, framework or other global code, so unrelated test groups were not run locally.
+
+![Wave 11 Accounting overview evidence](/assets/accounting-overview/accounting-overview-browser-skill.png)
+
+![Wave 11 Accounting overview mobile evidence](/assets/accounting-overview/accounting-overview-mobile-browser-skill.png)
+
+![Wave 11 CRM leaderboard evidence](/assets/crm-leaderboard/crm-leaderboard-browser-skill.png)
+
+![Wave 11 CRM leaderboard mobile evidence](/assets/crm-leaderboard/crm-leaderboard-mobile-browser-skill.png)
+
+![Wave 11 Sales invoicing policies evidence](/assets/sales-invoicing-policies/sales-invoicing-policies-list-browser-skill.png)
+
+![Wave 11 Sales invoicing policy create evidence](/assets/sales-invoicing-policies/sales-invoicing-policies-create-browser-skill.png)
+
+![Wave 11 Sales invoicing policy create mobile evidence](/assets/sales-invoicing-policies/sales-invoicing-policies-create-mobile-browser-skill.png)

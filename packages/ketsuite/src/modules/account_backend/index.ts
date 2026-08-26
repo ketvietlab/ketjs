@@ -18,7 +18,7 @@ import {
 } from '../account/functions.ts'
 import { moveTitle, optionsOf } from './screens.tsx'
 import { accountDefaultsScreen } from './account-defaults-screen.tsx'
-import { accountingOverviewScreen } from './accounting-overview-screen.tsx'
+import { accountingOverviewScreen } from './screens/index.ts'
 import { accountsScreen } from './accounts-screen.tsx'
 import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
 import { journalsScreen } from './journals-screen.tsx'

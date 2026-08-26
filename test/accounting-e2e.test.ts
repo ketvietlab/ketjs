@@ -445,6 +445,10 @@ test('e2e accounting: the overview reports posted moves, and never a draft', asy
 
   await call('account.postMove', { id: 'invoice-overview' })
   const posted = await read()
+  assert.match(posted, /data-ui="record-workspace"/)
+  assert.doesNotMatch(posted, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(posted, /data-ui="date-picker" method="get" action="\/admin\/accounting"/)
+  assert.match(posted, /name="lang" value="vi"/)
   assert.equal(digits(metricNamed(posted, 'Doanh thu thuần')), 100000)
   // And the same number the trial balance reports over the same window.
   const trial = (
@@ -457,6 +461,7 @@ test('e2e accounting: the overview reports posted moves, and never a draft', asy
   // The expense breakdown links into the ledger behind each account, and the
   // window travels with it: a figure nobody can open is one to trust blindly.
   assert.match(posted, /data-island="backend\.chart"/)
+  assert.doesNotMatch(posted, /data-island="mail\.chatter"/)
   assert.doesNotMatch(posted, /account_backend\.[A-Za-z]/)
 })
 

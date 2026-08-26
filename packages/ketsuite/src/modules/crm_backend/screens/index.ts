@@ -11,3 +11,6 @@ export { caseDetailScreen, permissionScreen } from './case-detail.tsx'
 export type { CaseDetailControls } from './case-detail.tsx'
 
 export { plannerScreen } from './activity-planner.tsx'
+
+export { leaderboardColumns, leaderboardScreen } from './leaderboard.tsx'
+export type { LeaderboardProfile, LeaderboardScreenOptions } from './leaderboard.tsx'
