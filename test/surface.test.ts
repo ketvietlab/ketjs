@@ -20,7 +20,21 @@ const assetDir = (files: Record<string, string>): string => {
 }
 
 const base = assetDir({ 'base.css': ':root { --x: 1 }' })
-const extra = assetDir({ 'extra.css': '.x { color: red }', 'logo.svg': '<svg/>' })
+const extra = assetDir({
+  'extra.css': '.x { color: red }',
+  'logo.svg': '<svg/>',
+  // Not assets, but they lived in the published directory all the same — this
+  // is exactly what `src/ui/client` held: the TSX an island is authored in,
+  // the sourcemap that inlines it, and a note to whoever maintains it.
+  'widget-view.tsx': 'export const secret = "API_KEY_IN_SOURCE"',
+  'extra.mjs.map': '{"sourcesContent":["API_KEY_IN_SOURCE"]}',
+  'HANDOFF.md': 'internal notes',
+  // Types a module may legitimately publish. `.jpeg` and `.woff` were briefly
+  // refused along with the source above, and `.PNG` is a PNG.
+  'photo.jpeg': 'not really a jpeg',
+  'body.woff': 'not really a font',
+  'LOGO.PNG': 'not really a png',
+})
 
 const core = defineModule({ name: 'core', assets: base, styles: ['base.css'] })
 const skin = defineModule({
@@ -160,9 +174,12 @@ test('serving: a module route answers, its asset is served, its stylesheet is li
   assert.equal((await fetch(`${at}/skin`)).status, 200)
   assert.equal((await fetch(`${at}/_ket/asset/skin/extra.css`)).status, 200)
   const body = await (await fetch(`${at}/skin`)).text()
-  assert.match(body, /\/_ket\/asset\/core\/base\.css/)
-  assert.match(body, /\/_ket\/asset\/skin\/extra\.css/)
-  assert.ok(body.indexOf('core/base.css') < body.indexOf('skin/extra.css'), 'and in dependency order')
+  // Booting stamps each asset's own digest into its URL, so a cache may keep it
+  // until the bytes change — `compose` above still names the plain path, since
+  // it is synchronous and reads no disk.
+  assert.match(body, /\/_ket\/asset\/core\/v[0-9a-f]{8}\/base\.css/)
+  assert.match(body, /\/_ket\/asset\/skin\/v[0-9a-f]{8}\/extra\.css/)
+  assert.ok(body.indexOf('/core/') < body.indexOf('/skin/'), 'and in dependency order')
   await b.close()
 })
 
@@ -188,6 +205,63 @@ test('serving: a static handler must not be talked out of its own directory', as
     assert.equal((await fetch(at + attack)).status, 404, attack)
   }
   await b.close()
+})
+
+test('serving: a versioned asset may be kept, an unversioned one must be revalidated', async () => {
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const at = `http://127.0.0.1:${b.port}`
+  try {
+    const body = await (await fetch(`${at}/skin`)).text()
+    const versioned = /\/_ket\/asset\/skin\/v[0-9a-f]{8}\/extra\.css/.exec(body)?.[0]
+    assert.ok(versioned, 'the page links the versioned URL')
+    const kept = await fetch(at + versioned)
+    assert.equal(kept.status, 200)
+    assert.equal(kept.headers.get('cache-control'), 'public, max-age=31536000, immutable')
+
+    // The plain path still answers — nothing that hard-codes it breaks — but it
+    // names no particular bytes, so it may not be kept.
+    const plain = await fetch(`${at}/_ket/asset/skin/extra.css`)
+    assert.equal(plain.status, 200)
+    assert.equal(plain.headers.get('cache-control'), 'no-cache')
+
+    // A version that no longer matches is not an error: a page loaded before a
+    // deploy goes on working, it just gets the bytes that are there now.
+    const stale = await fetch(`${at}/_ket/asset/skin/vdeadbeef/extra.css`)
+    assert.equal(stale.status, 200)
+    assert.equal(await stale.text(), '.x { color: red }')
+  } finally {
+    await b.close()
+  }
+})
+
+test('serving: a module publishes a directory, but only the asset types in it', async () => {
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const at = `http://127.0.0.1:${b.port}`
+  try {
+    // Whatever else shares the directory is not an asset. Served as
+    // `application/octet-stream` these were a download rather than an error,
+    // which is a worse answer than 404 for source nobody meant to publish.
+    for (const leaked of ['widget-view.tsx', 'extra.mjs.map', 'HANDOFF.md']) {
+      const response = await fetch(`${at}/_ket/asset/skin/${leaked}`)
+      assert.equal(response.status, 404, leaked)
+      assert.doesNotMatch(await response.text(), /API_KEY_IN_SOURCE|internal notes/, leaked)
+    }
+    // The real assets in the same directory are unaffected, whatever case
+    // their extension is written in.
+    for (const [name, type] of [
+      ['extra.css', /text\/css/],
+      ['logo.svg', /image\/svg\+xml/],
+      ['photo.jpeg', /image\/jpeg/],
+      ['body.woff', /font\/woff/],
+      ['LOGO.PNG', /image\/png/],
+    ] as const) {
+      const response = await fetch(`${at}/_ket/asset/skin/${name}`)
+      assert.equal(response.status, 200, name)
+      assert.match(response.headers.get('content-type') ?? '', type, name)
+    }
+  } finally {
+    await b.close()
+  }
 })
 
 test('serving: binary assets survive the trip, which a string-typed body would not', async () => {

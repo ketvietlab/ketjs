@@ -106,7 +106,9 @@ test('Chatter backend E2E: Product bridge renders, follows, posts attachments an
   assert.doesNotMatch(navigationHtml, /<!doctype|data-ui="sidebar-foot"|mail\.inbox-indicator/)
 
   const bootstrap = await e2e.client.get('/_ket/islands.js')
-  assert.match(await bootstrap.text(), /\/_ket\/asset\/mail_backend\/mail\.mjs/)
+  // The island's bundle URL carries the file's digest, stamped at boot — see
+  // packages/ketjs/src/server/assets.ts.
+  assert.match(await bootstrap.text(), /\/_ket\/asset\/mail_backend\/v[0-9a-f]{8}\/mail\.mjs/)
 
   const initial = (
     await call<{
@@ -401,7 +403,9 @@ test('Activity backend E2E: Product scheduling, due state, atomic completion and
   assert.match(productHtml, /data-ui="activity-schedule-trigger"/)
   assert.doesNotMatch(productHtml, /data-ui="activity-schedule"/)
   const bootstrap = await e2e.client.get('/_ket/islands.js')
-  assert.match(await bootstrap.text(), /\/_ket\/asset\/activity_backend\/activity\.mjs/)
+  // The island's bundle URL carries the file's digest, stamped at boot — see
+  // packages/ketjs/src/server/assets.ts.
+  assert.match(await bootstrap.text(), /\/_ket\/asset\/activity_backend\/v[0-9a-f]{8}\/activity\.mjs/)
 
   const before = (
     await member.call<{ activities: Row[] }>('product_activity_backend.list', {

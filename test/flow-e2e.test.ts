@@ -5,6 +5,7 @@ import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { address, company, mail, partner, storage, user } from '@ketvietlab/ketsuite'
 import flow from '../packages/ketsuite/src/modules/flow/index.ts'
+import { emptyIssueListState } from '../packages/ketsuite/src/modules/flow/search.ts'
 
 const errorCode = (row: Row): unknown => (row.errors as Array<{ code: string }> | undefined)?.[0]?.code
 
@@ -569,6 +570,308 @@ test('flow: the board a reader last opened is remembered for that reader alone',
 
     const missing = await call<Row>('flow.board.remember', { projectId: 'nosuchproject' })
     assert.equal(missing.ok, false)
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * The half that makes custom fields a tool rather than a decoration.
+ *
+ * The value lives in `flow.IssueFieldValue` and this query builder has no
+ * JOIN, so the rule is answered by collecting ids and constraining the issue
+ * query with them — the same shape every other cross-table question in this
+ * codebase takes.
+ */
+test('flow: a custom field can be filtered on', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyen Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyen Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+
+    await call('flow.project.save', {
+      values: { id: 'pf', key: 'PF', name: 'Filterable' },
+      idempotencyKey: 'project-filter-fields',
+    })
+    await call('flow.column.save', {
+      values: { id: 'cf', projectId: 'pf', code: 'todo', name: 'To do', sequence: 10 },
+      idempotencyKey: 'column-filter-fields',
+    })
+    await call('flow.field.save', {
+      id: 'ff-env',
+      projectId: 'pf',
+      code: 'environment',
+      name: 'Environment',
+      kind: 'select',
+      config: {
+        options: [
+          { code: 'production', label: 'Production' },
+          { code: 'staging', label: 'Staging' },
+        ],
+      },
+      idempotencyKey: 'field-filter-env',
+    })
+
+    const add = (id: string, title: string, environment?: string) =>
+      call('flow.issue.save', {
+        id,
+        projectId: 'pf',
+        columnId: 'cf',
+        title,
+        ...(environment ? { fields: { environment } } : {}),
+        idempotencyKey: `issue-filter-${id}`,
+      })
+    await add('fi1', 'Prod one', 'production')
+    await add('fi2', 'Prod two', 'production')
+    await add('fi3', 'Stage one', 'staging')
+    await add('fi4', 'No environment')
+
+    const listed = async (filters: unknown[]) =>
+      (
+        await call<Row>('flow.issue.list', {
+          projectId: 'pf',
+          limit: 50,
+          listState: { ...emptyIssueListState(), filters },
+        })
+      ).rows as Row[]
+    const titles = async (filters: unknown[]) =>
+      (await listed(filters)).map((row) => String(row.title)).sort()
+    const rule = (operator: string, value?: unknown) => [
+      { kind: 'rule', field: 'field:environment', operator, value },
+    ]
+
+    assert.deepEqual(await titles([]), ['No environment', 'Prod one', 'Prod two', 'Stage one'])
+    assert.deepEqual(await titles(rule('equals', 'production')), ['Prod one', 'Prod two'])
+    assert.deepEqual(await titles(rule('anyOf', ['production', 'staging'])), [
+      'Prod one',
+      'Prod two',
+      'Stage one',
+    ])
+    // A row exists only where there is a value, so `isSet` needs no clause of
+    // its own — and the issue nobody answered is the one it leaves out.
+    assert.deepEqual(await titles(rule('isSet')), ['Prod one', 'Prod two', 'Stage one'])
+    // Asking for a value nothing holds answers with nothing, not with everything.
+    assert.deepEqual(await titles(rule('equals', 'moon')), [])
+
+    // And it narrows alongside an ordinary rule rather than replacing it.
+    assert.deepEqual(
+      await titles([
+        { kind: 'rule', field: 'field:environment', operator: 'equals', value: 'production' },
+        { kind: 'rule', field: 'title', operator: 'contains', value: 'two' },
+      ]),
+      ['Prod two'],
+    )
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * Naming somebody in a comment is the one gesture that can be attributed and
+ * fired exactly once, which is why mentions live here and not in the
+ * description: `mail.Mention` is keyed to a message, and a live CRDT document
+ * has no message to key on.
+ */
+test('flow: a mention notifies, subscribes, and can be undone', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-author', kind: 'person', name: 'Author' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-named', kind: 'person', name: 'Named' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    for (const [id, partnerId] of [
+      ['author', 'p-author'],
+      ['named', 'p-named'],
+      // No partner: the platform cannot address them, which this has to survive.
+      ['ghost', null],
+    ] as Array<[string, string | null]>)
+      await e2e.fixture.call('user.createUser', {
+        id,
+        login: id,
+        password: 'test-password',
+        name: id,
+        ...(partnerId ? { partnerId } : {}),
+        defaultCompanyId: 'acme',
+        superuser: true,
+      })
+    for (const id of ['author', 'named', 'ghost'])
+      await e2e.fixture.call('user.grantCompany', { id: `${id}:acme`, userId: id, companyId: 'acme' })
+
+    await e2e.client.login({ login: 'author', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+    await call('flow.project.save', {
+      values: { id: 'pm', key: 'PM', name: 'Mentioned' },
+      idempotencyKey: 'project-mention',
+    })
+    await call('flow.column.save', {
+      values: { id: 'cm', projectId: 'pm', code: 'todo', name: 'To do', sequence: 10 },
+      idempotencyKey: 'column-mention',
+    })
+    await call('flow.issue.save', {
+      id: 'im',
+      projectId: 'pm',
+      columnId: 'cm',
+      title: 'Needs a second pair of eyes',
+      idempotencyKey: 'issue-mention',
+    })
+
+    const commented = await call<Row>('flow.issue.comment', {
+      id: 'msg-1',
+      issueId: 'im',
+      body: 'Could you look at this?',
+      // The partnerless user is named too, and has to be dropped rather than
+      // take the whole comment down with them.
+      mentionUserIds: ['named', 'ghost'],
+      idempotencyKey: 'comment-mention-1',
+    })
+    assert.equal(commented.ok, true)
+
+    // Named now follows, so the replies reach them.
+    await e2e.client.login({ login: 'named', password: 'test-password' })
+    assert.equal((await call<Row>('flow.issue.get', { id: 'im' })).following, true)
+
+    // And can stop, which is the only way out of a subscription this module
+    // otherwise only ever hands out.
+    assert.deepEqual(
+      await call<Row>('flow.issue.unfollow', { issueId: 'im', idempotencyKey: 'unfollow-first' }),
+      {
+        ok: true,
+        removed: 1,
+      },
+    )
+    assert.equal((await call<Row>('flow.issue.get', { id: 'im' })).following, false)
+    // Asking again is not an error: "I do not want these" is satisfied either way.
+    assert.deepEqual(
+      await call<Row>('flow.issue.unfollow', { issueId: 'im', idempotencyKey: 'unfollow-again' }),
+      {
+        ok: true,
+        removed: 0,
+      },
+    )
+
+    // The partnerless one was never subscribed, and nothing pretended otherwise.
+    await e2e.client.login({ login: 'ghost', password: 'test-password' })
+    assert.equal((await call<Row>('flow.issue.get', { id: 'im' })).following, false)
+  } finally {
+    await e2e.close()
+  }
+})
+
+/**
+ * What the project list shows across the top and beside each row.
+ *
+ * "Finished" is a column marked `terminalState`, the same definition the board
+ * and sub-task progress already use — a project carries no status of its own,
+ * so the state on screen has to be derived from something real.
+ */
+test('flow projects: counts come back per project, and a state is derived from them', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
+  try {
+    await e2e.fixture.call('partner.savePartner', { id: 'p-company', kind: 'company', name: 'ACME' })
+    await e2e.fixture.call('partner.savePartner', { id: 'p-user', kind: 'person', name: 'Nguyễn Minh' })
+    await e2e.fixture.call('company.saveCompany', { id: 'acme', partnerId: 'p-company', currency: 'VND' })
+    await e2e.fixture.call('user.createUser', {
+      id: 'u1',
+      login: 'u1',
+      password: 'test-password',
+      name: 'Nguyễn Minh',
+      partnerId: 'p-user',
+      defaultCompanyId: 'acme',
+    })
+    await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+    await e2e.client.login({ login: 'u1', password: 'test-password' })
+    const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+      (await e2e.client.call<T>(name, input)).value
+
+    for (const [id, key] of [['mixed', 'MIX'], ['finished', 'FIN'], ['fresh', 'FRE'], ['bare', 'BAR']]) {
+      await call('flow.project.save', {
+        values: { id, key, name: id },
+        idempotencyKey: `project-save-${id}`,
+      })
+      // A project each, so a column of one never counts towards another.
+      await call('flow.column.save', {
+        values: { id: `${id}-todo`, projectId: id, code: 'todo', name: 'To do', sequence: 10 },
+        idempotencyKey: `column-todo-${id}`,
+      })
+      await call('flow.column.save', {
+        values: {
+          id: `${id}-done`,
+          projectId: id,
+          code: 'done',
+          name: 'Done',
+          sequence: 20,
+          terminalState: true,
+        },
+        idempotencyKey: `column-done-${id}`,
+      })
+    }
+
+    const issue = async (id: string, projectId: string, columnId: string) => {
+      const saved = await call<Row>('flow.issue.save', {
+        id,
+        projectId,
+        columnId,
+        title: id,
+        idempotencyKey: `issue-save-${id}`,
+      })
+      assert.equal(saved.ok, true, JSON.stringify(saved.errors))
+    }
+    // Two open and one finished; everything finished; nothing finished; nothing at all.
+    await issue('m1', 'mixed', 'mixed-todo')
+    await issue('m2', 'mixed', 'mixed-todo')
+    await issue('m3', 'mixed', 'mixed-done')
+    await issue('f1', 'finished', 'finished-done')
+    await issue('r1', 'fresh', 'fresh-todo')
+
+    const stats = await call<Row[]>('flow.project.stats', {
+      projectIds: ['mixed', 'finished', 'fresh', 'bare'],
+    })
+    const by = new Map(stats.map((row) => [String(row.id), row]))
+    assert.deepEqual(
+      [by.get('mixed')?.total, by.get('mixed')?.done, by.get('mixed')?.state],
+      [3, 1, 'active'],
+    )
+    assert.deepEqual(
+      [by.get('finished')?.total, by.get('finished')?.done, by.get('finished')?.state],
+      [1, 1, 'done'],
+    )
+    assert.deepEqual(
+      [by.get('fresh')?.total, by.get('fresh')?.done, by.get('fresh')?.state],
+      [1, 0, 'planned'],
+    )
+    // A project nobody has written an issue for still answers, with zeroes —
+    // the card would otherwise have to guess whether it was missing or empty.
+    assert.deepEqual(
+      [by.get('bare')?.total, by.get('bare')?.done, by.get('bare')?.state],
+      [0, 0, 'empty'],
+    )
+
+    // `projectStats` also filters on `Issue.active`, which is not covered here:
+    // the column exists and `saveIssue` always writes `true`, but no function
+    // ever writes `false` — Column, IssueType, FieldDef, Epic, Tag and Page all
+    // have an archive and Issue does not. The filter is there for when one
+    // arrives; until then there is no way to reach it from outside.
+
+    // Asking for nothing is not an error, and asking about a project that does
+    // not exist answers for the ones that do rather than failing the page.
+    assert.deepEqual(await call<Row[]>('flow.project.stats', { projectIds: [] }), [])
+    const partial = await call<Row[]>('flow.project.stats', { projectIds: ['mixed', 'no-such'] })
+    assert.equal(partial.length, 2)
+    assert.equal(Number(partial.find((row) => String(row.id) === 'no-such')?.total), 0)
   } finally {
     await e2e.close()
   }

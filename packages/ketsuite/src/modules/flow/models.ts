@@ -7,7 +7,17 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       key: 'text',
       name: 'text',
+      /**
+       * The one line that identifies the project in a list — kept as a plain
+       * column beside the brief below, not replaced by it. A list row wants a
+       * sentence, and rendering one out of a CRDT to draw a table would be a
+       * document read per row.
+       */
       description: 'text?',
+      /** The project brief, as a Live Doc. Written only by its flatten routine. */
+      previewText: 'text?',
+      contentAttachmentId: 'ref:storage.Attachment?',
+      contentUpdatedAt: 'datetime?',
       active: 'bool',
     },
     indexes: {
@@ -161,6 +171,10 @@ export const models: Record<string, ModelDef> = {
       projectId: 'ref:flow.Project',
       title: 'text',
       color: 'text?',
+      /** What the epic is actually for, as a Live Doc — see the note on Issue. */
+      previewText: 'text?',
+      contentAttachmentId: 'ref:storage.Attachment?',
+      contentUpdatedAt: 'datetime?',
       active: 'bool',
     },
     indexes: {
@@ -222,7 +236,7 @@ export const models: Record<string, ModelDef> = {
        * The rich description is a Yjs (CRDT) document, not a field this row's own
        * `version`/compareAndSet guards — one row cannot honestly carry two
        * consistency models under one counter. These three columns are written
-       * only by the flatten routine in flow_backend/sync.ts, as a plain column
+       * only by Live Doc's flatten routine (modules/livedoc), as a plain column
        * update outside the CAS path, never by `issue.save`.
        */
       previewText: 'text?',
@@ -240,6 +254,51 @@ export const models: Record<string, ModelDef> = {
       sprint: { fields: ['companyId', 'sprintId', 'active'] },
       epic: { fields: ['companyId', 'epicId', 'active'] },
       parent: { fields: ['companyId', 'parentIssueId'] },
+    },
+  },
+
+  /**
+   * A written document that belongs to a project rather than to a task.
+   *
+   * The rich text is the whole point here, which is the difference from
+   * `Issue`: an issue is a row with a description attached, a page is a
+   * document with a title on it. So the same three Live Doc columns appear,
+   * and almost nothing else does — no assignee, no state, no due date. A page
+   * that needs those is an issue.
+   *
+   * `parentPageId` gives the tree a wiki grows into. Self-referencing, the
+   * same shape `Issue.parentIssueId` already uses; depth is not bounded by the
+   * schema because the query builder has no recursive CTE to walk it with, so
+   * the screen reads one level at a time.
+   */
+  Page: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      projectId: 'ref:flow.Project',
+      parentPageId: 'ref:flow.Page?',
+      title: 'text',
+      /**
+       * Written only by Live Doc's flatten routine (modules/livedoc), as a
+       * plain column update outside the CAS path — the same arrangement, and
+       * the same reason, as `Issue`'s three columns above: a Yjs document and
+       * a `version` counter are two consistency models, and one row cannot
+       * honestly carry both under one number.
+       */
+      previewText: 'text?',
+      contentAttachmentId: 'ref:storage.Attachment?',
+      contentUpdatedAt: 'datetime?',
+      /** Ordering among siblings, stepped by 10 the way Column does. */
+      sequence: 'int',
+      active: 'bool',
+      version: 'int',
+      createdByUserId: 'ref:user.User?',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      project_active: { fields: ['companyId', 'projectId', 'active', 'sequence'] },
+      parent: { fields: ['companyId', 'parentPageId'] },
     },
   },
 

@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { asc, bucketEq, compileListFilter, deleteFrom, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
-import { ensureThread, followThread, listTimeline, postMessage } from '../mail/index.ts'
+import { ensureThread, followThread, listTimeline, postMessage, unfollowThread } from '../mail/index.ts'
 import { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES } from './types.ts'
 import type { FieldKind } from './types.ts'
-import { emptyIssueListState, issueListSearch } from './search.ts'
+import { emptyIssueListState, FIELD_FILTER_PREFIX, issueListSearch } from './search.ts'
 
 export type FlowIssue = { field: string; code: string; params?: Record<string, unknown> }
 export type FlowResult = { ok: boolean; id?: string; errors?: FlowIssue[]; [key: string]: unknown }
@@ -73,6 +73,31 @@ async function followIssue(ctx: Ctx, threadId: unknown, userId: unknown): Promis
     threadId: String(threadId),
     partnerId: String(user.partnerId),
   })
+}
+
+/**
+ * The partners behind a list of mentioned users.
+ *
+ * Mentions are partner-keyed the whole way down, the same as followers, so a
+ * user without a partner cannot be mentioned any more than they can be
+ * notified — see `followIssue` above for why that is the platform's shape
+ * rather than something to work around here. They are dropped rather than
+ * refused: a comment naming five people should still reach the four the system
+ * can address.
+ */
+async function mentionPartners(ctx: Ctx, userIds: readonly string[]): Promise<string[]> {
+  const wanted = [...new Set(userIds.filter(Boolean).map(String))]
+  if (!wanted.length) return []
+  const U = ctx.table('user.User')
+  const users = await ctx.db.all(from(U).where(inArray(U.id, wanted)))
+  return [
+    ...new Set(
+      users
+        .map((user) => user.partnerId)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ]
 }
 
 /**
@@ -231,10 +256,11 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const sprintIds = ids(rows.map((row) => row.sprintId))
   const userIds = ids(rows.map((row) => row.assigneeUserId))
   const typeIds = ids(rows.map((row) => row.typeId))
+  const issueIds = rows.map((row) => String(row.id))
   // The project too, for the one list that spans them: an issue read outside
   // its own board has to say which board it came from.
   const projectIds = ids(rows.map((row) => row.projectId))
-  const [columns, epics, sprints, users, projects, types, progress] = await Promise.all([
+  const [columns, epics, sprints, users, projects, types, progress, values] = await Promise.all([
     columnIds.length
       ? ctx.db.all(from(ctx.table('flow.Column')).where(inArray(ctx.table('flow.Column').id, columnIds)))
       : [],
@@ -253,10 +279,17 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
     typeIds.length
       ? ctx.db.all(from(ctx.table('flow.IssueType')).where(inArray(ctx.table('flow.IssueType').id, typeIds)))
       : [],
-    progressOf(
-      ctx,
-      rows.map((row) => String(row.id)),
-    ),
+    progressOf(ctx, issueIds),
+    // Custom field values for the whole page in one query, so a list can show
+    // a column for them. Keyed by field id rather than code, because a screen
+    // holds the definitions and matches on what it was given.
+    issueIds.length
+      ? ctx.db.all(
+          from(ctx.table('flow.IssueFieldValue')).where(
+            inArray(ctx.table('flow.IssueFieldValue').issueId, issueIds),
+          ),
+        )
+      : [],
   ])
   const by = (values: Row[]) => new Map(values.map((row) => [String(row.id), row]))
   const columnBy = by(columns)
@@ -265,6 +298,13 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
   const userBy = by(users)
   const projectBy = by(projects)
   const typeBy = by(types)
+  const fieldsBy = new Map<string, Record<string, unknown>>()
+  for (const entry of values) {
+    const key = String(entry.issueId)
+    const held = fieldsBy.get(key) ?? {}
+    held[String(entry.fieldId)] = entry.value
+    fieldsBy.set(key, held)
+  }
   return rows.map((row) => {
     const counted = progress.get(String(row.id))
     return {
@@ -295,10 +335,93 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
       assigneeName: row.assigneeUserId
         ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
         : null,
+      /** `{ [fieldId]: value }`, for whatever fields this row happens to hold. */
+      fieldValues: fieldsBy.get(String(row.id)) ?? {},
       typeName: row.typeId ? (typeBy.get(String(row.typeId))?.name ?? row.typeId) : null,
       typeColor: row.typeId ? (typeBy.get(String(row.typeId))?.color ?? null) : null,
     }
   })
+}
+
+/**
+ * How many issues one custom-field filter may match.
+ *
+ * The value lives in another table and this query builder has no JOIN, so the
+ * rule is answered by collecting ids and handing them to `IN (...)`. That list
+ * becomes SQL parameters, and every database has a ceiling on those — SQLite's
+ * has historically been 999.
+ *
+ * Capped rather than left to fail at the driver, and reported rather than
+ * trimmed quietly: a truncated *list* looks truncated, while a truncated
+ * *filter* looks like an answer. `listIssues` passes `fieldFilterTruncated`
+ * back so a screen can say so.
+ */
+export const FIELD_FILTER_MATCHES = 900
+
+type FieldFilterOutcome = { state: ListState; ids: string[] | null; truncated: boolean }
+
+/**
+ * Answers every `field:<code>` rule as a set of issue ids, and takes the rules
+ * out of the state on the way.
+ *
+ * The value lives in another table, so the rule cannot compile against a column
+ * of `flow.Issue`. Rewriting it in place does not work either — the spec
+ * declares a select field's `choices`, and a list of ids is not among them, so
+ * validation refuses the rewritten rule. So the rules leave, and what they
+ * selected is applied to the query directly.
+ *
+ * Only the top level is read, which is the only shape the filter UI builds
+ * (facets and the custom-filter row are both flat, and flat means AND). A rule
+ * nested inside an `or` group is left where it is rather than quietly hoisted
+ * out of it: removing one from an `or` widens the group, and answering a
+ * narrower question than was asked is the failure that looks like success.
+ */
+async function resolveFieldFilters(
+  ctx: Ctx,
+  state: ListState,
+  projectId: unknown,
+): Promise<FieldFilterOutcome> {
+  const top = (state.filters ?? []) as Array<Record<string, unknown>>
+  const rules = top.filter(
+    (node) => node?.kind === 'rule' && String(node.field ?? '').startsWith(FIELD_FILTER_PREFIX),
+  )
+  if (!rules.length) return { state, ids: null, truncated: false }
+  const defs = await ctx.db.select(
+    'flow.FieldDef',
+    projectId ? { projectId, active: true } : { active: true },
+  )
+  const byCode = new Map(defs.map((def) => [String(def.code), def]))
+  let truncated = false
+  let matched: Set<string> | null = null
+
+  for (const rule of rules) {
+    const code = String(rule.field).slice(FIELD_FILTER_PREFIX.length)
+    const def = byCode.get(code)
+    const found = new Set<string>()
+    if (def) {
+      const V = ctx.table('flow.IssueFieldValue')
+      let query = from(V).where(eq(V.fieldId, def.id))
+      const operator = String(rule.operator)
+      if (operator === 'equals') query = query.where(eq(V.value, String(rule.value ?? '')))
+      else if (operator === 'anyOf') {
+        const values = (Array.isArray(rule.value) ? rule.value : [rule.value]).map(String)
+        query = query.where(inArray(V.value, values))
+      }
+      // `isSet` needs no clause of its own: a row exists only where there is a
+      // value, because emptying a field deletes its row rather than storing "".
+      const rows = await ctx.db.all(query.limit(FIELD_FILTER_MATCHES + 1))
+      if (rows.length > FIELD_FILTER_MATCHES) truncated = true
+      for (const row of rows.slice(0, FIELD_FILTER_MATCHES)) found.add(String(row.issueId))
+    }
+    // Several rules narrow each other, which is what a flat filter row means.
+    matched = matched ? new Set([...matched].filter((id: string) => found.has(id))) : found
+  }
+
+  return {
+    state: { ...state, filters: top.filter((node) => !rules.includes(node)) as ListState['filters'] },
+    ids: [...(matched ?? new Set<string>())],
+    truncated,
+  }
 }
 
 const listStateOf = (value: unknown): ListState | null =>
@@ -306,12 +429,22 @@ const listStateOf = (value: unknown): ListState | null =>
 
 const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const I = ctx.table('flow.Issue')
-  const state = listStateOf(args.listState) ?? emptyIssueListState()
+  const given = listStateOf(args.listState) ?? emptyIssueListState()
   const timezone = String(args.timezone ?? 'UTC')
   let query = from(I)
-  const spec = issueListSearch(I)
+  // The spec has to know the project's own fields, or `parseListState` would
+  // have dropped their rules as unknown before they ever reached here.
+  const defs = args.projectId
+    ? await ctx.db.select('flow.FieldDef', { projectId: args.projectId, active: true })
+    : []
+  const { state, ids, truncated } = await resolveFieldFilters(ctx, given, args.projectId)
+  const spec = issueListSearch(I, defs)
   const compiled = compileListFilter(spec, state, { timezone })
   if (compiled) query = query.where(compiled)
+  // No match is not "no filter": asking for a value nothing holds has to answer
+  // with nothing, which an empty list already does — `query.ts` compiles an
+  // empty `IN` to `1 = 0` rather than to no clause at all.
+  if (ids) query = query.where(inArray(I.id, ids))
   const path = Array.isArray(args.path) ? args.path : []
   for (let index = 0; index < path.length; index++) {
     const selected = state.groupBy[index]
@@ -341,14 +474,19 @@ const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
     const col = sortable.get(sort.key)
     if (col) query = query.orderBy(sort.dir === 'desc' ? desc(col) : asc(col))
   }
-  return { query, state, spec, timezone }
+  return { query, state, spec, timezone, truncated }
 }
 
 export async function listIssues(
   ctx: Ctx,
   args: Record<string, unknown>,
-): Promise<{ rows: Row[]; total: number; nextCursor: string | null }> {
-  const { query } = await issueQuery(ctx, args)
+): Promise<{
+  rows: Row[]
+  total: number
+  nextCursor: string | null
+  fieldFilterTruncated?: boolean
+}> {
+  const { query, truncated } = await issueQuery(ctx, args)
   const offset = Math.max(0, Number.parseInt(String(args.cursor ?? '0'), 10) || 0)
   const limit = Math.max(1, Math.min(200, n(args.limit ?? 50)))
   const [total, page] = await Promise.all([
@@ -359,6 +497,9 @@ export async function listIssues(
     rows: await serializeIssueList(ctx, page),
     total,
     nextCursor: offset + limit < total ? String(offset + limit) : null,
+    // Only said when it happened. A filter that quietly stopped short reads as
+    // an answer, which is the one thing it must not do.
+    ...(truncated ? { fieldFilterTruncated: true } : {}),
   }
 }
 
@@ -425,6 +566,7 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
     ...serialized!,
     parentTitle: parent ? String(parent.title) : null,
     fields,
+    following: await following(ctx, id),
     children: await serializeIssueList(ctx, children),
     tags: tagRows,
     dependencies: outgoing.map((row) => ({
@@ -810,7 +952,15 @@ export async function addDependency(
 
 export async function addComment(
   ctx: Ctx,
-  input: { id: string; issueId: string; body: string; kind?: 'comment' | 'note'; idempotencyKey: string },
+  input: {
+    id: string
+    issueId: string
+    body: string
+    kind?: 'comment' | 'note'
+    /** Who this comment is addressed to, beyond whoever already follows it. */
+    mentionUserIds?: string[]
+    idempotencyKey: string
+  },
 ): Promise<FlowResult> {
   if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
   if (!commandKey(input.idempotencyKey))
@@ -822,14 +972,61 @@ export async function addComment(
   // `postMessage` excludes the author from its own recipients, so this does
   // not notify them about their own comment.
   await followIssue(ctx, held.threadId, ctx.actor)
+  // Naming somebody subscribes them, so the answer to what they were asked
+  // reaches them too. Being mentioned once is how most people end up following
+  // an issue at all, which is also why `stopFollowing` exists below.
+  for (const userId of input.mentionUserIds ?? []) await followIssue(ctx, held.threadId, userId)
   const result = await postMessage(ctx, {
     id: input.id,
     threadId: String(held.threadId),
     authorUserId: ctx.actor ?? undefined,
     kind: input.kind ?? 'comment',
     body: input.body.trim(),
+    mentionPartnerIds: await mentionPartners(ctx, input.mentionUserIds ?? []),
   })
   return { ok: true, id: String(result.message.id) }
+}
+
+/**
+ * Leaves an issue's thread.
+ *
+ * The only way out of a subscription this module hands out freely: being
+ * assigned an issue, commenting on one, or being mentioned in one all
+ * subscribe you, and every comment afterwards reaches you. Without this the
+ * follower set only ever grows, and a single mention in a busy spec is a
+ * standing appointment nobody agreed to.
+ *
+ * Answers ok when there was nothing to remove, because "I do not want these"
+ * is satisfied either way.
+ */
+export async function stopFollowing(
+  ctx: Ctx,
+  input: { issueId: string; idempotencyKey: string },
+): Promise<FlowResult> {
+  if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
+  if (!commandKey(input.idempotencyKey))
+    return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
+  const held = (await ctx.db.select('flow.Issue', { id: input.issueId }))[0]
+  if (!held) return invalid(issue('issueId', 'flow.error.notFound'))
+  const user = (await ctx.db.select('user.User', { id: ctx.actor }))[0]
+  if (!user?.partnerId) return { ok: true, removed: 0 }
+  const removed = await unfollowThread(ctx, String(held.threadId), String(user.partnerId))
+  return { ok: true, removed }
+}
+
+/**
+ * Whether the reader follows this issue, so a screen can offer the right verb.
+ */
+export async function following(ctx: Ctx, issueId: string): Promise<boolean> {
+  const held = (await ctx.db.select('flow.Issue', { id: issueId }))[0]
+  if (!held || !ctx.actor) return false
+  const user = (await ctx.db.select('user.User', { id: ctx.actor }))[0]
+  if (!user?.partnerId) return false
+  const rows = await ctx.db.select('mail.Follower', {
+    threadId: held.threadId,
+    partnerId: user.partnerId,
+  })
+  return rows.length > 0
 }
 
 export async function startSprint(

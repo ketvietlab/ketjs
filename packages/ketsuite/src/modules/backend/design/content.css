@@ -153,6 +153,55 @@
   }
 
   /* Compact operational records for mobile and narrow side panels. */
+  /* A document hierarchy. The nesting is the markup, so the indent comes from
+     the nested list rather than from padding baked into each label. */
+  [data-ui="doc-tree"] {
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+    list-style: none;
+  }
+  [data-ui="doc-branch"] {
+    margin: 0;
+    /* The rail a reader follows down a branch, and the indent, in one. */
+    padding: 0 0 0 var(--admin-gap);
+    border-inline-start: 1px solid var(--admin-line);
+    margin-inline-start: var(--admin-gap);
+    list-style: none;
+  }
+  [data-ui="doc-entry"] {
+    display: flex;
+    min-block-size: 2.5rem;
+    align-items: baseline;
+    gap: var(--admin-gap-sm);
+    padding: var(--admin-gap-sm) var(--admin-gap);
+    color: inherit;
+    text-decoration: none;
+  }
+  [data-ui="doc-entry"]:hover {
+    background: var(--admin-surface-subtle);
+  }
+  [data-ui="doc-title"] {
+    flex: 0 0 auto;
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  [data-ui="doc-summary"] {
+    overflow: hidden;
+    flex: 1 1 auto;
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="doc-count"] {
+    flex: 0 0 auto;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+  }
   [data-ui="record-list"] {
     margin: 0;
     padding: 0;

@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { encodeListState, json, parseListState, streamed, table, text, withHeaders } from '@ketvietlab/ketjs'
+import { randomUUID } from 'node:crypto'
+import { encodeListState, parseListState, table, text } from '@ketvietlab/ketjs'
 import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { FIELD_KINDS, ISSUE_PRIORITIES } from '../flow/types.ts'
@@ -8,7 +8,13 @@ import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { assigneeControl, epicControl, issueControl, tagsControl } from './relation-control.ts'
+import {
+  assigneeControl,
+  epicControl,
+  issueControl,
+  mentionControl,
+  tagsControl,
+} from './relation-control.ts'
 import {
   keepForListSearch,
   LIST_PAGE_SIZE,
@@ -19,30 +25,24 @@ import {
 import {
   boardScreen,
   epicsScreen,
+  epicDetailScreen,
+  allEpicsScreen,
   issueDetailScreen,
   issuesScreen,
+  ganttScreen,
   mapScreen,
   crossProjectScreen,
+  pagesScreen,
+  pageDetailScreen,
+  allPagesScreen,
   projectsScreen,
   settingsScreen,
   sprintsScreen,
   TEMPLATE_OPTIONS,
 } from './screens/index.ts'
 import type { IssueDetailControls } from './screens/index.ts'
-import {
-  applySnapshot,
-  currentGeneration,
-  getOrCreateLive,
-  isLive,
-  previewTextOf,
-  publishPresence,
-  publishUpdate,
-  rollGeneration,
-  snapshotBytes,
-  tailTopic,
-  topicBelongsTo,
-  topicFor,
-} from './sync.ts'
+import { documentRoutes } from '../livedoc/index.ts'
+import type { DocumentOwner } from '../livedoc/index.ts'
 
 type Translator = ReturnType<ServeContext['translate']>
 
@@ -198,8 +198,15 @@ const issueFields = (
   ...((row.fields as AnyRow[] | undefined) ?? []).map(customFieldControl),
 ]
 
-const encoder = new TextEncoder()
-const MAX_BODY_BYTES = 2 * 1024 * 1024
+/**
+ * How many issues one chart draws.
+ *
+ * Every row is a line on screen, so this is a readability limit before it is a
+ * query one — past a few hundred bars nobody is reading a chart, they are
+ * scrolling past one. Ordered by start date, so what it does show is the
+ * beginning of the project rather than an arbitrary page of it.
+ */
+const GANTT_ROWS = 200
 
 /**
  * The two things every mutating route here has to establish before it reads a
@@ -227,22 +234,6 @@ const onlyPost = (req: IncomingMessage) =>
       ? text('Forbidden', { status: 403 })
       : null
 
-async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  const chunks: Uint8Array[] = []
-  let size = 0
-  for await (const chunk of req) {
-    size += chunk.byteLength
-    if (size > MAX_BODY_BYTES) throw new Error('request body too large')
-    chunks.push(chunk)
-  }
-  if (!size) return {}
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
-}
-
-const singleChunk = async function* (bytes: Uint8Array) {
-  yield bytes
-}
-
 const permitted = async (
   ctx: ServeContext,
   fn: string,
@@ -262,87 +253,56 @@ const readable = (ctx: ServeContext, url: URL, req: IncomingMessage, issueId: st
   permitted(ctx, 'flow.issue.get', url, req, issueId)
 
 /**
- * The same check for the routes that *change* the description.
+ * What Live Doc needs to know to hold an issue's description.
  *
- * `/push` rewrites an issue's description and `/leave` persists that rewrite,
- * so gating them on `flow.issue.get` made the description the one piece of
- * Flow data whose write path was granted by a read permission: a role holding
- * only `flow.issue.get` and `flow.issue.list` could POST over any issue's
- * text. Permissions here are per-function-key (modules/user/roles.ts), so the
- * fix is a separate key an administrator grants deliberately.
+ * Everything here is Flow's own: which functions grant reading and rewriting
+ * a description, where the row keeps its snapshot, and the one function
+ * allowed to write `flow.Issue` back. The CRDT, the relay, the presence and
+ * the blob writing are livedoc's — see modules/livedoc/documents.ts.
  */
-const writable = (ctx: ServeContext, url: URL, req: IncomingMessage, issueId: string) =>
-  permitted(ctx, 'flow.issue.editDescription', url, req, issueId)
-
-/**
- * Loads the durable snapshot into the live doc on first access.
- *
- * Every route that reads or writes the document calls this first. It used to
- * hang off `/content` alone, which meant a `/push` or a `/leave` arriving at a
- * process that had never opened the issue — after a restart, or from a plain
- * `curl` — worked against a blank document and then persisted it.
- *
- * Returns false when the durable snapshot could not be read, so a caller that
- * is about to overwrite it can decline instead.
- */
-async function hydrate(
-  ctx: ServeContext,
-  url: URL,
-  req: IncomingMessage,
-  companyId: string,
-  issueId: string,
-  contentAttachmentId: unknown,
-): Promise<boolean> {
-  const { isNew } = getOrCreateLive(companyId, issueId)
-  if (!isNew) return true
-  // Unchecked, like `commitContent` in `flatten` below and for the same
-  // reason: these are `exposure: 'internal'` helpers of a route that has
-  // already run its own permission check, and `ctx.call` would ask for a
-  // second grant nobody has any reason to hold. It used to be a checked call,
-  // and it worked only because the line above usually returns first — a
-  // reader-role viewer opening an issue this process had not already loaded
-  // got `E_FN_NOT_PERMITTED` for a function they never named.
-  const resolved = (await ctx.callUnchecked(
-    'flow_backend.sync.resolveSnapshotKey',
-    { attachmentId: contentAttachmentId },
-    url,
-    req,
-  )) as { storeKey: string | null }
-  // No stored snapshot is a genuine empty description, not a failure to read one.
-  if (!resolved.storeKey) return true
-  const storage = await ctx.storageOf(url, req)
-  const found = await storage.get(resolved.storeKey)
-  if (!found) return false
-  const chunks: Uint8Array[] = []
-  for await (const chunk of found.body) chunks.push(chunk)
-  applySnapshot(companyId, issueId, Buffer.concat(chunks))
-  return true
+const issueDocument: DocumentOwner = {
+  kind: 'flow.Issue',
+  readFn: 'flow.issue.get',
+  writeFn: 'flow.issue.editDescription',
+  attachmentOf: (row) => row.contentAttachmentId,
+  commitFn: 'flow_backend.sync.commitContent',
 }
 
-/** Flattens the live doc, writes the bytes, and records the result — then rolls the topic. */
-async function flatten(
-  ctx: ServeContext,
-  url: URL,
-  req: IncomingMessage,
-  companyId: string,
-  issueId: string,
-): Promise<void> {
-  const bytes = snapshotBytes(companyId, issueId)
-  // Nothing to flatten is not the same as an empty description: persisting a
-  // document this process does not hold would replace the real one with a
-  // blank. See sync.ts's note on snapshotBytes.
-  if (!bytes) return
-  const checksum = createHash('sha256').update(bytes).digest('hex')
-  const storeKey = `blobs/${companyId}/${checksum.slice(0, 2)}/${checksum}`
-  const storage = await ctx.storageOf(url, req)
-  await storage.put(storeKey, singleChunk(bytes), { type: 'application/octet-stream', size: bytes.length })
-  await ctx.callUnchecked(
-    'flow_backend.sync.commitContent',
-    { issueId, storeKey, checksum, size: bytes.length, previewText: previewTextOf(companyId, issueId) },
-    url,
-    req,
-  )
-  await rollGeneration(companyId, issueId)
+/**
+ * The same, for a page — where the document is not a field on the record but
+ * the record's whole reason to exist.
+ *
+ * `page.get` answers `{ value }`, so the attachment is read one level in. That
+ * is the only difference between the two owners, which is the point of the
+ * seam: a second kind of document cost five lines.
+ */
+/**
+ * The project brief. `description` stays the one-line summary a list row shows;
+ * this is the long form nobody wants to write into a single-line input.
+ */
+const projectDocument: DocumentOwner = {
+  kind: 'flow.Project',
+  readFn: 'flow.project.get',
+  writeFn: 'flow.project.editContent',
+  attachmentOf: (row) => (row.value as AnyRow | null)?.contentAttachmentId ?? row.contentAttachmentId,
+  commitFn: 'flow_backend.sync.commitProjectContent',
+}
+
+/** An epic's own document — what it is for, beside the issues under it. */
+const epicDocument: DocumentOwner = {
+  kind: 'flow.Epic',
+  readFn: 'flow.epic.get',
+  writeFn: 'flow.epic.editContent',
+  attachmentOf: (row) => (row.value as AnyRow | null)?.contentAttachmentId ?? row.contentAttachmentId,
+  commitFn: 'flow_backend.sync.commitEpicContent',
+}
+
+const pageDocument: DocumentOwner = {
+  kind: 'flow.Page',
+  readFn: 'flow.page.get',
+  writeFn: 'flow.page.editContent',
+  attachmentOf: (row) => (row.value as AnyRow | null)?.contentAttachmentId ?? row.contentAttachmentId,
+  commitFn: 'flow_backend.sync.commitPageContent',
 }
 
 /**
@@ -410,178 +370,77 @@ const crossProjectIssues =
     })
   }
 
+
+/**
+ * The "new page" form: a title, and optionally somewhere to put it.
+ *
+ * The parent choices are a plain select over the pages already in the project
+ * rather than a relation picker — a wiki is small enough to read in a list,
+ * and the picker would be a second island for no gain.
+ */
+const pageFields = (_: Translator, pages: readonly AnyRow[]): FormField[] => [
+  { name: 'title', label: _('flow_backend.pages.name'), value: '', required: true },
+  {
+    name: 'parentPageId',
+    label: _('flow_backend.pages.parent'),
+    type: 'select',
+    value: '',
+    options: [
+      { value: '', label: _('flow_backend.pages.root') },
+      ...pages.map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
+    ],
+  },
+]
+
+/** The move form's one control: every page except this one and its descendants. */
+const parentField = (
+  _: Translator,
+  pages: readonly AnyRow[],
+  pageId: string,
+  current: string,
+): FormField => {
+  // A page cannot move under itself or under anything below it. The server
+  // refuses that anyway (`movePage`), but offering the choice and then
+  // rejecting it is a worse screen than not offering it.
+  const banned = new Set([pageId])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const page of pages) {
+      const parent = page.parentPageId ? String(page.parentPageId) : ''
+      if (parent && banned.has(parent) && !banned.has(String(page.id))) {
+        banned.add(String(page.id))
+        grew = true
+      }
+    }
+  }
+  return {
+    name: 'parentPageId',
+    label: _('flow_backend.pages.parent'),
+    type: 'select',
+    value: current,
+    options: [
+      { value: '', label: _('flow_backend.pages.root') },
+      ...pages
+        .filter((page) => !banned.has(String(page.id)))
+        .map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
+    ],
+  }
+}
+
 export const routes: Record<string, RouteEntry> = {
+  // The document endpoints under `/admin/flow/issues/{id}` — content, push,
+  // live, presence, leave. Mounted rather than written out: they are the same
+  // five for every record that holds a document.
+  ...documentRoutes(issueDocument, '/admin/flow/issues'),
+  ...documentRoutes(pageDocument, '/admin/flow/pages'),
+  // A project's own five endpoints sit beside its screens rather than under a
+  // separate base — `/admin/flow/projects/{id}` is already this record's home.
+  ...documentRoutes(projectDocument, '/admin/flow/projects'),
+  ...documentRoutes(epicDocument, '/admin/flow/epics'),
+
   '/admin/flow': () => async (url, req) =>
     req.method === 'GET' ? seeOther(inLocale(url, '/admin/flow/projects')) : text('GET', { status: 405 }),
-
-  '/admin/flow/issues/{id}/content':
-    (ctx: ServeContext): Route =>
-    async (url, req, params) => {
-      if (req.method !== 'GET') return text('GET', { status: 405 })
-      const issueId = String(params.id)
-      const issue = await readable(ctx, url, req, issueId)
-      if (!issue) return text('forbidden', { status: 403 })
-      const scope = await ctx.scopeOf(url, req)
-      if (!scope.company) return text('company scope required', { status: 400 })
-      if (!(await hydrate(ctx, url, req, scope.company, issueId, issue.contentAttachmentId)))
-        return text('stored description could not be read', { status: 503 })
-      // Who the caller is, so a client knows which presence frames are its own
-      // before it can receive any. Learning that from its first announce
-      // instead left a window in which its own second tab read as a stranger.
-      const viewer = (await ctx.callUnchecked('flow_backend.sync.viewer', {}, url, req)) as {
-        id: string | null
-      }
-      return json({
-        snapshot: Buffer.from(snapshotBytes(scope.company, issueId) ?? new Uint8Array()).toString('base64'),
-        topic: topicFor(scope.company, issueId, currentGeneration(scope.company, issueId)),
-        viewerId: viewer.id,
-      })
-    },
-
-  '/admin/flow/issues/{id}/push':
-    (ctx: ServeContext): Route =>
-    async (url, req, params) => {
-      const refused = onlyPost(req)
-      if (refused) return refused
-      const issueId = String(params.id)
-      const issue = await writable(ctx, url, req, issueId)
-      if (!issue) return text('forbidden', { status: 403 })
-      const scope = await ctx.scopeOf(url, req)
-      if (!scope.company) return text('company scope required', { status: 400 })
-      let body: Record<string, unknown>
-      try {
-        body = await readJsonBody(req)
-      } catch {
-        return text('bad request', { status: 400 })
-      }
-      const update = typeof body.update === 'string' ? body.update : ''
-      if (!update) return text('bad request', { status: 400 })
-      // Before the update is merged, not after: an incremental update applied
-      // to a blank document keeps only what it carries.
-      if (!(await hydrate(ctx, url, req, scope.company, issueId, issue.contentAttachmentId)))
-        return text('stored description could not be read', { status: 503 })
-      let shouldFlatten: boolean
-      try {
-        ;({ shouldFlatten } = await publishUpdate(scope.company, issueId, update))
-      } catch {
-        // A malformed update is the client's problem, not a 500.
-        return text('bad request', { status: 400 })
-      }
-      if (shouldFlatten) await flatten(ctx, url, req, scope.company, issueId)
-      return json({ ok: true })
-    },
-
-  /**
-   * The framework's own `/_ket/stream/:id` (packages/ketjs/src/server/http.ts)
-   * has no auth check at all — fine for the short-lived generation logs it
-   * was built for, wrong for a live document edit stream. This wraps the
-   * same `streams.tail` primitive behind a real permission check instead of
-   * reaching that public route directly.
-   *
-   * There is no server-side disconnect hook here on purpose: a client abort
-   * does not reliably reach the route layer (verified against this same
-   * `pipeline()`-backed response — even an aborted `fetch()` does not run an
-   * async generator's `finally`, in-process or not), which is the same
-   * reason real apps send an explicit "I'm leaving" beacon rather than
-   * trust transport-level disconnect detection. `/leave` below is that
-   * signal; flattening otherwise only happens on the update-count
-   * threshold in `/push`.
-   */
-  '/admin/flow/issues/{id}/live':
-    (ctx: ServeContext): Route =>
-    async (url, req, params) => {
-      if (req.method !== 'GET') return text('GET', { status: 405 })
-      const issueId = String(params.id)
-      const topic = url.searchParams.get('topic') ?? ''
-      const from = Number(url.searchParams.get('from') ?? 0)
-      if (!(await readable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
-      const scope = await ctx.scopeOf(url, req)
-      // A topic name that doesn't actually belong to this issue's current
-      // generation is refused rather than relayed — otherwise a caller
-      // authorized for issue A could pass issue B's topic string and
-      // eavesdrop on edits it was never granted.
-      if (!scope.company || !topicBelongsTo(topic, scope.company, issueId))
-        return text('unknown topic', { status: 404 })
-
-      async function* relay(): AsyncGenerator<Uint8Array> {
-        for await (const chunk of tailTopic(topic, from, { timeoutMs: 30_000 })) {
-          yield encoder.encode(`id: ${chunk.seq}\ndata: ${JSON.stringify(chunk.data)}\n\n`)
-        }
-        yield encoder.encode('event: done\ndata: {}\n\n')
-      }
-
-      return withHeaders(streamed(relay(), { type: 'text/event-stream' }), {
-        'cache-control': 'no-cache',
-        connection: 'keep-alive',
-      })
-    },
-
-  /**
-   * "I am here, on this block" — relayed to everyone else in the document.
-   *
-   * Gated on reading the issue, not on writing its description: watching
-   * somebody type is looking, and a reviewer with read access showing up in
-   * the room is the point. Nothing here touches the document.
-   *
-   * The name is resolved from the session rather than read out of the body.
-   * A client that could name itself could sit in the room as somebody else,
-   * and everyone else's screen would agree with it.
-   */
-  '/admin/flow/issues/{id}/presence':
-    (ctx: ServeContext): Route =>
-    async (url, req, params) => {
-      const refused = onlyPost(req)
-      if (refused) return refused
-      const issueId = String(params.id)
-      if (!(await readable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
-      const scope = await ctx.scopeOf(url, req)
-      if (!scope.company) return text('company scope required', { status: 400 })
-      let body: Record<string, unknown>
-      try {
-        body = await readJsonBody(req)
-      } catch {
-        return text('bad request', { status: 400 })
-      }
-      const viewer = (await ctx.callUnchecked('flow_backend.sync.viewer', {}, url, req)) as {
-        id: string | null
-        name: string | null
-      }
-      if (!viewer.id) return json({ id: null })
-      const index = Number(body.index)
-      await publishPresence(scope.company, issueId, {
-        id: viewer.id,
-        name: viewer.name || viewer.id,
-        index: Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0,
-        gone: body.gone === true,
-      })
-      return json({ id: viewer.id })
-    },
-
-  /**
-   * The explicit "I'm done editing" signal — the client calls this
-   * (`navigator.sendBeacon`, so it fires reliably on tab close) instead of
-   * relying on the SSE connection's own teardown. Flattening is idempotent,
-   * so a duplicate or slightly-late beacon just re-persists the same or a
-   * slightly newer state.
-   *
-   * A beacon for a document this process never held is answered without
-   * writing anything: it carries no state to save, and the old behaviour —
-   * flatten whatever `live` returned — turned every post-restart tab close
-   * into a silent wipe of the stored description.
-   */
-  '/admin/flow/issues/{id}/leave':
-    (ctx: ServeContext): Route =>
-    async (url, req, params) => {
-      const refused = onlyPost(req)
-      if (refused) return refused
-      const issueId = String(params.id)
-      if (!(await writable(ctx, url, req, issueId))) return text('forbidden', { status: 403 })
-      const scope = await ctx.scopeOf(url, req)
-      if (!scope.company) return text('company scope required', { status: 400 })
-      if (!isLive(scope.company, issueId)) return json({ ok: true, flattened: false })
-      await flatten(ctx, url, req, scope.company, issueId)
-      return json({ ok: true, flattened: true })
-    },
 
   '/admin/flow/issues/{id}':
     (ctx: ServeContext): Route =>
@@ -662,10 +521,19 @@ export const routes: Record<string, RouteEntry> = {
         } else if (action === 'comment') {
           result = (await ctx.call(
             'flow.issue.comment',
-            { id: randomUUID(), issueId, body: form.body ?? '', idempotencyKey },
+            {
+              id: randomUUID(),
+              issueId,
+              body: form.body ?? '',
+              mentionUserIds: form.mentionUserIds ? form.mentionUserIds.split(',').filter(Boolean) : [],
+              idempotencyKey,
+            },
             url,
             req,
           )) as AnyRow
+        } else if (action === 'unfollow') {
+          if (!(await readable(ctx, url, req, issueId))) return text('not found', { status: 404 })
+          result = (await ctx.call('flow.issue.unfollow', { issueId, idempotencyKey }, url, req)) as AnyRow
         } else if (action === 'addDependency') {
           result = (await ctx.call(
             'flow.issue.dependency.add',
@@ -734,7 +602,8 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('flow.issueType.list', { projectId: issue.projectId }, url, req) as Promise<AnyRow[]>,
       ])
       const editor = await ctx.joint(url, req, 'flow_backend:screen.issue', {
-        issueId,
+        docId: issueId,
+        base: '/admin/flow/issues',
         lang: url.searchParams.get('lang') ?? '',
       })
       const controls: IssueDetailControls = {
@@ -750,6 +619,7 @@ export const routes: Record<string, RouteEntry> = {
               ]
             : [],
         }),
+        mentions: await mentionControl(ctx, url, req, _, { id: 'issue-mentions' }),
         epic: await epicControl(ctx, url, req, _, {
           id: 'issue-epic',
           value: issue.epicId ? String(issue.epicId) : null,
@@ -880,14 +750,73 @@ export const routes: Record<string, RouteEntry> = {
           errors = errorsOf(result, _)
         }
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      const all = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      // Counts for every project the reader can see, in two reads rather than
+      // one per row — see `projectStats`. Taken over the whole set, not the
+      // tab, so the cards keep describing the same thing when a tab narrows
+      // the table.
+      const stats = (await ctx.call(
+        'flow.project.stats',
+        { projectIds: all.map((project) => String(project.id)) },
+        url,
+        req,
+      )) as AnyRow[]
+      const statsBy = new Map(stats.map((row) => [String(row.id), row]))
+      const counted = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
+
+      // "Mine" is the projects holding an issue assigned to me. A project has
+      // no membership to read instead, so this answers the question the tab
+      // actually asks rather than inventing a list nobody maintains.
+      const tab = url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
+      const mine = (await ctx.call(
+        'flow.issue.list',
+        { mine: true, listState: emptyIssueListState(), limit: 200 },
+        url,
+        req,
+      )) as AnyRow
+      const mineProjects = new Set(
+        ((mine.rows as AnyRow[]) ?? []).map((issue) => String(issue.projectId)),
+      )
+      const rows = tab === 'mine' ? counted.filter((p) => mineProjects.has(String(p.id))) : counted
+
+      // The one rail the design asks for: what changed most recently, across
+      // every project, newest first.
+      const recent = (await ctx.call(
+        'flow.issue.list',
+        {
+          listState: { ...emptyIssueListState(), sort: [{ key: 'updatedAt', dir: 'desc' }] },
+          limit: 6,
+        },
+        url,
+        req,
+      )) as AnyRow
       return adminPage(ctx, url, req, {
         title: 'flow_backend.projects.title',
         body: (_, frame) =>
           projectsScreen(
             _,
             frame,
-            rows,
+            {
+              rows,
+              projectCount: all.length,
+              issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
+              issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
+              activeCount: stats.filter((row) => String(row.state) === 'active').length,
+              activity: ((recent.rows as AnyRow[]) ?? []).slice(0, 6),
+              tab,
+              tabs: [
+                {
+                  id: 'all',
+                  label: _('flow_backend.projects.tabAll'),
+                  href: '/admin/flow/projects',
+                },
+                {
+                  id: 'mine',
+                  label: _('flow_backend.projects.tabMine'),
+                  href: '/admin/flow/projects?tab=mine',
+                },
+              ],
+            },
             [
               { name: 'key', label: _('flow_backend.field.key'), required: true },
               { name: 'name', label: _('flow_backend.field.name'), required: true },
@@ -1077,7 +1006,11 @@ export const routes: Record<string, RouteEntry> = {
         if (result.ok) return seeOther(inLocale(url, `/admin/flow/projects/${projectId}/issues`))
         errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
+      // The project's own fields have to be in the spec before the URL is
+      // parsed: a rule naming a field the spec does not know is dropped as
+      // unknown, and the filter would silently do nothing.
+      const fieldDefs = (await ctx.call('flow.field.list', { projectId }, url, req)) as AnyRow[]
+      const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'), fieldDefs)
       const parsed = parseListState(spec, url)
       const state = parsed.state
       const timezone = 'UTC'
@@ -1147,8 +1080,265 @@ export const routes: Record<string, RouteEntry> = {
             grouped ? [] : ((result.rows as AnyRow[]) ?? []),
             groups,
             errors,
+            fieldDefs,
           )
         },
+      })
+    },
+
+
+  /**
+   * A project's documents, and the form that starts a new one.
+   *
+   * The whole tree comes back in one call and nests on the screen — see
+   * `listPages` for why that is the right shape for a wiki and the wrong one
+   * for the backlog.
+   */
+  '/admin/flow/projects/{id}/pages':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const refused = refusePost(req)
+      if (refused) return refused
+      const projectId = String(params.id)
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const endpoint = `/admin/flow/projects/${projectId}/pages`
+      let errors: string[] = []
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.action === 'save') {
+          const result = (await ctx.call(
+            'flow.page.save',
+            {
+              id: form.id || randomUUID(),
+              projectId,
+              title: form.title ?? '',
+              parentPageId: form.parentPageId || null,
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${String(result.id)}`))
+          errors = errorsOf(result, _)
+        }
+      }
+      const project = (await ctx.call('flow.project.get', { id: projectId }, url, req)) as AnyRow | null
+      if (!project) return text('not found', { status: 404 })
+      const pages = (await ctx.call(
+        'flow.page.list',
+        { projectId, search: url.searchParams.get('q') ?? '' },
+        url,
+        req,
+      )) as AnyRow[]
+      return adminPage(ctx, url, req, {
+        title: String(project.name ?? ''),
+        translate: false,
+        active: endpoint,
+        body: (t, frame) =>
+          pagesScreen(t, frame, String(project.name ?? ''), endpoint, pages, pageFields(t, pages), errors),
+      })
+    },
+
+  /**
+   * Every epic, across projects. Reached from the menu, and the base the epic
+   * document endpoints above hang off.
+   */
+  '/admin/flow/epics': (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      // `epic.list` is scoped to a project — there is no JOIN to fold the two
+      // reads into one, so the epics come back per project and are stitched
+      // here, capped by the project list's own limit.
+      const perProject = await Promise.all(
+        projects.map(
+          (project) =>
+            ctx.call('flow.epic.list', { projectId: String(project.id) }, url, req) as Promise<AnyRow[]>,
+        ),
+      )
+      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
+      const epics = perProject
+        .flat()
+        .map((epic) => ({ ...epic, projectName: named.get(String(epic.projectId)) ?? '' }))
+      return adminPage(ctx, url, req, {
+        title: 'flow_backend.epics.allTitle',
+        body: (t, frame) => allEpicsScreen(t, frame, t('flow_backend.epics.allTitle'), epics),
+      })
+    },
+
+  /**
+   * One epic: what it is for, and the issues under it.
+   *
+   * Epics had a card on a grid and a map, but nowhere to say what the epic
+   * actually means — which is the gap a Live Doc fills, and the reason this
+   * screen exists at all.
+   */
+  '/admin/flow/epics/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const epicId = String(params.id)
+      const held = (await ctx.call('flow.epic.get', { id: epicId }, url, req)) as { value: AnyRow | null }
+      const epic = held.value
+      if (!epic) return text('not found', { status: 404 })
+      const issues = (await ctx.call(
+        'flow.issue.list',
+        { listState: emptyIssueListState(), epicId, limit: 100 },
+        url,
+        req,
+      )) as AnyRow
+      const document = await ctx.joint(url, req, 'flow_backend:screen.epic', {
+        docId: epicId,
+        base: '/admin/flow/epics',
+        lang: url.searchParams.get('lang') ?? '',
+      })
+      return adminPage(ctx, url, req, {
+        title: String(epic.title ?? ''),
+        translate: false,
+        active: `/admin/flow/projects/${String(epic.projectId)}/epics`,
+        body: (t, frame) =>
+          epicDetailScreen(t, frame, epic, document, ((issues.rows as AnyRow[]) ?? [])),
+      })
+    },
+
+  /**
+   * Every document, across projects — the counterpart of `/admin/flow/issues`,
+   * and the base the document endpoints above hang off.
+   */
+  '/admin/flow/pages': (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const pages = (await ctx.call(
+        'flow.page.list',
+        { search: url.searchParams.get('q') ?? '' },
+        url,
+        req,
+      )) as AnyRow[]
+      // The project each page belongs to, batched — there is no JOIN, so the
+      // names come back in one `inArray` read rather than one call per row.
+      const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
+      const rows = pages.map((page) => ({
+        ...page,
+        projectName: named.get(String(page.projectId)) ?? '',
+      }))
+      return adminPage(ctx, url, req, {
+        title: 'flow_backend.pages.allTitle',
+        body: (t, frame) => allPagesScreen(t, frame, t('flow_backend.pages.allTitle'), rows),
+      })
+    },
+
+  /**
+   * One document: its place in the tree, its title, its Live Doc, its children.
+   */
+  '/admin/flow/pages/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const refused = refusePost(req)
+      if (refused) return refused
+      const pageId = String(params.id)
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const endpoint = `/admin/flow/pages/${pageId}`
+      let errors: string[] = []
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
+        const current = held.value
+        if (!current) return text('not found', { status: 404 })
+        if (form.action === 'save') {
+          const result = (await ctx.call(
+            'flow.page.save',
+            {
+              id: pageId,
+              projectId: String(current.projectId),
+              title: form.title ?? '',
+              expectedVersion: Number(form.expectedVersion ?? current.version ?? 0),
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(result, _)
+        } else if (form.action === 'addChild') {
+          const result = (await ctx.call(
+            'flow.page.save',
+            {
+              id: randomUUID(),
+              projectId: String(current.projectId),
+              title: form.title ?? '',
+              parentPageId: pageId,
+              idempotencyKey: randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${String(result.id)}`))
+          errors = errorsOf(result, _)
+        } else if (form.action === 'move') {
+          const result = (await ctx.call(
+            'flow.page.move',
+            { id: pageId, parentPageId: form.parentPageId || null },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(result, _)
+        } else if (form.action === 'orderUp' || form.action === 'orderDown') {
+          const result = (await ctx.call(
+            'flow.page.reorder',
+            { id: pageId, direction: form.action === 'orderUp' ? 'up' : 'down' },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, endpoint))
+          errors = errorsOf(result, _)
+        } else if (form.action === 'archive') {
+          const result = (await ctx.call('flow.page.archive', { id: pageId }, url, req)) as AnyRow
+          if (result.ok)
+            return seeOther(inLocale(url, `/admin/flow/projects/${String(current.projectId)}/pages`))
+          errors = errorsOf(result, _)
+        }
+      }
+      const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
+      const page = held.value
+      if (!page) return text('not found', { status: 404 })
+      const siblings = (await ctx.call(
+        'flow.page.list',
+        { projectId: String(page.projectId) },
+        url,
+        req,
+      )) as AnyRow[]
+      const editor = await ctx.joint(url, req, 'flow_backend:screen.page', {
+        docId: pageId,
+        base: '/admin/flow/pages',
+        lang: url.searchParams.get('lang') ?? '',
+      })
+      return adminPage(ctx, url, req, {
+        title: String(page.title ?? ''),
+        translate: false,
+        // The list this page belongs to, so the sidebar keeps marking the
+        // project rather than emptying out — same reason the issue detail does.
+        active: `/admin/flow/projects/${String(page.projectId)}/pages`,
+        body: (t, frame) =>
+          pageDetailScreen(
+            t,
+            frame,
+            page,
+            endpoint,
+            editor,
+            [
+              {
+                name: 'title',
+                label: t('flow_backend.pages.name'),
+                value: String(page.title ?? ''),
+                required: true,
+              },
+            ],
+            [{ name: 'title', label: t('flow_backend.pages.childName'), value: '', required: true }],
+            [parentField(t, siblings, pageId, page.parentPageId ? String(page.parentPageId) : '')],
+            errors,
+          ),
       })
     },
 
@@ -1289,6 +1479,43 @@ export const routes: Record<string, RouteEntry> = {
         title: String(epic.title),
         translate: false,
         body: (_, frame) => mapScreen(_, frame, String(epic.title), map),
+      })
+    },
+
+  /**
+   * The project on a day axis.
+   *
+   * A flat list rather than a tree of dependencies — that is what the epic map
+   * next door draws, and drawing it twice in two shapes would be two answers
+   * to one question. This one answers when, and the map answers in what order.
+   */
+  '/admin/flow/projects/{id}/gantt':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const projectId = String(params.id)
+      const project = await projectOf(ctx, url, req, projectId)
+      if (!project) return text('not found', { status: 404 })
+      const found = (await ctx.call('flow.issue.list', { projectId, limit: GANTT_ROWS }, url, req)) as AnyRow
+      const rows = ((found.rows as AnyRow[]) ?? []).slice().sort((a, b) => {
+        const left = String(a.startsOn ?? '')
+        const right = String(b.startsOn ?? '')
+        return left.localeCompare(right) || String(a.title).localeCompare(String(b.title))
+      })
+      const locale = ctx.localeOf(url, req)
+      return adminPage(ctx, url, req, {
+        title: String(project.name),
+        translate: false,
+        active: `/admin/flow/projects/${projectId}/issues`,
+        body: (_, frame) =>
+          ganttScreen(
+            _,
+            frame,
+            String(project.name),
+            rows,
+            new Date().toISOString().slice(0, 10),
+            locale.startsWith('en') ? 'en-GB' : 'vi-VN',
+          ),
       })
     },
 
@@ -1486,11 +1713,17 @@ export const routes: Record<string, RouteEntry> = {
       const editingType = editType ? types.find((row) => String(row.id) === editType) : undefined
       const editingField = editField ? fields.find((row) => String(row.id) === editField) : undefined
       const editingTag = editTag ? tags.find((row) => String(row.id) === editTag) : undefined
+      const brief = await ctx.joint(url, req, 'flow_backend:screen.project', {
+        docId: projectId,
+        base: '/admin/flow/projects',
+        lang: url.searchParams.get('lang') ?? '',
+      })
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
         body: (_, frame) =>
           settingsScreen(_, frame, String(project.name), endpoint, {
+            brief,
             columns,
             columnFields: [
               {

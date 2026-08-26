@@ -2,6 +2,7 @@
 // configuration, build artifact, module graph and executable registries; only
 // their outer loops differ.
 
+import { fingerprintAssets } from './assets.ts'
 import { compose } from '../kernel/compose.ts'
 import { readConfig } from './config.ts'
 import { registerFunctions } from './fn.ts'
@@ -32,6 +33,9 @@ export async function bootRuntime(
     requiredRegions: spec.requires ?? [],
     headless: spec.headless ?? false,
   })
+  // Asset URLs carry their file's digest from here on, so a browser and
+  // anything in front of it may keep them until the bytes change.
+  await fingerprintAssets(manifest)
   registerFunctions(modules)
   registerJobs(modules)
   return { spec, config, modules, manifest }

@@ -1,5 +1,5 @@
 import type { Translator } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { dataTable, Framed, linkButton, RecordForm, Section, stack } from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
 import type { AnyRow } from './shared.tsx'
@@ -29,6 +29,8 @@ export const settingsScreen = (
     typeErrors?: string[]
     fieldErrors?: string[]
     tagErrors?: string[]
+    /** The project brief's editor, placed through a joint like every other one. */
+    brief: JSXChild
   },
 ): TemplateResult => (
   <Framed
@@ -36,6 +38,9 @@ export const settingsScreen = (
     title={projectName}
     frame={frame}
     body={stack([
+      // First, because it is what the project is: the columns and tags below
+      // are how it is run.
+      <Section title={_('flow_backend.settings.brief')} body={options.brief} />,
       <Section
         title={_('flow_backend.settings.columns')}
         body={stack([
