@@ -148,6 +148,7 @@ export {
   docTree,
   kanbanCard,
   kanbanGrid,
+  deadline,
   recordList,
   recordWorkspace,
   recordToggle,

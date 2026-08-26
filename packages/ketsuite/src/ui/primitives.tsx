@@ -12,6 +12,7 @@ export const HOOKS = [
   'inline',
   'code',
   'badge',
+  'deadline',
   'tag',
   'tag-remove',
   'count-badge',
@@ -62,6 +63,21 @@ export const code = (value: string | null, context?: string): TemplateResult => 
  * specific when it has to be.
  */
 export type Tone = 'neutral' | 'info' | 'positive' | 'warning' | 'danger'
+
+/**
+ * A date somebody is working towards, marked when it has already passed.
+ *
+ * Not a badge, deliberately. Every tone a badge has is already spoken for by
+ * priority in the one table that needs this — urgent is `danger`, high is
+ * `warning` — so a late date rendered as a badge reads as a third priority
+ * rather than as a deadline. Colouring the date itself is what the eye is
+ * looking for anyway: the number, not a label beside it.
+ */
+export const deadline = (o: { date: string; late?: boolean }): TemplateResult => (
+  <span data-ui="deadline" data-late={String(o.late === true)}>
+    {o.date}
+  </span>
+)
 
 export const badge = (label: string, tone: Tone = 'neutral', value?: string): TemplateResult => (
   <span data-ui="badge" data-tone={tone} data-value={value ?? ''}>

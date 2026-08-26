@@ -20,6 +20,7 @@ export type { ActionVariant, ActionSize, ButtonSpec, LinkButtonSpec } from './ac
 export {
   inline,
   badge,
+  deadline,
   tag,
   countBadge,
   avatar,
