@@ -157,11 +157,46 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
 
   const partnerForm = await (await e2e.client.get('/admin/partner/partners/customer?lang=vi')).text()
   assert.match(partnerForm, /id="partner-identity-form"/)
+  assert.match(partnerForm, /data-ui="form-page" data-has-aside="true"/)
+  assert.match(partnerForm, /data-ui="form-page-actions"[\s\S]*?form="partner-identity-form"/)
   assert.match(partnerForm, /action="\/admin\/partner\/partners\/customer\?lang=vi"/)
   assert.match(partnerForm, /12 Nguyễn Huệ/)
   assert.doesNotMatch(partnerForm, /data-ui="partner-detail-layout"/)
+  assert.doesNotMatch(
+    partnerForm,
+    /data-ui="record-workspace"|data-ui="record-thumbnail"|data-ui="record-kicker"/,
+  )
   assert.doesNotMatch(partnerForm, /href="[^"]*\/edit/)
   assert.doesNotMatch(partnerForm, /href="[^"]*tab=(?:addresses|roles)/)
+  assert.match(partnerForm, /name="customer"[^>]*checked/)
+  assert.doesNotMatch(partnerForm, /action="[^"]*\/roles/)
+
+  const savedWithRoles = await e2e.client.post(
+    '/admin/partner/partners/customer?lang=vi',
+    new URLSearchParams({
+      name: 'Công ty Minh An',
+      kind: 'company',
+      vat: '0101234567',
+      email: 'hello@minhan.example',
+      supplier: '1',
+      employee: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(savedWithRoles.status, 303)
+  const partnerWithRoles = await call<{ roles: Array<{ role: string }> }>('partner.getPartner', {
+    id: 'customer',
+  })
+  assert.deepEqual(partnerWithRoles.value.roles.map((entry) => entry.role).sort(), ['employee', 'supplier'])
+
+  const partnerCreate = await (await e2e.client.get('/admin/partner/partners/new?lang=vi')).text()
+  assert.match(partnerCreate, /data-ui="form-page" data-has-aside="false"/)
+  assert.match(partnerCreate, /id="partner-create-form"/)
+  assert.match(partnerCreate, /data-ui="form-page-actions"[\s\S]*?form="partner-create-form"/)
+  assert.doesNotMatch(
+    partnerCreate,
+    /data-ui="record-workspace"|data-ui="record-thumbnail"|data-ui="record-kicker"/,
+  )
 
   const legacyEdit = await e2e.client.get('/admin/partner/partners/customer/edit?lang=vi', {
     redirect: 'manual',
@@ -249,7 +284,12 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
 
   const created = await e2e.client.post(
     '/admin/partner/partners/new',
-    new URLSearchParams({ kind: 'person', name: 'Nguyễn An', email: 'an@example.test' }),
+    new URLSearchParams({
+      kind: 'person',
+      name: 'Nguyễn An',
+      email: 'an@example.test',
+      customer: '1',
+    }),
     {
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       redirect: 'manual',
@@ -257,4 +297,12 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   )
   assert.equal(created.status, 303)
   assert.match(created.headers.get('location') ?? '', /^\/admin\/partner\/partners\/[0-9a-f-]+$/)
+  const createdId = created.headers.get('location')?.split('/').at(-1)
+  const createdPartner = await call<{ roles: Array<{ role: string }> }>('partner.getPartner', {
+    id: createdId,
+  })
+  assert.deepEqual(
+    createdPartner.value.roles.map((entry) => entry.role),
+    ['customer'],
+  )
 })

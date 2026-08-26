@@ -14,8 +14,13 @@
 // public components. New shared UI must enter through that public contract.
 
 export * as designSystem from '@ketvietlab/design-system'
-export { LinkButton, ListPage, Tabs as CollectionTabs } from '@ketvietlab/design-system'
-export type { LinkButtonProps, ListPageProps, TabItem as CollectionTabItem } from '@ketvietlab/design-system'
+export { FormPage, LinkButton, ListPage, Tabs as CollectionTabs } from '@ketvietlab/design-system'
+export type {
+  FormPageProps,
+  LinkButtonProps,
+  ListPageProps,
+  TabItem as CollectionTabItem,
+} from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
 export { formatMoney } from './format.ts'
@@ -76,6 +81,7 @@ export {
   recordFieldGrid,
   recordRail,
   recordHeaderActions,
+  recordMore,
 } from './record-detail.tsx'
 export type { RecordRailFact, RecordRailSwitch, RecordRailActivity } from './record-detail.tsx'
 export { modalSheet } from './modal.tsx'
@@ -130,6 +136,7 @@ export {
   recordFieldGrid as RecordFieldGrid,
   recordRail as RecordRail,
   recordHeaderActions as RecordHeaderActions,
+  recordMore as RecordMore,
 } from './record-detail.tsx'
 export { notice as Notice } from './state.tsx'
 export { breadcrumbs as Breadcrumbs, tabs as Tabs } from './navigation.tsx'

@@ -234,3 +234,18 @@ export const recordHeaderActions = (options: {
     </div>
   </div>
 )
+
+/** Secondary record actions collapse behind one stable control beside Save. */
+export const recordMore = (options: { label: string; body: JSXChild }): TemplateResult => (
+  <details data-ui="record-more">
+    <summary
+      data-ui="record-more-open"
+      data-variant="secondary"
+      aria-label={options.label}
+      title={options.label}
+    >
+      {icon('more-horizontal')}
+    </summary>
+    <div data-ui="record-more-menu">{options.body}</div>
+  </details>
+)

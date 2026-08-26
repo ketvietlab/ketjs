@@ -10,6 +10,7 @@ import { ContentCard, Grid, Inline, Metric, Section, Stack, Surface } from '../l
 import { AppShell, Page, PageHeader, RecordPage, RecordSection } from '../layouts/shell.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
+import { FormPage } from '../patterns/form-page.tsx'
 import { ModalSheet } from '../patterns/modal-sheet.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
 
@@ -503,6 +504,60 @@ export const componentGroups: readonly ComponentGroup[] = [
                 kind: 'status',
               },
             ]}
+          />
+        ),
+      },
+      {
+        id: 'form-page',
+        name: 'Form page',
+        description:
+          'The canonical form hierarchy: record identity and decision first, a stable form column, then durable context.',
+        render: () => (
+          <FormPage
+            title="Mùa Hạ Riverside"
+            description="Customer · CUS-0042"
+            status={<Badge label="Active" tone="positive" />}
+            actions={<Button label="Save partner" variant="primary" />}
+            body={
+              <Section
+                title="Main information"
+                body={
+                  <Surface
+                    body={
+                      <RecordForm
+                        action="#form-page"
+                        fields={[
+                          { id: 'partner-name', name: 'name', label: 'Name', value: 'Mùa Hạ Riverside' },
+                          { id: 'partner-ref', name: 'ref', label: 'Reference', value: 'CUS-0042' },
+                          {
+                            id: 'partner-email',
+                            name: 'email',
+                            label: 'Email',
+                            type: 'email',
+                            value: 'hello@muaha.example',
+                          },
+                          {
+                            id: 'partner-phone',
+                            name: 'phone',
+                            label: 'Phone',
+                            type: 'tel',
+                            value: '+84 28 3822 0042',
+                          },
+                        ]}
+                        submitLabel="Save partner"
+                      />
+                    }
+                  />
+                }
+              />
+            }
+            aside={
+              <Section
+                title="Record context"
+                body={<Stack gap="compact" items={['Customer since 2023', '6 delivery addresses']} />}
+              />
+            }
+            asideLabel="Partner context"
           />
         ),
       },

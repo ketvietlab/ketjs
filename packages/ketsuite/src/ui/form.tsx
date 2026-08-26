@@ -20,7 +20,13 @@ export const HOOKS = [
   'form-cluster',
 ] as const
 
-export type FormOption = { value: string; label: string }
+export type FormOption = {
+  value: string
+  label: string
+  /** Checkbox groups may submit independent boolean fields from one visual control. */
+  name?: string
+  checked?: boolean
+}
 export type FormField = {
   name: string
   label: string
@@ -42,6 +48,7 @@ export type FormField = {
     | 'select'
     | 'radio'
     | 'checkbox'
+    | 'checkbox-group'
     | 'textarea'
   value?: string | number | boolean | null
   placeholder?: string | null
@@ -194,6 +201,56 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
               )}
             </span>
           )
+          if (field.type === 'checkbox-group')
+            return (
+              <div
+                data-ui="form-field"
+                data-span={field.span ?? 'half'}
+                data-kind="checkbox-group"
+                data-invalid={String(!!field.error)}
+              >
+                <span data-ui="form-label" id={`${id}-label`}>
+                  {field.label}
+                  {field.required && (
+                    <span data-ui="form-required" aria-hidden="true">
+                      {' *'}
+                    </span>
+                  )}
+                </span>
+                <div data-ui="form-options" role="group" aria-labelledby={`${id}-label`}>
+                  {each(
+                    field.options ?? [],
+                    (option) => option.name ?? option.value,
+                    (option) => (
+                      <label data-ui="form-option">
+                        <input
+                          data-ui="form-option-input"
+                          type="checkbox"
+                          name={option.name ?? `${field.name}[]`}
+                          autocomplete="off"
+                          value={option.value}
+                          checked={option.checked === true}
+                          disabled={field.disabled === true}
+                          aria-invalid={field.error ? 'true' : null}
+                          aria-describedby={describedBy}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ),
+                  )}
+                </div>
+                {!!field.help && (
+                  <small data-ui="form-help" id={helpId ?? undefined}>
+                    {field.help}
+                  </small>
+                )}
+                {!!field.error && (
+                  <small data-ui="form-error" id={errorId ?? undefined}>
+                    {field.error}
+                  </small>
+                )}
+              </div>
+            )
           if (field.type === 'radio')
             return (
               <div
