@@ -34,8 +34,10 @@ import {
   Section,
   stack,
   Surface,
+  Tabs,
 } from '../../ui/index.ts'
-import type { ChartBar, ChartKey, DatePickerField, Frame } from '../../ui/index.ts'
+import type { ChartBar, ChartKey, DatePickerField, Frame, Tab } from '../../ui/index.ts'
+import { PERIOD_PRESETS } from './overview.ts'
 
 type Row = Record<string, unknown>
 
@@ -46,6 +48,12 @@ export type AccountingOverviewOptions = {
   frame: Frame
   /** The date filter posts back to the screen's own path. */
   action: string
+  /** Which named window is showing: a preset, a four-digit year, or `custom`. */
+  preset: string
+  /** The years the ledger covers, newest first. */
+  years: readonly number[]
+  /** Where a named window lives. The name travels, not the dates it resolves to. */
+  presetHref: (name: string) => string
   /**
    * What the filter has to carry across a submit.
    *
@@ -95,6 +103,29 @@ const ratioText = (_: Translator, value: unknown): string =>
   value === null || value === undefined
     ? _('account_backend.overview.noComparison')
     : `${(n(value) * 100).toFixed(1)}%`
+
+/**
+ * The named windows, as a row of links.
+ *
+ * Links rather than a form: each is an address, so it is bookmarkable, opens in
+ * a new tab, and works with nothing running in the browser — the same rule the
+ * rest of this screen keeps by holding its whole state in the URL.
+ */
+const presets = (_: Translator, o: AccountingOverviewOptions): Tab[] =>
+  PERIOD_PRESETS.map((name) => ({
+    id: name,
+    label: _(`account_backend.overview.preset.${name}`),
+    href: o.presetHref(name),
+    active: o.preset === name,
+  }))
+
+const years = (_: Translator, o: AccountingOverviewOptions): Tab[] =>
+  o.years.map((year) => ({
+    id: String(year),
+    label: String(year),
+    href: o.presetHref(String(year)),
+    active: o.preset === String(year),
+  }))
 
 const kpis = (_: Translator, o: AccountingOverviewOptions): TemplateResult => {
   const cards: Array<{
@@ -266,15 +297,20 @@ export const accountingOverviewScreen = (
                 body={
                   <Surface
                     padding="compact"
-                    body={
+                    body={stack([
+                      <Tabs label={_('account_backend.overview.period')} items={presets(_, options)} wrap />,
+                      // A year is offered even when the ledger covers only one:
+                      // "2026" is the whole year, which is a different question
+                      // from "this month" and the only way to ask it in one click.
+                      <Tabs label={_('account_backend.overview.byYear')} items={years(_, options)} wrap />,
                       <DatePicker
                         action={options.action}
                         hidden={options.hidden}
-                        label={_('account_backend.overview.period')}
+                        label={_('account_backend.overview.custom')}
                         fields={options.fields}
                         submit={_('account_backend.action.calculate')}
-                      />
-                    }
+                      />,
+                    ])}
                   />
                 }
               />,

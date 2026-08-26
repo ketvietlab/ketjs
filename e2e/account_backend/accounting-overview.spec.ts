@@ -184,6 +184,55 @@ test('the period filter drives the screen from the URL', async ({ page }) => {
   ).toHaveText(/1\.240\.000\.000/)
 })
 
+test('a named window travels as its name, so a bookmark stays what it says', async ({ page }) => {
+  await overview(page)
+  const chip = (label: string) => page.locator('[data-ui="tab"]', { hasText: label }).first()
+
+  // Nothing is current while the URL carries typed dates: the chips name windows,
+  // and a hand-typed range is not one of them.
+  await expect(page.locator('[data-ui="tab"][data-active="true"]')).toHaveCount(0)
+
+  await chip('Hôm nay').click()
+  // The name is what is in the address, not the dates it happens to mean today.
+  await expect(page).toHaveURL(/period=today/)
+  await expect(page).not.toHaveURL(/dateFrom=/)
+  await expect(chip('Hôm nay')).toHaveAttribute('data-active', 'true')
+  await expect(chip('Hôm nay')).toHaveAttribute('aria-current', 'page')
+
+  // And the date fields show what it resolved to: the same day, twice.
+  const today = new Date().toISOString().slice(0, 10)
+  await expect(page.locator('input[name="dateFrom"]')).toHaveValue(today)
+  await expect(page.locator('input[name="dateTo"]')).toHaveValue(today)
+
+  // Every window the screen offers is reachable and marks itself.
+  for (const label of [
+    'Hôm qua',
+    '7 ngày qua',
+    '14 ngày qua',
+    '30 ngày qua',
+    'Tháng này',
+    'Tháng trước',
+    '90 ngày qua',
+  ]) {
+    await chip(label).click()
+    await expect(chip(label)).toHaveAttribute('data-active', 'true')
+    await expect(page.locator('[data-ui="tab"][data-active="true"]')).toHaveCount(1)
+  }
+})
+
+test('a year is one click, and it is the whole year', async ({ page }) => {
+  await overview(page)
+  const year = String(new Date().getUTCFullYear())
+  await page.locator('[data-ui="tab"]', { hasText: year }).first().click()
+  await expect(page).toHaveURL(new RegExp(`period=${year}`))
+  await expect(page.locator('input[name="dateFrom"]')).toHaveValue(`${year}-01-01`)
+  await expect(page.locator('input[name="dateTo"]')).toHaveValue(`${year}-12-31`)
+  // 2026 covers both months the fixture posts, so it is more than either of them.
+  await expect(
+    page.locator('[data-ui="metric"]', { hasText: 'Doanh thu thuần' }).locator('[data-ui="metric-value"]'),
+  ).toHaveText(/3\.691\.000\.000/)
+})
+
 for (const viewport of [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'mobile', width: 390, height: 844 },
@@ -235,6 +284,25 @@ for (const viewport of [
         path: join(artifacts, `overview-${viewport.name}-${scheme}.png`),
         fullPage: true,
       })
+
+      // And the filter with a named window current, which the shot above cannot
+      // show: it arrives on typed dates, where no chip is the answer.
+      await page.goto(`/admin/accounting?lang=vi&period=last30`)
+      await expect(page.locator('[data-ui="tab"][data-active="true"]')).toHaveCount(1)
+      const filter = page.locator('[data-ui="section"]', { hasText: 'Kỳ báo cáo' }).first()
+      // Every named window is on screen, wrapped rather than scrolled past the
+      // edge: a current choice the reader cannot see is one they do not have.
+      const chips = await page.evaluate(() => {
+        const row = document.querySelector('[data-ui="tabs"][data-wrap="true"]')
+        const bounds = row?.getBoundingClientRect()
+        return [...(row?.querySelectorAll('[data-ui="tab"]') ?? [])].map((tab) => {
+          const box = tab.getBoundingClientRect()
+          return { inside: !!bounds && box.left >= bounds.left - 1 && box.right <= bounds.right + 1 }
+        })
+      })
+      expect(chips.length).toBe(8)
+      expect(chips.every((chip) => chip.inside)).toBeTruthy()
+      await filter.screenshot({ path: join(artifacts, `period-${viewport.name}-${scheme}.png`) })
     })
   }
 }

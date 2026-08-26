@@ -26,6 +26,27 @@ type Translator = ReturnType<ServeContext['translate']>
 const DAY = 86_400_000
 const n = (value: unknown): number => Number(value ?? 0)
 
+/**
+ * The named windows the screen offers, in the order they are shown.
+ *
+ * A relative window is stored by its name, not by the dates it resolves to: a
+ * bookmark of `period=last7` is still the last seven days tomorrow, while a
+ * bookmark of the dates it happened to mean today is a frozen week that quietly
+ * stops being what it says.
+ */
+export const PERIOD_PRESETS = [
+  'today',
+  'yesterday',
+  'last7',
+  'last14',
+  'last30',
+  'month',
+  'lastMonth',
+  'last90',
+] as const
+
+export type PeriodPreset = (typeof PERIOD_PRESETS)[number]
+
 /** The window the screen is reporting on, and the one it compares against. */
 export type Period = {
   from: string
@@ -35,42 +56,117 @@ export type Period = {
   /** What the date inputs show: a day, not an instant. */
   fromDay: string
   toDay: string
+  /**
+   * Which choice produced it: a preset name, a four-digit year, or `custom` for
+   * a window typed into the date fields. The screen marks it, and nothing else
+   * decides which chip is current.
+   */
+  preset: string
 }
 
 const day = (at: Date): string => at.toISOString().slice(0, 10)
 const startOf = (value: string): string => `${value}T00:00:00.000Z`
 /** Inclusive: a window ending on the 30th contains everything posted that day. */
 const endOf = (value: string): string => `${value}T23:59:59.999Z`
+const isDay = (value: string): boolean =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(new Date(startOf(value)).getTime())
+const shift = (from: string, days: number): string => day(new Date(new Date(from).getTime() + days * DAY))
+
+/**
+ * What a named window means today.
+ *
+ * A "last N days" window ends today and counts today as one of them, which is
+ * what a reader checking in at noon means by it — a window that stopped
+ * yesterday would answer a question about the past while claiming to be current.
+ */
+const presetWindow = (name: string, now: Date): { from: string; to: string } | null => {
+  const today = day(now)
+  const monthStart = day(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)))
+  switch (name) {
+    case 'today':
+      return { from: today, to: today }
+    case 'yesterday':
+      return { from: shift(today, -1), to: shift(today, -1) }
+    case 'last7':
+      return { from: shift(today, -6), to: today }
+    case 'last14':
+      return { from: shift(today, -13), to: today }
+    case 'last30':
+      return { from: shift(today, -29), to: today }
+    case 'last90':
+      return { from: shift(today, -89), to: today }
+    case 'month':
+      return { from: monthStart, to: today }
+    case 'lastMonth': {
+      const end = shift(monthStart, -1)
+      return { from: `${end.slice(0, 7)}-01`, to: end }
+    }
+    default:
+      // A year, which is the one window a reader names by a number.
+      return /^\d{4}$/.test(name) ? { from: `${name}-01-01`, to: `${name}-12-31` } : null
+  }
+}
 
 /**
  * The window from the URL, defaulting to the month in progress.
  *
+ * Dates typed into the fields win over a named preset, because they are the more
+ * specific thing the reader just did — and they arrive together, so a half-typed
+ * range never silently narrows the screen.
+ *
  * The comparison window is the same number of days ending the day before this
- * one opens, rather than "the previous calendar month". A user who asked for
- * the 1st to the 10th is comparing ten days, and answering with a thirty-one
- * day month would have made every figure on the screen look like a collapse.
+ * one opens, rather than "the previous calendar month". A user who asked for the
+ * 1st to the 10th is comparing ten days, and answering with a thirty-one day
+ * month would have made every figure on the screen look like a collapse.
  */
 export const periodOf = (url: URL, now: Date = new Date()): Period => {
-  const asked = {
+  const typed = {
     from: url.searchParams.get('dateFrom') ?? '',
     to: url.searchParams.get('dateTo') ?? '',
   }
-  const valid = (value: string): boolean =>
-    /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(new Date(startOf(value)).getTime())
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-  const fromDay = valid(asked.from) ? asked.from : day(monthStart)
-  const toDay = valid(asked.to) && asked.to >= fromDay ? asked.to : day(now)
-  const span = Math.max(1, Math.round((new Date(toDay).getTime() - new Date(fromDay).getTime()) / DAY) + 1)
-  const previousEnd = new Date(new Date(fromDay).getTime() - DAY)
-  const previousStart = new Date(previousEnd.getTime() - (span - 1) * DAY)
+  const named = url.searchParams.get('period') ?? ''
+  const resolved = presetWindow(named, now)
+  // A name nobody offers falls back to the month rather than to nothing: the
+  // screen has to report on some window, and an empty one is not a period.
+  const chosen =
+    isDay(typed.from) && isDay(typed.to) && typed.to >= typed.from
+      ? { from: typed.from, to: typed.to, preset: 'custom' }
+      : resolved
+        ? { ...resolved, preset: named }
+        : { ...presetWindow('month', now)!, preset: 'month' }
+  const span = Math.max(
+    1,
+    Math.round((new Date(chosen.to).getTime() - new Date(chosen.from).getTime()) / DAY) + 1,
+  )
+  const previousEnd = shift(chosen.from, -1)
+  const previousStart = shift(previousEnd, -(span - 1))
   return {
-    from: startOf(fromDay),
-    to: endOf(toDay),
-    previousFrom: startOf(day(previousStart)),
-    previousTo: endOf(day(previousEnd)),
-    fromDay,
-    toDay,
+    from: startOf(chosen.from),
+    to: endOf(chosen.to),
+    previousFrom: startOf(previousStart),
+    previousTo: endOf(previousEnd),
+    fromDay: chosen.from,
+    toDay: chosen.to,
+    preset: chosen.preset,
   }
+}
+
+/**
+ * The years a reader can ask for: the ones the ledger actually covers.
+ *
+ * Newest first and capped, because a chip row is read at a glance and a company
+ * ten years into its books does not want ten of them across the filter. The
+ * years past the cap are still reachable by typing the dates.
+ */
+export const YEAR_CHOICES = 6
+
+export const yearsOf = (earliest: string, now: Date = new Date()): number[] => {
+  const first = Number(String(earliest).slice(0, 4))
+  const last = now.getUTCFullYear()
+  if (!Number.isFinite(first) || first < 1970 || first > last) return [last]
+  const all: number[] = []
+  for (let year = last; year >= first && all.length < YEAR_CHOICES; year -= 1) all.push(year)
+  return all
 }
 
 /** How many points a line may carry before its labels stop being readable. */

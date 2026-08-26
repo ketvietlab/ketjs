@@ -32,7 +32,7 @@ import { taxesScreen } from './taxes-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
-import { overviewCharts, periodOf } from './overview.ts'
+import { overviewCharts, periodOf, yearsOf } from './overview.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -681,18 +681,34 @@ export default defineModule({
         // "dashboard" function: the same split the trial balance and the general
         // ledger already make, and the reason narrowing the filter cannot make
         // total assets shrink.
-        const [current, previous, position, opening, timeline, openItems, cashFlow, setup, companies] =
-          await Promise.all([
-            read('account.performance', { dateFrom: period.from, dateTo: period.to }),
-            read('account.performance', { dateFrom: period.previousFrom, dateTo: period.previousTo }),
-            read('account.position', { asOf: period.to }),
-            read('account.position', { asOf: period.previousTo }),
-            read('account.revenueTimeline', { dateFrom: period.from, dateTo: period.to }),
-            read('account.openItemSummary', { asOf: period.to, partnerLimit: 5 }),
-            read('account.cashFlow', { dateFrom: period.from, dateTo: period.to }),
-            read('account.getSetup', {}),
-            ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
-          ])
+        const [
+          current,
+          previous,
+          position,
+          opening,
+          timeline,
+          openItems,
+          cashFlow,
+          setup,
+          companies,
+          oldest,
+        ] = await Promise.all([
+          read('account.performance', { dateFrom: period.from, dateTo: period.to }),
+          read('account.performance', { dateFrom: period.previousFrom, dateTo: period.previousTo }),
+          read('account.position', { asOf: period.to }),
+          read('account.position', { asOf: period.previousTo }),
+          read('account.revenueTimeline', { dateFrom: period.from, dateTo: period.to }),
+          read('account.openItemSummary', { asOf: period.to, partnerLimit: 5 }),
+          read('account.cashFlow', { dateFrom: period.from, dateTo: period.to }),
+          read('account.getSetup', {}),
+          ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
+          // The oldest posted move, and only that one: the year chips offer
+          // the years the ledger actually covers, and asking the database for
+          // the earliest date is cheaper than every year deriving from a scan.
+          ctx.call('account.listMoves', { state: 'posted', order: 'asc', limit: 1 }, url, req) as Promise<
+            AnyRow[]
+          >,
+        ])
         // The comparison line has to be bucketed the way this one was, or the
         // two are not comparable: a previous window one day shorter would
         // otherwise pick days where this picked months and draw a shape that
@@ -715,6 +731,15 @@ export default defineModule({
             return accountingOverviewScreen(_, {
               frame,
               action: '/admin/accounting',
+              preset: period.preset,
+              years: yearsOf(String((oldest as AnyRow[])[0]?.date ?? '')),
+              presetHref: (name) => {
+                const target = new URL('/admin/accounting', url)
+                target.searchParams.set('period', name)
+                const lang = url.searchParams.get('lang')
+                if (lang) target.searchParams.set('lang', lang)
+                return `${target.pathname}${target.search}`
+              },
               // The language rides as a hidden field: a GET form discards the
               // query string its action carried, which silently sent a reader
               // filtering in Vietnamese back to the negotiated locale.
@@ -1731,7 +1756,17 @@ const vi: Record<string, string> = {
   'overview.subtitle': 'Kết quả kinh doanh, tình hình tài chính và công nợ lấy thẳng từ sổ đã ghi.',
   'overview.period': 'Kỳ báo cáo',
   'overview.periodHint':
-    'Số liệu kết quả tính trong kỳ; số dư tính đến ngày cuối kỳ. Kỳ so sánh là khoảng thời gian cùng độ dài liền trước.',
+    'Chọn một khoảng có sẵn, một năm, hoặc tự nhập. Số liệu kết quả tính trong kỳ; số dư tính đến ngày cuối kỳ. Kỳ so sánh là khoảng thời gian cùng độ dài liền trước.',
+  'overview.preset.today': 'Hôm nay',
+  'overview.preset.yesterday': 'Hôm qua',
+  'overview.preset.last7': '7 ngày qua',
+  'overview.preset.last14': '14 ngày qua',
+  'overview.preset.last30': '30 ngày qua',
+  'overview.preset.month': 'Tháng này',
+  'overview.preset.lastMonth': 'Tháng trước',
+  'overview.preset.last90': '90 ngày qua',
+  'overview.byYear': 'Theo năm',
+  'overview.custom': 'Khoảng tuỳ chọn',
   'overview.headline': 'Chỉ số chính',
   'overview.headlineHint': 'So với kỳ liền trước cùng độ dài.',
   'overview.revenue': 'Doanh thu thuần',
@@ -2083,7 +2118,17 @@ const en: Record<string, string> = {
   'overview.subtitle': 'Result, position, and what is still owed, read straight from the posted ledger.',
   'overview.period': 'Reporting period',
   'overview.periodHint':
-    'Results are for the window; balances are as at its last day. The comparison is the window of equal length immediately before it.',
+    'Pick a named window, a year, or type your own. Results are for the window; balances are as at its last day. The comparison is the window of equal length immediately before it.',
+  'overview.preset.today': 'Today',
+  'overview.preset.yesterday': 'Yesterday',
+  'overview.preset.last7': 'Last 7 days',
+  'overview.preset.last14': 'Last 14 days',
+  'overview.preset.last30': 'Last 30 days',
+  'overview.preset.month': 'This month',
+  'overview.preset.lastMonth': 'Last month',
+  'overview.preset.last90': 'Last 90 days',
+  'overview.byYear': 'By year',
+  'overview.custom': 'Custom range',
   'overview.headline': 'Headline figures',
   'overview.headlineHint': 'Against the preceding window of equal length.',
   'overview.revenue': 'Net revenue',

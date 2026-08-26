@@ -158,6 +158,11 @@
     overflow-x: auto;
     border-block-end: 1px solid var(--admin-line);
   }
+  /* A filter row shows every choice at once, on as many lines as that takes. */
+  [data-ui="tabs"][data-wrap="true"] {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
   [data-ui="tab"] {
     display: inline-flex;
     min-block-size: var(--admin-control-height);
