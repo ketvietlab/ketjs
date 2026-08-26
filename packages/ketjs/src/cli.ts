@@ -23,6 +23,7 @@ import { bootDeployment, serveDeployment } from './server/boot.ts'
 import { bootRuntime } from './server/runtime.ts'
 import { callFn } from './server/fn.ts'
 import { bootWorker, serveWorker } from './server/worker.ts'
+import { createDevelopmentCloser } from './server/development.ts'
 import { createQueue } from './server/queue.ts'
 import { scaffold } from './scaffold/index.ts'
 import { KetError } from './kernel/errors.ts'
@@ -473,12 +474,10 @@ try {
     worker.start()
     console.log(await deployment.banner())
     console.log(`  worker ${worker.workerId} is running in this development process\n`)
-    const close = async () => {
-      await worker.close()
-      await deployment.close()
-      process.exit(0)
+    const close = createDevelopmentCloser(deployment, worker)
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+      process.on(signal, () => void close().then(() => process.exit(0)))
     }
-    for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => void close())
     await new Promise(() => {})
   } else if (cmd === 'jobs') {
     const action = rest.find((item) => !item.startsWith('--'))
