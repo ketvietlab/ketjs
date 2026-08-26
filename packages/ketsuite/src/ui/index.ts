@@ -37,7 +37,9 @@ export { dataTable, visibleColumns } from './table.tsx'
 export type { Cell, Column, DataTable, TableGroup, TableSelection } from './table.tsx'
 export { scheduleBoard } from './schedule.tsx'
 export type { ScheduleDay, ScheduleEvent, ScheduleRow, ScheduleTone } from './schedule.tsx'
-export { kanbanCard, kanbanGrid, progressBar, recordList } from './data.tsx'
+export { docTree, kanbanCard, kanbanGrid, progressBar, recordList } from './data.tsx'
+export { gantt, ganttSpan } from './gantt.tsx'
+export type { GanttItem, GanttLabels } from './gantt.tsx'
 export { mediaPanel } from './media.tsx'
 export type { MediaItem, MediaLabels, MediaPanelProps } from './media.tsx'
 export { attachmentPanel } from './attachments.tsx'
@@ -105,7 +107,9 @@ export { datePicker as DatePicker } from './date-picker.tsx'
 export { mediaPanel as MediaPanel } from './media.tsx'
 export { attachmentPanel as AttachmentPanel } from './attachments.tsx'
 export { scheduleBoard as ScheduleBoard } from './schedule.tsx'
+export { gantt as Gantt } from './gantt.tsx'
 export {
+  docTree as DocTree,
   kanbanCard as KanbanCard,
   kanbanGrid as KanbanGrid,
   progressBar as Progress,

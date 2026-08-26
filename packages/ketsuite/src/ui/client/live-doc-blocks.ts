@@ -2,9 +2,9 @@
 // reader.
 //
 // Its own file because both of them need the same list and neither owns it:
-// `markdown.ts` produces blocks and `editor-view.ts` consumes them, so putting
-// the union in either one makes the other import from a module it has no
-// business depending on.
+// `live-doc-markdown.ts` produces blocks and `live-doc-view.tsx` consumes
+// them, so putting the union in either one makes the other import from a
+// module it has no business depending on.
 
 export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'quote' | 'code' | 'bullet' | 'ordered' | 'check'
 

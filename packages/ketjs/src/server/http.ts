@@ -1,6 +1,7 @@
 // One server function, three surfaces: an HTTP endpoint, the typed client that
 // calls it, and an agent tool descriptor — all read off the same manifest entry.
 
+import { isVersioned } from './assets.ts'
 import { createServer } from 'node:http'
 import { pipeline } from 'node:stream/promises'
 import { isNavigationRequest, navigablePage } from './respond.ts'
@@ -83,6 +84,19 @@ export type AssetMount = {
   resolve?: (rest: string, url: URL, req: IncomingMessage) => Promise<string | null>
 }
 
+/**
+ * The file types a module may publish, and what they are served as.
+ *
+ * This doubles as the list of what gets served at all, so it has to cover what
+ * a browser actually loads from an asset directory rather than only what this
+ * repo happens to ship today. It was briefly the shorter list, which 404'd
+ * `.jpeg`, `.gif`, `.webp` and `.woff` — all of which had worked, because an
+ * unknown type used to fall through to `application/octet-stream` and browsers
+ * sniff images successfully.
+ *
+ * What stays out is source and anything that carries it: `.ts`, `.tsx`, and
+ * `.map` — a minified bundle's sourcemap inlines the whole original file.
+ */
 const ASSET_MIME: Record<string, string> = {
   '.css': 'text/css',
   '.js': 'text/javascript',
@@ -90,9 +104,26 @@ const ASSET_MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
   '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
+  '.pdf': 'application/pdf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
 }
+
+/**
+ * Extensions are compared in lower case, because a file called `logo.PNG` is
+ * a PNG. `extname` reports the case it finds, so the table lookup missed it.
+ */
+const assetType = (rel: string): string | undefined => ASSET_MIME[extname(rel).toLowerCase()]
 
 const json = (res: ServerResponse, status: number, body: unknown): void => {
   const s = JSON.stringify(body, null, 2)
@@ -426,10 +457,24 @@ export async function createKetServer(o: ServeOpts) {
               : null
             : await (mount.resolve as NonNullable<AssetMount['resolve']>)(rel, url, req)
         if (file === null) break
+        // A module publishes a *directory*, not a list of files, so anything
+        // else that lives in that directory went out with the assets: the TSX an
+        // island is authored in, a sourcemap with the original text inlined, a
+        // README. They were answered as `application/octet-stream` — a download
+        // rather than an error, which is worse than useless for source nobody
+        // meant to publish. `ASSET_MIME` is already the list of things a browser
+        // loads as a page asset, so it is the list of things that get served.
+        const type = assetType(rel)
+        if (type === undefined) break
         try {
           const body = await readFile(file)
-          const type = ASSET_MIME[extname(rel)] ?? 'application/octet-stream'
-          res.writeHead(200, { 'content-type': contentType(type), 'cache-control': 'no-cache' })
+          // A URL that names its own content can never go stale, so it is kept
+          // rather than revalidated. Anything else keeps the old answer: safe,
+          // and re-fetched every time, which is what versioning is for.
+          res.writeHead(200, {
+            'content-type': contentType(type),
+            'cache-control': isVersioned(rel) ? 'public, max-age=31536000, immutable' : 'no-cache',
+          })
           return res.end(body)
         } catch {
           break

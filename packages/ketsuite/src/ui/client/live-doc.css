@@ -51,7 +51,7 @@
     /* So a space the user typed is a space the model reads back. Without it a
        trailing space collapses, contenteditable substitutes U+00A0 to keep it
        visible, and the substitute is what gets stored — see domTextOf in
-       flow_backend/editor-view.ts. */
+       live-doc-view.tsx. */
     white-space: pre-wrap;
   }
 

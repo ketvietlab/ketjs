@@ -5,10 +5,14 @@
 // heading does not.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { inlineDelta, parseMarkdown } from '../packages/ketsuite/src/modules/flow_backend/markdown.ts'
+import { inlineDelta, parseMarkdown } from '../packages/ketsuite/src/ui/client/live-doc-markdown.ts'
+import type { MarkdownBlock } from '../packages/ketsuite/src/ui/client/live-doc-markdown.ts'
 
 const shape = (source: string) =>
-  parseMarkdown(source).map((block) => [block.type, block.delta.map((op) => op.insert).join('')])
+  parseMarkdown(source).map((block: MarkdownBlock) => [
+    block.type,
+    block.delta.map((op) => op.insert).join(''),
+  ])
 
 test('flow markdown: block markers become the blocks the editor has', () => {
   assert.deepEqual(shape(['# Rollout', '## Steps', '- freeze', '2. tag', '> ship Friday'].join('\n')), [
@@ -23,7 +27,7 @@ test('flow markdown: block markers become the blocks the editor has', () => {
 test('flow markdown: a task list keeps whether it is done', () => {
   const blocks = parseMarkdown('- [x] shipped\n- [ ] announced')
   assert.deepEqual(
-    blocks.map((block) => [block.type, block.checked]),
+    blocks.map((block: MarkdownBlock) => [block.type, block.checked]),
     [
       ['check', true],
       ['check', false],
@@ -45,7 +49,7 @@ test('flow markdown: plain lines join into a paragraph and a blank line ends it'
 test('flow markdown: a fenced block is characters, delimiters and all', () => {
   const blocks = parseMarkdown('before\n\n```sh\nnpm run **verify**\ncd build\n```\n\nafter')
   assert.deepEqual(
-    blocks.map((block) => block.type),
+    blocks.map((block: MarkdownBlock) => block.type),
     ['p', 'code', 'p'],
   )
   // No marks inside: what is in a code block is what was typed.

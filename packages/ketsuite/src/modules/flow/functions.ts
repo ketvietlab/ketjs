@@ -4,6 +4,7 @@ import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   actorRequired,
   addComment,
+  stopFollowing,
   addDependency,
   assignSprint,
   closeSprint,
@@ -21,12 +22,23 @@ import {
   startSprint,
 } from './operations.ts'
 import { emptyIssueListState } from './search.ts'
+import { projectStateOf, projectStats } from './projects.ts'
+import {
+  archivePage,
+  listPages,
+  movePage,
+  pageDetail,
+  reorderPage,
+  restorePage,
+  savePage,
+} from './pages.ts'
 
 const flowReadEffects = [
   'read:flow.Project',
   'read:flow.Column',
   'read:flow.IssueType',
   'read:flow.FieldDef',
+  'read:mail.Follower',
   'read:flow.IssueFieldValue',
   'read:flow.Epic',
   'read:flow.Sprint',
@@ -157,12 +169,63 @@ export const functions: Record<string, FnSpec> = {
    * `optionRows` caps at 200 rows sorted by name — so the 201st project by
    * name would answer "not found" on its own board.
    */
+  /**
+   * The issue counts behind a list of projects, in two reads rather than one
+   * per project — see `projectStats`.
+   */
+  'project.stats': defineFn({
+    input: { projectIds: 'json' },
+    output: { id: 'id', total: 'int', done: 'int', state: 'text' },
+    effects: ['read:flow.Issue', 'read:flow.Column'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const ids = Array.isArray(args.projectIds) ? args.projectIds.map(String) : []
+      const stats = await projectStats(ctx, ids)
+      return [...stats].map(([id, counted]) => ({
+        id,
+        total: counted.total,
+        done: counted.done,
+        state: projectStateOf(counted),
+      }))
+    },
+  }),
+
   'project.get': defineFn({
     input: { id: 'id' },
-    output: { id: 'id', key: 'text', name: 'text', description: 'text?', active: 'bool' },
+    output: {
+      id: 'id',
+      key: 'text',
+      name: 'text',
+      description: 'text?',
+      previewText: 'text?',
+      contentAttachmentId: 'id?',
+      active: 'bool',
+    },
     effects: ['read:flow.Project'],
     agent: true,
     handler: async (ctx, args) => (await ctx.db.select('flow.Project', { id: args.id }))[0] ?? null,
+  }),
+
+  /**
+   * Rewriting a project's brief, as a permission key of its own — separate
+   * from `project.save`, which renames the project and archives it.
+   */
+  'project.editContent': defineFn({
+    input: { id: 'id' },
+    // The fields as they are actually returned, not a `value` wrapper the
+    // handler never builds: output is projected against these keys, so
+    // declaring `value` and answering `{ id, contentAttachmentId }` threw both
+    // away and handed the caller `{}`. Live Doc reads `contentAttachmentId`
+    // off this to find the stored snapshot, so an empty answer read as "never
+    // written" — and the next push started from a blank document and flattened
+    // it over the real one.
+    output: { id: 'id?', contentAttachmentId: 'id?' },
+    effects: ['read:flow.Project'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const row = (await ctx.db.select('flow.Project', { id: args.id }))[0]
+      return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
+    },
   }),
 
   'project.save': saveEntity(
@@ -420,7 +483,15 @@ export const functions: Record<string, FnSpec> = {
 
   'epic.list': defineFn({
     input: { projectId: 'id', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
-    output: { id: 'id', projectId: 'id', title: 'text', color: 'text?', active: 'bool' },
+    output: {
+      id: 'id',
+      projectId: 'id',
+      title: 'text',
+      color: 'text?',
+      previewText: 'text?',
+      contentAttachmentId: 'id?',
+      active: 'bool',
+    },
     effects: ['read:flow.Epic'],
     agent: true,
     handler: async (ctx, args) => {
@@ -434,6 +505,42 @@ export const functions: Record<string, FnSpec> = {
       return rows
         .filter((row) => !needle || normalized(row.title).includes(needle))
         .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+    },
+  }),
+
+  /**
+   * One epic by id — what Live Doc reads to find its stored document, and what
+   * the epic's own screen is built from.
+   */
+  'epic.get': defineFn({
+    input: { id: 'id' },
+    output: { value: 'json?' },
+    effects: ['read:flow.Epic'],
+    agent: true,
+    handler: async (ctx, args) => ({
+      value: (await ctx.db.select('flow.Epic', { id: args.id }))[0] ?? null,
+    }),
+  }),
+
+  /**
+   * Rewriting an epic's document, as a permission key of its own — the same
+   * split `page.editContent` makes, and for the same reason.
+   */
+  'epic.editContent': defineFn({
+    input: { id: 'id' },
+    // The fields as they are actually returned, not a `value` wrapper the
+    // handler never builds: output is projected against these keys, so
+    // declaring `value` and answering `{ id, contentAttachmentId }` threw both
+    // away and handed the caller `{}`. Live Doc reads `contentAttachmentId`
+    // off this to find the stored snapshot, so an empty answer read as "never
+    // written" — and the next push started from a blank document and flattened
+    // it over the real one.
+    output: { id: 'id?', contentAttachmentId: 'id?' },
+    effects: ['read:flow.Epic'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const row = (await ctx.db.select('flow.Epic', { id: args.id }))[0]
+      return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
     },
   }),
 
@@ -455,6 +562,151 @@ export const functions: Record<string, FnSpec> = {
       if (!existing) return invalid(issue('id', 'flow.error.notFound'))
       await ctx.db.update('flow.Epic', { id: args.id }, { active: false })
       return { ok: true, id: args.id }
+    },
+  }),
+
+  /**
+   * Every page in a project, flat — the screen assembles the tree.
+   *
+   * See listPages for why the whole project comes back at once rather than a
+   * level per request.
+   */
+  'page.list': defineFn({
+    input: { projectId: 'id?', search: 'text?', includeArchived: 'bool?', limit: 'int?' },
+    output: {
+      id: 'id',
+      projectId: 'id',
+      parentPageId: 'id?',
+      title: 'text',
+      previewText: 'text?',
+      contentAttachmentId: 'id?',
+      contentUpdatedAt: 'datetime?',
+      sequence: 'int',
+      active: 'bool',
+      version: 'int',
+      updatedAt: 'datetime',
+      childCount: 'int',
+    },
+    effects: ['read:flow.Page'],
+    agent: true,
+    handler: (ctx, args) =>
+      listPages(ctx, {
+        projectId: args.projectId == null ? null : String(args.projectId),
+        search: args.search == null ? null : String(args.search),
+        includeArchived: args.includeArchived === true,
+        limit: args.limit == null ? undefined : n(args.limit),
+      }),
+  }),
+
+  'page.get': defineFn({
+    input: { id: 'id' },
+    output: { value: 'json?' },
+    effects: ['read:flow.Page', 'read:flow.Project'],
+    agent: true,
+    handler: async (ctx, args) => ({ value: await pageDetail(ctx, String(args.id)) }),
+  }),
+
+  'page.save': defineFn({
+    input: {
+      id: 'id',
+      projectId: 'id',
+      title: 'text',
+      parentPageId: 'id?',
+      sequence: 'int?',
+      expectedVersion: 'int?',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page', 'read:flow.Project'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      savePage(ctx, {
+        id: String(args.id),
+        projectId: String(args.projectId),
+        title: String(args.title),
+        parentPageId: args.parentPageId === undefined ? undefined : (args.parentPageId as string | null),
+        sequence: args.sequence == null ? null : n(args.sequence),
+        expectedVersion: args.expectedVersion == null ? undefined : n(args.expectedVersion),
+        idempotencyKey: String(args.idempotencyKey),
+      }),
+  }),
+
+  /**
+   * Re-parenting, as its own key.
+   *
+   * A hierarchy is only useful if it can be rearranged, and rearranging is a
+   * different right from writing: someone may be trusted to edit a page
+   * without being trusted to move a whole branch of the wiki.
+   */
+  'page.move': defineFn({
+    input: { id: 'id', parentPageId: 'id?', sequence: 'int?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      movePage(ctx, {
+        id: String(args.id),
+        parentPageId: (args.parentPageId as string | null) ?? null,
+        sequence: args.sequence == null ? null : n(args.sequence),
+      }),
+  }),
+
+  'page.reorder': defineFn({
+    input: { id: 'id', direction: 'text' },
+    output: { ok: 'bool', id: 'id?', moved: 'bool?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      reorderPage(ctx, {
+        id: String(args.id),
+        direction: String(args.direction) === 'up' ? 'up' : 'down',
+      }),
+  }),
+
+  'page.archive': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) => archivePage(ctx, String(args.id)),
+  }),
+
+  'page.restore': defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.Page', 'write:flow.Page'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) => restorePage(ctx, String(args.id)),
+  }),
+
+  /**
+   * Rewriting a page's document, as a permission key of its own.
+   *
+   * It grants nothing by itself — Live Doc calls it only to ask whether this
+   * caller may write, and hands back the row it returns (documents.ts). It is
+   * separate from `page.save` because writing prose and renaming a page are
+   * different rights: a reviewer may hold one without the other.
+   */
+  'page.editContent': defineFn({
+    input: { id: 'id' },
+    // The fields as they are actually returned, not a `value` wrapper the
+    // handler never builds: output is projected against these keys, so
+    // declaring `value` and answering `{ id, contentAttachmentId }` threw both
+    // away and handed the caller `{}`. Live Doc reads `contentAttachmentId`
+    // off this to find the stored snapshot, so an empty answer read as "never
+    // written" — and the next push started from a blank document and flattened
+    // it over the real one.
+    output: { id: 'id?', contentAttachmentId: 'id?' },
+    effects: ['read:flow.Page'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const row = (await ctx.db.select('flow.Page', { id: args.id }))[0]
+      return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
     },
   }),
 
@@ -583,7 +835,7 @@ export const functions: Record<string, FnSpec> = {
       path: 'json?',
       timezone: 'text?',
     },
-    output: { rows: 'json', total: 'int', nextCursor: 'text?' },
+    output: { rows: 'json', total: 'int', nextCursor: 'text?', fieldFilterTruncated: 'bool?' },
     effects: [...flowReadEffects],
     agent: true,
     handler: (ctx, args) => listIssues(ctx, args),
@@ -704,9 +956,17 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'issue.comment': defineFn({
-    input: { id: 'id', issueId: 'id', body: 'text', kind: 'text?', idempotencyKey: 'text' },
+    input: {
+      id: 'id',
+      issueId: 'id',
+      body: 'text',
+      kind: 'text?',
+      /** Users this comment is addressed to, beyond whoever already follows. */
+      mentionUserIds: 'json?',
+      idempotencyKey: 'text',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: [...commentEffects],
+    effects: [...commentEffects, 'read:user.User', 'write:mail.Mention'],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -715,6 +975,36 @@ export const functions: Record<string, FnSpec> = {
         issueId: String(args.issueId),
         body: String(args.body),
         kind: args.kind === 'note' ? 'note' : 'comment',
+        mentionUserIds: Array.isArray(args.mentionUserIds) ? args.mentionUserIds.map(String) : [],
+        idempotencyKey: String(args.idempotencyKey),
+      }),
+  }),
+
+  /**
+   * Leaves an issue's thread.
+   *
+   * A separate key from commenting, because it is the opposite act: everything
+   * else in this module hands out subscriptions, and this is the only way to
+   * give one back.
+   */
+  'issue.unfollow': defineFn({
+    input: { issueId: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', removed: 'int?', errors: 'json?' },
+    // `unfollowThread` clears the follower's per-subtype rows too, which the
+    // effect system refused until it was said out loud — which is the point of
+    // it: a capability nobody declared is one nobody reviewed.
+    effects: [
+      'read:flow.Issue',
+      'read:user.User',
+      'read:mail.Follower',
+      'write:mail.Follower',
+      'write:mail.FollowerSubtype',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      stopFollowing(ctx, {
+        issueId: String(args.issueId),
         idempotencyKey: String(args.idempotencyKey),
       }),
   }),
