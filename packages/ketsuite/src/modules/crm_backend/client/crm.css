@@ -1,91 +1,399 @@
+/*
+ * The pipeline board.
+ *
+ * Owned by this module because the board is an island: its markup is behaviour,
+ * so it lives in `client/crm-kanban-view.mjs` rather than in the kit. Every value
+ * here is a role from the public design system — `@ketvietlab/design-system`
+ * declares the palette, this file only decides which role a column head or a card
+ * figure plays.
+ */
 @layer ket.app {
   [data-ui="crm-kanban-board"] {
     display: grid;
-    grid-auto-columns: minmax(17rem, 1fr);
+    grid-auto-columns: minmax(17.5rem, 1fr);
     grid-auto-flow: column;
-    gap: var(--admin-gap-md);
+    gap: var(--kv-space-3);
     overflow-x: auto;
-    padding-block-end: var(--admin-gap);
+    padding-block-end: var(--kv-space-2);
   }
 
   [data-ui="crm-kanban-column"] {
-    min-height: 22rem;
-    padding: var(--admin-gap);
-    border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius-lg);
-    background: var(--admin-surface-subtle);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-block-size: 22rem;
+    min-inline-size: 0;
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-lg);
+    background: var(--kv-panel-bg-subtle);
   }
+
+  /* ── column head ───────────────────────────────────────────────────────── */
 
   [data-ui="crm-kanban-stage"] {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-block-end: var(--admin-gap);
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-3);
+    border-block-end: 1px solid var(--kv-panel-border);
   }
 
-  [data-ui="crm-kanban-stage"] h2 {
-    margin: 0;
-    font-size: var(--admin-size-base);
+  /*
+   * The dot says "different column", nothing more.
+   *
+   * Position, not status — a stage carries no colour of its own, so the board
+   * assigns one from the order the stages are already in. The two stages that do
+   * mean something take the colour that meaning has everywhere else.
+   */
+  [data-ui="crm-stage-dot"] {
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: var(--kv-radius-full);
+    background: var(--admin-chart-1);
   }
+  [data-ui="crm-kanban-column"][data-tone="2"] [data-ui="crm-stage-dot"] {
+    background: var(--admin-chart-4);
+  }
+  [data-ui="crm-kanban-column"][data-tone="3"] [data-ui="crm-stage-dot"] {
+    background: var(--admin-chart-3);
+  }
+  [data-ui="crm-kanban-column"][data-tone="4"] [data-ui="crm-stage-dot"] {
+    background: var(--admin-chart-5);
+  }
+  [data-ui="crm-kanban-column"][data-tone="5"] [data-ui="crm-stage-dot"] {
+    background: var(--admin-chart-6);
+  }
+  [data-ui="crm-kanban-column"][data-tone="6"] [data-ui="crm-stage-dot"] {
+    background: var(--admin-chart-2);
+  }
+  [data-ui="crm-kanban-column"][data-tone="won"] [data-ui="crm-stage-dot"] {
+    background: var(--kv-positive);
+  }
+  [data-ui="crm-kanban-column"][data-tone="lost"] [data-ui="crm-stage-dot"] {
+    background: var(--kv-danger);
+  }
+
+  [data-ui="crm-stage-name"] {
+    overflow: hidden;
+    margin: 0;
+    color: var(--kv-text-main);
+    font-size: var(--kv-text-md);
+    font-weight: var(--kv-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui="crm-stage-count"],
+  [data-ui="crm-stage-weight"] {
+    flex: none;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  /* The two read as one figure — "5 · 25%" — so the separator is drawn, not typed. */
+  [data-ui="crm-stage-weight"]::before {
+    margin-inline-end: var(--kv-space-1);
+    content: "·";
+  }
+
+  /*
+   * The column's money, pushed to the end of the row.
+   *
+   * `margin-inline-start: auto` rather than `space-between`: the name, the count
+   * and the share belong together on the left however many of them are present,
+   * and a column with no money in it must not leave the menu floating in the middle.
+   */
+  [data-ui="crm-stage-value"] {
+    flex: none;
+    margin-inline-start: auto;
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  [data-ui="crm-stage-menu"] {
+    position: relative;
+    flex: none;
+    margin-inline-start: auto;
+  }
+  [data-ui="crm-stage-value"] + [data-ui="crm-stage-menu"] {
+    margin-inline-start: 0;
+  }
+  [data-ui="crm-stage-menu-open"],
+  [data-ui="crm-card-move-open"] {
+    display: grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border-radius: var(--kv-radius-sm);
+    color: var(--kv-text-muted);
+    cursor: pointer;
+    list-style: none;
+  }
+  [data-ui="crm-stage-menu-open"]::-webkit-details-marker,
+  [data-ui="crm-card-move-open"]::-webkit-details-marker {
+    display: none;
+  }
+  [data-ui="crm-stage-menu-open"]:hover,
+  [data-ui="crm-card-move-open"]:hover {
+    background: var(--kv-interactive-hover);
+    color: var(--kv-text-main);
+  }
+  [data-ui="crm-stage-menu-open"] svg,
+  [data-ui="crm-card-move-open"] svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+  [data-ui="crm-stage-menu-content"] {
+    position: absolute;
+    z-index: var(--kv-z-dropdown);
+    display: grid;
+    inset-block-start: calc(100% + var(--kv-space-1));
+    inset-inline-end: 0;
+    min-inline-size: 12rem;
+    padding: var(--kv-space-1);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-popover);
+  }
+  [data-ui="crm-stage-menu-item"] {
+    padding: var(--kv-space-1-5) var(--kv-space-2);
+    border-radius: var(--kv-radius-sm);
+    color: var(--kv-text-main);
+    font-size: var(--kv-text-md);
+    text-decoration: none;
+  }
+  [data-ui="crm-stage-menu-item"]:hover {
+    background: var(--kv-interactive-hover);
+  }
+
+  /* ── cards ─────────────────────────────────────────────────────────────── */
+
   [data-ui="crm-kanban-cards"] {
     display: grid;
-    gap: var(--admin-gap);
+    align-content: start;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-2);
   }
+
   [data-ui="crm-kanban-card"] {
     display: grid;
-    gap: var(--admin-gap-sm);
-    padding: var(--admin-gap);
-    border: 1px solid var(--admin-divider-subtle);
-    border-radius: var(--admin-radius);
-    background: var(--admin-card);
-    box-shadow: var(--admin-shadow-card);
+    gap: var(--kv-space-1-5);
+    padding: var(--kv-space-3);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-xs);
   }
-  [data-ui="crm-kanban-card"] h3,
-  [data-ui="crm-kanban-card"] p {
-    margin: 0;
+  [data-ui="crm-kanban-card"]:hover {
+    border-color: var(--kv-border-strong);
   }
-  [data-ui="crm-kanban-card"] h3 {
-    font-size: var(--admin-size-base);
+  [data-ui="crm-kanban-card"][data-busy="true"] {
+    opacity: 0.6;
   }
+
   /* The priority is a stripe rather than a word: a column is scanned, not read. */
   [data-ui="crm-kanban-card"][data-priority="2"] {
-    border-inline-start: 3px solid var(--admin-accent);
+    border-inline-start: 3px solid var(--kv-warning);
   }
   [data-ui="crm-kanban-card"][data-priority="3"] {
-    border-inline-start: 3px solid var(--admin-danger);
+    border-inline-start: 3px solid var(--kv-danger);
   }
-  [data-ui="crm-kanban-party"] {
-    color: var(--admin-ink-muted);
+
+  [data-ui="crm-card-title"] {
+    margin: 0;
+    font-size: var(--kv-text-md);
+    font-weight: var(--kv-weight-semibold);
+    line-height: var(--kv-leading-tight);
   }
-  [data-ui="crm-kanban-figures"] {
+  [data-ui="crm-card-title"] a {
+    color: var(--kv-text-main);
+    text-decoration: none;
+  }
+  [data-ui="crm-card-title"] a:hover {
+    text-decoration: underline;
+  }
+
+  [data-ui="crm-card-party"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kv-space-1);
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+  }
+  [data-ui="crm-card-contact"]::before {
+    margin-inline-end: var(--kv-space-1);
+    content: "·";
+  }
+
+  [data-ui="crm-card-tags"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--kv-space-1);
+    margin: 0;
+  }
+  [data-ui="crm-card-tag"] {
+    padding: 0.0625rem var(--kv-space-1-5);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-sm);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-xs);
+    line-height: 1.5;
+  }
+
+  [data-ui="crm-card-figures"] {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: var(--admin-gap-sm);
+    gap: var(--kv-space-2);
+    margin: 0;
   }
-  [data-ui="crm-kanban-figures"] small {
-    color: var(--admin-ink-muted);
+  [data-ui="crm-card-amount"] {
+    color: var(--kv-text-main);
+    font-size: var(--kv-text-md);
+    font-weight: var(--kv-weight-semibold);
+    font-variant-numeric: tabular-nums;
   }
-  /*
-   * The move control sits on one line with the card, not above it: as a stacked
-   * label-plus-select-plus-button it took more room than everything it was
-   * attached to and turned the board into a column of forms.
-   */
-  [data-ui="crm-kanban-move"] {
+  [data-ui="crm-card-odds"] {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-ui="crm-card-foot"] {
     display: flex;
     align-items: center;
-    gap: var(--admin-gap-xs);
+    gap: var(--kv-space-1-5);
+    padding-block-start: var(--kv-space-1-5);
+    border-block-start: 1px solid var(--kv-panel-border);
   }
-  [data-ui="crm-kanban-move"] select {
+
+  /*
+   * The next thing owed on this case, and when.
+   *
+   * `min-inline-size: 0` with the ellipsis on the summary: the date is the half
+   * that decides anything, so a long summary loses its tail rather than pushing
+   * the date off the card.
+   */
+  [data-ui="crm-card-activity"] {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-inline-size: 0;
+    gap: var(--kv-space-1);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+  }
+  [data-ui="crm-card-activity"] svg {
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+  [data-ui="crm-card-activity-summary"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="crm-card-activity-due"] {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  [data-ui="crm-card-activity"][data-overdue="true"] {
+    color: var(--kv-danger);
+  }
+  [data-ui="crm-card-activity"][data-empty="true"] {
+    min-block-size: 1rem;
+  }
+
+  [data-ui="crm-card-owner"] {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border-radius: var(--kv-radius-full);
+    background: var(--kv-accent-subtle);
+    color: var(--kv-accent);
+    font-size: var(--kv-text-xs);
+    font-weight: var(--kv-weight-semibold);
+  }
+  [data-ui="crm-card-owner"][data-assigned="false"] {
+    background: var(--kv-interactive-disabled);
+    color: var(--kv-text-disabled);
+  }
+
+  /* The move form stays, folded away. See the note in crm-kanban-view.mjs. */
+  [data-ui="crm-card-move"] {
+    position: relative;
+    flex: none;
+  }
+  [data-ui="crm-card-move-form"] {
+    position: absolute;
+    z-index: var(--kv-z-dropdown);
+    display: flex;
+    align-items: center;
+    inset-block-end: calc(100% + var(--kv-space-1));
+    inset-inline-end: 0;
+    gap: var(--kv-space-1);
+    min-inline-size: 14rem;
+    padding: var(--kv-space-2);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-popover);
+  }
+  [data-ui="crm-card-move-form"] select {
     flex: 1 1 auto;
     min-inline-size: 0;
   }
-  [data-ui="crm-kanban-error"] {
-    margin-block-end: var(--admin-gap);
-    color: var(--admin-danger);
+
+  /* ── column foot and states ────────────────────────────────────────────── */
+
+  [data-ui="crm-kanban-add"] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kv-space-1);
+    padding: var(--kv-space-2);
+    border-block-start: 1px solid var(--kv-panel-border);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    text-decoration: none;
   }
+  [data-ui="crm-kanban-add"]:hover {
+    background: var(--kv-interactive-hover);
+    color: var(--kv-accent);
+  }
+  [data-ui="crm-kanban-add"] svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  [data-ui="crm-kanban-more"] {
+    padding: var(--kv-space-1-5);
+    color: var(--kv-accent);
+    font-size: var(--kv-text-sm);
+    text-align: center;
+    text-decoration: none;
+  }
+  [data-ui="crm-kanban-more"]:hover {
+    text-decoration: underline;
+  }
+
+  [data-ui="crm-kanban-error"] {
+    margin-block-end: var(--kv-space-3);
+    color: var(--kv-danger);
+  }
+
   [data-ui="crm-kanban-empty"] {
-    color: var(--admin-ink-muted);
+    margin: 0;
+    padding: var(--kv-space-4) var(--kv-space-2);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    text-align: center;
   }
 
   @media (max-width: 47.9375rem) {

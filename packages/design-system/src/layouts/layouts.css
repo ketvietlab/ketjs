@@ -175,6 +175,39 @@
     background: var(--kv-panel-bg);
   }
 
+  /* A metric with a glyph puts it in a tile on the left and lets the figure keep
+     the rest of the row, so a grid of four stays scannable by position. */
+  :where([data-kv-design-system]) [data-ui="metric"]:has(> [data-ui="metric-icon"]) {
+    grid-template-columns: auto 1fr;
+    column-gap: var(--kv-space-3);
+  }
+
+  /* The figures are pinned to the text column: auto-placement would wrap them
+     back under the tile as soon as a card carried a third line. */
+  :where([data-kv-design-system])
+    [data-ui="metric"]:has(> [data-ui="metric-icon"])
+    > :not([data-ui="metric-icon"]) {
+    grid-column: 2;
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric-icon"] {
+    display: grid;
+    grid-row: 1 / 3;
+    grid-column: 1;
+    align-self: center;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-accent-subtle);
+    color: var(--kv-accent);
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric-icon"] svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
   :where([data-kv-design-system]) [data-ui="metric-label"] {
     margin-bottom: 0;
     color: var(--kv-text-secondary);

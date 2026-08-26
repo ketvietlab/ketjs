@@ -145,9 +145,14 @@ to create was refused.
 
 ## Backend screens
 
-- **Pipeline** — a kanban board, one column per stage, with drag-and-drop and a select as the
-  no-JavaScript fallback. Cards carry the amount, the owner and a priority stripe; a column that holds
-  more than it shows links to the same stage in the list.
+- **Pipeline** — a kanban board, one column per stage, under four figures counted over the same
+  filter the columns are: open records, total value, weighted value and overdue activities. Filtering
+  is the shared list chrome — search, team, "mine", and a switch to the same records as a list — so
+  the header and the cards always agree. A column head carries its count, the share of its money the
+  forecast counts, and that money; its menu creates a record in that stage or opens the stage in the
+  list. A card carries the party, its tags, the amount and probability, the next activity with its due
+  date in red when it is late, and the owner. Moving is drag-and-drop, with a per-card disclosure
+  holding the stage select and a real POST as the no-JavaScript fallback.
 - **Cases** — the shared list chrome: search, filters, grouping, saved state in the URL.
 - **Record workspace** — duplicates, the record form, and the commands that were previously reachable
   only over the API: move, assign, merge, and marking a case lost with a reason. Tabs for sales
@@ -156,6 +161,14 @@ to create was refused.
 - **Leaderboard** — standings, recalculated on request.
 - **Configuration** — teams, team members, stages, tags, assignment rules and scoring rules; each row
   can be edited and archived, not only created.
+
+The board's figures come from `crm.pipeline.summary`, which takes the screen's filters and answers
+per-stage counts and amounts plus the four totals. Every column keeps its own figures, including Won
+and Lost, because that is what a column head states; the four above the board count only the stages
+that are still open, so winning a deal does not make the pipeline total climb. Counts come from SQL and are exact; the amounts
+need `crm.SalesDetail` for every matching case, so past five thousand of them the function reports
+`partial` and the screen drops the two money cards rather than showing the total of a subset. A role
+that predates the function still gets the board — the header simply has nothing to state.
 
 Relational fields — partner, owner, team, stage, tags, merge source, quotation product — are pickers
 that search server-side and, where it makes sense, create the missing record inline. Fields over a

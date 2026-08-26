@@ -6,6 +6,7 @@ import { formatMoney } from '../../ui/index.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { choices, adminPage, inLocale, optional, timezoneOf } from '../backend/screen.ts'
+import { withParam } from '../backend/paging.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { RelationOption } from '../backend/relation-select.ts'
 import { receiveAttachment } from '../storage/routes.ts'
@@ -29,7 +30,7 @@ import {
   pipelineScreen,
   plannerScreen,
 } from './screens.tsx'
-import type { CaseDetailControls, ConfigurationTab } from './screens.tsx'
+import type { CaseDetailControls, ConfigurationTab, PipelineFigure } from './screens.tsx'
 import {
   keepForListSearch,
   LIST_PAGE_SIZE,
@@ -105,7 +106,13 @@ const options = (rows: readonly AnyRow[]): RelationOption[] =>
 const caseFields = (
   _: Translator,
   row: AnyRow = {},
-  controls: { partner?: JSXChild; team?: JSXChild; assignee?: JSXChild; tags?: JSXChild } = {},
+  controls: {
+    partner?: JSXChild
+    team?: JSXChild
+    assignee?: JSXChild
+    tags?: JSXChild
+    stage?: JSXChild
+  } = {},
 ): FormField[] => [
   {
     name: 'name',
@@ -123,6 +130,15 @@ const caseFields = (
     required: true,
     options: ['lead', 'opportunity'].map((value) => ({ value, label: _(`crm.kind.${value}`) })),
   },
+  /*
+   * Only where creating one. On a record that already exists the stage is moved
+   * by the action beside the form, which records the move on the timeline and
+   * refuses a stale version; a second field quietly writing the same column would
+   * be a change nobody could later account for.
+   */
+  ...(controls.stage
+    ? [{ name: 'stageId', label: _('crm_backend.field.stage'), control: controls.stage }]
+    : []),
   { name: 'partnerId', label: _('crm_backend.field.partner'), control: controls.partner },
   { name: 'contactName', label: _('crm_backend.field.contactName'), value: String(row.contactName ?? '') },
   { name: 'email', label: _('crm_backend.field.email'), type: 'email', value: String(row.email ?? '') },
@@ -172,9 +188,11 @@ const caseControls = async (
   data: References,
   prefix: string,
   row: AnyRow = {},
+  /** The stage picker belongs to the create form only — see the note in `caseFields`. */
+  wants: { stage?: boolean } = {},
 ) => {
   const tags = ((row.tags as AnyRow[] | undefined) ?? []).map((tag) => String(tag.id))
-  const [partner, team, assignee, tagPicker] = await Promise.all([
+  const [partner, team, assignee, tagPicker, stage] = await Promise.all([
     partnerControl(ctx, url, req, _, {
       id: `${prefix}-partner`,
       value: row.partnerId ? String(row.partnerId) : null,
@@ -195,8 +213,19 @@ const caseControls = async (
       values: tags,
       tags: options(data.tags),
     }),
+    // The board's per-column create arrives with a stage in the query, and
+    // without this control the form silently dropped it into the first stage —
+    // an affordance that pointed at a column and then ignored which one.
+    wants.stage === false
+      ? Promise.resolve(undefined)
+      : stageControl(ctx, url, req, _, {
+          id: `${prefix}-stage`,
+          value: row.stageId ? String(row.stageId) : null,
+          stages: options(data.config.stages ?? []),
+          kind: row.kind ? String(row.kind) : null,
+        }),
   ])
-  return { partner, team, assignee, tags: tagPicker }
+  return { partner, team, assignee, tags: tagPicker, stage }
 }
 
 const saveInput = (id: string, form: Record<string, string>, kind = form.kind ?? 'lead') => ({
@@ -209,6 +238,7 @@ const saveInput = (id: string, form: Record<string, string>, kind = form.kind ??
   ...optional(form, 'phone'),
   ...optional(form, 'teamId'),
   ...optional(form, 'assigneeUserId'),
+  ...optional(form, 'stageId'),
   ...optional(form, 'description'),
   ...optional(form, 'expectedClosing'),
   priority: form.priority ?? '1',
@@ -245,6 +275,126 @@ const pager = (url: URL, state: ListState, rows: number, total: number) => {
 /** How many cards one pipeline column shows before it offers the rest. */
 const PIPELINE_COLUMN = 40
 
+/**
+ * The board's own filters, carried through the search form so typing a query
+ * does not silently drop the team or the "mine" toggle the reader had set.
+ */
+const PIPELINE_PARAMS = ['teamId', 'mine', 'lang'] as const
+
+const keepForPipeline = (url: URL): Record<string, string> =>
+  Object.fromEntries(
+    PIPELINE_PARAMS.map((key) => [key, url.searchParams.get(key) ?? '']).filter(([, value]) => value),
+  )
+
+/**
+ * Day and month first, which is how a due date is read here.
+ *
+ * A card carries a date to answer "is this late", and an ISO string answers it
+ * a beat slower than a formatted one does. The board never parses this back —
+ * `overdue` is decided on the server, where the company's today is known.
+ */
+const dayLabel = (locale: string, value: unknown): string => {
+  const raw = String(value ?? '')
+  if (!raw) return ''
+  const at = new Date(`${raw.slice(0, 10)}T00:00:00.000Z`)
+  if (Number.isNaN(at.getTime())) return raw
+  return new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(at)
+}
+
+/**
+ * The header figures, or nothing at all.
+ *
+ * `crm.pipeline.summary` is a second function, so a role granted the board's
+ * `crm.case.list` before this screen existed has not been granted it. Rather
+ * than turn that into a 500 on the only screen the CRM menu opens with, the
+ * board renders and the header simply has nothing to state. Any other failure is
+ * still a failure.
+ */
+const pipelineSummaryOf = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  filters: Record<string, unknown>,
+): Promise<AnyRow | null> => {
+  try {
+    return (await ctx.call('crm.pipeline.summary', filters, url, req)) as AnyRow
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'E_FN_NOT_PERMITTED') return null
+    throw error
+  }
+}
+
+/**
+ * Six stage colours, assigned by position rather than stored.
+ *
+ * A dot at the head of a column says "this is a different column" at a glance,
+ * which is the whole job; it is not a status, so it is not worth a field on the
+ * stage that somebody then has to keep meaningful. A stage that ends the case
+ * takes the colour its outcome already has everywhere else in the product.
+ */
+/** The record kind a column can actually hold, and therefore the one it offers to create. */
+const kindFor = (stage: AnyRow): 'lead' | 'opportunity' =>
+  Array.isArray(stage.allowedKinds) && (stage.allowedKinds as unknown[]).includes('lead')
+    ? 'lead'
+    : 'opportunity'
+
+const stageTone = (stage: AnyRow, index: number): string =>
+  stage.terminalState === 'won' ? 'won' : stage.terminalState === 'lost' ? 'lost' : String((index % 6) + 1)
+
+/**
+ * The four figures above the board.
+ *
+ * Every one of them is counted over the same filter the columns are counted
+ * over, so switching to "mine" moves the header and the cards together. Empty
+ * when the caller may not read the summary; the two amounts are dropped when the
+ * board is larger than one summary pass, because a total that is quietly the
+ * total of the first five thousand cases is worse than no total.
+ */
+const pipelineFigures = (
+  _: Translator,
+  summary: AnyRow | null,
+  money: (value: unknown) => string,
+): PipelineFigure[] => {
+  if (!summary) return []
+  const partial = summary.partial === true
+  return [
+    {
+      id: 'open',
+      label: _('crm_backend.metric.open'),
+      value: String(summary.openCount ?? 0),
+      icon: 'users',
+    },
+    ...(partial
+      ? []
+      : [
+          {
+            id: 'revenue',
+            label: _('crm_backend.metric.revenue'),
+            value: money(summary.expectedRevenue),
+            icon: 'banknote',
+          },
+          {
+            id: 'weighted',
+            label: _('crm_backend.metric.weighted'),
+            value: money(summary.weightedRevenue),
+            detail: _('crm_backend.metric.weightedHint'),
+            icon: 'wallet',
+          },
+        ]),
+    {
+      id: 'overdue',
+      label: _('crm_backend.metric.overdue'),
+      value: String(summary.overdueActivityCount ?? 0),
+      icon: 'alert-triangle',
+    },
+  ]
+}
+
 const configurationTabOf = (url: URL): ConfigurationTab => {
   const asked = url.searchParams.get('tab') ?? ''
   return (CONFIGURATION_TABS as readonly string[]).includes(asked) ? (asked as ConfigurationTab) : 'teams'
@@ -258,59 +408,113 @@ export const routes: Record<string, RouteEntry> = {
     (ctx): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
       const config = await configuration(ctx, url, req)
       const stages = (config.stages ?? []).filter(
         (item) =>
           Array.isArray(item.allowedKinds) &&
           (item.allowedKinds as unknown[]).some((kind) => kind === 'lead' || kind === 'opportunity'),
       )
-      const search = url.searchParams.get('q') ?? undefined
-      const teamId = url.searchParams.get('teamId') ?? undefined
-      const pages = await Promise.all(
-        stages.map(async (stage) => {
-          const result = (await ctx.call(
-            'crm.case.list',
-            {
-              stageId: stage.id,
-              ...(search ? { search } : {}),
-              ...(teamId ? { teamId } : {}),
-              limit: PIPELINE_COLUMN,
-            },
-            url,
-            req,
-          )) as AnyRow
-          const total = Number(result.total ?? 0)
-          const rows = (result.rows as AnyRow[]) ?? []
-          // The board has always rendered "shown / total" and a "load more"
-          // control the server never gave a target, so a column past its page
-          // size simply hid the rest. The link opens the same stage in the list.
-          const more = new URLSearchParams({ 'f.stageId': String(stage.id) })
-          if (search) more.set('q', search)
-          return {
-            stage: {
-              ...stage,
-              total,
-              loadMoreHref: rows.length < total ? `/admin/crm/cases?${more.toString()}` : null,
-            },
-            rows,
-          }
-        }),
+      const teams = config.teams ?? []
+      const search = url.searchParams.get('q')?.trim() || undefined
+      const teamId = url.searchParams.get('teamId') || undefined
+      const mine = bool(url.searchParams.get('mine') ?? undefined)
+      const filters = {
+        ...(search ? { search } : {}),
+        ...(teamId ? { teamId } : {}),
+        ...(mine ? { mine: true } : {}),
+      }
+      const [summary, pages] = await Promise.all([
+        pipelineSummaryOf(ctx, url, req, filters),
+        Promise.all(
+          stages.map(async (stage) => {
+            const result = (await ctx.call(
+              'crm.case.list',
+              { stageId: stage.id, ...filters, limit: PIPELINE_COLUMN },
+              url,
+              req,
+            )) as AnyRow
+            return { stage, total: Number(result.total ?? 0), rows: (result.rows as AnyRow[]) ?? [] }
+          }),
+        ),
+      ])
+      const figures = new Map(
+        (((summary?.stages as AnyRow[]) ?? []) as AnyRow[]).map((row) => [String(row.id), row]),
       )
-      const _ = ctx.translate(ctx.localeOf(url, req))
+      const money = (value: unknown) => formatMoney(_, value)
       const board = await ctx.joint(url, req, 'crm_backend:screen.pipeline', {
-        lang: ctx.localeOf(url, req),
+        lang,
         data: JSON.stringify({
           // The amount is formatted here, where the translator and the company
           // currency both are; the board only prints what it is handed.
           rows: pages.flatMap((item) =>
-            item.rows.map((row) => ({
-              ...row,
-              revenue: Number(row.expectedRevenue ?? 0)
-                ? formatMoney(_, row.expectedRevenue, row.currency)
-                : null,
-            })),
+            item.rows.map((row) => {
+              const activity = row.nextActivity as AnyRow | null
+              return {
+                id: row.id,
+                name: row.name,
+                kind: row.kind,
+                stageId: row.stageId,
+                priority: String(row.priority ?? '1'),
+                version: row.version,
+                party: row.partnerName ?? row.contactName ?? row.email ?? row.phone ?? null,
+                contactName:
+                  row.partnerName && row.contactName && row.partnerName !== row.contactName
+                    ? row.contactName
+                    : null,
+                revenue: Number(row.expectedRevenue ?? 0) ? money(row.expectedRevenue) : null,
+                probability: Number(row.probability ?? 0) ? `${Math.round(Number(row.probability))}%` : null,
+                assigneeName: row.assigneeName ?? null,
+                tags: ((row.tags as AnyRow[]) ?? []).map((tag) => String(tag.name)),
+                activity: activity
+                  ? {
+                      summary: String(activity.summary ?? ''),
+                      due: dayLabel(lang, activity.dueDate),
+                      overdue: activity.overdue === true,
+                    }
+                  : null,
+              }
+            }),
           ),
-          stages: pages.map((item) => item.stage),
+          stages: stages.map((stage, index) => {
+            const figure = figures.get(String(stage.id))
+            const expected = Number(figure?.expectedRevenue ?? 0)
+            const weighted = Number(figure?.weightedRevenue ?? 0)
+            const shown = pages.find((item) => item.stage.id === stage.id)
+            const more = new URLSearchParams({ 'f.stageId': String(stage.id) })
+            if (search) more.set('q', search)
+            return {
+              id: stage.id,
+              name: stage.name,
+              tone: stageTone(stage, index),
+              total: figure ? Number(figure.count ?? 0) : (shown?.total ?? 0),
+              // Withheld rather than reported short: `partial` means the board is
+              // larger than the summary reads in one pass, so the amounts it did
+              // add up are the amounts of a subset.
+              value: figure && summary?.partial !== true && expected ? money(expected) : null,
+              // The share of the column's money the forecast actually counts.
+              // It is an aggregate of the cases standing there, not a property of
+              // the stage — which is why it disappears when there is no money in it.
+              weight:
+                figure && summary?.partial !== true && expected
+                  ? `${Math.round((weighted / expected) * 100)}%`
+                  : null,
+              // The board has always rendered "shown / total" and a "load more"
+              // control the server never gave a target, so a column past its page
+              // size simply hid the rest. The link opens the same stage in the list.
+              loadMoreHref: `/admin/crm/cases?${more.toString()}`,
+              // A stage that only accepts opportunities gets an opportunity: the
+              // column offered "new lead" on every stage and the save was then
+              // refused for the kind, which is an affordance that points at a
+              // column and then argues with it.
+              createHref: inLocale(
+                url,
+                `/admin/crm/cases?stageId=${encodeURIComponent(String(stage.id))}&kind=${kindFor(stage)}`,
+              ),
+              createLabel: _(`crm_backend.kanban.create.${kindFor(stage)}`),
+            }
+          }),
           // The board carries its own wording so the client file stops holding a
           // second vocabulary the translation catalogue never sees.
           labels: {
@@ -322,23 +526,96 @@ export const routes: Record<string, RouteEntry> = {
             unassigned: _('crm_backend.kanban.unassigned'),
             loadMore: _('crm_backend.kanban.loadMore'),
             moveShort: _('crm_backend.kanban.moveShort'),
+
+            weight: _('crm_backend.kanban.weight'),
+            columnMenu: _('crm_backend.kanban.columnMenu'),
+            overdue: _('crm_backend.activity.overdue'),
           },
         }),
       })
-      const teams = config.teams ?? []
       return adminPage(ctx, url, req, {
         title: 'crm_backend.pipeline.title',
-        body: (_, frame) =>
-          pipelineScreen(_, frame, board, [
-            { name: 'q', label: _('crm_backend.search.cases'), value: search ?? '' },
-            {
-              name: 'teamId',
-              label: _('crm_backend.field.team'),
-              type: 'select',
-              value: teamId ?? '',
-              options: choices(teams, true),
+        body: (_, frame) => {
+          frame.chrome = {
+            create: { label: _('crm_backend.action.createLead'), path: inLocale(url, '/admin/crm/cases') },
+            search: {
+              name: 'q',
+              value: search ?? '',
+              placeholder: _('crm_backend.search.pipeline'),
+              keep: keepForPipeline(url),
+              facets: [
+                ...(teamId
+                  ? [
+                      {
+                        label: String(teams.find((team) => String(team.id) === teamId)?.name ?? teamId),
+                        without: withParam(url, 'teamId', null),
+                      },
+                    ]
+                  : []),
+                ...(mine
+                  ? [{ label: _('crm_backend.filter.mine'), without: withParam(url, 'mine', null) }]
+                  : []),
+              ],
+              menus: [
+                {
+                  id: 'team',
+                  label: teamId
+                    ? String(teams.find((team) => String(team.id) === teamId)?.name ?? teamId)
+                    : _('crm_backend.filter.allTeams'),
+                  items: [
+                    {
+                      id: 'all',
+                      label: _('crm_backend.filter.allTeams'),
+                      path: withParam(url, 'teamId', null),
+                      active: !teamId,
+                    },
+                    ...teams.map((team) => ({
+                      id: String(team.id),
+                      label: String(team.name ?? team.id),
+                      path: withParam(url, 'teamId', String(team.id)),
+                      active: teamId === String(team.id),
+                    })),
+                  ],
+                },
+                {
+                  id: 'scope',
+                  label: _('crm_backend.action.filter'),
+                  items: [
+                    {
+                      id: 'everyone',
+                      label: _('crm_backend.filter.everyone'),
+                      path: withParam(url, 'mine', null),
+                      active: !mine,
+                    },
+                    {
+                      id: 'mine',
+                      label: _('crm_backend.filter.mine'),
+                      path: withParam(url, 'mine', '1'),
+                      active: mine,
+                    },
+                  ],
+                },
+              ],
             },
-          ]),
+            views: [
+              {
+                id: 'kanban',
+                label: _('backend.chrome.view.kanban'),
+                icon: 'layout-grid',
+                path: inLocale(url, '/admin/crm/pipeline'),
+                active: true,
+              },
+              {
+                id: 'list',
+                label: _('backend.chrome.view.list'),
+                icon: 'list',
+                path: inLocale(url, '/admin/crm/cases'),
+                active: false,
+              },
+            ],
+          }
+          return pipelineScreen(_, frame, board, pipelineFigures(_, summary, money))
+        },
       })
     },
 
@@ -380,7 +657,15 @@ export const routes: Record<string, RouteEntry> = {
         errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await references(ctx, url, req)
-      const controls = await caseControls(ctx, url, req, _, data, 'crm-create')
+      // `?stageId=` and `?kind=` are how the board's per-column create names the
+      // column it was pressed in, and the only kind that column can hold.
+      const askedStage = url.searchParams.get('stageId')
+      const askedKind = url.searchParams.get('kind')
+      const preset: AnyRow = {
+        ...(askedStage ? { stageId: askedStage } : {}),
+        ...(askedKind === 'lead' || askedKind === 'opportunity' ? { kind: askedKind } : {}),
+      }
+      const controls = await caseControls(ctx, url, req, _, data, 'crm-create', preset)
       const spec = caseListSearch(table(ctx.manifest, 'crm.Case'))
       const parsed = parseListState(spec, url)
       const state = parsed.state
@@ -421,7 +706,7 @@ export const routes: Record<string, RouteEntry> = {
             _,
             frame,
             grouped ? [] : ((result.rows as AnyRow[]) ?? []),
-            caseFields(_, {}, controls),
+            caseFields(_, preset, controls),
             errors,
             groups,
           )
@@ -568,7 +853,9 @@ export const routes: Record<string, RouteEntry> = {
             >)
           : Promise.resolve([] as AnyRow[]),
       ])
-      const fieldControls = await caseControls(ctx, url, req, _, data, 'crm-case', row)
+      const fieldControls = await caseControls(ctx, url, req, _, data, 'crm-case', row, {
+        stage: false,
+      })
       const controls: CaseDetailControls = {
         stage: await stageControl(ctx, url, req, _, {
           id: 'crm-case-move-stage',

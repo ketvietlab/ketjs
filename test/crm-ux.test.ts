@@ -726,3 +726,141 @@ test('crm sale: a quotation is written with the line the form asked for', async 
   assert.equal(empty.ok, false)
   assert.equal((empty.errors as Row[])[0]?.code, 'crm_sale.error.productRequired')
 })
+
+test('crm pipeline: the header counts the board it is standing over, not the whole board', async (t) => {
+  const { app, call } = await boot(t)
+  const save = (id: string, name: string, revenue: string, probability: string) =>
+    call('crm.case.save', {
+      id,
+      kind: 'opportunity',
+      name,
+      partnerId: 'customer',
+      stageId: 'crm-stage-qualified',
+      expectedRevenue: revenue,
+      probability,
+      idempotencyKey: `pipeline-${id}`.padEnd(16, '0'),
+    })
+  await save('open-one', 'Open one', '100', '25')
+  await save('open-two', 'Open two', '200', '50')
+  await save('closing-deal', 'Closing deal', '400', '100')
+
+  const before = await call<Row>('crm.pipeline.summary', {})
+  assert.equal(before.openCount, 3)
+  assert.equal(Number(before.expectedRevenue), 700)
+  // 100×25% + 200×50% + 400×100% — a probability is a percentage, not a factor.
+  assert.equal(Number(before.weightedRevenue), 525)
+
+  const held = await call<Row>('crm.case.get', { id: 'closing-deal' })
+  const won = await call<Row>('crm.case.markWon', {
+    id: 'closing-deal',
+    expectedVersion: held.version,
+    idempotencyKey: 'pipeline-won-0001',
+  })
+  assert.equal(won.ok, true)
+
+  // Winning a deal takes it out of the header and leaves it in its column: a
+  // pipeline total that climbs every time something closes measures nothing.
+  const after = await call<Row>('crm.pipeline.summary', {})
+  assert.equal(after.openCount, 2)
+  assert.equal(Number(after.expectedRevenue), 300)
+  assert.equal(Number(after.weightedRevenue), 125)
+  const wonColumn = (after.stages as Row[]).find((stage) => String(stage.id).endsWith('crm-stage-won'))
+  assert.equal(Number(wonColumn?.count), 1, 'the Won column still states its own count')
+  assert.equal(Number(wonColumn?.expectedRevenue), 400)
+
+  // And the filters the board runs are the filters the header runs.
+  assert.equal((await call<Row>('crm.pipeline.summary', { search: 'Open one' })).openCount, 1)
+  assert.equal((await call<Row>('crm.pipeline.summary', { mine: true })).openCount, 0)
+
+  const page = await app.client.get('/admin/crm/pipeline?lang=en')
+  const html = await page.text()
+  assert.equal(page.status, 200)
+  assert.match(html, /data-ui="metric-icon"/, 'the figures render as metric cards')
+  assert.match(html, /Weighted value/)
+  // The filters are the shared list chrome, not a form of their own above the board.
+  assert.match(html, /data-ui="chrome-search-input"/)
+  assert.match(html, /data-ui="view-kind"[^>]*data-kind="list"/)
+})
+
+test('crm pipeline: a column offers only the record kind that column can hold', async (t) => {
+  const { app, call } = await boot(t)
+  const board = await (await app.client.get('/admin/crm/pipeline?lang=en')).text()
+  // `crm-stage-proposition` accepts opportunities only, so its column may not
+  // offer a lead — the save would be refused for the kind it just asked for.
+  assert.match(board, /crm-stage-proposition&amp;kind=opportunity/)
+  assert.match(board, /crm-stage-new&amp;kind=lead/)
+  assert.doesNotMatch(board, /crm-stage-proposition&amp;kind=lead/)
+
+  // And the form the column points at arrives with that stage already chosen.
+  const create = await app.client.get(
+    '/admin/crm/cases?stageId=crm-stage-proposition&kind=opportunity&lang=en',
+  )
+  const html = await create.text()
+  assert.match(html, /name="stageId"[^>]*value="crm-stage-proposition"/)
+
+  const made = await app.client.post(
+    '/admin/crm/cases?lang=en',
+    new URLSearchParams({
+      name: 'Straight into proposition',
+      kind: 'opportunity',
+      stageId: 'crm-stage-proposition',
+      priority: '1',
+    }),
+    post,
+  )
+  assert.equal(made.status, 303)
+  const rows = await app.client.call<{ rows: Row[] }>('crm.case.list', { search: 'Straight into' })
+  assert.equal(rows.value.rows[0]?.stageId, 'crm-stage-proposition')
+
+  // The stage picker belongs to the create form only. On a record that exists the
+  // stage moves through the action that records the move and checks the version.
+  await call('crm.case.save', {
+    id: 'held-record',
+    kind: 'opportunity',
+    name: 'Held record',
+    partnerId: 'customer',
+    idempotencyKey: 'held-record-0001',
+  })
+  const detail = await app.client.get('/admin/crm/cases/held-record?lang=en')
+  assert.equal(detail.status, 200)
+  const detailHtml = await detail.text()
+  assert.match(detailHtml, /name="action" value="move"/, 'the move action is still the way')
+  // One `stageId` on the page, and it belongs to that action. A second one in the
+  // record form would write the same column without recording the move.
+  assert.equal(detailHtml.match(/name="stageId"/g)?.length, 1)
+})
+
+test('crm: a pipeline card carries its tags and the next thing owed on it', async (t) => {
+  const { app, call } = await boot(t)
+  await call('crm.tag.save', { id: 'tag-gift', name: 'Gift' })
+  await call('crm.case.save', {
+    id: 'carded',
+    kind: 'opportunity',
+    name: 'Carded opportunity',
+    partnerId: 'customer',
+    tagIds: ['tag-gift'],
+    expectedRevenue: '90',
+    probability: '40',
+    idempotencyKey: 'carded-00000001',
+  })
+  await call('crm.activity.schedule', {
+    id: 'carded-call',
+    caseId: 'carded',
+    summary: 'Call the buyer back',
+    dueDate: '2020-01-01',
+    idempotencyKey: 'carded-activity-1',
+  })
+  const listed = await call<{ rows: Row[] }>('crm.case.list', { search: 'Carded' })
+  const row = listed.rows[0]!
+  assert.deepEqual(
+    (row.tags as Row[]).map((tag) => tag.name),
+    ['Gift'],
+  )
+  const activity = row.nextActivity as Row
+  assert.equal(activity.summary, 'Call the buyer back')
+  assert.equal(activity.overdue, true, 'a due date in the past is late, decided where today is known')
+
+  const board = await (await app.client.get('/admin/crm/pipeline?lang=en')).text()
+  assert.match(board, /Call the buyer back/)
+  assert.match(board, /crm-card-tag/)
+})

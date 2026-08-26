@@ -234,7 +234,25 @@ export const componentGroups: readonly ComponentGroup[] = [
               <Grid
                 columns={3}
                 items={[
-                  <Metric label="Orders" value="148" detail="+12 today" tone="positive" />,
+                  <Metric
+                    label="Orders"
+                    value="148"
+                    detail="+12 today"
+                    tone="positive"
+                    icon={
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.75"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path d="M3 6h18v12H3z" />
+                        <circle cx="12" cy="12" r="2.5" />
+                      </svg>
+                    }
+                  />,
                   <Metric label="Review queue" value="7" detail="Oldest 42 min" tone="warning" />,
                   <Metric label="Blocked" value="2" detail="Credential required" tone="danger" />,
                 ]}
