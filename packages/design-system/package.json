@@ -1,0 +1,58 @@
+{
+  "name": "@ketvietlab/design-system",
+  "version": "0.1.3",
+  "description": "Két Việt's public, server-rendered operational design system.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ketvietlab/ketjs.git",
+    "directory": "packages/design-system"
+  },
+  "homepage": "https://github.com/ketvietlab/ketjs#readme",
+  "bugs": {
+    "url": "https://github.com/ketvietlab/ketjs/issues"
+  },
+  "keywords": [
+    "design-system",
+    "components",
+    "ssr",
+    "ketjs"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "prepack": "npm run build --prefix ../.."
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./contract": {
+      "types": "./dist/contract/index.d.ts",
+      "default": "./dist/contract/index.js"
+    },
+    "./catalogue": {
+      "types": "./dist/catalogue/index.d.ts",
+      "default": "./dist/catalogue/index.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./tokens.css": "./dist/foundations/tokens.css",
+    "./catalogue/styles.css": "./dist/catalogue/styles.css"
+  },
+  "dependencies": {
+    "@ketvietlab/ketjs-view": "0.1.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "files": [
+    "dist"
+  ]
+}

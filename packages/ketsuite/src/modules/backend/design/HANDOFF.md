@@ -1,8 +1,13 @@
 # Backend UI — bàn giao cho đội design
 
-## Trạng thái triển khai — 2026-08-20
+## Trạng thái triển khai — 2026-08-26
 
-Visual baseline đã hoàn tất trong `design/tokens.css` và các stylesheet component trong `design/` theo hướng
+Visual baseline chuẩn nằm trong public package `@ketvietlab/design-system`. Khi build,
+CSS của package được chép vào `design/design-system/` và load trước các stylesheet
+tương thích của backend. `design/tokens.css` chỉ giữ alias `--admin-*`/token cũ; không
+được khai báo thêm raw color, spacing hay radius ở đây.
+
+Hệ thống theo hướng
 **enterprise dense**: nhiều dữ liệu hữu ích trên một viewport, hierarchy tạo bằng
 divider và typography thay vì khoảng trắng/card/shadow quá mức.
 
@@ -10,10 +15,10 @@ Các thông số đã chốt:
 
 | Vai trò | Giá trị |
 |---|---:|
-| Sidebar desktop | `224px` |
-| Topbar desktop | `44px` |
-| Data row | `36px` |
-| Control desktop | `28px` |
+| Sidebar desktop | `216px` |
+| Context right rail | `340px` |
+| Data row | `52px` |
+| Control desktop | `34px` |
 | Icon trong control | `14px` |
 | Touch target action mobile | `44px` |
 | Body / compact UI | `14px` / `13px` |
@@ -27,12 +32,18 @@ sáng, đóng hai migration gap còn tồn tại trong theme the domain contract
 ## Chạy lên trong 30 giây
 
 ```bash
-npm run design
+npm run design:system
 ```
 
 | | |
 |---|---|
-| `http://127.0.0.1:4000/catalogue` | **mọi màn hình, mọi trạng thái** — đây là chỗ làm việc chính |
+| `http://127.0.0.1:4100/` | catalogue public — token, primitive, layout và pattern chuẩn |
+
+Chạy `npm run design` riêng khi cần kiểm tra compatibility trên màn KetSuite thật:
+
+| | |
+|---|---|
+| `http://127.0.0.1:4000/catalogue` | catalogue màn backend cũ trong giai đoạn migration |
 | `http://127.0.0.1:4000/admin/companies` | màn hình thật, dữ liệu thật |
 
 Database nằm trong bộ nhớ và được tạo lại mỗi lần khởi động. Thử thay đổi dữ liệu
@@ -42,10 +53,12 @@ thoải mái — khởi động lại là sạch. Không có gì ở đây chạ
 
 | | |
 |---|---|
-| **của đội design** | `design/tokens.css` · `design/foundation.css` · `design/lists.css` · `design/responsive.css` · `design/auth.css` · `design/controls.css` · `design/record.css` · `design/forms.css` · `design/content.css` |
+| **nguồn chuẩn public** | `packages/design-system/src/` — token, primitive, app shell, page, record section và pattern dùng chung |
+| **compatibility KetSuite** | `design/tokens.css` · `design/foundation.css` · `design/lists.css` · `design/responsive.css` · `design/auth.css` · `design/controls.css` · `design/record.css` · `design/forms.css` · `design/content.css` |
 | **của framework** | mọi file `.ts` |
 
-Sửa CSS xong bấm F5 là thấy, không cần build, không cần khởi động lại.
+Sửa public design system thì chạy lại build hoặc `npm run design:system`; không sửa
+file sinh ra trong `design/design-system/`. CSS compatibility backend vẫn reload bằng F5.
 
 ## Hợp đồng: thuộc tính `data-ui`
 
@@ -366,7 +379,7 @@ giữ touch target `44px`.
 
 `mediaPanel` không biết storage schema. Adapter chỉ đưa URL và POST endpoint; component
 sở hữu layout ảnh chính, gallery, upload và action. Ảnh chính có badge bằng chữ, không
-chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide `14px` trong control `28px`,
+chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide `14px` trong control `34px`,
 tooltip và accessible label; mobile tăng vùng bấm lên `44px` theo quality gate.
 
 Status surface (`neutral`, `info`, `positive`, `warning`, `danger`) giữ surface sáng và

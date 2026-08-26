@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "pretest:design-system": "npm --prefix .. run build --silent",
+    "test:design-system": "E2E_MODULE=design_system playwright test",
     "pretest:product": "npm --prefix .. run build --silent",
     "test:product": "E2E_MODULE=product_backend playwright test",
     "pretest:website": "npm --prefix .. run build --silent",

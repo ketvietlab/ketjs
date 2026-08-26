@@ -29,7 +29,12 @@ const PACKAGES = join(ROOT, 'packages')
 const LOCK = join(ROOT, '.ket-build.lock')
 const FINGERPRINT = '.ket-build-fingerprint'
 const packageNames = readdirSync(PACKAGES, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
+  .filter(
+    (entry) =>
+      entry.isDirectory() &&
+      existsSync(join(PACKAGES, entry.name, 'package.json')) &&
+      existsSync(join(PACKAGES, entry.name, 'src')),
+  )
   .map((entry) => entry.name)
 
 const tsc = join(ROOT, 'node_modules', '.bin', 'tsc')
@@ -111,6 +116,9 @@ const sourceFingerprint = () => {
 
 const artifactsExist = () =>
   existsSync(join(BUILD, 'ket.workspace.js')) &&
+  existsSync(
+    join(BUILD, 'packages', 'ketsuite', 'src', 'modules', 'backend', 'design', 'design-system', 'styles.css'),
+  ) &&
   packageNames.every(
     (name) =>
       existsSync(join(BUILD, 'packages', name, 'src', 'index.js')) &&
@@ -185,6 +193,13 @@ try {
         cpSync(declarations, dist, { recursive: true })
         copyAssets(join(PACKAGES, name, 'src'), [emitted, dist])
       }
+      // The public design system is the canonical visual foundation. Backend
+      // assets are self-contained at runtime, so copy its CSS beside the legacy
+      // compatibility styles instead of relying on a workspace filesystem path.
+      copyAssets(join(PACKAGES, 'design-system', 'src'), [
+        join(stageBuild, 'packages', 'ketsuite', 'src', 'modules', 'backend', 'design', 'design-system'),
+        join(stageDist, 'ketsuite', 'modules', 'backend', 'design', 'design-system'),
+      ])
       writeFileSync(join(stageBuild, FINGERPRINT), fingerprint)
 
       // Only a complete staged build may replace the current good artifacts.

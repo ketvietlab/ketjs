@@ -1,0 +1,154 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="app-shell"] {
+    display: grid;
+    min-width: 0;
+    min-height: 100dvh;
+    grid-template-columns: var(--kv-sidebar-width) minmax(0, 1fr);
+    background: var(--kv-page-bg);
+    color: var(--kv-text-main);
+  }
+
+  :where([data-kv-design-system]) [data-ui="app-shell"][data-has-right-rail="true"] {
+    grid-template-columns: var(--kv-sidebar-width) minmax(0, 1fr) var(--kv-right-rail-width);
+  }
+
+  :where([data-kv-design-system]) [data-ui="app-sidebar"] {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    min-width: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--kv-sidebar-border);
+    border-radius: var(--kv-radius-app-region);
+    background: var(--kv-sidebar-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="app-main"] {
+    min-width: 0;
+    border-radius: var(--kv-radius-app-region);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="app-right-rail"] {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    min-width: 0;
+    overflow-y: auto;
+    border-left: 1px solid var(--kv-right-rail-border);
+    border-radius: var(--kv-radius-app-region);
+    background: var(--kv-right-rail-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="app-shell"][data-mode="embedded"] {
+    min-height: 28rem;
+    height: 28rem;
+    overflow: hidden;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="app-shell"][data-mode="embedded"]
+    :is([data-ui="app-sidebar"], [data-ui="app-right-rail"]) {
+    position: relative;
+    height: 100%;
+  }
+
+  :where([data-kv-design-system]) [data-ui="page"] {
+    min-width: 0;
+    padding: var(--kv-page-padding-y) var(--kv-page-padding-x);
+  }
+
+  :where([data-kv-design-system]) [data-ui="page-header"] {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--kv-space-6);
+    margin-bottom: var(--kv-space-6);
+  }
+
+  :where([data-kv-design-system]) [data-ui="page-heading"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="page-title"] {
+    margin: 0;
+    font-size: var(--kv-text-2xl);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: -0.025em;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="page-description"] {
+    margin: var(--kv-space-1-5) 0 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="page-actions"] {
+    flex: 0 0 auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="page-body"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page"] {
+    min-width: 0;
+    padding: 1.375rem var(--kv-page-padding-x) var(--kv-space-12);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-content"] {
+    width: 100%;
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-section"] {
+    min-width: 0;
+    padding: var(--kv-space-6) 0;
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-section"]:last-child {
+    border-bottom: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-section-title"] {
+    margin: 0 0 var(--kv-space-4);
+    font-size: var(--kv-text-lg);
+    font-weight: var(--kv-weight-semibold);
+  }
+
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="app-shell"],
+    :where([data-kv-design-system]) [data-ui="app-shell"][data-has-right-rail="true"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    :where([data-kv-design-system]) [data-ui="app-sidebar"],
+    :where([data-kv-design-system]) [data-ui="app-right-rail"] {
+      position: relative;
+      width: auto;
+      height: auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="app-sidebar"] {
+      border-right: 0;
+      border-bottom: 1px solid var(--kv-sidebar-border);
+    }
+
+    :where([data-kv-design-system]) [data-ui="app-right-rail"] {
+      border-top: 1px solid var(--kv-right-rail-border);
+      border-left: 0;
+    }
+
+    :where([data-kv-design-system]) [data-ui="page"],
+    :where([data-kv-design-system]) [data-ui="record-page"] {
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="page-header"] {
+      flex-direction: column;
+      gap: var(--kv-space-4);
+    }
+  }
+}
