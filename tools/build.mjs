@@ -29,7 +29,12 @@ const PACKAGES = join(ROOT, 'packages')
 const LOCK = join(ROOT, '.ket-build.lock')
 const FINGERPRINT = '.ket-build-fingerprint'
 const packageNames = readdirSync(PACKAGES, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
+  .filter(
+    (entry) =>
+      entry.isDirectory() &&
+      existsSync(join(PACKAGES, entry.name, 'package.json')) &&
+      existsSync(join(PACKAGES, entry.name, 'src')),
+  )
   .map((entry) => entry.name)
 
 const tsc = join(ROOT, 'node_modules', '.bin', 'tsc')
