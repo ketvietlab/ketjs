@@ -243,8 +243,8 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   assert.equal(productPage.status, 200)
   const productHtml = await productPage.text()
   assert.match(productHtml, /Áo thun/)
-  assert.match(productHtml, /data-ui="record-workspace"/)
-  assert.match(productHtml, /data-ui="record-controller"/)
+  assert.match(productHtml, /data-ui="form-page"[^>]*data-scope="product-form-page"/)
+  assert.match(productHtml, /data-ui="form-page-controller"/)
   assert.match(productHtml, /data-island="product\.editor"/)
   assert.match(productHtml, /id="product-detail-form"/)
   assert.equal((productHtml.match(/name="saleOk"/g) ?? []).length, 1)
@@ -257,7 +257,7 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
     /data-ui="form-option-input" type="radio" name="type" autocomplete="off" value="goods"/,
   )
   assert.match(productHtml, /Loại hàng hoá/)
-  assert.match(productHtml, /name="saleOk"[^>]*form="product-detail-form"/)
+  assert.match(productHtml, /name="saleOk"[^>]*checked/)
   assert.match(
     productHtml,
     /data-ui="tab" data-active="true" href="\/admin\/product\/templates\/tpl\?tab=general&amp;lang=vi"/,
@@ -314,7 +314,7 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   })
   assert.equal(variantsPage.status, 200)
   const variantsHtml = await variantsPage.text()
-  assert.match(variantsHtml, /name="saleOk"[^>]*disabled/)
+  assert.doesNotMatch(variantsHtml, /name="saleOk"/)
   assert.doesNotMatch(variantsHtml, /id="product-detail-form"/)
 
   const mediaPage = await e2e.client.get('/admin/product/templates/tpl?tab=media&lang=vi', {
@@ -332,7 +332,7 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   })
   assert.equal(variantPage.status, 200)
   const variantHtml = await variantPage.text()
-  assert.match(variantHtml, /data-ui="record-workspace"/)
+  assert.match(variantHtml, /data-ui="form-page"[^>]*data-scope="product-variant-form-page"/)
   assert.match(variantHtml, /data-scope="product-variant"/)
   assert.match(variantHtml, /id="product-variant-form"/)
   assert.match(variantHtml, /data-island="mail\.chatter"/)

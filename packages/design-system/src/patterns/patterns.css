@@ -419,6 +419,15 @@
     min-width: 0;
   }
 
+  :where([data-kv-design-system]) [data-ui="form-page-controller"] {
+    min-width: 0;
+    padding-inline: var(--kv-page-padding-x);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-controller"]:empty {
+    display: none;
+  }
+
   :where([data-kv-design-system]) [data-ui="form-page-navigation"] {
     min-width: 0;
     padding-inline: var(--kv-page-padding-x);
@@ -521,6 +530,16 @@
     grid-column: 2;
   }
 
+  @media (max-width: 89.9375rem) {
+    :where([data-kv-design-system])
+      [data-ui="form-page"]
+      [data-ui="record-form"]
+      [data-ui="field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(6.5rem, 7.5rem) minmax(0, 1fr);
+      column-gap: var(--kv-space-2);
+    }
+  }
+
   @media (max-width: 63.9375rem) {
     :where([data-kv-design-system]) [data-ui="form-page-layout"] {
       grid-template-columns: minmax(0, 1fr);
@@ -570,7 +589,8 @@
     }
 
     :where([data-kv-design-system]) [data-ui="form-page-body"],
-    :where([data-kv-design-system]) [data-ui="form-page-aside"] {
+    :where([data-kv-design-system]) [data-ui="form-page-aside"],
+    :where([data-kv-design-system]) [data-ui="form-page-controller"] {
       padding-inline: var(--kv-space-4);
     }
 

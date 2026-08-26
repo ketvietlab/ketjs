@@ -17,6 +17,7 @@ export * as designSystem from '@ketvietlab/design-system'
 export { FormPage, LinkButton, ListPage, Tabs as CollectionTabs } from '@ketvietlab/design-system'
 export type {
   FormPageProps,
+  FormPageSlots,
   LinkButtonProps,
   ListPageProps,
   TabItem as CollectionTabItem,

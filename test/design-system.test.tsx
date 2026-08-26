@@ -123,6 +123,24 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
   assert.match(formPage, /aria-label="Partner context"/)
   assert.doesNotMatch(formPage, /data-ui="(?:form-page-back|breadcrumbs)"/)
 
+  const formPageFragment = renderToString(
+    <FormPage
+      title="Updated product"
+      body="Updated fields"
+      slots={{
+        header: 'product.record-header',
+        body: 'product.record-body',
+        fragmentTitle: 'Updated product',
+      }}
+    />,
+  )
+  assert.match(formPageFragment, /<ket-fragments data-title="Updated product">/)
+  assert.deepEqual(
+    [...formPageFragment.matchAll(/<template data-ket-slot="([^"]+)"/g)].map((match) => match[1]),
+    ['product.record-header', 'product.record-body'],
+  )
+  assert.doesNotMatch(formPageFragment, /data-ui="form-page-(?:controller|aside)"/)
+
   const table = renderToString(
     <DataTable
       rows={[{ id: 'one', state: 'Ready' }]}
