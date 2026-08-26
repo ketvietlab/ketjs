@@ -21,6 +21,10 @@ export { AppShell, Page, PageHeader, RecordPage, RecordSection } from './layouts
 
 export { DataTable } from './patterns/data-table.tsx'
 export type { Cell, Column, DataTableProps } from './patterns/data-table.tsx'
+export { ListPage } from './patterns/list-page.tsx'
+export type { ListPageProps } from './patterns/list-page.tsx'
+export { FormPage } from './patterns/form-page.tsx'
+export type { FormPageProps, FormPageSlots } from './patterns/form-page.tsx'
 export { ModalSheet } from './patterns/modal-sheet.tsx'
 export { RecordForm } from './patterns/record-form.tsx'
 export type { RecordFormProps } from './patterns/record-form.tsx'

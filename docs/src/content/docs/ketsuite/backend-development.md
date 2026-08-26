@@ -87,6 +87,20 @@ Keep list state in the URL: search terms, filters, grouping, page, view, visible
 and locale should survive a copied link. Reuse the backend paging and search helpers instead of creating
 a module-local query-string convention.
 
+### List page layout
+
+Use the design system's `ListPage` as the baseline for an operational collection. The screen provides
+translated identity, the primary action, URL-driven list chrome, optional result context, and the list
+body. `ListPage` keeps those regions in a stable order and owns their responsive spacing; a module must
+not recreate that hierarchy with a route-specific header or a card around the whole page.
+
+Keep the primary create action in `actions`, where it stays beside the title. Put
+search/filter/view/paging controls in `controls` and the result count in `status`; the pattern combines
+those two slots into one command bar instead of scattering them over separate rows. The table, kanban,
+or empty state belongs in `body`. More capable KetSuite tables can still provide selection, groups,
+sorting, and configurable columns inside the public page pattern. The product catalogue at
+`/admin/product/templates` is the reference integration for this composition.
+
 ### Record workspace layout
 
 Use `RecordWorkspace` for a deep record or edit screen. The shared layout owns the hierarchy rather

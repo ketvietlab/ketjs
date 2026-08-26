@@ -5,4 +5,5 @@
 @import "./primitives/progress.css";
 @import "./layouts/layouts.css";
 @import "./layouts/shell.css";
+/* FormPage rail contract: desktop content is 2:1; narrow screens stack. */
 @import "./patterns/patterns.css";

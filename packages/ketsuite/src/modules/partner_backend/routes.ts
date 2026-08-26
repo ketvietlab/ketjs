@@ -7,6 +7,24 @@ import { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/i
 import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+import type { TableSelection } from '../../ui/index.ts'
+
+const crossSite = (req: Req): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+const onlyPost = (req: Req) =>
+  req.method !== 'POST'
+    ? text('POST', { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
 
 const partnerOptions = async (ctx: ServeContext, url: URL, req: Req, exclude?: string) =>
   (
@@ -161,7 +179,7 @@ const addressFormsFor = async (
 const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  const [row, parents, terms, integration] = await Promise.all([
+  const [row, parents, terms, integration, collaboration] = await Promise.all([
     ctx.call('partner.getPartner', { id }, url, req) as Promise<AnyRow | null>,
     partnerOptions(ctx, url, req, id),
     ctx.call('partner.getTerms', { partnerId: id }, url, req) as Promise<AnyRow | null>,
@@ -170,6 +188,11 @@ const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: stri
       locale: url.searchParams.get('lang')
         ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
         : '',
+    }),
+    ctx.joint(url, req, 'partner_backend:record.collaboration', {
+      resModel: 'partner.Partner',
+      resId: id,
+      lang,
     }),
   ])
   if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
@@ -197,6 +220,7 @@ const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: stri
           terms: terms as never,
           errors,
           integration,
+          collaboration,
           addressForms,
           parentControl,
         },
@@ -206,8 +230,31 @@ const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: stri
   })
 }
 
-const savePartner = (ctx: ServeContext, url: URL, req: Req, id: string, form: Record<string, string>) =>
-  ctx.call(
+const syncPartnerRoles = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  partnerId: string,
+  form: Record<string, string>,
+) => {
+  for (const role of ['customer', 'supplier', 'employee']) {
+    const result =
+      form[role] === '1'
+        ? await ctx.call('partner.grantRole', { id: randomUUID(), partnerId, role }, url, req)
+        : await ctx.call('partner.revokeRole', { partnerId, role }, url, req)
+    if ((result as { ok?: boolean }).ok === false) return result
+  }
+  return { ok: true }
+}
+
+const savePartner = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  id: string,
+  form: Record<string, string>,
+) => {
+  const result = await ctx.call(
     'partner.savePartner',
     {
       id,
@@ -223,6 +270,10 @@ const savePartner = (ctx: ServeContext, url: URL, req: Req, id: string, form: Re
     url,
     req,
   )
+  if ((result as { ok?: boolean }).ok === false) return result
+  const roles = await syncPartnerRoles(ctx, url, req, id, form)
+  return (roles as { ok?: boolean }).ok === false ? roles : result
+}
 
 export const routes: Record<string, RouteEntry> = {
   '/admin/partner/partners':
@@ -272,6 +323,15 @@ export const routes: Record<string, RouteEntry> = {
           req,
         ) as Promise<{ count: number }>,
       ])
+      const selection: TableSelection = {
+        formId: 'partner-directory-bulk',
+        action: inLocale(url, '/admin/partner/partners/bulk'),
+        hidden: { returnTo: `${url.pathname}${url.search}` },
+        actions: [
+          { id: 'archive', label: _('partner_backend.action.bulkArchive') },
+          ...(includeArchived ? [{ id: 'restore', label: _('partner_backend.action.bulkRestore') }] : []),
+        ],
+      }
       return adminPage(ctx, url, req, {
         title: 'partner_backend.screen.title',
         body: (_, frame) =>
@@ -281,12 +341,11 @@ export const routes: Record<string, RouteEntry> = {
             {
               ...frame,
               chrome: {
-                layout: 'catalogue',
-                section: _('partner_backend.menu.app'),
                 create: {
                   label: _('partner_backend.action.create'),
                   path: inLocale(url, '/admin/partner/partners/new'),
                 },
+                selection,
                 search: {
                   name: 'q',
                   value: search ?? '',
@@ -329,7 +388,7 @@ export const routes: Record<string, RouteEntry> = {
                 pager: pager(url, current, rows.length, total.count),
               },
             },
-            {},
+            { selection },
             url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
             {
               total: activeTotal.count,
@@ -348,8 +407,38 @@ export const routes: Record<string, RouteEntry> = {
                     ? 'suppliers'
                     : 'all',
             },
+            total.count,
           ),
       })
+    },
+
+  '/admin/partner/partners/bulk':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const denied = onlyPost(req)
+      if (denied) return denied
+      const form = await readForm(req)
+      const ids = Object.keys(form)
+        .filter((key) => key.startsWith('selected.'))
+        .map((key) => key.slice('selected.'.length))
+        .filter(Boolean)
+      const fallback = inLocale(url, '/admin/partner/partners')
+      const requested = new URL(form.returnTo || fallback, 'http://ket.local')
+      const returnTo =
+        requested.pathname === '/admin/partner/partners'
+          ? `${requested.pathname}${requested.search}`
+          : fallback
+      if (!ids.length) return seeOther(returnTo)
+      if (form.action !== 'archive' && form.action !== 'restore')
+        return text('Unknown bulk action', { status: 400 })
+      const result = (await ctx.call(
+        'partner.archivePartners',
+        { ids, active: form.action === 'restore' },
+        url,
+        req,
+      )) as { ok?: boolean }
+      if (result.ok === false) return text('Invalid bulk selection', { status: 400 })
+      return seeOther(returnTo)
     },
 
   '/admin/partner/partners/new':
@@ -415,7 +504,7 @@ export const routes: Record<string, RouteEntry> = {
     },
 
   '/admin/partner/partners/{id}/edit':
-    (ctx: ServeContext): Route =>
+    (_ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
@@ -426,11 +515,7 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const form = await readForm(req)
-      for (const role of ['customer', 'supplier', 'employee']) {
-        if (form[role] === '1')
-          await ctx.call('partner.grantRole', { id: randomUUID(), partnerId: params.id, role }, url, req)
-        else await ctx.call('partner.revokeRole', { partnerId: params.id, role }, url, req)
-      }
+      await syncPartnerRoles(ctx, url, req, params.id, form)
       return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
     },
 

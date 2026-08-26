@@ -14,6 +14,14 @@
 // public components. New shared UI must enter through that public contract.
 
 export * as designSystem from '@ketvietlab/design-system'
+export { FormPage, LinkButton, ListPage, Tabs as CollectionTabs } from '@ketvietlab/design-system'
+export type {
+  FormPageProps,
+  FormPageSlots,
+  LinkButtonProps,
+  ListPageProps,
+  TabItem as CollectionTabItem,
+} from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
 export { formatMoney } from './format.ts'
@@ -74,6 +82,7 @@ export {
   recordFieldGrid,
   recordRail,
   recordHeaderActions,
+  recordMore,
 } from './record-detail.tsx'
 export type { RecordRailFact, RecordRailSwitch, RecordRailActivity } from './record-detail.tsx'
 export { modalSheet } from './modal.tsx'
@@ -85,7 +94,7 @@ export type {
 } from './record.tsx'
 export { sidebar, sidebarMain, sidebarFoot, navGroup } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
-export { listChrome, topbarSearch } from './chrome.tsx'
+export { bulkActions, listChrome, topbarSearch } from './chrome.tsx'
 export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
 export { backendPage, shell, framedPage, definitionList } from './layout.tsx'
 export type { Extras, Frame } from './layout.tsx'
@@ -96,10 +105,9 @@ export { calendarContractCases } from './calendar.ts'
 export {
   PartnerFacts,
   PartnerInitials,
-  PartnerListLayout,
   PartnerPanel,
 } from './partner.tsx'
-export type { PartnerFact, PartnerStat } from './partner.tsx'
+export type { PartnerFact } from './partner.tsx'
 
 /**
  * The same components, under the names JSX wants.
@@ -129,6 +137,7 @@ export {
   recordFieldGrid as RecordFieldGrid,
   recordRail as RecordRail,
   recordHeaderActions as RecordHeaderActions,
+  recordMore as RecordMore,
 } from './record-detail.tsx'
 export { notice as Notice } from './state.tsx'
 export { breadcrumbs as Breadcrumbs, tabs as Tabs } from './navigation.tsx'

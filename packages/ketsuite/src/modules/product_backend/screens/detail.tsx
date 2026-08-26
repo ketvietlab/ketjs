@@ -2,17 +2,17 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
-  Framed,
+  button,
+  FormCluster,
+  FormPage,
   formatMoney,
-  icon,
   MediaPanel,
   ProductMediaManagement,
   ProductVariantManagement,
   RecordForm,
-  RecordHeaderActions,
-  RecordToggle,
-  RecordWorkspace,
+  RecordMore,
   Section,
+  shell,
   stack,
   Surface,
   Tabs,
@@ -42,16 +42,6 @@ const selectionLabel = (_: Translator, group: string, value: unknown): string =>
 
 export const PRODUCT_DETAIL_TABS = ['general', 'variants', 'media'] as const
 export type ProductDetailTab = (typeof PRODUCT_DETAIL_TABS)[number]
-
-const formattedDateTime = (value: string | Date | null | undefined, locale: string): string => {
-  if (!value) return '—'
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
-  return new Intl.DateTimeFormat(locale.toLowerCase().startsWith('vi') ? 'vi-VN' : 'en-US', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(date)
-}
 
 export const productDetailScreen = (
   _: Translator,
@@ -137,7 +127,6 @@ export const productDetailScreen = (
   partial = false,
 ): TemplateResult => {
   const images = media.images ?? []
-  const primaryImage = images.find((image) => image.primary) ?? images[0]
   const variantTotal = management.variantPage?.total ?? management.variants.length
   const hasRealVariants = variantTotal > 0
   const category = management.categories.find((option) => option.value === row.categoryId)?.label
@@ -157,15 +146,6 @@ export const productDetailScreen = (
   const tabHref = (tab: ProductDetailTab) =>
     localized(`/admin/product/templates/${row.id}?tab=${tab}`, locale)
   const productFormId = 'product-detail-form'
-  const productToggle = (name: string, label: string, checked: boolean) => (
-    <RecordToggle
-      name={name}
-      label={label}
-      checked={checked}
-      form={activeTab === 'general' ? productFormId : null}
-      disabled={activeTab !== 'general'}
-    />
-  )
   const general = (
     <RecordForm
       id={productFormId}
@@ -185,17 +165,54 @@ export const productDetailScreen = (
       }
       fields={[
         {
+          name: 'businessUse',
+          label: _('product_backend.field.businessUse'),
+          type: 'checkbox-group',
+          span: 'full',
+          options: [
+            {
+              name: 'saleOk',
+              value: '1',
+              label: _('product_backend.field.saleOk'),
+              checked: row.saleOk === true,
+            },
+            {
+              name: 'purchaseOk',
+              value: '1',
+              label: _('product_backend.field.purchaseOk'),
+              checked: row.purchaseOk === true,
+            },
+            ...(management.stockEnabled
+              ? [
+                  {
+                    name: 'isStorable',
+                    value: '1',
+                    label: _('product_backend.field.isStorable'),
+                    checked: row.isStorable === true,
+                  },
+                ]
+              : []),
+          ],
+        },
+        {
           name: 'type',
           label: _('product_backend.field.productKind'),
           type: 'radio',
           value: row.type,
           required: true,
+          span: 'full',
           options: ['goods', 'service'].map((value) => ({
             value,
             label: selectionLabel(_, 'type', value),
           })),
         },
-        { name: 'name', label: _('product_backend.field.name'), value: row.name, required: true },
+        {
+          name: 'name',
+          label: _('product_backend.field.name'),
+          value: row.name,
+          required: true,
+          span: 'full',
+        },
         {
           name: 'uomId',
           label: _('product_backend.field.uom'),
@@ -486,77 +503,39 @@ export const productDetailScreen = (
     />
   )
 
-  const updatedAt = formattedDateTime(row.updatedAt, locale)
-  const workspace = (
-    <RecordWorkspace
-      breadcrumbs={{
-        label: _('product_backend.tabs.label'),
-        items: [
-          {
-            label: _('product_backend.menu.app'),
-            href: localized('/admin/product/templates', locale),
-          },
-          {
-            label: _('product_backend.menu.templates'),
-            href: localized('/admin/product/templates', locale),
-          },
-          { label: row.name },
-        ],
-      }}
-      title={row.name}
-      subtitle={subtitle}
-      status={badge(
-        selectionLabel(_, 'state', archived ? 'archived' : 'active'),
-        archived ? 'neutral' : 'positive',
-        archived ? 'archived' : 'active',
-      )}
-      image={primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null}
-      imageFallback={icon('package')}
-      badges={
-        activeTab === 'media'
-          ? []
-          : [
-              productToggle('saleOk', _('product_backend.field.saleOk'), row.saleOk === true),
-              productToggle('purchaseOk', _('product_backend.field.purchaseOk'), row.purchaseOk === true),
-              ...(management.stockEnabled
-                ? [
-                    productToggle(
-                      'isStorable',
-                      _('product_backend.field.isStorable'),
-                      row.isStorable === true,
-                    ),
-                  ]
-                : []),
-            ]
-      }
-      summary={
-        activeTab === 'general'
+  const status = badge(
+    selectionLabel(_, 'state', archived ? 'archived' : 'active'),
+    archived ? 'neutral' : 'positive',
+    archived ? 'archived' : 'active',
+  )
+  const actions = (
+    <FormCluster
+      label={_('product_backend.action.actions')}
+      forms={[
+        ...(activeTab === 'general'
           ? [
-              {
-                id: 'variants',
-                label: _('product_backend.summary.variants'),
-                value: variantTotal,
-                href: tabHref('variants'),
-              },
-              {
-                id: 'images',
-                label: _('product_backend.summary.images'),
-                value: images.length,
-                href: tabHref('media'),
-              },
-              {
-                id: 'state',
-                label: _('product_backend.col.state'),
-                value: selectionLabel(_, 'state', archived ? 'archived' : 'active'),
-              },
-              {
-                id: 'updated',
-                label: _('product_backend.summary.updated'),
-                value: updatedAt,
-              },
+              button({
+                label: _('product_backend.action.save'),
+                type: 'submit',
+                form: productFormId,
+                variant: 'primary',
+              }),
             ]
-          : []
-      }
+          : []),
+        <RecordMore
+          label={_('product_backend.action.more')}
+          body={<FormCluster label={_('product_backend.action.more')} forms={[archiveAction]} />}
+        />,
+      ]}
+    />
+  )
+  const page = (
+    <FormPage
+      scope="product-form-page"
+      title={row.name}
+      description={subtitle}
+      status={status}
+      actions={actions}
       navigation={
         <Tabs
           label={_('product_backend.tabs.label')}
@@ -584,47 +563,10 @@ export const productDetailScreen = (
           ]}
         />
       }
-      controller={
-        <>
-          {activeTab === 'general' && (
-            <RecordHeaderActions
-              label={_('product_backend.action.actions')}
-              form={productFormId}
-              more={archiveAction}
-              moreLabel={_('product_backend.action.more')}
-              noteLabel={_('product_backend.action.internalNote')}
-              saveLabel={_('product_backend.action.saveClose')}
-              saveOptionsLabel={_('product_backend.action.saveOptions')}
-            />
-          )}
-          {activeTab === 'variants' && (
-            <RecordHeaderActions
-              label={_('product_backend.action.actions')}
-              saveHref={localized('/admin/product/templates', locale)}
-              more={archiveAction}
-              moreLabel={_('product_backend.action.more')}
-              noteLabel={_('product_backend.action.internalNote')}
-              saveLabel={_('product_backend.action.saveClose')}
-              saveOptionsLabel={_('product_backend.action.saveOptions')}
-            />
-          )}
-          {activeTab === 'media' && (
-            <RecordHeaderActions
-              label={_('product_backend.action.actions')}
-              saveHref={localized('/admin/product/templates', locale)}
-              more={archiveAction}
-              moreLabel={_('product_backend.action.more')}
-              noteLabel={_('product_backend.action.internalNote')}
-              saveLabel={_('product_backend.action.saveClose')}
-              saveOptionsLabel={_('product_backend.action.saveOptions')}
-            />
-          )}
-          {management.editor}
-        </>
-      }
       body={activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : generalTab}
       aside={collaboration}
       asideLabel={_('product_backend.collaboration.label')}
+      controller={management.editor}
       slots={{
         header: 'product.record-header',
         body: 'product.record-body',
@@ -632,14 +574,5 @@ export const productDetailScreen = (
       }}
     />
   )
-  return partial ? (
-    workspace
-  ) : (
-    <Framed
-      translator={_}
-      title={frame.navigation ? row.name : _('product_backend.detail.kicker')}
-      frame={frame}
-      body={workspace}
-    />
-  )
+  return partial ? page : shell(_, row.name, page, { ...frame, topbar: false, titled: false })
 }

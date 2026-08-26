@@ -163,6 +163,7 @@ Các function domain chính:
 | `partner.getPartner` | Đọc partner cùng addresses, defaults và roles |
 | `partner.savePartner` | Tạo/cập nhật partner và kiểm tra cây |
 | `partner.archivePartner` | Archive hoặc restore |
+| `partner.archivePartners` | Archive/restore tối đa 2.000 partner id trong một idempotent batch |
 | `partner.saveAddress` | Lưu address và chọn default nguyên tử |
 | `partner.grantRole` / `revokeRole` | Cấp/gỡ role idempotent |
 | `partner.saveTerms` / `getTerms` | Điều khoản core theo active company |
@@ -190,10 +191,24 @@ tiếng Việt hardcode.
 
 `partner_backend` cung cấp:
 
-- danh sách có search, lọc customer/supplier và tùy chọn hiện archived;
-- form tạo Partner;
-- form Partner duy nhất tại `/admin/partner/partners/:id`, gồm contact, roles,
-  addresses/default và company terms;
+- danh sách theo public `ListPage` baseline: title và create action cùng hàng, result count và
+  URL-driven search/filter/paging trong một command bar, sau đó là directory tabs và data table
+  full-width;
+- search/filter được giữ trong vùng tối đa 800px ở bên trái, còn paging nằm sát mép phải; tabs
+  customer/supplier/archived giữ count và vẫn hiện khi bộ lọc không trả về kết quả;
+- checkbox từng dòng và chọn tất cả trên trang dùng chung form selection của data table; More nằm cạnh
+  create action và gọi same-origin `POST /admin/partner/partners/bulk` để archive/restore các row đã chọn;
+- form tạo và chỉnh sửa Partner dùng public `FormPage` baseline: title cỡ nhỏ, mã/trạng thái trên
+  một metadata row và primary action nằm cùng header; không dùng thumbnail, kicker, breadcrumb,
+  back link hoặc hero title nặng nề;
+- edit header chỉ giữ Save và More; Kế toán/Email/Gọi điện nằm trong More để action phụ không làm
+  header vỡ hoặc tăng chiều cao trên mobile;
+- form giữ invariant ERP ở mọi viewport: label luôn ở cột trái và control ở cột phải; responsive chỉ
+  thu hẹp cột label, khoảng cách và chuyển rail ngữ cảnh xuống dưới, không xếp label lên trên input;
+- form Partner duy nhất tại `/admin/partner/partners/:id` gồm contact, roles, addresses/default và
+  company terms; quick facts nằm trong rail ngữ cảnh độc lập;
+- customer/supplier/employee là ba checkbox đầu tiên của form thông tin chính; create/save Partner
+  đồng bộ role trong cùng POST, không còn form và nút “Lưu vai trò” riêng;
 - archive/restore;
 - trạng thái empty và lỗi validation có dịch.
 
