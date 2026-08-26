@@ -51,6 +51,29 @@ export async function collaborationEvidenceDeployment(
       })
     }
 
+    // Keep the directory above one page and give every business filter a
+    // meaningful count so the ListPage evidence covers paging, tabs and empty
+    // filtered states with the same fixture.
+    for (let index = 1; index <= 29; index++) {
+      const id = `directory-partner-${String(index).padStart(2, '0')}`
+      await call('partner.savePartner', {
+        id,
+        kind: index % 4 === 0 ? 'person' : 'company',
+        name: index % 4 === 0 ? `Liên hệ vận hành ${index}` : `Đối tác vận hành ${index}`,
+        ref: `DT-${String(index).padStart(4, '0')}`,
+        email: `partner-${index}@example.test`,
+        phone: `0900${String(index).padStart(6, '0')}`,
+      })
+      const roles = index % 5 === 0 ? ['customer', 'supplier'] : [index % 2 === 0 ? 'supplier' : 'customer']
+      for (const role of roles)
+        await call('partner.grantRole', {
+          id: `${id}:${role}`,
+          partnerId: id,
+          role,
+        })
+    }
+    await call('partner.archivePartner', { id: 'directory-partner-29', active: false })
+
     await call('uom.saveUnit', { id: 'unit', name: 'Đơn vị', relativeFactor: '1' })
     await call('product.saveCategory', { id: 'workwear', name: 'Đồng phục vận hành' })
     await call('product.saveCategory', { id: 'services', name: 'Dịch vụ' })

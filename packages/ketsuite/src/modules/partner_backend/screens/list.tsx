@@ -1,6 +1,20 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import { badge, code, dataTable, emptyState, PartnerListLayout, shell } from '../../../ui/index.ts'
+import {
+  badge,
+  bulkActions,
+  code,
+  CollectionTabs,
+  dataTable,
+  emptyState,
+  inline,
+  LinkButton,
+  ListPage,
+  listChrome,
+  person,
+  shell,
+  stack,
+} from '../../../ui/index.ts'
 import type { DataTable, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { PartnerListRow, PartnerListSummary } from './types.ts'
@@ -14,11 +28,16 @@ const tableFor = (
   dataTable(_, {
     rows,
     id: (row) => row.id,
-    gutter: 'compact',
     rowHref: (row) => localized(`/admin/partner/partners/${row.id}`, locale),
     rowLink: false,
     columns: [
-      { key: 'name', label: _('partner_backend.field.name'), priority: 'primary', cell: (row) => row.name },
+      {
+        key: 'name',
+        label: _('partner_backend.field.name'),
+        priority: 'primary',
+        width: 'wide',
+        cell: (row) => person(row.name),
+      },
       {
         key: 'kind',
         label: _('partner_backend.field.kind'),
@@ -55,55 +74,95 @@ export const partnersScreen = (
   table: Partial<DataTable<PartnerListRow>> = {},
   locale = '',
   summary?: PartnerListSummary,
+  total = rows.length,
 ): TemplateResult =>
   shell(
     _,
     _('partner_backend.screen.title'),
-    rows.length === 0 ? (
-      emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint'))
-    ) : summary ? (
-      <PartnerListLayout
-        title={_('partner_backend.list.summary')}
-        tabs={[
-          {
-            id: 'all',
-            label: _('partner_backend.list.all'),
-            count: summary.total,
-            href: summary.allHref,
-            active: summary.active === 'all',
-          },
-          {
-            id: 'customers',
-            label: _('partner_backend.filter.customers'),
-            count: summary.customers,
-            href: summary.customersHref,
-            active: summary.active === 'customers',
-          },
-          {
-            id: 'suppliers',
-            label: _('partner_backend.filter.suppliers'),
-            count: summary.suppliers,
-            href: summary.suppliersHref,
-            active: summary.active === 'suppliers',
-          },
-          {
-            id: 'archived',
-            label: _('partner_backend.filter.includeArchived'),
-            count: summary.archived,
-            href: summary.archivedHref,
-            active: summary.active === 'archived',
-          },
-        ]}
-        stats={[
-          { label: _('partner_backend.list.total'), value: summary.total },
-          { label: _('partner_backend.filter.customers'), value: summary.customers },
-          { label: _('partner_backend.filter.suppliers'), value: summary.suppliers },
-          { label: _('partner_backend.filter.includeArchived'), value: summary.archived },
-        ]}
-        table={tableFor(_, rows, table, locale)}
-      />
-    ) : (
-      tableFor(_, rows, table, locale)
-    ),
-    frame,
+    <ListPage
+      title={_('partner_backend.screen.title')}
+      description={_('partner_backend.screen.description')}
+      actions={
+        frame.chrome?.create || frame.chrome?.selection || frame.extras?.['topbar.end'] !== undefined
+          ? inline([
+              frame.chrome?.create ? (
+                <LinkButton
+                  label={frame.chrome.create.label}
+                  href={frame.chrome.create.path}
+                  variant="primary"
+                />
+              ) : (
+                ''
+              ),
+              frame.chrome?.selection ? bulkActions(_, frame.chrome.selection) : '',
+              frame.extras?.['topbar.end'] ?? '',
+            ])
+          : undefined
+      }
+      controls={
+        frame.chrome
+          ? listChrome(
+              _,
+              _('partner_backend.screen.title'),
+              {
+                ...frame.chrome,
+                layout: 'command',
+                section: undefined,
+                create: null,
+                selection: null,
+              },
+              false,
+            )
+          : undefined
+      }
+      status={_('partner_backend.screen.results', { count: total })}
+      body={
+        summary
+          ? stack(
+              [
+                <CollectionTabs
+                  label={_('partner_backend.list.summary')}
+                  items={[
+                    {
+                      id: 'all',
+                      label: _('partner_backend.list.all'),
+                      count: summary.total,
+                      href: summary.allHref,
+                      active: summary.active === 'all',
+                    },
+                    {
+                      id: 'customers',
+                      label: _('partner_backend.filter.customers'),
+                      count: summary.customers,
+                      href: summary.customersHref,
+                      active: summary.active === 'customers',
+                    },
+                    {
+                      id: 'suppliers',
+                      label: _('partner_backend.filter.suppliers'),
+                      count: summary.suppliers,
+                      href: summary.suppliersHref,
+                      active: summary.active === 'suppliers',
+                    },
+                    {
+                      id: 'archived',
+                      label: _('partner_backend.filter.includeArchived'),
+                      count: summary.archived,
+                      href: summary.archivedHref,
+                      active: summary.active === 'archived',
+                    },
+                  ]}
+                />,
+                rows.length
+                  ? tableFor(_, rows, table, locale)
+                  : emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint')),
+              ],
+              'compact',
+            )
+          : rows.length
+            ? tableFor(_, rows, table, locale)
+            : emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint'))
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
   )

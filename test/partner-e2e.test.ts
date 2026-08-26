@@ -88,6 +88,19 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     { ok: true, id: 'customer-terms' },
   )
 
+  assert.deepEqual((await call<Row>('partner.archivePartners', { ids: [], active: false })).value, {
+    ok: false,
+    errors: [{ field: 'ids', code: 'partner.error.invalid' }],
+  })
+  assert.deepEqual(
+    (await call<Row>('partner.archivePartners', { ids: ['customer', 'customer'], active: false })).value,
+    { ok: true, updated: 1 },
+  )
+  assert.deepEqual((await call<Row>('partner.archivePartners', { ids: ['customer'], active: true })).value, {
+    ok: true,
+    updated: 1,
+  })
+
   const pages: Array<[string, RegExp]> = [
     ['/admin/partner/partners', /Công ty Minh An/],
     ['/admin/partner/partners?role=customer', /Khách hàng/],
@@ -106,14 +119,34 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   const partnerList = await (
     await e2e.client.get('/admin/partner/partners', { headers: { accept: 'text/html' } })
   ).text()
-  assert.match(partnerList, /data-ui="topbar"/)
-  assert.match(partnerList, /data-ui="chrome-create"[^>]*href="\/admin\/partner\/partners\/new"/)
+  assert.doesNotMatch(partnerList, /data-ui="topbar"/)
+  assert.match(partnerList, /data-ui="list-page"/)
+  assert.match(
+    partnerList,
+    /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"[\s\S]*?data-ui="action"[^>]*href="\/admin\/partner\/partners\/new"/,
+  )
+  assert.match(
+    partnerList,
+    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?2 đối tác[\s\S]*?data-ui="list-page-controls"/,
+  )
   assert.match(partnerList, /data-ui="search-menu"/)
+  assert.match(partnerList, /data-ui="select-all"/)
+  assert.match(partnerList, /data-ui="row-select"[^>]*form="partner-directory-bulk"/)
+  assert.match(
+    partnerList,
+    /data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"[^>]*action="\/admin\/partner\/partners\/bulk"[\s\S]*?data-ui="list-page-toolbar"/,
+  )
   assert.match(partnerList, /data-row-href="\/admin\/partner\/partners\/customer"/)
-  assert.match(partnerList, /data-ui="partner-list-layout"/)
-  assert.match(partnerList, /data-ui="partner-stat-grid"/)
+  assert.match(partnerList, /data-ui="tabs"[\s\S]*?data-ui="tab-count"/)
+  assert.doesNotMatch(partnerList, /data-ui="partner-list-layout"/)
+  assert.doesNotMatch(partnerList, /data-ui="partner-stat-grid"/)
   assert.doesNotMatch(partnerList, /data-ui="row-link"/, 'the partner name cell is plain text')
   assert.doesNotMatch(partnerList, /data-page-frame="true"/)
+  const partnerControls = partnerList.slice(
+    partnerList.indexOf('data-ui="list-page-controls"'),
+    partnerList.indexOf('data-ui="list-page-body"'),
+  )
+  assert.doesNotMatch(partnerControls, /data-ui="bulk-form"/)
   for (const hiddenMenu of ['/admin/activities', '/admin/inbox', '/admin/outbox', '/admin/inbound-email']) {
     assert.doesNotMatch(
       partnerList,
@@ -148,6 +181,54 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   })
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Partner directory|Partners/)
+
+  const bulkArchived = await e2e.client.post(
+    '/admin/partner/partners/bulk?lang=en',
+    new URLSearchParams({
+      action: 'archive',
+      'selected.customer': '1',
+      returnTo: '/admin/partner/partners?role=customer&lang=en',
+    }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(bulkArchived.status, 303)
+  assert.equal(bulkArchived.headers.get('location'), '/admin/partner/partners?role=customer&lang=en')
+  assert.doesNotMatch(
+    await (await e2e.client.get('/admin/partner/partners?lang=en')).text(),
+    /Công ty Minh An/,
+  )
+  const archivedDirectory = await (await e2e.client.get('/admin/partner/partners?archived=1&lang=en')).text()
+  assert.match(archivedDirectory, /Công ty Minh An/)
+  assert.match(archivedDirectory, /Restore selected/)
+  const bulkRestored = await e2e.client.post(
+    '/admin/partner/partners/bulk?lang=en',
+    new URLSearchParams({
+      action: 'restore',
+      'selected.customer': '1',
+      returnTo: '/admin/partner/partners?archived=1&lang=en',
+    }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(bulkRestored.status, 303)
+  assert.match(await (await e2e.client.get('/admin/partner/partners?lang=en')).text(), /Công ty Minh An/)
+  const refusedBulk = await e2e.client.post(
+    '/admin/partner/partners/bulk',
+    new URLSearchParams({ action: 'archive', 'selected.customer': '1' }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'https://cross-site.example',
+      },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(refusedBulk.status, 403)
 
   const archived = await e2e.client.post(
     '/admin/partner/partners/customer/archive?lang=en',
