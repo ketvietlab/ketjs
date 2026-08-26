@@ -28,6 +28,8 @@ export {
   startSprint,
 } from './operations.ts'
 export type { FlowIssue, FlowResult, SaveIssueInput } from './operations.ts'
+export { projectStats, projectStateOf } from './projects.ts'
+export type { ProjectStats, ProjectState } from './projects.ts'
 export {
   archivePage,
   listPages,

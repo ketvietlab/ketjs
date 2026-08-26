@@ -750,14 +750,73 @@ export const routes: Record<string, RouteEntry> = {
           errors = errorsOf(result, _)
         }
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      const all = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      // Counts for every project the reader can see, in two reads rather than
+      // one per row — see `projectStats`. Taken over the whole set, not the
+      // tab, so the cards keep describing the same thing when a tab narrows
+      // the table.
+      const stats = (await ctx.call(
+        'flow.project.stats',
+        { projectIds: all.map((project) => String(project.id)) },
+        url,
+        req,
+      )) as AnyRow[]
+      const statsBy = new Map(stats.map((row) => [String(row.id), row]))
+      const counted = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
+
+      // "Mine" is the projects holding an issue assigned to me. A project has
+      // no membership to read instead, so this answers the question the tab
+      // actually asks rather than inventing a list nobody maintains.
+      const tab = url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
+      const mine = (await ctx.call(
+        'flow.issue.list',
+        { mine: true, listState: emptyIssueListState(), limit: 200 },
+        url,
+        req,
+      )) as AnyRow
+      const mineProjects = new Set(
+        ((mine.rows as AnyRow[]) ?? []).map((issue) => String(issue.projectId)),
+      )
+      const rows = tab === 'mine' ? counted.filter((p) => mineProjects.has(String(p.id))) : counted
+
+      // The one rail the design asks for: what changed most recently, across
+      // every project, newest first.
+      const recent = (await ctx.call(
+        'flow.issue.list',
+        {
+          listState: { ...emptyIssueListState(), sort: [{ key: 'updatedAt', dir: 'desc' }] },
+          limit: 6,
+        },
+        url,
+        req,
+      )) as AnyRow
       return adminPage(ctx, url, req, {
         title: 'flow_backend.projects.title',
         body: (_, frame) =>
           projectsScreen(
             _,
             frame,
-            rows,
+            {
+              rows,
+              projectCount: all.length,
+              issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
+              issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
+              activeCount: stats.filter((row) => String(row.state) === 'active').length,
+              activity: ((recent.rows as AnyRow[]) ?? []).slice(0, 6),
+              tab,
+              tabs: [
+                {
+                  id: 'all',
+                  label: _('flow_backend.projects.tabAll'),
+                  href: '/admin/flow/projects',
+                },
+                {
+                  id: 'mine',
+                  label: _('flow_backend.projects.tabMine'),
+                  href: '/admin/flow/projects?tab=mine',
+                },
+              ],
+            },
             [
               { name: 'key', label: _('flow_backend.field.key'), required: true },
               { name: 'name', label: _('flow_backend.field.name'), required: true },

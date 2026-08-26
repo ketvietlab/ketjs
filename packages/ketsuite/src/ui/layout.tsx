@@ -164,6 +164,15 @@ export const framedPage = (options: {
   subtitle?: string | null
   /** A semantic glyph. Defaults to the active root's. */
   icon?: string | null
+  /**
+   * A column beside the body, for what accompanies a screen rather than
+   * continues it — an activity feed, a summary. `recordWorkspace` has had the
+   * slot all along; this only passes it through, so a full-page screen can use
+   * the same rail a record detail does instead of stacking the aside under the
+   * content and calling it a sidebar.
+   */
+  aside?: JSXChild
+  asideLabel?: string | null
 }): TemplateResult => {
   const activeRoot = activeMenuRoot(options.frame.menu ?? [])
   const glyph = options.icon ?? activeRoot?.icon ?? 'layout-grid'
@@ -188,6 +197,8 @@ export const framedPage = (options: {
         </>
       ) : undefined,
       body: options.body,
+      aside: options.aside,
+      asideLabel: options.asideLabel ?? null,
     }),
     // The workspace below opens with this same title, so the bar does not repeat it.
     { ...options.frame, titled: false, topbar: false },
