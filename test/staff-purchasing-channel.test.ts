@@ -473,6 +473,25 @@ test('staff purchasing channel completes all fourteen operations with one review
   assert.deepEqual((approved.data.receipts as Row[])[0]?.availableActions, [])
 
   const receiptId = String((approved.data.receipts as Row[])[0]?.id)
+
+  // Withholding the action above is a hint. This is the boundary: goods that the
+  // warehouse has not counted must not be receivable by asking directly. The
+  // refusal comes from the domain — removing the channel's own check leaves this
+  // answer byte-identical — which is the right place for it, because it holds for
+  // every caller and not just this route.
+  const beforeReview = await e2e.client.json<Envelope<Row>>(`/api/staff/v1/purchasing/orders/${id}`)
+  const premature = await e2e.client.request(
+    `/api/staff/v1/purchasing/orders/${id}/receipts/${receiptId}/receive`,
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'purchase-receive-premature', String(beforeReview.data.version)),
+      body: JSON.stringify({ expectedVersion: beforeReview.data.version }),
+    },
+  )
+  assert.equal(premature.status, 409)
+  const refusal = (await premature.json()) as { error: { fieldErrors?: Record<string, unknown> } | null }
+  assert.ok(Object.keys(refusal.error?.fieldErrors ?? {}).includes('receiptId'))
+
   const scope = { company: 'acme', branches: null }
   const picking = (await e2e.fixture.call<Row>('stock.getPicking', { id: receiptId }, { scope })).value
   const move = (picking.moves as Row[])[0]!
