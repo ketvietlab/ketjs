@@ -44,8 +44,8 @@ type LiveDoc = {
   /**
    * Whether the durable snapshot has been read into this document.
    *
-   * Separate from "the registry has an entry", which is what hydration used to
-   * test. `getOrCreateLive` publishes the entry before the snapshot is
+   * Separate from whether the registry has an entry, which is what hydration
+   * used to test. `getOrCreateLive` publishes the entry before the snapshot is
    * fetched, so a storage read that failed — or one still in flight — left a
    * blank document that every later caller treated as fully loaded. The next
    * push then merged into nothing and flattened the result over the real
@@ -209,10 +209,7 @@ const writerFor = (topic: string): Promise<Writer> => {
 }
 
 /** Applies a client's update and reports whether the update-count threshold was crossed. */
-export async function publishUpdate(
-  ref: DocRef,
-  updateBase64: string,
-): Promise<{ shouldFlatten: boolean }> {
+export async function publishUpdate(ref: DocRef, updateBase64: string): Promise<{ shouldFlatten: boolean }> {
   const { doc } = getOrCreateLive(ref)
   Y.applyUpdate(doc, new Uint8Array(Buffer.from(updateBase64, 'base64')))
   const entry = live.get(keyFor(ref))!

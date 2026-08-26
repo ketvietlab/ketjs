@@ -66,11 +66,27 @@
     background: var(--admin-card);
   }
   [data-ui="card-grid"]:has(> [data-ui="metric"]) {
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  }
+  /* A money card needs the width of the longest amount it can hold. Thirteen
+     digits and a symbol at the display size do not fit a ten-rem track, and a
+     clipped total reads as a different number.
+
+     13.5rem is the widest floor that still fits five cards across the content
+     column at 1440 — wider and the fifth drops to a row of its own, which reads
+     as a sixth category rather than as a wrap. Below that width they wrap, which
+     is the point: the floor is a minimum, not a count. */
+  [data-ui="card-grid"]:has(> [data-ui="metric"][data-tone="money"]) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.5rem), 1fr));
+  }
+  [data-ui="metric"][data-tone="money"] [data-ui="metric-value"] {
+    font-size: var(--admin-size-amount);
+    white-space: nowrap;
   }
   [data-ui="metric-label"],
   [data-ui="metric-value"],
-  [data-ui="metric-detail"] {
+  [data-ui="metric-detail"],
+  [data-ui="metric-trend"] {
     margin: 0;
   }
   [data-ui="metric-label"] {
@@ -86,9 +102,18 @@
     line-height: 1.25;
   }
   @media (max-width: 29.9375rem) {
-    [data-ui="metric"][data-tone="night-audit-amount"] [data-ui="metric-value"] {
+    /* An amount in đồng is thirteen digits and a symbol. At two cards to a phone
+       screen the display size clipped it, and a clipped total is worse than a
+       small one — it reads as a different number. */
+    [data-ui="metric"][data-tone="night-audit-amount"] [data-ui="metric-value"],
+    [data-ui="metric"][data-tone="money"] [data-ui="metric-value"] {
       font-size: var(--admin-size-lg);
       overflow-wrap: anywhere;
+    }
+    /* At the smaller size the amount fits a narrower track, so a phone keeps two
+       cards to a row instead of dropping to a column five cards long. */
+    [data-ui="card-grid"]:has(> [data-ui="metric"][data-tone="money"]) {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
     }
   }
   [data-ui="metric-detail"] {
@@ -132,6 +157,11 @@
     gap: var(--admin-gap-xs);
     overflow-x: auto;
     border-block-end: 1px solid var(--admin-line);
+  }
+  /* A filter row shows every choice at once, on as many lines as that takes. */
+  [data-ui="tabs"][data-wrap="true"] {
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
   [data-ui="tab"] {
     display: inline-flex;

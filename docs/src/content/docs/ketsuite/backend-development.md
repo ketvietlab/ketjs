@@ -138,6 +138,42 @@ UI layer.
 Do not hydrate an entire page to implement a small selector. Server rendering must remain useful before
 hydration, and island props must contain only data the current viewer is allowed to receive.
 
+### Charts
+
+A chart is a canvas, so it is an island — `backend.chart`, reached through the
+`backend:screen.chart` joint. `chartControl` resolves one the way `relationControl`
+resolves a picker:
+
+```ts
+// File: packages/ketsuite/src/modules/example_backend/routes.ts
+const plot = await chartControl(ctx, url, req, 'example-revenue', {
+  kind: 'line',
+  label: _('example_backend.revenue.title'),
+  labels: buckets.map((bucket) => bucket.label),
+  datasets: [{ label: _('example_backend.revenue.now'), series: 1, values, formatted }],
+  axis: axisScale(peakOf(datasets), units),
+})
+```
+
+Two rules the config exists to enforce. The island is handed props and nothing else — no
+context, no translator, no company currency — so every amount arrives already formatted
+and every word already translated, including the axis unit; a browser bundle that
+formatted money would disagree with the tables printed beside it. And a dataset carries a
+palette slot rather than a colour: the client reads `--admin-chart-N` off the document
+when it mounts, so `tokens.css` stays the only place a chart hue is named and a
+colour-scheme change is re-read rather than baked in.
+
+Pair the canvas with `Chart`, whose legend carries the same numbers as real text. A
+canvas has no text in it, so a reader without the bundle, a screen reader, and a printed
+page all get nothing from it — the legend is what makes the chart optional rather than
+load-bearing, and it can carry links a canvas cannot. `BarChart` is server-rendered for
+that last reason: its rows link into the ledger behind each bar.
+
+`chart.js` is bundled by `tools/build-chart-client.mjs`, separate from the island builder
+because it pulls a real dependency into the output — the same reason the Live Doc editor
+has its own builder for `yjs`. Both are named exceptions in `tools/zero-dep-audit.ts`,
+not an open door, and both are imported through the package's root entry only.
+
 ## Module-owned styles
 
 The backend module owns only the shared shell, tokens, and UI-kit baselines. A feature module must ship

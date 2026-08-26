@@ -213,9 +213,9 @@ const today = (): string => new Date().toISOString()
 const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
 /** The currency a ledger write is denominated in, with the scale its arithmetic must use. */
-type Ledger = { currency: string; scale: number }
+export type Ledger = { currency: string; scale: number }
 
-async function ledgerOf(ctx: Ctx): Promise<Ledger> {
+export async function ledgerOf(ctx: Ctx): Promise<Ledger> {
   if (!ctx.scope.company) throw new Error('accounting requires an active company')
   const company = (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
   if (!company) throw new Error(`company ${ctx.scope.company} does not exist`)
@@ -351,7 +351,7 @@ const paymentStateList = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(String).filter((state) => PAYMENT_STATES.includes(state as never)) : []
 
 /** The ids of every posted move inside an optional date window. */
-async function postedMoves(ctx: Ctx, dateFrom: unknown, dateTo: unknown): Promise<Map<string, Row>> {
+export async function postedMoves(ctx: Ctx, dateFrom: unknown, dateTo: unknown): Promise<Map<string, Row>> {
   const M = ctx.table('account.Move')
   const moves = await ctx.db.all(
     from(M).where(
@@ -370,7 +370,7 @@ async function postedMoves(ctx: Ctx, dateFrom: unknown, dateTo: unknown): Promis
  * database does the narrowing; chunking keeps a long reporting window from
  * building a parameter list no driver will accept.
  */
-async function linesOfMoves(ctx: Ctx, moveIds: string[], accountId?: unknown): Promise<Row[]> {
+export async function linesOfMoves(ctx: Ctx, moveIds: string[], accountId?: unknown): Promise<Row[]> {
   if (!moveIds.length) return []
   const L = ctx.table('account.MoveLine')
   const rows: Row[] = []
@@ -390,7 +390,7 @@ async function linesOfMoves(ctx: Ctx, moveIds: string[], accountId?: unknown): P
  * of journal items need this once instead of a lookup per line — a chart of
  * accounts is bounded (216 rows under TT99) while a ledger is not.
  */
-async function accountsById(ctx: Ctx): Promise<Map<string, Row>> {
+export async function accountsById(ctx: Ctx): Promise<Map<string, Row>> {
   return new Map((await ctx.db.select('account.Account')).map((row) => [String(row.id), row]))
 }
 

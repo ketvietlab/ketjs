@@ -6,7 +6,9 @@
     "pretest:product": "npm --prefix .. run build --silent",
     "test:product": "E2E_MODULE=product_backend playwright test",
     "pretest:website": "npm --prefix .. run build --silent",
-    "test:website": "E2E_MODULE=website_backend playwright test"
+    "test:website": "E2E_MODULE=website_backend playwright test",
+    "pretest:accounting": "npm --prefix .. run build --silent",
+    "test:accounting": "E2E_MODULE=account_backend playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1"

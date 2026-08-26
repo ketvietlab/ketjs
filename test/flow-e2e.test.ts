@@ -797,7 +797,12 @@ test('flow projects: counts come back per project, and a state is derived from t
     const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
       (await e2e.client.call<T>(name, input)).value
 
-    for (const [id, key] of [['mixed', 'MIX'], ['finished', 'FIN'], ['fresh', 'FRE'], ['bare', 'BAR']]) {
+    for (const [id, key] of [
+      ['mixed', 'MIX'],
+      ['finished', 'FIN'],
+      ['fresh', 'FRE'],
+      ['bare', 'BAR'],
+    ]) {
       await call('flow.project.save', {
         values: { id, key, name: id },
         idempotencyKey: `project-save-${id}`,
@@ -855,10 +860,7 @@ test('flow projects: counts come back per project, and a state is derived from t
     )
     // A project nobody has written an issue for still answers, with zeroes —
     // the card would otherwise have to guess whether it was missing or empty.
-    assert.deepEqual(
-      [by.get('bare')?.total, by.get('bare')?.done, by.get('bare')?.state],
-      [0, 0, 'empty'],
-    )
+    assert.deepEqual([by.get('bare')?.total, by.get('bare')?.done, by.get('bare')?.state], [0, 0, 'empty'])
 
     // `projectStats` also filters on `Issue.active`, which is not covered here:
     // the column exists and `saveIssue` always writes `true`, but no function

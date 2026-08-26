@@ -171,11 +171,7 @@ export async function movePage(
       : parent === before
         ? n(existing.sequence)
         : (await lastSequence(ctx, String(existing.projectId), parent)) + SEQUENCE_STEP
-  await ctx.db.update(
-    'flow.Page',
-    { id: input.id },
-    { parentPageId: parent, sequence, updatedAt: now() },
-  )
+  await ctx.db.update('flow.Page', { id: input.id }, { parentPageId: parent, sequence, updatedAt: now() })
   return { ok: true, id: input.id }
 }
 
@@ -238,16 +234,8 @@ export async function reorderPage(
   }
 
   const neighbour = siblings[to] as Row
-  await ctx.db.update(
-    'flow.Page',
-    { id: input.id },
-    { sequence: n(neighbour.sequence), updatedAt: stamp },
-  )
-  await ctx.db.update(
-    'flow.Page',
-    { id: neighbour.id },
-    { sequence: n(existing.sequence), updatedAt: stamp },
-  )
+  await ctx.db.update('flow.Page', { id: input.id }, { sequence: n(neighbour.sequence), updatedAt: stamp })
+  await ctx.db.update('flow.Page', { id: neighbour.id }, { sequence: n(existing.sequence), updatedAt: stamp })
   return { ok: true, id: input.id, moved: true }
 }
 
@@ -392,9 +380,7 @@ export async function pageDetail(ctx: Ctx, id: string): Promise<PageDetail | nul
   if (!row) return null
   const P = ctx.table('flow.Page')
   const kids = await ctx.db.all(
-    from(P)
-      .where(eq(P.parentPageId, id), eq(P.active, true))
-      .orderBy(asc(P.sequence), asc(P.title)),
+    from(P).where(eq(P.parentPageId, id), eq(P.active, true)).orderBy(asc(P.sequence), asc(P.title)),
   )
   // Walked upwards one row at a time — no recursive CTE, and bounded by the
   // same depth the parent check enforces, so a cycle written before that check
