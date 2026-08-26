@@ -26,6 +26,7 @@ export const HOOKS = [
   'metric-label',
   'metric-value',
   'metric-detail',
+  'metric-trend',
 ] as const
 
 export const stack = (
@@ -104,16 +105,25 @@ export const contentCard = (o: {
   </article>
 )
 
-/** One operational fact, with context rather than colour carrying its meaning. */
+/**
+ * One operational fact, with context rather than colour carrying its meaning.
+ *
+ * `trend` is a node rather than more text because the one thing that legitimately
+ * carries colour here is a change against a previous period, and whether a change
+ * is good news depends on the metric — see `delta` in `charts.tsx`. Everything
+ * else on the card stays in the ink the rest of the page uses.
+ */
 export const metric = (o: {
   label: string
   value: string
   detail?: string | null
+  trend?: JSXChild
   tone?: string
 }): TemplateResult => (
   <article data-ui="metric" data-tone={o.tone ?? 'neutral'}>
     <p data-ui="metric-label">{o.label}</p>
     <p data-ui="metric-value">{o.value}</p>
+    {o.trend !== undefined && <p data-ui="metric-trend">{o.trend}</p>}
     {!!o.detail && <p data-ui="metric-detail">{o.detail}</p>}
   </article>
 )

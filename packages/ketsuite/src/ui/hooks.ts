@@ -17,6 +17,7 @@ import { HOOKS as surfaces } from './surfaces.tsx'
 import { HOOKS as navigation } from './navigation.tsx'
 import { HOOKS as data } from './data.tsx'
 import { HOOKS as gantt } from './gantt.tsx'
+import { HOOKS as charts } from './charts.tsx'
 import { HOOKS as media } from './media.tsx'
 import { HOOKS as attachments } from './attachments.tsx'
 import { HOOKS as form } from './form.tsx'
@@ -39,6 +40,7 @@ const ALL = [
   ...table,
   ...data,
   ...gantt,
+  ...charts,
   ...media,
   ...attachments,
   ...form,
@@ -79,6 +81,7 @@ export const OWNERS: Readonly<Record<string, string[]>> = Object.freeze(
           ['navigation', navigation],
           ['data', data],
           ['gantt', gantt],
+          ['charts', charts],
           ['media', media],
           ['attachments', attachments],
           ['form', form],

@@ -70,7 +70,8 @@
   }
   [data-ui="metric-label"],
   [data-ui="metric-value"],
-  [data-ui="metric-detail"] {
+  [data-ui="metric-detail"],
+  [data-ui="metric-trend"] {
     margin: 0;
   }
   [data-ui="metric-label"] {

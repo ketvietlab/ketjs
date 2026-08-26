@@ -1,174 +1,378 @@
+/**
+ * The accounting overview.
+ *
+ * What replaced the card grid that used to be here: that screen counted the
+ * lists it linked to, which is navigation the sidebar already provides, and told
+ * nobody whether the month had gone well. This one answers that from the ledger
+ * — the same posted moves the trial balance reports, so a figure here and a
+ * report one click away agree or one of them is wrong.
+ *
+ * Every number arrives computed. The screen decides arrangement and wording and
+ * nothing else, which is why the comparison logic is `changeOf` in the kit
+ * rather than arithmetic scattered through the markup: whether a change is good
+ * news depends on the metric, and total liabilities falling is the case that
+ * catches a dashboard out.
+ */
+
 import type { Translator } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  BarChart,
   CardGrid,
-  ContentCard,
+  changeOf,
+  Chart,
+  dataTable,
+  DatePicker,
+  Delta,
+  emptyState,
+  formatMoney,
   Framed,
   icon,
   Metric,
   RecordWorkspace,
   Section,
   stack,
+  Surface,
 } from '../../ui/index.ts'
-import type { Frame } from '../../ui/index.ts'
+import type { ChartBar, ChartKey, DatePickerField, Frame } from '../../ui/index.ts'
 
-type Counts = {
-  accounts: number
-  journals: number
-  taxes: number
-  terms: number
-  draft: number
-  posted: number
-  unpaid: number
-  /** Documents of each kind, so a card's number is the list it opens. */
-  customerInvoices: number
-  vendorBills: number
-  entries: number
-  payments: number
+type Row = Record<string, unknown>
+
+/** A chart the route already resolved, with the legend that survives without it. */
+export type OverviewChart = { plot: JSXChild | null; keys: readonly ChartKey[] }
+
+export type AccountingOverviewOptions = {
+  frame: Frame
+  /** The date filter posts back to the screen's own path. */
+  action: string
+  fields: readonly [DatePickerField, DatePickerField]
+  /** `account.performance` over the window, and over the window before it. */
+  current: Row
+  previous: Row
+  /** `account.position` as at the end of the window, and as at the day before it opened. */
+  position: Row
+  opening: Row
+  openItems: Row
+  cashFlow: Row
+  revenue: OverviewChart
+  mix: OverviewChart
+  currency: unknown
+  standard: string
+  /** The ledger behind an account's total. A number nobody can open is one to trust blindly. */
+  ledgerHref: (accountId: string) => string
+  partnerHref: (partnerId: string) => string
 }
 
-type OverviewCard = {
-  id: string
-  title: string
-  summary: string
-  href: string
-  value?: number
+const n = (value: unknown): number => Number(value ?? 0)
+
+/**
+ * A percentage, or a word saying there is none.
+ *
+ * `changeOf` returns a null ratio when the previous period was zero, and there
+ * is no honest percentage to print for that — a first month of trading did not
+ * grow by 0%, it has nothing to have grown from.
+ */
+const percent = (_: Translator, ratio: number | null): string =>
+  ratio === null
+    ? _('account_backend.overview.noComparison')
+    : `${ratio > 0 ? '+' : ''}${(ratio * 100).toFixed(1)}% ${_('account_backend.overview.versusPrevious')}`
+
+const trend = (_: Translator, current: unknown, previous: unknown, better: 'higher' | 'lower'): JSXChild => {
+  const change = changeOf(n(current), n(previous), better)
+  return <Delta label={percent(_, change.ratio)} direction={change.direction} sentiment={change.sentiment} />
 }
 
-const cards = (_: Translator, locale: string, items: OverviewCard[]): TemplateResult => (
-  <CardGrid
-    items={items}
-    id={(item) => item.id}
-    card={(item) => (
-      <ContentCard
-        title={item.title}
-        summary={item.summary}
-        href={`${item.href}${locale}`}
-        body={
-          item.value === undefined ? undefined : (
-            <Metric label={_('account_backend.dashboard.records')} value={String(item.value)} />
-          )
-        }
-      />
-    )}
-  />
-)
+const ratioText = (_: Translator, value: unknown): string =>
+  value === null || value === undefined
+    ? _('account_backend.overview.noComparison')
+    : `${(n(value) * 100).toFixed(1)}%`
+
+const kpis = (_: Translator, o: AccountingOverviewOptions): TemplateResult => {
+  const cards: Array<{
+    id: string
+    label: string
+    value: unknown
+    was: unknown
+    better: 'higher' | 'lower'
+  }> = [
+    {
+      id: 'revenue',
+      label: _('account_backend.overview.revenue'),
+      value: o.current.revenue,
+      was: o.previous.revenue,
+      better: 'higher',
+    },
+    {
+      id: 'profit',
+      label: _('account_backend.overview.profit'),
+      value: o.current.profit,
+      was: o.previous.profit,
+      better: 'higher',
+    },
+    {
+      id: 'cash',
+      label: _('account_backend.overview.cash'),
+      value: o.position.cash,
+      was: o.opening.cash,
+      better: 'higher',
+    },
+    {
+      id: 'assets',
+      label: _('account_backend.overview.assets'),
+      value: o.position.assets,
+      was: o.opening.assets,
+      better: 'higher',
+    },
+    {
+      // Liabilities are the card that makes the direction/sentiment split earn
+      // its keep: this one falling is the good news, and an arrow coloured by
+      // direction alone painted it the same red as revenue falling.
+      id: 'liabilities',
+      label: _('account_backend.overview.liabilities'),
+      value: o.position.liabilities,
+      was: o.opening.liabilities,
+      better: 'lower',
+    },
+  ]
+  return (
+    <CardGrid
+      items={cards}
+      id={(card) => card.id}
+      card={(card) => (
+        <Metric
+          label={card.label}
+          value={formatMoney(_, card.value, o.currency)}
+          trend={trend(_, card.value, card.was, card.better)}
+        />
+      )}
+    />
+  )
+}
+
+const expenses = (_: Translator, o: AccountingOverviewOptions): TemplateResult => {
+  const rows = (o.current.expenseByAccount as Row[] | undefined) ?? []
+  const bars: ChartBar[] = rows.map((row) => ({
+    id: String(row.accountId),
+    label: `${row.code} · ${row.name}`,
+    value: n(row.amount),
+    href: o.ledgerHref(String(row.accountId)),
+  }))
+  return (
+    <BarChart
+      bars={bars}
+      value={(bar) => formatMoney(_, bar.value, o.currency)}
+      empty={_('account_backend.overview.noExpense')}
+    />
+  )
+}
+
+/** One side of the open items: what is owed, and who owes most of it. */
+const owed = (
+  _: Translator,
+  side: Row,
+  currency: unknown,
+  empty: string,
+  href: (id: string) => string,
+): TemplateResult => {
+  const partners = (side.partners as Row[] | undefined) ?? []
+  if (!partners.length) return emptyState(empty, '', { icon: icon('receipt') })
+  return dataTable(_, {
+    rows: partners,
+    id: (row: Row) => String(row.partnerId),
+    // The statement behind a balance, per partner: the same rule the trial
+    // balance follows, that a total nobody can open is a number to trust blindly.
+    rowHref: (row: Row) => href(String(row.partnerId)),
+    columns: [
+      {
+        key: 'name',
+        label: _('account_backend.overview.partner'),
+        priority: 'primary',
+        cell: (row: Row) => String(row.name),
+      },
+      {
+        key: 'total',
+        label: _('account_backend.overview.outstanding'),
+        align: 'end',
+        kind: 'currency',
+        cell: (row: Row) => formatMoney(_, row.total, currency),
+      },
+      {
+        key: 'overdue',
+        label: _('account_backend.overview.overdue'),
+        align: 'end',
+        kind: 'currency',
+        cell: (row: Row) => formatMoney(_, row.overdue, currency),
+      },
+    ],
+  })
+}
 
 export const accountingOverviewScreen = (
   _: Translator,
-  options: { counts: Counts; frame: Frame; locale: string; standard: string },
+  options: AccountingOverviewOptions,
 ): TemplateResult => {
-  const { counts } = options
+  const money = (value: unknown) => formatMoney(_, value, options.currency)
+  const cashRows = [
+    { id: 'sales', label: _('account_backend.overview.cashSales'), amount: options.cashFlow.sales },
+    {
+      id: 'purchases',
+      label: _('account_backend.overview.cashPurchases'),
+      amount: options.cashFlow.purchases,
+    },
+    {
+      id: 'operating',
+      label: _('account_backend.overview.cashOperating'),
+      amount: options.cashFlow.operating,
+    },
+    { id: 'other', label: _('account_backend.overview.cashOther'), amount: options.cashFlow.other },
+    { id: 'net', label: _('account_backend.overview.cashNet'), amount: options.cashFlow.net },
+  ]
+
+  /** Total, not yet due, overdue — the three numbers an aging is, said once. */
+  const aging = (side: Row): string =>
+    `${_('account_backend.overview.outstanding')}: ${money(side.total)} · ${_(
+      'account_backend.overview.notYetDue',
+    )}: ${money(side.current)} · ${_('account_backend.overview.overdue')}: ${money(side.overdue)}`
+
+  const receivable = options.openItems.receivable as Row
+  const payable = options.openItems.payable as Row
+
   return (
     <Framed
       translator={_}
-      title={_('account_backend.dashboard.title')}
+      title={_('account_backend.overview.title')}
       frame={options.frame}
       body={
         <RecordWorkspace
           kicker={_('account_backend.dashboard.kicker')}
-          title={_('account_backend.dashboard.title')}
-          subtitle={`${_('account_backend.dashboard.subtitle')} · ${options.standard}`}
+          title={_('account_backend.overview.title')}
+          subtitle={`${_('account_backend.overview.subtitle')} · ${options.standard}`}
           imageFallback={icon('banknote')}
-          summary={[
-            { id: 'draft', label: _('account_backend.dashboard.draft'), value: counts.draft },
-            { id: 'posted', label: _('account_backend.dashboard.posted'), value: counts.posted },
-            { id: 'unpaid', label: _('account_backend.dashboard.unpaid'), value: counts.unpaid },
-            { id: 'accounts', label: _('account_backend.menu.accounts'), value: counts.accounts },
-          ]}
           body={stack(
             [
               <Section
-                title={_('account_backend.dashboard.operations')}
-                description={_('account_backend.dashboard.operationsHint')}
-                body={cards(_, options.locale, [
-                  {
-                    id: 'customer-invoices',
-                    title: _('account_backend.menu.customerInvoices'),
-                    summary: _('account_backend.dashboard.customerInvoicesHint'),
-                    href: '/admin/accounting/customer-invoices',
-                    value: counts.customerInvoices,
-                  },
-                  {
-                    id: 'vendor-bills',
-                    title: _('account_backend.menu.vendorBills'),
-                    summary: _('account_backend.dashboard.vendorBillsHint'),
-                    href: '/admin/accounting/vendor-bills',
-                    value: counts.vendorBills,
-                  },
-                  {
-                    id: 'entries',
-                    title: _('account_backend.menu.entries'),
-                    summary: _('account_backend.dashboard.entriesHint'),
-                    href: '/admin/accounting/entries',
-                    value: counts.entries,
-                  },
-                  {
-                    id: 'payments',
-                    title: _('account_backend.menu.payments'),
-                    summary: _('account_backend.dashboard.paymentsHint'),
-                    href: '/admin/accounting/payments',
-                    value: counts.payments,
-                  },
-                ])}
+                title={_('account_backend.overview.period')}
+                description={_('account_backend.overview.periodHint')}
+                body={
+                  <Surface
+                    padding="compact"
+                    body={
+                      <DatePicker
+                        action={options.action}
+                        label={_('account_backend.overview.period')}
+                        fields={options.fields}
+                        submit={_('account_backend.action.calculate')}
+                      />
+                    }
+                  />
+                }
               />,
               <Section
-                title={_('account_backend.dashboard.reports')}
-                description={_('account_backend.dashboard.reportsHint')}
-                body={cards(_, options.locale, [
-                  {
-                    id: 'trial',
-                    title: _('account_backend.menu.trialBalance'),
-                    summary: _('account_backend.dashboard.trialBalanceHint'),
-                    href: '/admin/accounting/trial-balance',
-                  },
-                  {
-                    id: 'ledger',
-                    title: _('account_backend.menu.generalLedger'),
-                    summary: _('account_backend.dashboard.generalLedgerHint'),
-                    href: '/admin/accounting/general-ledger',
-                  },
-                  {
-                    id: 'partner',
-                    title: _('account_backend.menu.partnerStatement'),
-                    summary: _('account_backend.dashboard.partnerLedgerHint'),
-                    href: '/admin/accounting/partner-statement',
-                  },
-                ])}
+                title={_('account_backend.overview.headline')}
+                description={_('account_backend.overview.headlineHint')}
+                body={kpis(_, options)}
               />,
               <Section
-                title={_('account_backend.menu.configuration')}
-                description={_('account_backend.dashboard.configurationHint')}
-                body={cards(_, options.locale, [
-                  {
-                    id: 'accounts',
-                    title: _('account_backend.menu.accounts'),
-                    summary: _('account_backend.dashboard.accountsHint'),
-                    href: '/admin/accounting/accounts',
-                    value: counts.accounts,
-                  },
-                  {
-                    id: 'journals',
-                    title: _('account_backend.menu.journals'),
-                    summary: _('account_backend.dashboard.journalsHint'),
-                    href: '/admin/accounting/journals',
-                    value: counts.journals,
-                  },
-                  {
-                    id: 'taxes',
-                    title: _('account_backend.menu.taxes'),
-                    summary: _('account_backend.dashboard.taxesHint'),
-                    href: '/admin/accounting/taxes',
-                    value: counts.taxes,
-                  },
-                  {
-                    id: 'terms',
-                    title: _('account_backend.menu.paymentTerms'),
-                    summary: _('account_backend.dashboard.paymentTermsHint'),
-                    href: '/admin/accounting/terms',
-                    value: counts.terms,
-                  },
-                ])}
+                title={_('account_backend.overview.revenueTrend')}
+                description={_('account_backend.overview.revenueTrendHint')}
+                body={
+                  <Surface
+                    body={
+                      <Chart
+                        plot={options.revenue.plot}
+                        keys={options.revenue.keys}
+                        kind="line"
+                        empty={_('account_backend.overview.noRevenue')}
+                      />
+                    }
+                  />
+                }
+              />,
+              <Section
+                title={_('account_backend.overview.mix')}
+                description={`${_('account_backend.overview.revenue')}: ${money(options.current.revenue)}`}
+                body={
+                  <Surface
+                    body={
+                      <Chart
+                        plot={options.mix.plot}
+                        keys={options.mix.keys}
+                        kind="doughnut"
+                        empty={_('account_backend.overview.noRevenue')}
+                      />
+                    }
+                  />
+                }
+              />,
+              <Section
+                title={_('account_backend.overview.expenses')}
+                description={`${_('account_backend.overview.totalExpense')}: ${money(
+                  options.current.expense,
+                )} · ${_('account_backend.overview.grossMargin')}: ${ratioText(
+                  _,
+                  options.current.grossMargin,
+                )} (${_('account_backend.overview.previous')}: ${ratioText(_, options.previous.grossMargin)})`}
+                body={<Surface body={expenses(_, options)} />}
+              />,
+              <Section
+                title={_('account_backend.overview.receivable')}
+                description={aging(receivable)}
+                body={
+                  <Surface
+                    padding="none"
+                    body={owed(
+                      _,
+                      receivable,
+                      options.currency,
+                      _('account_backend.overview.noReceivable'),
+                      options.partnerHref,
+                    )}
+                  />
+                }
+              />,
+              <Section
+                title={_('account_backend.overview.payable')}
+                description={aging(payable)}
+                body={
+                  <Surface
+                    padding="none"
+                    body={owed(
+                      _,
+                      payable,
+                      options.currency,
+                      _('account_backend.overview.noPayable'),
+                      options.partnerHref,
+                    )}
+                  />
+                }
+              />,
+              <Section
+                title={_('account_backend.overview.cashFlow')}
+                description={_('account_backend.overview.cashFlowHint')}
+                body={
+                  <Surface
+                    padding="none"
+                    body={dataTable(_, {
+                      rows: cashRows,
+                      id: (row) => row.id,
+                      columns: [
+                        {
+                          key: 'label',
+                          label: _('account_backend.overview.movement'),
+                          priority: 'primary',
+                          cell: (row) => row.label,
+                        },
+                        {
+                          key: 'amount',
+                          label: _('account_backend.field.balance'),
+                          align: 'end',
+                          kind: 'currency',
+                          cell: (row) => money(row.amount),
+                        },
+                      ],
+                    })}
+                  />
+                }
               />,
             ],
             'loose',

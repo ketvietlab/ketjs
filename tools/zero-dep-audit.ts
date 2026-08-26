@@ -35,14 +35,23 @@ const RULES: Record<string, Rule> = {
   'ketjs-view': { allow: [] },
   ketjs: { allow: ['@ketvietlab/ketjs-view'] },
   'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
-  // yjs is the one accepted breach of ketsuite's own allowance, mirroring how
-  // ketjs-postgres is the framework's one accepted breach of rule 1: a named,
-  // narrow exception rather than an open door. It backs the Flow collaborative
-  // editor's CRDT merge, in the browser bundle and on the server that flattens
-  // the document, and is never reached by ketjs/ketjs-view — so the framework
-  // core stays untouched. One entry point, like everything else here: nothing
-  // imports a path inside it.
-  ketsuite: { allow: ['@ketvietlab/ketjs', '@ketvietlab/ketjs-view', 'yjs'], publicOnly: true },
+  // yjs and chart.js are the accepted breaches of ketsuite's own allowance,
+  // mirroring how ketjs-postgres is the framework's one accepted breach of rule
+  // 1: named, narrow exceptions rather than an open door. yjs backs the Flow
+  // collaborative editor's CRDT merge, in the browser bundle and on the server
+  // that flattens the document; chart.js draws the analytical screens, in the
+  // browser bundle only. Neither is ever reached by ketjs/ketjs-view — so the
+  // framework core stays untouched, and a deployment that installs the
+  // framework alone still installs nothing else.
+  //
+  // One entry point, like everything else here: nothing imports a path inside
+  // them. For chart.js that also decides the bundle — `chart.js/auto` would
+  // register every controller ever written, while the root entry makes each
+  // screen register the two or three it actually draws.
+  ketsuite: {
+    allow: ['@ketvietlab/ketjs', '@ketvietlab/ketjs-view', 'chart.js', 'yjs'],
+    publicOnly: true,
+  },
 }
 const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome', 'postgres', 'esbuild'])
 

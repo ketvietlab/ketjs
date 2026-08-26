@@ -40,6 +40,8 @@ export type { ScheduleDay, ScheduleEvent, ScheduleRow, ScheduleTone } from './sc
 export { docTree, kanbanCard, kanbanGrid, progressBar, recordList } from './data.tsx'
 export { gantt, ganttSpan } from './gantt.tsx'
 export type { GanttItem, GanttLabels } from './gantt.tsx'
+export { axisCeiling, barChart, changeOf, chart, CHART_SERIES, delta } from './charts.tsx'
+export type { ChartBar, ChartKey } from './charts.tsx'
 export { mediaPanel } from './media.tsx'
 export type { MediaItem, MediaLabels, MediaPanelProps } from './media.tsx'
 export { attachmentPanel } from './attachments.tsx'
@@ -144,4 +146,5 @@ export {
   recordList as RecordList,
 } from './data.tsx'
 export { navGroup as NavGroup } from './nav.tsx'
+export { barChart as BarChart, chart as Chart, delta as Delta } from './charts.tsx'
 export { definitionList as DefinitionList } from './layout.tsx'

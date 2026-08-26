@@ -91,6 +91,46 @@ export or a report asks for everything and gets it, rather than a silently trunc
 list that reads as complete. `countMoves` answers the totals a dashboard needs without
 fetching the rows.
 
+## Analytics
+
+`performance`, `position`, `revenueTimeline`, `openItemSummary` and `cashFlow` are the
+aggregates behind the accounting overview. They read the same posted moves the reports
+do, so a headline figure and a trial balance run over the same window agree.
+
+Each amount is reported in the direction its account is kept: revenue and liabilities as
+credit minus debit, expenses and assets as debit minus credit. Every figure is therefore
+positive when the books say the ordinary thing, and a negative revenue means refunds
+outran sales rather than that a sign convention leaked out of the module. Equity and
+off-balance accounts belong to no total — off-balance records what the company holds
+without owning, and adding it to total assets is the mistake a statutory chart makes
+easy.
+
+| Function | Answers | Window |
+| --- | --- | --- |
+| `performance` | revenue, cost of sales, operating expense, profit, gross margin, and the accounts behind each | over `dateFrom`–`dateTo` |
+| `position` | cash, total assets, total liabilities | as at `asOf` |
+| `revenueTimeline` | revenue and cost of sales per bucket | over `dateFrom`–`dateTo` |
+| `openItemSummary` | receivable and payable, split by due date, with the partners who owe most | as at `asOf` |
+| `cashFlow` | money through cash and bank accounts, filed by counterpart | over `dateFrom`–`dateTo` |
+
+A result is over a window and a balance is as at a date, which is why `position` takes
+no `dateFrom`: a window would report the movement instead, and narrowing the date filter
+would make total assets shrink.
+
+`revenueTimeline` buckets by day for a window of two months or less and by month above
+that, unless `granularity` says otherwise. Each bucket holds what was earned inside it,
+not a running total, so the buckets sum to the period revenue — a caller comparing two
+windows passes the same `granularity` to both, or the two lines share an axis and
+nothing else.
+
+`grossMargin` is `null` rather than zero when nothing was earned. A period with no sales
+has no margin, and reporting 0% reads as one that sold at exactly cost.
+
+`openItemSummary` reads unreconciled journal items rather than invoice totals, so a
+partly paid invoice contributes what is left of it instead of all or none, and its due
+date comes from the line's `dateMaturity`, falling back through the document's
+`invoiceDateDue` and its date.
+
 ## Which accounts a document posts to
 
 An invoice does not ask. `lineAccountId` and `counterpartAccountId` are optional, and
@@ -194,7 +234,12 @@ rather than merely untidy:
 
 - a picker only offers values the function will accept — a payment's destination lists
   receivable and payable accounts, not all 216;
-- a dashboard card counts exactly the list it opens;
+- the overview reports the ledger, not the database: nothing on it moves until a
+  document is posted;
+- a change against the previous period is coloured by whether it is good news, not by
+  which way it went — total liabilities falling is a fall and an improvement;
+- the period a screen compares against is the window of equal length immediately before
+  the one asked for, so narrowing the filter to ten days compares ten days;
 - a draft has no journal number yet, so lists and titles name it by its kind and date
   rather than by the raw id it was created under;
 - a payment state is shown only on documents that have one, never on a manual entry;
@@ -209,6 +254,10 @@ rather than merely untidy:
 `test/accounting.test.ts` covers tax computation, due dates, balanced posting, sequence
 assignment under concurrency, partial payment and reconciliation, VND settlement at the
 displayed amount, compounding taxes, reversal, and manual entry totals.
+`test/accounting-analytics.test.ts` covers the aggregates over one ledger with two
+months in it, and holds them to each other: total assets equal liabilities plus equity
+plus the result, the open items add up to the receivable balance, net cash flow equals
+the change in the cash balance, and no aggregate moves for a draft.
 `test/account-tt99.test.ts` covers installation, catalog upgrade — both the additive and
 the corrective path — and refusal of unsupported countries. `test/accounting-e2e.test.ts`
 drives the real HTTP backend through the invoice, payment and report workflow, through
