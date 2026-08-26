@@ -103,6 +103,7 @@ const boot = async (t: TestContext) => {
     const savedVariant = await fixture('product.saveVariant', {
       id: template.id.replace('-template', ''),
       templateId: template.id,
+      combinationKey: '',
       ...(template.id === 'mango-template' ? { defaultCode: 'XCAT-01', barcode: '893000000001' } : {}),
     })
     assert.equal(savedVariant.value.ok, true, JSON.stringify(savedVariant.value))

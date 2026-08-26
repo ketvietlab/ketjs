@@ -71,6 +71,7 @@ npm start                                   # KetSuite on SQLite, at :3000
 DATABASE_URL=postgres://… npm start         # …or on Postgres
 npm run dev                                 # …restarted on every change
 npm run dev -- --all                       # HTTP + worker, still one tsx watcher
+npm run build:watch                         # rebuild dist for a linked consumer
 npm run design                              # the backend UI catalogue, for designers
 npm run verify                              # audit + typecheck + tests + type proof
 npm run test:one -- test/e2e.test.ts        # one emitted test file
@@ -84,6 +85,11 @@ Production, tests and release commands build first, then run emitted JavaScript.
 after a clean typecheck and watches the dependency graph. Node never receives
 untransformed source. A first run composes the declared modules, migrates their
 complete schema, and serves. The runtime never installs or removes modules.
+
+`npm run build:watch` is the co-development path for another repository that links
+this checkout and consumes package `dist` artifacts. It debounces changes, serializes
+builds, and writes the gitignored `.ket-build-watch-ready` marker only after a
+successful build so the consumer can safely rebuild against the new declarations.
 
 The production worker is a separate process role of the same deployment artifact:
 `ket worker --deployment ketsuite`. Jobs stay in PostgreSQL/SQLite and can be enqueued
