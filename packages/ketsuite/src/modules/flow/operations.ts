@@ -623,11 +623,7 @@ export async function issueBuckets(
     ctx.db.count(query.where(...open, isNotNull(I.dueDate), lt(I.dueDate, today))),
     first.length
       ? ctx.db.count(
-          query.where(
-            ...open,
-            inArray(I.columnId, first),
-            or(isNull(I.dueDate), gte(I.dueDate, today)),
-          ),
+          query.where(...open, inArray(I.columnId, first), or(isNull(I.dueDate), gte(I.dueDate, today))),
         )
       : Promise.resolve(0),
   ])
