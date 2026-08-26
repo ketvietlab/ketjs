@@ -451,7 +451,12 @@ try {
     {
       name: 'lot-list',
       path: '/admin/stock/lots?lang=vi',
-      ready: `document.querySelector('#lot-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+    },
+    {
+      name: 'lot-create',
+      path: '/admin/stock/lots/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#lot-create-form')`,
     },
     {
       name: 'lot-detail-chatter',
@@ -3408,60 +3413,35 @@ try {
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+            listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
             rowsAtLeastOne: document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1,
-            productSelector: document.querySelector('#lot-create-form [name="productId"]')?.tagName === 'SELECT',
-            productLabel: document.querySelector('#lot-create-form [name="productId"]')?.textContent.includes('Áo khoác vận hành · OPS-JACKET'),
             onHand: document.querySelector('[data-ui="table"]')?.textContent.includes('12'),
             detailLink: Boolean(document.querySelector('[data-ui="table"] a[href*="/admin/stock/lots/lot-collab"]')),
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#lot-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+            createLink: Boolean(document.querySelector('[data-ui="list-page-actions"] a[href*="/admin/stock/lots/new"]')),
+            inlineCreate: Boolean(document.querySelector('#lot-create-form')),
             chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
         {
-          workspace: true,
+          listPage: true,
           rowsAtLeastOne: true,
-          productSelector: true,
-          productLabel: true,
           onHand: true,
           detailLink: true,
-          formRowsAtLeast28: true,
+          createLink: true,
+          inlineCreate: false,
           chatter: false,
           horizontalOverflow: false,
         },
-      )
-      await evaluate(
-        cdp,
-        `(() => {
-          const form = document.querySelector('#lot-create-form')
-          form.querySelector('[name="productId"]').value = 'variant-collab'
-          form.querySelector('[name="name"]').value = 'LOT/BROWSER/0085'
-          form.querySelector('[name="ref"]').value = 'BROWSER-REF-85'
-          form.querySelector('[name="note"]').value = 'Được tạo qua trình duyệt headless.'
-          form.requestSubmit()
-          return true
-        })()`,
-      )
-      await waitFor(
-        cdp,
-        `document.querySelector('[data-ui="table"]')?.textContent.includes('LOT/BROWSER/0085')`,
-      )
-      assert.equal(
-        await evaluate(cdp, `Boolean(document.querySelector('ket-island[data-island="mail.chatter"]'))`),
-        false,
       )
       if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-list-vi-desktop.png'))
 
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots?lang=en`)
       await waitFor(
         cdp,
-        `document.querySelector('#lot-create-form') && document.documentElement.lang === 'en'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'en'`,
       )
-      assert.equal(
-        await evaluate(cdp, `document.body.textContent.includes('Configured lots and serial numbers')`),
-        true,
-      )
+      assert.equal(await evaluate(cdp, `document.body.textContent.includes('Lots and serial numbers')`), true)
       if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-list-en-desktop.png'))
 
       await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -3473,22 +3453,20 @@ try {
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots?lang=vi`)
       await waitFor(
         cdp,
-        `document.querySelector('#lot-create-form') && document.documentElement.lang === 'vi'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'vi'`,
       )
       assert.deepEqual(
         await evaluate(
           cdp,
           `({
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
-            formRowsAtLeast28: Array.from(document.querySelectorAll('#lot-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
-            productSelectorVisible: document.querySelector('#lot-create-form [name="productId"]')?.getBoundingClientRect().height >= 28,
+            createVisible: document.querySelector('[data-ui="list-page-actions"] a[href*="/admin/stock/lots/new"]')?.getBoundingClientRect().height >= 28,
             listVisible: document.querySelector('[data-ui="table"]')?.getBoundingClientRect().height > 0
           })`,
         ),
         {
           horizontalOverflow: false,
-          formRowsAtLeast28: true,
-          productSelectorVisible: true,
+          createVisible: true,
           listVisible: true,
         },
       )
@@ -3497,7 +3475,7 @@ try {
       await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots?lang=en`)
       await waitFor(
         cdp,
-        `document.querySelector('#lot-create-form') && document.documentElement.lang === 'en'`,
+        `document.querySelector('[data-ui="list-page"]') && document.documentElement.lang === 'en'`,
       )
       assert.equal(
         await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
@@ -3512,28 +3490,123 @@ try {
         mobile: false,
       })
     }
+    if (screen.name === 'lot-create') {
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1280,
+        height: 900,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots/new?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#lot-create-form') && document.documentElement.lang === 'vi'`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `(() => {
+            const form = document.querySelector('#lot-create-form')
+            const fields = [...form.querySelectorAll('[data-ui="form-field"]')]
+            return {
+              formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+              productSelector: form.querySelector('[name="productId"]')?.tagName === 'SELECT',
+              productLabel: form.querySelector('[name="productId"]')?.textContent.includes('Áo khoác vận hành · OPS-JACKET'),
+              formRowsAtLeast28: fields.every((field) => field.getBoundingClientRect().height >= 28),
+              controlsWiderThanLabels: fields.every((field) => {
+                const label = field.querySelector(':scope > [data-ui="form-label"]')
+                const control = field.querySelector(':scope > [data-ui="form-control"]')
+                return !label || !control || control.getBoundingClientRect().width > label.getBoundingClientRect().width
+              }),
+              chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
+              horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+            }
+          })()`,
+        ),
+        {
+          formPage: true,
+          productSelector: true,
+          productLabel: true,
+          formRowsAtLeast28: true,
+          controlsWiderThanLabels: true,
+          chatter: false,
+          horizontalOverflow: false,
+        },
+      )
+      if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-create-vi-compact-desktop.png'))
+
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots/new?lang=en`)
+      await waitFor(
+        cdp,
+        `document.querySelector('#lot-create-form') && document.documentElement.lang === 'en'`,
+      )
+      if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-create-en-compact-desktop.png'))
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      for (const lang of ['vi', 'en']) {
+        await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots/new?lang=${lang}`)
+        await waitFor(
+          cdp,
+          `document.querySelector('#lot-create-form') && document.documentElement.lang === '${lang}'`,
+        )
+        assert.equal(
+          await evaluate(cdp, `document.documentElement.scrollWidth > document.documentElement.clientWidth`),
+          false,
+        )
+        if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, `lot-create-${lang}-mobile.png`))
+      }
+
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 1440,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots/new?lang=vi`)
+      await waitFor(cdp, `document.querySelector('#lot-create-form')`)
+      await evaluate(
+        cdp,
+        `(() => {
+          const form = document.querySelector('#lot-create-form')
+          form.querySelector('[name="productId"]').value = 'variant-collab'
+          form.querySelector('[name="name"]').value = 'LOT/BROWSER/0085'
+          form.querySelector('[name="ref"]').value = 'BROWSER-REF-85'
+          form.querySelector('[name="note"]').value = 'Được tạo qua form riêng.'
+          form.requestSubmit()
+          return true
+        })()`,
+      )
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="list-page"] [data-ui="table"]')?.textContent.includes('LOT/BROWSER/0085')`,
+      )
+    }
     if (screen.name === 'lot-detail-chatter') {
       assert.deepEqual(
         await evaluate(
           cdp,
           `({
-            workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
-            aside: Boolean(document.querySelector('[data-ui="record-aside"]')),
+            formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
+            aside: Boolean(document.querySelector('[data-ui="form-page-aside"]')),
             editorIdle: document.querySelector('ket-island[data-island="stock.editor"]')?.hidden === true,
             formRowsAtLeast28: Array.from(document.querySelectorAll('#lot-detail-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
-            collaborationNarrower: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width,
-            collaborationAtLeast32rem: document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width >= 512,
+            collaborationNarrower: document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect().width < document.querySelector('[data-ui="form-page-body"]').getBoundingClientRect().width,
+            collaborationAtLeast32rem: document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect().width >= 512,
             collaborationAboutThird: (() => {
-              const aside = document.querySelector('[data-ui="record-aside"]').getBoundingClientRect().width
-              const sheet = document.querySelector('[data-ui="record-sheet"]').getBoundingClientRect().width
-              const ratio = aside / (aside + sheet)
-              return ratio >= 0.31 && ratio <= 0.36
+              const aside = document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect().width
+              const layout = document.querySelector('[data-ui="form-page-layout"]').getBoundingClientRect().width
+              return Math.abs(aside / layout - 1 / 3) <= 0.01
             })(),
             horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
           })`,
         ),
         {
-          workspace: true,
+          formPage: true,
           aside: true,
           editorIdle: true,
           formRowsAtLeast28: true,
@@ -3543,6 +3616,7 @@ try {
           horizontalOverflow: false,
         },
       )
+      if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-detail-vi-desktop.png'))
       await evaluate(
         cdp,
         `(() => {
@@ -3559,7 +3633,7 @@ try {
       )
       await waitFor(
         cdp,
-        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="positive"]')`,
+        `document.querySelector('[data-ui="form-page-controller"] [data-ui="notice"][data-tone="positive"]')`,
       )
       assert.deepEqual(
         await evaluate(
@@ -3595,7 +3669,7 @@ try {
       )
       await waitFor(
         cdp,
-        `document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="danger"]')`,
+        `document.querySelector('[data-ui="form-page-controller"] [data-ui="notice"][data-tone="danger"]')`,
       )
       assert.deepEqual(
         await evaluate(
@@ -3604,7 +3678,7 @@ try {
             chatter: globalThis.__lotSaveNodes.chatter === document.querySelector('ket-island[data-island="mail.chatter"]'),
             activity: globalThis.__lotSaveNodes.activity === document.querySelector('ket-island[data-island="activity.record"]'),
             sidebar: globalThis.__lotSaveNodes.sidebar === document.querySelector('[data-ui="sidebar-foot"]'),
-            editorError: Boolean(document.querySelector('[data-ui="record-controller"] [data-ui="notice"][data-tone="danger"]')),
+            editorError: Boolean(document.querySelector('[data-ui="form-page-controller"] [data-ui="notice"][data-tone="danger"]')),
             formReady: document.querySelector('#lot-detail-form')?.getAttribute('aria-busy') !== 'true'
           })`,
         ),
@@ -3616,6 +3690,34 @@ try {
           formReady: true,
         },
       )
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      })
+      await navigate(cdp, `${e2e.baseUrl}/admin/stock/lots/lot-collab?lang=vi`)
+      await waitFor(
+        cdp,
+        `document.querySelector('[data-ui="form-page-aside"] [data-ui="chatter"][data-state="ready"]')`,
+      )
+      assert.deepEqual(
+        await evaluate(
+          cdp,
+          `(() => {
+            const body = document.querySelector('[data-ui="form-page-body"]').getBoundingClientRect()
+            const aside = document.querySelector('[data-ui="form-page-aside"]').getBoundingClientRect()
+            return {
+              stacked: aside.top >= body.bottom - 1,
+              chatterTopPadding: Number.parseFloat(getComputedStyle(document.querySelector('[data-ui="form-page-aside"]')).paddingTop) > 0,
+              horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+              chatterVisible: aside.height > 0
+            }
+          })()`,
+        ),
+        { stacked: true, chatterTopPadding: true, horizontalOverflow: false, chatterVisible: true },
+      )
+      if (!noArtifacts) await capture(cdp, join(lotEvidenceDir, 'lot-detail-vi-mobile.png'))
     }
     if (screen.name === 'transfer-chatter') {
       assert.deepEqual(

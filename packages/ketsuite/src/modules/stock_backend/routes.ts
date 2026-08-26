@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { json, text } from '@ketvietlab/ketjs'
+import { fragment, json, NAVIGATION_TYPE, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
 import { backendPage } from '../../ui/index.ts'
@@ -7,8 +7,7 @@ import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { inventoryScreen } from './inventory-screen.tsx'
 import { forecastScreen } from './forecast-screen.tsx'
 import { locationsScreen } from './locations-screen.tsx'
-import { lotDetailScreen } from './lot-screen.tsx'
-import { lotsScreen } from './lots-screen.tsx'
+import { lotCreateScreen, lotDetailScreen, lotsListScreen } from './screens/index.ts'
 import { pickingTypesScreen } from './picking-types-screen.tsx'
 import { replenishmentScreen } from './replenishment-screen.tsx'
 import { stockRouteDetailScreen } from './stock-route-screen.tsx'
@@ -121,6 +120,17 @@ const resultRedirect = (result: unknown, success: string) =>
     ? seeOther(success)
     : seeOther(`${success}${success.includes('?') ? '&' : '?'}invalid=1`)
 const isStockPartial = (req: Req): boolean => req.headers['x-ket-partial'] === 'stock-transfer'
+const lotProductOptions = (products: AnyRow[]) =>
+  products.flatMap((template) =>
+    (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+      .filter((variant) => variant.active !== false)
+      .map((variant) => ({
+        value: String(variant.id),
+        label: variant.defaultCode
+          ? `${String(template.name)} · ${String(variant.defaultCode)}`
+          : String(template.name),
+      })),
+  )
 const dateTimeLabel = (value: unknown, lang: string): string => {
   const raw = String(value ?? '')
   if (!raw) return ''
@@ -650,16 +660,7 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('stock.listLocations', {}, url, req),
         ctx.call('stock.listQuants', {}, url, req),
       ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow[]]
-      const productOptions = products.flatMap((template) =>
-        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
-          .filter((variant) => variant.active !== false)
-          .map((variant) => ({
-            value: String(variant.id),
-            label: variant.defaultCode
-              ? `${String(template.name)} · ${String(variant.defaultCode)}`
-              : String(template.name),
-          })),
-      )
+      const productOptions = lotProductOptions(products)
       const productById = new Map(productOptions.map((product) => [product.value, product.label]))
       const stockLocationIds = new Set(
         locations
@@ -678,7 +679,7 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'stock_backend.lots',
         body: (_, frame) =>
-          lotsScreen(
+          lotsListScreen(
             _,
             {
               rows: lots.map((row) => ({
@@ -691,8 +692,49 @@ export const routes: Record<string, RouteEntry> = {
                 active: row.active !== false,
                 href: inLocale(url, `/admin/stock/lots/${String(row.id)}`),
               })),
-              products: productOptions,
-              action: inLocale(url, '/admin/stock/lots'),
+              createHref: inLocale(url, '/admin/stock/lots/new'),
+            },
+            frame,
+          ),
+      })
+    },
+
+  '/admin/stock/lots/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const here = inLocale(url, '/admin/stock/lots/new')
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const result = await ctx.call(
+          'stock.createLot',
+          {
+            id: randomUUID(),
+            productId: form.productId ?? '',
+            name: form.name ?? '',
+            ref: form.ref || null,
+            note: form.note || null,
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/lots'))
+          : seeOther(`${here}${here.includes('?') ? '&' : '?'}invalid=1`)
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const products = (await ctx.call('stock.listStorableProducts', {}, url, req)) as AnyRow[]
+      return adminPage(ctx, url, req, {
+        title: 'stock_backend.lot.create.title',
+        body: (_, frame) =>
+          lotCreateScreen(
+            _,
+            {
+              products: lotProductOptions(products),
+              action: here,
+              cancelHref: inLocale(url, '/admin/stock/lots'),
               errors: invalid(url, _),
             },
             frame,
@@ -706,13 +748,13 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const here = inLocale(url, `/admin/stock/lots/${params.id}`)
+      const partial = req.headers['x-ket-partial'] === 'stock-lot'
       if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const lots = (await ctx.call('stock.listLots', {}, url, req)) as AnyRow[]
       let current = lots.find((row) => String(row.id) === params.id)
       if (!current) return text(_('stock_backend.lot.error.notFound'), { status: 404 })
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
-        const partial = req.headers['x-ket-partial'] === 'stock-lot'
         const form = await readForm(req)
         const values = {
           productId: form.productId ?? '',
@@ -746,16 +788,7 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('stock.listQuants', { productId: String(current.productId) }, url, req),
       ])) as [AnyRow[], AnyRow[], AnyRow[]]
       const locations = localizeGeneratedRecords(_, rawLocations, 'location')
-      const listedProductOptions = products.flatMap((template) =>
-        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
-          .filter((variant) => variant.active !== false)
-          .map((variant) => ({
-            value: String(variant.id),
-            label: variant.defaultCode
-              ? `${String(template.name)} · ${String(variant.defaultCode)}`
-              : String(template.name),
-          })),
-      )
+      const listedProductOptions = lotProductOptions(products)
       const productOptions = listedProductOptions.some(
         (product) => product.value === String(current.productId),
       )
@@ -818,7 +851,9 @@ export const routes: Record<string, RouteEntry> = {
           errors: invalid(url, _),
         },
         await frameOf(ctx, url, req),
+        partial,
       )
+      if (partial) return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
       return backendPage(ctx, req, {
         lang,
         title: String(current.name),

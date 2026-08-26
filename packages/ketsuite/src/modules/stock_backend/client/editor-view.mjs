@@ -45,8 +45,22 @@ const errorText = async (response, fallback) => {
   }
 }
 
-const replaceRecordParts = (markup) => {
+const replaceRecordParts = (markup, props) => {
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
+  if (props.lotId) {
+    const envelope = parsed.querySelector('ket-fragments')
+    const nextHeader = parsed.querySelector('template[data-ket-slot="stock.lot-header"]')
+    const nextBody = parsed.querySelector('template[data-ket-slot="stock.lot-body"]')
+    const currentHeader = document.querySelector('[data-ket-slot="stock.lot-header"]')
+    const currentBody = document.querySelector('[data-ket-slot="stock.lot-body"]')
+    if (!nextHeader || !nextBody || !currentHeader || !currentBody)
+      throw new Error('The refreshed lot fragment is incomplete.')
+
+    currentHeader.replaceChildren(document.importNode(nextHeader.content, true))
+    currentBody.replaceChildren(document.importNode(nextBody.content, true))
+    if (envelope?.getAttribute('data-title') !== null) document.title = envelope.getAttribute('data-title')
+    return
+  }
   const nextHeader = parsed.querySelector('[data-ui="record-header"]')
   const nextBody = parsed.querySelector('[data-ui="record-body"]')
   const currentHeader = document.querySelector('[data-ui="record-header"]')
@@ -116,7 +130,7 @@ export function createStockEditorView(runtime, props) {
         signal: activeRequest.signal,
       })
       if (!response.ok) throw new Error(await errorText(response, labels.failed))
-      replaceRecordParts(await response.text())
+      replaceRecordParts(await response.text(), props)
       if (disposed) return
       showState('saved', labels.saved)
     } catch (caught) {

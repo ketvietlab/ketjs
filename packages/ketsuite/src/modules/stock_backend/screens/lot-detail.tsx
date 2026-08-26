@@ -1,18 +1,20 @@
-import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
+  button,
   dataTable,
   emptyState,
-  Framed,
+  FormCluster,
+  FormPage,
   icon,
   RecordForm,
-  RecordWorkspace,
   Section,
+  shell,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { Column, FormOption, Frame } from '../../ui/index.ts'
+} from '../../../ui/index.ts'
+import type { Column, FormOption, Frame } from '../../../ui/index.ts'
 
 export type LotInventoryRow = {
   id: string
@@ -83,6 +85,7 @@ const lotForm = (_: Translator, options: LotDetailOptions): TemplateResult => (
     action={options.action}
     submit={_('stock_backend.action.save')}
     submitVariant="primary"
+    submitPlacement="external"
     errors={options.errors}
     fields={[
       {
@@ -116,10 +119,12 @@ const lotForm = (_: Translator, options: LotDetailOptions): TemplateResult => (
   />
 )
 
-export const lotDetailScreen = (_: Translator, options: LotDetailOptions, frame: Frame): TemplateResult => {
-  const onHandRows = options.rows.filter((row) => row.countsAsOnHand)
-  const totalOnHand = onHandRows.reduce((sum, row) => sum + Number(row.quantity), 0)
-  const totalAvailable = onHandRows.reduce((sum, row) => sum + Number(row.available), 0)
+export const lotDetailScreen = (
+  _: Translator,
+  options: LotDetailOptions,
+  frame: Frame,
+  partial = false,
+): TemplateResult => {
   const inventory = options.rows.length ? (
     dataTable(_, { columns: columns(_), rows: options.rows, id: (row) => row.id })
   ) : (
@@ -130,55 +135,54 @@ export const lotDetailScreen = (_: Translator, options: LotDetailOptions, frame:
       })}
     />
   )
-
-  return (
-    <Framed
-      translator={_}
-      title={_('stock_backend.lot.kicker')}
-      frame={frame}
-      body={
-        <RecordWorkspace
-          kicker={_('stock_backend.lot.kicker')}
-          title={options.lot.name}
-          subtitle={`${options.lot.productLabel}${options.lot.ref ? ` · ${options.lot.ref}` : ''}`}
-          imageFallback={icon('package')}
-          badges={[
-            badge(
-              options.lot.active
-                ? _('stock_backend.lot.status.active')
-                : _('stock_backend.lot.status.archived'),
-              options.lot.active ? 'positive' : 'danger',
-            ),
+  const description = `${options.lot.productLabel}${options.lot.ref ? ` · ${options.lot.ref}` : ''}`
+  const page = (
+    <FormPage
+      scope="stock-lot-form-page"
+      title={options.lot.name}
+      description={description}
+      status={badge(
+        options.lot.active ? _('stock_backend.lot.status.active') : _('stock_backend.lot.status.archived'),
+        options.lot.active ? 'positive' : 'neutral',
+      )}
+      actions={
+        <FormCluster
+          label={_('stock_backend.action.save')}
+          forms={[
+            button({
+              label: _('stock_backend.action.save'),
+              type: 'submit',
+              form: 'lot-detail-form',
+              variant: 'primary',
+            }),
           ]}
-          summary={[
-            { id: 'on-hand', label: _('stock_backend.lot.summary.onHand'), value: totalOnHand },
-            { id: 'available', label: _('stock_backend.lot.summary.available'), value: totalAvailable },
-            {
-              id: 'locations',
-              label: _('stock_backend.lot.summary.locations'),
-              value: options.rows.length,
-            },
-          ]}
-          controller={options.editor}
-          body={stack(
-            [
-              <Section
-                title={_('stock_backend.lot.information.title')}
-                description={_('stock_backend.lot.information.hint')}
-                body={<Surface padding="compact" body={lotForm(_, options)} />}
-              />,
-              <Section
-                title={_('stock_backend.lot.inventory.title')}
-                description={_('stock_backend.lot.inventory.hint')}
-                body={inventory}
-              />,
-            ],
-            'loose',
-          )}
-          aside={options.collaboration}
-          asideLabel={_('stock_backend.lot.collaboration.label')}
         />
       }
+      controller={options.editor}
+      body={stack(
+        [
+          <Section
+            title={_('stock_backend.lot.information.title')}
+            description={_('stock_backend.lot.information.hint')}
+            body={<Surface body={lotForm(_, options)} />}
+          />,
+          <Section
+            title={_('stock_backend.lot.inventory.title')}
+            description={_('stock_backend.lot.inventory.hint')}
+            body={inventory}
+          />,
+        ],
+        'loose',
+      )}
+      aside={options.collaboration}
+      asideLabel={_('stock_backend.lot.collaboration.label')}
+      slots={{
+        header: 'stock.lot-header',
+        body: 'stock.lot-body',
+        ...(partial ? { fragmentTitle: options.lot.name } : {}),
+      }}
     />
   )
+
+  return partial ? page : shell(_, options.lot.name, page, { ...frame, topbar: false, titled: false })
 }

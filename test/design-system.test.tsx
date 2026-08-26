@@ -63,6 +63,13 @@ test('design system: application regions are square while independent objects ar
   assert.match(shell, /data-ui="app-right-rail"/)
 })
 
+test('design system: a stacked FormPage rail keeps space above its content', () => {
+  assert.match(
+    css,
+    /@media \(max-width: 63\.9375rem\)[\s\S]*?\[data-ui="form-page-aside"\][\s\S]*?padding-top: var\(--kv-space-5\)/,
+  )
+})
+
 test('design system: controls preserve their native semantics and accessible state', () => {
   const button = renderToString(<Button label="Saving" variant="primary" loading />)
   assert.match(button, /^<button/)

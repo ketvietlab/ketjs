@@ -715,7 +715,7 @@
     :where([data-kv-design-system]) [data-ui="form-page-aside"] {
       position: static;
       max-height: none;
-      padding-top: 0;
+      padding-top: var(--kv-space-5);
       overflow: visible;
       border-top: 1px solid var(--kv-panel-divider);
       border-left: 0;
