@@ -1,4 +1,5 @@
 import { test } from 'node:test'
+import { createDevelopmentCloser } from '../packages/ketjs/src/server/development.ts'
 import assert from 'node:assert/strict'
 import { bootDeployment, defineDeployment, defineModule, readConfig, from, eq, json } from '@ketvietlab/ketjs'
 import type { Ctx } from '@ketvietlab/ketjs'
@@ -6,6 +7,36 @@ import { scaffold } from '../packages/ketjs/src/scaffold/index.ts'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+test('dev restart closes HTTP once before waiting for the worker', async () => {
+  const events: string[] = []
+  let releaseHttp = () => {}
+  const httpClosed = new Promise<void>((resolve) => {
+    releaseHttp = resolve
+  })
+  const close = createDevelopmentCloser(
+    {
+      close: async () => {
+        events.push('http')
+        await httpClosed
+      },
+    },
+    {
+      close: async () => {
+        events.push('worker')
+      },
+    },
+  )
+
+  const first = close()
+  const repeated = close()
+  assert.equal(first, repeated)
+  assert.deepEqual(events, ['http'])
+
+  releaseHttp()
+  await first
+  assert.deepEqual(events, ['http', 'worker'])
+})
 
 /**
  * Configuration is read once into a value rather than looked up from process.env
