@@ -14,7 +14,7 @@ export default defineModule({
   category: 'Kho vận',
   models,
   extend: {
-    'product.Template': { isStorable: 'bool?', tracking: 'text?' },
+    'product.Template': { isStorable: 'bool?', tracking: 'text?', inventoryRevision: 'int?' },
   },
   relations,
   functions: { ...functions, ...routingFunctions, ...reportFunctions },
