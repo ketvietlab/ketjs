@@ -1,5 +1,20 @@
 import { randomUUID } from 'node:crypto'
-import { asc, bucketEq, compileListFilter, deleteFrom, desc, eq, from, inArray } from '@ketvietlab/ketjs'
+import {
+  asc,
+  bucketEq,
+  compileListFilter,
+  deleteFrom,
+  desc,
+  eq,
+  from,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  not,
+  or,
+} from '@ketvietlab/ketjs'
 import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
 import { ensureThread, followThread, listTimeline, postMessage, unfollowThread } from '../mail/index.ts'
 import { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES } from './types.ts'
@@ -330,6 +345,15 @@ export async function serializeIssueList(ctx: Ctx, rows: Row[]): Promise<Row[]> 
       progress: counted ? Math.round((counted.done * 100) / counted.total) : null,
       projectName: row.projectId ? (projectBy.get(String(row.projectId))?.name ?? row.projectId) : null,
       columnName: row.columnId ? (columnBy.get(String(row.columnId))?.name ?? row.columnId) : null,
+      /**
+       * Whether this issue's column is one the board treats as finished.
+       *
+       * The name alone cannot answer it — "Done", "Shipped" and "Closed" are
+       * all somebody's terminal column and none of them is a keyword — so a
+       * screen wanting to mark a late issue would have to re-read the columns
+       * it was just handed.
+       */
+      terminal: row.columnId ? columnBy.get(String(row.columnId))?.terminalState === true : false,
       epicTitle: row.epicId ? (epicBy.get(String(row.epicId))?.title ?? row.epicId) : null,
       sprintName: row.sprintId ? (sprintBy.get(String(row.sprintId))?.name ?? row.sprintId) : null,
       assigneeName: row.assigneeUserId
@@ -427,6 +451,31 @@ async function resolveFieldFilters(
 const listStateOf = (value: unknown): ListState | null =>
   value && typeof value === 'object' ? (value as ListState) : null
 
+/**
+ * The columns a board treats as finished, and the one it starts from.
+ *
+ * Read once and shared, because "late" and "not started" both need them and
+ * two readings could disagree. A finished issue is never late, however long
+ * ago its date was — the work is done, and a red date on it would be asking
+ * for something that has already happened.
+ */
+const boardEdges = async (ctx: Ctx): Promise<{ terminal: string[]; first: string[] }> => {
+  const C = ctx.table('flow.Column')
+  const columns = await ctx.db.all(from(C).where(eq(C.active, true)))
+  const firstOf = new Map<string, { id: string; sequence: number }>()
+  for (const column of columns) {
+    if (column.terminalState) continue
+    const key = String(column.projectId)
+    const held = firstOf.get(key)
+    const at = { id: String(column.id), sequence: n(column.sequence) }
+    if (!held || at.sequence < held.sequence) firstOf.set(key, at)
+  }
+  return {
+    terminal: columns.filter((column) => column.terminalState).map((column) => String(column.id)),
+    first: [...firstOf.values()].map((column) => column.id),
+  }
+}
+
 const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const I = ctx.table('flow.Issue')
   const given = listStateOf(args.listState) ?? emptyIssueListState()
@@ -467,6 +516,17 @@ const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   // settles the question the same way. A request with no actor matches
   // nothing, which is the safe reading of "mine".
   if (args.mine === true) query = query.where(eq(I.assigneeUserId, ctx.actor ?? '\u0000'))
+  // A day, and the query narrows to what was already due before it and is not
+  // finished. Here rather than at each caller so the list, the counts and the
+  // rail cannot drift apart on what "late" means.
+  if (args.overdueOn) {
+    const { terminal } = await boardEdges(ctx)
+    query = query.where(
+      isNotNull(I.dueDate),
+      lt(I.dueDate, String(args.overdueOn)),
+      ...(terminal.length ? [not(inArray(I.columnId, terminal))] : []),
+    )
+  }
   if (!state.includeArchived && args.includeArchived !== true) query = query.where(eq(I.active, true))
   const sorts = state.sort.length ? state.sort : emptyIssueListState().sort
   const sortable = new Map((spec.sortable ?? []).map((field) => [field.key, field.col]))
@@ -515,6 +575,63 @@ export async function groupIssues(ctx: Ctx, args: Record<string, unknown>) {
   if (args.limit != null) grouped = grouped.limit(Number(args.limit))
   if (args.offset != null) grouped = grouped.offset(Number(args.offset))
   return ctx.db.group(grouped)
+}
+
+/**
+ * How the issues in view divide up: finished, late, not started, under way.
+ *
+ * Counted, not listed. Each figure is a `count` over the same query the list
+ * itself runs, so a board of a thousand issues costs four counts rather than a
+ * thousand rows — and every bucket answers the question the list is already
+ * filtered by, instead of describing something wider than what is on screen.
+ *
+ * The four are disjoint and add up to the total, which is the only way a row of
+ * figures beside a list is readable at all:
+ *
+ *   done      the issue sits in a column marked `terminalState`
+ *   overdue   not done, has a due date, and that date has passed
+ *   waiting   not done, not overdue, in the first column of its board
+ *   working   everything else that is not done
+ *
+ * "First column" is what stands in for "not started". A project has no such
+ * flag, but a board is ordered and its first column is where work lands before
+ * anyone picks it up — see `Column.sequence`. It is a reading of real rows
+ * rather than a status nobody sets.
+ */
+export type IssueBuckets = {
+  total: number
+  done: number
+  overdue: number
+  waiting: number
+  working: number
+}
+
+export async function issueBuckets(
+  ctx: Ctx,
+  args: Record<string, unknown>,
+  today: string,
+): Promise<IssueBuckets> {
+  const { query } = await issueQuery(ctx, args)
+  const I = ctx.table('flow.Issue')
+  const { terminal, first } = await boardEdges(ctx)
+
+  // `count` rather than `all`: none of these needs the rows.
+  const open = terminal.length ? [not(inArray(I.columnId, terminal))] : []
+  const [total, done, overdue, waiting] = await Promise.all([
+    ctx.db.count(query),
+    terminal.length ? ctx.db.count(query.where(inArray(I.columnId, terminal))) : Promise.resolve(0),
+    ctx.db.count(query.where(...open, isNotNull(I.dueDate), lt(I.dueDate, today))),
+    first.length
+      ? ctx.db.count(
+          query.where(
+            ...open,
+            inArray(I.columnId, first),
+            or(isNull(I.dueDate), gte(I.dueDate, today)),
+          ),
+        )
+      : Promise.resolve(0),
+  ])
+  return { total, done, overdue, waiting, working: Math.max(0, total - done - overdue - waiting) }
 }
 
 export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {

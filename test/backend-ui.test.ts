@@ -37,6 +37,7 @@ import {
   inline,
   kanbanCard,
   thumbnail,
+  deadline,
   docTree,
   kanbanGrid,
   linkButton,
@@ -336,6 +337,9 @@ const componentContract = [
   thumbnail({ fallback: icon('package') }),
   // Two levels, so the nested branch and its rail are rendered and not only
   // the root list — the stylesheet targets both.
+  // Both states, because only the late one is styled.
+  deadline({ date: '30/06/2026' }),
+  deadline({ date: '19/05/2026', late: true }),
   docTree<{
     id: string
     parent: string | null
