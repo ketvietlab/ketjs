@@ -119,6 +119,9 @@ const presets = (_: Translator, o: AccountingOverviewOptions): Tab[] =>
     active: o.preset === name,
   }))
 
+/** A year, or the typed range that narrowing one produces. Nothing else takes dates. */
+const refinable = (preset: string): boolean => /^\d{4}$/.test(preset) || preset === 'custom'
+
 const years = (_: Translator, o: AccountingOverviewOptions): Tab[] =>
   o.years.map((year) => ({
     id: String(year),
@@ -303,13 +306,26 @@ export const accountingOverviewScreen = (
                       // "2026" is the whole year, which is a different question
                       // from "this month" and the only way to ask it in one click.
                       <Tabs label={_('account_backend.overview.byYear')} items={years(_, options)} wrap />,
-                      <DatePicker
-                        action={options.action}
-                        hidden={options.hidden}
-                        label={_('account_backend.overview.custom')}
-                        fields={options.fields}
-                        submit={_('account_backend.action.calculate')}
-                      />,
+                      // The date fields belong to a year and appear with one.
+                      //
+                      // A relative window is already exact — "the last 30 days"
+                      // has nothing left to narrow, and a pair of dates sitting
+                      // under it invited the reader to edit numbers that the
+                      // next click would overwrite. A year is the coarse frame
+                      // that does have something inside it worth narrowing, and
+                      // a typed range is what narrowing it produces, so the
+                      // fields stay while that range is what is showing.
+                      ...(refinable(options.preset)
+                        ? [
+                            <DatePicker
+                              action={options.action}
+                              hidden={options.hidden}
+                              label={_('account_backend.overview.custom')}
+                              fields={options.fields}
+                              submit={_('account_backend.action.calculate')}
+                            />,
+                          ]
+                        : []),
                     ])}
                   />
                 }

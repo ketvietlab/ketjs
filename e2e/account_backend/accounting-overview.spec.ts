@@ -199,10 +199,9 @@ test('a named window travels as its name, so a bookmark stays what it says', asy
   await expect(chip('Hôm nay')).toHaveAttribute('data-active', 'true')
   await expect(chip('Hôm nay')).toHaveAttribute('aria-current', 'page')
 
-  // And the date fields show what it resolved to: the same day, twice.
-  const today = new Date().toISOString().slice(0, 10)
-  await expect(page.locator('input[name="dateFrom"]')).toHaveValue(today)
-  await expect(page.locator('input[name="dateTo"]')).toHaveValue(today)
+  // A relative window is already exact, so it takes no date fields: a pair of
+  // them under "today" only invites editing numbers the next click overwrites.
+  await expect(page.locator('input[name="dateFrom"]')).toHaveCount(0)
 
   // Every window the screen offers is reachable and marks itself.
   for (const label of [
@@ -220,11 +219,13 @@ test('a named window travels as its name, so a bookmark stays what it says', asy
   }
 })
 
-test('a year is one click, and it is the whole year', async ({ page }) => {
+test('a year is one click, and it is the only window with dates to narrow', async ({ page }) => {
   await overview(page)
   const year = String(new Date().getUTCFullYear())
   await page.locator('[data-ui="tab"]', { hasText: year }).first().click()
   await expect(page).toHaveURL(new RegExp(`period=${year}`))
+  // The year is the coarse frame, and the fields are how it is narrowed — so
+  // they are here, filled with the frame they start from.
   await expect(page.locator('input[name="dateFrom"]')).toHaveValue(`${year}-01-01`)
   await expect(page.locator('input[name="dateTo"]')).toHaveValue(`${year}-12-31`)
   // 2026 covers both months the fixture posts, so it is more than either of them.
@@ -302,7 +303,13 @@ for (const viewport of [
       })
       expect(chips.length).toBe(8)
       expect(chips.every((chip) => chip.inside)).toBeTruthy()
+      await expect(page.locator('input[name="dateFrom"]')).toHaveCount(0)
       await filter.screenshot({ path: join(artifacts, `period-${viewport.name}-${scheme}.png`) })
+
+      // And with a year current, where the date fields do belong.
+      await page.goto(`/admin/accounting?lang=vi&period=${new Date().getUTCFullYear()}`)
+      await expect(page.locator('input[name="dateFrom"]')).toHaveCount(1)
+      await filter.screenshot({ path: join(artifacts, `period-year-${viewport.name}-${scheme}.png`) })
     })
   }
 }
