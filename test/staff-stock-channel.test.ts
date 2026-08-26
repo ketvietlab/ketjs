@@ -279,6 +279,30 @@ test('staff warehouse channel covers claim, scanning, execution, and return as o
   assert.equal((claimed.data.claim as Row).state, 'active')
   assert.notEqual((claimed.data.picking as Row).version, ready.version)
 
+  // The claim moved the aggregate version, so a retry of that same POST carries a
+  // version that is already stale. A dropped response is the ordinary case on a
+  // handheld, and the retry is the recovery path: replaying the command under its
+  // own key has to return the claim, not refuse it as somebody else's.
+  const replayedClaim = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/claim', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-claim-1', String(ready.version)),
+    body: JSON.stringify({ expectedVersion: ready.version, reason: 'Start picking the transfer' }),
+  })
+  assert.equal(replayedClaim.status, 200, await replayedClaim.clone().text())
+  const replayed = (await replayedClaim.json()) as Envelope<Row>
+  assert.equal((replayed.data.claim as Row).id, (claimed.data.claim as Row).id)
+  assert.equal((replayed.data.claim as Row).state, 'active')
+  // A different key against a transfer somebody already holds is still a refusal.
+  const secondClaim = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/claim', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-claim-2', String((replayed.data.picking as Row).version)),
+    body: JSON.stringify({
+      expectedVersion: (replayed.data.picking as Row).version,
+      reason: 'Second claim must be refused',
+    }),
+  })
+  assert.equal(secondClaim.status, 422)
+
   const staleRelease = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/release', {
     method: 'POST',
     headers: mutationHeaders(csrf, 'warehouse-release-stale', String(ready.version)),
@@ -430,19 +454,19 @@ test('staff warehouse channel covers the complete inventory count lease and subm
   assert.equal(claim.status, 200)
   const claimed = (await claim.json()) as Envelope<Row>
   assert.match(String(claimed.data.attemptPublicId), /^staff_wcount_attempt_[0-9a-f]{64}$/)
-  assert.equal(claimed.data.attemptVersion, 'ica_1')
+  assert.match(String(claimed.data.attemptVersion), /^ica_[0-9a-f]{64}$/)
 
   const resume = await e2e.client.request(
     `/api/staff/v1/warehouse/count-attempts/${String(claimed.data.attemptPublicId)}/resume`,
     {
       method: 'POST',
-      headers: mutationHeaders(csrf, 'warehouse-count-resume-1', 'ica_1'),
-      body: JSON.stringify({ expectedVersion: 'ica_1' }),
+      headers: mutationHeaders(csrf, 'warehouse-count-resume-1', String(claimed.data.attemptVersion)),
+      body: JSON.stringify({ expectedVersion: claimed.data.attemptVersion }),
     },
   )
   assert.equal(resume.status, 200)
   const resumed = (await resume.json()) as Envelope<Row>
-  assert.equal(resumed.data.attemptVersion, 'ica_2')
+  assert.notEqual(resumed.data.attemptVersion, claimed.data.attemptVersion)
 
   const current = await e2e.client.json<Envelope<Row>>(
     '/api/staff/v1/warehouse/count-sessions/count-session-1',
@@ -461,14 +485,27 @@ test('staff warehouse channel covers the complete inventory count lease and subm
   assert.equal(entry.status, 200)
   const recorded = (await entry.json()) as Envelope<Row>
   assert.equal(recorded.data.countedQuantity, '20')
-  assert.equal(recorded.data.attemptVersion, 'ica_3')
+  assert.notEqual(recorded.data.attemptVersion, resumed.data.attemptVersion)
+
+  // A token that does not read the body it is handed out with is a 304 carrying
+  // the wrong answer. Recording a line advances the line and the attempt and
+  // leaves the session row alone, so the session's progress used to move under an
+  // unchanged token; renaming the location did the same to the labels.
+  const afterEntry = await e2e.client.get('/api/staff/v1/warehouse/count-sessions/count-session-1')
+  const afterEntryBody = (await afterEntry.json()) as Envelope<Row>
+  assert.equal(current.data.countedLineCount, 0)
+  assert.equal(afterEntryBody.data.countedLineCount, 1)
+  assert.notEqual(afterEntryBody.data.version, current.data.version)
+  // The mutation echo and the next read have to name the same version, or the
+  // caller's following command is refused by a resource nobody touched.
+  assert.equal(recorded.data.sessionVersion, afterEntryBody.data.version)
 
   const submit = await e2e.client.request(
     `/api/staff/v1/warehouse/count-attempts/${String(claimed.data.attemptPublicId)}/submit`,
     {
       method: 'POST',
-      headers: mutationHeaders(csrf, 'warehouse-count-submit-1', 'ica_3'),
-      body: JSON.stringify({ expectedVersion: 'ica_3' }),
+      headers: mutationHeaders(csrf, 'warehouse-count-submit-1', String(recorded.data.attemptVersion)),
+      body: JSON.stringify({ expectedVersion: recorded.data.attemptVersion }),
     },
   )
   assert.equal(submit.status, 200)
@@ -476,4 +513,76 @@ test('staff warehouse channel covers the complete inventory count lease and subm
   assert.equal(submitted.data.attemptState, 'submitted')
   assert.equal(submitted.data.sessionState, 'review_ready')
   assert.equal(submitted.data.completedAttemptCount, 1)
+
+  // The ETag is the wider promise and covers the labels the body resolves. The
+  // version deliberately does not: renaming a location belongs to somebody else
+  // and must not refuse the next quantity a counter types.
+  const beforeRename = await e2e.client.get('/api/staff/v1/warehouse/count-sessions/count-session-1')
+  const beforeRenameBody = (await beforeRename.json()) as Envelope<Row>
+  await e2e.fixture.call<Row>(
+    'stock.saveLocation',
+    { id: 'wh:stock', name: 'Kho đã đổi tên', usage: 'internal' },
+    { scope },
+  )
+  const afterRename = await e2e.client.get('/api/staff/v1/warehouse/count-sessions/count-session-1')
+  const afterRenameBody = (await afterRename.json()) as Envelope<Row>
+  assert.equal(String((beforeRenameBody.data.location as Row).name), 'Stock')
+  assert.equal(String((afterRenameBody.data.location as Row).name), 'Kho đã đổi tên')
+  assert.notEqual(afterRename.headers.get('etag'), beforeRename.headers.get('etag'))
+  assert.equal(afterRenameBody.data.version, beforeRenameBody.data.version)
+})
+
+/**
+ * Picking less than was asked for is the ordinary case, and it leaves work behind.
+ *
+ * The execution preview promises `createBackorder: 'always'`, and `completePicking`
+ * hands the new transfer's id back, but the channel was dropping it and answering
+ * with an empty list — so a partial pick reported itself as a finished one and the
+ * caller had no way to reach the remainder.
+ */
+test('staff warehouse channel names the backorder a partial execution leaves behind', async (t) => {
+  const e2e = await boot(t)
+  await prepareAssignedPicking(e2e)
+  const scope = { company: 'acme', branches: null }
+  await e2e.client.login({ login: 'warehouse-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+
+  const ready = await detail(e2e)
+  const claim = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/claim', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-partial-claim-1', String(ready.version)),
+    body: JSON.stringify({ expectedVersion: ready.version, reason: 'Pick what is on the shelf' }),
+  })
+  assert.equal(claim.status, 200)
+
+  const preview = await e2e.client.json<Envelope<Row>>('/api/staff/v1/warehouse/pickings/pick-a/execution')
+  const move = (preview.data.moves as Row[])[0]!
+  const reservation = (move.reservations as Row[])[0]!
+  assert.equal(move.quantity, '10')
+  const execution = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/execution/complete', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-partial-execution-1', String(preview.data.expectedVersion)),
+    body: JSON.stringify({
+      expectedVersion: preview.data.expectedVersion,
+      lines: [
+        {
+          moveId: move.moveId,
+          moveLineId: reservation.moveLineId,
+          productId: move.productId,
+          quantity: '4',
+          sourceLocationId: reservation.sourceLocationId,
+          destinationLocationId: move.destinationLocationId,
+        },
+      ],
+    }),
+  })
+  assert.equal(execution.status, 200, await execution.clone().text())
+  const executed = (await execution.json()) as Envelope<{ backorderIds: string[] }>
+  assert.equal(executed.data.backorderIds.length, 1)
+
+  const pickings = await e2e.fixture.call<Row[]>('stock.listPickingViews', {}, { scope })
+  const backorder = pickings.value.find((row) => String(row.id) === String(executed.data.backorderIds[0]))
+  assert.ok(backorder, `no transfer named ${String(executed.data.backorderIds[0])}`)
+  assert.equal(String(backorder.backorderId), 'pick-a')
 })

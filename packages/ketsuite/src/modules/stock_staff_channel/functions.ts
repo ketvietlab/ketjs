@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { defineFn } from '@ketvietlab/ketjs'
+import { defineFn, eq, from, inArray, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as stockFunctions } from '../stock/functions.ts'
 
@@ -25,6 +25,34 @@ const future = (minutes: number): string => new Date(Date.now() + minutes * 60_0
 const effectsOf = (...specs: Array<FnSpec | undefined>): string[] => [
   ...new Set(specs.flatMap((spec) => spec?.effects ?? [])),
 ]
+
+/**
+ * Rows by id, asked for by id.
+ *
+ * The catalogue tables are shared and unbounded, and these paths were reading all
+ * of one to keep a handful: every barcode beep pulled the whole product table
+ * across to run `.find()` on it in memory, while `barcode` carries a unique index
+ * that answers the same question directly.
+ */
+const byIds = async (ctx: Ctx, model: string, ids: Iterable<unknown>): Promise<Row[]> => {
+  const wanted = [...new Set([...ids].filter(Boolean).map(String))]
+  if (!wanted.length) return []
+  const table = ctx.table(model)
+  return ctx.db.all(from(table).where(inArray(table.id, wanted)))
+}
+
+const scannedProduct = async (ctx: Ctx, scan: string): Promise<Row | null> => {
+  const P = ctx.table('product.Product')
+  return (
+    (
+      await ctx.db.all(
+        from(P)
+          .where(or(eq(P.barcode, scan), eq(P.defaultCode, scan)))
+          .limit(1),
+      )
+    )[0] ?? null
+  )
+}
 
 const activeClaim = async (ctx: Ctx, pickingId: unknown): Promise<Row | null> =>
   (await ours(ctx, 'stock_staff_channel.PickingClaim', { activePickingKey: String(pickingId) }))[0] ?? null
@@ -97,7 +125,7 @@ const executeLines = async (
   ctx: Ctx,
   heldPicking: Row,
   rawLines: unknown,
-): Promise<{ ok: true; lines: Row[] } | ReturnType<typeof invalid>> => {
+): Promise<{ ok: true; lines: Row[]; backorderId: string | null } | ReturnType<typeof invalid>> => {
   if (!Array.isArray(rawLines) || !rawLines.length)
     return invalid('lines', 'stock_staff_channel.error.executionLinesRequired')
   const moves = await pickingMoves(ctx, heldPicking.id)
@@ -147,7 +175,11 @@ const executeLines = async (
     createBackorder: true,
   })) as Row
   if (result.ok !== true) return invalid('pickingId', 'stock_staff_channel.error.executionFailed')
-  return { ok: true, lines: completed }
+  // Picking less than was asked for leaves a backorder behind, and the caller has
+  // to be able to reach it. The id was being dropped here while the execution
+  // preview promised `createBackorder: 'always'` and the response said the list
+  // was empty — so a partial pick reported itself as a finished one.
+  return { ok: true, lines: completed, backorderId: (result.backorderId as string | null) ?? null }
 }
 
 export const functions: Record<string, FnSpec> = {
@@ -188,16 +220,21 @@ export const functions: Record<string, FnSpec> = {
         ? ((await ours(ctx, 'stock.Warehouse', { id: type.warehouseId }))[0] ?? null)
         : null
       const moves = await pickingMoves(ctx, heldPicking.id)
-      const productIds = [...new Set(moves.map((row) => String(row.productId)))]
-      const products = (await ctx.db.select('product.Product')).filter((row) =>
-        productIds.includes(String(row.id)),
+      const products = await byIds(
+        ctx,
+        'product.Product',
+        moves.map((row) => row.productId),
       )
-      const templateIds = [...new Set(products.map((row) => String(row.templateId)))]
-      const templates = (await ctx.db.select('product.Template')).filter((row) =>
-        templateIds.includes(String(row.id)),
+      const templates = await byIds(
+        ctx,
+        'product.Template',
+        products.map((row) => row.templateId),
       )
-      const unitIds = [...new Set(moves.map((row) => String(row.productUomId)))]
-      const units = (await ctx.db.select('uom.Unit')).filter((row) => unitIds.includes(String(row.id)))
+      const units = await byIds(
+        ctx,
+        'uom.Unit',
+        moves.map((row) => row.productUomId),
+      )
       return {
         session,
         picking: heldPicking,
@@ -278,17 +315,16 @@ export const functions: Record<string, FnSpec> = {
       const template = product
         ? ((await ctx.db.select('product.Template', { id: product.templateId }))[0] ?? null)
         : null
-      const unitIds = [...new Set(lines.map((row) => String(row.productUomId)))]
-      const units = (await ctx.db.select('uom.Unit')).filter((row) => unitIds.includes(String(row.id)))
-      const lotIds = [
-        ...new Set(
-          lines
-            .map((row) => row.lotId)
-            .filter(Boolean)
-            .map(String),
-        ),
-      ]
-      const lots = (await ours(ctx, 'stock.Lot')).filter((row) => lotIds.includes(String(row.id)))
+      const units = await byIds(
+        ctx,
+        'uom.Unit',
+        lines.map((row) => row.productUomId),
+      )
+      const lots = await byIds(
+        ctx,
+        'stock.Lot',
+        lines.map((row) => row.lotId),
+      )
       return {
         session,
         attempt: ownAttempt,
@@ -304,8 +340,19 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Claiming a transfer, and claiming it again with the same key.
+   *
+   * The id used to carry `Date.now()`, so a retry built a different row and the
+   * active-claim guard rejected it: replaying one POST with the same
+   * `Idempotency-Key` answered 409 `claimed` — the caller told it was beaten to
+   * its own claim. On a handheld in a warehouse a dropped response is the normal
+   * case, so the retry path has to be the working path. The caller supplies the
+   * id now, derived from the command it is retrying, and a claim that already
+   * carries that id is the same claim coming back.
+   */
   claimPicking: defineFn({
-    input: { pickingId: 'id', reason: 'text' },
+    input: { id: 'id', pickingId: 'id', reason: 'text' },
     output: { ok: 'bool', claimId: 'id?', errors: 'json?' },
     effects: [
       'read:stock.Picking',
@@ -320,10 +367,12 @@ export const functions: Record<string, FnSpec> = {
       const reason = String(args.reason ?? '').trim()
       if (reason.length < 3 || reason.length > 500)
         return invalid('reason', 'stock_staff_channel.error.reason')
+      const id = String(args.id)
+      const replay = (await ours(ctx, 'stock_staff_channel.PickingClaim', { id }))[0]
+      if (replay) return { ok: true, claimId: String(replay.id) }
       if (await activeClaim(ctx, held.id)) return invalid('pickingId', 'stock_staff_channel.error.claimed')
       if (!['assigned', 'partially_available', 'confirmed', 'done'].includes(String(held.state)))
         return invalid('pickingId', 'stock_staff_channel.error.claimState')
-      const id = durableId('staff_wclaim', company(ctx), held.id, actor(ctx), Date.now())
       await ctx.db.insert('stock_staff_channel.PickingClaim', {
         id,
         pickingId: held.id,
@@ -373,7 +422,11 @@ export const functions: Record<string, FnSpec> = {
       const moves = await pickingMoves(ctx, held.id)
       if (lines.length !== moves.length)
         return invalid('lines', 'stock_staff_channel.error.executionIncomplete')
-      const products = await ctx.db.select('product.Product')
+      const products = await byIds(
+        ctx,
+        'product.Product',
+        moves.map((row) => row.productId),
+      )
       for (let index = 0; index < lines.length; index++) {
         const line = lines[index]!
         const move = moves.find((row) => String(row.id) === String(line.lineId))
@@ -400,7 +453,7 @@ export const functions: Record<string, FnSpec> = {
         ok: true,
         claimId: claim.id,
         completedAt: refreshed?.dateDone ?? now(),
-        backorderId: null,
+        backorderId: executed.backorderId,
       }
     },
   }),
@@ -419,7 +472,11 @@ export const functions: Record<string, FnSpec> = {
       const executed = await executeLines(ctx, held, args.lines)
       if ('errors' in executed) return executed
       await finishClaim(ctx, claim, 'Canonical warehouse execution completed')
-      return { ok: true, lines: executed.lines, backorderIds: [] }
+      return {
+        ok: true,
+        lines: executed.lines,
+        backorderIds: executed.backorderId ? [executed.backorderId] : [],
+      }
     },
   }),
 
@@ -563,9 +620,7 @@ export const functions: Record<string, FnSpec> = {
       )[0]
       if (replay) return { ok: true, id: replay.id }
       const scan = String(args.scan).trim()
-      const product = (await ctx.db.select('product.Product')).find(
-        (row) => String(row.barcode ?? '') === scan || String(row.defaultCode ?? '') === scan,
-      )
+      const product = await scannedProduct(ctx, scan)
       const moves = await pickingMoves(ctx, session.pickingId)
       const move = product ? moves.find((row) => row.productId === product.id) : null
       if (!product || !move) {
