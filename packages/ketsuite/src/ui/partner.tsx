@@ -74,18 +74,6 @@ export const PartnerFacts = (props: { items: PartnerFact[] }): TemplateResult =>
   </dl>
 )
 
-export const PartnerDetailLayout = (props: {
-  main: JSXChild
-  secondary: JSXChild
-  aside: JSXChild
-}): TemplateResult => (
-  <div data-ui="partner-detail-layout">
-    <div data-ui="partner-detail-main">{props.main}</div>
-    <div data-ui="partner-detail-secondary">{props.secondary}</div>
-    <aside data-ui="partner-detail-rail">{props.aside}</aside>
-  </div>
-)
-
 export const PartnerInitials = (props: { name: string }): TemplateResult => (
   <span data-ui="partner-initials">
     {props.name

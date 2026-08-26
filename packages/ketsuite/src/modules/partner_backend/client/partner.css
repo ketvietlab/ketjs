@@ -109,21 +109,6 @@
     font-size: var(--admin-size-lg);
     font-variant-numeric: tabular-nums;
   }
-  [data-ui="partner-detail-layout"] {
-    display: grid;
-    min-inline-size: 0;
-    grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.7fr) minmax(18rem, 0.8fr);
-    align-items: start;
-    gap: var(--admin-gap-md);
-  }
-  [data-ui="partner-detail-main"],
-  [data-ui="partner-detail-secondary"],
-  [data-ui="partner-detail-rail"] {
-    display: grid;
-    min-inline-size: 0;
-    align-content: start;
-    gap: var(--admin-gap-md);
-  }
   [data-ui="partner-facts"] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -144,13 +129,9 @@
     color: var(--admin-ink-muted);
     font-size: var(--admin-size-sm);
   }
-  [data-ui="partner-detail-secondary"] [data-ui="partner-facts"],
-  [data-ui="partner-detail-rail"] [data-ui="partner-facts"],
   [data-ui="record-aside"] [data-ui="partner-facts"] {
     grid-template-columns: minmax(0, 1fr);
   }
-  [data-ui="partner-detail-secondary"] [data-ui="partner-fact"],
-  [data-ui="partner-detail-rail"] [data-ui="partner-fact"],
   [data-ui="record-aside"] [data-ui="partner-fact"] {
     grid-template-columns: minmax(6.5rem, 0.8fr) minmax(0, 1.2fr);
   }
@@ -175,17 +156,8 @@
     [data-ui="partner-list-rail"] {
       order: -1;
     }
-    [data-ui="partner-detail-layout"] {
-      grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.7fr);
-    }
-    [data-ui="partner-detail-rail"] {
-      grid-column: 1 / -1;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
   }
   @media (max-width: 47.9375rem) {
-    [data-ui="partner-detail-layout"],
-    [data-ui="partner-detail-rail"],
     [data-ui="partner-facts"] {
       grid-template-columns: minmax(0, 1fr);
     }

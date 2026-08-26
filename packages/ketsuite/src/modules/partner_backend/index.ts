@@ -62,15 +62,12 @@ export default defineModule({
       'action.restore': 'Khôi phục đối tác',
       'action.email': 'Gửi email',
       'action.call': 'Gọi điện',
-      'action.edit': 'Chỉnh sửa',
       'create.title': 'Tạo đối tác',
       'create.subtitle': 'Tạo hồ sơ đối tác và thông tin liên hệ.',
       'detail.identity': 'Thông tin chính',
       'detail.actions': 'Thao tác đối tác',
       'detail.quick': 'Thông tin nhanh',
-      'detail.editKicker': 'Chỉnh sửa đối tác',
       'detail.navigation': 'Điều hướng hồ sơ',
-      'detail.overview': 'Tổng quan',
       'field.name': 'Tên',
       'field.kind': 'Loại',
       'field.parent': 'Tổ chức cha',
@@ -142,15 +139,12 @@ export default defineModule({
       'action.restore': 'Restore partner',
       'action.email': 'Send email',
       'action.call': 'Call',
-      'action.edit': 'Edit',
       'create.title': 'Create partner',
       'create.subtitle': 'Create a partner profile and contact information.',
       'detail.identity': 'Main information',
       'detail.actions': 'Partner actions',
       'detail.quick': 'Quick information',
-      'detail.editKicker': 'Edit partner',
       'detail.navigation': 'Profile navigation',
-      'detail.overview': 'Overview',
       'field.name': 'Name',
       'field.kind': 'Type',
       'field.parent': 'Parent organisation',
@@ -198,5 +192,5 @@ export default defineModule({
   },
 })
 
-export { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens/index.ts'
+export { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/index.ts'
 export { partnerRelationControl } from './relation-control.ts'
