@@ -146,7 +146,6 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       [
         '/admin/accounting/customer-invoices',
         '/admin/accounting/vendor-bills',
-        '/admin/accounting/taxes',
         '/admin/accounting/payments',
         '/admin/accounting/general-ledger',
       ].includes(path)
@@ -198,9 +197,9 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/taxes') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="tax-create-form"/)
-      assert.match(html, /Số tiền \/ tỷ lệ/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.doesNotMatch(html, /id="tax-create-form"/)
+      assert.match(html, /href="\/admin\/accounting\/taxes\/new\?returnTo=/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/terms') {
@@ -468,6 +467,161 @@ test('e2e accounting: journal list and form preserve relations, correction, arch
   )
   assert.equal(
     (await call<Row[]>('account.listJournals', { includeArchived: true })).value.find(
+      (row) => row.id === target.id,
+    )?.active,
+    false,
+  )
+})
+
+test('e2e accounting: tax list and form preserve computation, account, ordering and safe writes', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const taxAccount = accounts.find((row) => row.code === '33311') ?? accounts[0]!
+  const path = '/admin/accounting/taxes'
+
+  const createPage = await e2e.client.get(`${path}/new?lang=vi`, {
+    headers: { accept: 'text/html' },
+  })
+  const createHtml = await createPage.text()
+  assert.equal(createPage.status, 200)
+  assert.match(createHtml, /data-ui="form-page"/)
+  assert.match(createHtml, /id="tax-create-form"/)
+  assert.match(createHtml, /Số tiền \/ tỷ lệ/)
+  assert.match(createHtml, /data-island="backend\.relation-select"/)
+  assert.match(createHtml, /&quot;listFunction&quot;:&quot;account\.listAccounts&quot;/)
+  assert.doesNotMatch(createHtml, /data-island="mail\.chatter"/)
+
+  const invalid = await e2e.client.post(
+    `${path}/new?lang=vi`,
+    new URLSearchParams({
+      name: 'Thuế HTTP nhập dở',
+      description: 'Giữ lại mô tả thuế',
+      typeTaxUse: 'sale',
+      amountType: 'unsupported',
+      amount: '1250',
+      accountId: String(taxAccount.id),
+      priceInclude: '1',
+      includeBaseAmount: '1',
+      sequence: '25',
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  const invalidHtml = await invalid.text()
+  assert.equal(invalid.status, 200)
+  assert.match(invalidHtml, /data-ui="form-page"/)
+  assert.match(invalidHtml, /value="Thuế HTTP nhập dở"/)
+  assert.match(invalidHtml, /value="Giữ lại mô tả thuế"/)
+  assert.match(invalidHtml, /value="1250"/)
+  assert.match(invalidHtml, /value="25"/)
+  assert.match(invalidHtml, new RegExp(`value="${String(taxAccount.id)}"`))
+
+  const crossSite = await e2e.client.post(
+    `${path}/new?lang=vi`,
+    new URLSearchParams({ name: 'Thuế HTTP', typeTaxUse: 'sale', amountType: 'fixed', amount: '1250' }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'https://evil.example',
+      },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(crossSite.status, 403)
+
+  const create = await e2e.client.post(
+    `${path}/new?lang=vi&returnTo=${encodeURIComponent('https://evil.example/steal')}`,
+    new URLSearchParams({
+      name: 'Thuế HTTP cố định',
+      description: 'Phí cố định kiểm thử HTTP',
+      typeTaxUse: 'sale',
+      amountType: 'fixed',
+      amount: '1250',
+      accountId: String(taxAccount.id),
+      priceInclude: '1',
+      sequence: '25',
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(create.status, 303)
+  assert.equal(create.headers.get('location'), '/admin/accounting/taxes?lang=vi')
+
+  const createdRows = (await call<Row[]>('account.listTaxes', { includeArchived: true })).value
+  const target = createdRows.find((row) => row.name === 'Thuế HTTP cố định')!
+  assert.equal(target.amountType, 'fixed')
+  assert.equal(String(target.amount), '1250')
+  assert.equal(target.accountId, taxAccount.id)
+  assert.equal(target.priceInclude, true)
+  assert.equal(target.includeBaseAmount, false)
+  assert.equal(target.sequence, 25)
+
+  const filtered = await e2e.client.get(
+    `${path}?lang=vi&q=${encodeURIComponent('Thuế HTTP')}&status=active&use=sale&computation=fixed&included=1`,
+    { headers: { accept: 'text/html' } },
+  )
+  const filteredHtml = await filtered.text()
+  assert.equal(filtered.status, 200)
+  assert.match(filteredHtml, /data-ui="list-page"/)
+  assert.match(filteredHtml, /data-ui="facet"/)
+  assert.match(filteredHtml, /Thuế HTTP cố định/)
+  assert.match(filteredHtml, new RegExp(String(taxAccount.code)))
+
+  const legacyEditor = await e2e.client.get(`${path}?lang=vi&edit=${encodeURIComponent(String(target.id))}`, {
+    headers: { accept: 'text/html' },
+  })
+  const legacyEditorHtml = await legacyEditor.text()
+  assert.equal(legacyEditor.status, 200)
+  assert.match(legacyEditorHtml, /data-ui="form-page"/)
+  assert.match(legacyEditorHtml, /value="Thuế HTTP cố định"/)
+  assert.match(legacyEditorHtml, /name="priceInclude"[^>]*checked/)
+
+  const legacySave = await e2e.client.post(
+    `${path}?lang=vi&edit=${encodeURIComponent(String(target.id))}`,
+    new URLSearchParams({
+      name: 'Thuế HTTP phần trăm',
+      description: 'Đã đổi cách tính',
+      typeTaxUse: 'sale',
+      amountType: 'percent',
+      amount: '8.5',
+      accountId: String(taxAccount.id),
+      includeBaseAmount: '1',
+      sequence: '7',
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(legacySave.status, 303)
+  const corrected = (await call<Row[]>('account.listTaxes', { includeArchived: true })).value.find(
+    (row) => row.id === target.id,
+  )!
+  assert.equal(corrected.name, 'Thuế HTTP phần trăm')
+  assert.equal(corrected.amountType, 'percent')
+  assert.equal(String(corrected.amount), '8.5')
+  assert.equal(corrected.priceInclude, false)
+  assert.equal(corrected.includeBaseAmount, true)
+  assert.equal(corrected.sequence, 7)
+
+  const archive = await e2e.client.post(
+    `${path}/new?lang=vi&edit=${encodeURIComponent(String(target.id))}`,
+    new URLSearchParams({
+      name: 'Thuế HTTP phần trăm',
+      typeTaxUse: 'sale',
+      amountType: 'percent',
+      amount: '8.5',
+      accountId: String(taxAccount.id),
+      includeBaseAmount: '1',
+      sequence: '7',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(archive.status, 303)
+  assert.equal(
+    (await call<Row[]>('account.listTaxes')).value.some((row) => row.id === target.id),
+    false,
+  )
+  assert.equal(
+    (await call<Row[]>('account.listTaxes', { includeArchived: true })).value.find(
       (row) => row.id === target.id,
     )?.active,
     false,

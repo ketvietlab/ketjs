@@ -26,6 +26,8 @@ import {
   labelOf,
   moveTitle,
   optionsOf,
+  taxFormScreen,
+  taxesListScreen,
 } from './screens/index.ts'
 import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
@@ -34,7 +36,6 @@ import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
 import { paymentTermsScreen } from './payment-terms-screen.tsx'
 import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
-import { taxesScreen } from './taxes-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
@@ -388,6 +389,137 @@ const journalFields = async (
           accounts: accountOptions(accounts),
           allowEmpty: true,
         }),
+      },
+      {
+        name: 'active',
+        label: _('account_backend.field.active'),
+        type: 'checkbox',
+        value: true,
+        help: _('account_backend.field.activeHint'),
+      },
+    ],
+    editing,
+    rejected,
+  )
+
+const taxListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/taxes'
+  for (const key of ['edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safeTaxReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/taxes${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/taxes'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const taxFormPath = (url: URL, returnTo: string, edit?: unknown): string => {
+  const target = new URL('/admin/accounting/taxes/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  if (edit) target.searchParams.set('edit', String(edit))
+  return `${target.pathname}${target.search}`
+}
+
+const taxSummary = (rows: AnyRow[]) => ({
+  total: rows.length,
+  sale: rows.filter((row) => row.typeTaxUse === 'sale').length,
+  purchase: rows.filter((row) => row.typeTaxUse === 'purchase').length,
+  included: rows.filter((row) => row.priceInclude).length,
+})
+
+const saveTax = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  form: Awaited<ReturnType<typeof readForm>>,
+) =>
+  ctx.call(
+    'account.saveTax',
+    {
+      id: targetId(url),
+      name: form.name ?? '',
+      ...optional(form, 'description'),
+      typeTaxUse: form.typeTaxUse ?? 'sale',
+      ...optional(form, 'taxScope'),
+      amountType: form.amountType ?? 'percent',
+      amount: form.amount || '0',
+      priceInclude: form.priceInclude === '1',
+      includeBaseAmount: form.includeBaseAmount === '1',
+      ...optional(form, 'accountId'),
+      sequence: Number(form.sequence || 10),
+      active: form.active === '1',
+    },
+    url,
+    req,
+  )
+
+const taxFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  accounts: AnyRow[],
+  editing: AnyRow | null,
+  rejected?: Rejection,
+): Promise<FormField[]> =>
+  formState(
+    [
+      { name: 'name', label: _('account_backend.field.name'), required: true },
+      { name: 'description', label: _('account_backend.field.description') },
+      {
+        name: 'typeTaxUse',
+        label: _('account_backend.field.typeTaxUse'),
+        type: 'select',
+        options: optionsOf(_, 'taxUse', TAX_USES),
+      },
+      {
+        name: 'amountType',
+        label: _('account_backend.field.amountType'),
+        type: 'select',
+        options: optionsOf(_, 'taxAmountType', TAX_AMOUNT_TYPES),
+      },
+      {
+        name: 'amount',
+        label: _('account_backend.field.amount'),
+        type: 'decimal',
+        value: 0,
+        required: true,
+      },
+      {
+        name: 'accountId',
+        label: _('account_backend.field.accountId'),
+        type: 'select',
+        options: accountChoices(_, accounts, true),
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'tax-account',
+          name: 'accountId',
+          label: _('account_backend.field.accountId'),
+          accounts: accountOptions(accounts),
+          allowEmpty: true,
+        }),
+      },
+      { name: 'priceInclude', label: _('account_backend.field.priceInclude'), type: 'checkbox' },
+      {
+        name: 'includeBaseAmount',
+        label: _('account_backend.field.includeBaseAmount'),
+        type: 'checkbox',
+        help: _('account_backend.field.includeBaseAmountHint'),
+      },
+      {
+        name: 'sequence',
+        label: _('account_backend.field.sequence'),
+        type: 'number',
+        value: 10,
+        help: _('account_backend.field.sequenceHint'),
       },
       {
         name: 'active',
@@ -1342,109 +1474,191 @@ export default defineModule({
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const result = await ctx.call(
-            'account.saveTax',
-            {
-              id: targetId(url),
-              name: form.name ?? '',
-              ...optional(form, 'description'),
-              typeTaxUse: form.typeTaxUse ?? 'sale',
-              ...optional(form, 'taxScope'),
-              amountType: form.amountType ?? 'percent',
-              amount: form.amount || '0',
-              priceInclude: form.priceInclude === '1',
-              includeBaseAmount: form.includeBaseAmount === '1',
-              ...optional(form, 'accountId'),
-              sequence: Number(form.sequence || 10),
-              active: form.active === '1',
-            },
-            url,
-            req,
+          const result = await saveTax(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(taxListPath(url))
+          rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const all = (await ctx.call('account.listTaxes', { includeArchived: true }, url, req)) as AnyRow[]
+        const editing = editTarget(all, url)
+        const returnTo = taxListPath(url)
+        const formPath = taxFormPath(url, returnTo, editing?.id ?? editingId(url))
+        if (req.method === 'POST' || editingId(url)) {
+          if (req.method === 'GET') return seeOther(formPath)
+          return adminPage(ctx, url, req, {
+            title: editing ? 'account_backend.tax.edit.title' : 'account_backend.tax.create.title',
+            body: async (_, frame) =>
+              taxFormScreen(_, {
+                frame,
+                action: formPath,
+                cancelHref: returnTo,
+                editing,
+                errors: rejected?.messages,
+                fields: await taxFields(ctx, url, req, _, data.accounts, editing, rejected),
+              }),
+          })
+        }
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
+          ? url.searchParams.get('status')
+          : null
+        const use = TAX_USES.includes(String(url.searchParams.get('use')) as never)
+          ? url.searchParams.get('use')
+          : null
+        const computation = TAX_AMOUNT_TYPES.includes(String(url.searchParams.get('computation')) as never)
+          ? url.searchParams.get('computation')
+          : null
+        const included = url.searchParams.get('included') === '1'
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          const active = row.active === true
+          if (status === 'active' && !active) return false
+          if (status === 'archived' && active) return false
+          if (use && row.typeTaxUse !== use) return false
+          if (computation && row.amountType !== computation) return false
+          if (included && row.priceInclude !== true) return false
+          return (
+            !needle ||
+            `${String(row.name)} ${String(row.description ?? '')} ${String(row.amount)}`
+              .toLocaleLowerCase()
+              .includes(needle)
           )
-          if (succeeded(result)) return seeOther(`/admin/accounting/taxes${localeQuery(url)}`)
+        })
+        const taxes = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.taxes.title',
+          body: (_, frame) =>
+            taxesListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.taxes.title'),
+                    keep: {
+                      ...(status ? { status } : {}),
+                      ...(use ? { use } : {}),
+                      ...(computation ? { computation } : {}),
+                      ...(included ? { included: '1' } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(status
+                        ? [
+                            {
+                              label:
+                                status === 'active'
+                                  ? _('account_backend.active')
+                                  : _('account_backend.archived'),
+                              without: withParam(url, 'status', null),
+                            },
+                          ]
+                        : []),
+                      ...(use
+                        ? [
+                            {
+                              label: labelOf(_, 'taxUse', use),
+                              without: withParam(url, 'use', null),
+                            },
+                          ]
+                        : []),
+                      ...(computation
+                        ? [
+                            {
+                              label: labelOf(_, 'taxAmountType', computation),
+                              without: withParam(url, 'computation', null),
+                            },
+                          ]
+                        : []),
+                      ...(included
+                        ? [
+                            {
+                              label: _('account_backend.tax.summary.included'),
+                              without: withParam(url, 'included', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          {
+                            id: 'status:active',
+                            label: _('account_backend.active'),
+                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
+                            active: status === 'active',
+                          },
+                          {
+                            id: 'status:archived',
+                            label: _('account_backend.archived'),
+                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
+                            active: status === 'archived',
+                          },
+                          ...TAX_USES.map((value) => ({
+                            id: `use:${value}`,
+                            label: labelOf(_, 'taxUse', value),
+                            path: withParam(url, 'use', use === value ? null : value),
+                            active: use === value,
+                          })),
+                          ...TAX_AMOUNT_TYPES.map((value) => ({
+                            id: `computation:${value}`,
+                            label: labelOf(_, 'taxAmountType', value),
+                            path: withParam(url, 'computation', computation === value ? null : value),
+                            active: computation === value,
+                          })),
+                          {
+                            id: 'included',
+                            label: _('account_backend.tax.summary.included'),
+                            path: withParam(url, 'included', included ? null : '1'),
+                            active: included,
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, taxes.length, matching.length),
+                },
+              },
+              rows: taxes,
+              accounts: data.accounts,
+              currency: currencyOf(data.companies, frame),
+              createHref: taxFormPath(url, returnTo),
+              rowHref: (row) => taxFormPath(url, returnTo, row.id),
+              summary: taxSummary(all),
+            }),
+        })
+      },
+    '/admin/accounting/taxes/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const result = await saveTax(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(safeTaxReturnTo(url))
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const data = await common(ctx, url, req)
         const taxes = (await ctx.call('account.listTaxes', { includeArchived: true }, url, req)) as AnyRow[]
         const editing = editTarget(taxes, url)
+        const returnTo = safeTaxReturnTo(url)
+        const formPath = taxFormPath(url, returnTo, editing?.id ?? editingId(url))
         return adminPage(ctx, url, req, {
-          title: 'account_backend.taxes.title',
-          body: async (_, frame) => {
-            const currency = currencyOf(data.companies, frame)
-            return taxesScreen(_, {
-              frame: frame,
-              action: configAction(url, '/admin/accounting/taxes'),
-              rows: taxes,
-              accounts: data.accounts,
-              currency,
+          title: editing ? 'account_backend.tax.edit.title' : 'account_backend.tax.create.title',
+          body: async (_, frame) =>
+            taxFormScreen(_, {
+              frame,
+              action: formPath,
+              cancelHref: returnTo,
               editing,
-              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
-              rowHref: (row) => editHref(url, '/admin/accounting/taxes', row.id),
-              cancelHref: `/admin/accounting/taxes${localeQuery(url)}`,
               errors: rejected?.messages,
-              fields: formState(
-                [
-                  { name: 'name', label: _('account_backend.field.name'), required: true },
-                  { name: 'description', label: _('account_backend.field.description') },
-                  {
-                    name: 'typeTaxUse',
-                    label: _('account_backend.field.typeTaxUse'),
-                    type: 'select',
-                    options: optionsOf(_, 'taxUse', TAX_USES),
-                  },
-                  {
-                    name: 'amountType',
-                    label: _('account_backend.field.amountType'),
-                    type: 'select',
-                    options: optionsOf(_, 'taxAmountType', TAX_AMOUNT_TYPES),
-                  },
-                  {
-                    name: 'amount',
-                    label: _('account_backend.field.amount'),
-                    type: 'decimal',
-                    value: 0,
-                    required: true,
-                  },
-                  {
-                    name: 'accountId',
-                    label: _('account_backend.field.accountId'),
-                    type: 'select',
-                    options: accountChoices(_, data.accounts, true),
-                    control: await accountRelationControl(ctx, url, req, _, {
-                      id: 'tax-account',
-                      name: 'accountId',
-                      label: _('account_backend.field.accountId'),
-                      accounts: accountOptions(data.accounts),
-                      allowEmpty: true,
-                    }),
-                  },
-                  { name: 'priceInclude', label: _('account_backend.field.priceInclude'), type: 'checkbox' },
-                  {
-                    name: 'includeBaseAmount',
-                    label: _('account_backend.field.includeBaseAmount'),
-                    type: 'checkbox',
-                    help: _('account_backend.field.includeBaseAmountHint'),
-                  },
-                  {
-                    name: 'sequence',
-                    label: _('account_backend.field.sequence'),
-                    type: 'number',
-                    value: 10,
-                    help: _('account_backend.field.sequenceHint'),
-                  },
-                  {
-                    name: 'active',
-                    label: _('account_backend.field.active'),
-                    type: 'checkbox',
-                    value: true,
-                    help: _('account_backend.field.activeHint'),
-                  },
-                ],
-                editing,
-                rejected,
-              ),
-            })
-          },
+              fields: await taxFields(ctx, url, req, _, data.accounts, editing, rejected),
+            }),
         })
       },
     '/admin/accounting/terms':

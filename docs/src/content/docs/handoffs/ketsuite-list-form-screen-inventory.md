@@ -67,7 +67,7 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 | ACC-01 | keep | Accounting overview | `/admin/accounting` | `screens/overview.tsx::accountingOverviewScreen` | Specialized | no | Curie |
 | ACC-02 | done | Chart of accounts | `/admin/accounting/accounts`, `/admin/accounting/accounts/new` | `screens/accounts-list.tsx`, `screens/account-form.tsx` | Split | no | Curie |
 | ACC-03 | done | Journals | `/admin/accounting/journals`, `/admin/accounting/journals/new` | `screens/journals-list.tsx`, `screens/journal-form.tsx` | Split | no | Curie |
-| ACC-04 | ready | Taxes | `/admin/accounting/taxes` | `taxesScreen` | Split | no | — |
+| ACC-04 | done | Taxes | `/admin/accounting/taxes`, `/admin/accounting/taxes/new` | `screens/taxes-list.tsx`, `screens/tax-form.tsx` | Split | no | Curie |
 | ACC-05 | ready | Payment terms | `/admin/accounting/terms` | `paymentTermsScreen` | Split | no | — |
 | ACC-06 | ready | Accounting defaults | `/admin/accounting/defaults` | `accountDefaultsScreen` | FormPage | no | — |
 | ACC-07 | ready | Journal entries | `/admin/accounting/entries` | `journalEntriesScreen` | Split | list/new: no | — |
@@ -172,7 +172,7 @@ leaf files; generated Live Doc endpoints belong to the detail renderer that cons
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
 | FLOW-01 | done | Projects | `/admin/flow/projects`, `/admin/flow/projects/new` | `screens/projects-list.tsx`, `screens/project-create.tsx` | Split | Huygens |
-| FLOW-02 | ready | Project board | `/admin/flow/projects/{id}/board` | `screens/board.tsx::boardScreen` | Specialized | — |
+| FLOW-02 | keep | Project board | `/admin/flow/projects/{id}/board` | `screens/board.tsx::boardScreen` | Specialized | Huygens |
 | FLOW-03 | ready | My/all cross-project issues | `/admin/flow/mine`, `/admin/flow/issues` | `screens/my-work.tsx::crossProjectScreen` | ListPage | — |
 | FLOW-04 | ready | Project issues | `/admin/flow/projects/{id}/issues` | `screens/issues.tsx::issuesScreen` | Split | — |
 | FLOW-05 | ready | Issue detail | `/admin/flow/issues/{id}` | `screens/issue-detail.tsx::issueDetailScreen` | FormPage/Specialized | — |
@@ -194,7 +194,7 @@ Structure debt: split `manufacturing_backend/screens.tsx` incrementally into `sc
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
 | MFG-01 | done | Manufacturing orders | `/admin/manufacturing`, `/admin/manufacturing/new` | `screens/orders-list.tsx`, `screens/order-create.tsx` | Split | Kant |
-| MFG-02 | ready | Manufacturing order execution | `/admin/manufacturing/orders/{id}` | `orderScreen` | FormPage/Specialized | — |
+| MFG-02 | done | Manufacturing order execution | `/admin/manufacturing/orders/{id}` | `screens/order-execution.tsx::orderScreen` | FormPage/Specialized | Kant |
 | MFG-03 | ready | Bills of materials | `/admin/manufacturing/boms` | `bomsScreen` | Split | — |
 | MFG-04 | ready | Work centers | `/admin/manufacturing/work-centers` | `workCentersScreen` | Split | — |
 
@@ -857,3 +857,36 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 13 Manufacturing Order create evidence](/assets/manufacturing-orders-wave13/manufacturing-order-create-browser-skill.png)
 
 ![Wave 13 Manufacturing Order create mobile evidence](/assets/manufacturing-orders-wave13/manufacturing-order-create-mobile-browser-skill.png)
+
+### Wave 14 — ACC-04, FLOW-02 and MFG-02
+
+- Accounting Taxes is now a dedicated `ListPage` plus `/new` `FormPage` under `account_backend/screens/`.
+  Tax use, fixed/percent/division computation, amount, account relation, price/base inclusion, sequence,
+  active/edit/archive behavior, validation, locale, CSRF, safe returns and legacy POST/edit compatibility
+  remain. The root renderer was removed.
+- Flow Project Board remains Specialized. The kanban columns, cards, counts, moves and project navigation are
+  an execution surface rather than a record form or flat collection. The audit found that locale was dropped
+  from card links, no-JS move actions, load-more links and project navigation; those URLs now retain `lang`
+  without changing the board layout or interaction model.
+- Manufacturing Order Execution now uses `FormPage` for record identity, state, quantity and lifecycle actions,
+  while work-order controls and component/move tables remain specialized body sections. All workflow actions,
+  optimistic versions, locale and validation remain; no Chatter was added because no Manufacturing mail or
+  activity bridge exists.
+- Browser QA verified Taxes list/create, a populated Flow board and a real Manufacturing order at desktop and
+  390 px. The board keeps horizontal column navigation inside its own viewport, and no document overflows.
+- Because the Flow locale fix touches the shared UI client, validation expanded to the complete local suite:
+  1,205 tests, 1,177 passed, 28 skipped, 0 failed. Build/typecheck, Biome and Astro docs validation also passed.
+
+![Wave 14 Accounting Taxes list evidence](/assets/accounting-taxes-wave14/taxes-list-browser-skill.png)
+
+![Wave 14 Accounting Tax create evidence](/assets/accounting-taxes-wave14/tax-create-browser-skill.png)
+
+![Wave 14 Accounting Tax create mobile evidence](/assets/accounting-taxes-wave14/tax-create-mobile-browser-skill.png)
+
+![Wave 14 Flow Project Board evidence](/assets/flow-project-board-wave14/flow-project-board-browser-skill.png)
+
+![Wave 14 Flow Project Board mobile evidence](/assets/flow-project-board-wave14/flow-project-board-mobile-browser-skill.png)
+
+![Wave 14 Manufacturing Order Execution evidence](/assets/manufacturing-order-execution-wave14/manufacturing-order-execution-browser-skill.png)
+
+![Wave 14 Manufacturing Order Execution mobile evidence](/assets/manufacturing-order-execution-wave14/manufacturing-order-execution-mobile-browser-skill.png)

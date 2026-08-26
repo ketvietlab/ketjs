@@ -1033,6 +1033,7 @@ export const routes: Record<string, RouteEntry> = {
       const board = await ctx.joint(url, req, 'flow_backend:screen.board', {
         lang: ctx.localeOf(url, req),
         data: JSON.stringify({
+          locale: localeQuery(url),
           rows: pages.flatMap((item) => item.rows.map((row) => ({ ...row, projectId }))),
           columns: pages.map((item) => item.column),
           labels: {

@@ -54,13 +54,14 @@ export const projectNav = (props: IslandProps): IslandView => {
   if (!found) return () => <></>
   const projectId = found[1] as string
   const screen = found[2] as string
+  const locale = props.lang ? `?lang=${encodeURIComponent(String(props.lang))}` : ''
   // Each path is written out rather than assembled from the segment, so the
   // repo's route invariant can still read it as a literal and check that a
   // screen actually serves it (test/backend-ui.test.ts).
   const at = (id: string, label: string, path: string): MenuNode => ({
     id: `flow.project.${id}`,
     label,
-    path,
+    path: `${path}${locale}`,
     icon: null,
     // The epic map sits under the epics screen, so the group still marks the
     // row the reader came in through rather than nothing at all.

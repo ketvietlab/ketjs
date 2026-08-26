@@ -5,8 +5,8 @@ import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { adminPage, choices, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
-import { orderCreateScreen, ordersListScreen } from './screens/index.ts'
-import { bomsScreen, orderScreen, workCentersScreen } from './screens.tsx'
+import { orderCreateScreen, orderScreen, ordersListScreen } from './screens/index.ts'
+import { bomsScreen, workCentersScreen } from './screens.tsx'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined

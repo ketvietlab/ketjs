@@ -127,7 +127,32 @@ test('manufacturing orders HTTP: split list/create preserves validation, locale,
   const createdRows = await e2e.client.call<Row[]>('manufacturing.listProductions', {})
   const createdId = String(createdRows.value.find((row) => row.name === 'MO/0001')?.id)
   const detail = await (await e2e.client.get(`/admin/manufacturing/orders/${createdId}?lang=en`)).text()
+  assert.match(
+    detail,
+    /data-ui="form-page" data-scope="manufacturing-order-execution-form-page" data-has-aside="false"/,
+  )
   assert.match(detail, new RegExp(`action="/admin/manufacturing/orders/${createdId}\\?lang=en"`))
+  assert.match(detail, /name="action" value="confirm"/)
+  assert.match(detail, /name="action" value="cancel"/)
+  assert.doesNotMatch(detail, /form-page-aside|mail\.chatter|activity\.record|record-workspace/)
+
+  const refusedDetail = await e2e.client.post(
+    `/admin/manufacturing/orders/${createdId}?lang=en`,
+    new URLSearchParams({ action: 'confirm' }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'https://cross-site.example',
+      },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(refusedDetail.status, 403)
+  assert.equal(
+    (await e2e.client.call<Row>('manufacturing.getProduction', { id: createdId })).value.state,
+    'draft',
+  )
+
   const confirmed = await e2e.client.post(
     `/admin/manufacturing/orders/${createdId}?lang=en`,
     new URLSearchParams({ action: 'confirm' }),
@@ -135,6 +160,26 @@ test('manufacturing orders HTTP: split list/create preserves validation, locale,
   )
   assert.equal(confirmed.status, 303)
   assert.equal(confirmed.headers.get('location'), `/admin/manufacturing/orders/${createdId}?lang=en`)
+
+  const cancelled = await e2e.client.post(
+    `/admin/manufacturing/orders/${createdId}?lang=en`,
+    new URLSearchParams({ action: 'cancel' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(cancelled.status, 303)
+  assert.equal(cancelled.headers.get('location'), `/admin/manufacturing/orders/${createdId}?lang=en`)
+
+  const invalidStart = await e2e.client.post(
+    `/admin/manufacturing/orders/${createdId}?lang=en`,
+    new URLSearchParams({ action: 'start' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(invalidStart.status, 200)
+  const invalidStartHtml = await invalidStart.text()
+  assert.match(invalidStartHtml, /data-scope="manufacturing-order-execution-form-page"/)
+  assert.match(invalidStartHtml, /version: The record changed; reload it before acting\./)
+  assert.match(invalidStartHtml, /data-ui="badge" data-tone="danger"[\s\S]*?cancelled/)
+  assert.doesNotMatch(invalidStartHtml, /data-ui="form-page-actions"/)
 
   const englishList = await (await e2e.client.get('/admin/manufacturing?lang=en')).text()
   assert.match(englishList, /MO\/0001/)
