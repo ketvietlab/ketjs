@@ -433,7 +433,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                     filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
                       { value: 'running', label: _('loyalty_backend.state.running') },
                       { value: 'upcoming', label: _('loyalty_backend.state.upcoming') },
-                      { value: 'paused', label: _('loyalty_backend.state.paused') },
+                      { value: 'archived', label: _('loyalty_backend.state.archived') },
                       { value: 'ended', label: _('loyalty_backend.state.ended') },
                     ]),
                     filterMenu(
@@ -530,6 +530,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
             programFields: programFields(_, program),
             ruleFields: ruleFields(_, data.products),
             rewardFields: rewardFields(_, data.products),
+            tab: url.searchParams.get('tab') ?? 'overview',
             errors,
           }),
       })
@@ -685,9 +686,23 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
         errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const wallet = (await ctx.call('loyalty.wallet.get', { id: params.id }, url, req)) as AnyRow | null
-      if (!wallet)
+      const held = (await ctx.call('loyalty.wallet.get', { id: params.id }, url, req)) as AnyRow | null
+      if (!held)
         return text(ctx.translate(ctx.localeOf(url, req))('loyalty_backend.error.notFound'), { status: 404 })
+      // The wallet carries ids; the screen names a guest and a program, so the
+      // two are resolved here rather than in a summary every other caller pays
+      // for.
+      const [holder, program] = await Promise.all([
+        held.partnerId
+          ? (ctx.call('partner.getPartner', { id: held.partnerId }, url, req) as Promise<AnyRow | null>)
+          : Promise.resolve(null),
+        ctx.call('loyalty.program.get', { id: held.programId }, url, req) as Promise<AnyRow | null>,
+      ])
+      const wallet = {
+        ...held,
+        partnerName: holder?.name ?? null,
+        programName: program?.name ?? null,
+      }
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.wallets.title',
         body: (_, frame) =>
@@ -705,6 +720,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               },
               { name: 'note', label: _('loyalty_backend.field.note'), type: 'textarea', span: 'full' },
             ],
+            url.searchParams.get('tab') ?? 'overview',
             errors,
           ),
       })

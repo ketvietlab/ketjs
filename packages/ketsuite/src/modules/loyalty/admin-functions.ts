@@ -96,7 +96,7 @@ export const adminFunctions: Record<string, FnSpec> = {
         )
       else if (args.state === 'upcoming') parts.push(and(eq(P.active, true), gt(P.dateFrom, at)))
       else if (args.state === 'ended') parts.push(and(eq(P.active, true), lt(P.dateTo, at)))
-      else if (args.state === 'paused') parts.push(eq(P.active, false))
+      else if (args.state === 'archived') parts.push(eq(P.active, false))
       else if (!args.includeArchived) parts.push(eq(P.active, true))
 
       let query = from(P).orderBy(asc(P.sequence), asc(P.id))

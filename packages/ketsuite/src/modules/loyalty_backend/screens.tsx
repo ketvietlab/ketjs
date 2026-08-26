@@ -4,20 +4,24 @@ import {
   badge,
   CardGrid,
   code,
+  actionGroup,
   ContentCard,
   dataTable,
   DefinitionList,
   Delta,
   emptyState,
   Framed,
+  icon,
   linkButton,
   Metric,
   Notice,
   RecordActions,
   RecordForm,
+  RecordWorkspace,
   Section,
   stack,
   Surface,
+  Tabs,
 } from '../../ui/index.ts'
 import type { FormField, Frame, Tone } from '../../ui/index.ts'
 import { selectionLabel } from '../backend/screen.ts'
@@ -119,7 +123,10 @@ const walletStateBadge = (_: Translator, wallet: AnyRow) => {
 
 /** Where a program stands in its own calendar. */
 const programStateBadge = (_: Translator, program: AnyRow) => {
-  if (!program.active) return badge(_('loyalty_backend.state.paused'), 'neutral', 'paused')
+  //  is what this module's own archive action writes, so that is
+  // what the badge says. A program the operator paused and one they retired are
+  // the same row here, and inventing a second word for it would claim otherwise.
+  if (!program.active) return badge(_('loyalty_backend.state.archived'), 'neutral', 'archived')
   const at = new Date().toISOString()
   if (program.dateFrom && String(program.dateFrom) > at)
     return badge(_('loyalty_backend.state.upcoming'), 'info', 'upcoming')
@@ -241,10 +248,10 @@ export const programsScreen = (
           tone: 'info',
         },
         {
-          id: 'paused',
-          label: _('loyalty_backend.stat.paused'),
-          value: figure(totals.paused),
-          detail: _('loyalty_backend.stat.pausedHint'),
+          id: 'archived',
+          label: _('loyalty_backend.stat.archived'),
+          value: figure(totals.archived),
+          detail: _('loyalty_backend.stat.archivedHint'),
         },
         { id: 'ended', label: _('loyalty_backend.stat.ended'), value: figure(totals.ended) },
       ]),
@@ -315,6 +322,17 @@ export const programsScreen = (
   />
 )
 
+/**
+ * One program, in the three questions it is set up by.
+ *
+ * What it is, how points are earned, and what they buy — three tabs rather than
+ * three sections down one page, because they are edited on separate occasions
+ * and each carries a form. Stacked, adding a reward meant scrolling past every
+ * rule to reach the form for it.
+ *
+ * The settings form stays on the first tab with the identity strip above it, so
+ * the state of the program is visible while it is being changed.
+ */
 export const programDetailScreen = (
   _: Translator,
   frame: Frame,
@@ -323,54 +341,183 @@ export const programDetailScreen = (
     programFields: FormField[]
     ruleFields: FormField[]
     rewardFields: FormField[]
+    tab?: string
     errors?: string[]
   },
 ): TemplateResult => {
   const rules = (program.rules as AnyRow[] | undefined) ?? []
   const rewards = (program.rewards as AnyRow[] | undefined) ?? []
+  const here = `/admin/loyalty/programs/${String(program.id)}`
+  const tab = options.tab === 'rules' || options.tab === 'rewards' ? options.tab : 'overview'
+  const rulesPane = (
+    <Section
+      title={_('loyalty_backend.rules.title')}
+      description={_('loyalty_backend.rules.hint')}
+      body={stack([
+        ...(rules.length
+          ? [
+              dataTable(_, {
+                rows: rules,
+                id: (row) => String(row.id),
+                columns: [
+                  {
+                    key: 'priority',
+                    label: _('loyalty_backend.field.priority'),
+                    cell: (row) => String(row.priority),
+                  },
+                  {
+                    key: 'mode',
+                    label: _('loyalty_backend.field.mode'),
+                    cell: (row) => labelOf(_, 'trigger', row.mode),
+                  },
+                  {
+                    key: 'points',
+                    label: _('loyalty_backend.field.pointAmount'),
+                    cell: (row) => String(row.pointAmount),
+                  },
+                  {
+                    key: 'basis',
+                    label: _('loyalty_backend.field.pointMode'),
+                    cell: (row) => labelOf(_, 'pointMode', row.pointMode),
+                  },
+                  {
+                    key: 'code',
+                    label: _('loyalty_backend.field.code'),
+                    cell: (row) => code(row.code ? String(row.code) : '—'),
+                  },
+                  {
+                    key: 'state',
+                    label: _('loyalty_backend.field.state'),
+                    cell: (row) => activeBadge(_, row.active),
+                  },
+                ],
+              }),
+            ]
+          : []),
+        <Surface
+          body={
+            <RecordForm
+              action={here}
+              hidden={{ action: 'add-rule' }}
+              fields={options.ruleFields}
+              submit={_('loyalty_backend.action.addRule')}
+              submitVariant="secondary"
+            />
+          }
+        />,
+      ])}
+    />
+  )
+  const rewardsPane = (
+    <Section
+      title={_('loyalty_backend.rewards.title')}
+      description={_('loyalty_backend.rewards.hint')}
+      body={stack([
+        ...(rewards.length
+          ? [
+              dataTable(_, {
+                rows: rewards,
+                id: (row) => String(row.id),
+                columns: [
+                  {
+                    key: 'description',
+                    label: _('loyalty_backend.field.description'),
+                    cell: (row) => String(row.description),
+                    priority: 'primary',
+                  },
+                  {
+                    key: 'type',
+                    label: _('loyalty_backend.field.rewardType'),
+                    cell: (row) => labelOf(_, 'rewardType', row.rewardType),
+                  },
+                  {
+                    key: 'points',
+                    label: _('loyalty_backend.field.requiredPoints'),
+                    cell: (row) => String(row.requiredPoints),
+                  },
+                  {
+                    key: 'discount',
+                    label: _('loyalty_backend.field.discount'),
+                    cell: (row) => String(row.discount),
+                  },
+                  {
+                    key: 'state',
+                    label: _('loyalty_backend.field.state'),
+                    cell: (row) => activeBadge(_, row.active),
+                  },
+                ],
+              }),
+            ]
+          : []),
+        <Surface
+          body={
+            <RecordForm
+              action={here}
+              hidden={{ action: 'add-reward' }}
+              fields={options.rewardFields}
+              submit={_('loyalty_backend.action.addReward')}
+              submitVariant="secondary"
+            />
+          }
+        />,
+      ])}
+    />
+  )
   return (
     <Framed
       translator={_}
       title={String(program.name)}
       frame={frame}
-      body={stack([
-        <CardGrid
-          items={[
-            {
-              id: 'type',
-              title: _('loyalty_backend.field.programType'),
-              value: labelOf(_, 'programType', program.programType),
-            },
+      body={
+        <RecordWorkspace
+          kicker={_('loyalty_backend.menu.programs')}
+          title={String(program.name)}
+          subtitle={periodOf(_, program)}
+          imageFallback={icon('gift')}
+          status={programStateBadge(_, program)}
+          badges={[
+            badge(labelOf(_, 'programType', program.programType), 'info', String(program.programType)),
+            badge(labelOf(_, 'trigger', program.trigger), 'neutral', String(program.trigger)),
+          ]}
+          summary={[
             {
               id: 'points',
-              title: _('loyalty_backend.field.pointName'),
-              value: String(program.pointName),
+              label: _('loyalty_backend.field.pointName'),
+              value: String(program.pointName ?? '—'),
             },
-            {
-              id: 'rules',
-              title: _('loyalty_backend.rules.title'),
-              value: String(rules.length),
-            },
-            {
-              id: 'rewards',
-              title: _('loyalty_backend.rewards.title'),
-              value: String(rewards.length),
-            },
+            { id: 'rules', label: _('loyalty_backend.rules.title'), value: rules.length },
+            { id: 'rewards', label: _('loyalty_backend.rewards.title'), value: rewards.length },
           ]}
-          id={(item) => item.id}
-          card={(item) => (
-            <ContentCard title={item.title} body={<Metric label={item.title} value={item.value} />} />
-          )}
-        />,
-        <Notice
-          title={_('loyalty_backend.field.state')}
-          message={program.active ? _('loyalty_backend.state.active') : _('loyalty_backend.state.archived')}
-          tone={program.active ? 'positive' : 'warning'}
-        />,
-        <Surface
-          body={
+          navigation={
+            <Tabs
+              label={_('loyalty_backend.program.detail')}
+              items={[
+                {
+                  id: 'overview',
+                  label: _('loyalty_backend.tab.overview'),
+                  href: here,
+                  active: tab === 'overview',
+                },
+                {
+                  id: 'rules',
+                  label: _('loyalty_backend.tab.rules'),
+                  href: `${here}?tab=rules`,
+                  active: tab === 'rules',
+                  count: rules.length,
+                },
+                {
+                  id: 'rewards',
+                  label: _('loyalty_backend.tab.rewards'),
+                  href: `${here}?tab=rewards`,
+                  active: tab === 'rewards',
+                  count: rewards.length,
+                },
+              ]}
+            />
+          }
+          controller={
             <RecordActions
-              action={`/admin/loyalty/programs/${String(program.id)}`}
+              action={here}
               actions={[
                 {
                   value: program.active ? 'archive' : 'restore',
@@ -382,135 +529,33 @@ export const programDetailScreen = (
               ]}
             />
           }
-        />,
-        <Section
-          title={_('loyalty_backend.program.detail')}
           body={
-            <Surface
-              body={
-                <RecordForm
-                  action={`/admin/loyalty/programs/${String(program.id)}`}
-                  hidden={{ action: 'save-program' }}
-                  fields={options.programFields}
-                  errors={options.errors}
-                  submit={_('loyalty_backend.action.save')}
-                  submitVariant="primary"
-                />
-              }
-            />
+            tab === 'rules' ? (
+              rulesPane
+            ) : tab === 'rewards' ? (
+              rewardsPane
+            ) : (
+              <Section
+                title={_('loyalty_backend.program.detail')}
+                body={
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={here}
+                        hidden={{ action: 'save-program' }}
+                        fields={options.programFields}
+                        errors={options.errors}
+                        submit={_('loyalty_backend.action.save')}
+                        submitVariant="primary"
+                      />
+                    }
+                  />
+                }
+              />
+            )
           }
-        />,
-        <Section
-          title={_('loyalty_backend.rules.title')}
-          description={_('loyalty_backend.rules.hint')}
-          body={stack([
-            ...(rules.length
-              ? [
-                  dataTable(_, {
-                    rows: rules,
-                    id: (row) => String(row.id),
-                    columns: [
-                      {
-                        key: 'priority',
-                        label: _('loyalty_backend.field.priority'),
-                        cell: (row) => String(row.priority),
-                      },
-                      {
-                        key: 'mode',
-                        label: _('loyalty_backend.field.mode'),
-                        cell: (row) => labelOf(_, 'trigger', row.mode),
-                      },
-                      {
-                        key: 'points',
-                        label: _('loyalty_backend.field.pointAmount'),
-                        cell: (row) => String(row.pointAmount),
-                      },
-                      {
-                        key: 'basis',
-                        label: _('loyalty_backend.field.pointMode'),
-                        cell: (row) => labelOf(_, 'pointMode', row.pointMode),
-                      },
-                      {
-                        key: 'code',
-                        label: _('loyalty_backend.field.code'),
-                        cell: (row) => code(row.code ? String(row.code) : '—'),
-                      },
-                      {
-                        key: 'state',
-                        label: _('loyalty_backend.field.state'),
-                        cell: (row) => activeBadge(_, row.active),
-                      },
-                    ],
-                  }),
-                ]
-              : []),
-            <Surface
-              body={
-                <RecordForm
-                  action={`/admin/loyalty/programs/${String(program.id)}`}
-                  hidden={{ action: 'add-rule' }}
-                  fields={options.ruleFields}
-                  submit={_('loyalty_backend.action.addRule')}
-                  submitVariant="secondary"
-                />
-              }
-            />,
-          ])}
-        />,
-        <Section
-          title={_('loyalty_backend.rewards.title')}
-          description={_('loyalty_backend.rewards.hint')}
-          body={stack([
-            ...(rewards.length
-              ? [
-                  dataTable(_, {
-                    rows: rewards,
-                    id: (row) => String(row.id),
-                    columns: [
-                      {
-                        key: 'description',
-                        label: _('loyalty_backend.field.description'),
-                        cell: (row) => String(row.description),
-                        priority: 'primary',
-                      },
-                      {
-                        key: 'type',
-                        label: _('loyalty_backend.field.rewardType'),
-                        cell: (row) => labelOf(_, 'rewardType', row.rewardType),
-                      },
-                      {
-                        key: 'points',
-                        label: _('loyalty_backend.field.requiredPoints'),
-                        cell: (row) => String(row.requiredPoints),
-                      },
-                      {
-                        key: 'discount',
-                        label: _('loyalty_backend.field.discount'),
-                        cell: (row) => String(row.discount),
-                      },
-                      {
-                        key: 'state',
-                        label: _('loyalty_backend.field.state'),
-                        cell: (row) => activeBadge(_, row.active),
-                      },
-                    ],
-                  }),
-                ]
-              : []),
-            <Surface
-              body={
-                <RecordForm
-                  action={`/admin/loyalty/programs/${String(program.id)}`}
-                  hidden={{ action: 'add-reward' }}
-                  fields={options.rewardFields}
-                  submit={_('loyalty_backend.action.addReward')}
-                  submitVariant="secondary"
-                />
-              }
-            />,
-          ])}
-        />,
-      ])}
+        />
+      }
     />
   )
 }
@@ -655,57 +700,170 @@ export const walletsScreen = (
   />
 )
 
+/**
+ * One wallet, as the person holding a support ticket about it needs to see it.
+ *
+ * The balance is three numbers, not one, and the difference between them is
+ * usually the reason somebody is looking: `reserved` is points already promised
+ * to an order in flight, so a guest told they have a balance and refused at the
+ * till is being told about `available`. All three sit in the identity strip.
+ *
+ * The history is a tab rather than a third section down the page, because for a
+ * wallet with a year of activity the adjustment form would otherwise sit below
+ * hundreds of rows, out of reach of the person who came here to use it.
+ */
 export const walletDetailScreen = (
   _: Translator,
   frame: Frame,
   wallet: AnyRow,
   adjustFields: FormField[],
+  tab: string,
   errors: string[] = [],
 ): TemplateResult => {
   const ledger = (wallet.ledger as AnyRow[] | undefined) ?? []
+  const here = `/admin/loyalty/wallets/${String(wallet.id)}`
+  const showLedger = tab === 'ledger'
   return (
     <Framed
       translator={_}
       title={String(wallet.code)}
       frame={frame}
-      body={stack([
-        <CardGrid
-          items={[
-            { id: 'balance', title: _('loyalty_backend.field.balance'), value: String(wallet.balance) },
-            { id: 'reserved', title: _('loyalty_backend.field.reserved'), value: String(wallet.reserved) },
-            { id: 'available', title: _('loyalty_backend.field.available'), value: String(wallet.available) },
-            {
-              id: 'unit',
-              title: _('loyalty_backend.field.unit'),
-              value: labelOf(_, 'walletUnit', wallet.unit),
-            },
+      body={
+        <RecordWorkspace
+          kicker={_('loyalty_backend.menu.wallets')}
+          title={String(wallet.code)}
+          subtitle={wallet.partnerName ? String(wallet.partnerName) : null}
+          imageFallback={icon('wallet')}
+          status={walletStateBadge(_, wallet)}
+          badges={[
+            badge(labelOf(_, 'walletUnit', wallet.unit), 'neutral', String(wallet.unit)),
+            ...(wallet.programName ? [badge(String(wallet.programName), 'info')] : []),
           ]}
-          id={(item) => item.id}
-          card={(item) => (
-            <ContentCard title={item.title} body={<Metric label={item.title} value={item.value} />} />
-          )}
-        />,
-        <Section
-          title={_('loyalty_backend.wallet.adjust')}
-          body={
-            <Surface
-              body={
-                <RecordForm
-                  action={`/admin/loyalty/wallets/${String(wallet.id)}`}
-                  fields={adjustFields}
-                  errors={errors}
-                  submit={_('loyalty_backend.action.adjust')}
-                  submitVariant="secondary"
-                />
-              }
+          summary={[
+            { id: 'balance', label: _('loyalty_backend.field.balance'), value: figure(wallet.balance) },
+            {
+              id: 'available',
+              label: _('loyalty_backend.field.available'),
+              value: figure(wallet.available),
+            },
+            { id: 'reserved', label: _('loyalty_backend.field.reserved'), value: figure(wallet.reserved) },
+          ]}
+          navigation={
+            <Tabs
+              label={_('loyalty_backend.wallets.title')}
+              items={[
+                {
+                  id: 'overview',
+                  label: _('loyalty_backend.tab.overview'),
+                  href: here,
+                  active: !showLedger,
+                },
+                {
+                  id: 'ledger',
+                  label: _('loyalty_backend.tab.ledger'),
+                  href: `${here}?tab=ledger`,
+                  active: showLedger,
+                  count: ledger.length,
+                },
+              ]}
             />
           }
-        />,
-        <Section
-          title={_('loyalty_backend.ledger.title')}
-          body={ledger.length ? ledgerTable(_, ledger, { admin: false }) : empty(_)}
-        />,
-      ])}
+          body={
+            showLedger
+              ? ledger.length
+                ? ledgerTable(_, ledger, { wallet: false })
+                : empty(_)
+              : stack([
+                  <Section
+                    title={_('loyalty_backend.wallet.adjust')}
+                    description={_('loyalty_backend.wallet.adjustHint')}
+                    body={
+                      <Surface
+                        body={
+                          <RecordForm
+                            action={here}
+                            fields={adjustFields}
+                            errors={errors}
+                            submit={_('loyalty_backend.action.adjust')}
+                            submitVariant="primary"
+                          />
+                        }
+                      />
+                    }
+                  />,
+                  // The last few entries, so the overview says what just
+                  // happened without making anyone change tab to find out.
+                  <Section
+                    title={_('loyalty_backend.wallet.recent')}
+                    body={ledger.length ? ledgerTable(_, ledger.slice(0, 5), { wallet: false }) : empty(_)}
+                  />,
+                ])
+          }
+          asideLabel={_('loyalty_backend.wallet.about')}
+          aside={stack([
+            <Section
+              title={_('loyalty_backend.wallet.about')}
+              body={
+                <DefinitionList
+                  title={String(wallet.code)}
+                  items={[
+                    {
+                      key: 'program',
+                      term: _('loyalty_backend.field.program'),
+                      value: String(wallet.programName ?? wallet.programId ?? '—'),
+                    },
+                    {
+                      key: 'partner',
+                      term: _('loyalty_backend.field.partner'),
+                      value: String(wallet.partnerName ?? '—'),
+                    },
+                    {
+                      key: 'unit',
+                      term: _('loyalty_backend.field.unit'),
+                      value: labelOf(_, 'walletUnit', wallet.unit),
+                    },
+                    {
+                      key: 'entries',
+                      term: _('loyalty_backend.wallet.entries'),
+                      value: figure(ledger.length),
+                    },
+                    {
+                      key: 'expires',
+                      term: _('loyalty_backend.field.expiresAt'),
+                      value: wallet.expiresAt
+                        ? String(wallet.expiresAt).slice(0, 10)
+                        : _('loyalty_backend.period.always'),
+                    },
+                  ]}
+                />
+              }
+            />,
+            <Section
+              title={_('loyalty_backend.wallet.quickActions')}
+              body={
+                <Surface
+                  body={actionGroup({
+                    actions: [
+                      linkButton({
+                        label: _('loyalty_backend.tab.ledger'),
+                        href: `${here}?tab=ledger`,
+                        variant: 'secondary',
+                      }),
+                      // The same wallet's entries beside everyone else's, which is
+                      // where a reconciliation question gets answered.
+                      linkButton({
+                        label: _('loyalty_backend.wallet.inLedger'),
+                        href: `/admin/loyalty/ledger?wallet=${encodeURIComponent(String(wallet.id))}&period=all`,
+                        variant: 'tertiary',
+                      }),
+                    ],
+                  })}
+                />
+              }
+            />,
+          ])}
+        />
+      }
     />
   )
 }
@@ -1230,7 +1388,7 @@ export const portalScreen = (_: Translator, frame: Frame, summary: AnyRow): Temp
         />,
         <Section
           title={_('loyalty_backend.portal.history')}
-          body={ledger.length ? ledgerTable(_, ledger) : empty(_)}
+          body={ledger.length ? ledgerTable(_, ledger, { admin: false }) : empty(_)}
         />,
       ])}
     />

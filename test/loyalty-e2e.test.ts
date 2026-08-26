@@ -187,9 +187,17 @@ test('loyalty HTTP E2E: admin screens create, edit, archive and localize program
     discountMode: 'percent',
     discountApplicability: 'order',
   })
+  // Rules and rewards are set up on separate occasions and each carries its own
+  // form, so each has its own tab — stacked, adding a reward meant scrolling past
+  // every rule to reach the form for it.
+  const rulesTab = await (await e2e.client.get(`${location}?tab=rules`)).text()
+  assert.match(rulesTab, />5</)
+  const rewardsTab = await (await e2e.client.get(`${location}?tab=rewards`)).text()
+  assert.match(rewardsTab, /Tặng giỏ trái cây/)
+  // And the counts are on the tabs themselves, so the overview says what is
+  // there without anyone opening either.
   const populated = await (await e2e.client.get(location)).text()
-  assert.match(populated, /Tặng giỏ trái cây/)
-  assert.match(populated, />5</)
+  assert.match(populated, /data-ui="tabs"/)
 
   await e2e.client.form(location, { action: 'archive' })
   const archived = await (await e2e.client.get(location)).text()
