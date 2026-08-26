@@ -281,8 +281,19 @@
   }
   [data-ui="record-aside"] :is([data-ui="chatter"], [data-ui="activity-record"]) {
     max-inline-size: none;
-    padding: var(--admin-gap);
+    padding: var(--gap-section) 0;
+    border: 0;
+    border-block-end: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--radius-app-region);
+    background: transparent;
     box-shadow: none;
+  }
+  [data-ui="record-aside"] :is([data-ui="chatter"], [data-ui="activity-record"]):first-child {
+    padding-block-start: 0;
+  }
+  [data-ui="record-aside"] :is([data-ui="chatter"], [data-ui="activity-record"]):last-child {
+    padding-block-end: 0;
+    border-block-end: 0;
   }
 
   /* Reusable supporting composition for record forms. Modules only provide
@@ -296,16 +307,24 @@
   [data-ui="record-rail"] {
     display: grid;
     min-inline-size: 0;
-    gap: var(--admin-gap);
+    gap: 0;
   }
   [data-ui="record-rail-card"] {
     display: grid;
     min-inline-size: 0;
     gap: var(--admin-gap);
-    padding: var(--admin-gap-md);
-    border: 1px solid var(--admin-divider-subtle);
-    border-radius: var(--admin-radius);
-    background: var(--admin-card);
+    padding: var(--gap-section) 0;
+    border: 0;
+    border-block-end: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--radius-app-region);
+    background: transparent;
+  }
+  [data-ui="record-rail-card"]:first-child {
+    padding-block-start: 0;
+  }
+  [data-ui="record-rail-card"]:last-child {
+    padding-block-end: 0;
+    border-block-end: 0;
   }
   [data-ui="record-system-facts"] {
     display: grid;

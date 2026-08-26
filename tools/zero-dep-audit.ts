@@ -35,6 +35,7 @@ const RULES: Record<string, Rule> = {
   'ketjs-view': { allow: [] },
   ketjs: { allow: ['@ketvietlab/ketjs-view'] },
   'ketjs-postgres': { allow: ['@ketvietlab/ketjs'], optionalPeers: ['postgres'] },
+  'design-system': { allow: ['@ketvietlab/ketjs-view'] },
   // yjs and chart.js are the accepted breaches of ketsuite's own allowance,
   // mirroring how ketjs-postgres is the framework's one accepted breach of rule
   // 1: named, narrow exceptions rather than an open door. yjs backs the Flow
@@ -49,7 +50,7 @@ const RULES: Record<string, Rule> = {
   // register every controller ever written, while the root entry makes each
   // screen register the two or three it actually draws.
   ketsuite: {
-    allow: ['@ketvietlab/ketjs', '@ketvietlab/ketjs-view', 'chart.js', 'yjs'],
+    allow: ['@ketvietlab/design-system', '@ketvietlab/ketjs', '@ketvietlab/ketjs-view', 'chart.js', 'yjs'],
     publicOnly: true,
   },
 }
@@ -57,7 +58,7 @@ const ALLOWED_DEV = new Set(['typescript', 'tsx', '@types/node', '@biomejs/biome
 
 const problems: string[] = []
 const IMPORT_RE =
-  /(?:^|\s)(?:import|export)[\s\S]*?from\s+['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\)|\bimport\(\s*['"]([^'"]+)['"]\s*\)/g
+  /(?:^|\n)\s*(?:import|export)\s+(?:type\s+)?(?:[^'"\n]*?\s+from\s+)?['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\)|\bimport\(\s*['"]([^'"]+)['"]\s*\)/g
 
 const root = JSON.parse(readFileSync('package.json', 'utf8')) as Pkg
 if (!root.private) problems.push('the workspace root must be private so it is never published')
@@ -152,6 +153,7 @@ console.log('')
 console.log(
   '  the only package that may touch a driver is ketjs-postgres, and it does so as an optional peer',
 )
+console.log('  design-system reaches only the browser-safe public ketjs-view entry')
 console.log(
   '  ketsuite reaches the framework only through its public entry, exactly as a third-party module would',
 )

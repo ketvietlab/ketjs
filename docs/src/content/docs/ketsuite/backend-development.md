@@ -69,10 +69,15 @@ authentication and authorization; it is not a shortcut for backend code.
 
 ## Screens use the component kit
 
-Import neutral components from `@ketvietlab/ketsuite/ui`, or backend framing and helpers from
-`@ketvietlab/ketsuite/backend`. Screens should compose components rather than authoring raw tags or
-new `data-ui` hooks. `tools/ui-audit.ts` protects that contract so markup and styles do not drift across
-dozens of screens.
+The public `@ketvietlab/design-system` package is the source of truth for tokens, shared primitives,
+application shell, page and record layouts, and reusable patterns. Import new shared UI directly from
+that package. Existing screens may import compatibility components from `@ketvietlab/ketsuite/ui`, or
+backend framing and helpers from `@ketvietlab/ketsuite/backend`, while they migrate. The compatibility
+entry also exposes the public package as `designSystem`; it must not redefine raw visual values.
+
+Screens should compose components rather than authoring raw tags or new `data-ui` hooks.
+`tools/ui-audit.ts` protects that contract so markup and styles do not drift across dozens of screens.
+Run `npm run design:system` to inspect every public specimen at `http://127.0.0.1:4100/`.
 
 The kit includes list chrome, tables, cards, record workspaces, forms, actions, tabs, notices, empty
 and error states, media and attachment panels, date pickers, calendars, and scheduling primitives.
@@ -176,7 +181,9 @@ not an open door, and both are imported through the package's root entry only.
 
 ## Module-owned styles
 
-The backend module owns only the shared shell, tokens, and UI-kit baselines. A feature module must ship
+The public design-system package owns the shared shell, tokens, and UI-kit baselines. The build copies
+its CSS into the backend asset tree and loads it before KetSuite compatibility styles; never edit that
+generated copy. A feature module must ship
 its visual rules from its own asset root instead of adding product-, partner-, or route-specific selectors
 to the backend design styles:
 

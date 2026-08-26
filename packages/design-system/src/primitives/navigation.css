@@ -1,0 +1,99 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="nav-list"] {
+    display: grid;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="nav-item"] {
+    display: flex;
+    height: var(--kv-sidebar-item-height);
+    align-items: center;
+    gap: 0.5625rem;
+    padding-inline: var(--kv-space-2-5);
+    border-radius: var(--kv-radius-sm);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    text-decoration: none;
+    transition:
+      background var(--kv-duration-normal) var(--kv-ease-default),
+      color var(--kv-duration-normal) var(--kv-ease-default);
+  }
+
+  :where([data-kv-design-system]) [data-ui="nav-item"]:hover {
+    background: color-mix(in srgb, var(--kv-text-main) 4.5%, transparent);
+    color: var(--kv-text-main);
+  }
+
+  :where([data-kv-design-system]) [data-ui="nav-item"][data-active="true"] {
+    background: var(--kv-nav-selected);
+    color: var(--kv-nav-selected-text);
+  }
+
+  :where([data-kv-design-system]) [data-ui="nav-item"][data-active="true"]:hover {
+    background: var(--kv-nav-selected-hover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="nav-item-leading"] {
+    display: inline-grid;
+    width: 1rem;
+    flex: none;
+    place-items: center;
+  }
+
+  :where([data-kv-design-system]) [data-ui="nav-item-label"] {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-kv-design-system]) [data-ui="nav-item-count"],
+  :where([data-kv-design-system]) [data-ui="tab-count"] {
+    color: inherit;
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.72;
+  }
+
+  :where([data-kv-design-system]) [data-ui="tabs"] {
+    display: flex;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    gap: 1.625rem;
+    border-bottom: 1px solid var(--kv-border-subtle);
+    overflow-x: auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="tab"] {
+    position: relative;
+    display: inline-flex;
+    height: var(--kv-table-header-height);
+    flex: none;
+    align-items: center;
+    gap: var(--kv-space-1-5);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-medium);
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="tab"]:hover {
+    color: var(--kv-text-secondary);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tab"][data-active="true"] {
+    color: var(--kv-tab-active-text);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tab"][data-active="true"]::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--kv-accent);
+    content: "";
+  }
+}

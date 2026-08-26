@@ -50,8 +50,8 @@ for (const viewport of [
             .map((control) => control.getBoundingClientRect().height),
         }))
         expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-        // Fields share the same 32px rhythm across desktop and touch layouts.
-        const fieldHeight = 32
+        // The public design-system contract fixes default fields at 34px.
+        const fieldHeight = 34
         expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
         if (tab === 'media') {
           await expect(page.locator('[data-ui="media-item"]')).toHaveCount(2)

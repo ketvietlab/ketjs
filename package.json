@@ -59,6 +59,7 @@
     "lint": "biome lint",
     "verify": "npm run format:check && npm run lint && npm run audit:terminology && npm run build && node .build/tools/zero-dep-audit.js && node .build/tools/ui-audit.js && npm run audit:staff-channel && npm run check:api && npm run check && npm run test:built && node .build/tools/type-proof.js",
     "design": "npm run build --silent && node .build/apps/admin/serve.js",
+    "design:system": "npm run build --silent && node .build/apps/design-system/serve.js",
     "start": "npm run build --silent && node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",
     "start:pg": "npm run build --silent && DATABASE_URL=${DATABASE_URL:-postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev} node packages/ketjs/dist/cli.js serve --workspace .build/ket.workspace.js",
     "ket": "npm run build --silent && node packages/ketjs/dist/cli.js",

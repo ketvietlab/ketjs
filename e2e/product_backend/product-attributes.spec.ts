@@ -12,7 +12,7 @@ const login = async (page: Page) => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('product-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -85,8 +85,8 @@ for (const viewport of [
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
       // A field is 32px on a touch screen and 28px with a cursor: a fingertip
       // needs the target, a pointer does not.
-      expect(metrics.input?.height).toBe(viewport.name === 'desktop' ? 28 : 32)
-      expect(metrics.submitHeight).toBe(viewport.name === 'desktop' ? 28 : 32)
+      expect(metrics.input?.height).toBe(34)
+      expect(metrics.submitHeight).toBe(34)
       if (viewport.name === 'desktop') {
         const inputCenter = metrics.input!.y + metrics.input!.height / 2
         const labelCenter = metrics.label!.y + metrics.label!.height / 2
