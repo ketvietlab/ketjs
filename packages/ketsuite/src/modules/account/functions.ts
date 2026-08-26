@@ -75,6 +75,7 @@ const REFUSALS = {
   moveDraftOnly: 'only a draft entry can be posted',
   movePostedOnly: 'only a posted entry can be reversed',
   moveNotCancellable: 'a posted entry is corrected with account.reverseMove, not cancelled',
+  moveConcurrent: 'the invoice changed concurrently; review it and retry',
   moveTypeUnsupported: 'unsupported move type',
   linesTooFew: 'a journal entry needs at least two lines',
   lineSideBoth: 'each line must have a non-negative debit or credit, never both',
@@ -140,6 +141,10 @@ const REFUSALS = {
   openItemAccountMismatch: 'open item uses another destination account',
   openItemDirection: 'open item has the wrong debit or credit direction',
   amountExceedsOpenItem: 'payment amount exceeds the selected open item',
+  invoicePaymentType: 'only a customer invoice can collect a payment',
+  invoicePaymentState: 'only a posted customer invoice can collect a payment',
+  invoicePaymentResidual: 'the customer invoice has no amount left to collect',
+  invoicePaymentAccounts: 'one mobile payment cannot settle several receivable accounts',
 
   reconcileAmountPositive: 'reconciliation amount must be positive',
   reconcileSides: 'reconciliation needs one debit and one credit line',
@@ -178,6 +183,18 @@ const refused = (field: string, error: unknown) =>
     : { ok: false, errors: [{ field, message: (error as Error).message }] }
 
 const n = (value: unknown): number => Number(value ?? 0)
+
+const claimMoveRevision = async (ctx: Ctx, move: Row, expectedRevision?: unknown): Promise<boolean> => {
+  const revision = n(move.revision)
+  if (expectedRevision !== undefined && revision !== n(expectedRevision)) return false
+  const changed = await ctx.db.compareAndSet(
+    'account.Move',
+    { id: move.id },
+    { revision: move.revision ?? null },
+    { revision: revision + 1 },
+  )
+  return 'dryRun' in changed || changed.matched
+}
 const today = (): string => new Date().toISOString()
 const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
@@ -481,7 +498,7 @@ async function nextMoveName(ctx: Ctx, journal: Row, date: Date): Promise<string>
   throw new Error('journal sequence did not settle after concurrent updates')
 }
 
-async function post(ctx: Ctx, id: unknown): Promise<Record<string, unknown>> {
+async function post(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<Record<string, unknown>> {
   const move = (await ctx.db.select('account.Move', { id }))[0]
   if (!move) return invalid('id', 'moveMissing')
   if (move.state === 'posted') return { ok: true, id: move.id, name: move.name }
@@ -512,11 +529,21 @@ async function post(ctx: Ctx, id: unknown): Promise<Record<string, unknown>> {
           amountTotal: moneyText(debit, scale),
         }
       : {}
-  const assigned = await ctx.tx(async (tx) => {
-    const name = await nextMoveName(tx, journal, new Date(String(move.date)))
-    await tx.db.update('account.Move', { id }, { name, state: 'posted', postedAt, ...totals })
-    return name
-  })
+  let assigned: string
+  try {
+    assigned = await ctx.tx(async (tx) => {
+      const current = (await tx.db.select('account.Move', { id }))[0]
+      if (!current) throw new Refusal('moveMissing')
+      if (current.state === 'posted') return String(current.name)
+      if (current.state !== 'draft') throw new Refusal('moveDraftOnly')
+      if (!(await claimMoveRevision(tx, current, expectedRevision))) throw new Refusal('moveConcurrent')
+      const name = await nextMoveName(tx, journal, new Date(String(current.date)))
+      await tx.db.update('account.Move', { id }, { name, state: 'posted', postedAt, ...totals })
+      return name
+    })
+  } catch (error) {
+    return refused('expectedRevision', error)
+  }
   return { ok: true, id: move.id, name: assigned }
 }
 
@@ -1150,6 +1177,7 @@ export const functions: Record<string, FnSpec> = {
         amountTax: moneyText(0, scale),
         amountTotal: moneyText(0, scale),
         postedAt: null,
+        revision: 0,
       })
       return { ok: true, id: args.id }
     },
@@ -1438,6 +1466,7 @@ export const functions: Record<string, FnSpec> = {
           amountTax: moneyText(tax, scale),
           amountTotal: moneyText(total, scale),
           postedAt: null,
+          revision: 0,
         })
         const line = async (
           id: string,
@@ -1516,7 +1545,7 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   postMove: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', name: 'text?', errors: 'json?' },
     effects: [
       'read:account.Move',
@@ -1527,10 +1556,10 @@ export const functions: Record<string, FnSpec> = {
     ],
     idempotent: true,
     agent: true,
-    handler: (ctx, args) => post(ctx, args.id),
+    handler: (ctx, args) => post(ctx, args.id, args.expectedRevision),
   }),
   cancelMove: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:account.Move', 'write:account.Move'],
     idempotent: true,
@@ -1538,9 +1567,22 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (!move) return invalid('id', 'moveMissing')
+      if (move.state === 'cancel') return { ok: true, id: args.id }
       if (move.state === 'posted') return invalid('state', 'moveNotCancellable')
-      await ctx.db.update('account.Move', { id: args.id }, { state: 'cancel' })
-      return { ok: true, id: args.id }
+      try {
+        await ctx.tx(async (tx) => {
+          const current = (await tx.db.select('account.Move', { id: args.id }))[0]
+          if (!current) throw new Refusal('moveMissing')
+          if (current.state === 'cancel') return
+          if (current.state === 'posted') throw new Refusal('moveNotCancellable')
+          if (!(await claimMoveRevision(tx, current, args.expectedRevision)))
+            throw new Refusal('moveConcurrent')
+          await tx.db.update('account.Move', { id: args.id }, { state: 'cancel' })
+        })
+        return { ok: true, id: args.id }
+      } catch (error) {
+        return refused('expectedRevision', error)
+      }
     },
   }),
   /**
@@ -1613,6 +1655,7 @@ export const functions: Record<string, FnSpec> = {
           amountTax: move.amountTax,
           amountTotal: move.amountTotal,
           postedAt: null,
+          revision: 0,
         })
         for (const line of lines) {
           const debit = n(line.credit)
@@ -1706,6 +1749,8 @@ export const functions: Record<string, FnSpec> = {
       memo: 'text?',
       paymentReference: 'text?',
       reconcileLineId: 'id?',
+      invoiceId: 'id?',
+      expectedRevision: 'int?',
     },
     output: { ok: 'bool', id: 'id?', moveId: 'id?', errors: 'json?' },
     effects: [
@@ -1791,7 +1836,8 @@ export const functions: Record<string, FnSpec> = {
           roundMoney(n(existing.amount), scale) !== amount ||
           String(existing.paymentType) !== String(args.paymentType) ||
           String(existing.journalId) !== String(args.journalId) ||
-          String(existing.destinationAccountId) !== String(args.destinationAccountId)
+          String(existing.destinationAccountId) !== String(args.destinationAccountId) ||
+          String(existing.invoiceId ?? '') !== String(args.invoiceId ?? '')
         )
           return invalid('id', 'paymentIdReused')
         const failed = await reconcilePayment(String(existing.moveId))
@@ -1800,73 +1846,194 @@ export const functions: Record<string, FnSpec> = {
       const moveId = `${String(args.id)}:move`,
         date = String(args.date ?? today()),
         inbound = args.paymentType === 'inbound'
-      await ctx.tx(async (tx) => {
-        await tx.db.insert('account.Move', {
-          id: moveId,
-          name: moveId,
-          ref: args.paymentReference ?? args.memo ?? null,
-          date,
-          moveType: 'entry',
-          state: 'draft',
-          journalId: args.journalId,
-          partnerId: args.partnerId ?? null,
-          invoiceDate: null,
-          invoiceDateDue: null,
-          paymentTermId: null,
-          paymentState: 'paid',
-          currency,
-          amountUntaxed: moneyText(0, scale),
-          amountTax: moneyText(0, scale),
-          amountTotal: moneyText(amount, scale),
-          postedAt: null,
-        })
-        const add = (id: string, accountId: unknown, debitSide: boolean, reconcilable: boolean) =>
-          tx.db.insert('account.MoveLine', {
-            id,
-            moveId,
-            name: args.memo ?? args.name,
-            accountId,
+      try {
+        await ctx.tx(async (tx) => {
+          if (args.invoiceId) {
+            const invoice = (await tx.db.select('account.Move', { id: args.invoiceId }))[0]
+            if (!invoice) throw new Refusal('moveMissing')
+            if (!(await claimMoveRevision(tx, invoice, args.expectedRevision)))
+              throw new Refusal('moveConcurrent')
+          }
+          await tx.db.insert('account.Move', {
+            id: moveId,
+            name: moveId,
+            ref: args.paymentReference ?? args.memo ?? null,
+            date,
+            moveType: 'entry',
+            state: 'draft',
+            journalId: args.journalId,
             partnerId: args.partnerId ?? null,
-            productId: null,
-            productUomId: null,
-            quantity: '1',
-            priceUnit: moneyText(amount, scale),
-            discount: '0',
-            taxId: null,
-            debit: moneyText(debitSide ? amount : 0, scale),
-            credit: moneyText(debitSide ? 0 : amount, scale),
-            balance: moneyText(debitSide ? amount : -amount, scale),
-            dateMaturity: null,
-            displayType: null,
-            reconciled: false,
-            amountResidual: moneyText(reconcilable ? amount : 0, scale),
-            sequence: debitSide ? 10 : 20,
+            invoiceDate: null,
+            invoiceDateDue: null,
+            paymentTermId: null,
+            paymentState: 'paid',
+            currency,
+            amountUntaxed: moneyText(0, scale),
+            amountTax: moneyText(0, scale),
+            amountTotal: moneyText(amount, scale),
+            postedAt: null,
+            revision: 0,
           })
-        await add(`${moveId}:liquidity`, journal.defaultAccountId, inbound, false)
-        await add(`${moveId}:counterpart`, args.destinationAccountId, !inbound, true)
-        await tx.db.insert('account.Payment', {
-          id: args.id,
-          name: args.name,
-          paymentType: args.paymentType,
-          partnerType: args.partnerType,
-          partnerId: args.partnerId ?? null,
-          journalId: args.journalId,
-          destinationAccountId: args.destinationAccountId,
-          amount: moneyText(amount, scale),
-          date,
-          memo: args.memo ?? null,
-          paymentReference: args.paymentReference ?? null,
-          state: 'in_process',
-          currency,
-          moveId,
+          const add = (id: string, accountId: unknown, debitSide: boolean, reconcilable: boolean) =>
+            tx.db.insert('account.MoveLine', {
+              id,
+              moveId,
+              name: args.memo ?? args.name,
+              accountId,
+              partnerId: args.partnerId ?? null,
+              productId: null,
+              productUomId: null,
+              quantity: '1',
+              priceUnit: moneyText(amount, scale),
+              discount: '0',
+              taxId: null,
+              debit: moneyText(debitSide ? amount : 0, scale),
+              credit: moneyText(debitSide ? 0 : amount, scale),
+              balance: moneyText(debitSide ? amount : -amount, scale),
+              dateMaturity: null,
+              displayType: null,
+              reconciled: false,
+              amountResidual: moneyText(reconcilable ? amount : 0, scale),
+              sequence: debitSide ? 10 : 20,
+            })
+          await add(`${moveId}:liquidity`, journal.defaultAccountId, inbound, false)
+          await add(`${moveId}:counterpart`, args.destinationAccountId, !inbound, true)
+          await tx.db.insert('account.Payment', {
+            id: args.id,
+            name: args.name,
+            paymentType: args.paymentType,
+            partnerType: args.partnerType,
+            partnerId: args.partnerId ?? null,
+            journalId: args.journalId,
+            destinationAccountId: args.destinationAccountId,
+            amount: moneyText(amount, scale),
+            date,
+            memo: args.memo ?? null,
+            paymentReference: args.paymentReference ?? null,
+            state: 'in_process',
+            currency,
+            moveId,
+            invoiceId: args.invoiceId ?? null,
+          })
         })
-      })
+      } catch (error) {
+        return refused('expectedRevision', error)
+      }
       const posted = await post(ctx, moveId)
       if (posted.ok !== true) return posted
       await ctx.db.update('account.Payment', { id: args.id }, { state: 'paid' })
       const failed = await reconcilePayment(moveId)
       if (failed) return failed
       return { ok: true, id: args.id, moveId }
+    },
+  }),
+  /**
+   * Collect the complete residual of one posted customer invoice.
+   *
+   * A payment can settle several due-date lines. The lower-level payment
+   * primitive intentionally accepts one open item, so this aggregate creates a
+   * single deterministic payment and reconciles its counterpart across every
+   * receivable line. Retries resume unfinished reconciliations from the same
+   * payment id; the invoice revision is claimed in the transaction that first
+   * creates that payment, preventing two collectors from recording the same
+   * money concurrently.
+   */
+  registerInvoicePayment: defineFn({
+    input: {
+      id: 'id',
+      invoiceId: 'id',
+      journalId: 'id',
+      expectedRevision: 'int?',
+      date: 'datetime?',
+    },
+    output: { ok: 'bool', id: 'id?', moveId: 'id?', amount: 'decimal?', errors: 'json?' },
+    effects: [
+      'read:account.Payment',
+      'read:account.Journal',
+      'read:account.Account',
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:account.PartialReconcile',
+      'read:company.Company',
+      'write:account.Payment',
+      'write:account.Journal',
+      'write:account.Move',
+      'write:account.MoveLine',
+      'write:account.PartialReconcile',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const invoice = (await ctx.db.select('account.Move', { id: args.invoiceId }))[0]
+      if (!invoice) return invalid('invoiceId', 'moveMissing')
+      if (invoice.moveType !== 'out_invoice') return invalid('invoiceId', 'invoicePaymentType')
+      if (invoice.state !== 'posted') return invalid('state', 'invoicePaymentState')
+
+      const existing = (await ctx.db.select('account.Payment', { id: args.id }))[0]
+      if (existing && String(existing.invoiceId ?? '') !== String(args.invoiceId))
+        return invalid('id', 'paymentIdReused')
+
+      const { scale } = await ledgerOf(ctx)
+      const slack = toleranceOf(scale)
+      const accounts = await accountsById(ctx)
+      const receivables = (await ctx.db.select('account.MoveLine', { moveId: args.invoiceId }))
+        .filter(
+          (line) =>
+            accounts.get(String(line.accountId))?.accountType === 'asset_receivable' &&
+            n(line.amountResidual) > slack,
+        )
+        .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+      if (!receivables.length) {
+        if (existing)
+          return { ok: true, id: args.id, moveId: existing.moveId, amount: String(existing.amount) }
+        return invalid('invoiceId', 'invoicePaymentResidual')
+      }
+      const destinationIds = [...new Set(receivables.map((line) => String(line.accountId)))]
+      if (destinationIds.length !== 1) return invalid('invoiceId', 'invoicePaymentAccounts')
+      const amount = existing
+        ? roundMoney(n(existing.amount), scale)
+        : roundMoney(
+            receivables.reduce((sum, line) => sum + n(line.amountResidual), 0),
+            scale,
+          )
+
+      const registered = (await functions.registerPayment!.handler(ctx, {
+        id: args.id,
+        name: `Payment ${String(invoice.name)}`,
+        paymentType: 'inbound',
+        partnerType: 'customer',
+        partnerId: invoice.partnerId,
+        journalId: args.journalId,
+        destinationAccountId: destinationIds[0],
+        amount: moneyText(amount, scale),
+        date: args.date ?? today(),
+        memo: String(invoice.name),
+        paymentReference: String(invoice.name),
+        invoiceId: args.invoiceId,
+        expectedRevision: args.expectedRevision,
+      })) as Row
+      if (registered.ok !== true) return registered
+
+      const counterpartId = `${String(registered.moveId)}:counterpart`
+      for (const line of receivables) {
+        const current = (await ctx.db.select('account.MoveLine', { id: line.id }))[0]
+        const residual = n(current?.amountResidual)
+        if (residual <= slack) continue
+        const reconciled = (await functions.reconcile!.handler(ctx, {
+          id: `${String(args.id)}:invoice:${String(line.id)}`,
+          debitMoveId: line.id,
+          creditMoveId: counterpartId,
+          amount: moneyText(residual, scale),
+          date: args.date ?? today(),
+        })) as Row
+        if (reconciled.ok !== true) return reconciled
+      }
+      return {
+        ok: true,
+        id: args.id,
+        moveId: registered.moveId,
+        amount: moneyText(amount, scale),
+      }
     },
   }),
   reconcile: defineFn({
