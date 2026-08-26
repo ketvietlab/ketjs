@@ -5,7 +5,6 @@ import {
   dataTable,
   emptyState,
   Framed,
-  linkButton,
   Notice,
   RecordActions,
   RecordForm,
@@ -31,70 +30,21 @@ const stateBadge = (value: unknown) => {
   )
 }
 
-export const ordersScreen = (
+export const orderScreen = (
   _: Translator,
   frame: Frame,
-  rows: R[],
-  fields: FormField[],
+  row: R,
   errors: string[] = [],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('manufacturing_backend.orders.title')}
-    frame={frame}
-    body={stack([
-      <Section
-        title={_('manufacturing_backend.orders.create')}
-        body={
-          <Surface
-            body={
-              <RecordForm
-                action="/admin/manufacturing"
-                fields={fields}
-                errors={errors}
-                submit={_('manufacturing_backend.action.create')}
-                submitVariant="primary"
-              />
-            }
-          />
-        }
-      />,
-      rows.length
-        ? dataTable(_, {
-            rows,
-            id: (row) => String(row.id),
-            columns: [
-              {
-                key: 'name',
-                label: _('manufacturing_backend.field.name'),
-                cell: (row) =>
-                  linkButton({
-                    label: String(row.name),
-                    href: `/admin/manufacturing/orders/${encodeURIComponent(String(row.id))}`,
-                    variant: 'tertiary',
-                  }),
-                priority: 'primary',
-              },
-              {
-                key: 'quantity',
-                label: _('manufacturing_backend.field.quantity'),
-                cell: (row) => String(row.productQty),
-              },
-              {
-                key: 'state',
-                label: _('manufacturing_backend.field.state'),
-                cell: (row) => stateBadge(row.state),
-              },
-            ],
-          })
-        : emptyState(_('manufacturing_backend.empty.orders'), _('manufacturing_backend.empty.ordersHint')),
-    ])}
-  />
-)
-
-export const orderScreen = (_: Translator, frame: Frame, row: R, errors: string[] = []): TemplateResult => {
+  action = `/admin/manufacturing/orders/${encodeURIComponent(String(row.id))}`,
+): TemplateResult => {
   const workOrders = (row.workOrders as R[] | undefined) ?? []
   const moves = (row.moves as R[] | undefined) ?? []
+  const workAction = (work: R) => {
+    const target = new URL(action, 'http://ket.local')
+    target.searchParams.set('workOrderId', String(work.id))
+    target.searchParams.set('workOrderVersion', String(work.version))
+    return `${target.pathname}${target.search}`
+  }
   const actions =
     row.state === 'draft'
       ? [
@@ -154,14 +104,7 @@ export const orderScreen = (_: Translator, frame: Frame, row: R, errors: string[
           body={
             <Surface
               body={
-                actions.length ? (
-                  <RecordActions
-                    action={`/admin/manufacturing/orders/${encodeURIComponent(String(row.id))}`}
-                    actions={actions}
-                  />
-                ) : (
-                  stateBadge(row.state)
-                )
+                actions.length ? <RecordActions action={action} actions={actions} /> : stateBadge(row.state)
               }
             />
           }
@@ -213,10 +156,7 @@ export const orderScreen = (_: Translator, frame: Frame, row: R, errors: string[
                                 ]
                               : []
                         return workActions.length ? (
-                          <RecordActions
-                            action={`/admin/manufacturing/orders/${encodeURIComponent(String(row.id))}?workOrderId=${encodeURIComponent(String(work.id))}&workOrderVersion=${encodeURIComponent(String(work.version))}`}
-                            actions={workActions}
-                          />
+                          <RecordActions action={workAction(work)} actions={workActions} />
                         ) : (
                           ''
                         )

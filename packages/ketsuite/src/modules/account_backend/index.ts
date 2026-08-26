@@ -21,12 +21,13 @@ import {
   accountFormScreen,
   accountingOverviewScreen,
   accountsListScreen,
+  journalFormScreen,
+  journalsListScreen,
   labelOf,
   moveTitle,
   optionsOf,
 } from './screens/index.ts'
 import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
-import { journalsScreen } from './journals-screen.tsx'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
@@ -290,6 +291,104 @@ const accountFields = (_: Translator, editing: AnyRow | null, rejected?: Rejecti
         options: optionsOf(_, 'accountType', ACCOUNT_TYPES),
       },
       { name: 'reconcile', label: _('account_backend.field.reconcile'), type: 'checkbox' },
+      {
+        name: 'active',
+        label: _('account_backend.field.active'),
+        type: 'checkbox',
+        value: true,
+        help: _('account_backend.field.activeHint'),
+      },
+    ],
+    editing,
+    rejected,
+  )
+
+const journalListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/journals'
+  for (const key of ['edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safeJournalReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/journals${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/journals'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const journalFormPath = (url: URL, returnTo: string, edit?: unknown): string => {
+  const target = new URL('/admin/accounting/journals/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  if (edit) target.searchParams.set('edit', String(edit))
+  return `${target.pathname}${target.search}`
+}
+
+const journalSummary = (rows: AnyRow[]) => ({
+  total: rows.length,
+  sale: rows.filter((row) => row.type === 'sale').length,
+  purchase: rows.filter((row) => row.type === 'purchase').length,
+  liquidity: rows.filter((row) => ['bank', 'cash'].includes(String(row.type))).length,
+})
+
+const saveJournal = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  form: Awaited<ReturnType<typeof readForm>>,
+) =>
+  ctx.call(
+    'account.saveJournal',
+    {
+      id: targetId(url),
+      name: form.name ?? '',
+      code: form.code ?? '',
+      type: form.type ?? '',
+      ...optional(form, 'defaultAccountId'),
+      active: form.active === '1',
+    },
+    url,
+    req,
+  )
+
+const journalFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  accounts: AnyRow[],
+  editing: AnyRow | null,
+  rejected?: Rejection,
+): Promise<FormField[]> =>
+  formState(
+    [
+      { name: 'name', label: _('account_backend.field.name'), required: true },
+      { name: 'code', label: _('account_backend.field.code'), required: true },
+      {
+        name: 'type',
+        label: _('account_backend.field.type'),
+        type: 'select',
+        options: optionsOf(_, 'journalType', JOURNAL_TYPES),
+      },
+      {
+        name: 'defaultAccountId',
+        label: _('account_backend.field.defaultAccountId'),
+        type: 'select',
+        options: accountChoices(_, accounts, true),
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'journal-default-account',
+          name: 'defaultAccountId',
+          label: _('account_backend.field.defaultAccountId'),
+          accounts: accountOptions(accounts),
+          allowEmpty: true,
+        }),
+      },
       {
         name: 'active',
         label: _('account_backend.field.active'),
@@ -1085,20 +1184,132 @@ export default defineModule({
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const result = await ctx.call(
-            'account.saveJournal',
-            {
-              id: targetId(url),
-              name: form.name ?? '',
-              code: form.code ?? '',
-              type: form.type ?? '',
-              ...optional(form, 'defaultAccountId'),
-              active: form.active === '1',
-            },
-            url,
-            req,
-          )
-          if (succeeded(result)) return seeOther(`/admin/accounting/journals${localeQuery(url)}`)
+          const result = await saveJournal(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(journalListPath(url))
+          rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const all = (await ctx.call('account.listJournals', { includeArchived: true }, url, req)) as AnyRow[]
+        const editing = editTarget(all, url)
+        const returnTo = journalListPath(url)
+        const formPath = journalFormPath(url, returnTo, editing?.id ?? editingId(url))
+        if (req.method === 'POST' || editingId(url)) {
+          if (req.method === 'GET') return seeOther(formPath)
+          return adminPage(ctx, url, req, {
+            title: editing ? 'account_backend.journal.edit.title' : 'account_backend.journal.create.title',
+            body: async (_, frame) =>
+              journalFormScreen(_, {
+                frame,
+                action: formPath,
+                cancelHref: returnTo,
+                editing,
+                errors: rejected?.messages,
+                fields: await journalFields(ctx, url, req, _, data.accounts, editing, rejected),
+              }),
+          })
+        }
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
+          ? url.searchParams.get('status')
+          : null
+        const type = JOURNAL_TYPES.includes(String(url.searchParams.get('type')) as never)
+          ? url.searchParams.get('type')
+          : null
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          const active = row.active === true
+          if (status === 'active' && !active) return false
+          if (status === 'archived' && active) return false
+          if (type && row.type !== type) return false
+          return !needle || `${String(row.code)} ${String(row.name)}`.toLocaleLowerCase().includes(needle)
+        })
+        const journals = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.journals.title',
+          body: (_, frame) =>
+            journalsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.journals.title'),
+                    keep: {
+                      ...(status ? { status } : {}),
+                      ...(type ? { type } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(status
+                        ? [
+                            {
+                              label:
+                                status === 'active'
+                                  ? _('account_backend.active')
+                                  : _('account_backend.archived'),
+                              without: withParam(url, 'status', null),
+                            },
+                          ]
+                        : []),
+                      ...(type
+                        ? [
+                            {
+                              label: labelOf(_, 'journalType', type),
+                              without: withParam(url, 'type', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          {
+                            id: 'status:active',
+                            label: _('account_backend.active'),
+                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
+                            active: status === 'active',
+                          },
+                          {
+                            id: 'status:archived',
+                            label: _('account_backend.archived'),
+                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
+                            active: status === 'archived',
+                          },
+                          ...JOURNAL_TYPES.map((value) => ({
+                            id: `type:${value}`,
+                            label: labelOf(_, 'journalType', value),
+                            path: withParam(url, 'type', type === value ? null : value),
+                            active: type === value,
+                          })),
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, journals.length, matching.length),
+                },
+              },
+              rows: journals,
+              accounts: data.accounts,
+              createHref: journalFormPath(url, returnTo),
+              rowHref: (row) => journalFormPath(url, returnTo, row.id),
+              displayAccountName: (row) => accountName(_, row),
+              summary: journalSummary(all),
+            }),
+        })
+      },
+    '/admin/accounting/journals/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const result = await saveJournal(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(safeJournalReturnTo(url))
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const data = await common(ctx, url, req)
@@ -1109,54 +1320,18 @@ export default defineModule({
           req,
         )) as AnyRow[]
         const editing = editTarget(journals, url)
+        const returnTo = safeJournalReturnTo(url)
+        const formPath = journalFormPath(url, returnTo, editing?.id ?? editingId(url))
         return adminPage(ctx, url, req, {
-          title: 'account_backend.journals.title',
+          title: editing ? 'account_backend.journal.edit.title' : 'account_backend.journal.create.title',
           body: async (_, frame) =>
-            journalsScreen(_, {
-              frame: frame,
-              action: configAction(url, '/admin/accounting/journals'),
-              rows: journals,
-              accounts: data.accounts,
+            journalFormScreen(_, {
+              frame,
+              action: formPath,
+              cancelHref: returnTo,
               editing,
-              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
-              rowHref: (row) => editHref(url, '/admin/accounting/journals', row.id),
-              cancelHref: `/admin/accounting/journals${localeQuery(url)}`,
-              displayName: (row) => accountName(_, row),
               errors: rejected?.messages,
-              fields: formState(
-                [
-                  { name: 'name', label: _('account_backend.field.name'), required: true },
-                  { name: 'code', label: _('account_backend.field.code'), required: true },
-                  {
-                    name: 'type',
-                    label: _('account_backend.field.type'),
-                    type: 'select',
-                    options: optionsOf(_, 'journalType', JOURNAL_TYPES),
-                  },
-                  {
-                    name: 'defaultAccountId',
-                    label: _('account_backend.field.defaultAccountId'),
-                    type: 'select',
-                    options: accountChoices(_, data.accounts, true),
-                    control: await accountRelationControl(ctx, url, req, _, {
-                      id: 'journal-default-account',
-                      name: 'defaultAccountId',
-                      label: _('account_backend.field.defaultAccountId'),
-                      accounts: accountOptions(data.accounts),
-                      allowEmpty: true,
-                    }),
-                  },
-                  {
-                    name: 'active',
-                    label: _('account_backend.field.active'),
-                    type: 'checkbox',
-                    value: true,
-                    help: _('account_backend.field.activeHint'),
-                  },
-                ],
-                editing,
-                rejected,
-              ),
+              fields: await journalFields(ctx, url, req, _, data.accounts, editing, rejected),
             }),
         })
       },

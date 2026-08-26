@@ -146,7 +146,6 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       [
         '/admin/accounting/customer-invoices',
         '/admin/accounting/vendor-bills',
-        '/admin/accounting/journals',
         '/admin/accounting/taxes',
         '/admin/accounting/payments',
         '/admin/accounting/general-ledger',
@@ -193,8 +192,9 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/journals') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="journal-create-form"/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.doesNotMatch(html, /id="journal-create-form"/)
+      assert.match(html, /href="\/admin\/accounting\/journals\/new\?returnTo=/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/taxes') {
@@ -344,6 +344,133 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
       (row) => row.id === target.id,
     ),
     true,
+  )
+})
+
+test('e2e accounting: journal list and form preserve relations, correction, archive and safe writes', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  const accounts = (await call<Row[]>('account.listAccounts')).value
+  const defaultAccount = accounts.find((row) => row.code === '112')!
+  const path = '/admin/accounting/journals'
+
+  const createPage = await e2e.client.get(`${path}/new?lang=vi`, {
+    headers: { accept: 'text/html' },
+  })
+  const createHtml = await createPage.text()
+  assert.equal(createPage.status, 200)
+  assert.match(createHtml, /data-ui="form-page"/)
+  assert.match(createHtml, /id="journal-create-form"/)
+  assert.match(createHtml, /data-island="backend\.relation-select"/)
+  assert.match(createHtml, /&quot;listFunction&quot;:&quot;account\.listAccounts&quot;/)
+  assert.doesNotMatch(createHtml, /data-island="mail\.chatter"/)
+
+  const invalid = await e2e.client.post(
+    `${path}/new?lang=vi`,
+    new URLSearchParams({
+      name: 'Ngân hàng nhập dở',
+      code: 'BAD CODE',
+      type: 'bank',
+      defaultAccountId: String(defaultAccount.id),
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  const invalidHtml = await invalid.text()
+  assert.equal(invalid.status, 200)
+  assert.match(invalidHtml, /data-ui="form-page"/)
+  assert.match(invalidHtml, /value="Ngân hàng nhập dở"/)
+  assert.match(invalidHtml, /value="BAD CODE"/)
+  assert.match(invalidHtml, new RegExp(`value="${String(defaultAccount.id)}"`))
+
+  const crossSite = await e2e.client.post(
+    `${path}/new?lang=vi`,
+    new URLSearchParams({ name: 'Ngân hàng HTTP', code: 'HTTPJ', type: 'bank' }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'https://evil.example',
+      },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(crossSite.status, 403)
+
+  const create = await e2e.client.post(
+    `${path}/new?lang=vi&returnTo=${encodeURIComponent('https://evil.example/steal')}`,
+    new URLSearchParams({
+      name: 'Ngân hàng HTTP',
+      code: 'HTTPJ',
+      type: 'bank',
+      defaultAccountId: String(defaultAccount.id),
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(create.status, 303)
+  assert.equal(create.headers.get('location'), '/admin/accounting/journals?lang=vi')
+
+  const createdRows = (await call<Row[]>('account.listJournals', { includeArchived: true })).value
+  const target = createdRows.find((row) => row.code === 'HTTPJ')!
+  const sequenceNumber = target.sequenceNumber
+  assert.equal(target.defaultAccountId, defaultAccount.id)
+
+  const filtered = await e2e.client.get(`${path}?lang=vi&q=HTTPJ&status=active&type=bank`, {
+    headers: { accept: 'text/html' },
+  })
+  const filteredHtml = await filtered.text()
+  assert.equal(filtered.status, 200)
+  assert.match(filteredHtml, /data-ui="list-page"/)
+  assert.match(filteredHtml, /data-ui="facet"/)
+  assert.match(filteredHtml, /HTTPJ/)
+  assert.match(filteredHtml, new RegExp(`${String(defaultAccount.code)} · ${String(defaultAccount.name)}`))
+
+  // Old links and POST targets remain valid while landing on the dedicated form/list split.
+  const legacyEditor = await e2e.client.get(`${path}?lang=vi&edit=${encodeURIComponent(String(target.id))}`, {
+    headers: { accept: 'text/html' },
+  })
+  const legacyEditorHtml = await legacyEditor.text()
+  assert.equal(legacyEditor.status, 200)
+  assert.match(legacyEditorHtml, /data-ui="form-page"/)
+  assert.match(legacyEditorHtml, /value="HTTPJ"/)
+
+  const legacySave = await e2e.client.post(
+    `${path}?lang=vi&edit=${encodeURIComponent(String(target.id))}`,
+    new URLSearchParams({
+      name: 'Ngân hàng HTTP đã sửa',
+      code: 'HTTPJ',
+      type: 'bank',
+      defaultAccountId: String(defaultAccount.id),
+      active: '1',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(legacySave.status, 303)
+  const corrected = (await call<Row[]>('account.listJournals', { includeArchived: true })).value.find(
+    (row) => row.id === target.id,
+  )!
+  assert.equal(corrected.name, 'Ngân hàng HTTP đã sửa')
+  assert.equal(corrected.sequenceNumber, sequenceNumber)
+
+  const archive = await e2e.client.post(
+    `${path}/new?lang=vi&edit=${encodeURIComponent(String(target.id))}`,
+    new URLSearchParams({
+      name: 'Ngân hàng HTTP đã sửa',
+      code: 'HTTPJ',
+      type: 'bank',
+      defaultAccountId: String(defaultAccount.id),
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(archive.status, 303)
+  assert.equal(
+    (await call<Row[]>('account.listJournals')).value.some((row) => row.id === target.id),
+    false,
+  )
+  assert.equal(
+    (await call<Row[]>('account.listJournals', { includeArchived: true })).value.find(
+      (row) => row.id === target.id,
+    )?.active,
+    false,
   )
 })
 

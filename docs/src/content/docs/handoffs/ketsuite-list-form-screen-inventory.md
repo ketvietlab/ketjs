@@ -66,7 +66,7 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 |---|---|---|---|---|---|---|---|
 | ACC-01 | keep | Accounting overview | `/admin/accounting` | `screens/overview.tsx::accountingOverviewScreen` | Specialized | no | Curie |
 | ACC-02 | done | Chart of accounts | `/admin/accounting/accounts`, `/admin/accounting/accounts/new` | `screens/accounts-list.tsx`, `screens/account-form.tsx` | Split | no | Curie |
-| ACC-03 | ready | Journals | `/admin/accounting/journals` | `journalsScreen` | Split | no | — |
+| ACC-03 | done | Journals | `/admin/accounting/journals`, `/admin/accounting/journals/new` | `screens/journals-list.tsx`, `screens/journal-form.tsx` | Split | no | Curie |
 | ACC-04 | ready | Taxes | `/admin/accounting/taxes` | `taxesScreen` | Split | no | — |
 | ACC-05 | ready | Payment terms | `/admin/accounting/terms` | `paymentTermsScreen` | Split | no | — |
 | ACC-06 | ready | Accounting defaults | `/admin/accounting/defaults` | `accountDefaultsScreen` | FormPage | no | — |
@@ -171,7 +171,7 @@ leaf files; generated Live Doc endpoints belong to the detail renderer that cons
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| FLOW-01 | ready | Projects | `/admin/flow/projects` | `screens/projects.tsx::projectsScreen` | Split | — |
+| FLOW-01 | done | Projects | `/admin/flow/projects`, `/admin/flow/projects/new` | `screens/projects-list.tsx`, `screens/project-create.tsx` | Split | Huygens |
 | FLOW-02 | ready | Project board | `/admin/flow/projects/{id}/board` | `screens/board.tsx::boardScreen` | Specialized | — |
 | FLOW-03 | ready | My/all cross-project issues | `/admin/flow/mine`, `/admin/flow/issues` | `screens/my-work.tsx::crossProjectScreen` | ListPage | — |
 | FLOW-04 | ready | Project issues | `/admin/flow/projects/{id}/issues` | `screens/issues.tsx::issuesScreen` | Split | — |
@@ -193,7 +193,7 @@ Structure debt: split `manufacturing_backend/screens.tsx` incrementally into `sc
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| MFG-01 | ready | Manufacturing orders | `/admin/manufacturing` | `ordersScreen` | Split | — |
+| MFG-01 | done | Manufacturing orders | `/admin/manufacturing`, `/admin/manufacturing/new` | `screens/orders-list.tsx`, `screens/order-create.tsx` | Split | Kant |
 | MFG-02 | ready | Manufacturing order execution | `/admin/manufacturing/orders/{id}` | `orderScreen` | FormPage/Specialized | — |
 | MFG-03 | ready | Bills of materials | `/admin/manufacturing/boms` | `bomsScreen` | Split | — |
 | MFG-04 | ready | Work centers | `/admin/manufacturing/work-centers` | `workCentersScreen` | Split | — |
@@ -818,3 +818,42 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 12 CRM Configuration evidence](/assets/crm-configuration/crm-configuration-wave12-browser-skill.png)
 
 ![Wave 12 CRM Configuration mobile evidence](/assets/crm-configuration/crm-configuration-mobile-wave12-browser-skill.png)
+
+### Wave 13 — ACC-03, FLOW-01 and MFG-01
+
+- Accounting Journals is now a dedicated `ListPage` plus `/new` `FormPage` under
+  `account_backend/screens/`. Search, status/type filters, pager, summary counts, default-account relation,
+  sequence preservation, edit/archive semantics, locale, validation, CSRF, safe return targets and legacy
+  POST/edit compatibility remain; the root renderer was removed.
+- Flow Projects is now a dedicated `ListPage` plus `/new` `FormPage`. Metrics, all/mine visibility tabs,
+  state/progress columns, templates, custom columns, validation values, locale, CSRF, safe redirects and
+  backward-compatible list POST remain. Recent Activity moved from the old frame aside into a final named
+  section below the collection; browser QA confirms it reads as part of the project overview without crowding
+  the list.
+- Manufacturing Orders is now a dedicated `ListPage` plus `/new` `FormPage` in the new incremental
+  `manufacturing_backend/screens/` folder. BOM, quantity/UoM, source/production/destination locations,
+  scheduled start, status and detail workflow links/actions remain. The legacy monolith keeps only the
+  Manufacturing renderers not yet assigned to later waves.
+- Browser QA verified the six routed surfaces at desktop and the three create forms at 390 px. All labels,
+  controls and actions stay within the viewport; no Chatter was invented.
+- Validation followed CI's affected-group planner. Build/typecheck passed; Accounting 66/66,
+  Collaboration 81/81 and Manufacturing 11/11 tests passed. Biome and Astro docs validation also passed;
+  no unrelated domain group was run.
+
+![Wave 13 Accounting Journals list evidence](/assets/accounting-journals-wave13/journals-list-browser-skill.png)
+
+![Wave 13 Accounting Journal create evidence](/assets/accounting-journals-wave13/journal-create-browser-skill.png)
+
+![Wave 13 Accounting Journal create mobile evidence](/assets/accounting-journals-wave13/journal-create-mobile-browser-skill.png)
+
+![Wave 13 Flow Projects list evidence](/assets/flow-projects-wave13/flow-projects-list-browser-skill.png)
+
+![Wave 13 Flow Project create evidence](/assets/flow-projects-wave13/flow-project-create-browser-skill.png)
+
+![Wave 13 Flow Project create mobile evidence](/assets/flow-projects-wave13/flow-project-create-mobile-browser-skill.png)
+
+![Wave 13 Manufacturing Orders list evidence](/assets/manufacturing-orders-wave13/manufacturing-orders-list-browser-skill.png)
+
+![Wave 13 Manufacturing Order create evidence](/assets/manufacturing-orders-wave13/manufacturing-order-create-browser-skill.png)
+
+![Wave 13 Manufacturing Order create mobile evidence](/assets/manufacturing-orders-wave13/manufacturing-order-create-mobile-browser-skill.png)

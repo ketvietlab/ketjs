@@ -132,4 +132,10 @@ export default defineModule({
   },
 })
 
-export { bomsScreen, orderScreen, ordersScreen, workCentersScreen } from './screens.tsx'
+export { orderCreateScreen, ordersListScreen } from './screens/index.ts'
+export type {
+  ManufacturingOrderCreateScreenOptions,
+  ManufacturingOrderListRow,
+  OrdersListScreenOptions,
+} from './screens/index.ts'
+export { bomsScreen, orderScreen, workCentersScreen } from './screens.tsx'

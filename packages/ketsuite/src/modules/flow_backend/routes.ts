@@ -4,7 +4,7 @@ import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { FIELD_KINDS, ISSUE_PRIORITIES } from '../flow/types.ts'
 import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
-import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
+import { adminPage, inLocale, localeQuery, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
@@ -35,7 +35,8 @@ import {
   pagesScreen,
   pageDetailScreen,
   allPagesScreen,
-  projectsScreen,
+  projectCreateScreen,
+  projectsListScreen,
   settingsScreen,
   sprintsScreen,
   TEMPLATE_OPTIONS,
@@ -479,6 +480,154 @@ const parentField = (_: Translator, pages: readonly AnyRow[], pageId: string, cu
   }
 }
 
+const projectCreateFields = (_: Translator, values: Record<string, string> = {}): FormField[] => [
+  { name: 'key', label: _('flow_backend.field.key'), value: values.key ?? '', required: true },
+  { name: 'name', label: _('flow_backend.field.name'), value: values.name ?? '', required: true },
+  {
+    name: 'description',
+    label: _('flow_backend.field.description'),
+    type: 'textarea',
+    value: values.description ?? '',
+    span: 'full',
+  },
+  {
+    name: 'template',
+    label: _('flow_backend.field.template'),
+    type: 'select',
+    value: values.template ?? 'simple',
+    options: TEMPLATE_OPTIONS(_),
+  },
+  {
+    name: 'customColumns',
+    label: _('flow_backend.field.customColumns'),
+    help: _('flow_backend.field.customColumnsHint'),
+    value: values.customColumns ?? '',
+    span: 'full',
+  },
+]
+
+/** Only the project collection is a valid create-form return target. */
+const projectReturnTo = (url: URL, requested?: string | null): string => {
+  const fallback = inLocale(url, '/admin/flow/projects')
+  if (!requested) return fallback
+  try {
+    const target = new URL(requested, url)
+    if (target.origin !== url.origin || target.pathname !== '/admin/flow/projects') return fallback
+    return `${target.pathname}${target.search}`
+  } catch {
+    return fallback
+  }
+}
+
+const projectCreateHref = (url: URL): string => {
+  const target = new URL(inLocale(url, '/admin/flow/projects/new'), url)
+  target.searchParams.set('returnTo', `${url.pathname}${url.search}`)
+  return `${target.pathname}${target.search}`
+}
+
+const projectCreateRoute =
+  (actionPath: '/admin/flow/projects' | '/admin/flow/projects/new') =>
+  (ctx: ServeContext): Route =>
+  async (url, req) => {
+    const refused = refusePost(req)
+    if (refused) return refused
+    const _ = ctx.translate(ctx.localeOf(url, req))
+    let errors: string[] = []
+    let values: Record<string, string> = Object.fromEntries(
+      ['key', 'name', 'description', 'template', 'customColumns']
+        .map((name) => [name, url.searchParams.get(name) ?? ''])
+        .filter(([, value]) => value),
+    )
+    let submittedReturnTo =
+      url.searchParams.get('returnTo') ??
+      (actionPath === '/admin/flow/projects' ? `${url.pathname}${url.search}` : null)
+
+    if (req.method === 'POST') {
+      const form = await readForm(req)
+      values = form
+      submittedReturnTo = form.returnTo ?? submittedReturnTo
+      const names =
+        form.template === 'custom'
+          ? (form.customColumns ?? '')
+              .split(',')
+              .map((name) => name.trim())
+              .filter(Boolean)
+          : (COLUMN_TEMPLATES[form.template ?? 'simple'] ?? COLUMN_TEMPLATES.simple)
+      if (!names.length) {
+        errors = [_('flow_backend.error.customColumnsRequired')]
+      } else {
+        const id = randomUUID()
+        const result = (await ctx.call(
+          'flow.project.save',
+          {
+            values: {
+              id,
+              key: form.key ?? '',
+              name: form.name ?? '',
+              description: form.description || null,
+            },
+            idempotencyKey: randomUUID(),
+          },
+          url,
+          req,
+        )) as AnyRow
+        if (result.ok) {
+          for (const [index, name] of names.entries()) {
+            const column = (await ctx.call(
+              'flow.column.save',
+              {
+                values: {
+                  id: randomUUID(),
+                  projectId: id,
+                  code: slugify(name),
+                  name,
+                  sequence: (index + 1) * 10,
+                  terminalState: index === names.length - 1,
+                },
+                idempotencyKey: randomUUID(),
+              },
+              url,
+              req,
+            )) as AnyRow
+            if (!column.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
+          }
+          for (const [index, name] of (TYPE_TEMPLATES[form.template ?? 'simple'] ??
+            TYPE_TEMPLATES.simple)!.entries())
+            await ctx.call(
+              'flow.issueType.save',
+              {
+                values: {
+                  id: randomUUID(),
+                  projectId: id,
+                  code: slugify(name),
+                  name,
+                  sequence: (index + 1) * 10,
+                },
+                idempotencyKey: randomUUID(),
+              },
+              url,
+              req,
+            )
+          return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
+        }
+        errors = errorsOf(result, _)
+      }
+    } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+
+    const returnTo = projectReturnTo(url, submittedReturnTo)
+    return adminPage(ctx, url, req, {
+      title: 'flow_backend.projects.create',
+      body: (_, frame) =>
+        projectCreateScreen(_, frame, {
+          action: inLocale(url, actionPath),
+          cancelHref: returnTo,
+          returnTo,
+          fields: projectCreateFields(_, values),
+          errors,
+        }),
+    })
+  }
+
 export const routes: Record<string, RouteEntry> = {
   // The document endpoints under `/admin/flow/issues/{id}` — content, push,
   // live, presence, leave. Mounted rather than written out: they are the same
@@ -755,98 +904,16 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
+  '/admin/flow/projects/new': projectCreateRoute('/admin/flow/projects/new'),
+
   '/admin/flow/projects':
     (ctx: ServeContext): Route =>
     async (url, req) => {
-      const refused = refusePost(req)
-      if (refused) return refused
+      if (req.method === 'POST') return projectCreateRoute('/admin/flow/projects')(ctx)(url, req, {})
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let errors: string[] = []
-      if (req.method === 'POST') {
-        const form = await readForm(req)
-        const names =
-          form.template === 'custom'
-            ? (form.customColumns ?? '')
-                .split(',')
-                .map((name) => name.trim())
-                .filter(Boolean)
-            : (COLUMN_TEMPLATES[form.template ?? 'simple'] ?? COLUMN_TEMPLATES.simple)
-        // Refused before the project row exists, not after: a board with no
-        // column cannot hold an issue, so "Custom" with an empty list used to
-        // build a project whose Issues screen rejected every create with an
-        // error the screen had nowhere to show.
-        if (!names.length) {
-          errors = [_('flow_backend.error.customColumnsRequired')]
-        } else {
-          const id = randomUUID()
-          const result = (await ctx.call(
-            'flow.project.save',
-            {
-              values: {
-                id,
-                key: form.key ?? '',
-                name: form.name ?? '',
-                description: form.description || null,
-              },
-              idempotencyKey: randomUUID(),
-            },
-            url,
-            req,
-          )) as AnyRow
-          if (result.ok) {
-            for (const [index, name] of names.entries()) {
-              const column = (await ctx.call(
-                'flow.column.save',
-                {
-                  values: {
-                    id: randomUUID(),
-                    projectId: id,
-                    code: slugify(name),
-                    name,
-                    sequence: (index + 1) * 10,
-                    terminalState: index === names.length - 1,
-                  },
-                  idempotencyKey: randomUUID(),
-                },
-                url,
-                req,
-              )) as AnyRow
-              // A column that will not save leaves a half-built board, and
-              // the settings screen is the only place to repair one — so say
-              // so here rather than landing on a board missing a column.
-              if (!column.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
-            }
-            for (const [index, name] of (TYPE_TEMPLATES[form.template ?? 'simple'] ??
-              TYPE_TEMPLATES.simple)!.entries()) {
-              // Unlike a column, a project with no type is still a working
-              // board — the field is simply not offered — so a type that will
-              // not save is not worth diverting the whole creation for.
-              await ctx.call(
-                'flow.issueType.save',
-                {
-                  values: {
-                    id: randomUUID(),
-                    projectId: id,
-                    code: slugify(name),
-                    name,
-                    sequence: (index + 1) * 10,
-                  },
-                  idempotencyKey: randomUUID(),
-                },
-                url,
-                req,
-              )
-            }
-            return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
-          }
-          errors = errorsOf(result, _)
-        }
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const all = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
-      // Counts for every project the reader can see, in two reads rather than
-      // one per row — see `projectStats`. Taken over the whole set, not the
-      // tab, so the cards keep describing the same thing when a tab narrows
-      // the table.
       const stats = (await ctx.call(
         'flow.project.stats',
         { projectIds: all.map((project) => String(project.id)) },
@@ -856,9 +923,6 @@ export const routes: Record<string, RouteEntry> = {
       const statsBy = new Map(stats.map((row) => [String(row.id), row]))
       const counted = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
 
-      // "Mine" is the projects holding an issue assigned to me. A project has
-      // no membership to read instead, so this answers the question the tab
-      // actually asks rather than inventing a list nobody maintains.
       const tab = url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
       const mine = (await ctx.call(
         'flow.issue.list',
@@ -867,10 +931,9 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as AnyRow
       const mineProjects = new Set(((mine.rows as AnyRow[]) ?? []).map((issue) => String(issue.projectId)))
-      const rows = tab === 'mine' ? counted.filter((p) => mineProjects.has(String(p.id))) : counted
+      const rows =
+        tab === 'mine' ? counted.filter((project) => mineProjects.has(String(project.id))) : counted
 
-      // The one rail the design asks for: what changed most recently, across
-      // every project, newest first.
       const recent = (await ctx.call(
         'flow.issue.list',
         {
@@ -883,55 +946,29 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'flow_backend.projects.title',
         body: (_, frame) =>
-          projectsScreen(
-            _,
-            frame,
-            {
-              rows,
-              projectCount: all.length,
-              issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
-              issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
-              activeCount: stats.filter((row) => String(row.state) === 'active').length,
-              activity: ((recent.rows as AnyRow[]) ?? []).slice(0, 6),
-              tab,
-              tabs: [
-                {
-                  id: 'all',
-                  label: _('flow_backend.projects.tabAll'),
-                  href: '/admin/flow/projects',
-                },
-                {
-                  id: 'mine',
-                  label: _('flow_backend.projects.tabMine'),
-                  href: '/admin/flow/projects?tab=mine',
-                },
-              ],
-            },
-            [
-              { name: 'key', label: _('flow_backend.field.key'), required: true },
-              { name: 'name', label: _('flow_backend.field.name'), required: true },
+          projectsListScreen(_, frame, {
+            rows,
+            projectCount: all.length,
+            issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
+            issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
+            activeCount: stats.filter((row) => String(row.state) === 'active').length,
+            activity: ((recent.rows as AnyRow[]) ?? []).slice(0, 6),
+            tab,
+            tabs: [
               {
-                name: 'description',
-                label: _('flow_backend.field.description'),
-                type: 'textarea',
-                span: 'full',
+                id: 'all',
+                label: _('flow_backend.projects.tabAll'),
+                href: '/admin/flow/projects',
               },
               {
-                name: 'template',
-                label: _('flow_backend.field.template'),
-                type: 'select',
-                value: 'simple',
-                options: TEMPLATE_OPTIONS(_),
-              },
-              {
-                name: 'customColumns',
-                label: _('flow_backend.field.customColumns'),
-                help: _('flow_backend.field.customColumnsHint'),
-                span: 'full',
+                id: 'mine',
+                label: _('flow_backend.projects.tabMine'),
+                href: '/admin/flow/projects?tab=mine',
               },
             ],
-            errors,
-          ),
+            createHref: projectCreateHref(url),
+            locale: localeQuery(url),
+          }),
       })
     },
 
