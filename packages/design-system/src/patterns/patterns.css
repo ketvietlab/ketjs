@@ -240,6 +240,16 @@
     border-top: 1px solid var(--kv-panel-divider);
   }
 
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system]) [data-ui="form-grid"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-grid"] [data-ui="field"] {
+      grid-column: 1;
+    }
+  }
+
   :where([data-kv-design-system]) [data-ui="modal-backdrop"] {
     position: fixed;
     z-index: var(--kv-z-modal);
@@ -331,14 +341,6 @@
     :where([data-kv-design-system]) [data-ui="list-page-controls"] {
       min-width: 0;
       flex-basis: 15rem;
-    }
-
-    :where([data-kv-design-system]) [data-ui="form-grid"] {
-      grid-template-columns: 1fr;
-    }
-
-    :where([data-kv-design-system]) [data-ui="form-grid"] [data-ui="field"] {
-      grid-column: 1;
     }
   }
 
@@ -664,9 +666,9 @@
     background: var(--kv-panel-bg-subtle);
   }
 
-  /* Inline controls are part of the form-page contract. Labels stay left and
-     controls stay right at every viewport; responsive rules only tighten their
-     measures and spacing. */
+  /* Record forms use the compact ERP label/value rhythm while there is enough
+     room. Below 768 px the form becomes conventional vertical fields so labels
+     and controls never compete for the same narrow row. */
   :where([data-kv-design-system])
     [data-ui="form-page"]
     [data-ui="record-form"]
@@ -723,6 +725,30 @@
     }
   }
 
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system])
+      [data-ui="form-page"]
+      [data-ui="record-form"]
+      [data-ui="field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="form-page"]
+      [data-ui="record-form"]
+      [data-ui="field"]:not([data-kind="checkbox"])
+      > :is(
+        [data-ui="field-label"],
+        [data-ui="field-control"],
+        [data-ui="field-options"],
+        [data-ui="field-help"],
+        [data-ui="field-error"]
+      ) {
+      grid-column: 1;
+    }
+  }
+
   @media (max-width: 42rem) {
     :where([data-kv-design-system]) [data-ui="form-page-header"] {
       padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
@@ -760,15 +786,6 @@
     :where([data-kv-design-system]) [data-ui="form-page-aside"],
     :where([data-kv-design-system]) [data-ui="form-page-controller"] {
       padding-inline: var(--kv-space-4);
-    }
-
-    :where([data-kv-design-system])
-      [data-ui="form-page"]
-      [data-ui="record-form"]
-      [data-ui="field"]:not([data-kind="checkbox"]) {
-      grid-template-columns: minmax(5.25rem, 6.25rem) minmax(0, 1fr);
-      align-items: center;
-      column-gap: var(--kv-space-2);
     }
   }
 }

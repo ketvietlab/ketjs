@@ -440,7 +440,8 @@ These entries were inspected and intentionally do not receive a screen agent:
 - If its module started with a monolithic `screens.tsx`, the assigned renderer now lives in the module's
   `screens/` folder and the barrel import remains stable.
 - List state is URL-driven; create is a header action rather than an unrelated form above the table.
-- Form labels stay in the left column and controls in the right column at every supported width.
+- Form labels stay in the left column and controls in the right column from 768px; below it, every field
+  stacks the label above a full-width control.
 - A collaboration rail is one third of content above 1023px and stacks below the body at narrower widths.
 - Primary action stays beside identity; secondary/destructive actions use the compact More hierarchy.
 - Partial saves preserve Chatter, Activity, relation controls, and any other island DOM.
@@ -930,6 +931,9 @@ does not loop. Login verification loaded all 22 stylesheets with zero failures.
 Nested relation-select QA verifies that the first Escape closes only the relation dialog and preserves the
 route modal URL; the second Escape closes the route modal and returns to its background list.
 
+The shared form contract was also verified at its exact responsive boundary: at `767px` every regular
+field stacks its label above a full-width control, while `768px` restores the compact ERP inline layout.
+
 ![PR 253 journal modal at 1440 px](/assets/modal-consolidation-pr253/journal-modal-desktop-1440.png)
 
 ![PR 253 journal modal at 390 px](/assets/modal-consolidation-pr253/journal-modal-mobile-390.png)
@@ -937,3 +941,5 @@ route modal URL; the second Escape closes the route modal and returns to its bac
 ![PR 253 partner accounting modal over detail and Chatter](/assets/modal-consolidation-pr253/partner-accounting-modal-chatter.png)
 
 ![PR 253 login font and controls after design-system bundling fix](/assets/modal-consolidation-pr253/login-font-fixed.png)
+
+![PR 253 Partner form controls stacked at 767 px](/assets/modal-consolidation-pr253/form-controls-stacked-767.png)

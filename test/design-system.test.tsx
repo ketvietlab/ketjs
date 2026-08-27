@@ -70,6 +70,19 @@ test('design system: a stacked FormPage rail keeps space above its content', () 
   )
 })
 
+test('design system: form controls stack below 768px', () => {
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const compatibility = readFileSync('packages/ketsuite/src/modules/backend/design/forms.css', 'utf8')
+  const partner = readFileSync('packages/ketsuite/src/modules/partner_backend/client/partner.css', 'utf8')
+  for (const source of [patterns, compatibility]) {
+    assert.match(source, /@media \(max-width: 47\.9375rem\)/)
+    assert.match(source, /grid-template-columns: minmax\(0, 1fr\)/)
+  }
+  assert.doesNotMatch(patterns, /minmax\(5\.25rem, 6\.25rem\)/)
+  assert.doesNotMatch(compatibility, /minmax\(5\.25rem, 6\.25rem\)/)
+  assert.doesNotMatch(partner, /\[data-ui="form-field"\]/)
+})
+
 test('design system: controls preserve their native semantics and accessible state', () => {
   const button = renderToString(<Button label="Saving" variant="primary" loading />)
   assert.match(button, /^<button/)
