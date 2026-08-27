@@ -24,5 +24,15 @@ KetJS owns the public Channel API and identity presentation primitives. It does 
 contract assembled from Cosmetic, Commerce, and Hospitality deployments. The private repository generates
 that artifact; the mobile repository pins and consumes it.
 
+| Change | Owning repository | Release consumer |
+| --- | --- | --- |
+| Staff identity, presentation, CSRF, OpenAPI primitives | `ketvietlab/ketjs` | `ketvietlab/ketviet` |
+| Opaque staff sessions, IdP exchange, private composition | `ketvietlab/ketviet` | `ketvietlab/ketviet-app` |
+| PKCE, secure storage, Swift/Kotlin generation and adapters | `ketvietlab/ketviet-app` | Native releases |
+
+Public framework changes land first, the private deployment then publishes a provenance-bearing contract,
+and mobile pins that artifact last. Private route source must not be copied into KetJS to make generation
+easier.
+
 This baseline is an audit anchor, not the target contract. In particular, 40 composed success responses are
 not yet typed strongly enough for safe Swift or Kotlin generation.
