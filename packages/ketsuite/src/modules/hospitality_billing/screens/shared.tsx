@@ -6,6 +6,8 @@ import {
   emptyState,
   Framed,
   linkButton,
+  modalForm,
+  modalWorkspace,
   Notice,
   RecordForm,
   Section,
@@ -14,7 +16,20 @@ import {
 import type { Column, Frame } from '../../../ui/index.ts'
 import { CHARGE_TYPES } from '../../hospitality_core/types.ts'
 
-export { badge, dataTable, emptyState, Framed, linkButton, Notice, RecordForm, Section, stack, CHARGE_TYPES }
+export {
+  badge,
+  dataTable,
+  emptyState,
+  Framed,
+  linkButton,
+  modalForm,
+  modalWorkspace,
+  Notice,
+  RecordForm,
+  Section,
+  stack,
+  CHARGE_TYPES,
+}
 export type { Translator, TemplateResult, Column, Frame }
 
 export type ChargeRuleRow = {

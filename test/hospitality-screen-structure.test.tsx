@@ -89,3 +89,135 @@ test('Hospitality primary create actions stay in the ListPage title row', () => 
     /data-ui="list-page-body"[\s\S]*?href="\/admin\/hospitality\/properties\/new\?lang=vi"/,
   )
 })
+
+test('Hospitality split collections keep context mounted under URL-owned create modals', () => {
+  const modal = {
+    open: true,
+    createHref: '/collection?lang=vi&create=1',
+    closeHref: '/collection?lang=vi',
+    action: '/collection?lang=vi&create=1',
+  }
+  const reservationData = {
+    rows: [],
+    properties: [{ id: 'hotel', name: 'Hotel' }],
+    roomTypes: [{ id: 'deluxe', name: 'Deluxe' }],
+    partners: [{ id: 'guest', name: 'Guest' }],
+    values: {
+      id: 'reservation',
+      code: 'RES-001',
+      propertyId: 'hotel',
+      roomTypeId: 'deluxe',
+      partnerId: 'guest',
+      bookingType: 'nightly',
+      checkIn: '2026-08-27T14:00',
+      checkOut: '2026-08-28T12:00',
+      adults: 1,
+      children: 0,
+      rate: '',
+    },
+  }
+  const room = {
+    id: '101',
+    code: '101',
+    name: 'Room 101',
+    status: 'available',
+  }
+  const collectionPairs = [
+    [
+      coreScreens.reservationsScreen(translate, reservationData, 'vi', 'Asia/Ho_Chi_Minh', {}),
+      coreScreens.reservationsScreen(translate, reservationData, 'vi', 'Asia/Ho_Chi_Minh', {}, null, modal),
+      'hospitality-reservation-create',
+    ],
+    [
+      coreScreens.ratePlansScreen(translate, [], [], [{ id: 'deluxe', name: 'Deluxe' }], 'hotel', {}),
+      coreScreens.ratePlansScreen(
+        translate,
+        [],
+        [],
+        [{ id: 'deluxe', name: 'Deluxe' }],
+        'hotel',
+        {},
+        null,
+        modal,
+      ),
+      'hospitality-rate-plan-create',
+    ],
+    [
+      coreScreens.cleaningTasksScreen(
+        translate,
+        {
+          rows: [],
+          properties: [],
+          propertyId: 'hotel',
+          state: 'all',
+          rooms: [room] as never,
+          summary: { todo: 0, inProgress: 0, done: 0, cancelled: 0 },
+          id: 'task',
+          code: 'HK-001',
+        },
+        'vi',
+        'Asia/Ho_Chi_Minh',
+        {},
+      ),
+      coreScreens.cleaningTasksScreen(
+        translate,
+        {
+          rows: [],
+          properties: [],
+          propertyId: 'hotel',
+          state: 'all',
+          rooms: [room] as never,
+          summary: { todo: 0, inProgress: 0, done: 0, cancelled: 0 },
+          id: 'task',
+          code: 'HK-001',
+        },
+        'vi',
+        'Asia/Ho_Chi_Minh',
+        {},
+        null,
+        modal,
+      ),
+      'hospitality-cleaning-task-create',
+    ],
+    [
+      coreScreens.amenitiesScreen(translate, [], [], {}),
+      coreScreens.amenitiesScreen(translate, [], [], {}, null, modal),
+      'hospitality-amenity-create',
+    ],
+    [
+      coreScreens.policiesScreen(translate, [], {}),
+      coreScreens.policiesScreen(translate, [], {}, null, modal),
+      'hospitality-policy-create',
+    ],
+  ] as const
+
+  for (const [closed, open, id] of collectionPairs) {
+    const closedHtml = renderToString(closed)
+    const openHtml = renderToString(open)
+    assert.match(closedHtml, /data-ui="list-page"/)
+    assert.match(closedHtml, /href="\/collection\?lang=vi&amp;create=1"/)
+    assert.doesNotMatch(closedHtml, /data-route-modal="true"/)
+    assert.match(openHtml, /data-ui="list-page"/)
+    assert.match(openHtml, /data-route-modal="true"/)
+    assert.match(openHtml, new RegExp(`aria-labelledby="${id}-title"`))
+    assert.match(openHtml, /href="\/collection\?lang=vi"/)
+  }
+
+  const billingModal = {
+    ...modal,
+    rowHref: (row: { chargeType: string }) => `/collection?lang=vi&create=1&rule=${row.chargeType}`,
+  }
+  const billingClosed = renderToString(
+    billingScreens.chargeRulesScreen(translate, [], [], [], [], {}, null, {
+      ...billingModal,
+      open: false,
+    }),
+  )
+  const billingOpen = renderToString(
+    billingScreens.chargeRulesScreen(translate, [], [], [], [], {}, null, billingModal),
+  )
+  assert.match(billingClosed, /href="\/collection\?lang=vi&amp;create=1"/)
+  assert.doesNotMatch(billingClosed, /data-route-modal="true"/)
+  assert.match(billingOpen, /data-route-modal="true"/)
+  assert.match(billingOpen, /aria-labelledby="hospitality-charge-rule-save-title"/)
+})

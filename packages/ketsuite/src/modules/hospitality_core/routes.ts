@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
-import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext, Translator } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import {
@@ -334,6 +334,48 @@ const redirected = (
     if (value) params.set(key, value)
     else params.delete(key)
   }
+  return seeOther(`${url.pathname}?${params.toString()}`)
+}
+
+const modalHref = (url: URL, open: boolean, remove: readonly string[] = []): string => {
+  const params = new URLSearchParams(url.searchParams)
+  if (open) params.set('create', '1')
+  else params.delete('create')
+  params.delete('status')
+  if (!open) params.delete('preview')
+  for (const key of remove) params.delete(key)
+  const query = params.toString()
+  return `${url.pathname}${query ? `?${query}` : ''}`
+}
+
+const modalAction = (url: URL): string => {
+  const params = new URLSearchParams(url.searchParams)
+  params.set('create', '1')
+  return `${url.pathname}?${params.toString()}`
+}
+
+const modalErrors = (url: URL, _: Translator): readonly string[] | undefined =>
+  url.searchParams.get('status') === 'invalid' ? [_('hospitality_core.feedback.invalid')] : undefined
+
+const modalValues = (url: URL, keys: readonly string[]): Record<string, string> =>
+  Object.fromEntries(keys.flatMap((key) => (url.searchParams.has(key) ? [[key, url.searchParams.get(key)!]] : [])))
+
+const modalResultRedirect = (
+  url: URL,
+  ok: boolean,
+  success: 'saved' | 'created',
+  values: Record<string, string | undefined> = {},
+  removeOnSuccess: readonly string[] = [],
+) => {
+  const params = new URLSearchParams(url.searchParams)
+  if (ok) params.delete('create')
+  else params.set('create', '1')
+  params.set('status', ok ? success : 'invalid')
+  for (const [key, value] of Object.entries(values)) {
+    if (value) params.set(key, value)
+    else params.delete(key)
+  }
+  if (ok) for (const key of removeOnSuccess) params.delete(key)
   return seeOther(`${url.pathname}?${params.toString()}`)
 }
 
@@ -933,6 +975,7 @@ export const routes: Record<string, RouteEntry> = {
         const checkOut = instantFromLocal(form.checkOut, timezone)
         const values = {
           lang: form.lang,
+          create: '1',
           property: propertyId,
           preview: '1',
           id: form.id,
@@ -986,9 +1029,24 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as { ok?: boolean }
-        return result.ok
-          ? redirected(url, 'saved', { lang: form.lang, property: propertyId })
-          : redirected(url, 'invalid', values)
+        return modalResultRedirect(
+          url,
+          Boolean(result.ok),
+          'saved',
+          result.ok ? { lang: form.lang, property: propertyId, preview: undefined } : values,
+          [
+            'id',
+            'code',
+            'partnerId',
+            'roomTypeId',
+            'bookingType',
+            'checkIn',
+            'checkOut',
+            'adults',
+            'children',
+            'rate',
+          ],
+        )
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
@@ -1088,6 +1146,35 @@ export const routes: Record<string, RouteEntry> = {
             timezone,
             frame,
             url.searchParams.get('status'),
+            {
+              open: url.searchParams.get('create') === '1',
+              createHref: modalHref(url, true, [
+                'preview',
+                'id',
+                'code',
+                'partnerId',
+                'roomTypeId',
+                'bookingType',
+                'checkIn',
+                'checkOut',
+                'adults',
+                'children',
+                'rate',
+              ]),
+              closeHref: modalHref(url, false, [
+                'id',
+                'code',
+                'partnerId',
+                'roomTypeId',
+                'bookingType',
+                'checkIn',
+                'checkOut',
+                'adults',
+                'children',
+                'rate',
+              ]),
+              action: modalAction(url),
+            },
           ),
       })
     },
@@ -1866,7 +1953,26 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as { ok?: boolean }
-        return redirected(url, result.ok ? 'saved' : 'invalid', { property: form.propertyId })
+        const values = {
+          property: form.propertyId,
+          roomTypeId: form.roomTypeId,
+          code: form.code,
+          name: form.name,
+          rateType: form.rateType,
+          amount: form.amount,
+          mealPlan: form.mealPlan,
+          minStay: form.minStay,
+          maxStay: form.maxStay,
+          isDefault: form.isDefault,
+          active: form.active,
+        }
+        return modalResultRedirect(
+          url,
+          Boolean(result.ok),
+          'saved',
+          values,
+          Object.keys(values).filter((key) => key !== 'property'),
+        )
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
@@ -1883,7 +1989,56 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.ratePlans.title',
         body: (_, frame) =>
-          ratePlansScreen(_, rows, properties, roomTypes, propertyId, frame, url.searchParams.get('status')),
+          ratePlansScreen(
+            _,
+            rows,
+            properties,
+            roomTypes,
+            propertyId,
+            frame,
+            url.searchParams.get('status'),
+            {
+              open: url.searchParams.get('create') === '1',
+              createHref: modalHref(url, true, [
+                'roomTypeId',
+                'code',
+                'name',
+                'rateType',
+                'amount',
+                'mealPlan',
+                'minStay',
+                'maxStay',
+                'isDefault',
+                'active',
+              ]),
+              closeHref: modalHref(url, false, [
+                'roomTypeId',
+                'code',
+                'name',
+                'rateType',
+                'amount',
+                'mealPlan',
+                'minStay',
+                'maxStay',
+                'isDefault',
+                'active',
+              ]),
+              action: modalAction(url),
+              errors: modalErrors(url, _),
+              values: modalValues(url, [
+                'roomTypeId',
+                'code',
+                'name',
+                'rateType',
+                'amount',
+                'mealPlan',
+                'minStay',
+                'maxStay',
+                'isDefault',
+                'active',
+              ]),
+            },
+          ),
       })
     },
 
@@ -2254,11 +2409,23 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as OperationResult
-        return redirected(url, result.ok ? 'created' : 'invalid', {
-          property: form.propertyId,
-          state: form.state === 'all' ? undefined : form.state,
-          lang: form.lang,
-        })
+        return modalResultRedirect(
+          url,
+          Boolean(result.ok),
+          'created',
+          {
+            property: form.propertyId,
+            state: form.state === 'all' ? undefined : form.state,
+            lang: form.lang,
+            room: result.ok ? undefined : form.roomId,
+            roomId: form.roomId,
+            taskType: form.taskType,
+            priority: form.priority,
+            assigneeId: form.assigneeId,
+            notes: form.notes,
+          },
+          ['roomId', 'taskType', 'priority', 'assigneeId', 'notes'],
+        )
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
@@ -2308,6 +2475,14 @@ export const routes: Record<string, RouteEntry> = {
             timezone,
             frame,
             url.searchParams.get('status'),
+            {
+              open: url.searchParams.get('create') === '1',
+              createHref: modalHref(url, true),
+              closeHref: modalHref(url, false, ['room']),
+              action: modalAction(url),
+              errors: modalErrors(url, _),
+              values: modalValues(url, ['roomId', 'taskType', 'priority', 'assigneeId', 'notes']),
+            },
           ),
       })
     },
@@ -2577,7 +2752,14 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as { ok?: boolean }
-        return redirected(url, result.ok ? 'saved' : 'invalid')
+        const values = {
+          code: form.code,
+          name: form.name,
+          scope: form.scope,
+          categoryId: form.categoryId,
+          sequence: form.sequence,
+        }
+        return modalResultRedirect(url, Boolean(result.ok), 'saved', values, Object.keys(values))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [rows, categories] = (await Promise.all([
@@ -2586,7 +2768,15 @@ export const routes: Record<string, RouteEntry> = {
       ])) as [AmenityRow[], Array<{ id: string; name: string }>]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.amenities.title',
-        body: (_, frame) => amenitiesScreen(_, rows, categories, frame, url.searchParams.get('status')),
+        body: (_, frame) =>
+          amenitiesScreen(_, rows, categories, frame, url.searchParams.get('status'), {
+            open: url.searchParams.get('create') === '1',
+            createHref: modalHref(url, true, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+            closeHref: modalHref(url, false, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+            action: modalAction(url),
+            errors: modalErrors(url, _),
+            values: modalValues(url, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+          }),
       })
     },
 
@@ -2610,13 +2800,50 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as { ok?: boolean }
-        return redirected(url, result.ok ? 'saved' : 'invalid')
+        const values = {
+          code: form.code,
+          name: form.name,
+          type: form.type,
+          description: form.description,
+          freeCancellationHours: form.freeCancellationHours,
+          penaltyPercent: form.penaltyPercent,
+        }
+        return modalResultRedirect(url, Boolean(result.ok), 'saved', values, Object.keys(values))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('hospitality_core.listCancellationPolicies', {}, url, req)) as PolicyRow[]
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.policies.title',
-        body: (_, frame) => policiesScreen(_, rows, frame, url.searchParams.get('status')),
+        body: (_, frame) =>
+          policiesScreen(_, rows, frame, url.searchParams.get('status'), {
+            open: url.searchParams.get('create') === '1',
+            createHref: modalHref(url, true, [
+              'code',
+              'name',
+              'type',
+              'description',
+              'freeCancellationHours',
+              'penaltyPercent',
+            ]),
+            closeHref: modalHref(url, false, [
+              'code',
+              'name',
+              'type',
+              'description',
+              'freeCancellationHours',
+              'penaltyPercent',
+            ]),
+            action: modalAction(url),
+            errors: modalErrors(url, _),
+            values: modalValues(url, [
+              'code',
+              'name',
+              'type',
+              'description',
+              'freeCancellationHours',
+              'penaltyPercent',
+            ]),
+          }),
       })
     },
 }
