@@ -26,7 +26,7 @@ import {
   programsScreen,
   walletDetailScreen,
   walletsScreen,
-} from './screens.tsx'
+} from './screens/index.tsx'
 import { adminPage, choices, inLocale, optional } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 

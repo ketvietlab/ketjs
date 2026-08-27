@@ -22,9 +22,10 @@ import {
   stack,
   Surface,
   Tabs,
-} from '../../ui/index.ts'
-import type { FormField, Frame, Tone } from '../../ui/index.ts'
-import { selectionLabel } from '../backend/screen.ts'
+} from '../../../ui/index.ts'
+import type { FormField, Frame, Tone } from '../../../ui/index.ts'
+import { selectionLabel } from '../../backend/screen.ts'
+import { FormScreenFrame, ListScreenFrame } from './page-frame.tsx'
 
 type AnyRow = Record<string, unknown>
 
@@ -227,7 +228,7 @@ export const programsScreen = (
   createFields: FormField[],
   errors: string[] = [],
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('loyalty_backend.programs.title')}
     subtitle={_('loyalty_backend.programs.hint')}
@@ -464,7 +465,7 @@ export const programDetailScreen = (
     />
   )
   return (
-    <Framed
+    <FormScreenFrame
       translator={_}
       title={String(program.name)}
       frame={frame}
@@ -576,7 +577,7 @@ export const walletsScreen = (
   createFields: FormField[],
   errors: string[] = [],
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('loyalty_backend.wallets.title')}
     subtitle={_('loyalty_backend.wallets.hint')}
@@ -724,7 +725,7 @@ export const walletDetailScreen = (
   const here = `/admin/loyalty/wallets/${String(wallet.id)}`
   const showLedger = tab === 'ledger'
   return (
-    <Framed
+    <FormScreenFrame
       translator={_}
       title={String(wallet.code)}
       frame={frame}
@@ -964,7 +965,7 @@ const ledgerTable = (_: Translator, rows: AnyRow[], options: { wallet?: boolean;
  * that same filter.
  */
 export const ledgerScreen = (_: Translator, frame: Frame, rows: AnyRow[], totals: AnyRow): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('loyalty_backend.ledger.title')}
     subtitle={_('loyalty_backend.ledger.hint')}

@@ -19,10 +19,10 @@ sub-agent mechanism is retired. Historical `Owner` values remain as delivery evi
 
 1. The primary agent alone edits, stages, commits, rebases and pushes the shared branch.
 2. A shared renderer serving several route aliases remains one row so its behavior is reviewed as one unit.
-3. Only one row per lane may be `in-progress` at a time. A lane is normally one backend module because its
-   screens share a route registry, translations and fixtures.
-4. Before editing, the agent changes `Status` to `in-progress` and treats the listed renderer, route registry,
-   module translations and focused tests as one locked work item.
+3. Starting with Wave 33, each wave contains at least 20 inventory rows. The primary agent may lock several
+   complete lanes in one wave, but remains their sole owner; the retired sub-agent mechanism is not restored.
+4. Before editing, the agent changes every row assigned to the wave to `in-progress` and treats their renderers,
+   route registries, module translations and focused tests as one locked delivery batch.
 5. Shared design-system changes land before dependent screen changes in the same wave.
 7. A module that still has a monolithic `screens.tsx` is migrated incrementally to a `screens/` folder.
    The first screen agent creates `screens/index.ts` and, only when necessary, `screens/shared.tsx`; every
@@ -265,13 +265,13 @@ tabs until their route/data loader is separated.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| LOYALTY-01 | ready | Loyalty overview | `/admin/loyalty` | `dashboardScreen` | Specialized | — |
-| LOYALTY-02 | ready | Programs | `/admin/loyalty/programs` | `programsScreen` | Split | — |
-| LOYALTY-03 | ready | Program detail | `/admin/loyalty/programs/{id}` | `programDetailScreen` | FormPage/Specialized | — |
-| LOYALTY-04 | ready | Wallets | `/admin/loyalty/wallets` | `walletsScreen` | Split | — |
-| LOYALTY-05 | ready | Wallet detail | `/admin/loyalty/wallets/{id}` | `walletDetailScreen` | FormPage/Specialized | — |
-| LOYALTY-06 | ready | Loyalty ledger | `/admin/loyalty/ledger` | `ledgerScreen` | ListPage | — |
-| LOYALTY-07 | ready | Membership configuration | `/admin/loyalty/memberships` | `membershipsScreen` | Specialized | — |
+| LOYALTY-01 | done | Loyalty overview | `/admin/loyalty` | `screens/index.tsx::dashboardScreen` | Specialized | Codex |
+| LOYALTY-02 | done | Programs | `/admin/loyalty/programs` | `screens/index.tsx::programsScreen` | Split | Codex |
+| LOYALTY-03 | done | Program detail | `/admin/loyalty/programs/{id}` | `screens/index.tsx::programDetailScreen` | FormPage/Specialized | Codex |
+| LOYALTY-04 | done | Wallets | `/admin/loyalty/wallets` | `screens/index.tsx::walletsScreen` | Split | Codex |
+| LOYALTY-05 | done | Wallet detail | `/admin/loyalty/wallets/{id}` | `screens/index.tsx::walletDetailScreen` | FormPage/Specialized | Codex |
+| LOYALTY-06 | done | Loyalty ledger | `/admin/loyalty/ledger` | `screens/index.tsx::ledgerScreen` | ListPage | Codex |
+| LOYALTY-07 | done | Membership configuration | `/admin/loyalty/memberships` | `screens/index.tsx::membershipsScreen` | Specialized | Codex |
 | LOYALTY-08 | ready | Sale/POS order loyalty | `/admin/loyalty/orders/{channel}/{id}` | `orderLoyaltyScreen` | Specialized | — |
 | LOYALTY-09 | keep | Customer loyalty portal | `/my/loyalty` | `portalScreen` | Specialized portal | — |
 
@@ -309,21 +309,21 @@ aliases remain owned by the page/post family and are not separate agents.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| WEB-01 | ready | Sites | `/admin/website/sites` | `sitesScreen` | ListPage | — |
-| WEB-02 | ready | Site create/detail | `/admin/website/sites/new`, `/admin/website/sites/{id}` | `siteFormScreen` | FormPage | — |
-| WEB-03 | ready | Pages/posts collections | `/admin/website/pages`, `/admin/website/posts` | `contentScreen` | ListPage | — |
-| WEB-04 | ready | Page/post create/detail/publish | `/pages/new`, `/pages/{id}`, `/posts/new`, `/posts/{id}` | `entryFormScreen` | FormPage | — |
-| WEB-05 | ready | Page/post revision history | `/pages/{id}/revisions`, `/posts/{id}/revisions` | `revisionsScreen` | ListPage | — |
-| WEB-06 | ready | Page/post preview launcher | `/pages/{id}/preview`, `/posts/{id}/preview` | `previewScreen` | Specialized | — |
-| WEB-07 | ready | Taxonomies | `/admin/website/taxonomies` | `taxonomyScreen` | ListPage | — |
-| WEB-08 | ready | Taxonomy create/detail | `/admin/website/taxonomies/new`, `/taxonomies/{id}` | `taxonomyFormScreen` | FormPage | — |
-| WEB-09 | ready | Media library | `/admin/website/media` | `mediaScreen` | ListPage | — |
-| WEB-10 | ready | Media create/detail | `/admin/website/media/new`, `/media/{id}` | `mediaFormScreen` | FormPage | — |
-| WEB-11 | ready | Navigation menus | `/admin/website/menus` | `menusScreen` | ListPage | — |
-| WEB-12 | ready | Menu create/detail | `/admin/website/menus/new`, `/menus/{id}` | `menuFormScreen` | FormPage | — |
-| WEB-13 | ready | Website forms | `/admin/website/forms` | `formsScreen` | ListPage | — |
-| WEB-14 | ready | Website form create | `/admin/website/forms/new` | `formCreateScreen` | FormPage | — |
-| WEB-15 | ready | Form submissions | `/admin/website/forms/{id}/submissions` | `submissionsScreen` | ListPage | — |
+| WEB-01 | done | Sites | `/admin/website/sites` | `screens/index.tsx::sitesScreen` | ListPage | Codex |
+| WEB-02 | done | Site create/detail | `/admin/website/sites/new`, `/admin/website/sites/{id}` | `screens/index.tsx::siteFormScreen` | FormPage | Codex |
+| WEB-03 | done | Pages/posts collections | `/admin/website/pages`, `/admin/website/posts` | `screens/index.tsx::contentScreen` | ListPage | Codex |
+| WEB-04 | done | Page/post create/detail/publish | `/pages/new`, `/pages/{id}`, `/posts/new`, `/posts/{id}` | `screens/index.tsx::entryFormScreen` | FormPage | Codex |
+| WEB-05 | done | Page/post revision history | `/pages/{id}/revisions`, `/posts/{id}/revisions` | `screens/index.tsx::revisionsScreen` | ListPage | Codex |
+| WEB-06 | done | Page/post preview launcher | `/pages/{id}/preview`, `/posts/{id}/preview` | `screens/index.tsx::previewScreen` | Specialized | Codex |
+| WEB-07 | done | Taxonomies | `/admin/website/taxonomies` | `screens/index.tsx::taxonomyScreen` | ListPage | Codex |
+| WEB-08 | done | Taxonomy create/detail | `/admin/website/taxonomies/new`, `/taxonomies/{id}` | `screens/index.tsx::taxonomyFormScreen` | FormPage | Codex |
+| WEB-09 | done | Media library | `/admin/website/media` | `screens/index.tsx::mediaScreen` | ListPage | Codex |
+| WEB-10 | done | Media create/detail | `/admin/website/media/new`, `/media/{id}` | `screens/index.tsx::mediaFormScreen` | FormPage | Codex |
+| WEB-11 | done | Navigation menus | `/admin/website/menus` | `screens/index.tsx::menusScreen` | ListPage | Codex |
+| WEB-12 | done | Menu create/detail | `/admin/website/menus/new`, `/menus/{id}` | `screens/index.tsx::menuFormScreen` | FormPage | Codex |
+| WEB-13 | done | Website forms | `/admin/website/forms` | `screens/index.tsx::formsScreen` | ListPage | Codex |
+| WEB-14 | done | Website form create | `/admin/website/forms/new` | `screens/index.tsx::formCreateScreen` | FormPage | Codex |
+| WEB-15 | done | Form submissions | `/admin/website/forms/{id}/submissions` | `screens/index.tsx::submissionsScreen` | ListPage | Codex |
 
 ### Public CRM website lane
 
@@ -412,8 +412,8 @@ layout migration. PDF output stays with the editor owner and is not a FormPage.
 
 | ID | Status | Screen/output | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| REPORT-01 | ready | Report definitions | `/admin/reports` | `routes.tsx::listReports` | ListPage | — |
-| REPORT-02 | ready | Report editor/version history | `/admin/reports/{report}` | `routes.tsx::reportEditor` | Specialized | — |
+| REPORT-01 | done | Report definitions | `/admin/reports` | `screens/index.tsx::reportsScreen` | ListPage | Codex |
+| REPORT-02 | done | Report editor/version history | `/admin/reports/{report}` | `screens/index.tsx::reportEditorScreen` | Specialized | Codex |
 | REPORT-03 | keep | Report PDF preview | `/admin/reports/{report}/preview` | `routes.tsx::previewReport` | Raw PDF output | — |
 
 ### Intentional exclusions and aliases
@@ -1232,6 +1232,18 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 - All OAuth routes declare their active navigation context. The former root `screens.tsx` now lives under the
   module's `screens/` folder, removing its outstanding structure debt.
 - Wave 32 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 33 — WEB-01 through WEB-15, LOYALTY-01 through LOYALTY-07, REPORT-01 and REPORT-02
+
+- This is the first expanded wave under the minimum-20 rule: 24 screens owned by the primary agent on one
+  branch. The POS-coupled `LOYALTY-08` remains unassigned so the POS team can continue stacking independently.
+- Website and Loyalty root `screens.tsx` files now live under module-local `screens/` folders. Collection and
+  form renderers use module-local adapters backed directly by the public `ListPage` and `FormPage` contracts;
+  dashboards, preview, membership configuration and other task surfaces retain specialized layouts.
+- Report definitions now use `ListPage`, and both report renderers live in `report_backend/screens/`; routing,
+  draft/publish/rollback commands and PDF preview remain in the route registry.
+- Wave 33 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
   browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253
