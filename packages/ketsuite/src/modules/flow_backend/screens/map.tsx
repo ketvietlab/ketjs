@@ -30,6 +30,6 @@ export const mapScreen = (_: Translator, frame: Frame, options: EpicMapScreenOpt
         variant: 'tertiary',
       }),
     ])}
-    body={options.map}
+    body={<>{options.map}</>}
   />
 )

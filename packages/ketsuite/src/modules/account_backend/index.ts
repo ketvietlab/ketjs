@@ -3257,7 +3257,7 @@ export default defineModule({
               (partner) => !companyPartners.has(String(partner.id)),
             )
             const unknownPartner = Boolean(partnerId && !selectedPartner)
-            const unavailablePartner = {
+            const unavailablePartner: AnyRow = {
               id: partnerId,
               name: _('account_backend.partnerLedger.filter.unavailablePartner'),
             }
