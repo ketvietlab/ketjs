@@ -1,24 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { bytes, compileReportTemplate, interFontUrl, renderPdf, text } from '@ketvietlab/ketjs'
-import type { Route, ServeContext, Translator } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import {
-  actionGroup,
-  button,
-  CardGrid,
-  ContentCard,
-  dataTable,
-  emptyState,
-  Framed,
-  linkButton,
-  RecordActions,
-  RecordForm,
-  stack,
-  Surface,
-} from '../../ui/index.ts'
+import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { adminPage } from '../backend/screen.ts'
+import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
+import { reportEditorScreen, reportsScreen } from './screens/index.tsx'
 
 export const listReports =
   (ctx: ServeContext): Route =>
@@ -27,82 +13,10 @@ export const listReports =
     const reports = (await ctx.call('report.listDefinitions', {}, url, req)) as AnyRow[]
     return adminPage(ctx, url, req, {
       title: 'report_backend.title',
-      body: (_, frame) => (
-        <Framed
-          translator={_}
-          title={_('report_backend.title')}
-          frame={frame}
-          body={
-            reports.length === 0 ? (
-              emptyState(_('report_backend.empty'), _('report_backend.emptyHint'))
-            ) : (
-              <CardGrid
-                items={reports}
-                id={(report) => String(report.id)}
-                card={(report) => (
-                  <ContentCard
-                    title={_(String(report.title))}
-                    summary={String(report.target)}
-                    href={`/admin/reports/${encodeURIComponent(String(report.id))}${url.search}`}
-                    actions={linkButton({
-                      label: _('report_backend.action.manage'),
-                      href: `/admin/reports/${encodeURIComponent(String(report.id))}${url.search}`,
-                      variant: 'tertiary',
-                    })}
-                  />
-                )}
-              />
-            )
-          }
-        />
-      ),
+      active: '/admin/reports',
+      body: (_, frame) => reportsScreen(_, frame, reports, url.search),
     })
   }
-
-/**
- * The version list, and the one control that acts on a row.
- *
- * Each rollback is its own POST, so each row carries its own form rather than a
- * checkbox column and a bulk action nobody asked for.
- */
-const versionsTable = (_: Translator, versions: AnyRow[], path: string): TemplateResult =>
-  dataTable(_, {
-    rows: versions,
-    id: (version) => String(version.id),
-    columns: [
-      {
-        key: 'version',
-        label: _('report_backend.col.version'),
-        kind: 'identifier',
-        priority: 'primary',
-        cell: (version) => `v${String(version.version)}`,
-      },
-      {
-        key: 'publishedAt',
-        label: _('report_backend.col.publishedAt'),
-        priority: 'secondary',
-        cell: (version) => String(version.publishedAt),
-      },
-      {
-        key: 'rollback',
-        label: _('report_backend.col.rollback'),
-        align: 'end',
-        cell: (version) => (
-          <RecordActions
-            action={path}
-            hidden={{ version: String(version.version) }}
-            actions={[
-              {
-                value: 'rollback',
-                label: _('report_backend.action.rollback'),
-                variant: 'tertiary' as const,
-              },
-            ]}
-          />
-        ),
-      },
-    ],
-  })
 
 export const reportEditor =
   (ctx: ServeContext): Route =>
@@ -113,12 +27,18 @@ export const reportEditor =
     const report = live.reports[reportId]
     if (!report) return text('Report not found', { status: 404 })
     const path = `/admin/reports/${encodeURIComponent(reportId)}`
+    const action = inLocale(url, path)
+    const destination = (state: string): string => {
+      const next = new URL(action, url)
+      next.searchParams.set(state, '1')
+      return `${next.pathname}${next.search}`
+    }
     if (req.method === 'POST') {
       const form = await readForm(req)
       const action = form.action ?? 'save'
       if (action === 'rollback') {
         await ctx.call('report.rollback', { reportId, version: Number(form.version ?? 0) }, url, req)
-        return seeOther(`${path}?rolledBack=1`)
+        return seeOther(destination('rolledBack'))
       }
       const saved = (await ctx.call(
         'report.saveDraft',
@@ -126,7 +46,7 @@ export const reportEditor =
         url,
         req,
       )) as { ok: boolean; revision?: number }
-      if (!saved.ok) return seeOther(`${path}?invalid=1`)
+      if (!saved.ok) return seeOther(destination('invalid'))
       if (action === 'publish') {
         const published = (await ctx.call(
           'report.publish',
@@ -134,91 +54,23 @@ export const reportEditor =
           url,
           req,
         )) as { ok: boolean }
-        return seeOther(`${path}?${published.ok ? 'published=1' : 'invalid=1'}`)
+        return seeOther(destination(published.ok ? 'published' : 'invalid'))
       }
-      return seeOther(`${path}?saved=1`)
+      return seeOther(destination('saved'))
     }
     const template = (await ctx.call('report.getTemplate', { reportId }, url, req)) as AnyRow
     const versions = (await ctx.call('report.listVersions', { reportId }, url, req)) as AnyRow[]
-    // The three submits share one form through `form=`, which is why the form
-    // declares an id and keeps its own submit out of the way: save and publish are
-    // the same POST with a different `action`, and preview sends the same draft to
-    // a different path so you can read the PDF beside the source you typed.
-    const FORM = 'report-source'
     return adminPage(ctx, url, req, {
       title: report.title,
-      body: (_, frame) => (
-        <Framed
-          translator={_}
-          title={_(report.title)}
-          frame={frame}
-          body={stack([
-            <Surface
-              body={
-                <RecordForm
-                  id={FORM}
-                  action={path}
-                  submit={_('report_backend.action.save')}
-                  submitVariant="primary"
-                  submitPlacement="external"
-                  hidden={{ revision: String(template.revision ?? 0) }}
-                  fields={[
-                    {
-                      name: 'source',
-                      label: _('report_backend.field.source'),
-                      type: 'textarea',
-                      span: 'full',
-                      value: String(template.draft),
-                    },
-                    {
-                      name: 'recordId',
-                      label: _('report_backend.field.previewRecord'),
-                      span: 'half',
-                    },
-                  ]}
-                />
-              }
-            />,
-            <Surface
-              body={actionGroup({
-                actions: [
-                  button({
-                    label: _('report_backend.action.save'),
-                    type: 'submit',
-                    form: FORM,
-                    name: 'action',
-                    value: 'save',
-                  }),
-                  button({
-                    label: _('report_backend.action.publish'),
-                    type: 'submit',
-                    form: FORM,
-                    name: 'action',
-                    value: 'publish',
-                    variant: 'primary',
-                  }),
-                  button({
-                    label: _('report_backend.action.preview'),
-                    type: 'submit',
-                    form: FORM,
-                    variant: 'tertiary',
-                    formAction: `${path}/preview`,
-                    formTarget: '_blank',
-                  }),
-                ],
-              })}
-            />,
-            <ContentCard
-              title={_('report_backend.versions')}
-              body={
-                versions.length
-                  ? versionsTable(_, versions, path)
-                  : emptyState(_('report_backend.emptyVersions'), _('report_backend.emptyVersionsHint'))
-              }
-            />,
-          ])}
-        />
-      ),
+      active: '/admin/reports',
+      body: (_, frame) =>
+        reportEditorScreen(_, frame, {
+          title: report.title,
+          action,
+          previewAction: inLocale(url, `${path}/preview`),
+          template,
+          versions,
+        }),
     })
   }
 
