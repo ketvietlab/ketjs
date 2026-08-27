@@ -609,6 +609,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.equal(quotePage.status, 200)
   assert.match(quoteHtml, /Báo giá sẵn sàng/)
   assert.match(quoteHtml, /100/)
+  assert.match(quoteHtml, /data-route-modal="true"/)
   assert.doesNotMatch(quoteHtml, /hospitality_core\./)
 
   const impossibleLocalDate = await e2e.client.post(
@@ -1112,6 +1113,23 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     const html = await response.text()
     assert.doesNotMatch(html, /hospitality_core\./, path)
     assert.match(html, new RegExp(title), path)
+    assert.doesNotMatch(html, /data-route-modal="true"/, path)
+  }
+
+  for (const path of [
+    '/admin/hospitality/reservations?lang=vi&property=hotel&create=1',
+    '/admin/hospitality/rate-plans?lang=vi&property=hotel&create=1',
+    '/admin/hospitality/housekeeping?lang=vi&property=hotel&create=1',
+    '/admin/hospitality/amenities?lang=vi&create=1',
+    '/admin/hospitality/policies?lang=vi&create=1',
+    '/admin/hospitality/billing/rules?lang=vi&create=1',
+  ] as const) {
+    const response = await e2e.client.get(path)
+    const html = await response.text()
+    assert.equal(response.status, 200, `${path}: ${html}`)
+    assert.match(html, /data-ui="list-page"/, path)
+    assert.match(html, /data-route-modal="true"/, path)
+    assert.match(html, /role="dialog"/, path)
   }
 
   const overdueReservation = await seed('hospitality_core.createReservation', {
@@ -1311,7 +1329,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(releasedHtml, /Đã cập nhật trạng thái phòng/)
   assert.match(releasedHtml, /Chưa vệ sinh/)
   const preselectedQueue = await e2e.client.get(
-    '/admin/hospitality/housekeeping?lang=vi&property=hotel&room=103',
+    '/admin/hospitality/housekeeping?lang=vi&property=hotel&room=103&create=1',
   )
   assert.match(await preselectedQueue.text(), /<option(?=[^>]*value="103")(?=[^>]*selected)[^>]*>/)
 

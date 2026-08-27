@@ -15,6 +15,40 @@ const redirected = (url: URL, state: 'saved' | 'invoiced' | 'paid' | 'queued' | 
   return seeOther(`${url.pathname}?${params.toString()}`)
 }
 
+const ruleModalHref = (url: URL, chargeType?: string): string => {
+  const params = new URLSearchParams(url.searchParams)
+  params.delete('status')
+  for (const key of ['chargeType', 'taxId', 'incomeAccountId', 'taxAccountId']) params.delete(key)
+  params.set('create', '1')
+  if (chargeType) params.set('rule', chargeType)
+  else params.delete('rule')
+  return `${url.pathname}?${params.toString()}`
+}
+
+const ruleListHref = (url: URL): string => {
+  const params = new URLSearchParams(url.searchParams)
+  params.delete('create')
+  params.delete('rule')
+  params.delete('status')
+  for (const key of ['chargeType', 'taxId', 'incomeAccountId', 'taxAccountId']) params.delete(key)
+  const query = params.toString()
+  return `${url.pathname}${query ? `?${query}` : ''}`
+}
+
+const ruleResultRedirect = (url: URL, ok: boolean, values: Record<string, string | undefined>) => {
+  const params = new URLSearchParams(url.searchParams)
+  params.set('status', ok ? 'saved' : 'invalid')
+  if (ok) {
+    params.delete('create')
+    params.delete('rule')
+  } else params.set('create', '1')
+  for (const [key, value] of Object.entries(values)) {
+    if (!ok && value !== undefined) params.set(key, value)
+    else params.delete(key)
+  }
+  return seeOther(`${url.pathname}?${params.toString()}`)
+}
+
 /**
  * The id a payment is written under.
  *
@@ -56,7 +90,12 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as Called
-        return redirected(url, result.ok ? 'saved' : 'invalid')
+        return ruleResultRedirect(url, Boolean(result.ok), {
+          chargeType: form.chargeType,
+          taxId: form.taxId,
+          incomeAccountId: form.incomeAccountId,
+          taxAccountId: form.taxAccountId,
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
 
@@ -71,8 +110,9 @@ export const routes: Record<string, RouteEntry> = {
 
       return adminPage(ctx, url, req, {
         title: 'hospitality_billing.chargeRules.title',
-        body: (_, frame) =>
-          chargeRulesScreen(
+        body: (_, frame) => {
+          const selected = rules.find((row) => row.chargeType === url.searchParams.get('rule'))
+          return chargeRulesScreen(
             _,
             rules,
             taxes
@@ -82,7 +122,25 @@ export const routes: Record<string, RouteEntry> = {
             choices(accounts.filter((row) => String(row.accountType).startsWith('liability'))),
             frame,
             url.searchParams.get('status'),
-          ),
+            {
+              open: url.searchParams.get('create') === '1',
+              createHref: ruleModalHref(url),
+              closeHref: ruleListHref(url),
+              action: ruleModalHref(url, selected?.chargeType),
+              selected,
+              rowHref: (row) => ruleModalHref(url, row.chargeType),
+              errors:
+                url.searchParams.get('status') === 'invalid'
+                  ? [_('hospitality_billing.feedback.invalid')]
+                  : undefined,
+              values: Object.fromEntries(
+                ['chargeType', 'taxId', 'incomeAccountId', 'taxAccountId'].flatMap((key) =>
+                  url.searchParams.has(key) ? [[key, url.searchParams.get(key)!]] : [],
+                ),
+              ),
+            },
+          )
+        },
       })
     },
 

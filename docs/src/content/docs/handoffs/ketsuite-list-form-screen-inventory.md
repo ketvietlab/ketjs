@@ -343,7 +343,7 @@ its renderer. This lane is strictly serial until the monolith is gone.
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
 | HOSP-01 | done | Front desk | `/admin/hospitality/front-desk` | `screens/front-desk.tsx::frontDeskScreen` | Specialized | Codex |
-| HOSP-02 | review | Reservations list/intake | `/admin/hospitality/reservations` | `screens/reservations.tsx::reservationsScreen` | Split | Codex |
+| HOSP-02 | done | Reservations list/intake | `/admin/hospitality/reservations` | `screens/reservations.tsx::reservationsScreen` | Split | Codex |
 | HOSP-03 | done | Reservation detail | `/admin/hospitality/reservations/{id}` | `screens/reservation-detail.tsx::reservationDetailScreen` | FormPage/Specialized | Codex |
 | HOSP-04 | done | Stays | `/admin/hospitality/stays` | `screens/stays.tsx::staysScreen` | ListPage | Codex |
 | HOSP-05 | done | Stay detail | `/admin/hospitality/stays/{id}` | `screens/stay-detail.tsx::stayDetailScreen` | FormPage/Specialized | Codex |
@@ -361,18 +361,18 @@ its renderer. This lane is strictly serial until the monolith is gone.
 | HOSP-17 | done | Room types | `/admin/hospitality/room-types` | `screens/room-types.tsx::roomTypesScreen` | ListPage | Codex |
 | HOSP-18 | done | Room-type create | `/admin/hospitality/room-types/new` | `screens/new-room-type.tsx::newRoomTypeScreen` | FormPage | Codex |
 | HOSP-19 | done | Room-type detail | `/admin/hospitality/room-types/{id}` | `screens/room-type-detail.tsx::roomTypeDetailScreen` | FormPage | Codex |
-| HOSP-20 | review | Rate plans | `/admin/hospitality/rate-plans` | `screens/rate-plans.tsx::ratePlansScreen` | Split | Codex |
+| HOSP-20 | done | Rate plans | `/admin/hospitality/rate-plans` | `screens/rate-plans.tsx::ratePlansScreen` | Split | Codex |
 | HOSP-21 | done | Hospitality inventory calendar | `/admin/hospitality/inventory` | `screens/inventory.tsx::inventoryScreen` | Specialized | Codex |
 | HOSP-22 | done | Services and charges | `/admin/hospitality/services` | `screens/services.tsx::servicesScreen` | Specialized | Codex |
 | HOSP-23 | done | Night audit | `/admin/hospitality/night-audit` | `screens/night-audit.tsx::nightAuditScreen` | Specialized | Codex |
 | HOSP-24 | done | Stay notices | `/admin/hospitality/stay-notices` | `screens/stay-notices.tsx::stayNoticesScreen` | Specialized | Codex |
-| HOSP-25 | review | Housekeeping tasks | `/admin/hospitality/housekeeping` | `screens/cleaning-tasks.tsx::cleaningTasksScreen` | Split | Codex |
+| HOSP-25 | done | Housekeeping tasks | `/admin/hospitality/housekeeping` | `screens/cleaning-tasks.tsx::cleaningTasksScreen` | Split | Codex |
 | HOSP-26 | done | Cleaning-task detail | `/admin/hospitality/housekeeping/tasks/{id}` | `screens/cleaning-task-detail.tsx::cleaningTaskDetailScreen` | FormPage/Specialized | Codex |
 | HOSP-27 | done | Housekeeping room status | `/admin/hospitality/housekeeping/rooms` | `screens/housekeeping-rooms.tsx::housekeepingRoomsScreen` | Specialized | Codex |
 | HOSP-28 | done | Housekeeping room detail | `/admin/hospitality/housekeeping/rooms/{id}` | `screens/housekeeping-room-detail.tsx::housekeepingRoomDetailScreen` | Specialized | Codex |
 | HOSP-29 | done | Hospitality content/media | `/admin/hospitality/content` | `screens/content.tsx::contentScreen` | Specialized | Codex |
-| HOSP-30 | review | Amenities | `/admin/hospitality/amenities` | `screens/amenities.tsx::amenitiesScreen` | Split | Codex |
-| HOSP-31 | review | Policies | `/admin/hospitality/policies` | `screens/policies.tsx::policiesScreen` | Split | Codex |
+| HOSP-30 | done | Amenities | `/admin/hospitality/amenities` | `screens/amenities.tsx::amenitiesScreen` | Split | Codex |
+| HOSP-31 | done | Policies | `/admin/hospitality/policies` | `screens/policies.tsx::policiesScreen` | Split | Codex |
 
 ### Hospitality billing lane
 
@@ -380,7 +380,7 @@ Structure debt: split `hospitality_billing/screens.tsx` into `screens/`.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| HOSP-BILL-01 | review | Charge rules | `/admin/hospitality/billing/rules` | `screens/charge-rules.tsx::chargeRulesScreen` | Split | Codex |
+| HOSP-BILL-01 | done | Charge rules | `/admin/hospitality/billing/rules` | `screens/charge-rules.tsx::chargeRulesScreen` | Split | Codex |
 | HOSP-BILL-02 | done | Closed-folio billing queue | `/admin/hospitality/billing` | `screens/billing.tsx::billingScreen` | Specialized | Codex |
 
 ### Mail operations lanes
@@ -1257,6 +1257,19 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   charge rules now have the list contract but still require their embedded create/edit controls to become
   URL-addressable dialogs before they can be marked `done`.
 - Wave 34 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 35 — HOSP-02, HOSP-20, HOSP-25, HOSP-30, HOSP-31 and HOSP-BILL-01
+
+- Wave 35 closes the six-item review tail left by Wave 34. It is intentionally smaller than the expanded-wave
+  minimum because every remaining non-POS inventory row is included; the nine POS-coupled rows remain reserved
+  for the POS team.
+- Reservation intake and the five short Hospitality configuration/create workflows now use URL-addressable
+  dialogs. The owning collection stays mounted underneath, locale and active property/state filters survive
+  open/close and validation redirects, and successful writes close the dialog back to the collection.
+- Charge-rule rows open the same dialog with their current accounting selections, so creation and correction
+  share one route-owned form without restoring an embedded full-width control.
+- Wave 35 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
   browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253
