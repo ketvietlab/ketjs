@@ -2,7 +2,7 @@ import { text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { adminPage } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
-import { inboundScreen } from './screens.tsx'
+import { inboundScreen } from './screens/index.ts'
 
 export const routes = {
   '/admin/inbound-email':
@@ -14,7 +14,8 @@ export const routes = {
       }
       return adminPage(ctx, url, req, {
         title: 'mail_inbound_backend.title',
-        body: (_, frame) => inboundScreen(_, result.events, frame),
+        active: '/admin/inbound-email',
+        body: (_, frame) => inboundScreen(_, frame, { rows: result.events }),
       })
     },
 }

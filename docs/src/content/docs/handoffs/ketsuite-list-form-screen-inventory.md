@@ -389,9 +389,9 @@ Each module has one root `screens.tsx`; its agent replaces it with `screens/inde
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
-| MAIL-01 | mail | ready | Inbox | `/admin/inbox` | `inboxScreen` | ListPage | — |
-| MAIL-02 | inbound-mail | ready | Inbound email events | `/admin/inbound-email` | `inboundScreen` | ListPage | — |
-| MAIL-03 | mail-transport | ready | Outbox deliveries | `/admin/outbox` | `outboxScreen` | ListPage | — |
+| MAIL-01 | mail | done | Inbox | `/admin/inbox` | `screens/inbox-list.tsx::inboxScreen` | ListPage | Codex |
+| MAIL-02 | inbound-mail | done | Inbound email events | `/admin/inbound-email` | `screens/inbound-list.tsx::inboundScreen` | ListPage | Codex |
+| MAIL-03 | mail-transport | done | Outbox deliveries | `/admin/outbox` | `screens/outbox-list.tsx::outboxScreen` | ListPage | Codex |
 
 ### OAuth lane
 
@@ -1213,6 +1213,16 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   Stable rule IDs, rejected settings/rule values, command allowlists, encoded navigation and locale-safe PRG are
   preserved. Focused leaves remove the Pricing Backend root `screens.tsx`.
 - Wave 30 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 31 — MAIL-01, MAIL-02 and MAIL-03
+
+- Inbox, inbound-email diagnostics and outbox now use `ListPage` while retaining their operational card
+  presentation, empty states, delivery badges and message context. Each module's former root `screens.tsx` is
+  replaced by a focused `screens/` folder.
+- Inbox and outbox forms receive route-owned locale-safe actions and explicit commands. Their mutations reject
+  cross-site browser posts, preserve legacy mark-read submissions and redirect back with the active locale.
+- Wave 31 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
   browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253
