@@ -73,6 +73,61 @@ test('channel api: the staff document names both credential presentations', () =
       assert.ok(operation.security?.length, `${method} ${path} publishes no credential`)
 })
 
+test('channel api: core and attendance staff responses publish concrete client models', () => {
+  const document = openApiDocument(compose(ketsuite.modules, { headless: true }), 'staff')
+  const dataSchema = (path: string, method: 'get' | 'post', status: string) => {
+    const operation = document.paths[path]?.[method] as Record<string, unknown>
+    const responses = operation.responses as Record<string, Record<string, unknown>>
+    const content = responses[status]?.content as Record<string, Record<string, unknown>>
+    const envelope = content['application/json']?.schema as Record<string, unknown>
+    return (envelope.properties as Record<string, unknown>).data as Record<string, unknown>
+  }
+
+  for (const [path, method, status] of [
+    ['/bootstrap', 'get', '200'],
+    ['/me', 'get', '200'],
+    ['/attendance/status', 'get', '200'],
+    ['/attendance/records', 'get', '200'],
+    ['/attendance/check-in', 'post', '201'],
+    ['/attendance/check-out', 'post', '201'],
+  ] as const) {
+    const schema = dataSchema(path, method, status)
+    assert.notDeepEqual(schema, {}, `${method.toUpperCase()} ${path} has an untyped success response`)
+    assert.ok(schema.type, `${method.toUpperCase()} ${path} has no concrete data type`)
+  }
+
+  assert.deepEqual(dataSchema('/attendance/status', 'get', '200').required, ['onClock'])
+  assert.equal(dataSchema('/attendance/records', 'get', '200').type, 'array')
+  assert.deepEqual(dataSchema('/attendance/check-in', 'post', '201').required, [
+    'kind',
+    'occurredAt',
+    'sessionId',
+  ])
+})
+
+test('channel api: warehouse completion and hospitality responses publish concrete client models', () => {
+  const document = openApiDocument(compose(ketsuite.modules, { headless: true }), 'staff')
+  const cases = [
+    ['/warehouse/pickings/{id}/complete', 'post'],
+    ['/hospitality/context', 'get'],
+    ['/hospitality/front-desk/today', 'get'],
+    ['/hospitality/reservations/{id}', 'get'],
+    ['/hospitality/stays/{id}', 'get'],
+    ['/hospitality/folios/{id}', 'get'],
+    ['/hospitality/operations/context', 'get'],
+  ] as const
+
+  for (const [path, method] of cases) {
+    const operation = document.paths[path]?.[method] as Record<string, unknown>
+    const responses = operation.responses as Record<string, Record<string, unknown>>
+    const content = responses['200']?.content as Record<string, Record<string, unknown>>
+    const envelope = content['application/json']?.schema as Record<string, unknown>
+    const data = (envelope.properties as Record<string, unknown>).data as Record<string, unknown>
+    assert.equal(data.type, 'object', `${method.toUpperCase()} ${path} has no object data model`)
+    assert.ok(data.properties, `${method.toUpperCase()} ${path} has no typed properties`)
+  }
+})
+
 test('channel api: POS routes publish Bearer auth and receive server-resolved device scope', () => {
   const owner = defineModule({
     name: 'channel_api',

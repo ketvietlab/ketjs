@@ -71,6 +71,208 @@ const reservationSummary = {
     'version',
   ],
 }
+const property = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    code: string,
+    name: string,
+    timezone: string,
+    defaultCheckIn: string,
+    defaultCheckOut: string,
+    roomCount: { type: 'integer', minimum: 0 },
+  },
+  required: ['id', 'code', 'name', 'timezone', 'defaultCheckIn', 'defaultCheckOut', 'roomCount'],
+}
+const nullableProperty = { anyOf: [property, { type: 'null' }] }
+const staySummary = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    reference: string,
+    state: string,
+    bookingType: { type: 'string', enum: [...BOOKING_TYPES] },
+    guest: reference,
+    roomType: reference,
+    room: nullableReference,
+    schedule,
+    version: string,
+  },
+  required: ['id', 'reference', 'state', 'bookingType', 'guest', 'roomType', 'room', 'schedule', 'version'],
+}
+const folioSummary = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, reference: string, state: string, amountTotal: string, version: string },
+  required: ['id', 'reference', 'state', 'amountTotal', 'version'],
+}
+const nullableStay = { anyOf: [staySummary, { type: 'null' }] }
+const nullableFolio = { anyOf: [folioSummary, { type: 'null' }] }
+const reservationDetail = {
+  ...reservationSummary,
+  properties: {
+    ...reservationSummary.properties,
+    property: nullableProperty,
+    readOnly: { type: 'boolean' },
+    stay: nullableStay,
+    folio: nullableFolio,
+  },
+  required: [...reservationSummary.required, 'property', 'readOnly', 'stay', 'folio'],
+}
+const stayDetail = {
+  ...staySummary,
+  properties: {
+    ...staySummary.properties,
+    property: nullableProperty,
+    folio: nullableFolio,
+    guests: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { id: string, name: string, isPrimary: { type: 'boolean' } },
+        required: ['id', 'name', 'isPrimary'],
+      },
+    },
+  },
+  required: [...staySummary.required, 'property', 'folio', 'guests'],
+}
+const folioDetail = {
+  ...folioSummary,
+  properties: {
+    ...folioSummary.properties,
+    guest: reference,
+    charges: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: string,
+          description: string,
+          chargeType: string,
+          quantity: string,
+          unitPrice: string,
+          amount: string,
+          occurredAt: { type: 'string', format: 'date-time' },
+          state: string,
+        },
+        required: [
+          'id',
+          'description',
+          'chargeType',
+          'quantity',
+          'unitPrice',
+          'amount',
+          'occurredAt',
+          'state',
+        ],
+      },
+    },
+    invoice: {
+      anyOf: [
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            id: string,
+            reference: string,
+            state: string,
+            paymentStatus: string,
+            amountTotal: string,
+            amountDue: string,
+          },
+          required: ['id', 'reference', 'state', 'paymentStatus', 'amountTotal', 'amountDue'],
+        },
+        { type: 'null' },
+      ],
+    },
+  },
+  required: [...folioSummary.required, 'guest', 'charges', 'invoice'],
+}
+const hospitalityContext = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    defaultPropertyId: nullableString,
+    properties: { type: 'array', items: property },
+    permissions: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        canManage: { type: 'boolean' },
+        canManageFinancials: { type: 'boolean' },
+        canRefund: { type: 'boolean' },
+      },
+      required: ['canManage', 'canManageFinancials', 'canRefund'],
+    },
+  },
+  required: ['defaultPropertyId', 'properties', 'permissions'],
+}
+const frontDeskToday = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    property,
+    businessDate: { type: 'string', format: 'date' },
+    counts: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        arrivals: { type: 'integer', minimum: 0 },
+        inHouse: { type: 'integer', minimum: 0 },
+        departures: { type: 'integer', minimum: 0 },
+      },
+      required: ['arrivals', 'inHouse', 'departures'],
+    },
+    arrivals: { type: 'array', items: reservationSummary },
+    inHouse: { type: 'array', items: staySummary },
+    departures: { type: 'array', items: staySummary },
+  },
+  required: ['property', 'businessDate', 'counts', 'arrivals', 'inHouse', 'departures'],
+}
+const operationsContext = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    property,
+    roomTypes: { type: 'array', items: reference },
+    rooms: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { id: string, name: string, roomType: reference, state: string },
+        required: ['id', 'name', 'roomType', 'state'],
+      },
+    },
+    stays: { type: 'array', items: stayDetail },
+    folios: { type: 'array', items: folioSummary },
+    housekeepingAssignees: { type: 'array', items: reference },
+    paymentJournals: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { id: string, name: string, type: { type: 'string', enum: ['bank', 'cash'] } },
+        required: ['id', 'name', 'type'],
+      },
+    },
+    supportedOperations: { type: 'array', items: string },
+  },
+  required: [
+    'property',
+    'roomTypes',
+    'rooms',
+    'stays',
+    'folios',
+    'housekeepingAssignees',
+    'paymentJournals',
+    'supportedOperations',
+  ],
+}
 const housekeepingTask = {
   type: 'object',
   additionalProperties: false,
@@ -451,7 +653,7 @@ export const channelRoutes = routesOf(
     summary: 'List actor-visible hospitality properties and their operational defaults.',
     auth: 'required',
     capability: { key: 'hospitality.properties', action: 'read' },
-    responses: { '200': envelope({ type: 'object' }) },
+    responses: { '200': envelope(hospitalityContext) },
     handler: async (ctx, url, req) => {
       const rows = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as Row[]
       const details = (await Promise.all(
@@ -476,7 +678,7 @@ export const channelRoutes = routesOf(
     auth: 'required',
     capability: { key: 'hospitality.reservations', action: 'read' },
     request: { query: propertyQuery },
-    responses: { '200': envelope({ type: 'object' }), '404': envelope({ type: 'null' }) },
+    responses: { '200': envelope(frontDeskToday), '404': envelope({ type: 'null' }) },
     handler: async (ctx, url, req) => {
       const propertyId = String(url.searchParams.get('propertyId'))
       const propertyRow = await propertyFor(ctx, url, req, propertyId)
@@ -580,7 +782,7 @@ export const channelRoutes = routesOf(
     auth: 'required',
     capability: { key: 'hospitality.reservations', action: 'read' },
     request: { params: idParams },
-    responses: { '200': envelope({ type: 'object' }), '404': envelope({ type: 'null' }) },
+    responses: { '200': envelope(reservationDetail), '404': envelope({ type: 'null' }) },
     handler: async (ctx, url, req, params) => {
       const row = (await ctx.call(
         'hospitality_core.getReservation',
@@ -601,7 +803,7 @@ export const channelRoutes = routesOf(
     auth: 'required',
     capability: { key: 'hospitality.stays', action: 'read' },
     request: { params: idParams, query: propertyQuery },
-    responses: { '200': envelope({ type: 'object' }), '404': envelope({ type: 'null' }) },
+    responses: { '200': envelope(stayDetail), '404': envelope({ type: 'null' }) },
     handler: async (ctx, url, req, params) => {
       const row = (await ctx.call('hospitality_core.getStay', { id: params.id }, url, req)) as Row | null
       if (!sameProperty(row, String(url.searchParams.get('propertyId')))) return notFound(ctx, url, req)
@@ -617,7 +819,7 @@ export const channelRoutes = routesOf(
     auth: 'required',
     capability: { key: 'hospitality.folios', action: 'read' },
     request: { params: idParams, query: propertyQuery },
-    responses: { '200': envelope({ type: 'object' }), '404': envelope({ type: 'null' }) },
+    responses: { '200': envelope(folioDetail), '404': envelope({ type: 'null' }) },
     handler: async (ctx, url, req, params) => {
       const row = (await ctx.call('hospitality_core.getFolio', { id: params.id }, url, req)) as Row | null
       if (!sameProperty(row, String(url.searchParams.get('propertyId')))) return notFound(ctx, url, req)
@@ -680,7 +882,7 @@ export const channelRoutes = routesOf(
     auth: 'required',
     capability: { key: 'hospitality.operations', action: 'read' },
     request: { query: propertyQuery },
-    responses: { '200': envelope({ type: 'object' }), '404': envelope({ type: 'null' }) },
+    responses: { '200': envelope(operationsContext), '404': envelope({ type: 'null' }) },
     handler: async (ctx, url, req) => {
       const propertyId = String(url.searchParams.get('propertyId'))
       const propertyRow = await propertyFor(ctx, url, req, propertyId)

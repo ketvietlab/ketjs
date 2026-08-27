@@ -77,6 +77,7 @@ test('staff attendance: an operator clocks their own shift in and out', async (t
   })
   assert.equal(started.status, 201, JSON.stringify(started.body.error))
   assert.equal(started.body.data.kind, 'in')
+  assert.match(started.body.data.sessionId, /^[0-9a-f-]{36}$/)
 
   const during = await staff<{ onClock: boolean; sessionId: string }>(booted, 'attendance/status')
   assert.equal(during.body.data.onClock, true)
@@ -89,9 +90,16 @@ test('staff attendance: an operator clocks their own shift in and out', async (t
   const after = await staff<{ onClock: boolean }>(booted, 'attendance/status')
   assert.equal(after.body.data.onClock, false)
 
-  const records = await staff<Array<{ id: string; state: string }>>(booted, 'attendance/records')
+  const records = await staff<Array<{ id: string; state: string; startAt: string; stopAt: string }>>(
+    booted,
+    'attendance/records',
+  )
   assert.equal(records.status, 200)
   assert.equal(records.body.data.length, 1)
+  assert.equal(records.body.data[0]?.id, started.body.data.sessionId)
+  assert.equal(records.body.data[0]?.state, 'closed')
+  assert.match(records.body.data[0]?.startAt ?? '', /^\d{4}-\d{2}-\d{2}T/)
+  assert.match(records.body.data[0]?.stopAt ?? '', /^\d{4}-\d{2}-\d{2}T/)
 })
 
 test('staff attendance: a repeated check-in is refused rather than clocking out', async (t) => {
