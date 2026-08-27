@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: '26'
+          node-version: "26"
       - id: groups
         name: select groups affected by this diff
         env:
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '26'
+          node-version: "26"
           cache: npm
       - run: npm ci
       - name: formatting is what the formatter would write
@@ -58,6 +58,8 @@ jobs:
         run: npm run audit:staff-channel
       - name: the published Channel API documents match the server
         run: npm run check:api
+      - name: architecture examples name their source location
+        run: npm --prefix docs run check:snippets
       - name: types check
         run: npm run check
       - name: the type-level claims still hold
@@ -78,7 +80,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '26'
+          node-version: "26"
           cache: npm
       - run: npm ci
       - name: start a real S3-compatible server
@@ -116,7 +118,7 @@ jobs:
           POSTGRES_USER: dev
           POSTGRES_PASSWORD: devpassword
           POSTGRES_DB: ketjs_ci
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
@@ -126,7 +128,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '26'
+          node-version: "26"
           cache: npm
       - run: npm ci
       - run: npm run build --silent
