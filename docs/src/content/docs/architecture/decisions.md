@@ -2047,5 +2047,6 @@ precedence must fail closed when multiple presentations are supplied.
 and OpenAPI schemes. The private deployment owns token persistence, exchange, refresh, revocation, IdP
 integration, and membership resolution. Mobile owns PKCE and secure token storage.
 
-**Cost:** the current staff resolver and OpenAPI scheme are cookie-only, so this decision requires an explicit
-framework change and tests. It does not authorize a deployment to accept raw IdP JWTs or reuse POS tokens.
+**Cost:** the framework now publishes both staff schemes and provides deterministic presentation resolver
+composition. A deployment still has to implement the private Bearer session resolver; this decision does not
+authorize accepting raw IdP JWTs or reusing POS tokens.

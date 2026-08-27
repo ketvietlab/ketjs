@@ -67,9 +67,8 @@ Customer identity is separate from KetSuite staff identity. Accounts belong to a
 can be selected from the website host or explicitly with `X-Channel-Realm` for native clients.
 
 - Browser clients use an HTTP-only, same-site cookie plus a CSRF token for mutations.
-- Headless customer clients and POS use short-lived Bearer access tokens and rotating refresh tokens. Native
-  staff will use the same presentation boundary once D68's staff resolver seam lands; current staff routes
-  remain cookie-only.
+- Headless customer clients, POS and native staff use short-lived Bearer access tokens backed by their own
+  profile sessions. Native staff tokens are opaque deployment credentials, not POS or raw IdP tokens.
 - Refresh grants are stored as digests, can be revoked, and are invalidated after password changes.
 - A customer credential cannot be used against the generic `/_ket/fn` staff transport.
 
@@ -77,8 +76,10 @@ The CSRF check follows how the caller proved who they are rather than which rout
 attached by the browser whether or not the caller meant to send it, a Bearer token is not. So every unsafe
 method on a cookie session requires a same origin and the `X-CSRF-Token` returned at sign-in, and a Bearer
 client is never asked for one. Which profile supplies identities is registered with
-`registerChannelIdentity()`; a contract declaring `auth` on a profile with no resolver fails the request
-rather than serving it open.
+`registerChannelIdentity()`. Profiles with multiple credential presentations use
+`registerChannelIdentityPresentation()` so a private Bearer resolver composes with the public cookie resolver
+without import-order precedence. A contract declaring `auth` on a profile with no resolver fails the request
+rather than serving it open, and supplying both presentations fails before either resolver runs.
 
 Registration is immediately usable in the current phase; email activation is not required.
 
@@ -89,6 +90,11 @@ body, no company in the query — the session carries which company the caller w
 may read, and the framework re-resolves that from live rows on every request. Revoking a membership takes
 effect on the next call rather than whenever a credential expires, and a caller cannot name a company they
 were not already granted.
+
+`StaffIdentity.presentation` is `cookie | bearer`. Both presentations enter the same route authorization
+pipeline. Cookie mutations require same-origin and CSRF proof; Bearer mutations do not. The public package
+registers only the framework cookie resolver. A private deployment registers the opaque Bearer resolver and
+owns token persistence, expiry, revocation and live membership resolution.
 
 `auth` is spelled `required` and `optional` on a staff route. Those are the profile-neutral names; the
 customer profile's `customer` and `optional-customer` still work and mean the same thing.

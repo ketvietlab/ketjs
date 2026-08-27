@@ -125,12 +125,12 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
       },
       sessions: { anonymous: { company: 'default' } },
       resolveSession: suite.resolveUserSession,
-      resolveAudience: (_url, req) => {
+      resolveAudience: (url, req) => {
         const authorization = String(req.headers.authorization ?? '')
         const cookies = String(req.headers.cookie ?? '')
-        return /^Bearer\s+/i.test(authorization) || /(?:^|;\s*)ket_customer_session=/.test(cookies)
-          ? 'customer'
-          : 'anonymous'
+        if (/^Bearer\s+/i.test(authorization))
+          return url.pathname.startsWith('/api/staff/v1/') ? 'staff' : 'customer'
+        return /(?:^|;\s*)ket_customer_session=/.test(cookies) ? 'customer' : 'anonymous'
       },
       permissions: (ctx, userId, url, req) =>
         ctx
