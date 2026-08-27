@@ -8,8 +8,8 @@ import {
   linkProviderScreen,
   providerFormScreen,
   providersScreen,
-} from './screens.tsx'
-import type { IdentityRow, ProviderRow } from './screens.tsx'
+} from './screens/index.tsx'
+import type { IdentityRow, ProviderRow } from './screens/index.tsx'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 
@@ -72,6 +72,7 @@ const renderProvider = async (
   return adminPage(ctx, url, req, {
     title: row.id ? String(row.name) : _('oauth_backend.providers.create'),
     translate: false,
+    active: '/admin/oauth/providers',
     body: async (_, frame) =>
       providerFormScreen(_, row, { ...(await formOptions(ctx, url, req)), errors }, frame, localeQuery(url)),
   })
@@ -108,6 +109,7 @@ const renderIdentities = async (ctx: ServeContext, url: URL, req: Req, errors: s
   const rows = (await ctx.call('oauth.listIdentities', { providerId, userId }, url, req)) as IdentityRow[]
   return adminPage(ctx, url, req, {
     title: 'oauth_backend.identities.title',
+    active: '/admin/oauth/identities',
     body: (_, frame) => identitiesScreen(_, rows, frame, localeQuery(url), errors),
   })
 }
@@ -120,6 +122,7 @@ export const routes: Record<string, RouteEntry> = {
       const includeArchived = url.searchParams.get('archived') === '1'
       return adminPage(ctx, url, req, {
         title: 'oauth_backend.providers.title',
+        active: '/admin/oauth/providers',
         body: async (_, frame) =>
           providersScreen(
             _,
@@ -195,6 +198,7 @@ export const routes: Record<string, RouteEntry> = {
       const render = async (row: Partial<IdentityRow>, errors: string[] = []) =>
         adminPage(ctx, url, req, {
           title: 'oauth_backend.identities.link',
+          active: '/admin/oauth/identities',
           body: async (_, frame) =>
             identityFormScreen(
               _,
@@ -254,6 +258,7 @@ export const routes: Record<string, RouteEntry> = {
       ])
       return adminPage(ctx, url, req, {
         title: 'oauth_backend.link.title',
+        active: '/admin/oauth/identities',
         body: (_, frame) => linkProviderScreen(_, providers, identities, frame, localeQuery(url)),
       })
     },

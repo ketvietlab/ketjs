@@ -8,13 +8,15 @@ import {
   dataTable,
   DefinitionList,
   emptyState,
-  Framed,
+  FormPage,
   inline,
   linkButton,
+  ListPage,
   Notice,
   RecordActions,
   RecordForm,
   Section,
+  shell,
   stack,
   Surface,
 } from '../../ui/index.ts'
@@ -64,13 +66,14 @@ export const providersScreen = (
   frame: Frame,
   locale = '',
   includeArchived = false,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('oauth_backend.providers.title')}
-    frame={frame}
-    body={stack([
-      inline([
+): TemplateResult =>
+  shell(
+    _,
+    _('oauth_backend.providers.title'),
+    <ListPage
+      title={_('oauth_backend.providers.title')}
+      description={_('oauth_backend.providers.subtitle')}
+      actions={inline([
         linkButton({
           label: _('oauth_backend.action.create'),
           href: localized('/admin/oauth/providers/new', locale),
@@ -90,8 +93,11 @@ export const providersScreen = (
           ),
           variant: 'tertiary',
         }),
-      ]),
-      rows.length === 0
+        frame.extras?.['topbar.end'] ?? '',
+      ])}
+      status={`${_('oauth_backend.providers.title')}: ${String(rows.length)}`}
+      body={
+        rows.length === 0
         ? emptyState(_('oauth_backend.providers.empty'), _('oauth_backend.providers.emptyHint'))
         : dataTable(_, {
             rows,
@@ -131,10 +137,11 @@ export const providersScreen = (
                   ),
               },
             ],
-          }),
-    ])}
-  />
-)
+          })
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
 
 type ProviderOptions = {
   companies: FormOption[]
@@ -254,11 +261,23 @@ export const providerFormScreen = (
   locale = '',
 ): TemplateResult => {
   const existing = Boolean(row.id)
-  return (
-    <Framed
-      translator={_}
-      title={existing ? String(row.name) : _('oauth_backend.providers.create')}
-      frame={frame}
+  const title = existing ? String(row.name) : _('oauth_backend.providers.create')
+  return shell(
+    _,
+    title,
+    <FormPage
+      scope="oauth-provider-form"
+      title={title}
+      description={_('oauth_backend.configuration.hint')}
+      status={
+        existing
+          ? badge(
+              row.active ? _('oauth_backend.state.active') : _('oauth_backend.state.archived'),
+              row.active ? 'positive' : 'neutral',
+            )
+          : undefined
+      }
+      actions={frame.extras?.['topbar.end']}
       body={stack([
         ...(existing
           ? [
@@ -342,7 +361,8 @@ export const providerFormScreen = (
             ]
           : []),
       ])}
-    />
+    />,
+    { ...frame, chrome: null, topbar: false },
   )
 }
 
@@ -352,16 +372,14 @@ export const identitiesScreen = (
   frame: Frame,
   locale = '',
   errors: string[] = [],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('oauth_backend.identities.title')}
-    frame={frame}
-    body={stack([
-      ...(errors.length
-        ? [<Notice tone="danger" title={_('oauth_backend.error.title')} message={errors.join(' ')} />]
-        : []),
-      inline([
+): TemplateResult =>
+  shell(
+    _,
+    _('oauth_backend.identities.title'),
+    <ListPage
+      title={_('oauth_backend.identities.title')}
+      description={_('oauth_backend.identities.subtitle')}
+      actions={inline([
         linkButton({
           label: _('oauth_backend.action.linkIdentity'),
           href: localized('/admin/oauth/identities/new', locale),
@@ -371,8 +389,14 @@ export const identitiesScreen = (
           label: _('oauth_backend.action.providers'),
           href: localized('/admin/oauth/providers', locale),
         }),
-      ]),
-      rows.length === 0
+        frame.extras?.['topbar.end'] ?? '',
+      ])}
+      status={`${_('oauth_backend.identities.title')}: ${String(rows.length)}`}
+      body={stack([
+        ...(errors.length
+        ? [<Notice tone="danger" title={_('oauth_backend.error.title')} message={errors.join(' ')} />]
+        : []),
+        rows.length === 0
         ? emptyState(_('oauth_backend.identities.empty'), _('oauth_backend.identities.emptyHint'))
         : dataTable(_, {
             rows,
@@ -415,9 +439,10 @@ export const identitiesScreen = (
               },
             ],
           }),
-    ])}
-  />
-)
+      ])}
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
 
 export const identityFormScreen = (
   _: Translator,
@@ -426,11 +451,15 @@ export const identityFormScreen = (
   frame: Frame,
   locale = '',
 ): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('oauth_backend.identities.link')}
-    frame={frame}
-    body={
+  shell(
+    _,
+    _('oauth_backend.identities.link'),
+    <FormPage
+      scope="oauth-identity-form"
+      title={_('oauth_backend.identities.link')}
+      description={_('oauth_backend.identities.linkHint')}
+      actions={frame.extras?.['topbar.end']}
+      body={
       <Section
         title={_('oauth_backend.identities.verifiedSubject')}
         description={_('oauth_backend.identities.linkHint')}
@@ -484,8 +513,10 @@ export const identityFormScreen = (
           />
         }
       />
-    }
-  />
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
 )
 
 export const linkProviderScreen = (
@@ -496,11 +527,14 @@ export const linkProviderScreen = (
   locale = '',
 ): TemplateResult => {
   const linked = new Set(identities.map((identity) => identity.providerId))
-  return (
-    <Framed
-      translator={_}
+  return shell(
+    _,
+    _('oauth_backend.link.title'),
+    <FormPage
+      scope="oauth-link-provider"
       title={_('oauth_backend.link.title')}
-      frame={frame}
+      description={_('oauth_backend.link.hint')}
+      actions={frame.extras?.['topbar.end']}
       body={
         <Section
           title={_('oauth_backend.link.choose')}
@@ -538,6 +572,7 @@ export const linkProviderScreen = (
           }
         />
       }
-    />
+    />,
+    { ...frame, chrome: null, topbar: false },
   )
 }

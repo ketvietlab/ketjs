@@ -399,11 +399,11 @@ Structure debt: split `oauth_backend/screens.tsx` into `screens/`.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| OAUTH-01 | ready | OAuth providers | `/admin/oauth/providers` | `providersScreen` | ListPage | — |
-| OAUTH-02 | ready | Provider create/detail | `/admin/oauth/providers/new`, `/providers/{id}` | `providerFormScreen` | FormPage | — |
-| OAUTH-03 | ready | Linked identities | `/admin/oauth/identities` | `identitiesScreen` | ListPage | — |
-| OAUTH-04 | ready | Identity create | `/admin/oauth/identities/new` | `identityFormScreen` | FormPage | — |
-| OAUTH-05 | ready | Provider linking chooser | `/admin/oauth/link` | `linkProviderScreen` | FormPage/Specialized | — |
+| OAUTH-01 | done | OAuth providers | `/admin/oauth/providers` | `screens/index.tsx::providersScreen` | ListPage | Codex |
+| OAUTH-02 | done | Provider create/detail | `/admin/oauth/providers/new`, `/providers/{id}` | `screens/index.tsx::providerFormScreen` | FormPage | Codex |
+| OAUTH-03 | done | Linked identities | `/admin/oauth/identities` | `screens/index.tsx::identitiesScreen` | ListPage | Codex |
+| OAUTH-04 | done | Identity create | `/admin/oauth/identities/new` | `screens/index.tsx::identityFormScreen` | FormPage | Codex |
+| OAUTH-05 | done | Provider linking chooser | `/admin/oauth/link` | `screens/index.tsx::linkProviderScreen` | FormPage/Specialized | Codex |
 
 ### Report lane
 
@@ -1223,6 +1223,15 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 - Inbox and outbox forms receive route-owned locale-safe actions and explicit commands. Their mutations reject
   cross-site browser posts, preserve legacy mark-read submissions and redirect back with the active locale.
 - Wave 31 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 32 — OAUTH-01 through OAUTH-05
+
+- Provider and linked-identity collections now use `ListPage`; provider configuration, manual identity linking
+  and the self-service provider chooser use `FormPage` while preserving archive, unlink and OAuth start flows.
+- All OAuth routes declare their active navigation context. The former root `screens.tsx` now lives under the
+  module's `screens/` folder, removing its outstanding structure debt.
+- Wave 32 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
   browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253
