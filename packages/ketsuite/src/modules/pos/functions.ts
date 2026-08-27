@@ -6,7 +6,14 @@ import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
 
 export const POS_ORDER_STATES = ['draft', 'cancel', 'paid', 'done'] as const
-export const POS_SESSION_STATES = ['opening_control', 'opened', 'closing_control', 'closed'] as const
+export const POS_SESSION_STATES = [
+  'opening_control',
+  'opened',
+  'closing_control',
+  'pending_approval',
+  'closed',
+] as const
+export const POS_TENDER_STATES = ['captured', 'voided'] as const
 export const POS_INVOICE_STATUSES = ['invoiced', 'to_invoice'] as const
 const invalid = (field: string, message: string) => ({ ok: false as const, errors: [{ field, message }] })
 const n = (value: unknown) => Number(value ?? 0)
@@ -88,18 +95,48 @@ async function recompute(ctx: Ctx, orderId: unknown) {
   const total = money(lines.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0))
   const tax = money(total - untaxed)
   const payments = await ctx.db.select('pos.Payment', { orderId }),
-    paid = money(payments.reduce((sum, payment) => sum + n(payment.amount), 0))
+    captured = payments.filter((payment) => (payment.state ?? 'captured') === 'captured'),
+    paid = money(captured.reduce((sum, payment) => sum + n(payment.appliedAmount ?? payment.amount), 0)),
+    returned = money(
+      captured.reduce(
+        (sum, payment) =>
+          sum + n(payment.tenderedAmount ?? payment.amount) - n(payment.appliedAmount ?? payment.amount),
+        0,
+      ),
+    )
   await ctx.db.update(
     'pos.Order',
     { id: orderId },
     {
       amountUntaxed: decimal(untaxed),
       amountTax: decimal(tax),
+      amountExact: decimal(total),
+      amountRounding: '0',
       amountTotal: decimal(total),
       amountPaid: decimal(paid),
-      amountReturn: decimal(paid - total),
+      amountReturn: decimal(returned),
     },
   )
+}
+
+async function consumerPartner(ctx: Ctx): Promise<Row> {
+  const name = 'Bán cho người tiêu dùng'
+  const existing = (await ctx.db.select('partner.Partner', { name })).find((row) => row.active !== false)
+  if (existing) return existing
+  const id = `pos-consumer-${String(ctx.scope.company)}`
+  await ctx.db.insertIfAbsent('partner.Partner', {
+    id,
+    kind: 'person',
+    name,
+    parentId: null,
+    vat: null,
+    ref: null,
+    email: null,
+    phone: null,
+    lang: 'vi',
+    active: true,
+  })
+  return (await ctx.db.select('partner.Partner', { id }))[0]!
 }
 async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[], payments: Row[]) {
   const id = `${String(order.id)}:account`,
@@ -270,6 +307,97 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
   return id
 }
 
+async function createCashAdjustmentAccounting(
+  ctx: Ctx,
+  session: Row,
+  config: Row,
+  adjustmentId: string,
+  difference: number,
+) {
+  if (!config.cashOverShortAccountId)
+    throw new Error('a cash over/short clearing account is required before approving variance')
+  const links = await ctx.db.select('pos.ConfigPaymentMethod', { configId: config.id })
+  let method: Row | undefined
+  for (const link of links) {
+    const held = (await ctx.db.select('pos.PaymentMethod', { id: link.paymentMethodId }))[0]
+    if (held?.isCash) {
+      method = held
+      break
+    }
+  }
+  if (!method) throw new Error('the POS configuration needs a cash payment method')
+  const journal = (await ctx.db.select('account.Journal', { id: method.journalId }))[0]
+  if (!journal?.defaultAccountId) throw new Error('the cash journal needs a default account')
+  const moveId = `${adjustmentId}:account`
+  if (!(await ctx.db.select('account.Move', { id: moveId }))[0]) {
+    const amount = Math.abs(difference)
+    await ctx.db.insert('account.Move', {
+      id: moveId,
+      name: moveId,
+      ref: `POS cash variance ${String(session.name)}`,
+      date: now(),
+      moveType: 'entry',
+      state: 'draft',
+      journalId: method.journalId,
+      partnerId: null,
+      invoiceDate: null,
+      invoiceDateDue: null,
+      paymentTermId: null,
+      paymentState: 'paid',
+      currency: await currencyOf(ctx),
+      amountUntaxed: '0',
+      amountTax: '0',
+      amountTotal: '0',
+      postedAt: null,
+    })
+    await ctx.db.insert('account.MoveLine', {
+      id: `${moveId}:cash`,
+      moveId,
+      name: method.name,
+      accountId: journal.defaultAccountId,
+      partnerId: null,
+      productId: null,
+      productUomId: null,
+      quantity: '1',
+      priceUnit: decimal(amount),
+      discount: '0',
+      taxId: null,
+      debit: difference > 0 ? decimal(amount) : '0',
+      credit: difference < 0 ? decimal(amount) : '0',
+      balance: decimal(difference),
+      dateMaturity: null,
+      displayType: null,
+      reconciled: false,
+      amountResidual: '0',
+      sequence: 10,
+    })
+    await ctx.db.insert('account.MoveLine', {
+      id: `${moveId}:clearing`,
+      moveId,
+      name: 'Cash over/short',
+      accountId: config.cashOverShortAccountId,
+      partnerId: null,
+      productId: null,
+      productUomId: null,
+      quantity: '1',
+      priceUnit: decimal(amount),
+      discount: '0',
+      taxId: null,
+      debit: difference < 0 ? decimal(amount) : '0',
+      credit: difference > 0 ? decimal(amount) : '0',
+      balance: decimal(-difference),
+      dateMaturity: null,
+      displayType: null,
+      reconciled: false,
+      amountResidual: '0',
+      sequence: 20,
+    })
+  }
+  const posted = (await accountFunctions.postMove!.handler(ctx, { id: moveId })) as Row
+  if (posted.ok !== true) throw new Error('cash variance accounting move could not be posted')
+  return moveId
+}
+
 const stockEffects = [
   ...(stockFunctions.createPicking!.effects ?? []),
   ...(stockFunctions.addMove!.effects ?? []),
@@ -300,6 +428,8 @@ export const functions: Record<string, FnSpec> = {
       revenueAccountId: 'id',
       receivableAccountId: 'id',
       taxAccountId: 'id?',
+      cashOverShortAccountId: 'id?',
+      cashRoundingIncrement: 'decimal?',
       maximumDifference: 'decimal?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
@@ -326,6 +456,13 @@ export const functions: Record<string, FnSpec> = {
         return invalid('receivableAccountId', 'a receivable account is required')
       if (args.taxAccountId && !(await ctx.db.select('account.Account', { id: args.taxAccountId }))[0])
         return invalid('taxAccountId', 'tax account does not exist')
+      if (
+        args.cashOverShortAccountId &&
+        !(await ctx.db.select('account.Account', { id: args.cashOverShortAccountId }))[0]
+      )
+        return invalid('cashOverShortAccountId', 'cash over/short account does not exist')
+      if (n(args.cashRoundingIncrement) !== 0)
+        return invalid('cashRoundingIncrement', 'cash rounding is modeled but disabled for the pilot')
       const existing = (await ctx.db.select('pos.Config', { id: args.id }))[0],
         values = {
           name: args.name,
@@ -335,6 +472,8 @@ export const functions: Record<string, FnSpec> = {
           revenueAccountId: args.revenueAccountId,
           receivableAccountId: args.receivableAccountId,
           taxAccountId: args.taxAccountId ?? null,
+          cashOverShortAccountId: args.cashOverShortAccountId ?? existing?.cashOverShortAccountId ?? null,
+          cashRoundingIncrement: args.cashRoundingIncrement ?? existing?.cashRoundingIncrement ?? '0',
           maximumDifference: args.maximumDifference ?? '0',
           active: true,
         }
@@ -406,7 +545,13 @@ export const functions: Record<string, FnSpec> = {
   }),
   getSession: defineFn({
     input: { id: 'id' },
-    effects: ['read:pos.Session', 'read:pos.Order', 'read:pos.Payment', 'read:pos.PaymentMethod'],
+    effects: [
+      'read:pos.Session',
+      'read:pos.Order',
+      'read:pos.Payment',
+      'read:pos.PaymentMethod',
+      'read:pos.CashMovement',
+    ],
     agent: true,
     handler: async (ctx, args) => {
       const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
@@ -415,10 +560,16 @@ export const functions: Record<string, FnSpec> = {
       let expectedCash = n(session.cashRegisterBalanceStart)
       for (const order of orders)
         for (const payment of await ctx.db.select('pos.Payment', { orderId: order.id })) {
+          if ((payment.state ?? 'captured') !== 'captured') continue
           const method = (await ctx.db.select('pos.PaymentMethod', { id: payment.paymentMethodId }))[0]
-          if (method?.isCash) expectedCash += n(payment.amount)
+          if (method?.isCash) expectedCash += n(payment.appliedAmount ?? payment.amount)
         }
-      return { ...session, cashRegisterBalanceEnd: decimal(expectedCash), orders }
+      const cashMovements = await ctx.db.select('pos.CashMovement', { sessionId: args.id })
+      expectedCash += cashMovements.reduce(
+        (sum, movement) => sum + (movement.direction === 'in' ? n(movement.amount) : -n(movement.amount)),
+        0,
+      )
+      return { ...session, cashRegisterBalanceEnd: decimal(expectedCash), orders, cashMovements }
     },
   }),
   createSession: defineFn({
@@ -463,7 +614,7 @@ export const functions: Record<string, FnSpec> = {
       }
       if (lock?.sessionId !== args.id) {
         const active = (await ctx.db.select('pos.Session', { id: lock?.sessionId }))[0]
-        if (active?.state !== 'closed')
+        if (active && !['closed', 'pending_approval'].includes(String(active.state)))
           return invalid('configId', 'this point of sale already has an active session')
         const changed = await ctx.db.compareAndSet(
           'pos.SessionLock',
@@ -489,6 +640,12 @@ export const functions: Record<string, FnSpec> = {
         cashRegisterBalanceEnd: args.openingCash ?? '0',
         cashRegisterBalanceEndReal: args.openingCash ?? '0',
         cashRegisterDifference: '0',
+        varianceStatus: 'none',
+        varianceReason: null,
+        varianceNote: null,
+        varianceApprovedBy: null,
+        varianceApprovedAt: null,
+        cashAdjustmentId: null,
         revision: 0,
       })
       return { ok: true, id: args.id, revision: 0 }
@@ -507,6 +664,102 @@ export const functions: Record<string, FnSpec> = {
       const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
       if (claim.ok !== true) return claim
       await ctx.db.update('pos.Session', { id: args.id }, { state: 'opened', startAt: held.startAt ?? now() })
+      return { ok: true, id: args.id, revision: claim.revision }
+    },
+  }),
+  recordCashMovement: defineFn({
+    input: {
+      id: 'id',
+      sessionId: 'id',
+      direction: 'text',
+      amount: 'decimal',
+      reason: 'text',
+      note: 'text?',
+      actorId: 'text',
+      deviceId: 'text?',
+      expectedRevision: 'int',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.CashMovement', 'write:pos.CashMovement'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!['in', 'out'].includes(String(args.direction)))
+        return invalid('direction', 'cash movement direction must be in or out')
+      if (!(n(args.amount) > 0)) return invalid('amount', 'cash movement amount must be positive')
+      if (!String(args.reason).trim()) return invalid('reason', 'cash movement requires a reason')
+      const session = (await ctx.db.select('pos.Session', { id: args.sessionId }))[0]
+      if (session?.state !== 'opened') return invalid('state', 'cash movement requires an open shift')
+      const existing = (await ctx.db.select('pos.CashMovement', { id: args.id }))[0]
+      if (existing) {
+        const same =
+          existing.sessionId === args.sessionId &&
+          existing.direction === args.direction &&
+          n(existing.amount) === n(args.amount)
+        return same
+          ? { ok: true, id: args.id, revision: n(session.revision) }
+          : invalid('id', 'cash movement id is already used by a different command')
+      }
+      const claim = await claimSessionRevision(ctx, args.sessionId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.insert('pos.CashMovement', {
+        id: args.id,
+        sessionId: args.sessionId,
+        direction: args.direction,
+        amount: decimal(n(args.amount)),
+        reason: String(args.reason),
+        note: args.note ?? null,
+        actorId: args.actorId,
+        deviceId: args.deviceId ?? null,
+        occurredAt: now(),
+        reversalOfId: null,
+      })
+      return { ok: true, id: args.id, revision: claim.revision }
+    },
+  }),
+  reverseCashMovement: defineFn({
+    input: {
+      id: 'id',
+      sessionId: 'id',
+      movementId: 'id',
+      expectedRevision: 'int',
+      reason: 'text',
+      note: 'text?',
+      actorId: 'text',
+      deviceId: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.CashMovement', 'write:pos.CashMovement'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!String(args.reason).trim()) return invalid('reason', 'cash movement reversal requires a reason')
+      const session = (await ctx.db.select('pos.Session', { id: args.sessionId }))[0]
+      if (session?.state !== 'opened')
+        return invalid('state', 'cash movement reversal requires an open shift')
+      const original = (await ctx.db.select('pos.CashMovement', { id: args.movementId }))[0]
+      if (!original || original.sessionId !== args.sessionId)
+        return invalid('movementId', 'cash movement does not belong to this shift')
+      if (original.reversalOfId) return invalid('movementId', 'a reversal cannot itself be reversed')
+      const prior = (await ctx.db.select('pos.CashMovement', { reversalOfId: args.movementId }))[0]
+      if (prior)
+        return prior.id === args.id
+          ? { ok: true, id: prior.id, revision: n(session.revision) }
+          : invalid('movementId', 'cash movement is already reversed')
+      const claim = await claimSessionRevision(ctx, args.sessionId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.insert('pos.CashMovement', {
+        id: args.id,
+        sessionId: args.sessionId,
+        direction: original.direction === 'in' ? 'out' : 'in',
+        amount: original.amount,
+        reason: String(args.reason),
+        note: args.note ?? null,
+        actorId: args.actorId,
+        deviceId: args.deviceId ?? null,
+        occurredAt: now(),
+        reversalOfId: original.id,
+      })
       return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
@@ -531,8 +784,22 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   closeSession: defineFn({
-    input: { id: 'id', closingCash: 'decimal', closingNotes: 'text?', expectedRevision: 'int?' },
-    output: { ok: 'bool', id: 'id?', revision: 'int?', difference: 'decimal?', errors: 'json?' },
+    input: {
+      id: 'id',
+      closingCash: 'decimal',
+      closingNotes: 'text?',
+      varianceReason: 'text?',
+      varianceNote: 'text?',
+      expectedRevision: 'int?',
+    },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      revision: 'int?',
+      difference: 'decimal?',
+      pendingApproval: 'bool?',
+      errors: 'json?',
+    },
     effects: [
       'read:pos.Session',
       'write:pos.Session',
@@ -540,6 +807,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.Order',
       'read:pos.Payment',
       'read:pos.PaymentMethod',
+      'read:pos.CashMovement',
       'write:pos.Order',
     ],
     idempotent: true,
@@ -547,12 +815,13 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
       if (!session) return invalid('id', 'session does not exist')
-      if (session.state === 'closed')
+      if (['closed', 'pending_approval'].includes(String(session.state)))
         return {
           ok: true,
           id: args.id,
           revision: n(session.revision),
           difference: session.cashRegisterDifference,
+          pendingApproval: session.state === 'pending_approval',
         }
       if (session.state !== 'closing_control') return invalid('state', 'session must be in closing control')
       const config = (await ctx.db.select('pos.Config', { id: session.configId }))[0]!,
@@ -560,12 +829,18 @@ export const functions: Record<string, FnSpec> = {
       let cash = n(session.cashRegisterBalanceStart)
       for (const order of orders)
         for (const payment of await ctx.db.select('pos.Payment', { orderId: order.id })) {
+          if ((payment.state ?? 'captured') !== 'captured') continue
           const method = (await ctx.db.select('pos.PaymentMethod', { id: payment.paymentMethodId }))[0]
-          if (method?.isCash) cash += n(payment.amount)
+          if (method?.isCash) cash += n(payment.appliedAmount ?? payment.amount)
         }
+      cash += (await ctx.db.select('pos.CashMovement', { sessionId: args.id })).reduce(
+        (sum, movement) => sum + (movement.direction === 'in' ? n(movement.amount) : -n(movement.amount)),
+        0,
+      )
       const difference = money(n(args.closingCash) - cash)
-      if (Math.abs(difference) - n(config.maximumDifference) > 0.000001)
-        return invalid('closingCash', 'cash difference exceeds the configured maximum')
+      const pendingApproval = Math.abs(difference) - n(config.maximumDifference) > 0.000001
+      if (pendingApproval && !String(args.varianceReason ?? '').trim())
+        return invalid('varianceReason', 'cash difference requires a reason before sealing the shift')
       const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
       if (claim.ok !== true) return claim
       for (const order of orders)
@@ -574,15 +849,151 @@ export const functions: Record<string, FnSpec> = {
         'pos.Session',
         { id: args.id },
         {
-          state: 'closed',
+          state: pendingApproval ? 'pending_approval' : 'closed',
           stopAt: now(),
           closingNotes: args.closingNotes ?? null,
           cashRegisterBalanceEnd: decimal(cash),
           cashRegisterBalanceEndReal: args.closingCash,
           cashRegisterDifference: decimal(difference),
+          varianceStatus: pendingApproval ? 'pending' : 'none',
+          varianceReason: pendingApproval ? String(args.varianceReason) : null,
+          varianceNote: pendingApproval ? (args.varianceNote ?? null) : null,
         },
       )
-      return { ok: true, id: args.id, revision: claim.revision, difference: decimal(difference) }
+      return {
+        ok: true,
+        id: args.id,
+        revision: claim.revision,
+        difference: decimal(difference),
+        pendingApproval,
+      }
+    },
+  }),
+  recountSession: defineFn({
+    input: { id: 'id', countedCash: 'decimal', expectedRevision: 'int', reviewedBy: 'text', note: 'text?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      revision: 'int?',
+      difference: 'decimal?',
+      pendingApproval: 'bool?',
+      errors: 'json?',
+    },
+    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.Config'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
+      if (session?.state !== 'pending_approval')
+        return invalid('state', 'only a sealed variance can be recounted')
+      const config = (await ctx.db.select('pos.Config', { id: session.configId }))[0]!
+      const difference = money(n(args.countedCash) - n(session.cashRegisterBalanceEnd))
+      const pendingApproval = Math.abs(difference) - n(config.maximumDifference) > 0.000001
+      const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.update(
+        'pos.Session',
+        { id: args.id },
+        {
+          state: pendingApproval ? 'pending_approval' : 'closed',
+          cashRegisterBalanceEndReal: args.countedCash,
+          cashRegisterDifference: decimal(difference),
+          varianceStatus: pendingApproval ? 'pending' : 'corrected',
+          varianceNote: args.note ?? session.varianceNote ?? null,
+          varianceApprovedBy: pendingApproval ? null : args.reviewedBy,
+          varianceApprovedAt: pendingApproval ? null : now(),
+        },
+      )
+      return {
+        ok: true,
+        id: args.id,
+        revision: claim.revision,
+        difference: decimal(difference),
+        pendingApproval,
+      }
+    },
+  }),
+  approveSessionVariance: defineFn({
+    input: { id: 'id', expectedRevision: 'int', approvedBy: 'text', note: 'text?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      revision: 'int?',
+      adjustmentId: 'id?',
+      accountMoveId: 'id?',
+      errors: 'json?',
+    },
+    effects: [
+      'read:pos.Session',
+      'write:pos.Session',
+      'read:pos.Config',
+      'read:pos.ConfigPaymentMethod',
+      'read:pos.PaymentMethod',
+      'read:pos.CashAdjustment',
+      'write:pos.CashAdjustment',
+      'read:account.Journal',
+      'read:account.Move',
+      'write:account.Move',
+      'write:account.MoveLine',
+      'read:company.Company',
+      ...accountEffects,
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
+      if (!session) return invalid('id', 'session does not exist')
+      if (session.varianceStatus === 'approved') {
+        const adjustment = (await ctx.db.select('pos.CashAdjustment', { sessionId: args.id }))[0]
+        return {
+          ok: true,
+          id: args.id,
+          revision: n(session.revision),
+          adjustmentId: adjustment?.id,
+          accountMoveId: adjustment?.accountMoveId,
+        }
+      }
+      if (session.state !== 'pending_approval')
+        return invalid('state', 'only a sealed variance can be approved')
+      const config = (await ctx.db.select('pos.Config', { id: session.configId }))[0]!
+      const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      const adjustmentId = `${String(args.id)}:variance`
+      let accountMoveId: string
+      try {
+        accountMoveId = await createCashAdjustmentAccounting(
+          ctx,
+          session,
+          config,
+          adjustmentId,
+          n(session.cashRegisterDifference),
+        )
+      } catch (error) {
+        return invalid('accounting', (error as Error).message)
+      }
+      await ctx.db.insertIfAbsent('pos.CashAdjustment', {
+        id: adjustmentId,
+        sessionId: args.id,
+        amount: session.cashRegisterDifference,
+        reason: session.varianceReason,
+        note: args.note ?? session.varianceNote ?? null,
+        approvedBy: args.approvedBy,
+        approvedAt: now(),
+        accountMoveId,
+      })
+      await ctx.db.update(
+        'pos.Session',
+        { id: args.id },
+        {
+          state: 'closed',
+          varianceStatus: 'approved',
+          varianceNote: args.note ?? session.varianceNote ?? null,
+          varianceApprovedBy: args.approvedBy,
+          varianceApprovedAt: now(),
+          cashAdjustmentId: adjustmentId,
+        },
+      )
+      return { ok: true, id: args.id, revision: claim.revision, adjustmentId, accountMoveId }
     },
   }),
   listOrders: defineFn({
@@ -661,8 +1072,6 @@ export const functions: Record<string, FnSpec> = {
       if (session?.state !== 'opened') return invalid('sessionId', 'orders require an open POS session')
       if (args.partnerId && !(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
         return invalid('partnerId', 'customer does not exist')
-      if (args.toInvoice && !args.partnerId)
-        return invalid('partnerId', 'invoiced POS orders require a customer')
       const sequenceNumber = await nextOrderNumber(ctx, args.sessionId),
         name = `Order ${String(sequenceNumber).padStart(5, '0')}`,
         posReference = `POS/${String(sequenceNumber).padStart(5, '0')}`
@@ -683,10 +1092,12 @@ export const functions: Record<string, FnSpec> = {
         currency: await currencyOf(ctx),
         amountUntaxed: '0',
         amountTax: '0',
+        amountExact: '0',
+        amountRounding: '0',
         amountTotal: '0',
         amountPaid: '0',
         amountReturn: '0',
-        toInvoice: Boolean(args.toInvoice),
+        toInvoice: true,
         accountMoveId: null,
         pickingId: null,
         note: args.note ?? null,
@@ -847,6 +1258,8 @@ export const functions: Record<string, FnSpec> = {
       taxIds: 'json?',
       quoteRevision: 'text?',
       sequence: 'int?',
+      overrideReason: 'text?',
+      overrideBy: 'text?',
     },
     output: { ok: 'bool', id: 'id?', priceUnit: 'decimal?', revision: 'int?', errors: 'json?' },
     effects: [
@@ -917,6 +1330,14 @@ export const functions: Record<string, FnSpec> = {
           taxIds: quote.taxIds,
           taxEvidence: { currency: quote.currency, scale: quote.scale, taxes: quote.taxes },
           quoteRevision: args.quoteRevision ?? line.quoteRevision ?? null,
+          overrideReason:
+            args.priceUnit !== undefined || args.discount !== undefined
+              ? (args.overrideReason ?? line.overrideReason ?? null)
+              : (line.overrideReason ?? null),
+          overrideBy:
+            args.priceUnit !== undefined || args.discount !== undefined
+              ? (args.overrideBy ?? line.overrideBy ?? null)
+              : (line.overrideBy ?? null),
           priceSubtotal: quote.amountUntaxed,
           priceSubtotalIncl: quote.amountTotal,
           sequence: args.sequence ?? line.sequence,
@@ -974,8 +1395,25 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   addPayment: defineFn({
-    input: { id: 'id', orderId: 'id', paymentMethodId: 'id', amount: 'decimal' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    input: {
+      id: 'id',
+      orderId: 'id',
+      paymentMethodId: 'id',
+      amount: 'decimal?',
+      tenderedAmount: 'decimal?',
+      reference: 'text?',
+      operatorId: 'text?',
+      deviceId: 'text?',
+      expectedRevision: 'int?',
+    },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      revision: 'int?',
+      appliedAmount: 'decimal?',
+      change: 'decimal?',
+      errors: 'json?',
+    },
     effects: [
       'read:pos.Order',
       'read:pos.ConfigPaymentMethod',
@@ -990,9 +1428,10 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
       if (order?.state !== 'draft') return invalid('orderId', 'payments can only be added to a new order')
-      if ((order.isRefund && n(args.amount) >= 0) || (!order.isRefund && n(args.amount) <= 0))
+      const tendered = n(args.tenderedAmount ?? args.amount)
+      if ((order.isRefund && tendered >= 0) || (!order.isRefund && tendered <= 0))
         return invalid(
-          'amount',
+          'tenderedAmount',
           order.isRefund ? 'refund payments must be negative' : 'payment must be positive',
         )
       const linked = (
@@ -1001,28 +1440,108 @@ export const functions: Record<string, FnSpec> = {
           paymentMethodId: args.paymentMethodId,
         })
       )[0]
-      if (!linked || !(await ctx.db.select('pos.PaymentMethod', { id: args.paymentMethodId }))[0])
+      const method = (await ctx.db.select('pos.PaymentMethod', { id: args.paymentMethodId }))[0]
+      if (!linked || !method)
         return invalid('paymentMethodId', 'payment method is not configured for this point of sale')
-      if (!(await ctx.db.select('pos.Payment', { id: args.id }))[0])
-        await ctx.db.insert('pos.Payment', {
-          id: args.id,
-          orderId: args.orderId,
-          paymentMethodId: args.paymentMethodId,
-          amount: args.amount,
-          paymentDate: now(),
-        })
+      if (!method.isCash && !String(args.reference ?? '').trim())
+        return invalid('reference', 'manual non-cash tender requires a reference')
+      const existing = (await ctx.db.select('pos.Payment', { id: args.id }))[0]
+      if (existing) {
+        const same =
+          existing.orderId === args.orderId &&
+          existing.paymentMethodId === args.paymentMethodId &&
+          n(existing.tenderedAmount ?? existing.amount) === tendered &&
+          String(existing.reference ?? '') === String(args.reference ?? '')
+        return same
+          ? {
+              ok: true,
+              id: args.id,
+              revision: n(order.revision),
+              appliedAmount: existing.appliedAmount ?? existing.amount,
+              change: decimal(
+                n(existing.tenderedAmount ?? existing.amount) - n(existing.appliedAmount ?? existing.amount),
+              ),
+            }
+          : invalid('id', 'tender id is already used by a different command')
+      }
+      const captured = (await ctx.db.select('pos.Payment', { orderId: args.orderId })).filter(
+        (payment) => (payment.state ?? 'captured') === 'captured',
+      )
+      const remaining = Math.max(
+        0,
+        Math.abs(n(order.amountTotal)) -
+          captured.reduce((sum, payment) => sum + Math.abs(n(payment.appliedAmount ?? payment.amount)), 0),
+      )
+      if (remaining <= 0.000001) return invalid('amount', 'the order is already fully covered')
+      const tenderedAbsolute = Math.abs(tendered)
+      if (!method.isCash && tenderedAbsolute - remaining > 0.000001)
+        return invalid('tenderedAmount', 'manual non-cash tender cannot exceed the remaining payable')
+      const appliedAbsolute = method.isCash ? Math.min(tenderedAbsolute, remaining) : tenderedAbsolute
+      const direction = order.isRefund ? -1 : 1
+      const applied = money(direction * appliedAbsolute)
+      const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.insert('pos.Payment', {
+        id: args.id,
+        orderId: args.orderId,
+        paymentMethodId: args.paymentMethodId,
+        amount: decimal(applied),
+        tenderedAmount: decimal(tendered),
+        appliedAmount: decimal(applied),
+        state: 'captured',
+        kind: method.isCash ? 'cash' : 'manual',
+        reference: args.reference ?? null,
+        operatorId: args.operatorId ?? null,
+        deviceId: args.deviceId ?? null,
+        paymentDate: now(),
+      })
       await recompute(ctx, args.orderId)
-      return { ok: true, id: args.id }
+      return {
+        ok: true,
+        id: args.id,
+        revision: claim.revision,
+        appliedAmount: decimal(applied),
+        change: decimal(tendered - applied),
+      }
+    },
+  }),
+  voidPayment: defineFn({
+    input: { id: 'id', orderId: 'id', expectedRevision: 'int', reason: 'text', operatorId: 'text?' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:pos.Order',
+      'write:pos.Order',
+      'read:pos.OrderLine',
+      'read:pos.Payment',
+      'write:pos.Payment',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!String(args.reason).trim()) return invalid('reason', 'voiding a tender requires a reason')
+      const payment = (await ctx.db.select('pos.Payment', { id: args.id }))[0]
+      if (!payment || payment.orderId !== args.orderId)
+        return invalid('id', 'tender does not belong to this order')
+      if (payment.state === 'voided') {
+        const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
+        return { ok: true, id: args.id, revision: n(order?.revision) }
+      }
+      const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.update('pos.Payment', { id: args.id }, { state: 'voided' })
+      await recompute(ctx, args.orderId)
+      return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
   validateOrder: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: {
       ok: 'bool',
       id: 'id?',
       state: 'text?',
       pickingId: 'id?',
       accountMoveId: 'id?',
+      revision: 'int?',
       errors: 'json?',
     },
     effects: [
@@ -1035,6 +1554,8 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.PaymentMethod',
       'read:product.Product',
       'read:product.Template',
+      'read:partner.Partner',
+      'write:partner.Partner',
       'read:account.Move',
       'write:account.Move',
       'write:account.MoveLine',
@@ -1055,6 +1576,7 @@ export const functions: Record<string, FnSpec> = {
           state: order.state,
           pickingId: order.pickingId,
           accountMoveId: order.accountMoveId,
+          revision: n(order.revision),
         }
       if (order.state !== 'draft') return invalid('state', 'only a new order can be paid')
       const session = (await ctx.db.select('pos.Session', { id: order.sessionId }))[0]
@@ -1062,7 +1584,9 @@ export const functions: Record<string, FnSpec> = {
         return invalid('sessionId', 'session is not open')
       const lines = await ctx.db.select('pos.OrderLine', { orderId: args.id })
       if (!lines.length) return invalid('lines', 'order needs at least one product')
-      const payments = await ctx.db.select('pos.Payment', { orderId: args.id })
+      const payments = (await ctx.db.select('pos.Payment', { orderId: args.id })).filter(
+        (payment) => (payment.state ?? 'captured') === 'captured',
+      )
       if (Math.abs(n(order.amountPaid) - n(order.amountTotal)) > 0.000001)
         return invalid('amountPaid', 'paid amount must equal order total')
       const config = (await ctx.db.select('pos.Config', { id: order.configId }))[0]!
@@ -1080,6 +1604,14 @@ export const functions: Record<string, FnSpec> = {
           goods.push(line)
         }
       }
+      const claim = await claimDraftRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      const partner = order.partnerId
+        ? (await ctx.db.select('partner.Partner', { id: order.partnerId }))[0]
+        : await consumerPartner(ctx)
+      if (!partner) return invalid('partnerId', 'invoice customer does not exist')
+      const effectiveOrder = { ...order, partnerId: partner.id, toInvoice: true }
+      await ctx.db.update('pos.Order', { id: args.id }, { partnerId: partner.id, toInvoice: true })
       let pickingId: string | null = null
       if (goods.length) {
         pickingId = `${String(order.id)}:picking`
@@ -1136,7 +1668,7 @@ export const functions: Record<string, FnSpec> = {
       }
       let accountMoveId: string
       try {
-        accountMoveId = await createAccounting(ctx, order, config, lines, payments)
+        accountMoveId = await createAccounting(ctx, effectiveOrder, config, lines, payments)
       } catch (error) {
         return invalid('accounting', (error as Error).message)
       }
@@ -1145,12 +1677,19 @@ export const functions: Record<string, FnSpec> = {
         { id: args.id },
         {
           state: 'paid',
-          invoiceStatus: order.toInvoice ? 'invoiced' : 'to_invoice',
+          invoiceStatus: 'invoiced',
           pickingId,
           accountMoveId,
         },
       )
-      return { ok: true, id: args.id, state: 'paid', ...(pickingId ? { pickingId } : {}), accountMoveId }
+      return {
+        ok: true,
+        id: args.id,
+        state: 'paid',
+        revision: claim.revision,
+        ...(pickingId ? { pickingId } : {}),
+        accountMoveId,
+      }
     },
   }),
   refundOrder: defineFn({
@@ -1199,13 +1738,19 @@ export const functions: Record<string, FnSpec> = {
         currency: original.currency,
         amountUntaxed: '0',
         amountTax: '0',
+        amountExact: '0',
+        amountRounding: '0',
         amountTotal: '0',
         amountPaid: '0',
         amountReturn: '0',
-        toInvoice: false,
+        toInvoice: true,
         accountMoveId: null,
         pickingId: null,
         note: `Refund ${String(original.posReference)}`,
+        revision: 0,
+        operatorId: null,
+        deviceId: session.deviceId ?? null,
+        priceBookRevision: original.priceBookRevision ?? null,
       })
       let sequence = 10
       for (const line of await ctx.db.select('pos.OrderLine', { orderId: original.id })) {
