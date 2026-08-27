@@ -36,3 +36,7 @@ easier.
 
 This baseline is an audit anchor, not the target contract. In particular, 40 composed success responses are
 not yet typed strongly enough for safe Swift or Kotlin generation.
+
+The target private bundle contains a union `staff-v1.openapi.json`, a separate
+`staff-session-v1.openapi.json`, and deployment manifests for Cosmetic, Commerce, and Hospitality. KetJS's
+public staff document remains the framework reference; it is not a substitute for that private bundle.
