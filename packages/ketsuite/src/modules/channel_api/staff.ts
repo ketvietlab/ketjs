@@ -22,7 +22,61 @@ import type { StaffIdentity } from './core.ts'
 
 type Req = Parameters<Route>[1]
 
-const envelope = { type: 'object', properties: { data: {}, error: {}, meta: { type: 'object' } } }
+const string = { type: 'string' }
+const nullableString = { type: ['string', 'null'] }
+const envelope = (data: unknown) => ({
+  type: 'object',
+  properties: { data, error: {}, meta: { type: 'object' } },
+})
+const bootstrapData = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    contractVersion: string,
+    user: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string },
+      required: ['id'],
+    },
+    csrfToken: nullableString,
+    scope: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        companyId: nullableString,
+        branchId: nullableString,
+        companies: { type: 'array', items: string },
+        branches: { type: ['array', 'null'], items: string },
+      },
+      required: ['companyId', 'branchId', 'companies', 'branches'],
+    },
+    capabilities: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { key: string, actions: { type: 'array', items: string } },
+        required: ['key', 'actions'],
+      },
+    },
+    capabilityRevision: string,
+  },
+  required: ['contractVersion', 'user', 'csrfToken', 'scope', 'capabilities', 'capabilityRevision'],
+}
+const meData = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    user: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string, name: nullableString, login: nullableString },
+      required: ['id', 'name', 'login'],
+    },
+  },
+  required: ['user'],
+}
 
 export const staffIdentity = async (ctx: ServeContext, url: URL, req: Req): Promise<StaffIdentity | null> => {
   const sessions = await ctx.sessionsOf(url, req)
@@ -58,7 +112,7 @@ export const staffRoutes = routesOf(
     operationId: 'staff.bootstrap',
     summary: 'Resolve the signed-in operator, their company scope and live capabilities.',
     auth: 'required',
-    responses: { '200': envelope },
+    responses: { '200': envelope(bootstrapData) },
     handler: async (ctx, _url, req, _params, request) => {
       const identity = request.identity!
       const live = await ctx.live(req)
@@ -113,7 +167,7 @@ export const staffRoutes = routesOf(
     summary: 'The operator this session belongs to.',
     auth: 'required',
     capability: { key: 'channel_api.staff_account', action: 'read' },
-    responses: { '200': envelope },
+    responses: { '200': envelope(meData) },
     handler: async (ctx, url, req, _params, request) => {
       const identity = request.identity!
       // Through ctx.call, not callUnchecked: a staff route answers within the

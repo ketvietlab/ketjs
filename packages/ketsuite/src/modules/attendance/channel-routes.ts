@@ -12,8 +12,48 @@ import type { Route, ServeContext } from '@ketvietlab/ketjs'
 type Req = Parameters<Route>[1]
 type Issue = { field?: string; code?: string }
 
-const envelope = { type: 'object', properties: { data: {}, error: {}, meta: { type: 'object' } } }
+const string = { type: 'string' }
+const nullableString = { type: ['string', 'null'] }
+const envelope = (data: unknown) => ({
+  type: 'object',
+  properties: { data, error: {}, meta: { type: 'object' } },
+})
 const object = { type: 'object' }
+const clockStatus = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    onClock: { type: 'boolean' },
+    sessionId: nullableString,
+    startAt: { ...nullableString, format: 'date-time' },
+    branchId: nullableString,
+  },
+  required: ['onClock'],
+}
+const attendanceSession = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    branchId: string,
+    startAt: { ...string, format: 'date-time' },
+    stopAt: { ...nullableString, format: 'date-time' },
+    correctedStartAt: { ...nullableString, format: 'date-time' },
+    correctedStopAt: { ...nullableString, format: 'date-time' },
+    state: string,
+  },
+  required: ['id', 'branchId', 'startAt', 'stopAt', 'correctedStartAt', 'correctedStopAt', 'state'],
+}
+const punchResult = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    kind: { type: 'string', enum: ['in', 'out'] },
+    occurredAt: { ...string, format: 'date-time' },
+    sessionId: string,
+  },
+  required: ['kind', 'occurredAt', 'sessionId'],
+}
 
 /** A domain refusal, carried out with the key the module already translates. */
 const refused = (ctx: ServeContext, url: URL, req: Req, result: unknown, status = 422) => {
@@ -57,7 +97,7 @@ export const channelRoutes = routesOf(
     summary: 'Whether the signed-in operator is on the clock, and since when.',
     auth: 'required',
     capability: { key: 'attendance.records', action: 'read' },
-    responses: { '200': envelope },
+    responses: { '200': envelope(clockStatus) },
     handler: async (ctx, url, req) => ({
       data: await ctx.call('attendance.clock.mine', {}, url, req),
     }),
@@ -70,7 +110,7 @@ export const channelRoutes = routesOf(
     summary: 'The operator’s own attendance sessions, newest first.',
     auth: 'required',
     capability: { key: 'attendance.records', action: 'read' },
-    responses: { '200': envelope },
+    responses: { '200': envelope({ type: 'array', items: attendanceSession }) },
     handler: async (ctx, url, req) => {
       const month = url.searchParams.get('month')
       const rows = (await ctx.call(
@@ -93,7 +133,7 @@ export const channelRoutes = routesOf(
     auth: 'required',
     capability: { key: 'attendance.records', action: 'check_in' },
     request: { body: object },
-    responses: { '201': envelope },
+    responses: { '201': envelope(punchResult) },
     handler: (ctx, url, req) => punch('in')(ctx, url, req),
   }),
   defineChannelRoute({
@@ -105,7 +145,7 @@ export const channelRoutes = routesOf(
     auth: 'required',
     capability: { key: 'attendance.records', action: 'check_out' },
     request: { body: object },
-    responses: { '201': envelope },
+    responses: { '201': envelope(punchResult) },
     handler: (ctx, url, req) => punch('out')(ctx, url, req),
   }),
 )

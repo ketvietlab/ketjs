@@ -99,6 +99,17 @@ owns token persistence, expiry, revocation and live membership resolution.
 `auth` is spelled `required` and `optional` on a staff route. Those are the profile-neutral names; the
 customer profile's `customer` and `optional-customer` still work and mean the same thing.
 
+The staff bootstrap, account, and attendance success responses publish concrete OpenAPI data models. Bootstrap
+types the live company and branch scope, credential-presentation-specific CSRF value, capabilities, and contract
+revision. Attendance types clock state, timestamped punch results, and shift history explicitly, including
+nullable corrections and stop times. Native generators can therefore reject an empty or free-form business data
+schema instead of falling back to an untyped map.
+
+The same client-readiness rule applies to the warehouse completion result and hospitality operations. A completed
+picking types the refreshed picking, released claim, and terminal transition. Hospitality types property context,
+the property-local front-desk board, reservation/stay/folio aggregates, and the bounded references accepted by
+operations. These schemas describe the existing projections and do not expose new domain state.
+
 Which identity a profile hands its routes is declared once, in `ChannelIdentities`:
 
 ```ts
