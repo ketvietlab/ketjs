@@ -29,6 +29,7 @@ export const models: Record<string, ModelDef> = {
       parentId: 'ref:company.Company?',
       currency: 'text',
       active: 'bool',
+      version: 'int',
     },
     indexes: {
       code: { fields: ['code'], unique: true },

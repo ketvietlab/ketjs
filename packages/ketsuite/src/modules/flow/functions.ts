@@ -475,7 +475,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'epic.list': defineFn({
-    input: { projectId: 'id', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
+    input: { projectId: 'id', id: 'id?', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
     output: {
       id: 'id',
       projectId: 'id',
@@ -488,16 +488,15 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:flow.Epic'],
     agent: true,
     handler: async (ctx, args) => {
-      const rows = await ctx.db.select(
-        'flow.Epic',
-        args.includeArchived === true
-          ? { projectId: args.projectId }
-          : { projectId: args.projectId, active: true },
-      )
+      const where: Row = { projectId: args.projectId }
+      if (args.id) where.id = args.id
+      if (args.includeArchived !== true) where.active = true
+      const rows = await ctx.db.select('flow.Epic', where)
       const needle = normalized(args.search)
-      return rows
-        .filter((row) => !needle || normalized(row.title).includes(needle))
-        .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+      const filtered = rows.filter((row) => !needle || normalized(row.title).includes(needle))
+      return args.id
+        ? filtered
+        : filtered.slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
     },
   }),
 
@@ -1123,11 +1122,15 @@ export const functions: Record<string, FnSpec> = {
 
   /** Blocking edges among a node set — the map view's one batch read, see dependenciesFor. */
   'issue.dependencies': defineFn({
-    input: { issueIds: 'json' },
+    input: { issueIds: 'json', includeExternalTargets: 'bool?' },
     output: { issueId: 'id', dependsOnIssueId: 'id', relation: 'text' },
     effects: ['read:flow.IssueDependency'],
     agent: true,
     handler: (ctx, args) =>
-      dependenciesFor(ctx, Array.isArray(args.issueIds) ? args.issueIds.map(String) : []),
+      dependenciesFor(
+        ctx,
+        Array.isArray(args.issueIds) ? args.issueIds.map(String) : [],
+        args.includeExternalTargets === true,
+      ),
   }),
 }

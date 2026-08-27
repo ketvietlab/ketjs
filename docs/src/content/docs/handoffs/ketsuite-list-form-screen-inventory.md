@@ -62,8 +62,8 @@ The current snapshot contains **173 stable work-item IDs** with no duplicates.
 
 ### Accounting lane
 
-Structure debt: the customer-invoice, vendor-bill, shared document-detail, payment, trial-balance and
-general-ledger renderers moved into `account_backend/screens/` in Waves 18–23; only partner-statement remains.
+Structure debt resolved in Wave 24: every routed Accounting renderer now lives in `account_backend/screens/`;
+the former root `*-screen.tsx` files no longer exist.
 `account_partner_backend` follows the same rule.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
@@ -81,7 +81,7 @@ general-ledger renderers moved into `account_backend/screens/` in Waves 18–23;
 | ACC-11 | done | Payments | `/admin/accounting/payments`, `/admin/accounting/payments/new` | `screens/payments-list.tsx`, `screens/payment-form.tsx` | Split | no | Curie |
 | ACC-12 | done | Trial balance | `/admin/accounting/trial-balance` | `screens/trial-balance.tsx::trialBalanceScreen` | Specialized | no | Curie |
 | ACC-13 | done | General ledger | `/admin/accounting/general-ledger` | `screens/general-ledger.tsx::generalLedgerScreen` | Specialized | no | Curie |
-| ACC-14 | ready | Partner statement | `/admin/accounting/partner-statement` | `partnerLedgerScreen` | Specialized | no | — |
+| ACC-14 | done | Partner statement | `/admin/accounting/partner-statement` | `screens/partner-statement.tsx::partnerLedgerScreen` | Specialized | no | Curie |
 | AP-01 | done | Partner accounting terms | `/admin/partner/partners/{id}/accounting` | `screens/accounting-terms.tsx::accountingTermsScreen` | FormPage | no | Kant |
 
 ### Sales lane
@@ -188,7 +188,7 @@ belong to the detail renderer that consumes them.
 | FLOW-09 | done | Project epics | `/admin/flow/projects/{id}/epics` | `screens/project-epics.tsx::epicsScreen` | Specialized | Huygens |
 | FLOW-10 | done | All epics | `/admin/flow/epics` | `screens/all-epics.tsx::allEpicsScreen` | ListPage | Huygens |
 | FLOW-11 | done | Epic detail | `/admin/flow/epics/{id}` | `screens/epic-detail.tsx::epicDetailScreen` | FormPage/Specialized | Huygens |
-| FLOW-12 | ready | Epic dependency map | `/admin/flow/projects/{id}/epics/{epicId}/map` | `screens/map.tsx::mapScreen` | Specialized | — |
+| FLOW-12 | done | Epic dependency map | `/admin/flow/projects/{id}/epics/{epicId}/map` | `screens/map.tsx::mapScreen` | Specialized | Huygens |
 | FLOW-13 | ready | Project Gantt | `/admin/flow/projects/{id}/gantt` | `screens/gantt.tsx::ganttScreen` | Specialized | — |
 | FLOW-14 | ready | Project sprints | `/admin/flow/projects/{id}/sprints` | `screens/sprints.tsx::sprintsScreen` | Split/Specialized | — |
 | FLOW-15 | ready | Project settings | `/admin/flow/projects/{id}/settings` | `screens/settings.tsx::settingsScreen` | Specialized | — |
@@ -223,13 +223,13 @@ Attendance Period and Credential Issuance; only the intentional public kiosk rem
 
 ### Company lane
 
-Structure debt: Wave 23 created `company_backend/screens/`, shared company/branch types and the companies-list
-leaf. The root `screens.tsx` retains company form, branch form, hierarchy and context until their assignments.
+Structure debt: Waves 23–24 created `company_backend/screens/`, shared company/branch types, the companies-list
+leaf and the company-form leaf. The root `screens.tsx` retains branch form, hierarchy and context.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
 | COMPANY-01 | done | Companies | `/admin/companies` | `screens/companies-list.tsx::companiesScreen` | ListPage | Kant |
-| COMPANY-02 | ready | Company create/detail | `/admin/companies/new`, `/admin/companies/{id}` | `companyFormScreen` | FormPage | — |
+| COMPANY-02 | done | Company create/detail | `/admin/companies/new`, `/admin/companies/{id}` | `screens/company-form.tsx::companyFormScreen` | FormPage | Kant |
 | COMPANY-03 | ready | Branch create/detail | `/admin/companies/{id}/branches/new`, `/admin/companies/{companyId}/branches/{id}` | `branchFormScreen` | FormPage | — |
 | COMPANY-04 | ready | Company hierarchy | `/admin/companies/hierarchy` | `hierarchyScreen` | Specialized | — |
 | COMPANY-05 | ready | Active company/branch context | `/admin/context` | `contextScreen` | FormPage/Specialized | — |
@@ -1101,6 +1101,27 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 - This is the final wave with local validation. Starting in Wave 24, the shared branch only edits code/tests,
   pushes the wave and follows CI; local test, build, lint, typecheck, diff and browser runs are skipped unless the
   user requests them explicitly.
+
+### Wave 24 — ACC-14, FLOW-12 and COMPANY-02
+
+- Partner Statement remains a Specialized receivable/payable movement report. It now computes exact totals over
+  the full matching result, then applies localized search and paging; partner, account, date and locale state stay
+  URL-owned. Inclusive date windows align overview drill-downs with the statement, invalid ranges remain visible,
+  unavailable relations stay bundled, entry links are encoded and the route requests only its actual read
+  capabilities. The last root Accounting renderer moved to `screens/partner-statement.tsx`.
+- Epic Dependency Map remains a Specialized graph workspace. Exact epic lookup removes the former false 404 after
+  80 records; issue and dependency reads now page/chunk beyond 200, aggregate complete edges and filter both ends
+  against the full epic node set. Project/epic return actions and node destinations are encoded and locale-safe;
+  the existing permission keys, archived compatibility and cycle guard remain.
+- Company create/detail remains a full-route `FormPage`, not a modal: legal-entity identity, archive lifecycle and
+  branches need stable context. Detail reuses the backing Partner collaboration thread in the one-third aside;
+  create has no Chatter before identity exists. Origin CSRF, explicit save/archive/restore actions, stable create
+  identity, safe return state, rejected relation values and locale PRG are preserved. Company version/CAS prevents
+  stale save/archive writes while compatible no-op replay remains safe; the renderer moved to
+  `screens/company-form.tsx`.
+- Wave 24 contains source and focused test changes only. No local test, build, typecheck, lint, diff check or
+  browser QA was run. Validation evidence is attached after the commit is pushed and the PR matrix completes;
+  CI failures, if any, are diagnosed and fixed in a follow-up push.
 
 ### Modal consolidation through Wave 14 — PR 253
 

@@ -52,6 +52,7 @@ test('company list uses public ListPage chrome, hierarchy/archive actions and en
             partnerId: 'partner-1',
             currency: 'VND',
             active: false,
+            version: 1,
             detailHref: '/admin/companies/company%2Fa?lang=vi',
           },
         ],

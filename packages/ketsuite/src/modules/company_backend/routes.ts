@@ -5,9 +5,9 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { adminPage, inLocale, localeQuery, localized } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
-import { companiesListScreen } from './screens/index.ts'
-import type { BranchRow, CompanyRow } from './screens/index.ts'
-import { branchFormScreen, companyFormScreen, contextScreen, hierarchyScreen } from './screens.tsx'
+import { companiesListScreen, companyFormScreen } from './screens/index.ts'
+import type { BranchRow, CompanyFormValues, CompanyRow } from './screens/index.ts'
+import { branchFormScreen, contextScreen, hierarchyScreen } from './screens.tsx'
 
 const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate']>): string[] =>
   ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
@@ -37,15 +37,140 @@ const dataForCompanyForm = async (ctx: ServeContext, url: URL, req: Req, id?: st
 const companyOf = (ctx: ServeContext, url: URL, req: Req, id: string) =>
   ctx.call('company.getCompany', { id }, url, req) as Promise<(CompanyRow & { branches: BranchRow[] }) | null>
 
-const renderCompany = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
+const safeReturnTo = (url: URL, submitted?: string | null): string => {
+  const fallback = inLocale(url, '/admin/companies')
+  if (!submitted?.startsWith('/')) return fallback
+  const target = new URL(submitted, 'http://ket.local')
+  if (target.origin !== 'http://ket.local' || target.pathname !== '/admin/companies') return fallback
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  else target.searchParams.delete('lang')
+  return `${target.pathname}${target.search}`
+}
+
+const withReturnTo = (url: URL, path: string, returnTo: string): string => {
+  const target = new URL(inLocale(url, path), 'http://ket.local')
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+
+const companyDetailPath = (url: URL, id: string, returnTo: string): string =>
+  withReturnTo(url, `/admin/companies/${encodeURIComponent(id)}`, returnTo)
+
+const companyCreatePath = (url: URL, returnTo: string): string =>
+  withReturnTo(url, '/admin/companies/new', returnTo)
+
+const companyValues = (form: Record<string, string>, id?: string): CompanyFormValues => ({
+  ...(id ? { id } : {}),
+  code: form.code,
+  partnerId: form.partnerId,
+  parentId: form.parentId || null,
+  currency: form.currency,
+})
+
+const expectedVersion = (value?: string): number | undefined =>
+  value === undefined ? undefined : /^\d+$/.test(value) ? Number(value) : -1
+
+const validCreateId = (value?: string): value is string =>
+  typeof value === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+
+const renderCompany = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  id: string,
+  options: { errors?: string[]; values?: CompanyFormValues; returnTo?: string } = {},
+) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
-  const [row, form] = await Promise.all([companyOf(ctx, url, req, id), dataForCompanyForm(ctx, url, req, id)])
+  const [row, form] = await Promise.all([
+    companyOf(ctx, url, req, id),
+    dataForCompanyForm(ctx, url, req, id),
+  ])
   if (!row) return text(_('company_backend.error.notFound'), { status: 404 })
+  const lang = ctx.localeOf(url, req)
+  const returnTo = safeReturnTo(url, options.returnTo ?? url.searchParams.get('returnTo'))
+  const values: CompanyFormValues = {
+    ...row,
+    ...options.values,
+    id: row.id,
+    name: row.name,
+    active: row.active,
+    version: row.version,
+  }
+  const collaboration = await ctx.joint(url, req, 'partner_backend:record.collaboration', {
+    resModel: 'partner.Partner',
+    resId: row.partnerId,
+    lang,
+  })
+  const detailPath = companyDetailPath(url, row.id, returnTo)
   return adminPage(ctx, url, req, {
     title: row.name,
     translate: false,
+    active: '/admin/companies',
     body: (_, frame) =>
-      companyFormScreen(_, row, { ...form, branches: row.branches, errors }, frame, localeQuery(url)),
+      companyFormScreen(
+        _,
+        values,
+        {
+          mode: 'detail',
+          action: detailPath,
+          archiveAction: withReturnTo(
+            url,
+            `/admin/companies/${encodeURIComponent(row.id)}/archive`,
+            returnTo,
+          ),
+          cancelHref: returnTo,
+          returnTo,
+          ...form,
+          branches: row.branches,
+          errors: options.errors,
+          manageAddressHref: localized(
+            `/admin/partner/partners/${encodeURIComponent(row.partnerId)}`,
+            localeQuery(url),
+          ),
+          addBranchHref: localized(
+            `/admin/companies/${encodeURIComponent(row.id)}/branches/new`,
+            localeQuery(url),
+          ),
+          branchHref: (branch) =>
+            localized(
+              `/admin/companies/${encodeURIComponent(row.id)}/branches/${encodeURIComponent(branch.id)}`,
+              localeQuery(url),
+            ),
+          collaboration,
+        },
+        frame,
+      ),
+  })
+}
+
+const renderCompanyCreate = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  values: CompanyFormValues,
+  returnTo: string,
+  errors?: string[],
+) => {
+  const options = await dataForCompanyForm(ctx, url, req)
+  return adminPage(ctx, url, req, {
+    title: 'company_backend.create.title',
+    active: '/admin/companies',
+    body: (_, frame) =>
+      companyFormScreen(
+        _,
+        values,
+        {
+          mode: 'create',
+          action: companyCreatePath(url, returnTo),
+          cancelHref: returnTo,
+          returnTo,
+          ...options,
+          errors,
+        },
+        frame,
+      ),
   })
 }
 
@@ -58,6 +183,9 @@ const saveCompany = (ctx: ServeContext, url: URL, req: Req, id: string, form: Re
       partnerId: form.partnerId ?? '',
       parentId: form.parentId || null,
       currency: form.currency ?? '',
+      ...(form.expectedVersion === undefined
+        ? {}
+        : { expectedVersion: expectedVersion(form.expectedVersion) }),
     },
     url,
     req,
@@ -143,13 +271,14 @@ export const routes: Record<string, RouteEntry> = {
             pager: pager(url, currentPage, rows.length, matching.length),
           }
           const locale = localeQuery(url)
+          const returnTo = safeReturnTo(url, `${url.pathname}${url.search}`)
           return companiesListScreen(_, frame, {
             rows: rows.map((row) => ({
               ...row,
-              detailHref: localized(`/admin/companies/${encodeURIComponent(row.id)}`, locale),
+              detailHref: companyDetailPath(url, row.id, returnTo),
             })),
             total: matching.length,
-            createHref: localized('/admin/companies/new', locale),
+            createHref: companyCreatePath(url, returnTo),
             hierarchyHref: localized('/admin/companies/hierarchy', locale),
             toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
             includeArchived,
@@ -161,30 +290,30 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/companies/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const options = await dataForCompanyForm(ctx, url, req)
+      const requestedReturnTo = safeReturnTo(url, url.searchParams.get('returnTo'))
       if (req.method === 'POST') {
         const form = await readForm(req)
-        const id = randomUUID()
+        // The new-record form always names its command. Only the established
+        // detail endpoint keeps accepting an absent action for old clients.
+        if (form.action !== 'save') return text('invalid action', { status: 400 })
+        const returnTo = safeReturnTo(url, form.returnTo ?? requestedReturnTo)
+        const id = validCreateId(form.id) ? form.id : randomUUID()
         const result = await saveCompany(ctx, url, req, id, form)
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/companies/${id}`))
-        return adminPage(ctx, url, req, {
-          title: 'company_backend.create.title',
-          body: (_, frame) =>
-            companyFormScreen(
-              _,
-              form as never,
-              { ...options, errors: translatedErrors(result, _) },
-              frame,
-              localeQuery(url),
-            ),
-        })
+        if ((result as { ok?: boolean }).ok)
+          return seeOther(companyDetailPath(url, id, returnTo))
+        return renderCompanyCreate(
+          ctx,
+          url,
+          req,
+          companyValues(form, id),
+          returnTo,
+          translatedErrors(result, _),
+        )
       }
-      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return adminPage(ctx, url, req, {
-        title: 'company_backend.create.title',
-        body: (_, frame) => companyFormScreen(_, {}, options, frame, localeQuery(url)),
-      })
+      return renderCompanyCreate(ctx, url, req, { id: randomUUID() }, requestedReturnTo)
     },
 
   '/admin/companies/hierarchy':
@@ -223,14 +352,23 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method === 'GET') return renderCompany(ctx, url, req, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
-      const result = await saveCompany(ctx, url, req, params.id, await readForm(req))
-      if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/companies/${params.id}`))
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
+      const form = await readForm(req)
+      if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
+      const returnTo = safeReturnTo(url, form.returnTo ?? url.searchParams.get('returnTo'))
+      const result = await saveCompany(ctx, url, req, params.id, form)
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(companyDetailPath(url, params.id, returnTo))
       return renderCompany(
         ctx,
         url,
         req,
         params.id,
-        translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+        {
+          errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+          values: companyValues(form),
+          returnTo,
+        },
       )
     },
 
@@ -238,20 +376,34 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
+      if (form.action !== 'archive' && form.action !== 'restore')
+        return text('invalid action', { status: 400 })
+      const returnTo = safeReturnTo(url, form.returnTo ?? url.searchParams.get('returnTo'))
       const result = await ctx.call(
         'user.archiveCompany',
-        { id: params.id, active: form.action === 'restore' },
+        {
+          id: params.id,
+          active: form.action === 'restore',
+          ...(form.expectedVersion === undefined
+            ? {}
+            : { expectedVersion: expectedVersion(form.expectedVersion) }),
+        },
         url,
         req,
       )
-      if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/companies/${params.id}`))
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(companyDetailPath(url, params.id, returnTo))
       return renderCompany(
         ctx,
         url,
         req,
         params.id,
-        translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+        {
+          errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+          returnTo,
+        },
       )
     },
 
@@ -265,7 +417,9 @@ export const routes: Record<string, RouteEntry> = {
         .filter((branch) => branch.active)
         .map((branch) => ({ value: branch.id, label: branch.name }))
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
+        if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
         const id = randomUUID()
         const result = await ctx.call(
           'company.saveBranch',
@@ -312,9 +466,11 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method === 'GET') return renderBranch(ctx, url, req, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const held = await branchOf(ctx, url, req, params.id)
       if (!held) return text('Not found', { status: 404 })
       const form = await readForm(req)
+      if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
       const result = await ctx.call(
         'company.saveBranch',
         {
@@ -342,7 +498,10 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
+      if (form.action !== 'archive' && form.action !== 'restore')
+        return text('invalid action', { status: 400 })
       const result = await ctx.call(
         'user.archiveBranch',
         { id: params.id, active: form.action === 'restore' },

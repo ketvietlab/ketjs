@@ -2233,7 +2233,13 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   partnerStatement: defineFn({
-    input: { partnerId: 'id', limit: 'int?', offset: 'int?' },
+    input: {
+      partnerId: 'id',
+      dateFrom: 'datetime?',
+      dateTo: 'datetime?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: ['read:account.Move', 'read:account.MoveLine', 'read:account.Account'],
     agent: true,
     handler: async (ctx, args) => {
@@ -2242,11 +2248,20 @@ export const functions: Record<string, FnSpec> = {
         .filter((row) => OPEN_ITEM_TYPES.includes(String(row.accountType)))
         .map((row) => row.id)
       if (!control.length) return []
+      const M = ctx.table('account.Move')
       const moves = new Map(
-        (await ctx.db.select('account.Move', { state: 'posted', partnerId: args.partnerId })).map((move) => [
-          String(move.id),
-          move,
-        ]),
+        (
+          await ctx.db.all(
+            from(M).where(
+              and(
+                eq(M.state, 'posted'),
+                eq(M.partnerId, args.partnerId),
+                ...(args.dateFrom ? [gte(M.date, args.dateFrom)] : []),
+                ...(args.dateTo ? [lte(M.date, args.dateTo)] : []),
+              ),
+            ),
+          )
+        ).map((move) => [String(move.id), move]),
       )
       if (!moves.size) return []
       const L = ctx.table('account.MoveLine')

@@ -53,10 +53,16 @@ test('company list HTTP keeps stable order, exact archived inclusion, paging and
   assert.match(first, /data-ui="list-page"/)
   assert.match(first, /data-ui="list-chrome" data-layout="command"/)
   assert.match(first, /1-30 \/ 31/)
-  assert.match(first, /data-row-href="\/admin\/companies\/company-00\?lang=en"/)
+  assert.match(
+    first,
+    /data-row-href="\/admin\/companies\/company-00\?lang=en&amp;returnTo=%2Fadmin%2Fcompanies%3Flang%3Den"/,
+  )
   assert.doesNotMatch(first, /company-30|company-31|Special Archived Company/)
   assert.ok(first.indexOf('/admin/companies/company-00') < first.indexOf('/admin/companies/company-01'))
-  assert.match(first, /href="\/admin\/companies\/new\?lang=en"/)
+  assert.match(
+    first,
+    /href="\/admin\/companies\/new\?lang=en&amp;returnTo=%2Fadmin%2Fcompanies%3Flang%3Den"/,
+  )
   assert.match(first, /href="\/admin\/companies\/hierarchy\?lang=en"/)
 
   const activeSecond = await (await e2e.client.get('/admin/companies?page=2&lang=en')).text()

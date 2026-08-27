@@ -162,6 +162,12 @@ export function createFlowMapView(runtime, props) {
         : tone === 'active'
           ? labels.active
           : labels.ready
+  const issueHref = (node) =>
+    node.href
+      ? String(node.href)
+      : `/admin/flow/issues/${encodeURIComponent(String(node.id))}${
+          props.lang ? `?lang=${encodeURIComponent(String(props.lang))}` : ''
+        }`
 
   return () => html`<section data-ui="flow-map">
     <header data-ui="flow-map-header">
@@ -208,7 +214,7 @@ export function createFlowMapView(runtime, props) {
               (node) => node.id,
               (
                 node,
-              ) => html`<a data-ui="flow-map-node" data-tone=${node.tone} href=${`/admin/flow/issues/${node.id}`}
+              ) => html`<a data-ui="flow-map-node" data-tone=${node.tone} href=${issueHref(node)}
                 style=${`left:${node.x}px;top:${node.y}px;width:${LAYOUT.nodeWidth}px;height:${LAYOUT.nodeHeight}px`}>
                 <span data-ui="flow-map-node-top">
                   <span data-ui="flow-map-node-column">${node.columnName ?? ''}</span>

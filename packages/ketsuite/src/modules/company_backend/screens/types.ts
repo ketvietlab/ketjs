@@ -6,6 +6,7 @@ export type CompanyRow = {
   parentId?: string | null
   currency: string
   active: boolean
+  version: number
 }
 
 export type BranchRow = {

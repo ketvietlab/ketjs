@@ -52,6 +52,9 @@ import type { DocumentOwner } from '../livedoc/index.ts'
 
 type Translator = ReturnType<ServeContext['translate']>
 
+/** Domain reads stay bounded; the map assembles complete epics one page at a time. */
+const MAP_BATCH_SIZE = 200
+
 /** Column-name presets offered when creating a project — the "Custom" option types its own list. */
 const COLUMN_TEMPLATES: Record<string, string[]> = {
   simple: ['To do', 'Done'],
@@ -1943,19 +1946,59 @@ export const routes: Record<string, RouteEntry> = {
       const epicId = String(params.epicId)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
-      const [epics, columns, found] = await Promise.all([
-        ctx.call('flow.epic.list', { projectId, includeArchived: true }, url, req) as Promise<AnyRow[]>,
+      const [epics, columns, firstPage] = await Promise.all([
+        ctx.call(
+          'flow.epic.list',
+          { projectId, id: epicId, includeArchived: true, limit: 1 },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
         ctx.call('flow.column.list', { projectId }, url, req) as Promise<AnyRow[]>,
-        ctx.call('flow.issue.list', { projectId, epicId, limit: 200 }, url, req) as Promise<AnyRow>,
+        ctx.call(
+          'flow.issue.list',
+          { projectId, epicId, cursor: '0', limit: MAP_BATCH_SIZE },
+          url,
+          req,
+        ) as Promise<AnyRow>,
       ])
-      const epic = epics.find((row) => String(row.id) === epicId)
+      const epic = epics[0]
       if (!epic) return text('not found', { status: 404 })
       const terminalColumnIds = new Set(
         columns.filter((column) => column.terminalState).map((column) => String(column.id)),
       )
-      const issues = (found.rows as AnyRow[]) ?? []
+      const issues = [...((firstPage.rows as AnyRow[]) ?? [])]
+      const issueTotal = Number(firstPage.total ?? issues.length)
+      while (issues.length < issueTotal) {
+        const found = (await ctx.call(
+          'flow.issue.list',
+          {
+            projectId,
+            epicId,
+            cursor: String(issues.length),
+            limit: MAP_BATCH_SIZE,
+          },
+          url,
+          req,
+        )) as AnyRow
+        const page = (found.rows as AnyRow[]) ?? []
+        if (!page.length) break
+        issues.push(...page)
+      }
       const issueIds = issues.map((row) => String(row.id))
-      const deps = (await ctx.call('flow.issue.dependencies', { issueIds }, url, req)) as AnyRow[]
+      const dependencyPages = await Promise.all(
+        Array.from({ length: Math.ceil(issueIds.length / MAP_BATCH_SIZE) }, (_, index) =>
+          ctx.call(
+            'flow.issue.dependencies',
+            {
+              issueIds: issueIds.slice(index * MAP_BATCH_SIZE, (index + 1) * MAP_BATCH_SIZE),
+              includeExternalTargets: true,
+            },
+            url,
+            req,
+          ) as Promise<AnyRow[]>,
+        ),
+      )
+      const deps = dependencyPages.flat()
       const issueIdSet = new Set(issueIds)
       const _ = ctx.translate(ctx.localeOf(url, req))
       const map = await ctx.joint(url, req, 'flow_backend:screen.map', {
@@ -1965,6 +2008,7 @@ export const routes: Record<string, RouteEntry> = {
           nodes: issues.map((row) => ({
             id: row.id,
             title: row.title,
+            href: inLocale(url, `/admin/flow/issues/${encodeURIComponent(String(row.id))}`),
             columnName: row.columnName ?? null,
             assigneeName: row.assigneeName ?? null,
             done: terminalColumnIds.has(String(row.columnId)),
@@ -1995,7 +2039,18 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(epic.title),
         translate: false,
-        body: (_, frame) => mapScreen(_, frame, String(epic.title), map),
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`,
+        body: (_, frame) =>
+          mapScreen(_, frame, {
+            projectName: String(project.name ?? projectId),
+            epicTitle: String(epic.title),
+            epicHref: inLocale(url, `/admin/flow/epics/${encodeURIComponent(epicId)}`),
+            epicsHref: inLocale(
+              url,
+              `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`,
+            ),
+            map,
+          }),
       })
     },
 

@@ -106,7 +106,8 @@ const options = {
   currency: 'VND',
   standard: 'TT99/2025',
   ledgerHref: (accountId: string) => `/admin/accounting/general-ledger?accountId=${accountId}&lang=vi`,
-  partnerHref: (partnerId: string) => `/admin/accounting/partner-statement?partnerId=${partnerId}&lang=vi`,
+  partnerHref: (partnerId: string) =>
+    `/admin/accounting/partner-statement?partnerId=${partnerId}&dateFrom=2026-01-01&dateTo=2026-12-31&lang=vi`,
 }
 
 test('accounting overview stays specialized: preserves period, ledger KPIs, drill-downs and cash queues', () => {
@@ -127,7 +128,10 @@ test('accounting overview stays specialized: preserves period, ledger KPIs, dril
   assert.match(html, /data-ui="chart" data-kind="line"[\s\S]*?Biểu đồ doanh thu/)
   assert.match(html, /data-ui="chart" data-kind="doughnut"[\s\S]*?Cơ cấu doanh thu/)
   assert.match(html, /href="\/admin\/accounting\/general-ledger\?accountId=642&amp;lang=vi"/)
-  assert.match(html, /href="\/admin\/accounting\/partner-statement\?partnerId=customer-1&amp;lang=vi"/)
+  assert.match(
+    html,
+    /href="\/admin\/accounting\/partner-statement\?partnerId=customer-1&amp;dateFrom=2026-01-01&amp;dateTo=2026-12-31&amp;lang=vi"/,
+  )
   assert.match(html, /Khách hàng An[\s\S]*?900\.000[\s\S]*?300\.000/)
   assert.match(html, /Không còn khoản phải trả nào đang mở/)
   assert.match(html, /Lưu chuyển tiền thuần[\s\S]*?650\.000/)

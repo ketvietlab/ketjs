@@ -36,6 +36,7 @@ import {
   optionsOf,
   paymentFormScreen,
   paymentsListScreen,
+  partnerLedgerScreen,
   paymentTermFormModal,
   paymentTermLineFormModal,
   paymentTermsListScreen,
@@ -45,7 +46,6 @@ import {
   vendorBillFormScreen,
   vendorBillsListScreen,
 } from './screens/index.ts'
-import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { overviewCharts, periodOf, yearsOf } from './overview.ts'
@@ -1458,6 +1458,8 @@ export default defineModule({
               partnerHref: (partnerId) => {
                 const target = new URL('/admin/accounting/partner-statement', url)
                 target.searchParams.set('partnerId', partnerId)
+                target.searchParams.set('dateFrom', period.fromDay)
+                target.searchParams.set('dateTo', period.toDay)
                 const lang = url.searchParams.get('lang')
                 if (lang) target.searchParams.set('lang', lang)
                 return `${target.pathname}${target.search}`
@@ -3218,26 +3220,116 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const data = await common(ctx, url, req)
-        const partnerId = url.searchParams.get('partnerId') ?? ''
-        const rows = partnerId
-          ? ((await ctx.call(
-              'account.partnerStatement',
-              { partnerId, limit: LIST_PAGE },
-              url,
-              req,
-            )) as AnyRow[])
-          : []
+        const partnerId = url.searchParams.get('partnerId') ?? '',
+          dateFrom = url.searchParams.get('dateFrom') ?? '',
+          dateTo = url.searchParams.get('dateTo') ?? '',
+          search = searchOf(url) ?? '',
+          page = pageOf(url),
+          inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
+        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
+        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
+        await ctx.call('account.initializeCompany', {}, url, req)
+        const [accounts, companies, initialPartners, selectedPartners, allRows] = (await Promise.all([
+          ctx.call('account.listAccounts', {}, url, req),
+          ctx.call('company.listCompanies', {}, url, req),
+          ctx.call('partner.listPartners', { limit: PAGE_SIZE }, url, req),
+          partnerId
+            ? ctx.call(
+                'partner.listPartners',
+                { ids: [partnerId], includeArchived: true },
+                url,
+                req,
+              )
+            : Promise.resolve([]),
+          partnerId && !inverted
+            ? ctx.call(
+                'account.partnerStatement',
+                {
+                  partnerId,
+                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
+                  ...(toInstant ? { dateTo: toInstant } : {}),
+                },
+                url,
+                req,
+              )
+            : Promise.resolve([]),
+        ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow[], AnyRow[]]
         return adminPage(ctx, url, req, {
           title: 'account_backend.partnerStatement.title',
-          body: (_, frame) => {
-            const currency = currencyOf(data.companies, frame)
+          body: async (_, frame) => {
+            const companyPartners = new Set(companies.map((company) => String(company.partnerId)))
+            const selectedPartner = selectedPartners.find(
+              (partner) => !companyPartners.has(String(partner.id)),
+            )
+            const unknownPartner = Boolean(partnerId && !selectedPartner)
+            const unavailablePartner = {
+              id: partnerId,
+              name: _('account_backend.partnerLedger.filter.unavailablePartner'),
+            }
+            const bundledPartners = [
+              ...(selectedPartner ? [selectedPartner] : unknownPartner ? [unavailablePartner] : []),
+              ...initialPartners.filter(
+                (partner) =>
+                  !companyPartners.has(String(partner.id)) && String(partner.id) !== partnerId,
+              ),
+            ]
+            const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
+            const matching = allRows.filter((row) => {
+              if (!needle) return true
+              const move = (row.move ?? {}) as AnyRow
+              return [
+                move.name,
+                move.ref,
+                move.date,
+                row.name,
+                row.accountId,
+                accountLabel(_, accounts, row.accountId),
+              ].some((value) =>
+                String(value ?? '')
+                  .toLocaleLowerCase(ctx.localeOf(url, req))
+                  .includes(needle),
+              )
+            })
+            const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+            const errors = [
+              ...(inverted ? [_('account_backend.trial.filter.rangeError')] : []),
+              ...(unknownPartner ? [_('account_backend.partnerLedger.filter.partnerError')] : []),
+            ]
+            frame.chrome = {
+              search: {
+                name: 'q',
+                value: search,
+                placeholder: _('account_backend.partnerLedger.search'),
+                keep: {
+                  ...(partnerId ? { partnerId } : {}),
+                  ...(dateFrom ? { dateFrom } : {}),
+                  ...(dateTo ? { dateTo } : {}),
+                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                },
+              },
+              pager: pager(url, page, rows.length, matching.length),
+            }
+            const currency = currencyOf(companies, frame)
             return partnerLedgerScreen(_, {
               frame: frame,
-              action: `/admin/accounting/partner-statement${localeQuery(url)}`,
+              action: '/admin/accounting/partner-statement',
               rows,
+              summary: {
+                debit: matching.reduce((total, row) => total + Number(row.debit ?? 0), 0),
+                credit: matching.reduce((total, row) => total + Number(row.credit ?? 0), 0),
+                residual: matching.reduce(
+                  (total, row) => total + Number(row.amountResidual ?? 0),
+                  0,
+                ),
+              },
               currency,
               selected: Boolean(partnerId),
+              hidden: {
+                ...(search ? { q: search } : {}),
+                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+              },
+              errors: errors.length ? errors : undefined,
+              accountLabel: (id) => accountLabel(_, accounts, id),
               entryHref: (row) =>
                 `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
               fields: [
@@ -3246,7 +3338,36 @@ export default defineModule({
                   label: _('account_backend.field.partnerId'),
                   type: 'select',
                   value: partnerId,
-                  options: choices(data.partners, true),
+                  error: unknownPartner ? _('account_backend.partnerLedger.filter.partnerError') : null,
+                  options: choices(bundledPartners, true),
+                  control: await partnerRelationControl(ctx, url, req, _, {
+                    id: 'partner-statement-partner',
+                    name: 'partnerId',
+                    value: partnerId,
+                    partners: bundledPartners.map((partner) => ({
+                      id: String(partner.id),
+                      name: String(partner.name),
+                      ref: partner.ref ? String(partner.ref) : null,
+                    })),
+                    fieldLabel: _('account_backend.field.partnerId'),
+                    title: _('account_backend.relation.partners'),
+                    allowEmpty: true,
+                    excludeIds: [...companyPartners],
+                  }),
+                },
+                {
+                  name: 'dateFrom',
+                  label: _('account_backend.field.dateFrom'),
+                  type: 'date',
+                  value: dateFrom,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
+                },
+                {
+                  name: 'dateTo',
+                  label: _('account_backend.field.dateTo'),
+                  type: 'date',
+                  value: dateTo,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
                 },
               ],
             })
@@ -3520,6 +3641,9 @@ const vi: Record<string, string> = {
   'partnerLedger.summary.residual': 'Còn lại',
   'partnerLedger.filter.title': 'Chọn đối tác',
   'partnerLedger.filter.hint': 'Báo cáo chỉ bao gồm tài khoản phải thu và phải trả trên bút toán đã ghi sổ.',
+  'partnerLedger.filter.unavailablePartner': 'Đối tác không còn khả dụng',
+  'partnerLedger.filter.partnerError': 'Đối tác đã chọn không còn khả dụng. Hãy xóa bộ lọc đối tác.',
+  'partnerLedger.search': 'Tìm theo chứng từ, tài khoản hoặc nội dung…',
   'partnerLedger.result.title': 'Chi tiết công nợ',
   'partnerLedger.result.hint': 'Theo dõi chứng từ, phát sinh Nợ/Có và phần chưa đối soát.',
   'partnerLedger.select': 'Chưa chọn đối tác',
@@ -3900,6 +4024,9 @@ const en: Record<string, string> = {
   'partnerLedger.summary.residual': 'Residual',
   'partnerLedger.filter.title': 'Select a partner',
   'partnerLedger.filter.hint': 'The report includes only posted receivable and payable journal items.',
+  'partnerLedger.filter.unavailablePartner': 'Partner no longer available',
+  'partnerLedger.filter.partnerError': 'The selected partner is no longer available. Clear the partner filter.',
+  'partnerLedger.search': 'Search documents, accounts, or descriptions…',
   'partnerLedger.result.title': 'Partner movements',
   'partnerLedger.result.hint': 'Review documents, debit/credit movements, and unreconciled amounts.',
   'partnerLedger.select': 'No partner selected',
