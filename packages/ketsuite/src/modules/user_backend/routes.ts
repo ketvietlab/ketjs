@@ -149,12 +149,7 @@ const renderUser = async (
           rolesAction: userActionPath(url, row.id, 'roles', returnTo),
           tokenAction: userActionPath(url, row.id, 'token', returnTo),
           sessionAction: (session) =>
-            userActionPath(
-              url,
-              row.id,
-              `sessions/${encodeURIComponent(session.id)}`,
-              returnTo,
-            ),
+            userActionPath(url, row.id, `sessions/${encodeURIComponent(session.id)}`, returnTo),
           integration: state.integration ? [externalIdentities, state.integration] : externalIdentities,
         },
         frame,
@@ -428,9 +423,7 @@ export const routes: Record<string, RouteEntry> = {
           )
           if (!(result as { ok?: boolean }).ok) return failure(ctx, url, req, result)
         }
-      return seeOther(
-        userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
-      )
+      return seeOther(userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))))
     },
 
   '/admin/users/{id}/branches':
@@ -480,9 +473,7 @@ export const routes: Record<string, RouteEntry> = {
           )
           if (!(result as { ok?: boolean }).ok) return failure(ctx, url, req, result)
         }
-      return seeOther(
-        userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
-      )
+      return seeOther(userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))))
     },
 
   '/admin/users/{id}/roles':
@@ -508,9 +499,7 @@ export const routes: Record<string, RouteEntry> = {
       for (const assignment of row.assignments ?? [])
         if (!selected.includes(assignment.roleId))
           await ctx.call('user.unassignRole', { userId: params.id, roleId: assignment.roleId }, url, req)
-      return seeOther(
-        userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
-      )
+      return seeOther(userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))))
     },
 
   '/admin/users/{id}/token':
@@ -582,11 +571,7 @@ export const routes: Record<string, RouteEntry> = {
       return seeOther(
         params.id === current?.userId
           ? inLocale(url, '/admin/profile')
-          : userDetailPath(
-              url,
-              params.id,
-              safeUserReturnTo(url, url.searchParams.get('returnTo')),
-            ),
+          : userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
       )
     },
 

@@ -16,16 +16,22 @@ const boot = async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => app.close())
   const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
-  const fixture = (name: string, input: Record<string, unknown>) => app.fixture.call<Row>(name, input, { scope })
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    app.fixture.call<Row>(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', { id: 'acme', code: 'ACME', partnerId: 'acme-party', currency: 'VND' })
   await fixture('user.createUser', {
-    id: 'admin', login: 'admin', password: 'correct horse', name: 'Administrator', superuser: true,
+    id: 'admin',
+    login: 'admin',
+    password: 'correct horse',
+    name: 'Administrator',
+    superuser: true,
   })
   await fixture('user.grantCompany', { id: 'admin:acme', userId: 'admin', companyId: 'acme' })
   await app.client.login({ login: 'admin', password: 'correct horse' })
   await app.client.call('flow.project.save', {
-    values: { id: 'platform', key: 'PLAT', name: 'Internal platform' }, idempotencyKey: 'project-platform',
+    values: { id: 'platform', key: 'PLAT', name: 'Internal platform' },
+    idempotencyKey: 'project-platform',
   })
   return app
 }
@@ -40,7 +46,14 @@ test('sprint route keeps collection context, stable rejected create state and ex
 
   const rejected = await app.client.post(
     path,
-    new URLSearchParams({ action: 'save', id, idempotencyKey, name: '', startDate: '2026-08-14', endDate: '2026-08-01' }),
+    new URLSearchParams({
+      action: 'save',
+      id,
+      idempotencyKey,
+      name: '',
+      startDate: '2026-08-14',
+      endDate: '2026-08-01',
+    }),
     post,
   )
   const rejectedHtml = await rejected.text()
@@ -51,7 +64,14 @@ test('sprint route keeps collection context, stable rejected create state and ex
 
   const saved = await app.client.post(
     path,
-    new URLSearchParams({ action: 'save', id, idempotencyKey, name: 'Sprint One', startDate: '2026-08-01', endDate: '2026-08-14' }),
+    new URLSearchParams({
+      action: 'save',
+      id,
+      idempotencyKey,
+      name: 'Sprint One',
+      startDate: '2026-08-01',
+      endDate: '2026-08-14',
+    }),
     post,
   )
   assert.equal(saved.status, 303)

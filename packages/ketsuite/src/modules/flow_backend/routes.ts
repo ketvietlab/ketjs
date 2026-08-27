@@ -2151,8 +2151,8 @@ export const routes: Record<string, RouteEntry> = {
       let errors: string[] = []
       let createErrors: string[] = []
       let createValues: Record<string, string> = {}
-      let recordId = randomUUID()
-      let idempotencyKey = randomUUID()
+      let recordId: string = randomUUID()
+      let idempotencyKey: string = randomUUID()
       const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/sprints`
       const action = inLocale(url, endpoint)
       const createOpen = url.searchParams.get('dialog') === 'create'

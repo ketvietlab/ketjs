@@ -1,12 +1,6 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  Framed,
-  RecordForm,
-  Section,
-  stack,
-  Surface,
-} from '../../ui/index.ts'
+import { Framed, RecordForm, Section, stack, Surface } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
 

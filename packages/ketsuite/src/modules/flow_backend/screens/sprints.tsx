@@ -17,7 +17,12 @@ export type SprintCreateValues = { name?: string; startDate?: string; endDate?: 
 
 export const sprintCreateFields = (_: Translator, values: SprintCreateValues = {}): FormField[] => [
   { name: 'name', label: _('flow_backend.field.name'), value: values.name ?? '', required: true },
-  { name: 'startDate', label: _('flow_backend.field.startDate'), type: 'date', value: values.startDate ?? '' },
+  {
+    name: 'startDate',
+    label: _('flow_backend.field.startDate'),
+    type: 'date',
+    value: values.startDate ?? '',
+  },
   { name: 'endDate', label: _('flow_backend.field.endDate'), type: 'date', value: values.endDate ?? '' },
 ]
 
@@ -43,7 +48,9 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
       title={options.projectName}
       subtitle={_('flow_backend.menu.sprints')}
       frame={frame}
-      actions={<LinkButton label={_('flow_backend.action.create')} href={options.createHref} variant="primary" />}
+      actions={
+        <LinkButton label={_('flow_backend.action.create')} href={options.createHref} variant="primary" />
+      }
       body={
         <>
           {options.errors?.length ? (

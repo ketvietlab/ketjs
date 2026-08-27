@@ -299,11 +299,8 @@ export const profileScreen = (
       />,
       <Section
         title={_('user_backend.sessions.title')}
-        body={sessionsScreen(
-          _,
-          sessions,
-          (session) =>
-            localized(`/admin/users/${row.id}/sessions/${encodeURIComponent(session.id)}`, locale),
+        body={sessionsScreen(_, sessions, (session) =>
+          localized(`/admin/users/${row.id}/sessions/${encodeURIComponent(session.id)}`, locale),
         )}
       />,
     ])}

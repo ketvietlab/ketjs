@@ -30,12 +30,16 @@ test('sprint collection remains specialized and opens short creation in a modal'
   assert.doesNotMatch(closed, /data-ui="modal-layer"|data-ui="list-page"|data-ui="form-page"/)
 
   const open = renderToString(
-    sprintsScreen(translate, {}, {
-      ...options,
-      createOpen: true,
-      createValues: { name: 'Draft sprint' },
-      createErrors: ['name: invalid'],
-    }),
+    sprintsScreen(
+      translate,
+      {},
+      {
+        ...options,
+        createOpen: true,
+        createValues: { name: 'Draft sprint' },
+        createErrors: ['name: invalid'],
+      },
+    ),
   )
   assert.match(open, /data-ui="modal-layer"/)
   assert.match(open, /id="flow-sprint-create-form"/)

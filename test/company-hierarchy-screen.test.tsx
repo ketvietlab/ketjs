@@ -11,16 +11,29 @@ translate.resolves = () => true
 
 test('company hierarchy remains specialized with encoded rows, lifecycle state and navigation', () => {
   const html = renderToString(
-    hierarchyScreen(translate, {}, {
-      rows: [
-        {
-          id: 'child/a', code: 'CHILD', name: 'Child', partnerId: 'party', parentId: 'root', currency: 'VND',
-          active: false, version: 1, depth: 1, parentName: 'Root', detailHref: '/admin/companies/child%2Fa?lang=en',
-        },
-      ],
-      companiesHref: '/admin/companies?lang=en',
-      createHref: '/admin/companies/new?lang=en',
-    }),
+    hierarchyScreen(
+      translate,
+      {},
+      {
+        rows: [
+          {
+            id: 'child/a',
+            code: 'CHILD',
+            name: 'Child',
+            partnerId: 'party',
+            parentId: 'root',
+            currency: 'VND',
+            active: false,
+            version: 1,
+            depth: 1,
+            parentName: 'Root',
+            detailHref: '/admin/companies/child%2Fa?lang=en',
+          },
+        ],
+        companiesHref: '/admin/companies?lang=en',
+        createHref: '/admin/companies/new?lang=en',
+      },
+    ),
   )
   assert.match(html, /data-row-href="\/admin\/companies\/child%2Fa\?lang=en"/)
   assert.match(html, /— Child/)

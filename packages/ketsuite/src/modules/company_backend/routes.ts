@@ -368,10 +368,7 @@ export const routes: Record<string, RouteEntry> = {
             ...company,
             depth,
             parentName: company.parentId ? names.get(company.parentId) : null,
-            detailHref: localized(
-              `/admin/companies/${encodeURIComponent(company.id)}`,
-              localeQuery(url),
-            ),
+            detailHref: localized(`/admin/companies/${encodeURIComponent(company.id)}`, localeQuery(url)),
           })
           walk(company.id, depth + 1)
         }

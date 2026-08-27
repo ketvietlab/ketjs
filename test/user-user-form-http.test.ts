@@ -15,10 +15,17 @@ const boot = async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => app.close())
   const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
-  const fixture = (name: string, input: Record<string, unknown>) => app.fixture.call<Row>(name, input, { scope })
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    app.fixture.call<Row>(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', { id: 'acme', code: 'ACME', partnerId: 'acme-party', currency: 'VND' })
-  await fixture('user.createUser', { id: 'admin', login: 'admin', password: 'correct horse', name: 'Administrator', superuser: true })
+  await fixture('user.createUser', {
+    id: 'admin',
+    login: 'admin',
+    password: 'correct horse',
+    name: 'Administrator',
+    superuser: true,
+  })
   await fixture('user.grantCompany', { id: 'admin:acme', userId: 'admin', companyId: 'acme' })
   await fixture('user.saveRole', { id: 'manager', name: 'Manager' })
   await app.client.login({ login: 'admin', password: 'correct horse' })
@@ -38,7 +45,14 @@ test('user create/detail preserves stable retry identity, return state and expli
 
   const rejected = await app.client.post(
     path,
-    new URLSearchParams({ action: 'save', id, login: '', name: 'Draft User', email: 'draft@example.test', accessKind: 'internal' }),
+    new URLSearchParams({
+      action: 'save',
+      id,
+      login: '',
+      name: 'Draft User',
+      email: 'draft@example.test',
+      accessKind: 'internal',
+    }),
     post,
   )
   const rejectedHtml = await rejected.text()
@@ -46,11 +60,21 @@ test('user create/detail preserves stable retry identity, return state and expli
   assert.equal(hidden(rejectedHtml, 'id'), id)
   assert.match(rejectedHtml, /name="email"[^>]*value="draft@example.test"/)
 
-  const body = new URLSearchParams({ action: 'save', id, login: 'draft.user', name: 'Draft User', email: 'draft@example.test', accessKind: 'internal' })
+  const body = new URLSearchParams({
+    action: 'save',
+    id,
+    login: 'draft.user',
+    name: 'Draft User',
+    email: 'draft@example.test',
+    accessKind: 'internal',
+  })
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const saved = await app.client.post(path, body, post)
     assert.equal(saved.status, 303)
-    assert.equal(saved.headers.get('location'), `/admin/users/${id}?lang=en&returnTo=${encodeURIComponent(returnTo)}`)
+    assert.equal(
+      saved.headers.get('location'),
+      `/admin/users/${id}?lang=en&returnTo=${encodeURIComponent(returnTo)}`,
+    )
   }
 
   const detailPath = `/admin/users/${id}?lang=en&returnTo=${encodeURIComponent(returnTo)}`
@@ -61,10 +85,24 @@ test('user create/detail preserves stable retry identity, return state and expli
   assert.match(detail, /href="\/admin\/users\?q=Draft&amp;archived=1&amp;lang=en"/)
 
   assert.equal((await app.client.post(path, new URLSearchParams({ id }), post)).status, 400)
-  assert.equal((await app.client.post(`${detailPath.replace('?', '/companies?')}`, new URLSearchParams(), post)).status, 400)
-  assert.equal((await app.client.post(`${detailPath.replace('?', '/token?')}`, new URLSearchParams({ action: 'unknown' }), post)).status, 400)
+  assert.equal(
+    (await app.client.post(`${detailPath.replace('?', '/companies?')}`, new URLSearchParams(), post)).status,
+    400,
+  )
+  assert.equal(
+    (
+      await app.client.post(
+        `${detailPath.replace('?', '/token?')}`,
+        new URLSearchParams({ action: 'unknown' }),
+        post,
+      )
+    ).status,
+    400,
+  )
 
-  const unsafe = await (await app.client.get('/admin/users/new?lang=en&returnTo=https://attacker.example')).text()
+  const unsafe = await (
+    await app.client.get('/admin/users/new?lang=en&returnTo=https://attacker.example')
+  ).text()
   assert.match(unsafe, /href="\/admin\/users\?lang=en"/)
   assert.doesNotMatch(unsafe, /attacker\.example/)
 })
