@@ -193,6 +193,8 @@ export type ChannelIdentityResolver<P extends ChannelProfile = ChannelProfile> =
 const identityResolvers = new Map<ChannelProfile, ChannelIdentityResolver<ChannelProfile>>()
 
 export type ChannelIdentityPresentationResolver<P extends ChannelProfile = ChannelProfile> = {
+  /** Stable package/module owner; reloading the same owner is idempotent. */
+  owner: string
   presentation: ChannelIdentityPresentation
   presented: (req: Req) => boolean
   resolve: ChannelIdentityResolver<P>
@@ -225,9 +227,11 @@ export const registerChannelIdentityPresentation = <P extends ChannelProfile>(
   const registered =
     identityPresentationResolvers.get(profile) ??
     new Map<ChannelIdentityPresentation, ChannelIdentityPresentationResolver<ChannelProfile>>()
-  if (registered.has(registration.presentation))
+  const existing = registered.get(registration.presentation)
+  if (existing?.owner === registration.owner) return
+  if (existing)
     throw new Error(
-      `channel identity presentation "${registration.presentation}" is already registered for "${profile}"`,
+      `channel identity presentation "${registration.presentation}" for "${profile}" is owned by "${existing.owner}", not "${registration.owner}"`,
     )
   registered.set(
     registration.presentation,
