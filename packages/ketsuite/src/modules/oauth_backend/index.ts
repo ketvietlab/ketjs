@@ -19,4 +19,9 @@ export default defineModule({
   },
 })
 
-export { identitiesScreen, identityFormScreen, providerFormScreen, providersScreen } from './screens/index.tsx'
+export {
+  identitiesScreen,
+  identityFormScreen,
+  providerFormScreen,
+  providersScreen,
+} from './screens/index.tsx'

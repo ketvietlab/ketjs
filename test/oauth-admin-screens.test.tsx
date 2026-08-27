@@ -43,7 +43,13 @@ test('OAuth collections use ListPage and forms use FormPage', () => {
     identityFormScreen(translate, {}, { providers: [], users: [] }, {}, '?lang=en'),
   )
   const chooser = renderToString(
-    linkProviderScreen(translate, [{ id: provider.id, code: provider.code, name: provider.name, sequence: 10 }], [], {}, '?lang=en'),
+    linkProviderScreen(
+      translate,
+      [{ id: provider.id, code: provider.code, name: provider.name, sequence: 10 }],
+      [],
+      {},
+      '?lang=en',
+    ),
   )
 
   assert.match(providers, /data-ui="list-page"/)
@@ -53,5 +59,5 @@ test('OAuth collections use ListPage and forms use FormPage', () => {
   assert.match(identities, /data-ui="list-page"/)
   assert.match(identityForm, /data-ui="form-page"/)
   assert.match(chooser, /data-ui="form-page"/)
-  assert.match(chooser, /\/auth\/oauth\/company\/start\?mode=link&amp;next=\/admin\/profile&amp;lang=en/)
+  assert.match(chooser, /\/auth\/oauth\/company\/start\?mode=link&amp;next=%2Fadmin%2Fprofile&amp;lang=en/)
 })
