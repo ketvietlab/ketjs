@@ -367,6 +367,18 @@ const crossProjectIssues =
             )) as AnyRow
           ).total ?? 0,
         )
+    const allCount = options.mine
+      ? Number(
+          (
+            (await ctx.call(
+              'flow.issue.buckets',
+              { listState: emptyIssueListState(), today },
+              url,
+              req,
+            )) as AnyRow
+          ).total ?? 0,
+        )
+      : Number(buckets.total ?? 0)
     const late = (await ctx.call(
       'flow.issue.list',
       {
@@ -400,7 +412,7 @@ const crossProjectIssues =
             ? null
             : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
         }
-        const at = url.searchParams.get('view') ?? 'all'
+        const at = url.searchParams.get('view') ?? (options.mine ? 'mine' : 'all')
         return crossProjectScreen(_, frame, _(options.title), grouped ? [] : marked, groups, {
           total: Number(buckets.total ?? 0),
           done: Number(buckets.done ?? 0),
@@ -410,12 +422,13 @@ const crossProjectIssues =
           mine: mineCount,
           late: ((late.rows as AnyRow[]) ?? []).slice(0, 5),
           tab: at,
+          locale: localeQuery(url),
           tabs: [
             {
               id: 'all',
               label: _('flow_backend.issues.tabAll'),
               href: '/admin/flow/issues',
-              count: Number(buckets.total ?? 0),
+              count: allCount,
             },
             {
               id: 'mine',

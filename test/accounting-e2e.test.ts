@@ -117,7 +117,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     ['/admin/accounting/accounts', /Hệ thống tài khoản/],
     ['/admin/accounting/journals', /Sổ nhật ký/],
     ['/admin/accounting/taxes', /Thuế/],
-    ['/admin/accounting/terms', /name="paymentId"/],
+    ['/admin/accounting/terms', /Điều khoản thanh toán/],
     ['/admin/accounting/entries', /Bút toán/],
     ['/admin/accounting/customer-invoices', /Hoá đơn khách hàng/],
     ['/admin/accounting/vendor-bills', /Hoá đơn nhà cung cấp/],
@@ -203,9 +203,10 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/terms') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="payment-term-create-form"/)
-      assert.match(html, /id="payment-term-line-form"/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.match(html, /href="\/admin\/accounting\/terms\?create=1"/)
+      assert.match(html, /href="\/admin\/accounting\/terms\?line=1"/)
+      assert.doesNotMatch(html, /id="payment-term-create-form"|id="payment-term-line-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/trial-balance') {
@@ -864,6 +865,69 @@ test('e2e accounting: the ledger names the account, and a draft is not titled by
   assert.doesNotMatch(detail, /Đã thanh toán/)
 })
 
+test('e2e accounting: payment-term sheets preserve list state, write safety and archive behavior', async (t) => {
+  const { e2e, call } = await bootAccounting(t)
+  const path = '/admin/accounting/terms'
+  const modalPath = `${path}?lang=vi&q=HTTP&status=active&page=2&create=1`
+
+  const createPage = await e2e.client.get(modalPath, { headers: { accept: 'text/html' } })
+  const createHtml = await createPage.text()
+  assert.equal(createPage.status, 200)
+  assert.match(createHtml, /data-ui="list-page"/)
+  assert.match(createHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(createHtml, /id="payment-term-create-form"/)
+  assert.doesNotMatch(createHtml, /id="payment-term-line-form"|data-island="mail\.chatter"/)
+
+  const crossSite = await e2e.client.post(
+    modalPath,
+    new URLSearchParams({ name: 'Điều khoản HTTP', note: 'Không được lưu', active: '1' }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'https://evil.example',
+      },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(crossSite.status, 403)
+
+  const created = await e2e.client.post(
+    modalPath,
+    new URLSearchParams({ name: 'Điều khoản HTTP', note: 'Giữ trạng thái danh sách', active: '1' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(created.status, 303)
+  assert.equal(created.headers.get('location'), '/admin/accounting/terms?lang=vi&q=HTTP&status=active&page=2')
+  const saved = (await call<Row[]>('account.listPaymentTerms')).value.find(
+    (row) => row.name === 'Điều khoản HTTP',
+  )!
+
+  const editPage = await e2e.client.get(
+    `${path}?lang=vi&q=HTTP&status=active&edit=${encodeURIComponent(String(saved.id))}`,
+    { headers: { accept: 'text/html' } },
+  )
+  const editHtml = await editPage.text()
+  assert.equal(editPage.status, 200)
+  assert.match(editHtml, /Sửa điều khoản thanh toán/)
+  assert.match(editHtml, /value="Điều khoản HTTP"/)
+  assert.match(editHtml, /Giữ trạng thái danh sách/)
+  assert.match(editHtml, /name="active"[^>]*checked/)
+
+  const archived = await e2e.client.post(
+    `${path}?lang=vi&q=HTTP&status=active&edit=${encodeURIComponent(String(saved.id))}`,
+    new URLSearchParams({ name: 'Điều khoản HTTP', note: 'Đã lưu trữ' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(archived.status, 303)
+  assert.equal(archived.headers.get('location'), '/admin/accounting/terms?lang=vi&q=HTTP&status=active')
+  const includingArchived = (await call<Row[]>('account.listPaymentTerms', { includeArchived: true })).value
+  assert.equal(includingArchived.find((row) => row.id === saved.id)?.active, false)
+  assert.equal(
+    (await call<Row[]>('account.listPaymentTerms')).value.some((row) => row.id === saved.id),
+    false,
+  )
+})
+
 test('e2e accounting: a payment term shows the milestones that define it, and they are editable', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   const terms = (await call<Row[]>('account.listPaymentTerms')).value
@@ -883,6 +947,8 @@ test('e2e accounting: a payment term shows the milestones that define it, and th
       headers: { accept: 'text/html' },
     })
   ).text()
+  assert.match(editing, /data-ui="list-page"/)
+  assert.match(editing, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(editing, /Sửa mốc đến hạn/)
   assert.match(editing, /value="30"/)
 
@@ -900,6 +966,7 @@ test('e2e accounting: a payment term shows the milestones that define it, and th
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(saved.status, 303)
+  assert.equal(saved.headers.get('location'), '/admin/accounting/terms?lang=vi')
   const after = (await call<Row[]>('account.listPaymentTerms')).value.find((row) => row.id === net30.id)!
   // Corrected in place, not duplicated into a second milestone.
   assert.equal((after.lines as Row[]).length, 1)

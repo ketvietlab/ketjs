@@ -1,12 +1,19 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
-import type { FormField } from '../../ui/index.ts'
+import { modalWorkspace } from '../../ui/index.ts'
+import type { FormField, Frame } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { adminPage, choices, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
-import { orderCreateScreen, orderScreen, ordersListScreen } from './screens/index.ts'
-import { bomsScreen, workCentersScreen } from './screens.tsx'
+import {
+  bomCreateModal,
+  bomsListScreen,
+  orderCreateScreen,
+  orderScreen,
+  ordersListScreen,
+} from './screens/index.ts'
+import { workCentersScreen } from './screens.tsx'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -39,6 +46,7 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
 
 type CommonData = Awaited<ReturnType<typeof common>>
 type ProductionFormValues = Record<string, string>
+type BomFormValues = Record<string, string>
 
 const productionFields = (
   _: Translator,
@@ -127,6 +135,172 @@ const productionValues = (form: ProductionFormValues): ProductionFormValues => (
   destinationLocationId: form.destinationLocationId ?? '',
   scheduledStart: form.scheduledStart || new Date().toISOString(),
 })
+
+const bomValues = (form: BomFormValues): BomFormValues => ({
+  id: form.id ?? '',
+  code: form.code ?? '',
+  productId: form.productId ?? '',
+  productQty: form.productQty || '1',
+  productUomId: form.productUomId ?? '',
+  componentId: form.componentId ?? '',
+  componentQty: form.componentQty || '1',
+  componentUomId: form.componentUomId ?? '',
+  operationName: form.operationName ?? '',
+  workCenterId: form.workCenterId ?? '',
+  durationExpected: form.durationExpected || '0',
+})
+
+const bomFields = (_: Translator, data: CommonData, values: BomFormValues = {}): FormField[] => [
+  {
+    name: 'code',
+    label: _('manufacturing_backend.field.code'),
+    value: values.code,
+  },
+  {
+    name: 'productId',
+    label: _('manufacturing_backend.field.product'),
+    type: 'select',
+    value: values.productId,
+    options: optionsKeeping(data.variants, values.productId),
+    required: true,
+  },
+  {
+    name: 'productQty',
+    label: _('manufacturing_backend.field.quantity'),
+    type: 'decimal',
+    value: values.productQty || 1,
+    required: true,
+  },
+  {
+    name: 'productUomId',
+    label: _('manufacturing_backend.field.uom'),
+    type: 'select',
+    value: values.productUomId,
+    options: optionsKeeping(data.units, values.productUomId),
+    required: true,
+  },
+  {
+    name: 'componentId',
+    label: _('manufacturing_backend.field.component'),
+    type: 'select',
+    value: values.componentId,
+    options: optionsKeeping(data.variants, values.componentId),
+    required: true,
+  },
+  {
+    name: 'componentQty',
+    label: _('manufacturing_backend.field.quantity'),
+    type: 'decimal',
+    value: values.componentQty || 1,
+    required: true,
+  },
+  {
+    name: 'componentUomId',
+    label: _('manufacturing_backend.field.uom'),
+    type: 'select',
+    value: values.componentUomId,
+    options: optionsKeeping(data.units, values.componentUomId),
+    required: true,
+  },
+  {
+    name: 'operationName',
+    label: _('manufacturing_backend.field.operation'),
+    value: values.operationName,
+  },
+  {
+    name: 'workCenterId',
+    label: _('manufacturing_backend.field.workCenter'),
+    type: 'select',
+    value: values.workCenterId,
+    options: [{ value: '', label: '—' }, ...optionsKeeping(data.workCenters, values.workCenterId)],
+  },
+  {
+    name: 'durationExpected',
+    label: _('manufacturing_backend.field.duration'),
+    type: 'number',
+    value: values.durationExpected || 0,
+  },
+]
+
+const saveBom = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1], values: BomFormValues) => {
+  const id = values.id || crypto.randomUUID()
+  const operations = values.operationName
+    ? [
+        {
+          id: `${id}:operation:1`,
+          name: values.operationName,
+          workCenterId: values.workCenterId,
+          durationExpected: Number(values.durationExpected || 0),
+        },
+      ]
+    : []
+  return ctx.call(
+    'manufacturing.saveBom',
+    {
+      id,
+      code: values.code || null,
+      productId: values.productId,
+      productQty: values.productQty || '1',
+      productUomId: values.productUomId,
+      lines: values.componentId
+        ? [
+            {
+              id: `${id}:line:1`,
+              productId: values.componentId,
+              productQty: values.componentQty || '1',
+              productUomId: values.componentUomId,
+              operationId: operations[0]?.id ?? null,
+            },
+          ]
+        : [],
+      operations,
+    },
+    url,
+    req,
+  )
+}
+
+const bomsPage = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  data: CommonData,
+  values?: BomFormValues,
+  errors: readonly string[] = [],
+) =>
+  adminPage(ctx, url, req, {
+    title: 'manufacturing_backend.boms.title',
+    active: '/admin/manufacturing/boms',
+    body: (_: Translator, frame: Frame) => {
+      const collection = inLocale(url, '/admin/manufacturing/boms')
+      const productsById = new Map(
+        data.variants.map((row) => [String(row.id), String(row.templateName ?? row.name ?? row.id)]),
+      )
+      const list = bomsListScreen(
+        _,
+        {
+          createHref: inLocale(url, '/admin/manufacturing/boms?create=1'),
+          rows: data.boms.map((row) => ({
+            id: String(row.id),
+            code: String(row.code ?? row.id),
+            product: productsById.get(String(row.productId)) ?? String(row.productId),
+            quantity: String(row.productQty),
+          })),
+        },
+        frame,
+      )
+      if (url.searchParams.get('create') !== '1' && !errors.length) return list
+      return modalWorkspace(
+        list,
+        bomCreateModal(_, {
+          fields: bomFields(_, data, values),
+          action: inLocale(url, '/admin/manufacturing/boms/new'),
+          cancelHref: collection,
+          errors,
+        }),
+      )
+    },
+  })
 
 const saveProduction = async (
   ctx: ServeContext,
@@ -328,112 +502,43 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (crossSite(req)) return text('Forbidden', { status: 403 })
-      const _ = ctx.translate(ctx.localeOf(url, req))
       const data = await common(ctx, url, req)
-      let result: unknown = { ok: true }
       if (req.method === 'POST') {
-        const form = await readForm(req)
-        const id = form.id || crypto.randomUUID()
-        const operations = form.operationName
-          ? [
-              {
-                id: `${id}:operation:1`,
-                name: form.operationName,
-                workCenterId: form.workCenterId,
-                durationExpected: Number(form.durationExpected || 0),
-              },
-            ]
-          : []
-        result = await ctx.call(
-          'manufacturing.saveBom',
-          {
-            id,
-            code: form.code || null,
-            productId: form.productId,
-            productQty: form.productQty || '1',
-            productUomId: form.productUomId,
-            lines: form.componentId
-              ? [
-                  {
-                    id: `${id}:line:1`,
-                    productId: form.componentId,
-                    productQty: form.componentQty || '1',
-                    productUomId: form.componentUomId,
-                    operationId: operations[0]?.id ?? null,
-                  },
-                ]
-              : [],
-            operations,
-          },
+        const values = bomValues(await readForm(req))
+        const result = await saveBom(ctx, url, req, values)
+        if ((result as AnyRow).ok) return seeOther(inLocale(url, '/admin/manufacturing/boms'))
+        const _ = ctx.translate(ctx.localeOf(url, req))
+        return bomsPage(
+          ctx,
           url,
           req,
+          data,
+          values,
+          resultErrors(result, _, 'manufacturing_backend.error.invalid'),
         )
-        if ((result as AnyRow).ok) return seeOther('/admin/manufacturing/boms')
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const fields: FormField[] = [
-        { name: 'code', label: _('manufacturing_backend.field.code') },
-        {
-          name: 'productId',
-          label: _('manufacturing_backend.field.product'),
-          type: 'select',
-          options: options(data.variants),
-          required: true,
-        },
-        {
-          name: 'productQty',
-          label: _('manufacturing_backend.field.quantity'),
-          type: 'decimal',
-          value: 1,
-          required: true,
-        },
-        {
-          name: 'productUomId',
-          label: _('manufacturing_backend.field.uom'),
-          type: 'select',
-          options: options(data.units),
-          required: true,
-        },
-        {
-          name: 'componentId',
-          label: _('manufacturing_backend.field.component'),
-          type: 'select',
-          options: options(data.variants),
-          required: true,
-        },
-        {
-          name: 'componentQty',
-          label: _('manufacturing_backend.field.quantity'),
-          type: 'decimal',
-          value: 1,
-          required: true,
-        },
-        {
-          name: 'componentUomId',
-          label: _('manufacturing_backend.field.uom'),
-          type: 'select',
-          options: options(data.units),
-          required: true,
-        },
-        { name: 'operationName', label: _('manufacturing_backend.field.operation') },
-        {
-          name: 'workCenterId',
-          label: _('manufacturing_backend.field.workCenter'),
-          type: 'select',
-          options: options(data.workCenters, true),
-        },
-        {
-          name: 'durationExpected',
-          label: _('manufacturing_backend.field.duration'),
-          type: 'number',
-          value: 0,
-        },
-      ]
-      const rows = (await ctx.call('manufacturing.listBoms', {}, url, req)) as AnyRow[]
-      return adminPage(ctx, url, req, {
-        title: 'manufacturing_backend.boms.title',
-        body: (_, frame) =>
-          bomsScreen(_, frame, rows, fields, resultErrors(result, _, 'manufacturing_backend.error.invalid')),
-      })
+      return bomsPage(ctx, url, req, data)
+    },
+
+  '/admin/manufacturing/boms/new':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
+      if (req.method === 'GET') return seeOther(inLocale(url, '/admin/manufacturing/boms?create=1'))
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const data = await common(ctx, url, req)
+      const values = bomValues(await readForm(req))
+      const result = await saveBom(ctx, url, req, values)
+      if ((result as AnyRow).ok) return seeOther(inLocale(url, '/admin/manufacturing/boms'))
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      return bomsPage(
+        ctx,
+        url,
+        req,
+        data,
+        values,
+        resultErrors(result, _, 'manufacturing_backend.error.invalid'),
+      )
     },
 
   '/admin/manufacturing/work-centers':

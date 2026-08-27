@@ -26,6 +26,9 @@ import {
   labelOf,
   moveTitle,
   optionsOf,
+  paymentTermFormModal,
+  paymentTermLineFormModal,
+  paymentTermsListScreen,
   taxFormScreen,
   taxesListScreen,
 } from './screens/index.ts'
@@ -34,7 +37,6 @@ import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
-import { paymentTermsScreen } from './payment-terms-screen.tsx'
 import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { vendorBillsScreen } from './vendor-bills-screen.tsx'
@@ -130,16 +132,6 @@ const editTarget = (rows: AnyRow[], url: URL): AnyRow | null => {
   return id ? (rows.find((row) => String(row.id) === id) ?? null) : null
 }
 
-/** The form target for a config screen, carrying the edited id and the locale. */
-const configAction = (url: URL, path: string): string => {
-  const target = new URL(path, url)
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  const id = editingId(url)
-  if (id) target.searchParams.set('edit', id)
-  return `${target.pathname}${target.search}`
-}
-
 /** The milestone a payment-term screen is correcting, found across every term's lines. */
 const termLineTarget = (terms: AnyRow[], url: URL): AnyRow | null => {
   const id = url.searchParams.get('editLine') ?? ''
@@ -149,30 +141,33 @@ const termLineTarget = (terms: AnyRow[], url: URL): AnyRow | null => {
   return null
 }
 
-const lineHref = (url: URL, id: unknown): string => {
-  const target = new URL('/admin/accounting/terms', url)
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  target.searchParams.set('editLine', String(id))
+const paymentTermListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/terms'
+  for (const key of ['create', 'edit', 'line', 'editLine', 'invalid', 'returnTo'])
+    target.searchParams.delete(key)
   return `${target.pathname}${target.search}`
 }
 
-const lineFormAction = (url: URL): string => {
-  const target = new URL('/admin/accounting/terms', url)
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  const line = url.searchParams.get('editLine')
-  if (line) target.searchParams.set('editLine', line)
+const paymentTermModalPath = (url: URL, edit?: unknown): string => {
+  const target = new URL(paymentTermListPath(url), 'http://ket.local')
+  if (edit !== undefined && edit !== null && String(edit)) target.searchParams.set('edit', String(edit))
+  else target.searchParams.set('create', '1')
   return `${target.pathname}${target.search}`
 }
 
-const editHref = (url: URL, path: string, id: unknown): string => {
-  const target = new URL(path, url)
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  target.searchParams.set('edit', String(id))
+const paymentTermLineModalPath = (url: URL, edit?: unknown): string => {
+  const target = new URL(paymentTermListPath(url), 'http://ket.local')
+  if (edit !== undefined && edit !== null && String(edit)) target.searchParams.set('editLine', String(edit))
+  else target.searchParams.set('line', '1')
   return `${target.pathname}${target.search}`
 }
+
+const paymentTermSummary = (rows: AnyRow[]) => ({
+  total: rows.length,
+  configured: rows.filter((row) => Array.isArray(row.lines) && row.lines.length > 0).length,
+  lines: rows.reduce((total, row) => total + (Array.isArray(row.lines) ? row.lines.length : 0), 0),
+})
 
 /** The value a field should show: what the row holds when editing, the default otherwise. */
 const prefill = (fields: FormField[], row: AnyRow | null): FormField[] =>
@@ -1632,10 +1627,12 @@ export default defineModule({
         // Two forms post here, so a refusal has to land on the one that caused it.
         let rejected: Rejection | undefined
         let rejectedLine: Rejection | undefined
+        let submittedLine = false
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const line = form.action === 'line'
+          submittedLine = line
           const result = line
             ? await ctx.call(
                 'account.savePaymentTermLine',
@@ -1663,7 +1660,7 @@ export default defineModule({
                 url,
                 req,
               )
-          if (succeeded(result)) return seeOther(`/admin/accounting/terms${localeQuery(url)}`)
+          if (succeeded(result)) return seeOther(paymentTermListPath(url))
           const failure = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
           if (line) rejectedLine = failure
           else rejected = failure
@@ -1676,45 +1673,96 @@ export default defineModule({
         )) as AnyRow[]
         const editing = editTarget(rows, url)
         const editingLine = termLineTarget(rows, url)
+        const returnTo = paymentTermListPath(url)
+        const lineModalOpen =
+          submittedLine || url.searchParams.get('line') === '1' || Boolean(url.searchParams.get('editLine'))
+        const termModalOpen =
+          !lineModalOpen &&
+          (req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url)))
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
+          ? url.searchParams.get('status')
+          : null
+        const needle = search?.toLocaleLowerCase()
+        const matching = rows.filter((row) => {
+          const active = row.active === true
+          if (status === 'active' && !active) return false
+          if (status === 'archived' && active) return false
+          return (
+            !needle || `${String(row.name)} ${String(row.note ?? '')}`.toLocaleLowerCase().includes(needle)
+          )
+        })
+        const listed = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.terms.title',
-          body: (_, frame) =>
-            paymentTermsScreen(_, {
-              frame: frame,
-              action: configAction(url, '/admin/accounting/terms'),
-              rows,
-              editing,
-              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
-              rowHref: (row) => editHref(url, '/admin/accounting/terms', row.id),
-              cancelHref: `/admin/accounting/terms${localeQuery(url)}`,
-              errors: rejected?.messages,
-              lineErrors: rejectedLine?.messages,
-              editingLine,
-              lineSubmit: editingLine
-                ? _('account_backend.action.save')
-                : _('account_backend.action.addTermLine'),
-              lineHref: (line) => lineHref(url, line.id),
-              lineCancelHref: `/admin/accounting/terms${localeQuery(url)}`,
-              lineAction: lineFormAction(url),
+          body: (_, frame) => {
+            const workspace = paymentTermsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.terms.title'),
+                    keep: {
+                      ...(status ? { status } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: status
+                      ? [
+                          {
+                            label:
+                              status === 'active'
+                                ? _('account_backend.active')
+                                : _('account_backend.archived'),
+                            without: withParam(url, 'status', null),
+                          },
+                        ]
+                      : [],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          {
+                            id: 'status:active',
+                            label: _('account_backend.active'),
+                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
+                            active: status === 'active',
+                          },
+                          {
+                            id: 'status:archived',
+                            label: _('account_backend.archived'),
+                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
+                            active: status === 'archived',
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, listed.length, matching.length),
+                },
+              },
+              rows: listed,
+              createHref: paymentTermModalPath(url),
+              lineCreateHref: rows.length ? paymentTermLineModalPath(url) : undefined,
+              rowHref: (row) => paymentTermModalPath(url, row.id),
+              lineHref: (line) => paymentTermLineModalPath(url, line.id),
               delayLabel: (line) => selectionLabel(_, 'account_backend', 'paymentTermDelay', line.delayType),
               valueLabel: (line) => selectionLabel(_, 'account_backend', 'paymentTermValue', line.value),
-              termFields: formState(
-                [
-                  { name: 'name', label: _('account_backend.field.name'), required: true },
-                  { name: 'note', label: _('account_backend.field.note'), type: 'textarea', span: 'full' },
-                  {
-                    name: 'active',
-                    label: _('account_backend.field.active'),
-                    type: 'checkbox',
-                    value: true,
-                    help: _('account_backend.field.activeHint'),
-                  },
-                ],
-                editing,
-                rejected,
-              ),
-              lineFields: rows.length
-                ? formState(
+              summary: paymentTermSummary(rows),
+            })
+            if (lineModalOpen && rows.length)
+              return modalWorkspace(
+                workspace,
+                paymentTermLineFormModal(_, {
+                  frame,
+                  action: paymentTermLineModalPath(url, editingLine?.id ?? url.searchParams.get('editLine')),
+                  cancelHref: returnTo,
+                  editing: editingLine,
+                  errors: rejectedLine?.messages,
+                  fields: formState(
                     [
                       {
                         name: 'paymentId',
@@ -1764,9 +1812,36 @@ export default defineModule({
                     ],
                     editingLine,
                     rejectedLine,
-                  )
-                : undefined,
-            }),
+                  ),
+                }),
+              )
+            if (!termModalOpen) return workspace
+            return modalWorkspace(
+              workspace,
+              paymentTermFormModal(_, {
+                frame,
+                action: paymentTermModalPath(url, editing?.id ?? editingId(url)),
+                cancelHref: returnTo,
+                editing,
+                errors: rejected?.messages,
+                fields: formState(
+                  [
+                    { name: 'name', label: _('account_backend.field.name'), required: true },
+                    { name: 'note', label: _('account_backend.field.note'), type: 'textarea', span: 'full' },
+                    {
+                      name: 'active',
+                      label: _('account_backend.field.active'),
+                      type: 'checkbox',
+                      value: true,
+                      help: _('account_backend.field.activeHint'),
+                    },
+                  ],
+                  editing,
+                  rejected,
+                ),
+              }),
+            )
+          },
         })
       },
     '/admin/accounting/defaults':

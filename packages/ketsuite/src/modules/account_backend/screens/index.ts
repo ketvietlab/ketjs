@@ -41,4 +41,19 @@ export {
   taxFormScreen,
   type TaxFormScreenOptions,
 } from './tax-form.tsx'
+export {
+  paymentTermFormModal,
+  type PaymentTermFormRow,
+  paymentTermFormScreen,
+  type PaymentTermFormScreenOptions,
+  paymentTermLineFormModal,
+  paymentTermLineFormScreen,
+  type PaymentTermLineFormScreenOptions,
+} from './payment-term-form.tsx'
+export {
+  type PaymentTermRow,
+  type PaymentTermSummary,
+  paymentTermsListScreen,
+  type PaymentTermsListScreenOptions,
+} from './payment-terms-list.tsx'
 export { labelOf, moveTitle, optionsOf } from './shared.tsx'

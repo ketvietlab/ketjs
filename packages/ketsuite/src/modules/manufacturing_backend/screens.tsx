@@ -1,65 +1,9 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { dataTable, emptyState, Framed, RecordForm, Section, stack, Surface } from '../../ui/index.ts'
-import type { FormField, Frame } from '../../ui/index.ts'
+import type { Frame } from '../../ui/index.ts'
 
 type R = Record<string, unknown>
-
-export const bomsScreen = (
-  _: Translator,
-  frame: Frame,
-  rows: R[],
-  fields: FormField[],
-  errors: string[] = [],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('manufacturing_backend.boms.title')}
-    frame={frame}
-    body={stack([
-      <Section
-        title={_('manufacturing_backend.boms.create')}
-        body={
-          <Surface
-            body={
-              <RecordForm
-                action="/admin/manufacturing/boms"
-                fields={fields}
-                errors={errors}
-                submit={_('manufacturing_backend.action.create')}
-                submitVariant="primary"
-              />
-            }
-          />
-        }
-      />,
-      rows.length
-        ? dataTable(_, {
-            rows,
-            id: (row) => String(row.id),
-            columns: [
-              {
-                key: 'code',
-                label: _('manufacturing_backend.field.code'),
-                cell: (row) => String(row.code ?? row.id),
-                priority: 'primary',
-              },
-              {
-                key: 'product',
-                label: _('manufacturing_backend.field.product'),
-                cell: (row) => String(row.productId),
-              },
-              {
-                key: 'quantity',
-                label: _('manufacturing_backend.field.quantity'),
-                cell: (row) => String(row.productQty),
-              },
-            ],
-          })
-        : emptyState(_('manufacturing_backend.empty.boms'), _('manufacturing_backend.empty.bomsHint')),
-    ])}
-  />
-)
 
 export const workCentersScreen = (
   _: Translator,

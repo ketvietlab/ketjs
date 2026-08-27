@@ -68,7 +68,7 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 | ACC-02 | done | Chart of accounts | `/admin/accounting/accounts`, `/admin/accounting/accounts/new` | `screens/accounts-list.tsx`, `screens/account-form.tsx` | Split | no | Curie |
 | ACC-03 | done | Journals | `/admin/accounting/journals`, `/admin/accounting/journals/new` | `screens/journals-list.tsx`, `screens/journal-form.tsx` | Split | no | Curie |
 | ACC-04 | done | Taxes | `/admin/accounting/taxes`, `/admin/accounting/taxes/new` | `screens/taxes-list.tsx`, `screens/tax-form.tsx` | Split | no | Curie |
-| ACC-05 | ready | Payment terms | `/admin/accounting/terms` | `paymentTermsScreen` | Split | no | — |
+| ACC-05 | done | Payment terms | `/admin/accounting/terms` | `screens/payment-terms-list.tsx`, `screens/payment-term-form.tsx` | Split | no | Curie |
 | ACC-06 | ready | Accounting defaults | `/admin/accounting/defaults` | `accountDefaultsScreen` | FormPage | no | — |
 | ACC-07 | ready | Journal entries | `/admin/accounting/entries` | `journalEntriesScreen` | Split | list/new: no | — |
 | ACC-08 | ready | Customer invoices | `/admin/accounting/customer-invoices` | `customerInvoicesScreen` | Split | list/new: no | — |
@@ -174,7 +174,7 @@ leaf files; generated Live Doc endpoints belong to the detail renderer that cons
 |---|---|---|---|---|---|---|
 | FLOW-01 | done | Projects | `/admin/flow/projects`, `/admin/flow/projects/new` | `screens/projects-list.tsx`, `screens/project-create.tsx` | Split | Huygens |
 | FLOW-02 | keep | Project board | `/admin/flow/projects/{id}/board` | `screens/board.tsx::boardScreen` | Specialized | Huygens |
-| FLOW-03 | ready | My/all cross-project issues | `/admin/flow/mine`, `/admin/flow/issues` | `screens/my-work.tsx::crossProjectScreen` | ListPage | — |
+| FLOW-03 | done | My/all cross-project issues | `/admin/flow/mine`, `/admin/flow/issues` | `screens/my-work.tsx::crossProjectScreen` | ListPage | Huygens |
 | FLOW-04 | ready | Project issues | `/admin/flow/projects/{id}/issues` | `screens/issues.tsx::issuesScreen` | Split | — |
 | FLOW-05 | ready | Issue detail | `/admin/flow/issues/{id}` | `screens/issue-detail.tsx::issueDetailScreen` | FormPage/Specialized | — |
 | FLOW-06 | ready | Project page tree | `/admin/flow/projects/{id}/pages` | `screens/pages.tsx::pagesScreen` | Specialized | — |
@@ -196,7 +196,7 @@ Structure debt: split `manufacturing_backend/screens.tsx` incrementally into `sc
 |---|---|---|---|---|---|---|
 | MFG-01 | done | Manufacturing orders | `/admin/manufacturing`, `/admin/manufacturing/new` | `screens/orders-list.tsx`, `screens/order-create.tsx` | Split | Kant |
 | MFG-02 | done | Manufacturing order execution | `/admin/manufacturing/orders/{id}` | `screens/order-execution.tsx::orderScreen` | FormPage/Specialized | Kant |
-| MFG-03 | ready | Bills of materials | `/admin/manufacturing/boms` | `bomsScreen` | Split | — |
+| MFG-03 | done | Bills of materials | `/admin/manufacturing/boms`, `/admin/manufacturing/boms/new` | `screens/boms-list.tsx`, `screens/bom-create.tsx` | Split | Kant |
 | MFG-04 | ready | Work centers | `/admin/manufacturing/work-centers` | `workCentersScreen` | Split | — |
 
 ### HR and attendance lanes
@@ -892,6 +892,37 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 14 Manufacturing Order Execution evidence](/assets/manufacturing-order-execution-wave14/manufacturing-order-execution-browser-skill.png)
 
 ![Wave 14 Manufacturing Order Execution mobile evidence](/assets/manufacturing-order-execution-wave14/manufacturing-order-execution-mobile-browser-skill.png)
+
+### Wave 15 — ACC-05, FLOW-03 and MFG-03
+
+- Accounting Payment Terms is now a `ListPage` with URL-driven search, status filter and pagination. Creating
+  or editing a term and creating or editing one milestone opens a URL-addressable sheet over the collection;
+  locale, list state, rejected values, `editLine`, archive state, CSRF and legacy POST semantics remain intact.
+  The root renderer moved into dedicated `screens/payment-terms-list.tsx` and `screens/payment-term-form.tsx`.
+- Flow My Work and All Issues now share the public `ListPage` hierarchy. Their metrics, progress, overdue rail,
+  active scope tab, grouped/list states, search, filters and pager remain URL-driven. Issue, project and tab links
+  preserve locale, and `/mine` now selects the Mine tab rather than inheriting the All default.
+- Manufacturing Bills of Materials is now a list-only `ListPage`; its ten-field create workflow opens in a large
+  URL-owned sheet. `/admin/manufacturing/boms/new` is a compatibility route, while the original collection POST,
+  locale, CSRF, validation errors, submitted values and domain payload remain supported. Only the BOM renderer
+  moved out of the legacy `screens.tsx`, leaving Work Centers for its assigned wave.
+- Focused Wave 15 validation passes 9/9 tests. The owning CI groups pass Accounting 74/74, Collaboration 88/88
+  and Manufacturing 16/16. Desktop and 390 px browser QA confirms the ListPage hierarchy, empty/populated states,
+  URL-owned sheets, stacked mobile fields and absence of document overflow.
+
+![Wave 15 Payment Terms list evidence](/assets/accounting-payment-terms-wave15/payment-terms-list-vi.png)
+
+![Wave 15 Payment Term milestone modal evidence](/assets/accounting-payment-terms-wave15/payment-term-milestone-modal-vi.png)
+
+![Wave 15 Payment Term milestone mobile evidence](/assets/accounting-payment-terms-wave15/payment-term-milestone-modal-mobile-390.png)
+
+![Wave 15 Flow My Work ListPage evidence](/assets/flow-my-work-wave15/flow-my-work-list-browser-skill.png)
+
+![Wave 15 Flow My Work mobile evidence](/assets/flow-my-work-wave15/flow-my-work-mobile-browser-skill.png)
+
+![Wave 15 BOM create modal evidence](/assets/manufacturing-boms-wave15/bom-create-modal-browser-skill.png)
+
+![Wave 15 BOM create modal mobile evidence](/assets/manufacturing-boms-wave15/bom-create-modal-mobile-browser-skill.png)
 
 ### Modal consolidation through Wave 14 — PR 253
 

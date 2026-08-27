@@ -519,8 +519,8 @@ try {
     },
     {
       name: 'accounting-payment-terms',
-      path: '/admin/accounting/terms?lang=vi',
-      ready: `document.querySelector('#payment-term-create-form') && document.querySelector('#payment-term-line-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      path: '/admin/accounting/terms?lang=vi&line=1',
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelector('#payment-term-line-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-trial-balance',
@@ -3558,18 +3558,18 @@ try {
         await evaluate(
           cdp,
           `({
-        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        listPage: Boolean(document.querySelector('[data-ui="list-page"]')),
         termForm: Boolean(document.querySelector('#payment-term-create-form')),
         lineForm: Boolean(document.querySelector('#payment-term-line-form')),
         term: document.querySelector('[data-ui="table"]')?.textContent.includes('30 ngày'),
         chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
-        rowsAtLeast28: Array.from(document.querySelectorAll('#payment-term-create-form [data-ui="form-field"], #payment-term-line-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
+        rowsAtLeast28: Array.from(document.querySelectorAll('#payment-term-line-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
         overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
       })`,
         ),
         {
-          workspace: true,
-          termForm: true,
+          listPage: true,
+          termForm: false,
           lineForm: true,
           term: true,
           chatter: false,
@@ -3579,7 +3579,7 @@ try {
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(paymentTermsEvidenceDir, 'payment-terms-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/terms?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/terms?lang=en&line=1`)
       await waitFor(
         cdp,
         `document.querySelector('#payment-term-line-form') && document.documentElement.lang === 'en'`,
@@ -3600,7 +3600,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/terms?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/terms?lang=${lang}&line=1`)
         await waitFor(
           cdp,
           `document.querySelector('#payment-term-line-form') && document.documentElement.lang === '${lang}'`,
