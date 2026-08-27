@@ -6,42 +6,6 @@ import type { AnyRow } from './shared.tsx'
 import { empty } from './shared.tsx'
 
 /**
- * Every epic across projects — the base the epic's document endpoints hang off,
- * and the way into an epic that does not start from its project.
- */
-export const allEpicsScreen = (
-  _: Translator,
-  frame: Frame,
-  title: string,
-  epics: readonly AnyRow[],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={title}
-    frame={frame}
-    body={stack([
-      epics.length ? (
-        <Section
-          title={title}
-          body={
-            <RecordList
-              rows={epics}
-              id={(epic) => String(epic.id)}
-              title={(epic) => String(epic.title ?? '')}
-              href={(epic) => `/admin/flow/epics/${String(epic.id)}`}
-              summary={(epic) => String(epic.previewText ?? '').slice(0, 140)}
-              value={(epic) => String(epic.projectName ?? '')}
-            />
-          }
-        />
-      ) : (
-        empty(_)
-      ),
-    ])}
-  />
-)
-
-/**
  * One epic: its document, and what is under it.
  *
  * The grid next door answers "how much is left"; this answers "what is this

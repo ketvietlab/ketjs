@@ -1524,23 +1524,46 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
-      // `epic.list` is scoped to a project — there is no JOIN to fold the two
-      // reads into one, so the epics come back per project and are stitched
-      // here, capped by the project list's own limit.
-      const perProject = await Promise.all(
-        projects.map(
-          (project) =>
-            ctx.call('flow.epic.list', { projectId: String(project.id) }, url, req) as Promise<AnyRow[]>,
-        ),
-      )
-      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
-      const epics = perProject
-        .flat()
-        .map((epic) => ({ ...epic, projectName: named.get(String(epic.projectId)) ?? '' }))
+      const search = url.searchParams.get('q') ?? ''
+      const currentPage = Math.max(1, Number(url.searchParams.get('page') ?? 1) || 1)
+      const cursor = (currentPage - 1) * LIST_PAGE_SIZE
+      const result = (await ctx.call(
+        'flow.epic.listAll',
+        { search, cursor, limit: LIST_PAGE_SIZE },
+        url,
+        req,
+      )) as { rows: AnyRow[]; total: number }
+      const pageHref = (page: number): string => {
+        const target = new URL(url)
+        if (page <= 1) target.searchParams.delete('page')
+        else target.searchParams.set('page', String(page))
+        return `${target.pathname}${target.search}`
+      }
       return adminPage(ctx, url, req, {
         title: 'flow_backend.epics.allTitle',
-        body: (t, frame) => allEpicsScreen(t, frame, t('flow_backend.epics.allTitle'), epics),
+        body: (t, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: search,
+              placeholder: t('flow_backend.epics.search'),
+              keep: keepForListSearch(url),
+            },
+            pager: {
+              from: result.rows.length ? cursor + 1 : 0,
+              to: Math.min(cursor + result.rows.length, result.total),
+              total: result.total,
+              prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
+              next: cursor + result.rows.length < result.total ? pageHref(currentPage + 1) : null,
+            },
+          }
+          return allEpicsScreen(t, frame, {
+            title: t('flow_backend.epics.allTitle'),
+            epics: result.rows,
+            total: result.total,
+            locale: localeQuery(url),
+          })
+        },
       })
     },
 

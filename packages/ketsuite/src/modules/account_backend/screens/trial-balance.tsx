@@ -9,28 +9,31 @@ import {
   Framed,
   icon,
   linkButton,
+  Notice,
   RecordWorkspace,
   Section,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { DatePickerField, Frame } from '../../ui/index.ts'
+} from '../../../ui/index.ts'
+import type { DatePickerField, Frame } from '../../../ui/index.ts'
 
-type Row = Record<string, unknown>
+export type TrialBalanceRow = Record<string, unknown>
 
-export const trialBalanceScreen = (
-  _: Translator,
-  options: {
-    frame: Frame
-    /** From and to. This screen is a date range and nothing else. */
-    fields: readonly [DatePickerField, DatePickerField]
-    rows: Row[]
-    action: string
-    currency: unknown
-    /** The ledger behind a balance. A total nobody can open is a number to trust blindly. */
-    ledgerHref?: (row: Row) => string
-  },
-): TemplateResult => {
+export type TrialBalanceScreenOptions = {
+  frame: Frame
+  /** From and to. This report is a date range and nothing else. */
+  fields: readonly [DatePickerField, DatePickerField]
+  rows: TrialBalanceRow[]
+  action: string
+  locale?: string
+  currency: unknown
+  /** The ledger behind a balance. A total nobody can open is a number to trust blindly. */
+  ledgerHref?: (row: TrialBalanceRow) => string
+  errors?: readonly string[]
+}
+
+/** A specialized financial report: filter, control totals, and drillable account rows. */
+export const trialBalanceScreen = (_: Translator, options: TrialBalanceScreenOptions): TemplateResult => {
   const total = (field: 'debit' | 'credit' | 'balance') =>
     options.rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0)
   const table = options.rows.length ? (
@@ -51,7 +54,11 @@ export const trialBalanceScreen = (
                 })
               : code(String(row.code)),
         },
-        { key: 'name', label: _('account_backend.field.name'), cell: (row) => String(row.name) },
+        {
+          key: 'name',
+          label: _('account_backend.field.name'),
+          cell: (row) => String((_.locale.startsWith('en') && row.nameEn) || row.name),
+        },
         {
           key: 'debit',
           label: _('account_backend.field.debit'),
@@ -114,6 +121,13 @@ export const trialBalanceScreen = (
           ]}
           body={stack(
             [
+              options.errors?.length ? (
+                <Notice
+                  tone="danger"
+                  title={_('account_backend.trial.filter.title')}
+                  message={options.errors.join(' · ')}
+                />
+              ) : null,
               <Section
                 title={_('account_backend.trial.filter.title')}
                 description={_('account_backend.trial.filter.hint')}
@@ -121,12 +135,11 @@ export const trialBalanceScreen = (
                   <Surface
                     padding="compact"
                     body={
-                      // A from and a to, a submit, nothing else — which is what
-                      // `DatePicker` already is, down to the GET form it owns.
                       <DatePicker
                         action={options.action}
                         label={_('account_backend.trial.filter.title')}
                         fields={options.fields}
+                        hidden={options.locale ? { lang: options.locale } : undefined}
                         submit={_('account_backend.action.calculate')}
                       />
                     }

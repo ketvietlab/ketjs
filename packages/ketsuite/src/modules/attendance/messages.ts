@@ -8,6 +8,7 @@ export const messages = {
     'error.missing': 'Không tìm thấy bản ghi.',
     'error.employeeUser': 'Tài khoản chưa được liên kết với nhân viên.',
     'error.credential': 'Mã nhân viên, PIN hoặc QR không hợp lệ.',
+    'error.credentialReplay': 'Yêu cầu cấp mã này đã được xử lý. Hãy mở lại biểu mẫu để tạo yêu cầu mới.',
     'error.throttled': 'Thử quá nhiều lần. Vui lòng chờ rồi thử lại.',
     'error.kiosk': 'Kiosk không hợp lệ hoặc đã bị vô hiệu hóa.',
     'error.branch': 'Chi nhánh không khớp ngữ cảnh làm việc.',
@@ -29,6 +30,8 @@ export const messages = {
     'error.missing': 'The record was not found.',
     'error.employeeUser': 'The account is not linked to an employee.',
     'error.credential': 'The employee code, PIN, or QR is invalid.',
+    'error.credentialReplay':
+      'This credential request was already processed. Reopen the form to start a new request.',
     'error.throttled': 'Too many attempts. Wait and try again.',
     'error.kiosk': 'The kiosk is invalid or disabled.',
     'error.branch': 'The branch does not match the active work context.',

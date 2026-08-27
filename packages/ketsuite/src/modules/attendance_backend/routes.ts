@@ -1,12 +1,20 @@
+import { randomUUID } from 'node:crypto'
 import { page, sha256, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { Req } from '../backend/screen.ts'
-import { leaveRequestModal, myWorkScreen, periodScreen } from './screens/index.ts'
-import type { LeaveRequestValues } from './screens/index.ts'
-import { credentialScreen, kioskScreen } from './screens.tsx'
+import {
+  credentialModal,
+  credentialScreen,
+  credentialSecretModal,
+  leaveRequestModal,
+  myWorkScreen,
+  periodScreen,
+} from './screens/index.ts'
+import type { CredentialIssue, CredentialValues, LeaveRequestValues } from './screens/index.ts'
+import { kioskScreen } from './screens.tsx'
 
 /**
  * The kiosk is the one screen here that is not the backend: it is answered
@@ -58,6 +66,24 @@ const myWorkResultPath = (url: URL, result: string): string =>
   inLocale(url, `/my/work?result=${encodeURIComponent(result)}`)
 const attendancePeriodPath = (url: URL, month?: string): string =>
   inLocale(url, month ? `/admin/attendance?month=${encodeURIComponent(month)}` : '/admin/attendance')
+const CREDENTIAL_ISSUES = ['kiosk', 'pin', 'qr'] as const
+const credentialIssue = (value: string | null): CredentialIssue | null =>
+  (CREDENTIAL_ISSUES as readonly string[]).includes(value ?? '') ? (value as CredentialIssue) : null
+const credentialsPath = (url: URL, issue?: CredentialIssue, result?: string): string =>
+  inLocale(
+    url,
+    `/admin/attendance/credentials${
+      issue || result
+        ? `?${new URLSearchParams({
+            ...(issue ? { issue } : {}),
+            ...(result ? { result } : {}),
+          }).toString()}`
+        : ''
+    }`,
+  )
+const credentialError = (field: string, code: string) => ({ ok: false, errors: [{ field, code }] })
+const validRequestKey = (value: string | undefined): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{8,200}$/.test(value)
 
 export const routes: Record<string, RouteEntry> = {
   '/my/work':
@@ -247,29 +273,106 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/attendance/credentials':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let result: Record<string, unknown> | undefined
+      const asked = url.searchParams.get('issue')
+      if (asked && !credentialIssue(asked)) return text('not found', { status: 404 })
+      let issue = credentialIssue(asked)
+      let result: unknown = { ok: true }
+      let values: CredentialValues | undefined
+      let secret: { issue: 'kiosk' | 'qr'; value: string } | undefined
+      const scope = await ctx.scopeOf(url, req)
+      const employees = (await ctx.call('attendance.credential.manageOptions', {}, url, req)) as Array<
+        Record<string, unknown>
+      >
       if (req.method === 'POST') {
         const form = await readForm(req)
-        result = (await ctx.call(
-          form.action === 'kiosk'
-            ? 'attendance.kiosk.manageIssue'
-            : form.action === 'pin'
-              ? 'attendance.credential.managePin'
-              : 'attendance.credential.manageQr',
-          form.action === 'kiosk'
-            ? { name: form.name, branchId: form.branchId }
-            : form.action === 'pin'
-              ? { employeeId: form.employeeId, pin: form.pin }
-              : { employeeId: form.employeeId },
-          url,
-          req,
-        )) as Record<string, unknown>
-        result = { ...result, credentialKind: form.action }
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        issue = credentialIssue(form.action ?? null)
+        if (!issue) return text('invalid action', { status: 400 })
+        if (asked && issue !== credentialIssue(asked)) return text('invalid action', { status: 400 })
+        values = { employeeId: form.employeeId, name: form.name, requestKey: form.requestKey }
+        if ((issue === 'kiosk' || issue === 'qr') && !validRequestKey(values.requestKey))
+          result = credentialError('requestKey', 'attendance.error.invalid')
+        else if (issue === 'kiosk' && !scope.branch)
+          result = credentialError('branchId', 'attendance.error.branch')
+        // manageOptions is the public permission boundary; the secret-bearing
+        // mutations stay internal so they never acquire generic HTTP endpoints.
+        else
+          result = await ctx.callUnchecked(
+            issue === 'kiosk'
+              ? 'attendance.kiosk.manageIssue'
+              : issue === 'pin'
+                ? 'attendance.credential.managePin'
+                : 'attendance.credential.manageQr',
+            issue === 'kiosk'
+              ? { id: values.requestKey, name: values.name, branchId: scope.branch }
+              : issue === 'pin'
+                ? { employeeId: values.employeeId, pin: form.pin }
+                : { employeeId: values.employeeId, requestKey: values.requestKey },
+            url,
+            req,
+          )
+        if ((result as { ok?: boolean }).ok) {
+          if (issue === 'pin') return seeOther(credentialsPath(url, undefined, 'pin-saved'))
+          const issued = String((result as { secret?: unknown }).secret ?? '')
+          if (issued) secret = { issue, value: issued }
+          else result = credentialError('requestKey', 'attendance.error.invalid')
+        }
+      }
+      const actions = {
+        ...(scope.branch ? { kiosk: credentialsPath(url, 'kiosk') } : {}),
+        pin: credentialsPath(url, 'pin'),
+        qr: credentialsPath(url, 'qr'),
+      }
+      const employeeOptions = employees.map((employee) => ({
+        value: String(employee.id),
+        label: `${String(employee.code)} · ${String(employee.name)}`,
+      }))
+      const base = credentialsPath(url)
       return adminPage(ctx, url, req, {
         title: 'attendance_backend.credentials.title',
-        body: (_, frame) => credentialScreen(_, frame, result),
+        active: '/admin/attendance/credentials',
+        body: (_, frame) => {
+          const workspace = credentialScreen(
+            _,
+            {
+              actions,
+              notice:
+                url.searchParams.get('result') === 'pin-saved'
+                  ? _('attendance_backend.credentials.pinSaved')
+                  : undefined,
+            },
+            frame,
+          )
+          if (secret)
+            return modalWorkspace(
+              workspace,
+              credentialSecretModal(_, {
+                cancelHref: base,
+                issue: secret.issue,
+                secret: secret.value,
+              }),
+            )
+          if (!issue) return workspace
+          return modalWorkspace(
+            workspace,
+            credentialModal(_, {
+              action: credentialsPath(url, issue),
+              branchId: scope.branch ?? undefined,
+              cancelHref: base,
+              employeeOptions,
+              errors: resultErrors(result, _, 'attendance_backend.result.failed'),
+              issue,
+              values: {
+                ...values,
+                ...(issue === 'kiosk' || issue === 'qr'
+                  ? { requestKey: values?.requestKey || randomUUID() }
+                  : {}),
+              },
+            }),
+          )
+        },
       })
     },
   '/admin/attendance/export/{month}':

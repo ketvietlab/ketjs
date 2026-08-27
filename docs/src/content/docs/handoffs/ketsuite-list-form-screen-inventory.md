@@ -61,8 +61,8 @@ The current snapshot contains **173 stable work-item IDs** with no duplicates.
 
 ### Accounting lane
 
-Structure debt: the customer-invoice, vendor-bill, shared document-detail and payment renderers moved into
-`account_backend/screens/` in Waves 18–21; only the report renderers remain to be split.
+Structure debt: the customer-invoice, vendor-bill, shared document-detail, payment and trial-balance renderers
+moved into `account_backend/screens/` in Waves 18–22; general-ledger and partner-statement remain to be split.
 `account_partner_backend` follows the same rule.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
@@ -78,7 +78,7 @@ Structure debt: the customer-invoice, vendor-bill, shared document-detail and pa
 | ACC-09 | done | Vendor bills | `/admin/accounting/vendor-bills`, `/admin/accounting/vendor-bills/new` | `screens/vendor-bills-list.tsx`, `screens/vendor-bill-form.tsx` | Split | list/new: no | Curie |
 | ACC-10 | done | Shared accounting document detail | `/admin/accounting/entries/{id}`, `/customer-invoices/{id}`, `/vendor-bills/{id}` | `screens/move-detail.tsx::moveDetailScreen` | FormPage | `account_mail_backend` | Curie |
 | ACC-11 | done | Payments | `/admin/accounting/payments`, `/admin/accounting/payments/new` | `screens/payments-list.tsx`, `screens/payment-form.tsx` | Split | no | Curie |
-| ACC-12 | ready | Trial balance | `/admin/accounting/trial-balance` | `trialBalanceScreen` | Specialized | no | — |
+| ACC-12 | done | Trial balance | `/admin/accounting/trial-balance` | `screens/trial-balance.tsx::trialBalanceScreen` | Specialized | no | Curie |
 | ACC-13 | ready | General ledger | `/admin/accounting/general-ledger` | `generalLedgerScreen` | Specialized | no | — |
 | ACC-14 | ready | Partner statement | `/admin/accounting/partner-statement` | `partnerLedgerScreen` | Specialized | no | — |
 | AP-01 | done | Partner accounting terms | `/admin/partner/partners/{id}/accounting` | `screens/accounting-terms.tsx::accountingTermsScreen` | FormPage | no | Kant |
@@ -170,8 +170,8 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 
 ### Flow lane
 
-`flow_backend/screens/` exists. Waves 18–21 moved the project tree, all-pages list, page detail and project epics
-to their own leaves, removing the former `pages.tsx`; split the remaining `epics.tsx` one assignment at a time. Generated Live Doc endpoints
+`flow_backend/screens/` exists. Waves 18–22 moved the project tree, all-pages list, page detail, project epics and
+all-epics list to their own leaves, removing the former `pages.tsx`; `epics.tsx` now holds only epic detail. Generated Live Doc endpoints
 belong to the detail renderer that consumes them.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
@@ -185,7 +185,7 @@ belong to the detail renderer that consumes them.
 | FLOW-07 | done | All pages | `/admin/flow/pages` | `screens/all-pages.tsx::allPagesScreen` | ListPage | Huygens |
 | FLOW-08 | done | Page live editor | `/admin/flow/pages/{id}` | `screens/page-detail.tsx::pageDetailScreen` | FormPage/Specialized | Huygens |
 | FLOW-09 | done | Project epics | `/admin/flow/projects/{id}/epics` | `screens/project-epics.tsx::epicsScreen` | Specialized | Huygens |
-| FLOW-10 | ready | All epics | `/admin/flow/epics` | `screens/epics.tsx::allEpicsScreen` | ListPage | — |
+| FLOW-10 | done | All epics | `/admin/flow/epics` | `screens/all-epics.tsx::allEpicsScreen` | ListPage | Huygens |
 | FLOW-11 | ready | Epic detail | `/admin/flow/epics/{id}` | `screens/epics.tsx::epicDetailScreen` | FormPage/Specialized | — |
 | FLOW-12 | ready | Epic dependency map | `/admin/flow/projects/{id}/epics/{epicId}/map` | `screens/map.tsx::mapScreen` | Specialized | — |
 | FLOW-13 | ready | Project Gantt | `/admin/flow/projects/{id}/gantt` | `screens/gantt.tsx::ganttScreen` | Specialized | — |
@@ -207,8 +207,8 @@ the barrel owns public exports, and the empty root `screens.tsx` no longer exist
 ### HR and attendance lanes
 
 Structure debt resolved in Wave 19: every HR backend renderer now lives in `hr_backend/screens/`, and the
-legacy root `screens.tsx` no longer exists. Waves 20–21 created `attendance_backend/screens/` leaves for My Work
-and Attendance Period; kiosk and credential issuance remain in the root `screens.tsx` until their assignments.
+legacy root `screens.tsx` no longer exists. Waves 20–22 created `attendance_backend/screens/` leaves for My Work,
+Attendance Period and Credential Issuance; only the intentional public kiosk remains in the root `screens.tsx`.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
@@ -218,7 +218,7 @@ and Attendance Period; kiosk and credential issuance remain in the root `screens
 | ATT-01 | attendance | done | My work | `/my/work` | `screens/my-work.tsx::myWorkScreen` | Specialized | Kant |
 | ATT-02 | attendance | keep | Attendance kiosk | `/attendance/kiosk/{secret}` | `kioskScreen` | Specialized public kiosk | — |
 | ATT-03 | attendance | done | Attendance period | `/admin/attendance` | `screens/period.tsx::periodScreen` | Specialized | Kant |
-| ATT-04 | attendance | ready | Credential issuance | `/admin/attendance/credentials` | `credentialScreen` | FormPage/Specialized | — |
+| ATT-04 | attendance | done | Credential issuance | `/admin/attendance/credentials` | `screens/credentials.tsx::credentialScreen` | FormPage/Specialized | Kant |
 
 ### Company lane
 
@@ -1050,6 +1050,30 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   108/108 and Identity 120 passed with one existing PostgreSQL-only test skipped locally. Typecheck, UI audit,
   Biome, docs and diff validation pass. Desktop and 390 px browser QA covers the Payments list/full form, Project
   Epic create modal and Attendance Period workspace; regular mobile controls stack and no wrap collision appears.
+
+### Wave 22 — ACC-12, FLOW-10 and ATT-04
+
+- Trial Balance remains a Specialized financial report: its date window, control totals, account rows and ledger
+  drill-downs stay in one route rather than becoming a form record or modal. Plain accounting days now map to an
+  inclusive UTC range, the same range reaches General Ledger, inverted dates produce a visible error without a
+  domain read, GET submissions retain locale, and account-code ordering is stable. The renderer moved to
+  `screens/trial-balance.tsx`.
+- All Epics is now a public `ListPage` with URL-owned search and 50-row paging. A new company-scoped domain read
+  removes the former 200-project and 80-epic caps, excludes archived projects/epics, returns an exact total and
+  sorts by project, title and ID before slicing. Epic and project destinations are encoded and locale-safe. No
+  create modal belongs on this cross-project read-only collection; project creation remains with FLOW-09. The
+  renderer moved to `screens/all-epics.tsx`.
+- Credential Issuance is now a Specialized action hub with three URL-owned short dialogs for kiosk, PIN and QR.
+  Branch scope is server-owned, employees use relation options, PIN uses PRG, and kiosk/QR secrets appear only in
+  the immediate POST result dialog. Explicit action dispatch, Origin CSRF, server validation, digest-only storage
+  and stable request keys prevent unknown actions, generic function calls, refresh or replay from silently issuing
+  another secret. A non-secret management capability preserves the normal manager permission path while secret
+  mutation functions remain internal. The renderer moved to `screens/credentials.tsx`.
+- Integrated focused validation passes 14/14 tests. The affected groups pass Accounting 102/102, Collaboration
+  112/112 and Identity 126 passed with one existing PostgreSQL-only test skipped locally. Build, typecheck, UI
+  audit, Biome and diff validation pass. Browser QA at 1440×1000 and 390×844 covers the Trial Balance report, All
+  Epics ListPage and Credential hub/kiosk dialog; fields stack cleanly and full-screen mobile dialogs do not wrap
+  into their background content.
 
 ### Modal consolidation through Wave 14 — PR 253
 

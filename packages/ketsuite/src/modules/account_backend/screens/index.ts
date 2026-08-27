@@ -83,6 +83,11 @@ export {
   taxFormScreen,
   type TaxFormScreenOptions,
 } from './tax-form.tsx'
+export {
+  type TrialBalanceRow,
+  trialBalanceScreen,
+  type TrialBalanceScreenOptions,
+} from './trial-balance.tsx'
 export { vendorBillFormScreen, type VendorBillFormScreenOptions } from './vendor-bill-form.tsx'
 export {
   vendorBillListColumns,

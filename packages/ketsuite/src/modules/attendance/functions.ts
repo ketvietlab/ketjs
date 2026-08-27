@@ -322,14 +322,18 @@ export const functions: Record<string, FnSpec> = {
   'kiosk.manageIssue': defineFn({
     input: { id: 'id?', name: 'text', branchId: 'id' },
     output: { ok: 'bool', id: 'id?', secret: 'text?', errors: 'json?' },
-    effects: ['write:attendance.Kiosk'],
+    effects: ['read:attendance.Kiosk', 'write:attendance.Kiosk'],
+    exposure: 'internal',
     idempotent: true,
-    agent: true,
+    agent: false,
     handler: async (ctx: Ctx, a) => {
       if (!ctx.scope.branch || String(a.branchId) !== ctx.scope.branch)
         return invalid(issue('branchId', 'attendance.error.branch'))
-      const id = String(a.id ?? randomUUID()),
-        value = secret()
+      if (!clean(a.name)) return invalid(issue('name', 'attendance.error.required'))
+      const id = String(a.id ?? randomUUID())
+      if ((await ctx.db.select('attendance.Kiosk', { id }))[0])
+        return invalid(issue('requestKey', 'attendance.error.credentialReplay'))
+      const value = secret()
       await ctx.db.insert('attendance.Kiosk', {
         id,
         name: clean(a.name),
@@ -346,8 +350,9 @@ export const functions: Record<string, FnSpec> = {
     input: { employeeId: 'id', pin: 'text' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:attendance.Credential', 'write:attendance.Credential'],
+    exposure: 'internal',
     idempotent: true,
-    agent: true,
+    agent: false,
     handler: async (ctx: Ctx, a) => {
       const pin = clean(a.pin)
       if (!/^\d{4,12}$/.test(pin)) return invalid(issue('pin', 'attendance.error.invalid'))
@@ -360,19 +365,46 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  'credential.manageOptions': defineFn({
+    input: {},
+    output: { id: 'id', code: 'text', name: 'text' },
+    effects: [
+      'read:attendance.Kiosk',
+      'write:attendance.Kiosk',
+      'read:attendance.Credential',
+      'write:attendance.Credential',
+      'read:hr.Employee',
+      'read:partner.Partner',
+    ],
+    agent: false,
+    handler: async (ctx: Ctx) => {
+      const E = ctx.table('hr.Employee')
+      return (await ctx.db.all(from(E).preload('partner').where(eq(E.active, true)))).map((row) => ({
+        id: row.id,
+        code: row.code,
+        name: String((row.partner as Row | null)?.name ?? row.code),
+      }))
+    },
+  }),
+
   'credential.manageQr': defineFn({
-    input: { employeeId: 'id' },
+    input: { employeeId: 'id', requestKey: 'text?' },
     output: { ok: 'bool', id: 'id?', secret: 'text?', errors: 'json?' },
     effects: ['read:attendance.Credential', 'write:attendance.Credential'],
+    exposure: 'internal',
     idempotent: true,
-    agent: true,
+    agent: false,
     handler: async (ctx: Ctx, a) => {
-      const value = qrSecret()
       const existing = (await ctx.db.select('attendance.Credential', { employeeId: a.employeeId }))[0]
+      const requestKey = clean(a.requestKey)
+      if (requestKey && existing?.qrRequestKey === requestKey)
+        return invalid(issue('requestKey', 'attendance.error.credentialReplay'))
+      const value = qrSecret()
       const id = String(existing?.id ?? `employee:${a.employeeId}`)
       const values = {
         employeeId: a.employeeId,
         qrDigest: digest(value),
+        qrRequestKey: requestKey || null,
         qrIssuedAt: now(),
         active: true,
         updatedAt: now(),

@@ -40,12 +40,12 @@ import {
   paymentTermsListScreen,
   taxFormScreen,
   taxesListScreen,
+  trialBalanceScreen,
   vendorBillFormScreen,
   vendorBillsListScreen,
 } from './screens/index.ts'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
-import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { overviewCharts, periodOf, yearsOf } from './overview.ts'
@@ -264,6 +264,12 @@ const paymentFormPath = (url: URL, returnTo: string): string => {
   target.searchParams.set('returnTo', returnTo)
   return `${target.pathname}${target.search}`
 }
+
+/** HTML date fields are accounting days; domain report filters compare instants in UTC. */
+const accountingRangeInstant = (value: string, edge: 'start' | 'end'): string =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `${value}T${edge === 'start' ? '00:00:00.000' : '23:59:59.999'}Z`
+    : value
 
 const paymentTermSummary = (rows: AnyRow[]) => ({
   total: rows.length,
@@ -3013,22 +3019,34 @@ export default defineModule({
         if (req.method !== 'GET') return text('GET', { status: 405 })
         const dateFrom = url.searchParams.get('dateFrom') ?? '',
           dateTo = url.searchParams.get('dateTo') ?? ''
+        const inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
+        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
+        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
         const [rows, companies] = (await Promise.all([
-          ctx.call(
-            'account.trialBalance',
-            { ...(dateFrom ? { dateFrom } : {}), ...(dateTo ? { dateTo } : {}) },
-            url,
-            req,
-          ),
+          inverted
+            ? Promise.resolve([])
+            : ctx.call(
+                'account.trialBalance',
+                {
+                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
+                  ...(toInstant ? { dateTo: toInstant } : {}),
+                },
+                url,
+                req,
+              ),
           ctx.call('company.listCompanies', {}, url, req),
         ])) as [AnyRow[], AnyRow[]]
+        rows.sort((a, b) =>
+          String(a.code ?? '').localeCompare(String(b.code ?? ''), undefined, { numeric: true }),
+        )
         return adminPage(ctx, url, req, {
           title: 'account_backend.trialBalance.title',
           body: (_, frame) => {
             const currency = currencyOf(companies, frame)
             return trialBalanceScreen(_, {
               frame: frame,
-              action: `/admin/accounting/trial-balance${localeQuery(url)}`,
+              action: '/admin/accounting/trial-balance',
+              locale: url.searchParams.get('lang') ?? '',
               rows,
               currency,
               // The balance carries its own date window into the ledger, so the
@@ -3043,9 +3061,20 @@ export default defineModule({
                 return `${target.pathname}${target.search}`
               },
               fields: [
-                { name: 'dateFrom', label: _('account_backend.field.dateFrom'), value: dateFrom },
-                { name: 'dateTo', label: _('account_backend.field.dateTo'), value: dateTo },
+                {
+                  name: 'dateFrom',
+                  label: _('account_backend.field.dateFrom'),
+                  value: dateFrom,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
+                },
+                {
+                  name: 'dateTo',
+                  label: _('account_backend.field.dateTo'),
+                  value: dateTo,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
+                },
               ],
+              errors: inverted ? [_('account_backend.trial.filter.rangeError')] : undefined,
             })
           },
         })
@@ -3058,12 +3087,14 @@ export default defineModule({
           accountId = url.searchParams.get('accountId') ?? '',
           dateFrom = url.searchParams.get('dateFrom') ?? '',
           dateTo = url.searchParams.get('dateTo') ?? ''
+        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
+        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
         const rows = (await ctx.call(
           'account.generalLedger',
           {
             ...(accountId ? { accountId } : {}),
-            ...(dateFrom ? { dateFrom } : {}),
-            ...(dateTo ? { dateTo } : {}),
+            ...(fromInstant ? { dateFrom: fromInstant } : {}),
+            ...(toInstant ? { dateTo: toInstant } : {}),
             limit: LIST_PAGE,
           },
           url,
@@ -3387,6 +3418,7 @@ const vi: Record<string, string> = {
   'trial.summary.balance': 'Chênh lệch',
   'trial.filter.title': 'Kỳ báo cáo',
   'trial.filter.hint': 'Để trống ngày để tính trên toàn bộ bút toán đã ghi sổ.',
+  'trial.filter.rangeError': 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.',
   'trial.result.title': 'Số dư theo tài khoản',
   'trial.result.hint': 'Tổng Nợ và Có phải cân bằng trên toàn bộ hệ thống tài khoản.',
   'trial.empty': 'Không có số liệu trong kỳ',
@@ -3763,6 +3795,7 @@ const en: Record<string, string> = {
   'trial.summary.balance': 'Difference',
   'trial.filter.title': 'Reporting period',
   'trial.filter.hint': 'Leave dates blank to calculate across all posted entries.',
+  'trial.filter.rangeError': 'The end date must be on or after the start date.',
   'trial.result.title': 'Balances by account',
   'trial.result.hint': 'Total debit and credit must balance across the chart of accounts.',
   'trial.empty': 'No figures for this period',

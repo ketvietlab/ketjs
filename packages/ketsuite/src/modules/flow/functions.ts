@@ -502,6 +502,46 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   /**
+   * The menu-level epic collection, paged after one company-scoped read.
+   *
+   * `epic.list` remains project-scoped for relation controls and project
+   * screens. Folding those calls together in the backend inherited both its
+   * 80-row default and `project.list`'s 200-row cap, so an "all" screen could
+   * silently omit valid records.
+   */
+  'epic.listAll': defineFn({
+    input: { search: 'text?', cursor: 'int?', limit: 'int?' },
+    output: { rows: 'json', total: 'int' },
+    effects: ['read:flow.Epic', 'read:flow.Project'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const [epics, projects] = await Promise.all([
+        ctx.db.select('flow.Epic', { active: true }),
+        ctx.db.select('flow.Project', { active: true }),
+      ])
+      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
+      const needle = normalized(args.search)
+      const rows = epics
+        .filter(
+          (epic) => named.has(String(epic.projectId)) && (!needle || normalized(epic.title).includes(needle)),
+        )
+        .map((epic): Row & { projectName: string } => ({
+          ...(epic as Row),
+          projectName: named.get(String(epic.projectId)) ?? '',
+        }))
+        .sort(
+          (a, b) =>
+            String(a.projectName).localeCompare(String(b.projectName)) ||
+            String(a.title ?? '').localeCompare(String(b.title ?? '')) ||
+            String(a.id).localeCompare(String(b.id)),
+        )
+      const cursor = Math.max(0, n(args.cursor ?? 0))
+      const limit = Math.max(1, Math.min(200, n(args.limit ?? 50)))
+      return { rows: rows.slice(cursor, cursor + limit), total: rows.length }
+    },
+  }),
+
+  /**
    * One epic by id — what Live Doc reads to find its stored document, and what
    * the epic's own screen is built from.
    */
