@@ -4,6 +4,7 @@ import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { account, company, MOVE_TYPES, partner, product, TAX_AMOUNT_TYPES, uom } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
+import { roundMoney } from '../packages/ketsuite/src/modules/account/money.ts'
 
 const modules = [address, partner, company, uom, product, account]
 const manifest = compose(modules, { headless: true })
@@ -11,6 +12,11 @@ const scope = { company: 'acme', branches: null }
 
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
   callFn(name, args, { adapter, manifest, scope })
+
+test('accounting: half-up rounding survives binary representation at currency scale', () => {
+  assert.equal(roundMoney(1.005, 2), 1.01)
+  assert.equal(roundMoney(-1.005, 2), -1.01)
+})
 
 async function boot() {
   const adapter = sqliteAdapter()
@@ -366,6 +372,24 @@ test('accounting: a tax that affects the base compounds into the next one', asyn
       },
       adapter,
     )
+    const quote = (
+      await call(
+        'account.quoteLine',
+        { quantity: '1', priceUnit: '1000000', taxIds: ['vat10', 'import5'] },
+        adapter,
+      )
+    ).value as Row
+    assert.deepEqual(
+      [quote.amountUntaxed, quote.amountTax, quote.amountTotal],
+      ['1000000', '155000', '1155000'],
+    )
+    assert.deepEqual(
+      (quote.taxes as Row[]).map((tax) => [tax.id, tax.share]),
+      [
+        ['import5', '50000'],
+        ['vat10', '105000'],
+      ],
+    )
     const created = (
       await call(
         'account.createInvoice',
@@ -403,6 +427,30 @@ test('accounting: a tax that affects the base compounds into the next one', asyn
       invoice.lines.reduce((sum, line) => sum + Number(line.debit), 0),
       invoice.lines.reduce((sum, line) => sum + Number(line.credit), 0),
     )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: the public quote separates a price-included percentage before submit', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.saveTax',
+      {
+        id: 'vat-included',
+        name: 'VAT 10% included',
+        typeTaxUse: 'sale',
+        amountType: 'percent',
+        amount: '10',
+        priceInclude: true,
+      },
+      adapter,
+    )
+    const quote = (
+      await call('account.quoteLine', { quantity: '1', priceUnit: '110', taxIds: ['vat-included'] }, adapter)
+    ).value as Row
+    assert.deepEqual([quote.amountUntaxed, quote.amountTax, quote.amountTotal], ['100', '10', '110'])
   } finally {
     await adapter.close()
   }

@@ -1,6 +1,6 @@
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { functions as accountFunctions } from '../account/functions.ts'
+import { functions as accountFunctions, quoteTaxLine } from '../account/functions.ts'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
@@ -40,29 +40,6 @@ async function nextOrderNumber(ctx: Ctx, sessionId: unknown) {
     if ('dryRun' in changed || changed.matched) return current
   }
   throw new Error('POS order sequence did not settle after concurrent updates')
-}
-function taxAmounts(tax: Row | null, gross: number, quantity: number) {
-  if (!tax) return { untaxed: money(gross), tax: 0, total: money(gross) }
-  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported POS subset')
-  const amount = n(tax.amount),
-    rate = amount / 100
-  let untaxed = money(gross),
-    taxAmount = 0
-  if (tax.amountType === 'fixed') {
-    taxAmount = money(amount * quantity)
-    if (tax.priceInclude) untaxed = money(gross - taxAmount)
-    return { untaxed, tax: taxAmount, total: tax.priceInclude ? money(gross) : money(gross + taxAmount) }
-  }
-  if (tax.amountType === 'division') {
-    if (tax.priceInclude) {
-      untaxed = money(gross * (1 - rate))
-      taxAmount = money(gross - untaxed)
-    } else taxAmount = money(gross / (1 - rate) - gross)
-  } else if (tax.priceInclude) {
-    untaxed = money(gross / (1 + rate))
-    taxAmount = money(gross - untaxed)
-  } else taxAmount = money(gross * rate)
-  return { untaxed, tax: taxAmount, total: money(untaxed + taxAmount) }
 }
 async function recompute(ctx: Ctx, orderId: unknown) {
   const lines = await ctx.db.select('pos.OrderLine', { orderId })
@@ -614,6 +591,8 @@ export const functions: Record<string, FnSpec> = {
       priceUnit: 'decimal?',
       discount: 'decimal?',
       taxId: 'id?',
+      taxIds: 'json?',
+      quoteRevision: 'text?',
     },
     output: { ok: 'bool', id: 'id?', priceUnit: 'decimal?', errors: 'json?' },
     effects: [
@@ -633,6 +612,8 @@ export const functions: Record<string, FnSpec> = {
       'read:pricing.Pricelist',
       'read:pricing.PricelistItem',
       'read:account.Tax',
+      'read:account.ProductTax',
+      'read:company.Company',
     ],
     idempotent: true,
     agent: true,
@@ -662,15 +643,15 @@ export const functions: Record<string, FnSpec> = {
       priceUnit ??= product.template.listPrice
       if (n(discount) < 0 || n(discount) > 100 || n(priceUnit) < 0)
         return invalid('discount', 'price and discount are invalid')
-      const tax = args.taxId ? (await ctx.db.select('account.Tax', { id: args.taxId }))[0] : null
-      if (args.taxId && (!tax || !['sale', 'none'].includes(String(tax.typeTaxUse))))
-        return invalid('taxId', 'tax use does not match POS sales')
-      let amounts: ReturnType<typeof taxAmounts>
-      try {
-        amounts = taxAmounts(tax, n(args.qty) * n(priceUnit) * (1 - n(discount) / 100), n(args.qty))
-      } catch (error) {
-        return invalid('taxId', (error as Error).message)
-      }
+      const taxIds = args.taxIds !== undefined ? args.taxIds : args.taxId ? [args.taxId] : undefined
+      const quote = await quoteTaxLine(ctx, {
+        productId: args.productId,
+        taxIds,
+        quantity: args.qty,
+        priceUnit,
+        discount,
+      })
+      if (quote.ok !== true) return quote
       if (!(await ctx.db.select('pos.OrderLine', { id: args.id }))[0])
         await ctx.db.insert('pos.OrderLine', {
           id: args.id,
@@ -681,9 +662,12 @@ export const functions: Record<string, FnSpec> = {
           qty: args.qty,
           priceUnit: String(priceUnit),
           discount: String(discount),
-          taxId: args.taxId ?? null,
-          priceSubtotal: decimal(amounts.untaxed),
-          priceSubtotalIncl: decimal(amounts.total),
+          taxId: quote.taxIds[0] ?? null,
+          taxIds: quote.taxIds,
+          taxEvidence: { currency: quote.currency, scale: quote.scale, taxes: quote.taxes },
+          quoteRevision: args.quoteRevision ?? null,
+          priceSubtotal: quote.amountUntaxed,
+          priceSubtotalIncl: quote.amountTotal,
           refundedOrderlineId: null,
           sequence: 10,
         })
@@ -937,6 +921,9 @@ export const functions: Record<string, FnSpec> = {
           priceUnit: line.priceUnit,
           discount: line.discount,
           taxId: line.taxId,
+          taxIds: line.taxIds ?? (line.taxId ? [line.taxId] : []),
+          taxEvidence: line.taxEvidence ?? null,
+          quoteRevision: line.quoteRevision ?? null,
           priceSubtotal: decimal(-n(line.priceSubtotal)),
           priceSubtotalIncl: decimal(-n(line.priceSubtotalIncl)),
           refundedOrderlineId: line.id,

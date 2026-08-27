@@ -13,12 +13,13 @@ const money = (value: number): number => Math.round((value + Number.EPSILON) * 1
 const decimal = (value: number): string => String(money(value))
 
 const lineTotal = async (ctx: Ctx, line: Row): Promise<number> => {
+  if (line.priceSubtotalIncl != null) return n(line.priceSubtotalIncl)
   if (!line.taxId) return n(line.priceSubtotal)
   const tax = (await ctx.db.select('account.Tax', { id: line.taxId }))[0]
   if (!tax) return n(line.priceSubtotal)
   const gross = money(n(line.productUomQty) * n(line.priceUnit) * (1 - n(line.discount) / 100))
-  const amount = n(tax.amount),
-    rate = amount / 100
+  const amount = n(tax.amount)
+  const rate = amount / 100
   if (tax.amountType === 'fixed')
     return tax.priceInclude ? gross : money(gross + amount * n(line.productUomQty))
   if (tax.amountType === 'division') return tax.priceInclude ? gross : money(gross / (1 - rate))
@@ -52,8 +53,8 @@ export const saleSnapshot = async (ctx: Ctx, orderId: string) => {
 const recompute = async (ctx: Ctx, orderId: string) => {
   const lines = await ours(ctx, 'sale.OrderLine', { orderId })
   const untaxed = money(lines.reduce((sum, line) => sum + n(line.priceSubtotal), 0))
-  let total = 0
-  for (const line of lines) total += await lineTotal(ctx, line)
+  const totals = await Promise.all(lines.map((line) => lineTotal(ctx, line)))
+  const total = money(totals.reduce((sum, amount) => sum + amount, 0))
   await ctx.db.update(
     'sale.Order',
     {
@@ -106,9 +107,13 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
     priceUnit: decimal(priceUnit),
     discount: '0',
     taxId: null,
+    taxIds: [],
+    taxEvidence: null,
+    quoteRevision: null,
     qtyDelivered: '0',
     qtyInvoiced: '0',
     priceSubtotal: decimal(quantity * priceUnit),
+    priceSubtotalIncl: decimal(quantity * priceUnit),
     sequence: 9000,
     lineKind: 'reward',
     loyaltyApplicationId: `sale:${orderId}:${programId}`,

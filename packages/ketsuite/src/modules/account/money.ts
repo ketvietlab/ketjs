@@ -51,7 +51,8 @@ export const scaleOf = (currency: unknown): number => {
 export const roundMoney = (value: number, scale: number): number => {
   if (!Number.isFinite(value)) return 0
   const factor = 10 ** scale
-  const magnitude = Math.round(Math.abs(value) * factor + Number.EPSILON) / factor
+  const scaled = Math.abs(value) * factor
+  const magnitude = Math.round(scaled + Number.EPSILON * Math.max(1, scaled)) / factor
   return value < 0 ? -magnitude : magnitude
 }
 
