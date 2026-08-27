@@ -1,0 +1,767 @@
+import type { Route, ServeContext } from '@ketvietlab/ketjs'
+import type { Row } from '@ketvietlab/ketjs'
+import { channelError, defineChannelRoute, routesOf, stableHash } from '../channel_api/core.ts'
+
+type Req = Parameters<Route>[1]
+
+const string = { type: 'string' }
+const integer = { type: 'integer', minimum: 0 }
+const nullableString = { type: ['string', 'null'] }
+const object = { type: 'object' }
+const envelope = (data: unknown) => ({
+  type: 'object',
+  properties: { data, error: {}, meta: { type: 'object' } },
+})
+const idParams = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string },
+  required: ['id'],
+}
+const lineParams = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, lineId: string },
+  required: ['id', 'lineId'],
+}
+const expectedBody = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { expectedRevision: integer },
+  required: ['expectedRevision'],
+}
+const orderLine = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    productId: string,
+    uomId: string,
+    name: string,
+    quantity: string,
+    unitPrice: string,
+    discount: string,
+    taxIds: { type: 'array', items: string },
+    amountUntaxed: string,
+    amountTotal: string,
+    sequence: integer,
+    quoteRevision: nullableString,
+  },
+  required: [
+    'id',
+    'productId',
+    'uomId',
+    'name',
+    'quantity',
+    'unitPrice',
+    'discount',
+    'taxIds',
+    'amountUntaxed',
+    'amountTotal',
+    'sequence',
+    'quoteRevision',
+  ],
+}
+const order = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    name: string,
+    uuid: string,
+    reference: string,
+    state: string,
+    shiftId: string,
+    customerId: nullableString,
+    note: nullableString,
+    currency: string,
+    amountUntaxed: string,
+    amountTax: string,
+    amountTotal: string,
+    amountPaid: string,
+    amountReturn: string,
+    priceBookRevision: nullableString,
+    revision: integer,
+    lines: { type: 'array', items: orderLine },
+    allowedActions: { type: 'array', items: string },
+  },
+  required: [
+    'id',
+    'name',
+    'uuid',
+    'reference',
+    'state',
+    'shiftId',
+    'customerId',
+    'note',
+    'currency',
+    'amountUntaxed',
+    'amountTax',
+    'amountTotal',
+    'amountPaid',
+    'amountReturn',
+    'priceBookRevision',
+    'revision',
+    'lines',
+    'allowedActions',
+  ],
+}
+const shift = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    name: string,
+    state: string,
+    operatorId: string,
+    deviceId: nullableString,
+    openedAt: nullableString,
+    closedAt: nullableString,
+    openingCash: string,
+    expectedCash: string,
+    countedCash: string,
+    difference: string,
+    revision: integer,
+    orderCount: integer,
+  },
+  required: [
+    'id',
+    'name',
+    'state',
+    'operatorId',
+    'deviceId',
+    'openedAt',
+    'closedAt',
+    'openingCash',
+    'expectedCash',
+    'countedCash',
+    'difference',
+    'revision',
+    'orderCount',
+  ],
+}
+
+const failure = (ctx: ServeContext, url: URL, req: Req, result: unknown) => {
+  const issues = Array.isArray((result as { errors?: unknown })?.errors)
+    ? ((result as { errors: Row[] }).errors ?? [])
+    : []
+  const conflict = issues.some((issue) => ['expectedRevision', 'state'].includes(String(issue.field)))
+  return {
+    status: conflict ? 409 : 422,
+    error: channelError(ctx, url, req, conflict ? 'pos.commandConflict' : 'pos.commandInvalid', {
+      messageKey: conflict ? 'pos_channel.error.commandConflict' : 'pos_channel.error.commandInvalid',
+      fieldErrors: Object.fromEntries(
+        issues.map((issue) => [
+          String(issue.field ?? 'command'),
+          {
+            code: 'pos.invalidField',
+            messageKey: 'pos_channel.error.invalidField',
+            params: {},
+          },
+        ]),
+      ),
+      retryable: conflict,
+    }),
+  }
+}
+
+const notFound = (ctx: ServeContext, url: URL, req: Req) => ({
+  status: 404,
+  error: channelError(ctx, url, req, 'pos.notFound', {
+    messageKey: 'pos_channel.error.notFound',
+  }),
+})
+
+const keyOf = (ctx: ServeContext, url: URL, req: Req) => {
+  const key = String(req.headers['idempotency-key'] ?? '').trim()
+  if (key.length >= 8 && key.length <= 200) return key
+  return {
+    status: 400,
+    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
+      messageKey: 'channel_api.error.idempotencyRequired',
+    }),
+  }
+}
+
+const commandId = (kind: string, scope: string, key: string): string =>
+  `${kind}_${stableHash(`${scope}\n${key}`).slice(0, 32)}`
+
+const projectOrder = (row: Row) => ({
+  id: String(row.id),
+  name: String(row.name),
+  uuid: String(row.uuid),
+  reference: String(row.posReference),
+  state: String(row.state),
+  shiftId: String(row.sessionId),
+  customerId: row.partnerId == null ? null : String(row.partnerId),
+  note: row.note == null ? null : String(row.note),
+  currency: String(row.currency),
+  amountUntaxed: String(row.amountUntaxed),
+  amountTax: String(row.amountTax),
+  amountTotal: String(row.amountTotal),
+  amountPaid: String(row.amountPaid),
+  amountReturn: String(row.amountReturn),
+  priceBookRevision: row.priceBookRevision == null ? null : String(row.priceBookRevision),
+  revision: Number(row.revision ?? 0),
+  lines: (Array.isArray(row.lines) ? (row.lines as Row[]) : [])
+    .map((line) => ({
+      id: String(line.id),
+      productId: String(line.productId),
+      uomId: String(line.productUomId),
+      name: String(line.name),
+      quantity: String(line.qty),
+      unitPrice: String(line.priceUnit),
+      discount: String(line.discount),
+      taxIds: Array.isArray(line.taxIds) ? line.taxIds.map(String) : line.taxId ? [String(line.taxId)] : [],
+      amountUntaxed: String(line.priceSubtotal),
+      amountTotal: String(line.priceSubtotalIncl),
+      sequence: Number(line.sequence),
+      quoteRevision: line.quoteRevision == null ? null : String(line.quoteRevision),
+    }))
+    .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id)),
+  allowedActions:
+    row.state === 'draft'
+      ? ['update', 'add_line', 'update_line', 'remove_line', 'reorder_lines', 'cancel']
+      : [],
+})
+
+const orderFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: Row) => {
+  const row = (await ctx.call('pos.getOrder', { id }, url, req)) as Row | null
+  if (!row || String(row.configId) !== String(identity.posConfigId)) return null
+  if (row.state === 'draft' && row.deviceId && String(row.deviceId) !== String(identity.deviceId)) return null
+  return row
+}
+
+const orderResult = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: Row) => {
+  const row = await orderFor(ctx, url, req, id, identity)
+  if (!row) return notFound(ctx, url, req)
+  const data = projectOrder(row)
+  return { data, headers: { etag: `"pos-order-${data.revision}"` } }
+}
+
+const projectShift = (row: Row) => ({
+  id: String(row.id),
+  name: String(row.name),
+  state: String(row.state),
+  operatorId: String(row.userId),
+  deviceId: row.deviceId == null ? null : String(row.deviceId),
+  openedAt: row.startAt == null ? null : String(row.startAt),
+  closedAt: row.stopAt == null ? null : String(row.stopAt),
+  openingCash: String(row.cashRegisterBalanceStart),
+  expectedCash: String(row.cashRegisterBalanceEnd),
+  countedCash: String(row.cashRegisterBalanceEndReal),
+  difference: String(row.cashRegisterDifference),
+  revision: Number(row.revision ?? 0),
+  orderCount: Array.isArray(row.orders) ? row.orders.length : 0,
+})
+
+const shiftFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: Row) => {
+  const row = (await ctx.call('pos.getSession', { id }, url, req)) as Row | null
+  if (!row || String(row.configId) !== String(identity.posConfigId)) return null
+  if (row.deviceId && String(row.deviceId) !== String(identity.deviceId)) return null
+  return row
+}
+
+const shiftResult = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: Row) => {
+  const row = await shiftFor(ctx, url, req, id, identity)
+  if (!row) return notFound(ctx, url, req)
+  const data = projectShift(row)
+  return { data, headers: { etag: `"pos-shift-${data.revision}"` } }
+}
+
+const commandOptions = (identity: Row, action: string, key: string) => ({
+  idempotencyKey: key,
+  idempotencyNamespace: `pos:${String(identity.companyId)}:${String(identity.deviceId)}:${action}`,
+})
+
+export const operationRoutes = routesOf(
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'shifts',
+    operationId: 'pos.shifts.create',
+    summary: 'Create one opening-control shift in the live device configuration.',
+    auth: 'required',
+    request: {
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { openingCash: string, openingNotes: string },
+        required: ['openingCash'],
+      },
+    },
+    responses: {
+      '200': envelope(shift),
+      '400': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, _params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      const id = commandId('shift', String(identity.deviceId), key)
+      const result = (await ctx.call(
+        'pos.createSession',
+        {
+          id,
+          configId: identity.posConfigId,
+          userId: identity.operatorId,
+          deviceId: identity.deviceId,
+          openingCash: request.body.openingCash,
+          openingNotes: request.body.openingNotes,
+        },
+        url,
+        req,
+        commandOptions(identity, 'shift.create', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return shiftResult(ctx, url, req, id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'GET',
+    path: 'shifts/current',
+    operationId: 'pos.shifts.current',
+    summary: 'Read the active shift for the live device configuration, or null when none is open.',
+    auth: 'required',
+    responses: { '200': envelope({ anyOf: [shift, { type: 'null' }] }) },
+    handler: async (ctx, url, req, _params, request) => {
+      const identity = request.identity! as unknown as Row
+      const sessions = (await ctx.call('pos.listSessions', {}, url, req)) as Row[]
+      const active = sessions
+        .filter(
+          (row) =>
+            String(row.configId) === String(identity.posConfigId) &&
+            (!row.deviceId || String(row.deviceId) === String(identity.deviceId)) &&
+            row.state !== 'closed',
+        )
+        .sort((left, right) => String(right.startAt ?? '').localeCompare(String(left.startAt ?? '')))[0]
+      if (!active) return { data: null }
+      const row = (await ctx.call('pos.getSession', { id: active.id }, url, req)) as Row
+      return { data: projectShift(row), headers: { etag: `"pos-shift-${Number(row.revision ?? 0)}"` } }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'GET',
+    path: 'shifts/{id}',
+    operationId: 'pos.shifts.get',
+    summary: 'Read one canonical revisioned shift.',
+    auth: 'required',
+    request: { params: idParams },
+    responses: { '200': envelope(shift), '404': envelope(object) },
+    handler: (ctx, url, req, params, request) =>
+      shiftResult(ctx, url, req, params.id, request.identity! as unknown as Row),
+  }),
+  ...(['open', 'start-closing'] as const).map((action) =>
+    defineChannelRoute({
+      profile: 'pos',
+      method: 'POST',
+      path: `shifts/{id}/${action}`,
+      operationId: `pos.shifts.${action === 'open' ? 'open' : 'startClosing'}`,
+      summary:
+        action === 'open' ? 'Open an opening-control shift.' : 'Move an open shift to closing control.',
+      auth: 'required',
+      request: { params: idParams, body: expectedBody },
+      responses: {
+        '200': envelope(shift),
+        '404': envelope(object),
+        '409': envelope(object),
+        '422': envelope(object),
+      },
+      idempotent: true,
+      handler: async (ctx, url, req, params, request) => {
+        const key = keyOf(ctx, url, req)
+        if (typeof key !== 'string') return key
+        const identity = request.identity! as unknown as Row
+        if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+        const result = (await ctx.call(
+          action === 'open' ? 'pos.openSession' : 'pos.startClosing',
+          { id: params.id, expectedRevision: request.body.expectedRevision },
+          url,
+          req,
+          commandOptions(identity, `shift.${action}`, key),
+        )) as Row
+        if (result.ok !== true) return failure(ctx, url, req, result)
+        return shiftResult(ctx, url, req, params.id, identity)
+      },
+    }),
+  ),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'shifts/{id}/close',
+    operationId: 'pos.shifts.close',
+    summary: 'Close a shift whose counted cash is within the configured tolerance.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { expectedRevision: integer, countedCash: string, closingNotes: string },
+        required: ['expectedRevision', 'countedCash'],
+      },
+    },
+    responses: {
+      '200': envelope(shift),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.closeSession',
+        {
+          id: params.id,
+          expectedRevision: request.body.expectedRevision,
+          closingCash: request.body.countedCash,
+          closingNotes: request.body.closingNotes,
+        },
+        url,
+        req,
+        commandOptions(identity, 'shift.close', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return shiftResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders',
+    operationId: 'pos.orders.create',
+    summary: 'Create or replay one empty revisioned POS draft owned by this device.',
+    auth: 'required',
+    request: {
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          uuid: string,
+          shiftId: string,
+          customerId: string,
+          note: string,
+          priceBookRevision: string,
+        },
+        required: ['uuid', 'shiftId', 'priceBookRevision'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '400': envelope(object),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, _params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await shiftFor(ctx, url, req, String(request.body.shiftId), identity)))
+        return notFound(ctx, url, req)
+      const id = commandId('order', String(identity.deviceId), String(request.body.uuid))
+      const result = (await ctx.call(
+        'pos.createOrder',
+        {
+          id,
+          uuid: request.body.uuid,
+          sessionId: request.body.shiftId,
+          partnerId: request.body.customerId,
+          note: request.body.note,
+          operatorId: identity.operatorId,
+          deviceId: identity.deviceId,
+          priceBookRevision: request.body.priceBookRevision,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.create', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, String(result.id), identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'GET',
+    path: 'orders/{id}/detail',
+    operationId: 'pos.orders.get',
+    summary: 'Read one canonical revisioned POS order.',
+    auth: 'required',
+    request: { params: idParams },
+    responses: { '200': envelope(order), '404': envelope(object) },
+    handler: (ctx, url, req, params, request) =>
+      orderResult(ctx, url, req, params.id, request.identity! as unknown as Row),
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'PATCH',
+    path: 'orders/{id}/update',
+    operationId: 'pos.orders.update',
+    summary: 'Update customer or note under the order revision.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { expectedRevision: integer, customerId: nullableString, note: string },
+        required: ['expectedRevision'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.updateOrder',
+        {
+          id: params.id,
+          expectedRevision: request.body.expectedRevision,
+          partnerId: request.body.customerId ?? undefined,
+          clearPartner: request.body.customerId === null,
+          note: request.body.note,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.update', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/lines',
+    operationId: 'pos.orders.lines.add',
+    summary: 'Add one canonically quoted line under the order revision.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          expectedRevision: integer,
+          productId: string,
+          uomId: string,
+          quantity: string,
+          unitPrice: string,
+          discount: string,
+          taxIds: { type: 'array', items: string },
+          quoteRevision: string,
+        },
+        required: ['expectedRevision', 'productId', 'uomId', 'quantity', 'quoteRevision'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.addLine',
+        {
+          id: commandId('line', params.id, key),
+          orderId: params.id,
+          productId: request.body.productId,
+          productUomId: request.body.uomId,
+          qty: request.body.quantity,
+          priceUnit: request.body.unitPrice,
+          discount: request.body.discount,
+          taxIds: request.body.taxIds,
+          quoteRevision: request.body.quoteRevision,
+          expectedRevision: request.body.expectedRevision,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.line.add', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'PATCH',
+    path: 'orders/{id}/lines/{lineId}/update',
+    operationId: 'pos.orders.lines.update',
+    summary: 'Requote and update one member line under the order revision.',
+    auth: 'required',
+    request: {
+      params: lineParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          expectedRevision: integer,
+          quantity: string,
+          unitPrice: string,
+          discount: string,
+          taxIds: { type: 'array', items: string },
+          quoteRevision: string,
+          sequence: integer,
+        },
+        required: ['expectedRevision', 'quantity'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.updateLine',
+        {
+          id: params.lineId,
+          orderId: params.id,
+          expectedRevision: request.body.expectedRevision,
+          qty: request.body.quantity,
+          priceUnit: request.body.unitPrice,
+          discount: request.body.discount,
+          taxIds: request.body.taxIds,
+          quoteRevision: request.body.quoteRevision,
+          sequence: request.body.sequence,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.line.update', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'DELETE',
+    path: 'orders/{id}/lines/{lineId}/remove',
+    operationId: 'pos.orders.lines.remove',
+    summary: 'Remove one member line under the order revision.',
+    auth: 'required',
+    request: { params: lineParams, body: expectedBody },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.removeLine',
+        { id: params.lineId, orderId: params.id, expectedRevision: request.body.expectedRevision },
+        url,
+        req,
+        commandOptions(identity, 'order.line.remove', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/lines/reorder',
+    operationId: 'pos.orders.lines.reorder',
+    summary: 'Replace line order using an exact membership list.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { expectedRevision: integer, lineIds: { type: 'array', items: string } },
+        required: ['expectedRevision', 'lineIds'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.reorderLines',
+        { id: params.id, expectedRevision: request.body.expectedRevision, lineIds: request.body.lineIds },
+        url,
+        req,
+        commandOptions(identity, 'order.line.reorder', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/cancel',
+    operationId: 'pos.orders.cancel',
+    summary: 'Cancel one draft under the order revision.',
+    auth: 'required',
+    request: { params: idParams, body: expectedBody },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.cancelOrder',
+        { id: params.id, expectedRevision: request.body.expectedRevision },
+        url,
+        req,
+        commandOptions(identity, 'order.cancel', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+)

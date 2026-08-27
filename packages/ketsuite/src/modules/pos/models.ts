@@ -2,6 +2,7 @@ import type { ModelDef } from '@ketvietlab/ketjs'
 
 export const models: Record<string, ModelDef> = {
   Sequence: { scope: 'company', fields: { id: 'id', nextNumber: 'int' } },
+  SessionLock: { scope: 'company', fields: { id: 'id', sessionId: 'text' } },
   Config: {
     scope: 'company',
     fields: {
@@ -33,6 +34,7 @@ export const models: Record<string, ModelDef> = {
       name: 'text',
       configId: 'ref:pos.Config',
       userId: 'ref:user.User',
+      deviceId: 'text?',
       state: 'text',
       startAt: 'datetime?',
       stopAt: 'datetime?',
@@ -42,6 +44,7 @@ export const models: Record<string, ModelDef> = {
       cashRegisterBalanceEnd: 'decimal',
       cashRegisterBalanceEndReal: 'decimal',
       cashRegisterDifference: 'decimal',
+      revision: 'int?',
     },
     indexes: { config_state: { fields: ['companyId', 'configId', 'state'] } },
   },
@@ -71,6 +74,10 @@ export const models: Record<string, ModelDef> = {
       accountMoveId: 'ref:account.Move?',
       pickingId: 'ref:stock.Picking?',
       note: 'text?',
+      revision: 'int?',
+      operatorId: 'text?',
+      deviceId: 'text?',
+      priceBookRevision: 'text?',
     },
     indexes: {
       company_uuid: { fields: ['companyId', 'uuid'], unique: true },
