@@ -1,6 +1,12 @@
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, stableHash } from '../channel_api/core.ts'
+import {
+  channelCommandId,
+  channelError,
+  defineChannelRoute,
+  routesOf,
+  type PosIdentity,
+} from '../channel_api/core.ts'
 
 type Req = Parameters<Route>[1]
 
@@ -183,9 +189,6 @@ const keyOf = (ctx: ServeContext, url: URL, req: Req) => {
   }
 }
 
-const commandId = (kind: string, scope: string, key: string): string =>
-  `${kind}_${stableHash(`${scope}\n${key}`).slice(0, 32)}`
-
 const projectOrder = (row: Row) => ({
   id: String(row.id),
   name: String(row.name),
@@ -225,14 +228,14 @@ const projectOrder = (row: Row) => ({
       : [],
 })
 
-const orderFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: Row) => {
+const orderFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
   const row = (await ctx.call('pos.getOrder', { id }, url, req)) as Row | null
   if (!row || String(row.configId) !== String(identity.posConfigId)) return null
   if (row.state === 'draft' && row.deviceId && String(row.deviceId) !== String(identity.deviceId)) return null
   return row
 }
 
-const orderResult = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: Row) => {
+const orderResult = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
   const row = await orderFor(ctx, url, req, id, identity)
   if (!row) return notFound(ctx, url, req)
   const data = projectOrder(row)
@@ -255,23 +258,23 @@ const projectShift = (row: Row) => ({
   orderCount: Array.isArray(row.orders) ? row.orders.length : 0,
 })
 
-const shiftFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: Row) => {
+const shiftFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
   const row = (await ctx.call('pos.getSession', { id }, url, req)) as Row | null
   if (!row || String(row.configId) !== String(identity.posConfigId)) return null
   if (row.deviceId && String(row.deviceId) !== String(identity.deviceId)) return null
   return row
 }
 
-const shiftResult = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: Row) => {
+const shiftResult = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
   const row = await shiftFor(ctx, url, req, id, identity)
   if (!row) return notFound(ctx, url, req)
   const data = projectShift(row)
   return { data, headers: { etag: `"pos-shift-${data.revision}"` } }
 }
 
-const commandOptions = (identity: Row, action: string, key: string) => ({
+const commandOptions = (identity: PosIdentity, action: string, key: string) => ({
   idempotencyKey: key,
-  idempotencyNamespace: `pos:${String(identity.companyId)}:${String(identity.deviceId)}:${action}`,
+  idempotencyNamespace: `pos:${identity.companyId}:${identity.posConfigId}:${identity.deviceId}:${action}`,
 })
 
 export const operationRoutes = routesOf(
@@ -300,8 +303,8 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, _params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
-      const id = commandId('shift', String(identity.deviceId), key)
+      const identity = request.identity!
+      const id = channelCommandId('shift', identity, key)
       const result = (await ctx.call(
         'pos.createSession',
         {
@@ -329,7 +332,7 @@ export const operationRoutes = routesOf(
     auth: 'required',
     responses: { '200': envelope({ anyOf: [shift, { type: 'null' }] }) },
     handler: async (ctx, url, req, _params, request) => {
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       const sessions = (await ctx.call('pos.listSessions', {}, url, req)) as Row[]
       const active = sessions
         .filter(
@@ -353,8 +356,7 @@ export const operationRoutes = routesOf(
     auth: 'required',
     request: { params: idParams },
     responses: { '200': envelope(shift), '404': envelope(object) },
-    handler: (ctx, url, req, params, request) =>
-      shiftResult(ctx, url, req, params.id, request.identity! as unknown as Row),
+    handler: (ctx, url, req, params, request) => shiftResult(ctx, url, req, params.id, request.identity!),
   }),
   ...(['open', 'start-closing'] as const).map((action) =>
     defineChannelRoute({
@@ -376,7 +378,7 @@ export const operationRoutes = routesOf(
       handler: async (ctx, url, req, params, request) => {
         const key = keyOf(ctx, url, req)
         if (typeof key !== 'string') return key
-        const identity = request.identity! as unknown as Row
+        const identity = request.identity!
         if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
         const result = (await ctx.call(
           action === 'open' ? 'pos.openSession' : 'pos.startClosing',
@@ -416,7 +418,7 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.closeSession',
@@ -466,10 +468,10 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, _params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await shiftFor(ctx, url, req, String(request.body.shiftId), identity)))
         return notFound(ctx, url, req)
-      const id = commandId('order', String(identity.deviceId), String(request.body.uuid))
+      const id = channelCommandId('order', identity, String(request.body.uuid))
       const result = (await ctx.call(
         'pos.createOrder',
         {
@@ -499,8 +501,7 @@ export const operationRoutes = routesOf(
     auth: 'required',
     request: { params: idParams },
     responses: { '200': envelope(order), '404': envelope(object) },
-    handler: (ctx, url, req, params, request) =>
-      orderResult(ctx, url, req, params.id, request.identity! as unknown as Row),
+    handler: (ctx, url, req, params, request) => orderResult(ctx, url, req, params.id, request.identity!),
   }),
   defineChannelRoute({
     profile: 'pos',
@@ -528,7 +529,7 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.updateOrder',
@@ -582,12 +583,12 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.addLine',
         {
-          id: commandId('line', params.id, key),
+          id: channelCommandId('line', identity, `${params.id}\n${key}`),
           orderId: params.id,
           productId: request.body.productId,
           productUomId: request.body.uomId,
@@ -640,7 +641,7 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.updateLine',
@@ -681,7 +682,7 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.removeLine',
@@ -720,7 +721,7 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.reorderLines',
@@ -751,7 +752,7 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.cancelOrder',
