@@ -19,4 +19,10 @@ export {
   type RoleListRow,
   type RolesListScreenOptions,
 } from './roles-list.tsx'
-export type { RoleRow } from './types.ts'
+export type { PermissionRow, RoleRow } from './types.ts'
+export {
+  roleIdentityFields,
+  roleScreen,
+  type RoleFormScreenOptions,
+  type RoleFormValues,
+} from './role-form.tsx'

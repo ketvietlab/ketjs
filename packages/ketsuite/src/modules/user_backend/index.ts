@@ -23,6 +23,5 @@ export { routes } from './routes.ts'
 export {
   presetsScreen,
   profileScreen,
-  roleScreen,
 } from './screens.tsx'
-export { rolesScreen, sessionsScreen, userFormScreen, usersScreen } from './screens/index.ts'
+export { roleScreen, rolesScreen, sessionsScreen, userFormScreen, usersScreen } from './screens/index.ts'

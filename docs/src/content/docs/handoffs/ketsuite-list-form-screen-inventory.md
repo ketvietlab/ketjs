@@ -232,8 +232,8 @@ routed Company renderer now lives in `company_backend/screens/` and the former r
 
 ### User and authentication lanes
 
-Structure debt: Waves 25–27 created `user_backend/screens/` with shared types, users/roles lists, user form and
-shared session leaves. Move role detail, presets and profile incrementally; USER-06 reuses
+Structure debt: Waves 25–28 created `user_backend/screens/` with shared types, users/roles lists and forms, and
+shared session leaves. Move presets and profile incrementally; USER-06 reuses
 `screens/sessions.tsx`. The public login renderer is a separate user module surface and is intentionally not
 forced into FormPage.
 
@@ -242,21 +242,21 @@ forced into FormPage.
 | USER-01 | user-backend | done | Users | `/admin/users` | `screens/users-list.tsx::usersScreen` | ListPage | Codex |
 | USER-02 | user-backend | done | User create/detail/access | `/admin/users/new`, `/admin/users/{id}` | `screens/user-form.tsx::userFormScreen`, `screens/sessions.tsx::sessionsScreen` | FormPage | Codex |
 | USER-03 | user-backend | done | Roles | `/admin/roles` | `screens/roles-list.tsx::rolesScreen` | ListPage | Codex |
-| USER-04 | user-backend | ready | Role create/detail | `/admin/roles/new`, `/admin/roles/{id}` | `roleScreen` | FormPage | — |
+| USER-04 | user-backend | done | Role create/detail | `/admin/roles/new`, `/admin/roles/{id}` | `screens/role-form.tsx::roleScreen` | FormPage | Codex |
 | USER-05 | user-backend | ready | Permission presets | `/admin/permission-presets` | `presetsScreen` | FormPage/Specialized | — |
 | USER-06 | user-backend | ready | Profile/security/preferences | `/admin/profile` | `profileScreen`, `sessionsScreen` | FormPage | — |
 | AUTH-01 | user | keep | Login | `/login` | `user/screens.tsx::loginScreen` | Specialized public auth | — |
 
 ### Address, activity, and calendar lanes
 
-Each of these modules still has a root `screens.tsx`; move the assigned renderer into a module-local
-`screens/` folder when its row begins.
+Wave 28 removed the Activity root `screens.tsx` and started the Address split. The country browser remains in
+the Address root until ADDRESS-02 moves; Calendar still needs its first module-local screen leaf.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
-| ADDRESS-01 | address | ready | Address catalogs | `/admin/addresses` | `catalogsScreen` | ListPage | — |
+| ADDRESS-01 | address | done | Address catalogs | `/admin/addresses` | `screens/catalogs-list.tsx::catalogsScreen` | ListPage | Codex |
 | ADDRESS-02 | address | ready | Country/division browser | `/admin/addresses/{countryCode}` | `countryScreen` | Specialized | — |
-| ACTIVITY-01 | activity | ready | Activities/to-do queue | `/admin/activities` | `activitiesScreen` | ListPage | — |
+| ACTIVITY-01 | activity | done | Activities/to-do queue | `/admin/activities` | `screens/activities-list.tsx::activitiesScreen` | ListPage | Codex |
 | CALENDAR-01 | calendar | ready | Calendar | `/admin/calendar` | `calendarScreen` | Specialized | — |
 
 ### Loyalty lane
@@ -1170,6 +1170,22 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   unchanged in this wave.
 - Wave 27 follows the CI-first rule: source and focused tests are committed without local execution, formatter
   or browser QA. CI failures activate only the targeted no-browser exception path before a follow-up push.
+
+### Wave 28 — USER-04, ADDRESS-01 and ACTIVITY-01
+
+- Role create/detail now uses `FormPage` with a single external save action and module-grouped permission
+  sections. Stable create identity survives rejected saves; submitted identity values remain visible, commands
+  are explicit while legacy detail/permission clients remain compatible, identifiers are encoded and locale is
+  preserved through actions and PRG. The renderer moved to `screens/role-form.tsx` with its types.
+- Address Catalogs now uses `ListPage` with whole-row country navigation, install state/count and an install
+  action only where needed. Route-owned destinations are encoded and locale-safe. The list renderer and catalog
+  types started the incremental `address_backend/screens/` split; the specialized country browser remains intact.
+- Activities now uses `ListPage` as an operational queue while retaining its task cards and inline complete,
+  reschedule and cancel controls. Target destinations are encoded and locale-safe; action URLs and post-action
+  redirects preserve locale, date and the closed-activity filter. The root renderer was replaced by
+  `screens/activities-list.tsx`.
+- Wave 28 follows the CI-first rule: source and focused test changes are pushed without local execution,
+  formatter or browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253
 

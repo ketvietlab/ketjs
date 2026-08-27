@@ -1,110 +1,13 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  badge,
-  code,
-  Framed,
-  inline,
-  linkButton,
-  Notice,
-  person,
-  RecordForm,
-  Section,
-  stack,
-  Surface,
-} from '../../ui/index.ts'
+import { badge, code, Framed, inline, Notice, person, RecordForm, Section, stack, Surface } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
 
 import { sessionsScreen } from './screens/index.ts'
-import type { RoleRow, SessionRow, UserRow } from './screens/index.ts'
+import type { SessionRow, UserRow } from './screens/index.ts'
 
-export type { RoleRow, SessionRow, UserRow } from './screens/index.ts'
-
-export type PermissionRow = {
-  key: string
-  module: string
-  moduleLabel: string
-  task: string
-  label: string
-  checked: boolean
-}
-
-export const roleScreen = (
-  _: Translator,
-  row: Partial<RoleRow>,
-  permissions: PermissionRow[],
-  frame: Frame,
-  locale = '',
-  errors?: string[],
-): TemplateResult => {
-  const create = !row.id
-  const groups = new Map<string, PermissionRow[]>()
-  for (const permission of permissions)
-    groups.set(permission.module, [...(groups.get(permission.module) ?? []), permission])
-  return (
-    <Framed
-      translator={_}
-      title={create ? _('user_backend.roles.create') : (row.name ?? '')}
-      frame={frame}
-      body={stack([
-        <Section
-          title={_('user_backend.roles.identity')}
-          body={
-            <Surface
-              body={
-                <RecordForm
-                  action={localized(create ? '/admin/roles/new' : `/admin/roles/${row.id}`, locale)}
-                  submit={_('user_backend.action.save')}
-                  submitVariant="primary"
-                  cancelHref={localized('/admin/roles', locale)}
-                  cancelLabel={_('user_backend.action.cancel')}
-                  errors={errors}
-                  fields={[
-                    { name: 'name', label: _('user_backend.field.name'), value: row.name, required: true },
-                    {
-                      name: 'description',
-                      label: _('user_backend.field.description'),
-                      value: row.description,
-                      type: 'textarea',
-                      span: 'full',
-                    },
-                  ]}
-                />
-              }
-            />
-          }
-        />,
-        ...(!create
-          ? [...groups.entries()].map(([moduleName, items]) => (
-              <Section
-                title={items[0]?.moduleLabel ?? moduleName}
-                description={_('user_backend.roles.permissionHint')}
-                body={
-                  <Surface
-                    body={
-                      <RecordForm
-                        action={localized(`/admin/roles/${row.id}/permissions`, locale)}
-                        submit={_('user_backend.action.savePermissions')}
-                        submitVariant="secondary"
-                        hidden={{ module: moduleName }}
-                        fields={items.map((permission) => ({
-                          name: `permission.${permission.key}`,
-                          label: permission.label,
-                          type: 'checkbox' as const,
-                          value: permission.checked,
-                        }))}
-                      />
-                    }
-                  />
-                }
-              />
-            ))
-          : []),
-      ])}
-    />
-  )
-}
+export type { PermissionRow, RoleRow, SessionRow, UserRow } from './screens/index.ts'
 
 export const presetsScreen = (
   _: Translator,

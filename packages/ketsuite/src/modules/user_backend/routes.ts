@@ -2,10 +2,16 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { presetsScreen, profileScreen, roleScreen } from './screens.tsx'
-import type { PermissionRow, RoleRow, SessionRow } from './screens.tsx'
-import { rolesScreen, userFormScreen, usersScreen } from './screens/index.ts'
-import type { UserFormValues, UserRow } from './screens/index.ts'
+import { presetsScreen, profileScreen } from './screens.tsx'
+import { rolesScreen, roleScreen, userFormScreen, usersScreen } from './screens/index.ts'
+import type {
+  PermissionRow,
+  RoleFormValues,
+  RoleRow,
+  SessionRow,
+  UserFormValues,
+  UserRow,
+} from './screens/index.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
@@ -194,21 +200,36 @@ const permissionGroups = async (
   }))
 }
 
-const renderRole = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
+const renderRole = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  id: string,
+  state: { errors?: string[]; values?: RoleFormValues } = {},
+) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
   const row = (await ctx.call('user.getRole', { id }, url, req)) as RoleRow | null
   if (!row) return text(_('user_backend.error.roleNotFound'), { status: 404 })
   return adminPage(ctx, url, req, {
-    title: row.name,
+    title: state.values?.name ?? row.name,
     translate: false,
+    active: '/admin/roles',
     body: async (_, frame) =>
       roleScreen(
         _,
-        row,
-        await permissionGroups(ctx, url, req, row.grants ?? []),
+        { ...row, ...state.values, id: row.id },
+        {
+          mode: 'detail',
+          action: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}`),
+          cancelHref: inLocale(url, '/admin/roles'),
+          permissionsAction: inLocale(
+            url,
+            `/admin/roles/${encodeURIComponent(row.id)}/permissions`,
+          ),
+          permissions: await permissionGroups(ctx, url, req, row.grants ?? []),
+          errors: state.errors,
+        },
         frame,
-        localeQuery(url),
-        errors,
       ),
   })
 }
@@ -611,24 +632,49 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
-        const id = randomUUID()
+        if (form.action !== 'save') return text('invalid action', { status: 400 })
+        const id = validCreateId(form.id) ? form.id : randomUUID()
         const result = await ctx.call(
           'user.saveRole',
           { id, name: form.name ?? '', description: form.description || null },
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/roles/${id}`))
+        if ((result as { ok?: boolean }).ok)
+          return seeOther(inLocale(url, `/admin/roles/${encodeURIComponent(id)}`))
         return adminPage(ctx, url, req, {
           title: 'user_backend.roles.create',
+          active: '/admin/roles',
           body: (_, frame) =>
-            roleScreen(_, form, [], frame, localeQuery(url), translatedErrors(ctx, url, req, result)),
+            roleScreen(
+              _,
+              { ...form, id },
+              {
+                mode: 'create',
+                action: inLocale(url, '/admin/roles/new'),
+                cancelHref: inLocale(url, '/admin/roles'),
+                errors: translatedErrors(ctx, url, req, result),
+              },
+              frame,
+            ),
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const id = randomUUID()
       return adminPage(ctx, url, req, {
         title: 'user_backend.roles.create',
-        body: (_, frame) => roleScreen(_, {}, [], frame, localeQuery(url)),
+        active: '/admin/roles',
+        body: (_, frame) =>
+          roleScreen(
+            _,
+            { id },
+            {
+              mode: 'create',
+              action: inLocale(url, '/admin/roles/new'),
+              cancelHref: inLocale(url, '/admin/roles'),
+            },
+            frame,
+          ),
       })
     },
 
@@ -639,6 +685,7 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
+      if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
       const result = await ctx.call(
         'user.saveRole',
         { id: params.id, name: form.name ?? '', description: form.description || null },
@@ -646,8 +693,11 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther(inLocale(url, `/admin/roles/${params.id}`))
-        : renderRole(ctx, url, req, params.id, translatedErrors(ctx, url, req, result))
+        ? seeOther(inLocale(url, `/admin/roles/${encodeURIComponent(params.id)}`))
+        : renderRole(ctx, url, req, params.id, {
+            errors: translatedErrors(ctx, url, req, result),
+            values: form,
+          })
     },
 
   '/admin/roles/{id}/permissions':
@@ -656,6 +706,7 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
+      if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
       const moduleName = form.module ?? ''
       const selected = new Set(desired(form, 'permission'))
       const catalogue = (await ctx.call('user.permissionCatalogue', {}, url, req)) as Array<{
@@ -677,7 +728,7 @@ export const routes: Record<string, RouteEntry> = {
         if (!selected.has(group) && held.has(permission.key))
           await ctx.call('user.revokeFunction', { roleId: params.id, fnKey: permission.key }, url, req)
       }
-      return seeOther(inLocale(url, `/admin/roles/${params.id}`))
+      return seeOther(inLocale(url, `/admin/roles/${encodeURIComponent(params.id)}`))
     },
 
   '/admin/permission-presets':

@@ -33,3 +33,12 @@ export type RoleRow = {
   description?: string | null
   grants?: Array<{ fnKey: string }>
 }
+
+export type PermissionRow = {
+  key: string
+  module: string
+  moduleLabel: string
+  task: string
+  label: string
+  checked: boolean
+}

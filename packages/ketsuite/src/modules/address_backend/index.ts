@@ -86,4 +86,5 @@ export default defineModule({
   },
 })
 
-export { catalogsScreen, countryScreen } from './screens.tsx'
+export { countryScreen } from './screens.tsx'
+export { catalogsScreen } from './screens/index.ts'

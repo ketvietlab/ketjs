@@ -1,8 +1,9 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { seeOther } from '../backend/forms.ts'
-import { catalogsScreen, countryScreen } from './screens.tsx'
+import { countryScreen } from './screens.tsx'
 import type { CatalogRow, DivisionRow } from './screens.tsx'
+import { catalogsScreen } from './screens/index.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 
@@ -35,7 +36,18 @@ export const routes: Record<string, RouteEntry> = {
       const rows = await catalogRows(ctx, url, req)
       return adminPage(ctx, url, req, {
         title: 'address_backend.title',
-        body: (_, frame) => catalogsScreen(_, rows, frame, localeQuery(url)),
+        active: '/admin/addresses',
+        body: (_, frame) =>
+          catalogsScreen(_, frame, {
+            rows: rows.map((row) => ({
+              ...row,
+              detailHref: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}`),
+              installAction: inLocale(
+                url,
+                `/admin/addresses/${encodeURIComponent(row.countryCode)}/install`,
+              ),
+            })),
+          }),
       })
     },
 
