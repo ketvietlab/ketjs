@@ -6,7 +6,10 @@ import {
   FormScreenFrame as LoyaltyFormFrame,
   ListScreenFrame as LoyaltyListFrame,
 } from '../packages/ketsuite/src/modules/loyalty_backend/screens/page-frame.tsx'
-import { reportEditorScreen, reportsScreen } from '../packages/ketsuite/src/modules/report_backend/screens/index.tsx'
+import {
+  reportEditorScreen,
+  reportsScreen,
+} from '../packages/ketsuite/src/modules/report_backend/screens/index.tsx'
 import {
   FormScreenFrame as WebsiteFormFrame,
   ListScreenFrame as WebsiteListFrame,
@@ -19,23 +22,33 @@ translate.resolves = () => true
 
 test('Website and Loyalty page frames use the shared ListPage and FormPage contracts', () => {
   for (const frame of [WebsiteListFrame, LoyaltyListFrame]) {
-    assert.match(renderToString(frame({ translator: translate, title: 'List', frame: {}, body: <p>Rows</p> })), /data-ui="list-page"/)
+    assert.match(
+      renderToString(frame({ translator: translate, title: 'List', frame: {}, body: <p>Rows</p> })),
+      /data-ui="list-page"/,
+    )
   }
   for (const frame of [WebsiteFormFrame, LoyaltyFormFrame]) {
-    assert.match(renderToString(frame({ translator: translate, title: 'Form', frame: {}, body: <p>Fields</p> })), /data-ui="form-page"/)
+    assert.match(
+      renderToString(frame({ translator: translate, title: 'Form', frame: {}, body: <p>Fields</p> })),
+      /data-ui="form-page"/,
+    )
   }
 })
 
 test('Report list uses ListPage while the editor retains its specialized workspace', () => {
   const list = renderToString(reportsScreen(translate, {}, [], '?lang=en'))
   const editor = renderToString(
-    reportEditorScreen(translate, {}, {
-      title: 'orders.report',
-      action: '/admin/reports/orders.report?lang=en',
-      previewAction: '/admin/reports/orders.report/preview?lang=en',
-      template: { revision: 2, draft: '<report />' },
-      versions: [],
-    }),
+    reportEditorScreen(
+      translate,
+      {},
+      {
+        title: 'orders.report',
+        action: '/admin/reports/orders.report?lang=en',
+        previewAction: '/admin/reports/orders.report/preview?lang=en',
+        template: { revision: 2, draft: '<report />' },
+        versions: [],
+      },
+    ),
   )
 
   assert.match(list, /data-ui="list-page"/)

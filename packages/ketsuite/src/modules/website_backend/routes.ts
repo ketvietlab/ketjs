@@ -19,7 +19,15 @@ import {
   taxonomyScreen,
   taxonomyFormScreen,
 } from './screens/index.tsx'
-import type { EntryDetail, EntryKind, EntryRow, MediaRow, MenuRow, SiteRow, TaxonomyRow } from './screens/index.tsx'
+import type {
+  EntryDetail,
+  EntryKind,
+  EntryRow,
+  MediaRow,
+  MenuRow,
+  SiteRow,
+  TaxonomyRow,
+} from './screens/index.tsx'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { Req } from '../backend/screen.ts'
 
