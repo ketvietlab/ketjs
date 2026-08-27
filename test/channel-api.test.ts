@@ -110,6 +110,36 @@ test('channel api: POS routes publish Bearer auth and receive server-resolved de
   assert.deepEqual((document.paths['/me']!.get as Record<string, unknown>).security, [{ posBearer: [] }])
 })
 
+test('channel api: POS publishes revisioned shift and cart commands', () => {
+  const document = openApiDocument(compose(ketsuite.modules, { headless: true }), 'pos')
+  const expected = [
+    ['/shifts', 'post', 'pos.shifts.create'],
+    ['/shifts/{id}', 'get', 'pos.shifts.get'],
+    ['/shifts/{id}/open', 'post', 'pos.shifts.open'],
+    ['/orders', 'post', 'pos.orders.create'],
+    ['/orders/{id}/detail', 'get', 'pos.orders.get'],
+    ['/orders/{id}/lines', 'post', 'pos.orders.lines.add'],
+    ['/orders/{id}/lines/{lineId}/update', 'patch', 'pos.orders.lines.update'],
+    ['/orders/{id}/lines/{lineId}/remove', 'delete', 'pos.orders.lines.remove'],
+  ] as const
+  for (const [path, method, operationId] of expected) {
+    const operation = document.paths[path]?.[method] as Record<string, unknown> | undefined
+    assert.equal(operation?.operationId, operationId)
+    assert.deepEqual(operation?.security, [{ posBearer: [] }])
+  }
+  const addLine = document.paths['/orders/{id}/lines']?.post as Record<string, unknown>
+  const requestBody = addLine.requestBody as {
+    content: { 'application/json': { schema: { required?: string[] } } }
+  }
+  assert.deepEqual(requestBody.content['application/json'].schema.required, [
+    'expectedRevision',
+    'productId',
+    'uomId',
+    'quantity',
+    'quoteRevision',
+  ])
+})
+
 test('channel api: a POS enrollment route can publish the upstream operator credential', () => {
   const owner = defineModule({ name: 'channel_api', version: '1.0.0', reserves: ['/api/pos/v1/'] })
   const enrollment = defineModule({

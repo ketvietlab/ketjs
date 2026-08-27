@@ -1,4 +1,4 @@
-import { defineFn } from '@ketvietlab/ketjs'
+import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as accountFunctions, quoteTaxLine } from '../account/functions.ts'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
@@ -8,11 +8,52 @@ import { functions as stockFunctions } from '../stock/functions.ts'
 export const POS_ORDER_STATES = ['draft', 'cancel', 'paid', 'done'] as const
 export const POS_SESSION_STATES = ['opening_control', 'opened', 'closing_control', 'closed'] as const
 export const POS_INVOICE_STATUSES = ['invoiced', 'to_invoice'] as const
-const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+const invalid = (field: string, message: string) => ({ ok: false as const, errors: [{ field, message }] })
 const n = (value: unknown) => Number(value ?? 0)
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 const decimal = (value: number) => String(money(value))
 const now = () => new Date().toISOString()
+
+type RevisionClaim = { ok: true; order: Row; revision: number } | ReturnType<typeof invalid>
+
+async function claimDraftRevision(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<RevisionClaim> {
+  const order = (await ctx.db.select('pos.Order', { id }))[0]
+  if (!order) return invalid('orderId', 'order does not exist')
+  if (order.state !== 'draft') return invalid('state', 'only a draft order can be changed')
+  const current = n(order.revision)
+  if (expectedRevision !== undefined && n(expectedRevision) !== current)
+    return invalid('expectedRevision', 'the order changed; reload it before continuing')
+  const changed = await ctx.db.compareAndSet(
+    'pos.Order',
+    { id: order.id },
+    { revision: order.revision ?? null },
+    { revision: current + 1 },
+  )
+  if (!('dryRun' in changed) && !changed.matched)
+    return invalid('expectedRevision', 'the order changed; reload it before continuing')
+  return { ok: true, order, revision: current + 1 }
+}
+
+async function claimSessionRevision(
+  ctx: Ctx,
+  id: unknown,
+  expectedRevision?: unknown,
+): Promise<{ ok: true; session: Row; revision: number } | ReturnType<typeof invalid>> {
+  const session = (await ctx.db.select('pos.Session', { id }))[0]
+  if (!session) return invalid('id', 'session does not exist')
+  const current = n(session.revision)
+  if (expectedRevision !== undefined && n(expectedRevision) !== current)
+    return invalid('expectedRevision', 'the shift changed; reload it before continuing')
+  const changed = await ctx.db.compareAndSet(
+    'pos.Session',
+    { id: session.id },
+    { revision: session.revision ?? null },
+    { revision: current + 1 },
+  )
+  if (!('dryRun' in changed) && !changed.matched)
+    return invalid('expectedRevision', 'the shift changed; reload it before continuing')
+  return { ok: true, session, revision: current + 1 }
+}
 
 async function currencyOf(ctx: Ctx) {
   if (!ctx.scope.company) throw new Error('point of sale requires an active company')
@@ -381,27 +422,64 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   createSession: defineFn({
-    input: { id: 'id', configId: 'id', userId: 'id', openingCash: 'decimal?', openingNotes: 'text?' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.Config', 'read:user.User'],
+    input: {
+      id: 'id',
+      configId: 'id',
+      userId: 'id',
+      deviceId: 'text?',
+      openingCash: 'decimal?',
+      openingNotes: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:pos.Session',
+      'write:pos.Session',
+      'read:pos.SessionLock',
+      'write:pos.SessionLock',
+      'read:pos.Config',
+      'read:user.User',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const existing = (await ctx.db.select('pos.Session', { id: args.id }))[0]
-      if (existing) return { ok: true, id: args.id }
+      if (existing) {
+        const same =
+          existing.configId === args.configId &&
+          existing.userId === args.userId &&
+          (args.deviceId === undefined || existing.deviceId === args.deviceId)
+        return same
+          ? { ok: true, id: args.id, revision: n(existing.revision) }
+          : invalid('id', 'session id is already used by a different command')
+      }
       if (!(await ctx.db.select('pos.Config', { id: args.configId }))[0])
         return invalid('configId', 'point of sale does not exist')
       if (!(await ctx.db.select('user.User', { id: args.userId }))[0])
         return invalid('userId', 'operator does not exist')
-      const active = (await ctx.db.select('pos.Session', { configId: args.configId })).find(
-        (row) => row.state !== 'closed',
-      )
-      if (active) return invalid('configId', 'this point of sale already has an active session')
+      let lock = (await ctx.db.select('pos.SessionLock', { id: args.configId }))[0]
+      if (!lock) {
+        await ctx.db.insertIfAbsent('pos.SessionLock', { id: args.configId, sessionId: args.id })
+        lock = (await ctx.db.select('pos.SessionLock', { id: args.configId }))[0]
+      }
+      if (lock?.sessionId !== args.id) {
+        const active = (await ctx.db.select('pos.Session', { id: lock?.sessionId }))[0]
+        if (active?.state !== 'closed')
+          return invalid('configId', 'this point of sale already has an active session')
+        const changed = await ctx.db.compareAndSet(
+          'pos.SessionLock',
+          { id: args.configId },
+          { sessionId: lock?.sessionId },
+          { sessionId: args.id },
+        )
+        if (!('dryRun' in changed) && !changed.matched)
+          return invalid('configId', 'this point of sale already has an active session')
+      }
       await ctx.db.insert('pos.Session', {
         id: args.id,
         name: `POS/${String(args.id)}`,
         configId: args.configId,
         userId: args.userId,
+        deviceId: args.deviceId ?? null,
         state: 'opening_control',
         startAt: null,
         stopAt: null,
@@ -411,47 +489,50 @@ export const functions: Record<string, FnSpec> = {
         cashRegisterBalanceEnd: args.openingCash ?? '0',
         cashRegisterBalanceEndReal: args.openingCash ?? '0',
         cashRegisterDifference: '0',
+        revision: 0,
       })
-      return { ok: true, id: args.id }
+      return { ok: true, id: args.id, revision: 0 }
     },
   }),
   openSession: defineFn({
-    input: { id: 'id' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    input: { id: 'id', expectedRevision: 'int?' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
     effects: ['read:pos.Session', 'write:pos.Session'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
-      if (!session || !['opening_control', 'opened'].includes(String(session.state)))
-        return invalid('state', 'only opening control can be opened')
-      await ctx.db.update(
-        'pos.Session',
-        { id: args.id },
-        { state: 'opened', startAt: session.startAt ?? now() },
-      )
-      return { ok: true, id: args.id }
+      const held = (await ctx.db.select('pos.Session', { id: args.id }))[0]
+      if (held?.state === 'opened') return { ok: true, id: args.id, revision: n(held.revision) }
+      if (held?.state !== 'opening_control') return invalid('state', 'only opening control can be opened')
+      const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.update('pos.Session', { id: args.id }, { state: 'opened', startAt: held.startAt ?? now() })
+      return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
   startClosing: defineFn({
-    input: { id: 'id' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    input: { id: 'id', expectedRevision: 'int?' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
     effects: ['read:pos.Session', 'read:pos.Order', 'write:pos.Session'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
-      if (!session || !['opened', 'closing_control'].includes(String(session.state)))
+      if (session?.state === 'closing_control')
+        return { ok: true, id: args.id, revision: n(session.revision) }
+      if (session?.state !== 'opened')
         return invalid('state', 'only an open session can enter closing control')
       if ((await ctx.db.select('pos.Order', { sessionId: args.id })).some((order) => order.state === 'draft'))
         return invalid('orders', 'pay or cancel every draft order before closing')
+      const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
       await ctx.db.update('pos.Session', { id: args.id }, { state: 'closing_control' })
-      return { ok: true, id: args.id }
+      return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
   closeSession: defineFn({
-    input: { id: 'id', closingCash: 'decimal', closingNotes: 'text?' },
-    output: { ok: 'bool', id: 'id?', difference: 'decimal?', errors: 'json?' },
+    input: { id: 'id', closingCash: 'decimal', closingNotes: 'text?', expectedRevision: 'int?' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', difference: 'decimal?', errors: 'json?' },
     effects: [
       'read:pos.Session',
       'write:pos.Session',
@@ -467,7 +548,12 @@ export const functions: Record<string, FnSpec> = {
       const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
       if (!session) return invalid('id', 'session does not exist')
       if (session.state === 'closed')
-        return { ok: true, id: args.id, difference: session.cashRegisterDifference }
+        return {
+          ok: true,
+          id: args.id,
+          revision: n(session.revision),
+          difference: session.cashRegisterDifference,
+        }
       if (session.state !== 'closing_control') return invalid('state', 'session must be in closing control')
       const config = (await ctx.db.select('pos.Config', { id: session.configId }))[0]!,
         orders = await ctx.db.select('pos.Order', { sessionId: args.id })
@@ -480,6 +566,8 @@ export const functions: Record<string, FnSpec> = {
       const difference = money(n(args.closingCash) - cash)
       if (Math.abs(difference) - n(config.maximumDifference) > 0.000001)
         return invalid('closingCash', 'cash difference exceeds the configured maximum')
+      const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
       for (const order of orders)
         if (order.state === 'paid') await ctx.db.update('pos.Order', { id: order.id }, { state: 'done' })
       await ctx.db.update(
@@ -494,7 +582,7 @@ export const functions: Record<string, FnSpec> = {
           cashRegisterDifference: decimal(difference),
         },
       )
-      return { ok: true, id: args.id, difference: decimal(difference) }
+      return { ok: true, id: args.id, revision: claim.revision, difference: decimal(difference) }
     },
   }),
   listOrders: defineFn({
@@ -523,8 +611,18 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   createOrder: defineFn({
-    input: { id: 'id', uuid: 'text?', sessionId: 'id', partnerId: 'id?', toInvoice: 'bool?', note: 'text?' },
-    output: { ok: 'bool', id: 'id?', name: 'text?', errors: 'json?' },
+    input: {
+      id: 'id',
+      uuid: 'text?',
+      sessionId: 'id',
+      partnerId: 'id?',
+      toInvoice: 'bool?',
+      note: 'text?',
+      operatorId: 'text?',
+      deviceId: 'text?',
+      priceBookRevision: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', name: 'text?', revision: 'int?', errors: 'json?' },
     effects: [
       'read:pos.Sequence',
       'write:pos.Sequence',
@@ -539,10 +637,25 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const existing = (await ctx.db.select('pos.Order', { id: args.id }))[0]
-      if (existing) return { ok: true, id: args.id, name: existing.name }
+      if (existing) {
+        const same =
+          existing.sessionId === args.sessionId &&
+          (args.uuid === undefined || existing.uuid === args.uuid) &&
+          (args.deviceId === undefined || existing.deviceId === args.deviceId)
+        return same
+          ? { ok: true, id: args.id, name: existing.name, revision: n(existing.revision) }
+          : invalid('id', 'order id is already used by a different command')
+      }
       if (args.uuid) {
         const offline = (await ctx.db.select('pos.Order', { uuid: args.uuid }))[0]
-        if (offline) return { ok: true, id: offline.id, name: offline.name }
+        if (offline) {
+          const same =
+            offline.sessionId === args.sessionId &&
+            (args.deviceId === undefined || offline.deviceId === args.deviceId)
+          return same
+            ? { ok: true, id: offline.id, name: offline.name, revision: n(offline.revision) }
+            : invalid('uuid', 'order uuid is already used by a different command')
+        }
       }
       const session = (await ctx.db.select('pos.Session', { id: args.sessionId }))[0]
       if (session?.state !== 'opened') return invalid('sessionId', 'orders require an open POS session')
@@ -577,8 +690,12 @@ export const functions: Record<string, FnSpec> = {
         accountMoveId: null,
         pickingId: null,
         note: args.note ?? null,
+        revision: 0,
+        operatorId: args.operatorId ?? null,
+        deviceId: args.deviceId ?? null,
+        priceBookRevision: args.priceBookRevision ?? null,
       })
-      return { ok: true, id: args.id, name }
+      return { ok: true, id: args.id, name, revision: 0 }
     },
   }),
   addLine: defineFn({
@@ -593,8 +710,9 @@ export const functions: Record<string, FnSpec> = {
       taxId: 'id?',
       taxIds: 'json?',
       quoteRevision: 'text?',
+      expectedRevision: 'int?',
     },
-    output: { ok: 'bool', id: 'id?', priceUnit: 'decimal?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', priceUnit: 'decimal?', revision: 'int?', errors: 'json?' },
     effects: [
       'read:pos.Order',
       'read:pos.Config',
@@ -652,27 +770,207 @@ export const functions: Record<string, FnSpec> = {
         discount,
       })
       if (quote.ok !== true) return quote
-      if (!(await ctx.db.select('pos.OrderLine', { id: args.id }))[0])
-        await ctx.db.insert('pos.OrderLine', {
-          id: args.id,
-          orderId: args.orderId,
-          productId: args.productId,
-          productUomId: args.productUomId,
-          name: product.template.name,
+      const existing = (await ctx.db.select('pos.OrderLine', { id: args.id }))[0]
+      if (existing) {
+        const same =
+          existing.orderId === args.orderId &&
+          existing.productId === args.productId &&
+          existing.productUomId === args.productUomId &&
+          n(existing.qty) === n(args.qty) &&
+          n(existing.priceUnit) === n(priceUnit) &&
+          n(existing.discount) === n(discount) &&
+          JSON.stringify(existing.taxIds ?? []) === JSON.stringify(quote.taxIds)
+        return same
+          ? { ok: true, id: args.id, priceUnit: String(priceUnit), revision: n(order.revision) }
+          : invalid('id', 'line id is already used by a different command')
+      }
+      const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.insert('pos.OrderLine', {
+        id: args.id,
+        orderId: args.orderId,
+        productId: args.productId,
+        productUomId: args.productUomId,
+        name: product.template.name,
+        qty: args.qty,
+        priceUnit: String(priceUnit),
+        discount: String(discount),
+        taxId: quote.taxIds[0] ?? null,
+        taxIds: quote.taxIds,
+        taxEvidence: { currency: quote.currency, scale: quote.scale, taxes: quote.taxes },
+        quoteRevision: args.quoteRevision ?? null,
+        priceSubtotal: quote.amountUntaxed,
+        priceSubtotalIncl: quote.amountTotal,
+        refundedOrderlineId: null,
+        sequence: 10,
+      })
+      await recompute(ctx, args.orderId)
+      return { ok: true, id: args.id, priceUnit: String(priceUnit), revision: claim.revision }
+    },
+  }),
+  updateOrder: defineFn({
+    input: {
+      id: 'id',
+      expectedRevision: 'int',
+      partnerId: 'id?',
+      clearPartner: 'bool?',
+      note: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: ['read:pos.Order', 'write:pos.Order', 'read:partner.Partner'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (args.partnerId && !(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
+        return invalid('partnerId', 'customer does not exist')
+      const claim = await claimDraftRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.update(
+        'pos.Order',
+        { id: args.id },
+        {
+          ...(args.clearPartner ? { partnerId: null } : args.partnerId ? { partnerId: args.partnerId } : {}),
+          ...(args.note !== undefined ? { note: args.note } : {}),
+        },
+      )
+      return { ok: true, id: args.id, revision: claim.revision }
+    },
+  }),
+  updateLine: defineFn({
+    input: {
+      id: 'id',
+      orderId: 'id',
+      expectedRevision: 'int',
+      qty: 'decimal',
+      priceUnit: 'decimal?',
+      discount: 'decimal?',
+      taxIds: 'json?',
+      quoteRevision: 'text?',
+      sequence: 'int?',
+    },
+    output: { ok: 'bool', id: 'id?', priceUnit: 'decimal?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:pos.Order',
+      'write:pos.Order',
+      'read:pos.OrderLine',
+      'write:pos.OrderLine',
+      'read:pos.Payment',
+      'read:pos.Config',
+      'read:product.Product',
+      'read:product.Template',
+      'read:product.TemplateUom',
+      'read:product.ProductUom',
+      'read:product.Category',
+      'read:product.Cost',
+      'read:uom.Unit',
+      'read:pricing.Pricelist',
+      'read:pricing.PricelistItem',
+      'read:account.Tax',
+      'read:account.ProductTax',
+      'read:company.Company',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
+      const line = (await ctx.db.select('pos.OrderLine', { id: args.id }))[0]
+      if (!line || line.orderId !== args.orderId) return invalid('id', 'line does not belong to this order')
+      if (order?.state !== 'draft' || order.isRefund)
+        return invalid('orderId', 'only a new non-refund order can be changed')
+      if (!(n(args.qty) > 0)) return invalid('qty', 'quantity must be positive')
+      const sellable = await sellableProduct(ctx, line.productId, line.productUomId)
+      if (!sellable.ok) return invalid(sellable.field, sellable.message)
+      const config = (await ctx.db.select('pos.Config', { id: order.configId }))[0]!
+      let priceUnit: unknown = args.priceUnit
+      if (priceUnit === undefined && config.pricelistId) {
+        const priced = (await pricingFunctions.priceFor!.handler(ctx, {
+          pricelistId: config.pricelistId,
+          productId: line.productId,
+          quantity: args.qty,
+          uomId: line.productUomId,
+          date: order.dateOrder,
+        })) as Row
+        if (priced.ok !== true) return priced
+        priceUnit = priced.price
+      }
+      priceUnit ??= sellable.value.template.listPrice
+      const discount = args.discount ?? line.discount
+      const taxIds = args.taxIds !== undefined ? args.taxIds : (line.taxIds ?? [])
+      const quote = await quoteTaxLine(ctx, {
+        productId: line.productId,
+        taxIds,
+        quantity: args.qty,
+        priceUnit,
+        discount,
+      })
+      if (quote.ok !== true) return quote
+      const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.update(
+        'pos.OrderLine',
+        { id: args.id },
+        {
           qty: args.qty,
           priceUnit: String(priceUnit),
           discount: String(discount),
           taxId: quote.taxIds[0] ?? null,
           taxIds: quote.taxIds,
           taxEvidence: { currency: quote.currency, scale: quote.scale, taxes: quote.taxes },
-          quoteRevision: args.quoteRevision ?? null,
+          quoteRevision: args.quoteRevision ?? line.quoteRevision ?? null,
           priceSubtotal: quote.amountUntaxed,
           priceSubtotalIncl: quote.amountTotal,
-          refundedOrderlineId: null,
-          sequence: 10,
-        })
+          sequence: args.sequence ?? line.sequence,
+        },
+      )
       await recompute(ctx, args.orderId)
-      return { ok: true, id: args.id, priceUnit: String(priceUnit) }
+      return { ok: true, id: args.id, priceUnit: String(priceUnit), revision: claim.revision }
+    },
+  }),
+  removeLine: defineFn({
+    input: { id: 'id', orderId: 'id', expectedRevision: 'int' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:pos.Order',
+      'write:pos.Order',
+      'read:pos.OrderLine',
+      'write:pos.OrderLine',
+      'read:pos.Payment',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const line = (await ctx.db.select('pos.OrderLine', { id: args.id }))[0]
+      if (!line) return invalid('id', 'line does not exist')
+      if (line.orderId !== args.orderId) return invalid('id', 'line does not belong to this order')
+      const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      const L = ctx.table('pos.OrderLine')
+      await ctx.db.del(deleteFrom(L).where(eq(L.id, String(args.id))))
+      await recompute(ctx, args.orderId)
+      return { ok: true, id: args.id, revision: claim.revision }
+    },
+  }),
+  reorderLines: defineFn({
+    input: { id: 'id', expectedRevision: 'int', lineIds: 'json' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: ['read:pos.Order', 'write:pos.Order', 'read:pos.OrderLine', 'write:pos.OrderLine'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!Array.isArray(args.lineIds)) return invalid('lineIds', 'lineIds must be an array')
+      const lines = await ctx.db.select('pos.OrderLine', { orderId: args.id })
+      const wanted = args.lineIds.map(String)
+      if (
+        new Set(wanted).size !== wanted.length ||
+        lines.length !== wanted.length ||
+        lines.some((line) => !wanted.includes(String(line.id)))
+      )
+        return invalid('lineIds', 'lineIds must contain every line exactly once')
+      const claim = await claimDraftRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      for (const [index, lineId] of wanted.entries())
+        await ctx.db.update('pos.OrderLine', { id: lineId }, { sequence: (index + 1) * 10 })
+      return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
   addPayment: defineFn({
@@ -936,18 +1234,20 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   cancelOrder: defineFn({
-    input: { id: 'id' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    input: { id: 'id', expectedRevision: 'int?' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
     effects: ['read:pos.Order', 'write:pos.Order'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('pos.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'order does not exist')
-      if (order.state !== 'draft' && order.state !== 'cancel')
-        return invalid('state', 'paid orders must be refunded, not cancelled')
+      if (order.state === 'cancel') return { ok: true, id: args.id, revision: n(order.revision) }
+      if (order.state !== 'draft') return invalid('state', 'paid orders must be refunded, not cancelled')
+      const claim = await claimDraftRevision(ctx, args.id, args.expectedRevision)
+      if (claim.ok !== true) return claim
       await ctx.db.update('pos.Order', { id: args.id }, { state: 'cancel' })
-      return { ok: true, id: args.id }
+      return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
 }

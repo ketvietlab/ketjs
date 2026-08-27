@@ -293,6 +293,117 @@ test('pos: price-book exposes only active sellable products and explicitly enabl
   }
 })
 
+test('pos: revisioned cart commands reject stale and cross-order edits', async () => {
+  const adapter = await boot()
+  try {
+    await call('pos.createSession', { id: 'revision-shift', configId: 'shop', userId: 'cashier' }, adapter)
+    const opened = (await call('pos.openSession', { id: 'revision-shift', expectedRevision: 0 }, adapter))
+      .value as Row
+    assert.equal(opened.revision, 1)
+    await call('pos.createOrder', { id: 'cart-a', sessionId: 'revision-shift' }, adapter)
+    await call('pos.createOrder', { id: 'cart-b', sessionId: 'revision-shift' }, adapter)
+
+    const added = (
+      await call(
+        'pos.addLine',
+        {
+          id: 'cart-a:line',
+          orderId: 'cart-a',
+          productId: 'goods-1',
+          productUomId: 'unit',
+          qty: '1',
+          expectedRevision: 0,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(added.revision, 1)
+
+    const foreign = (
+      await call(
+        'pos.addLine',
+        {
+          id: 'cart-a:line',
+          orderId: 'cart-b',
+          productId: 'goods-1',
+          productUomId: 'unit',
+          qty: '1',
+          expectedRevision: 0,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(foreign.ok, false)
+
+    const stale = (
+      await call(
+        'pos.updateLine',
+        { id: 'cart-a:line', orderId: 'cart-a', qty: '2', expectedRevision: 0 },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(stale.ok, false)
+    assert.equal((stale.errors as Row[])[0]!.field, 'expectedRevision')
+
+    const updated = (
+      await call(
+        'pos.updateLine',
+        { id: 'cart-a:line', orderId: 'cart-a', qty: '2', expectedRevision: 1 },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(updated.revision, 2)
+    const order = (await call('pos.getOrder', { id: 'cart-a' }, adapter)).value as Row
+    assert.equal(order.amountTotal, '198')
+
+    const header = (
+      await call('pos.updateOrder', { id: 'cart-a', expectedRevision: 2, note: 'fragile' }, adapter)
+    ).value as Row
+    assert.equal(header.revision, 3)
+    const reordered = (
+      await call('pos.reorderLines', { id: 'cart-a', expectedRevision: 3, lineIds: ['cart-a:line'] }, adapter)
+    ).value as Row
+    assert.equal(reordered.revision, 4)
+    const removed = (
+      await call('pos.removeLine', { id: 'cart-a:line', orderId: 'cart-a', expectedRevision: 4 }, adapter)
+    ).value as Row
+    assert.equal(removed.revision, 5)
+    assert.equal(((await call('pos.getOrder', { id: 'cart-a' }, adapter)).value as Row).amountTotal, '0')
+
+    await call('pos.cancelOrder', { id: 'cart-a', expectedRevision: 5 }, adapter)
+    await call('pos.cancelOrder', { id: 'cart-b', expectedRevision: 0 }, adapter)
+    const closing = (await call('pos.startClosing', { id: 'revision-shift', expectedRevision: 1 }, adapter))
+      .value as Row
+    assert.equal(closing.revision, 2)
+    const staleClose = (
+      await call('pos.closeSession', { id: 'revision-shift', expectedRevision: 1, closingCash: '0' }, adapter)
+    ).value as Row
+    assert.equal(staleClose.ok, false)
+    const closed = (
+      await call('pos.closeSession', { id: 'revision-shift', expectedRevision: 2, closingCash: '0' }, adapter)
+    ).value as Row
+    assert.equal(closed.revision, 3)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: concurrent shift creation keeps one active shift per configuration', async () => {
+  const adapter = await boot()
+  try {
+    const [first, second] = await Promise.all([
+      call('pos.createSession', { id: 'shift-a', configId: 'shop', userId: 'cashier' }, adapter),
+      call('pos.createSession', { id: 'shift-b', configId: 'shop', userId: 'cashier' }, adapter),
+    ])
+    const answers = [first.value as Row, second.value as Row]
+    assert.equal(answers.filter((answer) => answer.ok === true).length, 1)
+    assert.equal(answers.filter((answer) => answer.ok === false).length, 1)
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM pos_session'))[0]!.n, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('pos: refunds use a new open session, reverse accounting and return stock', async () => {
   const adapter = await boot()
   try {
