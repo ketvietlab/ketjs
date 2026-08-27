@@ -70,6 +70,7 @@ async function boot() {
     { id: 'vat10', name: 'VAT 10%', typeTaxUse: 'sale', amountType: 'percent', amount: '10' },
     adapter,
   )
+  await call('account.setProductTax', { templateId: 'goods', taxId: 'vat10' }, adapter)
   await call('pricing.savePricelist', { id: 'retail', name: 'Retail' }, adapter)
   await call(
     'pricing.savePricelistItem',
@@ -104,7 +105,6 @@ test('sale: quotation pricing, confirmation and delivery integrate with Stock', 
           productId: 'goods-1',
           productUomQty: '4',
           productUomId: 'unit',
-          taxId: 'vat10',
         },
         adapter,
       )
@@ -394,6 +394,7 @@ test('sale: an invoice falls due on its payment term, not on the day it is raise
         journalId: 'sales-journal',
         revenueAccountId: 'revenue',
         receivableAccountId: 'receivable',
+        taxAccountId: 'tax',
         invoiceDate: '2026-01-10T00:00:00.000Z',
       },
       adapter,
@@ -488,7 +489,7 @@ test('sale: a line can be taken back off a quotation', async () => {
         },
         adapter,
       )
-    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '500')
+    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '550')
 
     // Lines used to be add-only: a wrong product meant abandoning the quotation.
     const removed = (await call('sale.removeLine', { id: 'so:a' }, adapter)).value as Row
@@ -497,7 +498,7 @@ test('sale: a line can be taken back off a quotation', async () => {
       (await adapter.all('SELECT id FROM sale_order_line')).map((row) => row.id),
       ['so:b'],
     )
-    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '300')
+    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '330')
 
     // A confirmed order is settled: its lines back deliveries and cannot vanish.
     await call('sale.confirmOrder', { id: 'so' }, adapter)
@@ -782,8 +783,8 @@ test('sale: the overview counts every order and adds up one currency', async () 
     // The week-old draft is not new today, whichever side of midnight the server
     // happens to be on: the day is bounded in the reader's timezone.
     assert.equal(counted.draftToday, 1)
-    assert.equal(Number(counted.saleTotal), 200)
-    // Two drafts at 200 apiece, and neither is confirmed, so the confirmed total
+    assert.equal(Number(counted.saleTotal), 220)
+    // Two drafts at 220 apiece, and neither is confirmed, so the confirmed total
     // is not simply every order in the table.
     assert.equal(Number(counted.sentTotal), 0)
 

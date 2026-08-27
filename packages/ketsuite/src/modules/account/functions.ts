@@ -123,6 +123,8 @@ const REFUSALS = {
   taxDivisionFull: 'a division tax of 100% or more has no finite base',
   productMissing: 'product template does not exist',
   taxFixedExceedsLine: 'a price-included fixed tax cannot be larger than the line it is inside',
+  taxQuantityPositive: 'line quantity must be positive',
+  taxPriceInvalid: 'unit price and discount are invalid',
 
   partnerMissing: 'partner does not exist',
   paymentTermMissing: 'payment term does not exist',
@@ -175,7 +177,7 @@ const fill = (sentence: string, params?: Record<string, unknown>): string =>
   params ? sentence.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`)) : sentence
 
 const invalid = (field: string, code: RefusalCode, params?: Record<string, unknown>) => ({
-  ok: false,
+  ok: false as const,
   errors: [{ field, code: `account.error.${code}`, message: fill(REFUSALS[code], params), params }],
 })
 
@@ -194,7 +196,7 @@ class Refusal extends Error {
 const refused = (field: string, error: unknown) =>
   error instanceof Refusal
     ? invalid(field, error.code, error.params)
-    : { ok: false, errors: [{ field, message: (error as Error).message }] }
+    : { ok: false as const, errors: [{ field, message: (error as Error).message }] }
 
 const n = (value: unknown): number => Number(value ?? 0)
 
@@ -495,6 +497,107 @@ function taxAmounts(
   return { untaxed: gross, tax: total, total: roundMoney(gross + total, scale), shares }
 }
 
+export type TaxQuote = {
+  ok: true
+  currency: string
+  scale: number
+  quantity: string
+  priceUnit: string
+  discount: string
+  amountUntaxed: string
+  amountTax: string
+  amountTotal: string
+  taxIds: string[]
+  taxes: Array<{
+    id: string
+    name: string
+    amountType: string
+    amount: string
+    priceInclude: boolean
+    includeBaseAmount: boolean
+    sequence: number
+    share: string
+  }>
+  /** Posting-only evidence. Channel projections must remove accountId. */
+  shares: TaxShare[]
+}
+
+export type TaxQuoteRefusal = {
+  ok: false
+  errors: Array<{
+    field: string
+    message: string
+    code?: string
+    params?: Record<string, unknown>
+  }>
+}
+
+/** Canonical product line calculation shared by Sales, POS and invoices. */
+export async function quoteTaxLine(
+  ctx: Ctx,
+  input: {
+    productId?: unknown
+    taxIds?: unknown
+    quantity: unknown
+    priceUnit: unknown
+    discount?: unknown
+  },
+): Promise<TaxQuote | TaxQuoteRefusal> {
+  const quantity = n(input.quantity)
+  const priceUnit = n(input.priceUnit)
+  const discount = n(input.discount)
+  if (!(quantity > 0)) return invalid('quantity', 'taxQuantityPositive')
+  if (priceUnit < 0 || discount < 0 || discount > 100) return invalid('priceUnit', 'taxPriceInvalid')
+
+  let wanted: string[]
+  if (Array.isArray(input.taxIds)) wanted = [...new Set(input.taxIds.map(String))]
+  else if (input.productId) {
+    const product = (await ctx.db.select('product.Product', { id: input.productId }))[0]
+    if (!product) return invalid('productId', 'productMissing')
+    const mapping = (await ctx.db.select('account.ProductTax', { templateId: product.templateId }))[0]
+    wanted = mapping?.taxId ? [String(mapping.taxId)] : []
+  } else wanted = []
+
+  const taxes: Row[] = []
+  for (const id of wanted) {
+    const tax = (await ctx.db.select('account.Tax', { id }))[0]
+    if (!tax || tax.active === false) return invalid('taxIds', 'taxMissing')
+    if (!['sale', 'none'].includes(String(tax.typeTaxUse)))
+      return invalid('taxIds', 'taxDirectionMismatch', { name: tax.name })
+    taxes.push(tax)
+  }
+  const { currency, scale } = await ledgerOf(ctx)
+  try {
+    const amounts = taxAmounts(taxes, quantity, priceUnit, discount, scale)
+    const shares = new Map(amounts.shares.map((share) => [String(share.taxId), share]))
+    return {
+      ok: true,
+      currency,
+      scale,
+      quantity: String(input.quantity),
+      priceUnit: String(input.priceUnit),
+      discount: String(input.discount ?? '0'),
+      amountUntaxed: moneyText(amounts.untaxed, scale),
+      amountTax: moneyText(amounts.tax, scale),
+      amountTotal: moneyText(amounts.total, scale),
+      taxIds: taxes.sort(taxOrder).map((tax) => String(tax.id)),
+      taxes: taxes.sort(taxOrder).map((tax) => ({
+        id: String(tax.id),
+        name: String(tax.name),
+        amountType: String(tax.amountType),
+        amount: String(tax.amount),
+        priceInclude: tax.priceInclude === true,
+        includeBaseAmount: tax.includeBaseAmount === true,
+        sequence: n(tax.sequence),
+        share: moneyText(shares.get(String(tax.id))?.amount ?? 0, scale),
+      })),
+      shares: amounts.shares,
+    }
+  } catch (error) {
+    return refused('taxIds', error)
+  }
+}
+
 async function nextMoveName(ctx: Ctx, journal: Row, date: Date): Promise<string> {
   for (let attempt = 0; attempt < 32; attempt += 1) {
     const current = (await ctx.db.select('account.Journal', { id: journal.id }))[0]
@@ -606,6 +709,42 @@ const narrow = (rows: Row[], args: { search?: unknown; limit?: unknown }, fields
 }
 
 export const functions: Record<string, FnSpec> = {
+  quoteLine: defineFn({
+    input: {
+      productId: 'id?',
+      taxIds: 'json?',
+      quantity: 'decimal',
+      priceUnit: 'decimal',
+      discount: 'decimal?',
+    },
+    output: {
+      ok: 'bool',
+      currency: 'text?',
+      scale: 'int?',
+      quantity: 'decimal?',
+      priceUnit: 'decimal?',
+      discount: 'decimal?',
+      amountUntaxed: 'decimal?',
+      amountTax: 'decimal?',
+      amountTotal: 'decimal?',
+      taxIds: 'json?',
+      taxes: 'json?',
+      errors: 'json?',
+    },
+    effects: ['read:company.Company', 'read:product.Product', 'read:account.ProductTax', 'read:account.Tax'],
+    agent: true,
+    handler: (ctx, args) =>
+      quoteTaxLine(
+        ctx,
+        args as {
+          productId?: unknown
+          taxIds?: unknown
+          quantity: unknown
+          priceUnit: unknown
+          discount?: unknown
+        },
+      ),
+  }),
   initializeCompany: defineFn({
     input: {},
     output: {
