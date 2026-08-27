@@ -67,10 +67,18 @@ test('staff channel: the company comes from the session, never from the request'
   const bootstrap = await staff<{
     user: { id: string }
     scope: { companyId: string; companies: string[] }
+    deployment: string
+    minimumAppVersion: { ios: string; android: string }
+    recommendedAppVersion: { ios: string; android: string }
+    maintenance: { enabled: boolean; message: string | null }
   }>(e2e, 'bootstrap')
   assert.equal(bootstrap.status, 200)
   assert.equal(bootstrap.body.data.user.id, 'operator')
   assert.equal(bootstrap.body.data.scope.companyId, 'acme')
+  assert.equal(bootstrap.body.data.deployment, 'ketsuite')
+  assert.deepEqual(bootstrap.body.data.minimumAppVersion, { ios: '0.0.0', android: '0.0.0' })
+  assert.deepEqual(bootstrap.body.data.recommendedAppVersion, { ios: '0.0.0', android: '0.0.0' })
+  assert.deepEqual(bootstrap.body.data.maintenance, { enabled: false, message: null })
 
   // Every way a caller might try to name a different company. The session is
   // what answers, so all of them come back the same.

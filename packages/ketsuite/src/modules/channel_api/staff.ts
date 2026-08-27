@@ -24,6 +24,12 @@ type Req = Parameters<Route>[1]
 
 const string = { type: 'string' }
 const nullableString = { type: ['string', 'null'] }
+const appVersions = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { ios: string, android: string },
+  required: ['ios', 'android'],
+}
 const envelope = (data: unknown) => ({
   type: 'object',
   properties: { data, error: {}, meta: { type: 'object' } },
@@ -61,8 +67,28 @@ const bootstrapData = {
       },
     },
     capabilityRevision: string,
+    deployment: string,
+    minimumAppVersion: appVersions,
+    recommendedAppVersion: appVersions,
+    maintenance: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { enabled: { type: 'boolean' }, message: nullableString },
+      required: ['enabled', 'message'],
+    },
   },
-  required: ['contractVersion', 'user', 'csrfToken', 'scope', 'capabilities', 'capabilityRevision'],
+  required: [
+    'contractVersion',
+    'user',
+    'csrfToken',
+    'scope',
+    'capabilities',
+    'capabilityRevision',
+    'deployment',
+    'minimumAppVersion',
+    'recommendedAppVersion',
+    'maintenance',
+  ],
 }
 const meData = {
   type: 'object',
@@ -130,6 +156,17 @@ export const staffRoutes = routesOf(
       const capabilities = [...grouped.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, actions]) => ({ key, actions: [...actions].sort() }))
+      const policy = ctx.clientCompatibility
+      const minimumAppVersion = {
+        ios: policy?.minimumVersions.ios ?? '0.0.0',
+        android: policy?.minimumVersions.android ?? '0.0.0',
+      }
+      const recommendedAppVersion = {
+        ios: policy?.recommendedVersions?.ios ?? minimumAppVersion.ios,
+        android: policy?.recommendedVersions?.android ?? minimumAppVersion.android,
+      }
+      const maintenance = policy?.maintenance ?? { enabled: false }
+      const maintenanceMessage = maintenance.messages?.[ctx.localeOf(_url, req)] ?? null
       return {
         data: {
           contractVersion: CHANNEL_API_VERSION,
@@ -155,6 +192,10 @@ export const staffRoutes = routesOf(
           },
           capabilities,
           capabilityRevision: stableHash(capabilities),
+          deployment: ctx.deploymentName,
+          minimumAppVersion,
+          recommendedAppVersion,
+          maintenance: { enabled: maintenance.enabled, message: maintenanceMessage },
         },
       }
     },

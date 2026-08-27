@@ -42,6 +42,7 @@ export { bootDeployment, serveDeployment } from './server/boot.ts'
 export type {
   ServeSpec,
   ServeContext,
+  ClientCompatibilityPolicy,
   SessionResolveContext,
   RequestIdentity,
   RequestIdentityResolveContext,
