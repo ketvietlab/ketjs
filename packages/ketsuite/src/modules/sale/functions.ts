@@ -13,6 +13,7 @@ import {
   or,
 } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Row } from '@ketvietlab/ketjs'
+import { quoteTaxLine, quoteTaxLineForPosting, type TaxShare } from '../account/functions.ts'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
@@ -110,39 +111,29 @@ async function contextOf(ctx: Ctx, productId: unknown) {
   const template = (await ctx.db.select('product.Template', { id: product.templateId }))[0]
   return template ? { product, template } : null
 }
-function taxAmounts(tax: Row | null, gross: number, quantity: number) {
-  if (!tax) return { untaxed: money(gross), tax: 0, total: money(gross) }
-  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported subset')
-  const amount = n(tax.amount),
-    rate = amount / 100
-  let untaxed = money(gross),
-    taxAmount = 0
-  if (tax.amountType === 'fixed') {
-    taxAmount = money(amount * quantity)
-    if (tax.priceInclude) untaxed = money(gross - taxAmount)
-    return { untaxed, tax: taxAmount, total: tax.priceInclude ? money(gross) : money(gross + taxAmount) }
-  }
-  if (tax.amountType === 'division') {
-    if (tax.priceInclude) {
-      untaxed = money(gross * (1 - rate))
-      taxAmount = money(gross - untaxed)
-    } else taxAmount = money(gross / (1 - rate) - gross)
-  } else if (tax.priceInclude) {
-    untaxed = money(gross / (1 + rate))
-    taxAmount = money(gross - untaxed)
-  } else taxAmount = money(gross * rate)
-  return { untaxed, tax: taxAmount, total: money(untaxed + taxAmount) }
-}
 async function recompute(ctx: Ctx, orderId: unknown) {
-  let untaxed = 0,
-    tax = 0
-  for (const line of await ours(ctx, 'sale.OrderLine', { orderId })) {
-    const held = line.taxId ? ((await ctx.db.select('account.Tax', { id: line.taxId }))[0] ?? null) : null
-    const gross = money(n(line.productUomQty) * n(line.priceUnit) * (1 - n(line.discount) / 100))
-    const amounts = taxAmounts(held, gross, n(line.productUomQty))
-    untaxed = money(untaxed + amounts.untaxed)
-    tax = money(tax + amounts.tax)
-  }
+  const lines = await ours(ctx, 'sale.OrderLine', { orderId })
+  const amounts = await Promise.all(
+    lines.map(async (line) => {
+      if (line.priceSubtotalIncl != null)
+        return { untaxed: n(line.priceSubtotal), total: n(line.priceSubtotalIncl) }
+      // Rows written before Wave 1B have no stored inclusive total. Re-quote them through the same
+      // account boundary; explicit [] preserves a historically tax-free line instead of applying a
+      // product default that may have been configured later.
+      const quote = await quoteTaxLine(ctx, {
+        productId: line.productId,
+        taxIds: line.taxIds ?? (line.taxId ? [line.taxId] : []),
+        quantity: line.productUomQty,
+        priceUnit: line.priceUnit,
+        discount: line.discount,
+      })
+      if (quote.ok !== true) return { untaxed: n(line.priceSubtotal), total: n(line.priceSubtotal) }
+      return { untaxed: n(quote.amountUntaxed), total: n(quote.amountTotal) }
+    }),
+  )
+  const untaxed = money(amounts.reduce((sum, line) => sum + line.untaxed, 0))
+  const total = money(amounts.reduce((sum, line) => sum + line.total, 0))
+  const tax = money(total - untaxed)
   const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
   if (!order) return
   await ctx.db.update(
@@ -151,7 +142,7 @@ async function recompute(ctx: Ctx, orderId: unknown) {
     {
       amountUntaxed: decimal(untaxed),
       amountTax: decimal(tax),
-      amountTotal: decimal(untaxed + tax),
+      amountTotal: decimal(total),
       revision: n(order.revision) + 1,
     },
   )
@@ -552,6 +543,8 @@ export const functions: Record<string, FnSpec> = {
       priceUnit: 'decimal?',
       discount: 'decimal?',
       taxId: 'id?',
+      taxIds: 'json?',
+      quoteRevision: 'text?',
       sequence: 'int?',
     },
     output: { ok: 'bool', id: 'id?', priceUnit: 'decimal?', errors: 'json?' },
@@ -570,6 +563,8 @@ export const functions: Record<string, FnSpec> = {
       'read:pricing.Pricelist',
       'read:pricing.PricelistItem',
       'read:account.Tax',
+      'read:account.ProductTax',
+      'read:company.Company',
     ],
     idempotent: true,
     agent: true,
@@ -600,16 +595,17 @@ export const functions: Record<string, FnSpec> = {
       const discount = args.discount ?? '0'
       if (n(priceUnit) < 0 || n(discount) < 0 || n(discount) > 100)
         return invalid('priceUnit', 'unit price and discount are invalid')
-      const tax = args.taxId ? (await ctx.db.select('account.Tax', { id: args.taxId }))[0] : null
-      if (args.taxId && (!tax || !['sale', 'none'].includes(String(tax.typeTaxUse))))
-        return invalid('taxId', 'tax use does not match a sales order')
-      const gross = money(n(args.productUomQty) * n(priceUnit) * (1 - n(discount) / 100))
-      let subtotal: number
-      try {
-        subtotal = taxAmounts(tax, gross, n(args.productUomQty)).untaxed
-      } catch (error) {
-        return invalid('taxId', (error as Error).message)
-      }
+      // Keep the established Sales contract: omitting tax means tax-free. POS resolves the product
+      // default explicitly through its own quote boundary before creating a line.
+      const taxIds = args.taxIds !== undefined ? args.taxIds : args.taxId ? [args.taxId] : []
+      const quote = await quoteTaxLine(ctx, {
+        productId: args.productId,
+        taxIds,
+        quantity: args.productUomQty,
+        priceUnit,
+        discount,
+      })
+      if (quote.ok !== true) return quote
       if (!(await ours(ctx, 'sale.OrderLine', { id: args.id }))[0])
         await ctx.db.insert('sale.OrderLine', {
           id: args.id,
@@ -620,10 +616,14 @@ export const functions: Record<string, FnSpec> = {
           productUomId: args.productUomId,
           priceUnit: String(priceUnit),
           discount: String(discount),
-          taxId: args.taxId ?? null,
+          taxId: quote.taxIds[0] ?? null,
+          taxIds: quote.taxIds,
+          taxEvidence: { currency: quote.currency, scale: quote.scale, taxes: quote.taxes },
+          quoteRevision: args.quoteRevision ?? null,
           qtyDelivered: '0',
           qtyInvoiced: '0',
-          priceSubtotal: decimal(subtotal),
+          priceSubtotal: quote.amountUntaxed,
+          priceSubtotalIncl: quote.amountTotal,
           sequence: args.sequence ?? 10,
         })
       await recompute(ctx, args.orderId)
@@ -654,6 +654,8 @@ export const functions: Record<string, FnSpec> = {
       'read:stock.Warehouse',
       'read:product.Product',
       'read:product.Template',
+      'read:product.TemplateUom',
+      'read:product.ProductUom',
       'read:product.Category',
       'read:product.Cost',
       'read:uom.Unit',
@@ -661,6 +663,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pricing.PricelistItem',
       'read:account.PaymentTerm',
       'read:account.Tax',
+      'read:account.ProductTax',
       'read:company.Company',
     ],
     idempotent: true,
@@ -753,6 +756,7 @@ export const functions: Record<string, FnSpec> = {
       'write:sale.OrderLine',
       'write:sale.Order',
       'read:account.Tax',
+      'read:company.Company',
     ],
     idempotent: true,
     agent: true,
@@ -865,6 +869,7 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Journal',
       'read:account.Account',
       'read:account.Tax',
+      'read:account.ProductTax',
       // paymentTermDue walks the term's lines to work out when this falls due.
       'read:account.PaymentTermLine',
       'read:account.Move',
@@ -891,8 +896,8 @@ export const functions: Record<string, FnSpec> = {
         line: Row
         quantity: number
         subtotal: number
-        tax: Row | null
         taxAmount: number
+        shares: TaxShare[]
       }> = []
       // A soft error raised once the transaction has started writing has to
       // unwind it: `adapter.tx` commits on a normal return and rolls back only on
@@ -912,15 +917,26 @@ export const functions: Record<string, FnSpec> = {
           const basis = policy === 'delivery' ? n(line.qtyDelivered) : n(line.productUomQty),
             quantity = money(basis - n(line.qtyInvoiced))
           if (quantity <= 0) continue
-          const gross = money(quantity * n(line.priceUnit) * (1 - n(line.discount) / 100)),
-            tax = line.taxId ? ((await tx.db.select('account.Tax', { id: line.taxId }))[0] ?? null) : null
-          const amounts = taxAmounts(tax, gross, quantity)
-          if (
-            amounts.tax &&
-            (!args.taxAccountId || !(await tx.db.select('account.Account', { id: args.taxAccountId }))[0])
-          )
-            throw new Refused(invalid('taxAccountId', 'a valid tax account is required'))
-          billable.push({ line, quantity, subtotal: amounts.untaxed, tax, taxAmount: amounts.tax })
+          const quote = await quoteTaxLineForPosting(tx, {
+            productId: line.productId,
+            taxIds: line.taxIds ?? (line.taxId ? [line.taxId] : undefined),
+            quantity,
+            priceUnit: line.priceUnit,
+            discount: line.discount,
+          })
+          if (quote.ok !== true) throw new Refused(quote)
+          for (const share of quote.shares) {
+            const accountId = (quote.shares.length === 1 ? args.taxAccountId : null) ?? share.accountId
+            if (!accountId || !(await tx.db.select('account.Account', { id: accountId }))[0])
+              throw new Refused(invalid('taxAccountId', 'a valid tax account is required'))
+          }
+          billable.push({
+            line,
+            quantity,
+            subtotal: n(quote.amountUntaxed),
+            taxAmount: n(quote.amountTax),
+            shares: quote.shares,
+          })
         }
         if (!billable.length)
           throw new Refused(invalid('lines', 'there is no ordered or delivered quantity left to invoice'))
@@ -985,22 +1001,24 @@ export const functions: Record<string, FnSpec> = {
               saleLineId: item.line.id,
             })
             sequence += 10
-            if (item.taxAmount)
+            for (const share of item.shares) {
+              if (!share.amount) continue
+              const accountId = (item.shares.length === 1 ? args.taxAccountId : null) ?? share.accountId
               await tx.db.insert('account.MoveLine', {
-                id: `${baseId}:tax`,
+                id: `${baseId}:tax:${String(share.taxId)}`,
                 moveId: args.id,
-                name: item.tax?.name ?? 'Tax',
-                accountId: args.taxAccountId,
+                name: share.name,
+                accountId,
                 partnerId: order.partnerId,
                 productId: null,
                 productUomId: null,
                 quantity: '1',
-                priceUnit: decimal(item.taxAmount),
+                priceUnit: decimal(share.amount),
                 discount: '0',
-                taxId: null,
+                taxId: share.taxId,
                 debit: '0',
-                credit: decimal(item.taxAmount),
-                balance: decimal(-item.taxAmount),
+                credit: decimal(share.amount),
+                balance: decimal(-share.amount),
                 dateMaturity: null,
                 displayType: null,
                 reconciled: false,
@@ -1008,6 +1026,7 @@ export const functions: Record<string, FnSpec> = {
                 sequence: sequence++,
                 saleLineId: item.line.id,
               })
+            }
             await tx.db.update(
               'sale.OrderLine',
               { id: item.line.id },

@@ -24,6 +24,7 @@ export const quotationEffects = [
   'read:pricing.PricelistItem',
   'read:account.PaymentTerm',
   'read:account.Tax',
+  'read:account.ProductTax',
   'read:company.Company',
   'read:product.Product',
   'read:product.Template',

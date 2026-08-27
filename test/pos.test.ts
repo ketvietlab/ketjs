@@ -96,6 +96,7 @@ async function boot() {
     { id: 'vat10', name: 'VAT 10%', typeTaxUse: 'sale', amountType: 'percent', amount: '10' },
     adapter,
   )
+  await call('account.setProductTax', { templateId: 'goods', taxId: 'vat10' }, adapter)
   await call('pricing.savePricelist', { id: 'retail', name: 'Retail' }, adapter)
   await call(
     'pricing.savePricelistItem',
@@ -162,7 +163,6 @@ test('pos: exact session/order states, pricing, payment, stock and accounting fo
           productId: 'goods-1',
           productUomId: 'unit',
           qty: '1',
-          taxId: 'vat10',
         },
         adapter,
       )
@@ -275,6 +275,9 @@ test('pos: price-book exposes only active sellable products and explicitly enabl
     const offered = (first.products as Row[])[0]!
     assert.equal(offered.id, 'goods-1')
     assert.equal(offered.listPrice, 90)
+    const firstPrice = (offered.prices as Row[])[0]!
+    assert.equal((firstPrice.taxIds as string[])[0], 'vat10')
+    assert.equal(firstPrice.amountTotal, '99')
     assert.deepEqual(
       (offered.uoms as Row[]).map((unit) => unit.id),
       ['unit'],
@@ -310,22 +313,22 @@ test('pos: refunds use a new open session, reverse accounting and return stock',
     )
     await call(
       'pos.addPayment',
-      { id: 'sale:pay', orderId: 'sale', paymentMethodId: 'cash-method', amount: '100' },
+      { id: 'sale:pay', orderId: 'sale', paymentMethodId: 'cash-method', amount: '110' },
       adapter,
     )
     await call('pos.validateOrder', { id: 'sale' }, adapter)
     await call('pos.startClosing', { id: 's1' }, adapter)
-    await call('pos.closeSession', { id: 's1', closingCash: '100' }, adapter)
+    await call('pos.closeSession', { id: 's1', closingCash: '110' }, adapter)
     await call('pos.createSession', { id: 's2', configId: 'shop', userId: 'cashier' }, adapter)
     await call('pos.openSession', { id: 's2' }, adapter)
     await call('pos.refundOrder', { id: 'refund', originalOrderId: 'sale', sessionId: 's2' }, adapter)
     assert.equal(
       (await adapter.all('SELECT "amountTotal" FROM pos_order WHERE id = ?', ['refund']))[0]!.amountTotal,
-      '-100',
+      '-110',
     )
     await call(
       'pos.addPayment',
-      { id: 'refund:pay', orderId: 'refund', paymentMethodId: 'cash-method', amount: '-100' },
+      { id: 'refund:pay', orderId: 'refund', paymentMethodId: 'cash-method', amount: '-110' },
       adapter,
     )
     await call('pos.validateOrder', { id: 'refund' }, adapter)
@@ -343,11 +346,11 @@ test('pos: refunds use a new open session, reverse accounting and return stock',
     ])
     assert.equal(
       lines.reduce((sum, row) => sum + Number(row.debit), 0),
-      100,
+      110,
     )
     assert.equal(
       lines.reduce((sum, row) => sum + Number(row.credit), 0),
-      100,
+      110,
     )
   } finally {
     await adapter.close()
@@ -378,7 +381,7 @@ test('pos: customer invoice is posted and reconciled by the POS payment', async 
     )
     await call(
       'pos.addPayment',
-      { id: 'invoice-payment', orderId: 'invoice-order', paymentMethodId: 'cash-method', amount: '100' },
+      { id: 'invoice-payment', orderId: 'invoice-order', paymentMethodId: 'cash-method', amount: '110' },
       adapter,
     )
     await call('pos.validateOrder', { id: 'invoice-order' }, adapter)

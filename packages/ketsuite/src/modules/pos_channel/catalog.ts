@@ -1,5 +1,6 @@
 import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row, Route, ServeContext } from '@ketvietlab/ketjs'
+import { ledgerOf, quoteTaxLine } from '../account/functions.ts'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { sellableProduct } from '../product/sellable.ts'
 import { channelError, defineChannelRoute, routesOf, stableHash } from '../channel_api/core.ts'
@@ -62,6 +63,7 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
     : null
   if (config.pricelistId && (!pricelist || !active(pricelist.active))) return null
 
+  const ledger = await ledgerOf(ctx)
   const rules = pricelist ? await ctx.db.select('pricing.PricelistItem', { pricelistId: pricelist.id }) : []
   const breakpoints = [...new Set([1, ...rules.map((rule) => Number(rule.minQuantity || 1))])]
     .filter((quantity) => Number.isFinite(quantity) && quantity > 0)
@@ -85,21 +87,35 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
       type: method.isCash === true ? 'cash' : 'bank',
     }))
     .sort((a, b) => a.id.localeCompare(b.id))
-  const currency = String(pricelist?.currency ?? '')
+  const currency = String(pricelist?.currency ?? ledger.currency)
 
   // Hash source rows instead of calculated prices. Pagination can then calculate only the variants
   // on the requested page while a cursor still detects any catalog or price-input change.
-  const [templates, templateUoms, productUoms, categories, costs, units, pricelists, pricelistItems] =
-    await Promise.all([
-      ctx.db.select('product.Template'),
-      ctx.db.select('product.TemplateUom'),
-      ctx.db.select('product.ProductUom'),
-      ctx.db.select('product.Category'),
-      ctx.db.select('product.Cost'),
-      ctx.db.select('uom.Unit'),
-      ctx.db.select('pricing.Pricelist'),
-      ctx.db.select('pricing.PricelistItem'),
-    ])
+  const [
+    templates,
+    templateUoms,
+    productUoms,
+    categories,
+    costs,
+    units,
+    pricelists,
+    pricelistItems,
+    productTaxes,
+    taxes,
+    companies,
+  ] = await Promise.all([
+    ctx.db.select('product.Template'),
+    ctx.db.select('product.TemplateUom'),
+    ctx.db.select('product.ProductUom'),
+    ctx.db.select('product.Category'),
+    ctx.db.select('product.Cost'),
+    ctx.db.select('uom.Unit'),
+    ctx.db.select('pricing.Pricelist'),
+    ctx.db.select('pricing.PricelistItem'),
+    ctx.db.select('account.ProductTax'),
+    ctx.db.select('account.Tax'),
+    ctx.db.select('company.Company'),
+  ])
   const revision = stableHash({
     config: revisionRows([config]),
     variants: revisionRows(variants),
@@ -111,12 +127,16 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
     units: revisionRows(units),
     pricelists: revisionRows(pricelists),
     pricelistItems: revisionRows(pricelistItems),
+    productTaxes: revisionRows(productTaxes),
+    taxes: revisionRows(taxes),
+    companies: revisionRows(companies),
     methodLinks: revisionRows(methodLinks),
     paymentMethods,
     currency,
+    scale: ledger.scale,
     cashRoundingStep: null,
   })
-  return { config, currency, variants, breakpoints, pricelist, paymentMethods, revision }
+  return { config, currency, scale: ledger.scale, variants, breakpoints, pricelist, paymentMethods, revision }
 }
 
 async function pageOf(
@@ -136,11 +156,25 @@ async function pageOf(
     for (const uom of uoms)
       for (const quantity of held.breakpoints) {
         if (!held.pricelist) {
+          const quote = await quoteTaxLine(ctx, {
+            productId: product.id,
+            quantity: String(quantity),
+            priceUnit: String(template.listPrice),
+          })
           prices.push({
             uomId: uom.id,
             minQuantity: String(quantity),
             price: String(template.listPrice),
             ruleId: null,
+            ...(quote.ok === true
+              ? {
+                  amountUntaxed: quote.amountUntaxed,
+                  amountTax: quote.amountTax,
+                  amountTotal: quote.amountTotal,
+                  taxIds: quote.taxIds,
+                  taxes: quote.taxes.map(({ share: _share, ...tax }) => tax),
+                }
+              : {}),
           })
           continue
         }
@@ -151,13 +185,28 @@ async function pageOf(
           uomId: uom.id,
           date: new Date().toISOString(),
         })) as Row
-        if (priced.ok === true)
+        if (priced.ok === true) {
+          const quote = await quoteTaxLine(ctx, {
+            productId: product.id,
+            quantity: String(quantity),
+            priceUnit: priced.price,
+          })
           prices.push({
             uomId: uom.id,
             minQuantity: String(quantity),
             price: String(priced.price),
             ruleId: priced.ruleId == null ? null : String(priced.ruleId),
+            ...(quote.ok === true
+              ? {
+                  amountUntaxed: quote.amountUntaxed,
+                  amountTax: quote.amountTax,
+                  amountTotal: quote.amountTotal,
+                  taxIds: quote.taxIds,
+                  taxes: quote.taxes.map(({ share: _share, ...tax }) => tax),
+                }
+              : {}),
           })
+        }
       }
     products.push({
       id: String(product.id),
@@ -193,6 +242,9 @@ export const catalogFunctions: Record<string, FnSpec> = {
       'read:product.Category',
       'read:product.Cost',
       'read:uom.Unit',
+      'read:account.ProductTax',
+      'read:account.Tax',
+      'read:company.Company',
     ],
     exposure: 'internal',
     handler: async (ctx, args) => {
@@ -245,6 +297,7 @@ export const catalogRoutes = routesOf(
           content: {
             configId: String(held.config.id),
             currency: held.currency,
+            scale: held.scale,
             products: held.products,
             paymentMethods: held.paymentMethods,
             rounding: null,

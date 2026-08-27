@@ -70,6 +70,7 @@ async function boot() {
     { id: 'vat10', name: 'VAT 10%', typeTaxUse: 'sale', amountType: 'percent', amount: '10' },
     adapter,
   )
+  await call('account.setProductTax', { templateId: 'goods', taxId: 'vat10' }, adapter)
   await call('pricing.savePricelist', { id: 'retail', name: 'Retail' }, adapter)
   await call(
     'pricing.savePricelistItem',
@@ -162,6 +163,53 @@ test('sale: keeps accepting a compatible measurement-tree unit without a product
       )
     ).value as Row
     assert.equal(line.ok, true)
+    assert.equal(
+      (await adapter.all('SELECT "amountTax" FROM sale_order WHERE id = ?', ['so']))[0]!.amountTax,
+      '0',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('sale: an archived legacy tax does not make a draft permanently uneditable', async () => {
+  const adapter = await boot()
+  try {
+    await call('sale.createOrder', { id: 'so', partnerId: 'customer', warehouseId: 'wh' }, adapter)
+    await call(
+      'sale.addLine',
+      {
+        id: 'legacy',
+        orderId: 'so',
+        productId: 'goods-1',
+        productUomQty: '1',
+        productUomId: 'unit',
+        priceUnit: '100',
+        taxId: 'vat10',
+      },
+      adapter,
+    )
+    await adapter.run('UPDATE sale_order_line SET "priceSubtotalIncl" = NULL WHERE id = ?', ['legacy'])
+    await adapter.run('UPDATE account_tax SET active = ? WHERE id = ?', [false, 'vat10'])
+    const added = (
+      await call(
+        'sale.addLine',
+        {
+          id: 'new-line',
+          orderId: 'so',
+          productId: 'goods-1',
+          productUomQty: '1',
+          productUomId: 'unit',
+          priceUnit: '50',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(added.ok, true)
+    assert.equal(
+      (await adapter.all('SELECT "amountTotal" FROM sale_order WHERE id = ?', ['so']))[0]!.amountTotal,
+      '150',
+    )
   } finally {
     await adapter.close()
   }
@@ -394,6 +442,7 @@ test('sale: an invoice falls due on its payment term, not on the day it is raise
         journalId: 'sales-journal',
         revenueAccountId: 'revenue',
         receivableAccountId: 'receivable',
+        taxAccountId: 'tax',
         invoiceDate: '2026-01-10T00:00:00.000Z',
       },
       adapter,
@@ -485,10 +534,11 @@ test('sale: a line can be taken back off a quotation', async () => {
           productUomQty: qty,
           productUomId: 'unit',
           priceUnit: '100',
+          taxId: 'vat10',
         },
         adapter,
       )
-    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '500')
+    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '550')
 
     // Lines used to be add-only: a wrong product meant abandoning the quotation.
     const removed = (await call('sale.removeLine', { id: 'so:a' }, adapter)).value as Row
@@ -497,7 +547,7 @@ test('sale: a line can be taken back off a quotation', async () => {
       (await adapter.all('SELECT id FROM sale_order_line')).map((row) => row.id),
       ['so:b'],
     )
-    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '300')
+    assert.equal((await adapter.all('SELECT "amountTotal" FROM sale_order'))[0]!.amountTotal, '330')
 
     // A confirmed order is settled: its lines back deliveries and cannot vanish.
     await call('sale.confirmOrder', { id: 'so' }, adapter)
@@ -769,7 +819,14 @@ test('sale: the overview counts every order and adds up one currency', async () 
       )
       await call(
         'sale.addLine',
-        { id: `${id}:line`, orderId: id, productId: 'goods-1', productUomQty: '2', productUomId: 'unit' },
+        {
+          id: `${id}:line`,
+          orderId: id,
+          productId: 'goods-1',
+          productUomQty: '2',
+          productUomId: 'unit',
+          taxId: 'vat10',
+        },
         adapter,
       )
     }
@@ -782,8 +839,8 @@ test('sale: the overview counts every order and adds up one currency', async () 
     // The week-old draft is not new today, whichever side of midnight the server
     // happens to be on: the day is bounded in the reader's timezone.
     assert.equal(counted.draftToday, 1)
-    assert.equal(Number(counted.saleTotal), 200)
-    // Two drafts at 200 apiece, and neither is confirmed, so the confirmed total
+    assert.equal(Number(counted.saleTotal), 220)
+    // Two drafts at 220 apiece, and neither is confirmed, so the confirmed total
     // is not simply every order in the table.
     assert.equal(Number(counted.sentTotal), 0)
 

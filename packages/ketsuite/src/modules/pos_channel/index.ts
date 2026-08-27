@@ -4,7 +4,7 @@ import { catalogFunctions, catalogRoutes } from './catalog.ts'
 export default defineModule({
   name: 'pos_channel',
   version: '0.1.0',
-  depends: ['channel_api', 'pos', 'product', 'uom', 'pricing'],
+  depends: ['channel_api', 'pos', 'product', 'uom', 'pricing', 'account'],
   compatible: { channel_api: '^1' },
   title: 'POS Channel API',
   summary: 'Typed POS contracts for catalog, shifts, orders and tenders.',

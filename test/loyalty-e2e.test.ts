@@ -702,3 +702,42 @@ test('loyalty HTTP E2E: Sale UI adapter, portal actor and company scope stay iso
   const denied = await limited.get('/admin/loyalty/programs', { headers: { accept: 'application/json' } })
   assert.equal([400, 403].includes(denied.status), true)
 })
+
+test('loyalty Sale adapter keeps tax-inclusive points for legacy lines', async (t) => {
+  const { e2e, call } = await bootLoyalty(t)
+  await call('account.saveTax', {
+    id: 'vat10',
+    name: 'VAT 10%',
+    typeTaxUse: 'sale',
+    amountType: 'percent',
+    amount: '10',
+  })
+  await saveProgram(call, { id: 'legacy-program' })
+  await saveRule(call, {
+    id: 'legacy-rule',
+    programId: 'legacy-program',
+    pointAmount: '1',
+    pointMode: 'money',
+    taxMode: 'incl',
+  })
+  await call<Row>('sale.createOrder', {
+    id: 'legacy-order',
+    partnerId: 'customer',
+    warehouseId: 'wh',
+  })
+  await call<Row>('sale.addLine', {
+    id: 'legacy-line',
+    orderId: 'legacy-order',
+    productId: 'fruit-box',
+    productUomQty: '1',
+    productUomId: 'unit',
+    priceUnit: '100',
+    taxId: 'vat10',
+  })
+  await e2e.adapter!.run('UPDATE sale_order_line SET "priceSubtotalIncl" = NULL WHERE id = ?', [
+    'legacy-line',
+  ])
+
+  const evaluated = await call<Row>('loyalty_sale.evaluateOrder', { orderId: 'legacy-order' })
+  assert.equal(((evaluated.programs as Row[])[0]?.points as number) ?? 0, 110)
+})
