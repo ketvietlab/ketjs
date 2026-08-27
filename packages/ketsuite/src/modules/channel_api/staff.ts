@@ -41,6 +41,7 @@ export const staffIdentity = async (ctx: ServeContext, url: URL, req: Req): Prom
 }
 
 registerChannelIdentityPresentation('staff', {
+  owner: 'ketjs.staff-cookie',
   presentation: 'cookie',
   presented: (req) =>
     String(req.headers.cookie ?? '')

@@ -28,6 +28,7 @@ const identity: StaffIdentity = {
 }
 
 registerChannelIdentityPresentation('staff', {
+  owner: 'test.staff-bearer',
   presentation: 'bearer',
   presented: (req) => String(req.headers.authorization ?? '').trim() !== '',
   resolve: async (_ctx, _url, req) => {
@@ -139,13 +140,22 @@ test('staff Bearer: cookie and authorization credentials fail closed before reso
 })
 
 test('staff Bearer: one presentation cannot be replaced by import order', () => {
+  assert.doesNotThrow(() =>
+    registerChannelIdentityPresentation('staff', {
+      owner: 'test.staff-bearer',
+      presentation: 'bearer',
+      presented: () => true,
+      resolve: async () => identity,
+    }),
+  )
   assert.throws(
     () =>
       registerChannelIdentityPresentation('staff', {
+        owner: 'test.competing-staff-bearer',
         presentation: 'bearer',
         presented: () => true,
         resolve: async () => identity,
       }),
-    /already registered/,
+    /is owned by/,
   )
 })
