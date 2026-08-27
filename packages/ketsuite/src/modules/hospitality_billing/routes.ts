@@ -3,8 +3,8 @@ import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { adminPage } from '../backend/screen.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { billingScreen, chargeRulesScreen } from './screens.tsx'
-import type { ChargeRuleRow, ChoiceRow, FolioBillingRow } from './screens.tsx'
+import { billingScreen, chargeRulesScreen } from './screens/index.ts'
+import type { ChargeRuleRow, ChoiceRow, FolioBillingRow } from './screens/index.ts'
 
 type Called = { ok?: boolean }
 type Row = Record<string, unknown>

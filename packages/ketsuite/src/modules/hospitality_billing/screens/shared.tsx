@@ -10,9 +10,12 @@ import {
   RecordForm,
   Section,
   stack,
-} from '../../ui/index.ts'
-import type { Column, Frame } from '../../ui/index.ts'
-import { CHARGE_TYPES } from '../hospitality_core/types.ts'
+} from '../../../ui/index.ts'
+import type { Column, Frame } from '../../../ui/index.ts'
+import { CHARGE_TYPES } from '../../hospitality_core/types.ts'
+
+export { badge, dataTable, emptyState, Framed, linkButton, Notice, RecordForm, Section, stack, CHARGE_TYPES }
+export type { Translator, TemplateResult, Column, Frame }
 
 export type ChargeRuleRow = {
   chargeType: string
@@ -42,10 +45,10 @@ export type FolioBillingRow = {
   paymentState: string | null
 }
 
-const chargeName = (_: Translator, type: string): string =>
+export const chargeName = (_: Translator, type: string): string =>
   (CHARGE_TYPES as readonly string[]).includes(type) ? _(`hospitality_billing.chargeType.${type}`) : type
 
-const feedback = (_: Translator, state?: string | null): TemplateResult | null => {
+export const feedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'saved')
     return (
       <Notice
@@ -89,7 +92,7 @@ const feedback = (_: Translator, state?: string | null): TemplateResult | null =
   return null
 }
 
-const ruleColumns = (_: Translator): Column<ChargeRuleRow>[] => [
+export const ruleColumns = (_: Translator): Column<ChargeRuleRow>[] => [
   {
     key: 'chargeType',
     label: _('hospitality_billing.chargeRules.chargeType'),
@@ -122,89 +125,9 @@ const ruleColumns = (_: Translator): Column<ChargeRuleRow>[] => [
  * because an undeclared charge type is what stops a checkout billing, and the
  * operator reading this arrived here from that refusal.
  */
-export const chargeRulesScreen = (
-  _: Translator,
-  rows: ChargeRuleRow[],
-  taxes: ChoiceRow[],
-  incomeAccounts: ChoiceRow[],
-  taxAccounts: ChoiceRow[],
-  frame: Frame,
-  state?: string | null,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('hospitality_billing.chargeRules.title')}
-    frame={frame}
-    body={stack([
-      feedback(_, state),
-      taxes.length ? null : (
-        <Notice
-          title={_('hospitality_billing.chargeRules.needsAccounting')}
-          message={_('hospitality_billing.chargeRules.needsAccountingHint')}
-          tone="warning"
-          actions={linkButton({
-            label: _('hospitality_billing.chargeRules.openAccounting'),
-            href: '/admin/accounting',
-          })}
-        />
-      ),
-      <Section
-        title={_('hospitality_billing.chargeRules.save')}
-        description={_('hospitality_billing.chargeRules.intro')}
-        body={
-          <RecordForm
-            action="/admin/hospitality/billing/rules"
-            method="post"
-            submit={_('hospitality_billing.chargeRules.save')}
-            submitVariant="primary"
-            hidden={{ operation: 'save-rule' }}
-            fields={[
-              {
-                name: 'chargeType',
-                label: _('hospitality_billing.chargeRules.chargeType'),
-                type: 'select',
-                required: true,
-                options: CHARGE_TYPES.map((value) => ({ value, label: chargeName(_, value) })),
-              },
-              {
-                name: 'taxId',
-                label: _('hospitality_billing.chargeRules.tax'),
-                type: 'select',
-                options: [
-                  { value: '', label: _('hospitality_billing.chargeRules.taxExempt') },
-                  ...taxes.map((tax) => ({ value: tax.id, label: tax.name })),
-                ],
-                help: _('hospitality_billing.chargeRules.taxHint'),
-              },
-              {
-                name: 'incomeAccountId',
-                label: _('hospitality_billing.chargeRules.incomeAccount'),
-                type: 'select',
-                options: [
-                  { value: '', label: _('hospitality_billing.chargeRules.inherit') },
-                  ...incomeAccounts.map((account) => ({ value: account.id, label: account.name })),
-                ],
-                help: _('hospitality_billing.chargeRules.incomeAccountHint'),
-              },
-              {
-                name: 'taxAccountId',
-                label: _('hospitality_billing.chargeRules.taxAccount'),
-                type: 'select',
-                options: [
-                  { value: '', label: _('hospitality_billing.chargeRules.inherit') },
-                  ...taxAccounts.map((account) => ({ value: account.id, label: account.name })),
-                ],
-              },
-            ]}
-          />
-        }
-      />,
-      dataTable(_, { columns: ruleColumns(_), rows, id: (row) => row.chargeType }),
-    ])}
-  />
-)
 
-const folioColumns = (_: Translator): Column<FolioBillingRow>[] => [
+
+export const folioColumns = (_: Translator): Column<FolioBillingRow>[] => [
   {
     key: 'folioCode',
     label: _('hospitality_billing.col.folio'),
@@ -285,42 +208,3 @@ const folioColumns = (_: Translator): Column<FolioBillingRow>[] => [
  * be superseded by the next night audit. The blocked badge names the charge type
  * whose rule is missing, so the fix is one link away rather than a hunt.
  */
-export const billingScreen = (
-  _: Translator,
-  rows: FolioBillingRow[],
-  frame: Frame,
-  state?: string | null,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('hospitality_billing.screen.title')}
-    subtitle={_('hospitality_billing.screen.subtitle')}
-    frame={frame}
-    body={stack([
-      feedback(_, state),
-      rows.length
-        ? dataTable(_, { columns: folioColumns(_), rows, id: (row) => row.folioId })
-        : // A dead end that names the next step and does not link to it is the
-          // defect the hospitality review filed seven times; the rules screen is
-          // where an operator has to go from here.
-          emptyState(_('hospitality_billing.screen.empty'), _('hospitality_billing.screen.emptyHint'), {
-            actions: linkButton({
-              label: _('hospitality_billing.menu.chargeRules'),
-              href: '/admin/hospitality/billing/rules',
-            }),
-          }),
-      // A hotel closes folios all night with nobody at the desk. One press bills
-      // everything that is only waiting for one.
-      rows.some((row) => !row.moveId && !row.missingRules.length) ? (
-        <RecordForm
-          action="/admin/hospitality/billing"
-          method="post"
-          submit={_('hospitality_billing.action.invoiceAll')}
-          submitVariant="secondary"
-          hidden={{ operation: 'queue-closed' }}
-          fields={[]}
-        />
-      ) : null,
-    ])}
-  />
-)
