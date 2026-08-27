@@ -148,4 +148,20 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { session: { fields: ['companyId', 'sessionId'], unique: true } },
   },
+  CashMovement: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      sessionId: 'ref:pos.Session',
+      direction: 'text',
+      amount: 'decimal',
+      reason: 'text',
+      note: 'text?',
+      actorId: 'text',
+      deviceId: 'text?',
+      occurredAt: 'datetime',
+      reversalOfId: 'ref:pos.CashMovement?',
+    },
+    indexes: { session_time: { fields: ['companyId', 'sessionId', 'occurredAt'] } },
+  },
 }

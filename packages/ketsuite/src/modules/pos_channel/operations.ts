@@ -38,6 +38,12 @@ const tenderParams = {
   properties: { id: string, tenderId: string },
   required: ['id', 'tenderId'],
 }
+const movementParams = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, movementId: string },
+  required: ['id', 'movementId'],
+}
 const expectedBody = {
   type: 'object',
   additionalProperties: false,
@@ -167,6 +173,7 @@ const shift = {
     expectedCash: string,
     countedCash: string,
     difference: string,
+    cashMovementTotal: string,
     varianceStatus: string,
     varianceReason: nullableString,
     varianceNote: nullableString,
@@ -187,6 +194,7 @@ const shift = {
     'expectedCash',
     'countedCash',
     'difference',
+    'cashMovementTotal',
     'varianceStatus',
     'varianceReason',
     'varianceNote',
@@ -329,6 +337,12 @@ const projectShift = (row: Row) => ({
   expectedCash: String(row.cashRegisterBalanceEnd),
   countedCash: String(row.cashRegisterBalanceEndReal),
   difference: String(row.cashRegisterDifference),
+  cashMovementTotal: String(
+    (Array.isArray(row.cashMovements) ? (row.cashMovements as Row[]) : []).reduce(
+      (sum, movement) => sum + (movement.direction === 'in' ? n(movement.amount) : -n(movement.amount)),
+      0,
+    ),
+  ),
   varianceStatus: String(row.varianceStatus ?? 'none'),
   varianceReason: row.varianceReason == null ? null : String(row.varianceReason),
   varianceNote: row.varianceNote == null ? null : String(row.varianceNote),
@@ -477,6 +491,111 @@ export const operationRoutes = routesOf(
       },
     }),
   ),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'shifts/{id}/cash-movements',
+    operationId: 'pos.shifts.cashMovements.create',
+    summary: 'Record an immutable cash-in or cash-out movement in an open shift.',
+    auth: 'required',
+    capability: { key: 'pos.shifts', action: 'cash_movement' },
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          expectedRevision: integer,
+          direction: string,
+          amount: string,
+          reason: string,
+          note: string,
+        },
+        required: ['expectedRevision', 'direction', 'amount', 'reason'],
+      },
+    },
+    responses: {
+      '200': envelope(shift),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.recordCashMovement',
+        {
+          id: commandId('cash-movement', params.id, key),
+          sessionId: params.id,
+          expectedRevision: request.body.expectedRevision,
+          direction: request.body.direction,
+          amount: request.body.amount,
+          reason: request.body.reason,
+          note: request.body.note,
+          actorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'shift.cash-movement.create', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return shiftResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'shifts/{id}/cash-movements/{movementId}/reverse',
+    operationId: 'pos.shifts.cashMovements.reverse',
+    summary: 'Correct a cash movement by appending one linked opposite movement.',
+    auth: 'required',
+    capability: { key: 'pos.shifts', action: 'cash_movement' },
+    request: {
+      params: movementParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { expectedRevision: integer, reason: string, note: string },
+        required: ['expectedRevision', 'reason'],
+      },
+    },
+    responses: {
+      '200': envelope(shift),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity! as unknown as Row
+      if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.reverseCashMovement',
+        {
+          id: commandId('cash-movement-reversal', params.id, key),
+          sessionId: params.id,
+          movementId: params.movementId,
+          expectedRevision: request.body.expectedRevision,
+          reason: request.body.reason,
+          note: request.body.note,
+          actorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'shift.cash-movement.reverse', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return shiftResult(ctx, url, req, params.id, identity)
+    },
+  }),
   defineChannelRoute({
     profile: 'pos',
     method: 'POST',

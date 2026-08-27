@@ -116,6 +116,8 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     ['/shifts', 'post', 'pos.shifts.create'],
     ['/shifts/{id}', 'get', 'pos.shifts.get'],
     ['/shifts/{id}/open', 'post', 'pos.shifts.open'],
+    ['/shifts/{id}/cash-movements', 'post', 'pos.shifts.cashMovements.create'],
+    ['/shifts/{id}/cash-movements/{movementId}/reverse', 'post', 'pos.shifts.cashMovements.reverse'],
     ['/shifts/{id}/variance/recount', 'post', 'pos.shifts.variance.recount'],
     ['/shifts/{id}/variance/approve', 'post', 'pos.shifts.variance.approve'],
     ['/orders', 'post', 'pos.orders.create'],

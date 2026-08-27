@@ -545,7 +545,13 @@ export const functions: Record<string, FnSpec> = {
   }),
   getSession: defineFn({
     input: { id: 'id' },
-    effects: ['read:pos.Session', 'read:pos.Order', 'read:pos.Payment', 'read:pos.PaymentMethod'],
+    effects: [
+      'read:pos.Session',
+      'read:pos.Order',
+      'read:pos.Payment',
+      'read:pos.PaymentMethod',
+      'read:pos.CashMovement',
+    ],
     agent: true,
     handler: async (ctx, args) => {
       const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
@@ -558,7 +564,12 @@ export const functions: Record<string, FnSpec> = {
           const method = (await ctx.db.select('pos.PaymentMethod', { id: payment.paymentMethodId }))[0]
           if (method?.isCash) expectedCash += n(payment.appliedAmount ?? payment.amount)
         }
-      return { ...session, cashRegisterBalanceEnd: decimal(expectedCash), orders }
+      const cashMovements = await ctx.db.select('pos.CashMovement', { sessionId: args.id })
+      expectedCash += cashMovements.reduce(
+        (sum, movement) => sum + (movement.direction === 'in' ? n(movement.amount) : -n(movement.amount)),
+        0,
+      )
+      return { ...session, cashRegisterBalanceEnd: decimal(expectedCash), orders, cashMovements }
     },
   }),
   createSession: defineFn({
@@ -656,6 +667,102 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
+  recordCashMovement: defineFn({
+    input: {
+      id: 'id',
+      sessionId: 'id',
+      direction: 'text',
+      amount: 'decimal',
+      reason: 'text',
+      note: 'text?',
+      actorId: 'text',
+      deviceId: 'text?',
+      expectedRevision: 'int',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.CashMovement', 'write:pos.CashMovement'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!['in', 'out'].includes(String(args.direction)))
+        return invalid('direction', 'cash movement direction must be in or out')
+      if (!(n(args.amount) > 0)) return invalid('amount', 'cash movement amount must be positive')
+      if (!String(args.reason).trim()) return invalid('reason', 'cash movement requires a reason')
+      const session = (await ctx.db.select('pos.Session', { id: args.sessionId }))[0]
+      if (session?.state !== 'opened') return invalid('state', 'cash movement requires an open shift')
+      const existing = (await ctx.db.select('pos.CashMovement', { id: args.id }))[0]
+      if (existing) {
+        const same =
+          existing.sessionId === args.sessionId &&
+          existing.direction === args.direction &&
+          n(existing.amount) === n(args.amount)
+        return same
+          ? { ok: true, id: args.id, revision: n(session.revision) }
+          : invalid('id', 'cash movement id is already used by a different command')
+      }
+      const claim = await claimSessionRevision(ctx, args.sessionId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.insert('pos.CashMovement', {
+        id: args.id,
+        sessionId: args.sessionId,
+        direction: args.direction,
+        amount: decimal(n(args.amount)),
+        reason: String(args.reason),
+        note: args.note ?? null,
+        actorId: args.actorId,
+        deviceId: args.deviceId ?? null,
+        occurredAt: now(),
+        reversalOfId: null,
+      })
+      return { ok: true, id: args.id, revision: claim.revision }
+    },
+  }),
+  reverseCashMovement: defineFn({
+    input: {
+      id: 'id',
+      sessionId: 'id',
+      movementId: 'id',
+      expectedRevision: 'int',
+      reason: 'text',
+      note: 'text?',
+      actorId: 'text',
+      deviceId: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.CashMovement', 'write:pos.CashMovement'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!String(args.reason).trim()) return invalid('reason', 'cash movement reversal requires a reason')
+      const session = (await ctx.db.select('pos.Session', { id: args.sessionId }))[0]
+      if (session?.state !== 'opened')
+        return invalid('state', 'cash movement reversal requires an open shift')
+      const original = (await ctx.db.select('pos.CashMovement', { id: args.movementId }))[0]
+      if (!original || original.sessionId !== args.sessionId)
+        return invalid('movementId', 'cash movement does not belong to this shift')
+      if (original.reversalOfId) return invalid('movementId', 'a reversal cannot itself be reversed')
+      const prior = (await ctx.db.select('pos.CashMovement', { reversalOfId: args.movementId }))[0]
+      if (prior)
+        return prior.id === args.id
+          ? { ok: true, id: prior.id, revision: n(session.revision) }
+          : invalid('movementId', 'cash movement is already reversed')
+      const claim = await claimSessionRevision(ctx, args.sessionId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.insert('pos.CashMovement', {
+        id: args.id,
+        sessionId: args.sessionId,
+        direction: original.direction === 'in' ? 'out' : 'in',
+        amount: original.amount,
+        reason: String(args.reason),
+        note: args.note ?? null,
+        actorId: args.actorId,
+        deviceId: args.deviceId ?? null,
+        occurredAt: now(),
+        reversalOfId: original.id,
+      })
+      return { ok: true, id: args.id, revision: claim.revision }
+    },
+  }),
   startClosing: defineFn({
     input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
@@ -700,6 +807,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.Order',
       'read:pos.Payment',
       'read:pos.PaymentMethod',
+      'read:pos.CashMovement',
       'write:pos.Order',
     ],
     idempotent: true,
@@ -725,6 +833,10 @@ export const functions: Record<string, FnSpec> = {
           const method = (await ctx.db.select('pos.PaymentMethod', { id: payment.paymentMethodId }))[0]
           if (method?.isCash) cash += n(payment.appliedAmount ?? payment.amount)
         }
+      cash += (await ctx.db.select('pos.CashMovement', { sessionId: args.id })).reduce(
+        (sum, movement) => sum + (movement.direction === 'in' ? n(movement.amount) : -n(movement.amount)),
+        0,
+      )
       const difference = money(n(args.closingCash) - cash)
       const pendingApproval = Math.abs(difference) - n(config.maximumDifference) > 0.000001
       if (pendingApproval && !String(args.varianceReason ?? '').trim())

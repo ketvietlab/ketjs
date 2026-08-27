@@ -567,6 +567,62 @@ test('pos: split tender requires manual reference and voided tender stops coveri
   }
 })
 
+test('pos: cash movements affect expected cash and corrections append a linked reversal', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'pos.createSession',
+      { id: 'movement-shift', configId: 'shop', userId: 'cashier', openingCash: '10' },
+      adapter,
+    )
+    await call('pos.openSession', { id: 'movement-shift', expectedRevision: 0 }, adapter)
+    const moved = (
+      await call(
+        'pos.recordCashMovement',
+        {
+          id: 'movement-out',
+          sessionId: 'movement-shift',
+          expectedRevision: 1,
+          direction: 'out',
+          amount: '2',
+          reason: 'petty_cash',
+          actorId: 'cashier',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(moved.revision, 2)
+    assert.equal(
+      ((await call('pos.getSession', { id: 'movement-shift' }, adapter)).value as Row).cashRegisterBalanceEnd,
+      '8',
+    )
+    const reversed = (
+      await call(
+        'pos.reverseCashMovement',
+        {
+          id: 'movement-reversal',
+          sessionId: 'movement-shift',
+          movementId: 'movement-out',
+          expectedRevision: 2,
+          reason: 'wrong_drawer',
+          actorId: 'cashier',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(reversed.revision, 3)
+    const shift = (await call('pos.getSession', { id: 'movement-shift' }, adapter)).value as Row
+    assert.equal(shift.cashRegisterBalanceEnd, '10')
+    assert.equal((shift.cashMovements as Row[]).length, 2)
+    assert.equal(
+      (shift.cashMovements as Row[]).find((row) => row.id === 'movement-reversal')?.reversalOfId,
+      'movement-out',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('pos: a variance seals the old shift, permits a new shift and posts approval separately', async () => {
   const adapter = await boot()
   try {
