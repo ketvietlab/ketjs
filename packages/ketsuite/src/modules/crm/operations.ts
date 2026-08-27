@@ -51,8 +51,15 @@ export const normalized = (value: unknown): string =>
 /** Digits only, so `+84 90 123 4567` and `090-123-4567` compare equal. */
 export const dialled = (value: unknown): string => String(value ?? '').replace(/\D/g, '')
 
-const jsonStrings = (value: unknown): string[] =>
-  Array.isArray(value)
+const jsonStrings = (value: unknown): string[] => {
+  if (typeof value === 'string') {
+    try {
+      return jsonStrings(JSON.parse(value))
+    } catch {
+      return []
+    }
+  }
+  return Array.isArray(value)
     ? [
         ...new Set(
           value
@@ -62,6 +69,7 @@ const jsonStrings = (value: unknown): string[] =>
         ),
       ]
     : []
+}
 
 export const actorRequired = (ctx: Ctx): string | null => ctx.actor || null
 
