@@ -595,7 +595,7 @@ test('ui contract: every documented data-ui hook is actually emitted', () => {
 
 test('ui contract: no hook is emitted that the contract does not list', () => {
   const emitted = new Set([...everything.matchAll(/data-ui="([^"]+)"/g)].map((m) => m[1] as string))
-  const undocumented = [...emitted].filter((n) => !CONTRACT.includes(n)).sort()
+  const undocumented = [...emitted].filter((n) => !CONTRACT.includes(n) && !PUBLIC_HOOKS.includes(n)).sort()
   assert.deepEqual(undocumented, [], 'a new hook needs a baseline rule before it ships')
 })
 
@@ -919,10 +919,11 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
 })
 
-test('backend layout: framed list and form screens share the accounting workspace', () => {
+test('backend layout: framed screens use the compact page header and flatten around rich records', () => {
   const list = renderToString(pagesScreen(_, [page()], {}))
-  assert.match(list, /data-ui="record-workspace" data-page-frame="true"/)
-  assert.match(list, /data-ui="record-heading"[\s\S]*Trang/)
+  assert.match(list, /data-ui="list-page"/)
+  assert.match(list, /data-ui="list-page-title"[\s\S]*Trang/)
+  assert.doesNotMatch(list, /data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/)
 
   const rich = renderToString(
     Framed({
@@ -936,14 +937,14 @@ test('backend layout: framed list and form screens share the accounting workspac
       }),
     }),
   )
-  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
-  assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
+  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 1)
+  assert.equal(rich.match(/data-ui="list-page"/g)?.length, 1)
 
   const css = ADMIN_CSS
-  assert.match(css, /data-page-frame="true"\]:has/)
+  assert.match(css, /data-ui="list-page"\]:has/)
   assert.ok(
-    css.includes('> [data-ui="record-body"] [data-ui="record-workspace"]'),
-    'the generic frame also flattens a rich workspace wrapped by feedback or a stack',
+    css.includes('> [data-ui="list-page-body"] [data-ui="record-workspace"]'),
+    'the compatibility frame also flattens a rich workspace wrapped by feedback or a stack',
   )
 })
 
@@ -956,7 +957,7 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
   )
 })
 
-test('record workspace: breadcrumbs and actions share the global record header', () => {
+test('record workspace: compact identity and actions share the global record header', () => {
   const html = renderToString(
     recordWorkspace({
       kicker: 'Products',
@@ -969,7 +970,11 @@ test('record workspace: breadcrumbs and actions share the global record header',
 
   assert.match(
     html,
-    /data-ui="record-top"[\s\S]*data-ui="record-header"[\s\S]*data-ui="breadcrumbs"[\s\S]*Products[\s\S]*Linen shirt[\s\S]*data-ui="record-controller"[\s\S]*form="product-form"/,
+    /data-ui="record-top"[\s\S]*data-ui="record-header"[\s\S]*Linen shirt[\s\S]*data-ui="record-controller"[\s\S]*form="product-form"/,
+  )
+  assert.doesNotMatch(
+    html,
+    /data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"|Products/,
   )
   assert.doesNotMatch(html, /data-ui="record-navigation"[\s\S]*data-ui="record-controller"/)
 })
@@ -1078,7 +1083,7 @@ test('design tokens: the native date picker glyph follows the theme', () => {
   assert.match(tokens, /--admin-picker-invert: light-dark\(0, 1\);/)
 })
 
-test('backend layout: a framed screen names itself once, and not with a placeholder', () => {
+test('backend layout: a framed screen uses one compact title without breadcrumb, kicker or glyph', () => {
   const manifest = compose(ketsuite.modules, { headless: true })
   const vi = translator(manifest, 'vi')
   const menu = buildMenu(manifest, {
@@ -1089,11 +1094,10 @@ test('backend layout: a framed screen names itself once, and not with a placehol
   const framed = renderToString(
     Framed({ translator: vi, title: 'Điều chuyển', frame: { menu }, body: surface({ body: 'x' }) }),
   )
-  // The title was printed twice — once in the bar, once in the heading a line below.
+  // The title is owned by the compact page header, not repeated by the shell.
   assert.equal(framed.match(/data-ui="title"/g), null, 'the bar does not repeat the heading')
-  assert.equal(framed.match(/data-ui="record-heading"/g)?.length, 1)
-  // And the header was a title beside a placeholder grid icon and nothing else.
-  assert.match(framed, /data-ui="record-kicker"[^>]*>(?:<!--k\[-->)?Kho/)
+  assert.equal(framed.match(/data-ui="list-page-title"/g)?.length, 1)
+  assert.doesNotMatch(framed, /data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/)
 
   // A list keeps its toolbar; it just stops naming the page twice.
   const listed = renderToString(

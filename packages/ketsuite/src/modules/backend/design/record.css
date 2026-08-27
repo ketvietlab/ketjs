@@ -21,28 +21,18 @@
       "record-body";
     grid-template-columns: minmax(0, 1fr);
   }
-  /* `framed` gives legacy list/form screens the accounting workspace. Rich
-     screens already render their own RecordWorkspace; flatten only the generic
-     wrapper in that case so no duplicate card or heading appears. */
-  [data-ui="record-workspace"][data-page-frame="true"]:has(
-    > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
-  ),
-  [data-ui="record-workspace"][data-page-frame="true"]:has(
-      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
-    )
-    > [data-ui="record-sheet"],
-  [data-ui="record-workspace"][data-page-frame="true"]:has(
-      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
-    )
-    > [data-ui="record-sheet"]
-    > [data-ui="record-body"] {
+  /* `Framed` is a compact compatibility ListPage. A screen that already owns a
+     rich record workspace must keep that record's identity instead of printing
+     a second generic page title immediately above it. */
+  [data-ui="list-page"]:has(> [data-ui="list-page-body"] [data-ui="record-workspace"]),
+  [data-ui="list-page"]:has(> [data-ui="list-page-body"] [data-ui="record-workspace"])
+    > [data-ui="list-page-body"] {
     display: contents;
   }
-  [data-ui="record-workspace"][data-page-frame="true"]:has(
-      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
-    )
-    > [data-ui="record-sheet"]
-    > [data-ui="record-top"] {
+  [data-ui="list-page"]:has(> [data-ui="list-page-body"] [data-ui="record-workspace"])
+    > [data-ui="list-page-header"],
+  [data-ui="list-page"]:has(> [data-ui="list-page-body"] [data-ui="record-workspace"])
+    > [data-ui="list-page-toolbar"] {
     display: none;
   }
   [data-ui="record-sheet"] {
@@ -81,42 +71,13 @@
     display: grid;
     min-inline-size: 0;
     grid-area: identity;
-    grid-template-columns: 4.5rem minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     gap: var(--admin-gap);
   }
-  [data-ui="record-thumbnail"] {
-    display: grid;
-    inline-size: 4.5rem;
-    aspect-ratio: 1;
-    overflow: hidden;
-    place-items: center;
-    border: 1px solid var(--admin-line);
-    border-radius: var(--admin-radius);
-    background: var(--admin-surface-subtle);
-    color: var(--admin-ink-muted);
-  }
-  [data-ui="record-thumbnail"] > img {
-    display: block;
-    inline-size: 100%;
-    block-size: 100%;
-    object-fit: cover;
-  }
-  [data-ui="record-thumbnail"] > [data-ui="icon"] {
-    inline-size: 1.5rem;
-    block-size: 1.5rem;
-  }
-  [data-ui="record-kicker"],
   [data-ui="record-heading"],
   [data-ui="record-subtitle"] {
     margin: 0;
-  }
-  [data-ui="record-kicker"] {
-    color: var(--admin-ink-secondary);
-    font-size: var(--admin-size-xs);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
   }
   [data-ui="record-heading"] {
     overflow-wrap: anywhere;
@@ -471,12 +432,6 @@
     }
     [data-ui="record-controller"] [data-ui="action"] {
       flex: 1 1 9rem;
-    }
-    [data-ui="record-identity"] {
-      grid-template-columns: 3.75rem minmax(0, 1fr);
-    }
-    [data-ui="record-thumbnail"] {
-      inline-size: 3.75rem;
     }
     [data-ui="record-heading"] {
       font-size: 1.25rem;
