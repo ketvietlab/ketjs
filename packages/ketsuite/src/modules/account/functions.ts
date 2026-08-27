@@ -518,8 +518,7 @@ export type TaxQuote = {
     sequence: number
     share: string
   }>
-  /** Posting-only evidence. Channel projections must remove accountId. */
-  shares: TaxShare[]
+  shares: Array<{ taxId: unknown; name: string; amount: number }>
 }
 
 export type TaxQuoteRefusal = {
@@ -533,7 +532,7 @@ export type TaxQuoteRefusal = {
 }
 
 /** Canonical product line calculation shared by Sales, POS and invoices. */
-export async function quoteTaxLine(
+export async function quoteTaxLineForPosting(
   ctx: Ctx,
   input: {
     productId?: unknown
@@ -542,7 +541,7 @@ export async function quoteTaxLine(
     priceUnit: unknown
     discount?: unknown
   },
-): Promise<TaxQuote | TaxQuoteRefusal> {
+): Promise<(Omit<TaxQuote, 'shares'> & { shares: TaxShare[] }) | TaxQuoteRefusal> {
   const quantity = n(input.quantity)
   const priceUnit = n(input.priceUnit)
   const discount = n(input.discount)
@@ -595,6 +594,19 @@ export async function quoteTaxLine(
     }
   } catch (error) {
     return refused('taxIds', error)
+  }
+}
+
+/** Public calculation evidence intentionally excludes ledger account routing. */
+export async function quoteTaxLine(
+  ctx: Ctx,
+  input: Parameters<typeof quoteTaxLineForPosting>[1],
+): Promise<TaxQuote | TaxQuoteRefusal> {
+  const quote = await quoteTaxLineForPosting(ctx, input)
+  if (quote.ok !== true) return quote
+  return {
+    ...quote,
+    shares: quote.shares.map(({ accountId: _accountId, ...share }) => share),
   }
 }
 

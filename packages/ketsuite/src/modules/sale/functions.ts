@@ -13,7 +13,7 @@ import {
   or,
 } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Row } from '@ketvietlab/ketjs'
-import { quoteTaxLine, type TaxQuote } from '../account/functions.ts'
+import { quoteTaxLine, quoteTaxLineForPosting, type TaxShare } from '../account/functions.ts'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
@@ -127,7 +127,7 @@ async function recompute(ctx: Ctx, orderId: unknown) {
         priceUnit: line.priceUnit,
         discount: line.discount,
       })
-      if (quote.ok !== true) throw new Error(`cannot quote legacy sale line ${String(line.id)}`)
+      if (quote.ok !== true) return { untaxed: n(line.priceSubtotal), total: n(line.priceSubtotal) }
       return { untaxed: n(quote.amountUntaxed), total: n(quote.amountTotal) }
     }),
   )
@@ -595,7 +595,9 @@ export const functions: Record<string, FnSpec> = {
       const discount = args.discount ?? '0'
       if (n(priceUnit) < 0 || n(discount) < 0 || n(discount) > 100)
         return invalid('priceUnit', 'unit price and discount are invalid')
-      const taxIds = args.taxIds !== undefined ? args.taxIds : args.taxId ? [args.taxId] : undefined
+      // Keep the established Sales contract: omitting tax means tax-free. POS resolves the product
+      // default explicitly through its own quote boundary before creating a line.
+      const taxIds = args.taxIds !== undefined ? args.taxIds : args.taxId ? [args.taxId] : []
       const quote = await quoteTaxLine(ctx, {
         productId: args.productId,
         taxIds,
@@ -895,7 +897,7 @@ export const functions: Record<string, FnSpec> = {
         quantity: number
         subtotal: number
         taxAmount: number
-        shares: TaxQuote['shares']
+        shares: TaxShare[]
       }> = []
       // A soft error raised once the transaction has started writing has to
       // unwind it: `adapter.tx` commits on a normal return and rolls back only on
@@ -915,7 +917,7 @@ export const functions: Record<string, FnSpec> = {
           const basis = policy === 'delivery' ? n(line.qtyDelivered) : n(line.productUomQty),
             quantity = money(basis - n(line.qtyInvoiced))
           if (quantity <= 0) continue
-          const quote = await quoteTaxLine(tx, {
+          const quote = await quoteTaxLineForPosting(tx, {
             productId: line.productId,
             taxIds: line.taxIds ?? (line.taxId ? [line.taxId] : undefined),
             quantity,
