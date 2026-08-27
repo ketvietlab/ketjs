@@ -4,6 +4,7 @@ import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { account, company, MOVE_TYPES, partner, product, TAX_AMOUNT_TYPES, uom } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
+import { roundMoney } from '../packages/ketsuite/src/modules/account/money.ts'
 
 const modules = [address, partner, company, uom, product, account]
 const manifest = compose(modules, { headless: true })
@@ -11,6 +12,11 @@ const scope = { company: 'acme', branches: null }
 
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
   callFn(name, args, { adapter, manifest, scope })
+
+test('accounting: half-up rounding survives binary representation at currency scale', () => {
+  assert.equal(roundMoney(1.005, 2), 1.01)
+  assert.equal(roundMoney(-1.005, 2), -1.01)
+})
 
 async function boot() {
   const adapter = sqliteAdapter()
