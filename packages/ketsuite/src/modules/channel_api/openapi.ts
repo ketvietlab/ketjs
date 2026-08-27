@@ -21,12 +21,24 @@ const SCHEMES: Record<ChannelProfile, Record<string, unknown>> = {
   integration: {},
 }
 
-const PROFILE_SCHEMES: Record<ChannelProfile, string[]> = {
-  customer: ['bearer', 'customerCookie'],
-  staff: ['staffCookie'],
-  pos: ['posBearer'],
+/**
+ * Schemes the facade never offers on its own.
+ *
+ * `operatorBearer` is the upstream identity an enrollment handler verifies for
+ * itself, so it belongs to the routes that name it in `credentials` and to no
+ * other. Naming the exceptions rather than re-listing every profile's schemes
+ * keeps `SCHEMES` the only place a scheme is declared: a new one added there is
+ * offered, instead of being silently dropped from every route's security.
+ */
+const HANDLER_VERIFIED: Record<ChannelProfile, readonly string[]> = {
+  customer: [],
+  staff: [],
+  pos: ['operatorBearer'],
   integration: [],
 }
+
+const offeredSchemes = (profile: ChannelProfile): string[] =>
+  Object.keys(SCHEMES[profile]).filter((name) => !HANDLER_VERIFIED[profile].includes(name))
 
 const securityFor = (profile: ChannelProfile, auth: ChannelAuth, credentials?: string[]): unknown[] => {
   if (credentials?.length) {
@@ -36,7 +48,7 @@ const securityFor = (profile: ChannelProfile, auth: ChannelAuth, credentials?: s
     return credentials.map((name) => ({ [name]: [] }))
   }
   if (!resolves(auth)) return []
-  const offered = PROFILE_SCHEMES[profile].map((name) => ({ [name]: [] }))
+  const offered = offeredSchemes(profile).map((name) => ({ [name]: [] }))
   return demands(auth) ? offered : [{}, ...offered]
 }
 
