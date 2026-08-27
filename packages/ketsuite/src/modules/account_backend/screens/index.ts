@@ -58,6 +58,12 @@ export {
   type JournalEntriesListScreenOptions,
 } from './journal-entries-list.tsx'
 export {
+  type MoveDetailRejection,
+  type MoveDetailRow,
+  moveDetailScreen,
+  type MoveDetailScreenOptions,
+} from './move-detail.tsx'
+export {
   type TaxListRow,
   type TaxListSummary,
   taxListColumns,

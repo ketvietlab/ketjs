@@ -1,9 +1,12 @@
 import { page, sha256, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
+import { modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { adminPage } from '../backend/screen.ts'
+import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { Req } from '../backend/screen.ts'
-import { credentialScreen, kioskScreen, myWorkScreen, periodScreen } from './screens.tsx'
+import { leaveRequestModal, myWorkScreen } from './screens/index.ts'
+import type { LeaveRequestValues } from './screens/index.ts'
+import { credentialScreen, kioskScreen, periodScreen } from './screens.tsx'
 
 /**
  * The kiosk is the one screen here that is not the backend: it is answered
@@ -19,62 +22,126 @@ const kioskPage = async (ctx: ServeContext, url: URL, req: Req, title: string, b
       body: body as never,
     }),
   })
-const currentMonth = () => new Date().toISOString().slice(0, 7)
+const currentMonth = (timezone = 'UTC') => {
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+    }).formatToParts(new Date())
+    const year = parts.find((part) => part.type === 'year')?.value
+    const month = parts.find((part) => part.type === 'month')?.value
+    return year && month ? `${year}-${month}` : new Date().toISOString().slice(0, 7)
+  } catch {
+    return new Date().toISOString().slice(0, 7)
+  }
+}
 const monthRange = (month: string) => {
   const [y, m] = month.split('-').map(Number)
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
   return [`${month}-01`, `${month}-${String(last).padStart(2, '0')}`]
 }
 
+const crossSite = (req: Req): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+const myWorkPath = (url: URL): string => inLocale(url, '/my/work')
+const myWorkLeavePath = (url: URL): string => inLocale(url, '/my/work?leave=1')
+const myWorkResultPath = (url: URL, result: string): string =>
+  inLocale(url, `/my/work?result=${encodeURIComponent(result)}`)
+
 export const routes: Record<string, RouteEntry> = {
   '/my/work':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let message: string | undefined
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+      let message: { text: string; tone?: 'info' | 'positive' | 'warning' | 'danger' } | undefined
+      let leaveValues: LeaveRequestValues | undefined
+      let leaveErrors: readonly string[] = []
+      let forceLeaveModal = false
       if (req.method === 'POST') {
         const form = await readForm(req)
-        const result =
-          form.action === 'leave'
-            ? await ctx.call(
-                'hr.leave.request',
-                {
-                  leaveTypeId: form.leaveTypeId,
-                  dateFrom: form.dateFrom,
-                  dateTo: form.dateTo,
-                  portion: form.portion,
-                  reason: form.reason,
-                },
-                url,
-                req,
-              )
-            : await ctx.call('attendance.punch.self', {}, url, req)
-        message = (result as { ok?: boolean; kind?: string }).ok
-          ? (result as { kind?: string }).kind
-            ? _(`attendance_backend.punch.${(result as { kind?: string }).kind}`)
-            : _('attendance_backend.result.success')
-          : _('attendance_backend.result.failed')
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const month = currentMonth(),
-        [dateFrom, dateTo] = monthRange(month)
-      const [profile, sessions, shifts, leaves] = await Promise.all([
-        ctx.call('hr.employee.myProfile', {}, url, req),
-        ctx.call('attendance.session.mine', { month }, url, req),
+        if (form.action === 'leave') {
+          forceLeaveModal = true
+          leaveValues = {
+            leaveTypeId: form.leaveTypeId,
+            dateFrom: form.dateFrom,
+            dateTo: form.dateTo,
+            portion: form.portion,
+            reason: form.reason,
+          }
+          const result = await ctx.call('hr.leave.request', leaveValues, url, req)
+          if ((result as { ok?: boolean }).ok) return seeOther(myWorkResultPath(url, 'success'))
+          leaveErrors = resultErrors(result, _, 'attendance_backend.result.failed')
+        } else {
+          const result = await ctx.call(
+            'attendance.punch.self',
+            form.expect ? { expect: form.expect } : {},
+            url,
+            req,
+          )
+          if ((result as { ok?: boolean }).ok)
+            return seeOther(myWorkResultPath(url, String((result as { kind?: string }).kind ?? 'success')))
+          message = { text: _('attendance_backend.result.failed'), tone: 'danger' }
+        }
+      } else {
+        const result = url.searchParams.get('result') ?? ''
+        if (result === 'in' || result === 'out')
+          message = { text: _(`attendance_backend.punch.${result}`), tone: 'positive' }
+        else if (result === 'success')
+          message = { text: _('attendance_backend.result.success'), tone: 'positive' }
+      }
+      const profile = (await ctx.call('hr.employee.myProfile', {}, url, req)) as Record<
+        string,
+        unknown
+      > | null
+      const scheduleMonth = currentMonth(String(profile?.timezone ?? ctx.config.defaultTimezone)),
+        [dateFrom, dateTo] = monthRange(scheduleMonth)
+      const [clock, sessions, shifts, leaves] = await Promise.all([
+        ctx.call('attendance.clock.mine', {}, url, req),
+        ctx.call('attendance.session.mine', { currentMonth: true }, url, req),
         ctx.call('hr.schedule.mine', { dateFrom, dateTo }, url, req),
         ctx.call('hr.leave.mine', {}, url, req),
       ])
       return adminPage(ctx, url, req, {
         title: 'attendance_backend.my.title',
-        body: (_, frame) =>
-          myWorkScreen(
+        active: '/my/work',
+        body: (_, frame) => {
+          const workspace = myWorkScreen(
             _,
+            {
+              action: myWorkPath(url),
+              clock: clock as Record<string, unknown>,
+              leaveHref: myWorkLeavePath(url),
+              leaves: leaves as Record<string, unknown>[],
+              message,
+              profile,
+              sessions: sessions as Record<string, unknown>[],
+              shifts: shifts as Record<string, unknown>[],
+            },
             frame,
-            profile as never,
-            sessions as never,
-            shifts as never,
-            leaves as never,
-            message,
-          ),
+          )
+          return url.searchParams.get('leave') === '1' || forceLeaveModal
+            ? modalWorkspace(
+                workspace,
+                leaveRequestModal(_, {
+                  action: myWorkLeavePath(url),
+                  cancelHref: myWorkPath(url),
+                  errors: leaveErrors,
+                  values: leaveValues,
+                }),
+              )
+            : workspace
+        },
       })
     },
   '/attendance/kiosk/{secret}': {

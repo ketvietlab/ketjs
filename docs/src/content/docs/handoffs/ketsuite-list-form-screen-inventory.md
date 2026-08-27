@@ -59,9 +59,9 @@ The current snapshot contains **173 stable work-item IDs** with no duplicates.
 
 ### Accounting lane
 
-Structure debt: the customer-invoice and vendor-bill root renderers moved into `account_backend/screens/` in
-Waves 18–19; shared document detail, payments and report renderers remain to be split. `account_partner_backend`
-follows the same rule.
+Structure debt: the customer-invoice, vendor-bill and shared document-detail renderers moved into
+`account_backend/screens/` in Waves 18–20; payments and report renderers remain to be split.
+`account_partner_backend` follows the same rule.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
@@ -74,7 +74,7 @@ follows the same rule.
 | ACC-07 | done | Journal entries | `/admin/accounting/entries` | `screens/journal-entries-list.tsx`, `screens/journal-entry-create.tsx` | Split | list/new: no | Curie |
 | ACC-08 | done | Customer invoices | `/admin/accounting/customer-invoices`, `/admin/accounting/customer-invoices/new` | `screens/customer-invoices-list.tsx`, `screens/customer-invoice-form.tsx` | Split | list/new: no | Curie |
 | ACC-09 | done | Vendor bills | `/admin/accounting/vendor-bills`, `/admin/accounting/vendor-bills/new` | `screens/vendor-bills-list.tsx`, `screens/vendor-bill-form.tsx` | Split | list/new: no | Curie |
-| ACC-10 | ready | Shared accounting document detail | `/admin/accounting/entries/{id}`, `/customer-invoices/{id}`, `/vendor-bills/{id}` | `moveDetailScreen` | FormPage | `account_mail_backend` | — |
+| ACC-10 | done | Shared accounting document detail | `/admin/accounting/entries/{id}`, `/customer-invoices/{id}`, `/vendor-bills/{id}` | `screens/move-detail.tsx::moveDetailScreen` | FormPage | `account_mail_backend` | Curie |
 | ACC-11 | ready | Payments | `/admin/accounting/payments` | `paymentsScreen` | Split | no | — |
 | ACC-12 | ready | Trial balance | `/admin/accounting/trial-balance` | `trialBalanceScreen` | Specialized | no | — |
 | ACC-13 | ready | General ledger | `/admin/accounting/general-ledger` | `generalLedgerScreen` | Specialized | no | — |
@@ -168,9 +168,9 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 
 ### Flow lane
 
-`flow_backend/screens/` exists. Waves 18–19 moved the project tree and all-pages list to their own leaves;
-`pages.tsx` now contains only page detail. Split it and `epics.tsx` one assignment at a time; generated Live Doc
-endpoints belong to the detail renderer that consumes them.
+`flow_backend/screens/` exists. Waves 18–20 moved the project tree, all-pages list and page detail to their own
+leaves, removing the former `pages.tsx`; split `epics.tsx` one assignment at a time. Generated Live Doc endpoints
+belong to the detail renderer that consumes them.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
@@ -181,7 +181,7 @@ endpoints belong to the detail renderer that consumes them.
 | FLOW-05 | done | Issue detail | `/admin/flow/issues/{id}` | `screens/issue-detail.tsx::issueDetailScreen` | FormPage/Specialized | Huygens |
 | FLOW-06 | done | Project page tree | `/admin/flow/projects/{id}/pages` | `screens/project-pages.tsx::pagesScreen` | Specialized | Huygens |
 | FLOW-07 | done | All pages | `/admin/flow/pages` | `screens/all-pages.tsx::allPagesScreen` | ListPage | Huygens |
-| FLOW-08 | ready | Page live editor | `/admin/flow/pages/{id}` | `screens/pages.tsx::pageDetailScreen` | Specialized | — |
+| FLOW-08 | done | Page live editor | `/admin/flow/pages/{id}` | `screens/page-detail.tsx::pageDetailScreen` | FormPage/Specialized | Huygens |
 | FLOW-09 | ready | Project epics | `/admin/flow/projects/{id}/epics` | `screens/epics.tsx::epicsScreen` | Specialized | — |
 | FLOW-10 | ready | All epics | `/admin/flow/epics` | `screens/epics.tsx::allEpicsScreen` | ListPage | — |
 | FLOW-11 | ready | Epic detail | `/admin/flow/epics/{id}` | `screens/epics.tsx::epicDetailScreen` | FormPage/Specialized | — |
@@ -205,15 +205,15 @@ the barrel owns public exports, and the empty root `screens.tsx` no longer exist
 ### HR and attendance lanes
 
 Structure debt resolved in Wave 19: every HR backend renderer now lives in `hr_backend/screens/`, and the
-legacy root `screens.tsx` no longer exists. `attendance_backend` still starts from monolithic `screens.tsx` and
-creates its own folder one assignment at a time.
+legacy root `screens.tsx` no longer exists. Wave 20 created `attendance_backend/screens/` for My Work;
+kiosk, period and credential issuance remain in the root `screens.tsx` until their assignments.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
 | HR-01 | hr | done | Employees | `/admin/hr` | `screens/employees-list.tsx`, `screens/employee-form.tsx` | Split | Kant |
 | HR-02 | hr | done | Weekly roster | `/admin/hr/roster` | `screens/roster.tsx::rosterScreen` | Specialized | Kant |
 | HR-03 | hr | done | Leave approvals | `/admin/hr/leaves` | `screens/leaves-list.tsx::leavesListScreen` | ListPage | Kant |
-| ATT-01 | attendance | ready | My work | `/my/work` | `myWorkScreen` | Specialized | — |
+| ATT-01 | attendance | done | My work | `/my/work` | `screens/my-work.tsx::myWorkScreen` | Specialized | Kant |
 | ATT-02 | attendance | keep | Attendance kiosk | `/attendance/kiosk/{secret}` | `kioskScreen` | Specialized public kiosk | — |
 | ATT-03 | attendance | ready | Attendance period | `/admin/attendance` | `periodScreen` | Specialized | — |
 | ATT-04 | attendance | ready | Credential issuance | `/admin/attendance/credentials` | `credentialScreen` | FormPage/Specialized | — |
@@ -1000,6 +1000,29 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   100/100 and Identity 111 passed with one existing PostgreSQL-only test skipped locally. Desktop and 390 px
   browser QA confirms 302 px Vendor Bill controls, an internally scrolling All Pages table, a 390 px Leave
   Approvals main region, localized destinations and no document-level horizontal overflow.
+
+### Wave 20 — ACC-10, FLOW-08 and ATT-01
+
+- Shared Accounting Document Detail now uses the public `FormPage` record shell for journal entries, customer
+  invoices and vendor bills. Document identity, lifecycle and print commands, editable lines, revision checks,
+  rejected values and retry-stable line/reversal IDs remain. Mail Chatter and record activity occupy the native
+  one-third aside rather than a separate quick-information column; the full document stays a routed form.
+- Flow Page Detail now wraps its specialized Live Doc editor in `FormPage`. Title save remains the primary
+  record action; add-child and move are URL-owned dialogs; reorder/archive stay compact operational commands.
+  Breadcrumbs, child links, locale, CSRF, version checks, rejected values and retry identity remain. The last
+  `screens/pages.tsx` renderer moved to `screens/page-detail.tsx` and the empty source file was removed.
+- Attendance My Work remains a Specialized employee task surface because clock state, profile, monthly schedule,
+  corrected sessions and leave history form one workflow. The five-field leave request moved to a URL-owned large
+  dialog, while clock-in/out is explicit and retry-safe. Its renderer moved to
+  `attendance_backend/screens/my-work.tsx`; the root file now holds only kiosk, period and credentials.
+- Wave 20 starts the accelerated pipeline: each agent runs focused tests plus static checks, the coordinator runs
+  each owning CI group once after integration, and the next wave may start after the quality gate while matrix CI
+  continues. Cross-review remains mandatory before commit; it caught and closed retry, route-family and timezone
+  edge cases before browser QA.
+- Integrated focused validation passes 13/13 tests. The affected groups pass Accounting 94/94, Collaboration
+  104/104 and Identity 116 passed with one existing PostgreSQL-only test skipped locally. Browser QA covers the
+  populated Flow Live Doc, add-child dialog, Accounting detail with one-third Chatter/activity rail, its 900 px
+  wrapped layout and Attendance leave dialog at desktop and 390 px; regular mobile fields stack label over input.
 
 ### Modal consolidation through Wave 14 — PR 253
 

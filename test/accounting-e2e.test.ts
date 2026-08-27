@@ -134,8 +134,8 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /account_backend\.[A-Za-z]/, path)
     if (path === '/admin/accounting/customer-invoices/invoice-1') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /data-ui="record-aside"/)
+      assert.match(html, /data-ui="form-page"[^>]*data-has-aside="true"/)
+      assert.match(html, /data-ui="form-page-aside"/)
       assert.match(html, /data-island="mail\.chatter"/)
       assert.match(html, /data-island="activity\.record"/)
     }

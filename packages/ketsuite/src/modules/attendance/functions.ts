@@ -39,6 +39,18 @@ const policyFor = async (ctx: Ctx): Promise<Row> =>
     overtimeMinimumMinutes: 30,
   }
 
+const currentMonth = (timezone: string): string => {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date())
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  if (!year || !month) throw new Error('month')
+  return `${year}-${month}`
+}
+
 const monthBounds = (month: string, timezone: string): [string, string] => {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('month')
   const [year, number] = month.split('-').map(Number)
@@ -513,7 +525,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'session.mine': defineFn({
-    input: { month: 'text?' },
+    input: { month: 'text?', currentMonth: 'bool?' },
     output: {
       id: 'id',
       branchId: 'id',
@@ -528,9 +540,13 @@ export const functions: Record<string, FnSpec> = {
       const employee = await employeeForActor(ctx)
       if (!employee) return []
       const rows = await ctx.db.select('attendance.Session', { employeeId: employee.id })
-      if (!a.month) return rows
-      const policy = await policyFor(ctx),
-        [from, to] = monthBounds(String(a.month), String(policy.timezone))
+      if (!a.month && !a.currentMonth) return rows
+      const policy = await policyFor(ctx)
+      // A month label and its UTC bounds must come from the same timezone.
+      // Letting the caller derive "current" from an employee timezone while
+      // these bounds use policy time can skip a whole month at the boundary.
+      const month = a.currentMonth ? currentMonth(String(policy.timezone)) : String(a.month)
+      const [from, to] = monthBounds(month, String(policy.timezone))
       return rows.filter((row) => String(row.startAt) >= from && String(row.startAt) < to)
     },
   }),

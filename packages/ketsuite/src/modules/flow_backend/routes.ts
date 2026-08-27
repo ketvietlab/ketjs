@@ -44,7 +44,7 @@ import {
   sprintsScreen,
   TEMPLATE_OPTIONS,
 } from './screens/index.ts'
-import type { IssueDetailControls } from './screens/index.ts'
+import type { IssueDetailControls, PageDetailAction } from './screens/index.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { documentRoutes } from '../livedoc/index.ts'
 import type { DocumentOwner } from '../livedoc/index.ts'
@@ -461,17 +461,21 @@ const parentField = (_: Translator, pages: readonly AnyRow[], pageId: string, cu
       }
     }
   }
+  const options = [
+    { value: '', label: _('flow_backend.pages.root') },
+    ...pages
+      .filter((page) => !banned.has(String(page.id)))
+      .map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
+  ]
+  if (current && !options.some((option) => option.value === current)) {
+    options.unshift({ value: current, label: current })
+  }
   return {
     name: 'parentPageId',
     label: _('flow_backend.pages.parent'),
     type: 'select',
     value: current,
-    options: [
-      { value: '', label: _('flow_backend.pages.root') },
-      ...pages
-        .filter((page) => !banned.has(String(page.id)))
-        .map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
-    ],
+    options,
   }
 }
 
@@ -1593,10 +1597,12 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       const pageId = String(params.id)
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const endpoint = `/admin/flow/pages/${pageId}`
-      let errors: string[] = []
+      const endpoint = `/admin/flow/pages/${encodeURIComponent(pageId)}`
+      let errors: { action: PageDetailAction; messages: string[] } | undefined
+      let submitted: Record<string, string> = {}
       if (req.method === 'POST') {
         const form = await readForm(req)
+        submitted = form
         const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
         const current = held.value
         if (!current) return text('not found', { status: 404 })
@@ -1608,28 +1614,29 @@ export const routes: Record<string, RouteEntry> = {
               projectId: String(current.projectId),
               title: form.title ?? '',
               expectedVersion: Number(form.expectedVersion ?? current.version ?? 0),
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
+          errors = { action: 'save', messages: errorsOf(result, _) }
         } else if (form.action === 'addChild') {
           const result = (await ctx.call(
             'flow.page.save',
             {
-              id: randomUUID(),
+              id: form.childId || randomUUID(),
               projectId: String(current.projectId),
               title: form.title ?? '',
               parentPageId: pageId,
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
-          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${String(result.id)}`))
-          errors = errorsOf(result, _)
+          if (result.ok)
+            return seeOther(inLocale(url, `/admin/flow/pages/${encodeURIComponent(String(result.id))}`))
+          errors = { action: 'addChild', messages: errorsOf(result, _) }
         } else if (form.action === 'move') {
           const result = (await ctx.call(
             'flow.page.move',
@@ -1638,23 +1645,27 @@ export const routes: Record<string, RouteEntry> = {
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
+          errors = { action: 'move', messages: errorsOf(result, _) }
         } else if (form.action === 'orderUp' || form.action === 'orderDown') {
+          const idempotencyKey = form.idempotencyKey || randomUUID()
           const result = (await ctx.call(
             'flow.page.reorder',
             { id: pageId, direction: form.action === 'orderUp' ? 'up' : 'down' },
             url,
             req,
+            { idempotencyKey },
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
+          errors = { action: form.action, messages: errorsOf(result, _) }
         } else if (form.action === 'archive') {
           const result = (await ctx.call('flow.page.archive', { id: pageId }, url, req)) as AnyRow
           if (result.ok)
-            return seeOther(inLocale(url, `/admin/flow/projects/${String(current.projectId)}/pages`))
-          errors = errorsOf(result, _)
+            return seeOther(
+              inLocale(url, `/admin/flow/projects/${encodeURIComponent(String(current.projectId))}/pages`),
+            )
+          errors = { action: 'archive', messages: errorsOf(result, _) }
         }
-      }
+      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
       const page = held.value
       if (!page) return text('not found', { status: 404 })
@@ -1676,24 +1687,53 @@ export const routes: Record<string, RouteEntry> = {
         // project rather than emptying out — same reason the issue detail does.
         active: `/admin/flow/projects/${String(page.projectId)}/pages`,
         body: (t, frame) =>
-          pageDetailScreen(
-            t,
-            frame,
+          pageDetailScreen(t, frame, {
             page,
-            endpoint,
             editor,
-            [
+            titleFields: [
               {
                 name: 'title',
                 label: t('flow_backend.pages.name'),
-                value: String(page.title ?? ''),
+                value: errors?.action === 'save' ? (submitted.title ?? '') : String(page.title ?? ''),
                 required: true,
               },
             ],
-            [{ name: 'title', label: t('flow_backend.pages.childName'), value: '', required: true }],
-            [parentField(t, siblings, pageId, page.parentPageId ? String(page.parentPageId) : '')],
+            childFields: [
+              {
+                name: 'title',
+                label: t('flow_backend.pages.childName'),
+                value: errors?.action === 'addChild' ? (submitted.title ?? '') : '',
+                required: true,
+              },
+            ],
+            moveFields: [
+              parentField(
+                t,
+                siblings,
+                pageId,
+                errors?.action === 'move'
+                  ? (submitted.parentPageId ?? '')
+                  : page.parentPageId
+                    ? String(page.parentPageId)
+                    : '',
+              ),
+            ],
             errors,
-          ),
+            locale: localeQuery(url),
+            dialog:
+              url.searchParams.get('dialog') === 'addChild' || url.searchParams.get('dialog') === 'move'
+                ? (url.searchParams.get('dialog') as 'addChild' | 'move')
+                : undefined,
+            childId: errors?.action === 'addChild' ? submitted.childId || randomUUID() : randomUUID(),
+            idempotencyKey:
+              errors?.action === 'save' || errors?.action === 'addChild'
+                ? submitted.idempotencyKey || randomUUID()
+                : randomUUID(),
+            orderUpIdempotencyKey:
+              errors?.action === 'orderUp' ? submitted.idempotencyKey || randomUUID() : randomUUID(),
+            orderDownIdempotencyKey:
+              errors?.action === 'orderDown' ? submitted.idempotencyKey || randomUUID() : randomUUID(),
+          }),
       })
     },
 

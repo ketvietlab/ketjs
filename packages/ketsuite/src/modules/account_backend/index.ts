@@ -30,6 +30,7 @@ import {
   journalFormModal,
   journalsListScreen,
   labelOf,
+  moveDetailScreen,
   moveTitle,
   optionsOf,
   paymentTermFormModal,
@@ -41,7 +42,6 @@ import {
   vendorBillsListScreen,
 } from './screens/index.ts'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
-import { moveDetailScreen } from './move-detail-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
 import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
@@ -925,34 +925,85 @@ const createInvoice = async (
   }
 }
 
+type MoveRouteFamily = 'entry' | 'customer' | 'vendor'
+
+const moveFamily = (move: AnyRow): MoveRouteFamily =>
+  (CUSTOMER_INVOICE_TYPES as readonly string[]).includes(String(move.moveType))
+    ? 'customer'
+    : (VENDOR_BILL_TYPES as readonly string[]).includes(String(move.moveType))
+      ? 'vendor'
+      : 'entry'
+
+const canonicalMovePath = (move: AnyRow, url: URL): string => {
+  const family = moveFamily(move)
+  const collection =
+    family === 'customer'
+      ? '/admin/accounting/customer-invoices'
+      : family === 'vendor'
+        ? '/admin/accounting/vendor-bills'
+        : '/admin/accounting/entries'
+  return `${collection}/${encodeURIComponent(String(move.id))}${localeQuery(url)}`
+}
+
 const accountMoveRoute =
+  (family: MoveRouteFamily) =>
   (ctx: ServeContext): Route =>
   async (url, req, params) => {
+    if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+    if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+    let move = (await ctx.call('account.getMove', { id: params.id }, url, req)) as AnyRow | null
+    if (!move)
+      return text(ctx.translate(ctx.localeOf(url, req))('account_backend.move.notFound'), { status: 404 })
+    if (moveFamily(move) !== family) return seeOther(canonicalMovePath(move, url))
+
     let rejected: Rejection | undefined
     if (req.method === 'POST') {
-      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       const result =
         form.action === 'post'
-          ? await ctx.call('account.postMove', { id: params.id }, url, req)
+          ? await ctx.call(
+              'account.postMove',
+              {
+                id: params.id,
+                ...(form.expectedRevision ? { expectedRevision: Number(form.expectedRevision) } : {}),
+              },
+              url,
+              req,
+            )
           : form.action === 'cancel'
-            ? await ctx.call('account.cancelMove', { id: params.id }, url, req)
+            ? await ctx.call(
+                'account.cancelMove',
+                {
+                  id: params.id,
+                  ...(form.expectedRevision ? { expectedRevision: Number(form.expectedRevision) } : {}),
+                },
+                url,
+                req,
+              )
             : form.action === 'reverse'
-              ? await ctx.call('account.reverseMove', { id: params.id, reversalId: randomUUID() }, url, req)
-              : await ctx.call(
-                  'account.addMoveLine',
-                  {
-                    id: randomUUID(),
-                    moveId: params.id,
-                    name: form.name ?? '',
-                    accountId: form.accountId ?? '',
-                    ...optional(form, 'partnerId'),
-                    debit: form.debit || '0',
-                    credit: form.credit || '0',
-                  },
+              ? await ctx.call(
+                  'account.reverseMove',
+                  { id: params.id, reversalId: form.reversalId || randomUUID() },
                   url,
                   req,
                 )
+              : form.action === 'add-line'
+                ? await ctx.call(
+                    'account.addMoveLine',
+                    {
+                      id: form.lineId || randomUUID(),
+                      moveId: params.id,
+                      name: form.name ?? '',
+                      accountId: form.accountId ?? '',
+                      ...optional(form, 'partnerId'),
+                      debit: form.debit || '0',
+                      credit: form.credit || '0',
+                    },
+                    url,
+                    req,
+                  )
+                : null
+      if (!result) return text('invalid action', { status: 400 })
       if (succeeded(result))
         // A reversal is a journal entry of its own, so the user lands on it rather
         // than on the document they just corrected.
@@ -962,13 +1013,11 @@ const accountMoveRoute =
             : `${url.pathname}${localeQuery(url)}`,
         )
       rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
-    } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-    const [move, accounts] = (await Promise.all([
-      ctx.call('account.getMove', { id: params.id }, url, req),
-      ctx.call('account.listAccounts', {}, url, req),
-    ])) as [AnyRow | null, AnyRow[]]
-    if (!move)
-      return text(ctx.translate(ctx.localeOf(url, req))('account_backend.move.notFound'), { status: 404 })
+      move = (await ctx.call('account.getMove', { id: params.id }, url, req)) as AnyRow | null
+      if (!move)
+        return text(ctx.translate(ctx.localeOf(url, req))('account_backend.move.notFound'), { status: 404 })
+    }
+    const accounts = (await ctx.call('account.listAccounts', {}, url, req)) as AnyRow[]
     const lang = ctx.localeOf(url, req)
     const collaboration = await ctx.joint(url, req, 'account_backend:move.collaboration', {
       resModel: 'account.Move',
@@ -988,17 +1037,18 @@ const accountMoveRoute =
       title: moveTitle(ctx.translate(lang), move),
       translate: false,
       body: (_, frame) =>
-        moveDetailScreen(
-          _,
+        moveDetailScreen(_, {
           move,
-          (move.lines as AnyRow[]) ?? [],
+          lines: (move.lines as AnyRow[]) ?? [],
           frame,
-          accountChoices(_, accounts),
-          `${url.pathname}${localeQuery(url)}`,
+          accountOptions: accountChoices(_, accounts),
+          action: `${url.pathname}${localeQuery(url)}`,
           collaboration,
-          printGroup(_, printable, String(move.id), url.search),
-          rejected?.messages,
-        ),
+          printActions: printGroup(_, printable, String(move.id), url.search),
+          rejected,
+          lineId: rejected?.values.lineId || randomUUID(),
+          reversalId: rejected?.values.reversalId || randomUUID(),
+        }),
     })
   }
 
@@ -2593,9 +2643,9 @@ export default defineModule({
             }),
         })
       },
-    '/admin/accounting/entries/{id}': accountMoveRoute,
-    '/admin/accounting/customer-invoices/{id}': accountMoveRoute,
-    '/admin/accounting/vendor-bills/{id}': accountMoveRoute,
+    '/admin/accounting/entries/{id}': accountMoveRoute('entry'),
+    '/admin/accounting/customer-invoices/{id}': accountMoveRoute('customer'),
+    '/admin/accounting/vendor-bills/{id}': accountMoveRoute('vendor'),
     '/admin/accounting/payments':
       (ctx): Route =>
       async (url, req) => {
