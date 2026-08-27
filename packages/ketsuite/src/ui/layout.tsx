@@ -4,12 +4,10 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
-import { activeMenuRoot } from '@ketvietlab/ketjs'
 import { sidebar, sidebarMain } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
-import { icon } from './icons.ts'
 import { recordWorkspace } from './record.tsx'
 
 export const HOOKS = [
@@ -138,22 +136,12 @@ export const backendPage = async (
 }
 
 /**
- * Every operational page gets the same bordered header/body sheet as accounting.
- * A screen that already supplies a richer record workspace is flattened by CSS,
- * so its domain-specific identity, facts, tabs, and collaboration rail remain the
- * only visible workspace rather than being wrapped in a second card.
- *
- * One shape, not two: this was `framed(_, title, frame, body)` beside
- * `framedPage({...})`, the second wrapping the first, and the audit banned only the
- * first — so which one a screen used depended on whether its filename happened to
- * contain the word "screen". It is exported as `Framed` for JSX.
- *
- * The kicker and the glyph come from the menu when a screen does not name its own.
- * Ninety screens opened with a title, a placeholder grid icon and nothing else,
- * which reads as a page that failed to load its header — and the sidebar already
- * knows which app you are in and which glyph that app chose, so asking each screen
- * to repeat it would have been ninety translations that can only drift. A screen
- * with something better to say still says it.
+ * Compatibility frame for operational screens that have not yet selected a more
+ * specific page pattern. It keeps the operational workspace semantics used by
+ * boards and reports, while the compact RecordWorkspace header avoids repeating
+ * the module identity as a breadcrumb, kicker and large glyph. A richer
+ * RecordWorkspace nested in the body keeps its own record header; the
+ * compatibility heading is flattened for that case in record.css.
  */
 export const framedPage = (options: {
   translator: Translator
@@ -183,37 +171,34 @@ export const framedPage = (options: {
    */
   actions?: JSXChild
 }): TemplateResult => {
-  const activeRoot = activeMenuRoot(options.frame.menu ?? [])
-  const glyph = options.icon ?? activeRoot?.icon ?? 'layout-grid'
+  const actions =
+    options.frame.extras?.['topbar.end'] !== undefined || options.actions !== undefined ? (
+      <>
+        {options.frame.extras?.['topbar.end'] ?? ''}
+        {options.actions ?? ''}
+      </>
+    ) : undefined
   return shell(
     options.translator,
     options.title,
     recordWorkspace({
       pageFrame: true,
-      kicker: options.kicker ?? activeRoot?.label ?? options.translator('backend.brand'),
       title: options.title,
-      // No fallback. This used to read `backend.app.summary`, which is the
-      // Administration app's own description — printed under the title of every
-      // screen of every app that did not pass its own, so Flow and CRM both
-      // told the reader they were managing system configuration. A screen with
-      // nothing to add says nothing; the title already named it.
       subtitle: options.subtitle ?? null,
-      imageFallback: icon(glyph),
+      imageFallback: '',
       controller:
-        options.frame.chrome || options.actions !== undefined ? (
+        options.frame.chrome || actions !== undefined ? (
           <>
             {options.frame.chrome
               ? listChrome(options.translator, options.title, options.frame.chrome, false)
               : ''}
-            {options.frame.extras?.['topbar.end'] ?? ''}
-            {options.actions ?? ''}
+            {actions ?? ''}
           </>
         ) : undefined,
       body: options.body,
       aside: options.aside,
       asideLabel: options.asideLabel ?? null,
     }),
-    // The workspace below opens with this same title, so the bar does not repeat it.
     { ...options.frame, titled: false, topbar: false },
   )
 }

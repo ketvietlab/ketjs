@@ -35,7 +35,7 @@ import {
   servicesScreen,
   nightAuditScreen,
   stayNoticesScreen,
-} from './screens.tsx'
+} from './screens/index.ts'
 import type {
   AmenityRow,
   BuildingDetail,
@@ -77,7 +77,7 @@ import type {
   NightAuditPreview,
   NightAuditRow,
   StayNoticeRow,
-} from './screens.tsx'
+} from './screens/index.ts'
 import { addCalendarDays, calendarRange, dateKeyIn, zonedDateTime } from './calendar.ts'
 import { CLEANING_TASK_STATES, ROOM_STATUSES, STAY_NOTICE_STATES } from './types.ts'
 import { adminPage } from '../backend/screen.ts'
