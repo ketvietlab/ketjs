@@ -11,18 +11,22 @@ translate.resolves = () => true
 
 test('address catalogs use ListPage with encoded navigation and install action', () => {
   const html = renderToString(
-    catalogsScreen(translate, {}, {
-      rows: [
-        {
-          countryCode: 'VN/a',
-          version: '2025-07-01',
-          recommended: true,
-          installed: false,
-          detailHref: '/admin/addresses/VN%2Fa?lang=en',
-          installAction: '/admin/addresses/VN%2Fa/install?lang=en',
-        },
-      ],
-    }),
+    catalogsScreen(
+      translate,
+      {},
+      {
+        rows: [
+          {
+            countryCode: 'VN/a',
+            version: '2025-07-01',
+            recommended: true,
+            installed: false,
+            detailHref: '/admin/addresses/VN%2Fa?lang=en',
+            installAction: '/admin/addresses/VN%2Fa/install?lang=en',
+          },
+        ],
+      },
+    ),
   )
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /data-row-href="\/admin\/addresses\/VN%2Fa\?lang=en"/)

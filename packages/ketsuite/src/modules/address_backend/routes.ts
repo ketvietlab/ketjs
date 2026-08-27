@@ -42,10 +42,7 @@ export const routes: Record<string, RouteEntry> = {
             rows: rows.map((row) => ({
               ...row,
               detailHref: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}`),
-              installAction: inLocale(
-                url,
-                `/admin/addresses/${encodeURIComponent(row.countryCode)}/install`,
-              ),
+              installAction: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}/install`),
             })),
           }),
       })

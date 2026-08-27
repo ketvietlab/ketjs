@@ -222,10 +222,7 @@ const renderRole = async (
           mode: 'detail',
           action: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}`),
           cancelHref: inLocale(url, '/admin/roles'),
-          permissionsAction: inLocale(
-            url,
-            `/admin/roles/${encodeURIComponent(row.id)}/permissions`,
-          ),
+          permissionsAction: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}/permissions`),
           permissions: await permissionGroups(ctx, url, req, row.grants ?? []),
           errors: state.errors,
         },

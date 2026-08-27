@@ -45,6 +45,7 @@ export const roleScreen = (
   const create = options.mode === 'create'
   const title = create ? _('user_backend.roles.create') : String(values.name ?? values.id ?? '')
   const formId = 'role-record-form'
+  const permissionsAction = options.permissionsAction
   const groups = new Map<string, PermissionRow[]>()
   for (const permission of options.permissions ?? [])
     groups.set(permission.module, [...(groups.get(permission.module) ?? []), permission])
@@ -94,7 +95,7 @@ export const roleScreen = (
             />
           }
         />,
-        ...(!create && options.permissionsAction
+        ...(!create && permissionsAction
           ? [...groups.entries()].map(([moduleName, items]) => (
               <Section
                 title={items[0]?.moduleLabel ?? moduleName}
@@ -103,7 +104,7 @@ export const roleScreen = (
                   <Surface
                     body={
                       <RecordForm
-                        action={options.permissionsAction}
+                        action={permissionsAction}
                         submit={_('user_backend.action.savePermissions')}
                         submitVariant="secondary"
                         hidden={{ action: 'save', module: moduleName }}

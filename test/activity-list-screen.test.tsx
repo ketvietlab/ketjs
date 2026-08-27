@@ -11,24 +11,28 @@ translate.resolves = () => true
 
 test('activity queue uses ListPage and keeps route-owned actions and destinations', () => {
   const html = renderToString(
-    activitiesScreen(translate, {}, {
-      rows: [
-        {
-          id: 'activity/a',
-          summary: 'Confirm quantity',
-          typeName: 'To-do',
-          targetName: 'Product A',
-          dueDate: '2026-08-27',
-          state: 'today',
-          active: true,
-          targetHref: '/admin/product/templates/product%2Fa?lang=en',
-        },
-      ],
-      action: '/admin/activities?lang=en&done=1',
-      toggleHref: '/admin/activities?lang=en&today=2026-08-27',
-      includeDone: true,
-      today: '2026-08-27',
-    }),
+    activitiesScreen(
+      translate,
+      {},
+      {
+        rows: [
+          {
+            id: 'activity/a',
+            summary: 'Confirm quantity',
+            typeName: 'To-do',
+            targetName: 'Product A',
+            dueDate: '2026-08-27',
+            state: 'today',
+            active: true,
+            targetHref: '/admin/product/templates/product%2Fa?lang=en',
+          },
+        ],
+        action: '/admin/activities?lang=en&done=1',
+        toggleHref: '/admin/activities?lang=en&today=2026-08-27',
+        includeDone: true,
+        today: '2026-08-27',
+      },
+    ),
   )
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /href="\/admin\/product\/templates\/product%2Fa\?lang=en"/)
