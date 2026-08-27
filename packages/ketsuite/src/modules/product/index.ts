@@ -24,3 +24,5 @@ export default defineModule({
 export { PRODUCT_TYPES } from './types.ts'
 export type { ProductType } from './types.ts'
 export { productListSearch, emptyProductListState } from './search.ts'
+export { sellableProduct } from './sellable.ts'
+export type { SellableProduct, SellableProductResult, SellableUom } from './sellable.ts'

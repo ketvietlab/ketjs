@@ -4,9 +4,11 @@ import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import {
   account,
+  channelApi,
   company,
   partner,
   pos,
+  posChannel,
   POS_ORDER_STATES,
   POS_SESSION_STATES,
   pricing,
@@ -14,10 +16,25 @@ import {
   stock,
   uom,
   user,
+  website,
 } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 
-const modules = [address, partner, company, user, uom, product, pricing, stock, account, pos]
+const modules = [
+  website,
+  address,
+  partner,
+  company,
+  user,
+  channelApi,
+  uom,
+  product,
+  pricing,
+  stock,
+  account,
+  pos,
+  posChannel,
+]
 const manifest = compose(modules, { headless: true }),
   scope = { company: 'acme', branches: null }
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
@@ -219,6 +236,55 @@ test('pos: exact session/order states, pricing, payment, stock and accounting fo
       (await adapter.all('SELECT state FROM pos_order WHERE id = ?', ['order-1']))[0]!.state,
       'done',
     )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: price-book exposes only active sellable products and explicitly enabled units', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'uom.saveUnit',
+      { id: 'box', name: 'Box', relativeUomId: 'unit', relativeFactor: '10' },
+      adapter,
+    )
+    await call('pos.createSession', { id: 'catalog-session', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'catalog-session' }, adapter)
+    await call('pos.createOrder', { id: 'catalog-order', sessionId: 'catalog-session' }, adapter)
+    const refused = (
+      await call(
+        'pos.addLine',
+        {
+          id: 'catalog-line',
+          orderId: 'catalog-order',
+          productId: 'goods-1',
+          productUomId: 'box',
+          qty: '1',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Row[])[0]?.field, 'productUomId')
+
+    const first = (await call('pos_channel.priceBook', { posConfigId: 'shop' }, adapter)).value as Row
+    const second = (await call('pos_channel.priceBook', { posConfigId: 'shop' }, adapter)).value as Row
+    assert.equal(first.revision, second.revision)
+    assert.equal((first.products as Row[]).length, 1)
+    const offered = (first.products as Row[])[0]!
+    assert.equal(offered.id, 'goods-1')
+    assert.equal(offered.listPrice, 90)
+    assert.deepEqual(
+      (offered.uoms as Row[]).map((unit) => unit.id),
+      ['unit'],
+    )
+    assert.equal(JSON.stringify(first).includes('standardPrice'), false)
+
+    await adapter.run('UPDATE product_product SET active = ? WHERE id = ?', [false, 'goods-1'])
+    const changed = (await call('pos_channel.priceBook', { posConfigId: 'shop' }, adapter)).value as Row
+    assert.notEqual(changed.revision, first.revision)
+    assert.deepEqual(changed.products, [])
   } finally {
     await adapter.close()
   }
