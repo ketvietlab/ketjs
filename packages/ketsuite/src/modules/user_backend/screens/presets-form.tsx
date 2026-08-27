@@ -13,11 +13,7 @@ export type PresetsScreenOptions = {
   result?: string
 }
 
-export const presetsScreen = (
-  _: Translator,
-  frame: Frame,
-  options: PresetsScreenOptions,
-): TemplateResult => {
+export const presetsScreen = (_: Translator, frame: Frame, options: PresetsScreenOptions): TemplateResult => {
   const formId = 'permission-preset-form'
   return shell(
     _,
@@ -34,13 +30,7 @@ export const presetsScreen = (
       })}
       body={stack([
         ...(options.result
-          ? [
-              <Notice
-                tone="positive"
-                title={_('user_backend.presets.done')}
-                message={options.result}
-              />,
-            ]
+          ? [<Notice tone="positive" title={_('user_backend.presets.done')} message={options.result} />]
           : []),
         <Section
           title={_('user_backend.presets.apply')}

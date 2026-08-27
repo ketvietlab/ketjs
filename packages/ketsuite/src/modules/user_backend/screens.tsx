@@ -1,16 +1,6 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  badge,
-  code,
-  Framed,
-  inline,
-  person,
-  RecordForm,
-  Section,
-  stack,
-  Surface,
-} from '../../ui/index.ts'
+import { badge, code, Framed, inline, person, RecordForm, Section, stack, Surface } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
 

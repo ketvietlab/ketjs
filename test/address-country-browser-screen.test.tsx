@@ -16,9 +16,7 @@ test('country browser keeps specialized hierarchy with encoded locale-safe navig
       {
         countryCode: 'VN/a',
         status: { countryCode: 'VN/a', version: '2025', recommended: true, installed: true },
-        divisions: [
-          { id: 'division/a', code: '01', officialName: 'Division A', kind: 'province', level: 1 },
-        ],
+        divisions: [{ id: 'division/a', code: '01', officialName: 'Division A', kind: 'province', level: 1 }],
       },
       {},
       'lang=en',

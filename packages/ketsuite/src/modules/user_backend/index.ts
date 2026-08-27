@@ -20,9 +20,7 @@ export default defineModule({
 })
 
 export { routes } from './routes.ts'
-export {
-  profileScreen,
-} from './screens.tsx'
+export { profileScreen } from './screens.tsx'
 export {
   presetsScreen,
   roleScreen,

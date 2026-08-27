@@ -11,12 +11,16 @@ translate.resolves = () => true
 
 test('permission presets use FormPage and preserve rejected selections', () => {
   const html = renderToString(
-    presetsScreen(translate, {}, {
-      modules: [{ value: 'sale', label: 'Sales' }],
-      action: '/admin/permission-presets?lang=en',
-      values: { module: 'sale', level: 'manager' },
-      errors: ['level: invalid'],
-    }),
+    presetsScreen(
+      translate,
+      {},
+      {
+        modules: [{ value: 'sale', label: 'Sales' }],
+        action: '/admin/permission-presets?lang=en',
+        values: { module: 'sale', level: 'manager' },
+        errors: ['level: invalid'],
+      },
+    ),
   )
   assert.match(html, /data-ui="form-page" data-scope="permission-preset-page"/)
   assert.match(html, /form="permission-preset-form"/)
