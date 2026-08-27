@@ -1,5 +1,36 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { badge, type Choice, dataTable, dateTime, DefinitionList, DOCUMENT_TYPES, emptyState, formatMoney, type Frame, guestDocumentColumns, type GuestDocumentRow, guestName, icon, linkButton, Notice, RecordForm, RecordWorkspace, type RoomRow, Section, stack, stayAssignmentColumns, stayDetailFeedback, stayGuestColumns, type StayGuestRow, type StayRow, type TemplateResult, type Translator, workflowTone } from './shared.tsx'
+import {
+  badge,
+  type Choice,
+  choices,
+  dataTable,
+  dateTime,
+  DefinitionList,
+  DOCUMENT_TYPES,
+  emptyState,
+  formatMoney,
+  type Frame,
+  GENDERS,
+  guestDocumentColumns,
+  type GuestDocumentRow,
+  guestName,
+  icon,
+  linkButton,
+  Notice,
+  RecordForm,
+  RecordWorkspace,
+  type RoomRow,
+  Section,
+  stack,
+  stayAssignmentColumns,
+  stayDetailFeedback,
+  stayGuestColumns,
+  type StayGuestRow,
+  type StayRow,
+  type TemplateResult,
+  type Translator,
+  workflowTone,
+} from './shared.tsx'
 
 export const stayDetailScreen = (
   _: Translator,

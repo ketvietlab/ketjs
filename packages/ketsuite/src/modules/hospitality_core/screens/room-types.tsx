@@ -1,5 +1,22 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { CardGrid, choices, dataTable, emptyState, type Frame, linkButton, Metric, Notice, type PropertyRow, RecordForm, roomTypeColumns, type RoomTypeRow, setupAction, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  choices,
+  dataTable,
+  emptyState,
+  type Frame,
+  linkButton,
+  Metric,
+  Notice,
+  type PropertyRow,
+  RecordForm,
+  roomTypeColumns,
+  type RoomTypeRow,
+  setupAction,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const roomTypesScreen = (
   _: Translator,

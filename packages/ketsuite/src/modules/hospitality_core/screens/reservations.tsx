@@ -1,5 +1,24 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { CardGrid, type Choice, choices, dataTable, emptyState, formatMoney, type Frame, Metric, RecordForm, reservationColumns, reservationFeedback, type ReservationIntakeValues, type ReservationQuote, type ReservationRow, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  type Choice,
+  choices,
+  dataTable,
+  emptyState,
+  formatMoney,
+  type Frame,
+  Metric,
+  RecordForm,
+  reservationColumns,
+  reservationFeedback,
+  type ReservationIntakeValues,
+  type ReservationQuote,
+  type ReservationRow,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const reservationsScreen = (
   _: Translator,

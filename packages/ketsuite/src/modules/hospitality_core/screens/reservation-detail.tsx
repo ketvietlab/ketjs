@@ -1,5 +1,29 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { badge, type Choice, choices, dateTime, DefinitionList, emptyState, formatMoney, type Frame, guestName, icon, linkButton, providerName, RecordForm, RecordWorkspace, type ReservationAmendmentValues, type ReservationDetail, reservationDetailFeedback, type RoomRow, Section, stack, type TemplateResult, type Translator, workflowTone } from './shared.tsx'
+import {
+  badge,
+  type Choice,
+  choices,
+  dateTime,
+  DefinitionList,
+  emptyState,
+  formatMoney,
+  type Frame,
+  guestName,
+  icon,
+  linkButton,
+  providerName,
+  RecordForm,
+  RecordWorkspace,
+  type ReservationAmendmentValues,
+  type ReservationDetail,
+  reservationDetailFeedback,
+  type RoomRow,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+  workflowTone,
+} from './shared.tsx'
 
 export const reservationDetailScreen = (
   _: Translator,

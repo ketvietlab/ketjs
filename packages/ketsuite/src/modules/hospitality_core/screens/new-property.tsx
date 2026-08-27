@@ -1,5 +1,16 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { type BranchChoice, type Frame, type PolicyRow, propertyFeedback, propertyForm, type PropertyFormValues, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  type BranchChoice,
+  type Frame,
+  type PolicyRow,
+  propertyFeedback,
+  propertyForm,
+  type PropertyFormValues,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const newPropertyScreen = (
   _: Translator,

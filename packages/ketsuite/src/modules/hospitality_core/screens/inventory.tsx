@@ -1,4 +1,23 @@
-import { CardGrid, type Choice, choices, dataTable, DatePicker, emptyState, feedback, FormCluster, type Frame, Framed, inventoryColumns, type InventoryRow, Metric, RecordForm, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  type Choice,
+  choices,
+  dataTable,
+  DatePicker,
+  emptyState,
+  feedback,
+  FormCluster,
+  type Frame,
+  Framed,
+  inventoryColumns,
+  type InventoryRow,
+  Metric,
+  RecordForm,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const inventoryScreen = (
   _: Translator,

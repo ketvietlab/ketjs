@@ -1,4 +1,17 @@
-import { dataTable, emptyState, feedback, type FolioBillingRow, folioColumns, type Frame, Framed, linkButton, RecordForm, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  dataTable,
+  emptyState,
+  feedback,
+  type FolioBillingRow,
+  folioColumns,
+  type Frame,
+  Framed,
+  linkButton,
+  RecordForm,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const billingScreen = (
   _: Translator,

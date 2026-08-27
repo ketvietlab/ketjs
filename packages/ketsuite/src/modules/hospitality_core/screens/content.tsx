@@ -1,4 +1,24 @@
-import { CardGrid, choices, type ContentCompleteness, contentFeedback, type ContentImageRow, emptyState, FormCluster, type Frame, Framed, MediaPanel, Metric, type PropertyRow, RecordForm, type RoomTypeRow, Section, setupAction, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  choices,
+  type ContentCompleteness,
+  contentFeedback,
+  type ContentImageRow,
+  emptyState,
+  FormCluster,
+  type Frame,
+  Framed,
+  MediaPanel,
+  Metric,
+  type PropertyRow,
+  RecordForm,
+  type RoomTypeRow,
+  Section,
+  setupAction,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const contentScreen = (
   _: Translator,

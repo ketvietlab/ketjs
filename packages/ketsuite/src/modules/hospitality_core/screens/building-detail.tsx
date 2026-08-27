@@ -1,5 +1,25 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { badge, type BuildingDetail, buildingForm, type BuildingFormValues, dataTable, DefinitionList, emptyState, floorColumns, type Frame, icon, linkButton, locationFeedback, RecordActions, RecordWorkspace, Section, stack, Surface, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  badge,
+  type BuildingDetail,
+  buildingForm,
+  type BuildingFormValues,
+  dataTable,
+  DefinitionList,
+  emptyState,
+  floorColumns,
+  type Frame,
+  icon,
+  linkButton,
+  locationFeedback,
+  RecordActions,
+  RecordWorkspace,
+  Section,
+  stack,
+  Surface,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const buildingDetailScreen = (
   _: Translator,

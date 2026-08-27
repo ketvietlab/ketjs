@@ -1,4 +1,28 @@
-import { CardGrid, type Choice, choices, dataTable, emptyState, extraLineColumns, type ExtraLineRow, feedback, formatMoney, FormCluster, type Frame, Framed, Metric, propertyChargeColumns, type PropertyChargeRow, RecordForm, Section, serviceChargeColumns, type ServiceChargeRow, type ServiceProductRow, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  type Choice,
+  choices,
+  dataTable,
+  emptyState,
+  extraLineColumns,
+  type ExtraLineRow,
+  feedback,
+  formatMoney,
+  FormCluster,
+  type Frame,
+  Framed,
+  Metric,
+  propertyChargeColumns,
+  type PropertyChargeRow,
+  RecordForm,
+  Section,
+  serviceChargeColumns,
+  type ServiceChargeRow,
+  type ServiceProductRow,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const servicesScreen = (
   _: Translator,

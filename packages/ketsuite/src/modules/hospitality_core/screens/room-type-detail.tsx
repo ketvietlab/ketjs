@@ -1,5 +1,23 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { badge, DefinitionList, formatMoney, type Frame, icon, linkButton, type PolicyRow, type PropertyRow, RecordWorkspace, type RoomTypeDetail, roomTypeFeedback, roomTypeForm, type RoomTypeFormValues, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  badge,
+  DefinitionList,
+  formatMoney,
+  type Frame,
+  icon,
+  linkButton,
+  type PolicyRow,
+  type PropertyRow,
+  RecordWorkspace,
+  type RoomTypeDetail,
+  roomTypeFeedback,
+  roomTypeForm,
+  type RoomTypeFormValues,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const roomTypeDetailScreen = (
   _: Translator,

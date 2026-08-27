@@ -1,4 +1,24 @@
-import { badge, cleaningTaskColumns, type CleaningTaskRow, dataTable, DefinitionList, emptyState, type Frame, Framed, housekeepingRoomFeedback, icon, linkButton, RecordForm, RecordWorkspace, type RoomRow, Section, stack, statusTone, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  badge,
+  cleaningTaskColumns,
+  type CleaningTaskRow,
+  dataTable,
+  DefinitionList,
+  emptyState,
+  type Frame,
+  Framed,
+  housekeepingRoomFeedback,
+  icon,
+  linkButton,
+  RecordForm,
+  RecordWorkspace,
+  type RoomRow,
+  Section,
+  stack,
+  statusTone,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const housekeepingRoomDetailScreen = (
   _: Translator,

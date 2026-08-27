@@ -1,5 +1,19 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { amenityColumns, type AmenityRow, type Choice, dataTable, emptyState, feedback, type Frame, RecordForm, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  amenityColumns,
+  type AmenityRow,
+  type Choice,
+  choices,
+  dataTable,
+  emptyState,
+  feedback,
+  type Frame,
+  RecordForm,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const amenitiesScreen = (
   _: Translator,

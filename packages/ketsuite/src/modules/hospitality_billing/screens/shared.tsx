@@ -126,7 +126,6 @@ export const ruleColumns = (_: Translator): Column<ChargeRuleRow>[] => [
  * operator reading this arrived here from that refusal.
  */
 
-
 export const folioColumns = (_: Translator): Column<FolioBillingRow>[] => [
   {
     key: 'folioCode',

@@ -1,4 +1,18 @@
-import { addCalendarDays, dateKeyIn, emptyState, type Frame, Framed, providerName, ScheduleBoard, setupAction, type TapeChart, type TemplateResult, type Translator, workflowTone, zonedMidnight } from './shared.tsx'
+import {
+  addCalendarDays,
+  dateKeyIn,
+  emptyState,
+  type Frame,
+  Framed,
+  providerName,
+  ScheduleBoard,
+  setupAction,
+  type TapeChart,
+  type TemplateResult,
+  type Translator,
+  workflowTone,
+  zonedMidnight,
+} from './shared.tsx'
 
 export const tapeChartScreen = (
   _: Translator,

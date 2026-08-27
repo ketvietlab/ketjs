@@ -1,5 +1,30 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { buildingColumns, type BuildingRow, CardGrid, choices, dataTable, emptyState, floorColumns, type FloorRow, FormCluster, type Frame, linkButton, Metric, Notice, type PropertyRow, RecordForm, roomColumns, roomFeedback, type RoomRow, type RoomTypeRow, Section, setupAction, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  buildingColumns,
+  type BuildingRow,
+  CardGrid,
+  choices,
+  dataTable,
+  emptyState,
+  floorColumns,
+  type FloorRow,
+  FormCluster,
+  type Frame,
+  linkButton,
+  Metric,
+  Notice,
+  type PropertyRow,
+  RecordForm,
+  roomColumns,
+  roomFeedback,
+  type RoomRow,
+  type RoomTypeRow,
+  Section,
+  setupAction,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const roomsScreen = (
   _: Translator,

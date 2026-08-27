@@ -1,5 +1,16 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { type Frame, type PolicyRow, type PropertyRow, roomTypeFeedback, roomTypeForm, type RoomTypeFormValues, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  type Frame,
+  type PolicyRow,
+  type PropertyRow,
+  roomTypeFeedback,
+  roomTypeForm,
+  type RoomTypeFormValues,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const newRoomTypeScreen = (
   _: Translator,

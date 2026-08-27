@@ -1,5 +1,28 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { badge, CHARGE_TYPES, dataTable, dateTime, DefinitionList, emptyState, folioChargeColumns, folioDetailFeedback, type FolioRow, folioStayColumns, formatMoney, type Frame, icon, linkButton, Notice, RecordForm, RecordWorkspace, Section, stack, type TemplateResult, type Translator, workflowTone } from './shared.tsx'
+import {
+  badge,
+  CHARGE_TYPES,
+  dataTable,
+  dateTime,
+  DefinitionList,
+  emptyState,
+  folioChargeColumns,
+  folioDetailFeedback,
+  type FolioRow,
+  folioStayColumns,
+  formatMoney,
+  type Frame,
+  icon,
+  linkButton,
+  Notice,
+  RecordForm,
+  RecordWorkspace,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+  workflowTone,
+} from './shared.tsx'
 
 export const folioDetailScreen = (
   _: Translator,

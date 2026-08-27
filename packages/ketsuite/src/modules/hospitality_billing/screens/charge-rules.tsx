@@ -1,5 +1,21 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { CHARGE_TYPES, chargeName, type ChargeRuleRow, type ChoiceRow, dataTable, feedback, type Frame, linkButton, Notice, RecordForm, ruleColumns, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CHARGE_TYPES,
+  chargeName,
+  type ChargeRuleRow,
+  type ChoiceRow,
+  dataTable,
+  feedback,
+  type Frame,
+  linkButton,
+  Notice,
+  RecordForm,
+  ruleColumns,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const chargeRulesScreen = (
   _: Translator,

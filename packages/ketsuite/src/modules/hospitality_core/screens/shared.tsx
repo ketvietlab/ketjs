@@ -37,7 +37,41 @@ import {
   ROOM_VIEW_TYPES,
 } from '../types.ts'
 
-export { badge, CardGrid, code, dataTable, DatePicker, DefinitionList, emptyState, formatMoney, FormCluster, Framed, icon, linkButton, MediaPanel, Metric, Notice, person, RecordActions, RecordForm, RecordWorkspace, ScheduleBoard, Section, stack, Surface, addCalendarDays, dateKeyIn, zonedMidnight, ACCOMMODATION_TYPES, BOOKING_PROVIDERS, CHARGE_TYPES, DOCUMENT_TYPES, GENDERS, ROOM_STATUSES, ROOM_VIEW_TYPES }
+export {
+  badge,
+  CardGrid,
+  code,
+  dataTable,
+  DatePicker,
+  DefinitionList,
+  emptyState,
+  formatMoney,
+  FormCluster,
+  Framed,
+  icon,
+  linkButton,
+  MediaPanel,
+  Metric,
+  Notice,
+  person,
+  RecordActions,
+  RecordForm,
+  RecordWorkspace,
+  ScheduleBoard,
+  Section,
+  stack,
+  Surface,
+  addCalendarDays,
+  dateKeyIn,
+  zonedMidnight,
+  ACCOMMODATION_TYPES,
+  BOOKING_PROVIDERS,
+  CHARGE_TYPES,
+  DOCUMENT_TYPES,
+  GENDERS,
+  ROOM_STATUSES,
+  ROOM_VIEW_TYPES,
+}
 export type { Translator, TemplateResult, Column, FormField, Frame }
 
 export const providerName = (_: Translator, provider: string): string =>
@@ -1248,8 +1282,6 @@ export const propertyForm = (
   />
 )
 
-
-
 export const propertyFeedback = (
   _: Translator,
   status?: string | null,
@@ -1267,10 +1299,6 @@ export const propertyFeedback = (
     return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
-
-
-
-
 
 export const roomFeedback = (
   _: Translator,
@@ -1402,8 +1430,6 @@ export const roomForm = (
   />
 )
 
-
-
 export const locationFeedback = (
   _: Translator,
   resource: 'building' | 'floor',
@@ -1453,8 +1479,6 @@ export const buildingForm = (_: Translator, values: BuildingFormValues, locale: 
   />
 )
 
-
-
 export const floorForm = (_: Translator, values: FloorFormValues, locale: string): TemplateResult => (
   <RecordForm
     action={`/admin/hospitality/levels/${encodeURIComponent(values.id)}?lang=${encodeURIComponent(locale)}`}
@@ -1485,14 +1509,6 @@ export const floorForm = (_: Translator, values: FloorFormValues, locale: string
   />
 )
 
-
-
-
-
-
-
-
-
 export const cleaningTaskFeedback = (
   _: Translator,
   status?: string | null,
@@ -1510,8 +1526,6 @@ export const cleaningTaskFeedback = (
     return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
-
-
 
 export const housekeepingRoomColumns = (_: Translator): Array<Column<RoomRow>> => [
   { key: 'code', label: _('hospitality_core.col.code'), cell: (row) => code(row.code), kind: 'identifier' },
@@ -1543,8 +1557,6 @@ export const housekeepingRoomColumns = (_: Translator): Array<Column<RoomRow>> =
   },
 ]
 
-
-
 export const housekeepingRoomFeedback = (
   _: Translator,
   status?: string | null,
@@ -1562,8 +1574,6 @@ export const housekeepingRoomFeedback = (
     return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
-
-
 
 export const roomTypeFormFields = (
   _: Translator,
@@ -1770,12 +1780,6 @@ export const roomTypeFeedback = (
   return null
 }
 
-
-
-
-
-
-
 /**
  * An empty screen that names the missing prerequisite should also open it.
  * Telling an operator "create a property first" and then leaving them to find
@@ -1783,10 +1787,6 @@ export const roomTypeFeedback = (
  */
 export const setupAction = (label: string, href: string): TemplateResult =>
   linkButton({ label, href, variant: 'primary' })
-
-
-
-
 
 export const contentFeedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'saved')
@@ -1807,8 +1807,6 @@ export const contentFeedback = (_: Translator, state?: string | null): TemplateR
     )
   return null
 }
-
-
 
 export type Choice = { id: string; code?: string; name: string; propertyId?: string }
 
@@ -1922,8 +1920,6 @@ export const nightAuditColumns = (_: Translator, locale: string): Array<Column<N
   },
 ]
 
-
-
 export const stayNoticeFeedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'refreshed' || state === 'submitted' || state === 'confirmed')
     return (
@@ -1963,7 +1959,11 @@ export const stayNoticeIssues = (_: Translator, row: StayNoticeRow): string =>
     ? row.issueCodes.map((item) => _(`hospitality_core.stayNotice.issue.${item}`)).join(', ')
     : _('hospitality_core.stayNotice.value.complete')
 
-export const stayNoticeColumns = (_: Translator, locale: string, timezone: string): Array<Column<StayNoticeRow>> => [
+export const stayNoticeColumns = (
+  _: Translator,
+  locale: string,
+  timezone: string,
+): Array<Column<StayNoticeRow>> => [
   {
     key: 'guest',
     label: _('hospitality_core.stayNotice.col.guest'),
@@ -2003,7 +2003,12 @@ export const stayNoticeColumns = (_: Translator, locale: string, timezone: strin
   },
 ]
 
-export const stayNoticeHref = (locale: string, propertyId: string, state: string, noticeId: string): string => {
+export const stayNoticeHref = (
+  locale: string,
+  propertyId: string,
+  state: string,
+  noticeId: string,
+): string => {
   const query = new URLSearchParams({ lang: locale, property: propertyId, notice: noticeId })
   if (state !== 'all') query.set('state', state)
   return `/admin/hospitality/stay-notices?${query.toString()}`
@@ -2096,8 +2101,6 @@ export const stayNoticeAction = (
     )
   return null
 }
-
-
 
 export const propertyChargeColumns = (_: Translator): Array<Column<PropertyChargeRow>> => [
   {
@@ -2214,12 +2217,6 @@ export const serviceChargeColumns = (
     kind: 'status',
   },
 ]
-
-
-
-
-
-
 
 export const reservationColumns = (
   _: Translator,
@@ -2458,7 +2455,11 @@ export const folioChargeColumns = (
   },
 ]
 
-export const folioStayColumns = (_: Translator, locale: string, timezone: string): Array<Column<FolioStayRow>> => [
+export const folioStayColumns = (
+  _: Translator,
+  locale: string,
+  timezone: string,
+): Array<Column<FolioStayRow>> => [
   {
     key: 'code',
     label: _('hospitality_core.col.code'),
@@ -2492,8 +2493,6 @@ export const folioStayColumns = (_: Translator, locale: string, timezone: string
   },
 ]
 
-
-
 export const reservationFeedback = (_: Translator, status?: string | null): TemplateResult | null => {
   if (status === 'saved')
     return (
@@ -2521,8 +2520,6 @@ export const reservationFeedback = (_: Translator, status?: string | null): Temp
     )
   return null
 }
-
-
 
 export const reservationDetailFeedback = (
   _: Translator,
@@ -2589,8 +2586,6 @@ export const reservationDetailFeedback = (
     return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
-
-
 
 export const stayAssignmentColumns = (
   _: Translator,
@@ -2720,10 +2715,6 @@ export const stayDetailFeedback = (
   return null
 }
 
-
-
-
-
 export const folioDetailFeedback = (
   _: Translator,
   status?: string | null,
@@ -2749,8 +2740,3 @@ export const folioDetailFeedback = (
     return <Notice title={_('hospitality_core.feedback.invalid')} message={errors.join(' ')} tone="danger" />
   return null
 }
-
-
-
-
-

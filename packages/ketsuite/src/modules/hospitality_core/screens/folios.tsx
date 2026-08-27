@@ -1,5 +1,13 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { dataTable, emptyState, folioColumns, type FolioRow, type Frame, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  dataTable,
+  emptyState,
+  folioColumns,
+  type FolioRow,
+  type Frame,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const foliosScreen = (
   _: Translator,

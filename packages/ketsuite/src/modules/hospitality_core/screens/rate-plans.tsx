@@ -1,5 +1,20 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { type Choice, choices, dataTable, emptyState, feedback, type Frame, ratePlanColumns, type RatePlanRow, RecordForm, Section, setupAction, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  type Choice,
+  choices,
+  dataTable,
+  emptyState,
+  feedback,
+  type Frame,
+  ratePlanColumns,
+  type RatePlanRow,
+  RecordForm,
+  Section,
+  setupAction,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const ratePlansScreen = (
   _: Translator,

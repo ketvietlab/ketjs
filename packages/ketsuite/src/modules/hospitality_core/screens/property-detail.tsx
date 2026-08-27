@@ -1,5 +1,22 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { badge, type BranchChoice, DefinitionList, type Frame, icon, linkButton, type PolicyRow, type PropertyDetail, propertyFeedback, propertyForm, type PropertyFormValues, RecordWorkspace, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  badge,
+  type BranchChoice,
+  DefinitionList,
+  type Frame,
+  icon,
+  linkButton,
+  type PolicyRow,
+  type PropertyDetail,
+  propertyFeedback,
+  propertyForm,
+  type PropertyFormValues,
+  RecordWorkspace,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const propertyDetailScreen = (
   _: Translator,

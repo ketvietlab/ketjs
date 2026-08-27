@@ -1,5 +1,13 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { dataTable, emptyState, type Frame, stayColumns, type StayRow, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  dataTable,
+  emptyState,
+  type Frame,
+  stayColumns,
+  type StayRow,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const staysScreen = (
   _: Translator,

@@ -1,5 +1,17 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { CardGrid, dataTable, emptyState, type Frame, linkButton, Metric, propertyColumns, type PropertyRow, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  dataTable,
+  emptyState,
+  type Frame,
+  linkButton,
+  Metric,
+  propertyColumns,
+  type PropertyRow,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const propertiesScreen = (
   _: Translator,

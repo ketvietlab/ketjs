@@ -1,5 +1,21 @@
 import { FormScreenFrame } from './page-frame.tsx'
-import { badge, cleaningTaskFeedback, type CleaningTaskRow, cleaningTone, dateTime, DefinitionList, type Frame, icon, linkButton, RecordForm, RecordWorkspace, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  badge,
+  cleaningTaskFeedback,
+  type CleaningTaskRow,
+  cleaningTone,
+  dateTime,
+  DefinitionList,
+  type Frame,
+  icon,
+  linkButton,
+  RecordForm,
+  RecordWorkspace,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const cleaningTaskDetailScreen = (
   _: Translator,

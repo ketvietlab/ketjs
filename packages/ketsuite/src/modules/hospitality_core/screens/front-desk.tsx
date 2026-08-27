@@ -1,4 +1,18 @@
-import { CardGrid, dataTable, emptyState, type Frame, Framed, Metric, Section, setupAction, stack, stayColumns, type StayRow, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  dataTable,
+  emptyState,
+  type Frame,
+  Framed,
+  Metric,
+  Section,
+  setupAction,
+  stack,
+  stayColumns,
+  type StayRow,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const frontDeskScreen = (
   _: Translator,

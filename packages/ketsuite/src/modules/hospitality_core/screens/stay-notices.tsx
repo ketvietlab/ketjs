@@ -1,4 +1,27 @@
-import { CardGrid, type Choice, choices, dataTable, DefinitionList, emptyState, type Frame, Framed, Metric, Notice, RecordForm, Section, stack, stayNoticeAction, stayNoticeColumns, stayNoticeDocument, stayNoticeFeedback, stayNoticeHref, stayNoticeIssues, type StayNoticeRow, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  type Choice,
+  choices,
+  dataTable,
+  DefinitionList,
+  emptyState,
+  type Frame,
+  Framed,
+  Metric,
+  Notice,
+  RecordForm,
+  Section,
+  stack,
+  stayNoticeAction,
+  stayNoticeColumns,
+  stayNoticeDocument,
+  stayNoticeFeedback,
+  stayNoticeHref,
+  stayNoticeIssues,
+  type StayNoticeRow,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const stayNoticesScreen = (
   _: Translator,

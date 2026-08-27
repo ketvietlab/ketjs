@@ -11,7 +11,13 @@ type PageFrameProps = {
   body: JSXChild
 }
 
-export const ListScreenFrame = ({ translator: _, title, subtitle, frame, body }: PageFrameProps): TemplateResult =>
+export const ListScreenFrame = ({
+  translator: _,
+  title,
+  subtitle,
+  frame,
+  body,
+}: PageFrameProps): TemplateResult =>
   shell(
     _,
     title,

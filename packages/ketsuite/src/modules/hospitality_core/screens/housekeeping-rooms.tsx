@@ -1,4 +1,22 @@
-import { CardGrid, choices, dataTable, emptyState, type Frame, Framed, housekeepingRoomColumns, Metric, type PropertyRow, RecordForm, type RoomRow, type RoomStatusSummary, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  CardGrid,
+  choices,
+  dataTable,
+  emptyState,
+  type Frame,
+  Framed,
+  housekeepingRoomColumns,
+  Metric,
+  type PropertyRow,
+  RecordForm,
+  ROOM_STATUSES,
+  type RoomRow,
+  type RoomStatusSummary,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const housekeepingRoomsScreen = (
   _: Translator,

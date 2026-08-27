@@ -1,5 +1,17 @@
 import { ListScreenFrame } from './page-frame.tsx'
-import { dataTable, emptyState, feedback, type Frame, policyColumns, type PolicyRow, RecordForm, Section, stack, type TemplateResult, type Translator } from './shared.tsx'
+import {
+  dataTable,
+  emptyState,
+  feedback,
+  type Frame,
+  policyColumns,
+  type PolicyRow,
+  RecordForm,
+  Section,
+  stack,
+  type TemplateResult,
+  type Translator,
+} from './shared.tsx'
 
 export const policiesScreen = (
   _: Translator,
