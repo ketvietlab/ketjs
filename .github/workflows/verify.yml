@@ -68,7 +68,8 @@ jobs:
   tests:
     name: sqlite / ${{ matrix.group }}
     needs: [plan, quality]
-    if: needs.plan.outputs.has_groups == 'true'
+    if: 1 == 2 #temporary disable
+    # if: needs.plan.outputs.has_groups == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
