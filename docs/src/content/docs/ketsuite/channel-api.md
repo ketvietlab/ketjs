@@ -98,14 +98,26 @@ Which identity a profile hands its routes is declared once, in `ChannelIdentitie
 export interface ChannelIdentities {
   customer: CustomerIdentity
   staff: StaffIdentity
-  pos: never
+  pos: PosIdentity
   integration: never
 }
 ```
 
-`pos` and `integration` are `never` deliberately. Their prefixes are reserved and their identity is not
-designed, so writing a route for one is a compile error rather than a route that silently trusts whichever
-credential happens to arrive.
+`PosIdentity` is resolved from the live device grant and POS session. It carries the operator, device,
+company, granted POS configuration, grant and session ids. POS request bodies do not select that scope.
+`integration` remains `never` deliberately: its prefix is reserved but its identity is not designed, so
+writing an integration route is a compile error rather than a route that silently trusts whichever credential
+happens to arrive.
+
+POS command ids derive their namespace from the resolved company, POS configuration and device. Reusing a
+client idempotency key on another terminal or configuration therefore cannot return the first terminal's
+record. The deployment that owns the device registry registers the POS resolver; KetJS owns only this public
+identity and routing seam.
+
+Enrollment and exchange are different: the caller does not have a POS identity yet. Such a route remains
+`auth: 'public'` to the POS resolver, declares `credentials: ['operatorBearer']` for its OpenAPI contract,
+and delegates to a function that requires the live upstream operator actor and company scope. The credential
+metadata documents that separate trust boundary; it does not turn a raw Bearer string into an identity.
 
 A staff route calls `ctx.call`, not `ctx.callUnchecked`. The framework already knows which functions a
 session may invoke, and reaching past that check is how a channel becomes a way around the roles every
@@ -267,8 +279,9 @@ and a storefront that rounds a total in transit is worse than one that never sho
 
 KetSuite's `openApiDocument()` maps one channel profile per document — capabilities, idempotency metadata,
 and the security schemes that profile actually accepts — to OpenAPI 3.1. Customer routes offer Bearer or the
-storefront cookie; staff routes offer only the verified session cookie, and describing that per profile is what
-keeps a generated client from being built without a credential to send. Both checked-in artifacts are
+storefront cookie; staff routes offer only the verified session cookie; POS routes offer only the POS Bearer
+session. Describing that per profile is what keeps a generated client from being built without a credential to
+send. Checked-in artifacts are
 regenerated from the composed server contract before Starlight development and production builds:
 
 ```sh
