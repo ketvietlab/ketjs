@@ -1,7 +1,16 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { button, FormCluster, FormPage, linkButton, RecordForm, shell, Surface } from '../../../ui/index.ts'
-import type { FormOption, Frame } from '../../../ui/index.ts'
+import {
+  button,
+  FormCluster,
+  FormPage,
+  linkButton,
+  modalForm,
+  RecordForm,
+  shell,
+  Surface,
+} from '../../../ui/index.ts'
+import type { FormField, FormOption, Frame } from '../../../ui/index.ts'
 
 export type LocationCreateScreenOptions = {
   warehouses: FormOption[]
@@ -23,6 +32,57 @@ const usageOptions = (_: Translator): FormOption[] =>
     value,
     label: selectionLabel(_, 'usage', value),
   }))
+
+const locationFields = (_: Translator, options: LocationCreateScreenOptions): FormField[] => [
+  {
+    name: 'name',
+    label: _('stock_backend.location.field.name'),
+    placeholder: _('stock_backend.location.field.name.placeholder'),
+    required: true,
+  },
+  {
+    name: 'parentId',
+    label: _('stock_backend.field.parentLocation'),
+    type: 'select',
+    options: [{ value: '', label: '—' }, ...options.parents],
+  },
+  {
+    name: 'usage',
+    label: _('stock_backend.field.usage'),
+    type: 'select',
+    value: 'internal',
+    options: usageOptions(_),
+    required: true,
+    help: _('stock_backend.location.field.usage.help'),
+  },
+  {
+    name: 'warehouseId',
+    label: _('stock_backend.field.warehouse'),
+    type: 'select',
+    options: [{ value: '', label: '—' }, ...options.warehouses],
+    help: _('stock_backend.location.field.warehouse.help'),
+  },
+]
+
+export const locationCreateModal = (_: Translator, options: LocationCreateScreenOptions): TemplateResult =>
+  modalForm({
+    id: 'location-create',
+    title: _('stock_backend.location.create.title'),
+    closeHref: options.cancelHref,
+    closeLabel: _('stock_backend.action.cancel'),
+    presentation: 'dialog',
+    form: {
+      id: 'location-create-form',
+      scope: 'location-create',
+      action: options.action,
+      submit: _('stock_backend.action.create'),
+      submitVariant: 'primary',
+      errors: options.errors,
+      fields: locationFields(_, options),
+      cancelHref: options.cancelHref,
+      cancelLabel: _('stock_backend.action.cancel'),
+    },
+  })
 
 export const locationCreateScreen = (
   _: Translator,
@@ -67,36 +127,7 @@ export const locationCreateScreen = (
               submitVariant="primary"
               submitPlacement="external"
               errors={options.errors}
-              fields={[
-                {
-                  name: 'name',
-                  label: _('stock_backend.location.field.name'),
-                  placeholder: _('stock_backend.location.field.name.placeholder'),
-                  required: true,
-                },
-                {
-                  name: 'parentId',
-                  label: _('stock_backend.field.parentLocation'),
-                  type: 'select',
-                  options: [{ value: '', label: '—' }, ...options.parents],
-                },
-                {
-                  name: 'usage',
-                  label: _('stock_backend.field.usage'),
-                  type: 'select',
-                  value: 'internal',
-                  options: usageOptions(_),
-                  required: true,
-                  help: _('stock_backend.location.field.usage.help'),
-                },
-                {
-                  name: 'warehouseId',
-                  label: _('stock_backend.field.warehouse'),
-                  type: 'select',
-                  options: [{ value: '', label: '—' }, ...options.warehouses],
-                  help: _('stock_backend.location.field.warehouse.help'),
-                },
-              ]}
+              fields={locationFields(_, options)}
             />
           }
         />

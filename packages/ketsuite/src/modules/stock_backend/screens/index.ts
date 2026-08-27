@@ -1,8 +1,12 @@
 export { forecastScreen, type ForecastRow, type ForecastScreenOptions } from './forecast.tsx'
 export { inventoryScreen, type InventoryBalanceRow, type InventoryScreenOptions } from './inventory.tsx'
-export { lotCreateScreen, type LotCreateScreenOptions } from './lot-create.tsx'
+export { lotCreateModal, lotCreateScreen, type LotCreateScreenOptions } from './lot-create.tsx'
 export { lotDetailScreen, type LotDetailOptions, type LotInventoryRow } from './lot-detail.tsx'
-export { locationCreateScreen, type LocationCreateScreenOptions } from './location-create.tsx'
+export {
+  locationCreateModal,
+  locationCreateScreen,
+  type LocationCreateScreenOptions,
+} from './location-create.tsx'
 export {
   type LocationListRow,
   locationListColumns,
@@ -15,7 +19,11 @@ export {
   lotsListScreen,
   type LotsListScreenOptions,
 } from './lots-list.tsx'
-export { pickingTypeCreateScreen, type PickingTypeCreateScreenOptions } from './picking-type-create.tsx'
+export {
+  pickingTypeCreateModal,
+  pickingTypeCreateScreen,
+  type PickingTypeCreateScreenOptions,
+} from './picking-type-create.tsx'
 export {
   type PickingTypeListRow,
   pickingTypeListColumns,
@@ -34,7 +42,11 @@ export {
 } from './replenishment-list.tsx'
 export { stockRowsTable, type StockRow } from './shared.tsx'
 export { stockScreen } from './stock.tsx'
-export { stockRouteCreateScreen, type StockRouteCreateScreenOptions } from './stock-route-create.tsx'
+export {
+  stockRouteCreateModal,
+  stockRouteCreateScreen,
+  type StockRouteCreateScreenOptions,
+} from './stock-route-create.tsx'
 export {
   stockRouteDetailScreen,
   type StockRouteDetailOptions,
@@ -58,7 +70,11 @@ export {
   transfersListScreen,
   type TransfersListScreenOptions,
 } from './transfers-list.tsx'
-export { warehouseCreateScreen, type WarehouseCreateScreenOptions } from './warehouse-create.tsx'
+export {
+  warehouseCreateModal,
+  warehouseCreateScreen,
+  type WarehouseCreateScreenOptions,
+} from './warehouse-create.tsx'
 export {
   type WarehouseListRow,
   warehouseListColumns,

@@ -19,7 +19,7 @@ import {
   Surface,
 } from '../../../ui/index.ts'
 import type { ActionVariant, FormField, Frame } from '../../../ui/index.ts'
-import { labelOf } from '../screens.tsx'
+import { labelOf } from './shared.tsx'
 
 type SaleDetailRow = Record<string, unknown>
 

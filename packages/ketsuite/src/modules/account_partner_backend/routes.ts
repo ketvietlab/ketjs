@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { accountingTermsScreen } from './screens/index.ts'
-import { adminPage, inLocale } from '../backend/screen.ts'
+import { accountingTermsModal } from './screens/index.ts'
+import { inLocale } from '../backend/screen.ts'
+import { renderPartnerForm } from '../partner_backend/routes.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 
 const crossSite = (req: Req): boolean => {
@@ -35,21 +36,23 @@ const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, 
       .filter((row) => row.accountType === 'liability_payable')
       .map((row) => ({ value: String(row.id), label: `${row.code} · ${row.name}` })),
   }
-  return adminPage(ctx, url, req, {
-    title: _('account_partner_backend.screen.title', { name: String(partner.name) }),
-    translate: false,
-    body: (_, frame) =>
-      accountingTermsScreen(
-        _,
-        partner as never,
-        terms as never,
-        options,
-        frame,
-        inLocale(url, `/admin/partner/partners/${partnerId}/accounting`),
-        inLocale(url, `/admin/partner/partners/${partnerId}`),
-        errors,
-      ),
-  })
+  const backHref = inLocale(url, `/admin/partner/partners/${partnerId}`)
+  return renderPartnerForm(
+    ctx,
+    url,
+    req,
+    partnerId,
+    undefined,
+    accountingTermsModal(
+      _,
+      partner as never,
+      terms as never,
+      options,
+      inLocale(url, `/admin/partner/partners/${partnerId}/accounting`),
+      backHref,
+      errors,
+    ),
+  )
 }
 
 export const routes: Record<string, RouteEntry> = {

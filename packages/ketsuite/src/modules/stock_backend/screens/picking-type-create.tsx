@@ -1,7 +1,16 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { button, FormCluster, FormPage, linkButton, RecordForm, shell, Surface } from '../../../ui/index.ts'
-import type { FormOption, Frame } from '../../../ui/index.ts'
+import {
+  button,
+  FormCluster,
+  FormPage,
+  linkButton,
+  modalForm,
+  RecordForm,
+  shell,
+  Surface,
+} from '../../../ui/index.ts'
+import type { FormField, FormOption, Frame } from '../../../ui/index.ts'
 
 export type PickingTypeCreateScreenOptions = {
   warehouses: FormOption[]
@@ -20,6 +29,77 @@ const selectionLabel = (_: Translator, group: string, value: string): string => 
 
 const selectionOptions = (_: Translator, group: string, values: readonly string[]): FormOption[] =>
   values.map((value) => ({ value, label: selectionLabel(_, group, value) }))
+
+const pickingTypeFields = (_: Translator, options: PickingTypeCreateScreenOptions): FormField[] => [
+  {
+    name: 'name',
+    label: _('stock_backend.pickingType.field.name'),
+    placeholder: _('stock_backend.pickingType.field.name.placeholder'),
+    required: true,
+  },
+  {
+    name: 'code',
+    label: _('stock_backend.pickingType.field.code'),
+    type: 'radio',
+    value: 'internal',
+    options: selectionOptions(_, 'pickingType', ['incoming', 'outgoing', 'internal']),
+    required: true,
+    span: 'full',
+  },
+  {
+    name: 'warehouseId',
+    label: _('stock_backend.field.warehouse'),
+    type: 'select',
+    options: options.warehouses,
+    required: true,
+  },
+  {
+    name: 'createBackorder',
+    label: _('stock_backend.field.backorder'),
+    type: 'select',
+    value: 'ask',
+    options: selectionOptions(_, 'backorder', ['ask', 'always', 'never']),
+    required: true,
+    help: _('stock_backend.pickingType.field.backorder.help'),
+  },
+  {
+    name: 'defaultLocationSrcId',
+    label: _('stock_backend.field.sourceLocation'),
+    type: 'select',
+    options: options.locations,
+    required: true,
+  },
+  {
+    name: 'defaultLocationDestId',
+    label: _('stock_backend.field.destinationLocation'),
+    type: 'select',
+    options: options.locations,
+    required: true,
+  },
+]
+
+export const pickingTypeCreateModal = (
+  _: Translator,
+  options: PickingTypeCreateScreenOptions,
+): TemplateResult =>
+  modalForm({
+    id: 'picking-type-create',
+    title: _('stock_backend.pickingType.create.title'),
+    closeHref: options.cancelHref,
+    closeLabel: _('stock_backend.action.cancel'),
+    size: 'large',
+    form: {
+      id: 'picking-type-create-form',
+      scope: 'picking-type-create',
+      action: options.action,
+      submit: _('stock_backend.action.create'),
+      submitVariant: 'primary',
+      errors: options.errors,
+      fields: pickingTypeFields(_, options),
+      cancelHref: options.cancelHref,
+      cancelLabel: _('stock_backend.action.cancel'),
+    },
+  })
 
 export const pickingTypeCreateScreen = (
   _: Translator,
@@ -64,53 +144,7 @@ export const pickingTypeCreateScreen = (
               submitVariant="primary"
               submitPlacement="external"
               errors={options.errors}
-              fields={[
-                {
-                  name: 'name',
-                  label: _('stock_backend.pickingType.field.name'),
-                  placeholder: _('stock_backend.pickingType.field.name.placeholder'),
-                  required: true,
-                },
-                {
-                  name: 'code',
-                  label: _('stock_backend.pickingType.field.code'),
-                  type: 'radio',
-                  value: 'internal',
-                  options: selectionOptions(_, 'pickingType', ['incoming', 'outgoing', 'internal']),
-                  required: true,
-                  span: 'full',
-                },
-                {
-                  name: 'warehouseId',
-                  label: _('stock_backend.field.warehouse'),
-                  type: 'select',
-                  options: options.warehouses,
-                  required: true,
-                },
-                {
-                  name: 'createBackorder',
-                  label: _('stock_backend.field.backorder'),
-                  type: 'select',
-                  value: 'ask',
-                  options: selectionOptions(_, 'backorder', ['ask', 'always', 'never']),
-                  required: true,
-                  help: _('stock_backend.pickingType.field.backorder.help'),
-                },
-                {
-                  name: 'defaultLocationSrcId',
-                  label: _('stock_backend.field.sourceLocation'),
-                  type: 'select',
-                  options: options.locations,
-                  required: true,
-                },
-                {
-                  name: 'defaultLocationDestId',
-                  label: _('stock_backend.field.destinationLocation'),
-                  type: 'select',
-                  options: options.locations,
-                  required: true,
-                },
-              ]}
+              fields={pickingTypeFields(_, options)}
             />
           }
         />

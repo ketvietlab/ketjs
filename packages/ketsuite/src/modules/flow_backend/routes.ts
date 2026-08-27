@@ -7,6 +7,7 @@ import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
 import { adminPage, inLocale, localeQuery, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField } from '../../ui/index.ts'
+import { modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
   assigneeControl,
@@ -35,7 +36,7 @@ import {
   pagesScreen,
   pageDetailScreen,
   allPagesScreen,
-  projectCreateScreen,
+  projectCreateModal,
   projectsListScreen,
   settingsScreen,
   sprintsScreen,
@@ -520,8 +521,28 @@ const projectReturnTo = (url: URL, requested?: string | null): string => {
 }
 
 const projectCreateHref = (url: URL): string => {
-  const target = new URL(inLocale(url, '/admin/flow/projects/new'), url)
-  target.searchParams.set('returnTo', `${url.pathname}${url.search}`)
+  const target = new URL(url)
+  target.pathname = '/admin/flow/projects'
+  for (const key of ['create', 'invalid', 'error', 'key', 'name', 'description', 'template', 'customColumns'])
+    target.searchParams.delete(key)
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const projectCreateFailureHref = (
+  url: URL,
+  returnTo: string,
+  values: Record<string, string>,
+  errors: readonly string[],
+): string => {
+  const target = new URL(returnTo, url)
+  target.searchParams.set('create', '1')
+  if (errors.length) target.searchParams.set('invalid', '1')
+  for (const name of ['key', 'name', 'description', 'template', 'customColumns']) {
+    const value = values[name]
+    if (value) target.searchParams.set(name, value)
+  }
+  for (const error of errors) target.searchParams.append('error', error)
   return `${target.pathname}${target.search}`
 }
 
@@ -615,17 +636,7 @@ const projectCreateRoute =
     } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
 
     const returnTo = projectReturnTo(url, submittedReturnTo)
-    return adminPage(ctx, url, req, {
-      title: 'flow_backend.projects.create',
-      body: (_, frame) =>
-        projectCreateScreen(_, frame, {
-          action: inLocale(url, actionPath),
-          cancelHref: returnTo,
-          returnTo,
-          fields: projectCreateFields(_, values),
-          errors,
-        }),
-    })
+    return seeOther(projectCreateFailureHref(url, returnTo, values, errors))
   }
 
 export const routes: Record<string, RouteEntry> = {
@@ -945,8 +956,8 @@ export const routes: Record<string, RouteEntry> = {
       )) as AnyRow
       return adminPage(ctx, url, req, {
         title: 'flow_backend.projects.title',
-        body: (_, frame) =>
-          projectsListScreen(_, frame, {
+        body: (_, frame) => {
+          const workspace = projectsListScreen(_, frame, {
             rows,
             projectCount: all.length,
             issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
@@ -968,7 +979,44 @@ export const routes: Record<string, RouteEntry> = {
             ],
             createHref: projectCreateHref(url),
             locale: localeQuery(url),
-          }),
+          })
+          if (url.searchParams.get('create') !== '1') return workspace
+          const returnUrl = new URL(url)
+          for (const key of [
+            'create',
+            'invalid',
+            'error',
+            'key',
+            'name',
+            'description',
+            'template',
+            'customColumns',
+          ])
+            returnUrl.searchParams.delete(key)
+          const returnTo = `${returnUrl.pathname}${returnUrl.search}`
+          const errors = url.searchParams.getAll('error')
+          return modalWorkspace(
+            workspace,
+            projectCreateModal(_, {
+              action: projectCreateHref(url),
+              cancelHref: returnTo,
+              returnTo,
+              fields: projectCreateFields(
+                _,
+                Object.fromEntries(
+                  ['key', 'name', 'description', 'template', 'customColumns']
+                    .map((name) => [name, url.searchParams.get(name) ?? ''])
+                    .filter(([, value]) => value),
+                ),
+              ),
+              errors: errors.length
+                ? errors
+                : url.searchParams.get('invalid') === '1'
+                  ? [_('flow_backend.error.invalid')]
+                  : undefined,
+            }),
+          )
+        },
       })
     },
 

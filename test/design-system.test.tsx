@@ -222,7 +222,7 @@ test('design system: KetSuite consumes the public package through aliases and ge
   const backend = readFileSync('packages/ketsuite/src/modules/backend/index.ts', 'utf8')
   const aliases = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   assert.match(packageJson, /"@ketvietlab\/design-system": "0\.1\.3"/)
-  assert.match(backend, /'design-system\/styles\.css'/)
+  assert.match(backend, /'design-system\.css'/)
   assert.match(aliases, /--admin-bg: var\(--kv-page-bg\)/)
   assert.match(aliases, /--color-primary: var\(--kv-ref-primary\)/)
 })

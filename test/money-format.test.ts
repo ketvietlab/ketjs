@@ -7,7 +7,7 @@ import { customerInvoicesScreen } from '../packages/ketsuite/src/modules/account
 import { roomTypesScreen } from '../packages/ketsuite/src/modules/hospitality_core/screens.tsx'
 import { ordersScreen as posOrdersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.tsx'
 import { purchaseOrdersListScreen } from '../packages/ketsuite/src/modules/purchase_backend/screens/purchase-orders-list.tsx'
-import { ordersScreen as saleOrdersScreen } from '../packages/ketsuite/src/modules/sale_backend/screens.tsx'
+import { salesOrdersListScreen } from '../packages/ketsuite/src/modules/sale_backend/screens/sales-orders-list.tsx'
 
 const manifest = compose([backend], { headless: true })
 const vi = translator(manifest, 'vi')
@@ -28,9 +28,8 @@ test('money format: keeps missing and invalid business data visible', () => {
 test('money format: every money-bearing backend module renders formatted list values', () => {
   const amount = formatMoney(vi, 1234567, 'VND')
   const screens = [
-    saleOrdersScreen(vi, {
-      title: 'Sales',
-      frame: {},
+    salesOrdersListScreen(vi, {
+      detailSuffix: '',
       rows: [
         {
           id: 'sale-1',

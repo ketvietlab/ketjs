@@ -12,6 +12,7 @@ export {
 } from './accounts-list.tsx'
 export {
   type AccountFormRow,
+  accountFormModal,
   accountFormScreen,
   type AccountFormScreenOptions,
 } from './account-form.tsx'
@@ -24,6 +25,7 @@ export {
 } from './journals-list.tsx'
 export {
   type JournalFormRow,
+  journalFormModal,
   journalFormScreen,
   type JournalFormScreenOptions,
 } from './journal-form.tsx'

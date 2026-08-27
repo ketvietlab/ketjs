@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { formatMoney } from '../../ui/index.ts'
+import { formatMoney, modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { accountOptions, accountRelationControl } from './relation-control.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
@@ -18,10 +18,10 @@ import {
 } from '../account/functions.ts'
 import { accountDefaultsScreen } from './account-defaults-screen.tsx'
 import {
-  accountFormScreen,
+  accountFormModal,
   accountingOverviewScreen,
   accountsListScreen,
-  journalFormScreen,
+  journalFormModal,
   journalsListScreen,
   labelOf,
   moveTitle,
@@ -200,7 +200,15 @@ const accountName = (_: Translator, account: AnyRow): string =>
 const accountListPath = (url: URL): string => {
   const target = new URL(url)
   target.pathname = '/admin/accounting/accounts'
-  for (const key of ['edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  for (const key of ['create', 'edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const accountModalPath = (url: URL, edit?: unknown, invalid = false): string => {
+  const target = new URL(accountListPath(url), 'http://ket.local')
+  if (edit) target.searchParams.set('edit', String(edit))
+  else target.searchParams.set('create', '1')
+  if (invalid) target.searchParams.set('invalid', '1')
   return `${target.pathname}${target.search}`
 }
 
@@ -212,16 +220,6 @@ const safeAccountReturnTo = (url: URL): string => {
   return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/accounts'
     ? `${candidate.pathname}${candidate.search}`
     : fallback
-}
-
-const accountFormPath = (url: URL, returnTo: string, edit?: unknown): string => {
-  const target = new URL('/admin/accounting/accounts/new', url)
-  target.search = ''
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  target.searchParams.set('returnTo', returnTo)
-  if (edit) target.searchParams.set('edit', String(edit))
-  return `${target.pathname}${target.search}`
 }
 
 const accountSummary = (rows: AnyRow[]) => {
@@ -307,7 +305,15 @@ const accountFields = (_: Translator, editing: AnyRow | null, rejected?: Rejecti
 const journalListPath = (url: URL): string => {
   const target = new URL(url)
   target.pathname = '/admin/accounting/journals'
-  for (const key of ['edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  for (const key of ['create', 'edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const journalModalPath = (url: URL, edit?: unknown, invalid = false): string => {
+  const target = new URL(journalListPath(url), 'http://ket.local')
+  if (edit) target.searchParams.set('edit', String(edit))
+  else target.searchParams.set('create', '1')
+  if (invalid) target.searchParams.set('invalid', '1')
   return `${target.pathname}${target.search}`
 }
 
@@ -319,16 +325,6 @@ const safeJournalReturnTo = (url: URL): string => {
   return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/journals'
     ? `${candidate.pathname}${candidate.search}`
     : fallback
-}
-
-const journalFormPath = (url: URL, returnTo: string, edit?: unknown): string => {
-  const target = new URL('/admin/accounting/journals/new', url)
-  target.search = ''
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  target.searchParams.set('returnTo', returnTo)
-  if (edit) target.searchParams.set('edit', String(edit))
-  return `${target.pathname}${target.search}`
 }
 
 const journalSummary = (rows: AnyRow[]) => ({
@@ -1138,23 +1134,9 @@ export default defineModule({
         const all = (await ctx.call('account.listAccounts', { includeArchived: true }, url, req)) as AnyRow[]
         const editing = editTarget(all, url)
         const returnTo = accountListPath(url)
-        const formPath = accountFormPath(url, returnTo, editing?.id ?? editingId(url))
-        if (req.method === 'POST' || editingId(url)) {
-          if (req.method === 'GET') return seeOther(formPath)
-          return adminPage(ctx, url, req, {
-            title: editing ? 'account_backend.account.edit.title' : 'account_backend.account.create.title',
-            body: (_, frame) =>
-              accountFormScreen(_, {
-                frame,
-                action: formPath,
-                cancelHref: returnTo,
-                editing,
-                displayName: (row) => accountName(_, row),
-                errors: rejected?.messages,
-                fields: accountFields(_, editing, rejected),
-              }),
-          })
-        }
+        const modalOpen =
+          req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url))
+        const formPath = accountModalPath(url, editing?.id ?? editingId(url))
         const page = pageOf(url)
         const search = searchOf(url)
         const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
@@ -1185,8 +1167,8 @@ export default defineModule({
         const rows = grouped ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.accounts.title',
-          body: (_, frame) =>
-            accountsListScreen(_, {
+          body: (_, frame) => {
+            const workspace = accountsListScreen(_, {
               frame: {
                 ...frame,
                 chrome: {
@@ -1272,42 +1254,43 @@ export default defineModule({
                 },
               },
               rows,
-              createHref: accountFormPath(url, returnTo),
-              rowHref: (row) => accountFormPath(url, returnTo, row.id),
+              createHref: accountModalPath(url),
+              rowHref: (row) => accountModalPath(url, row.id),
               displayName: (row) => accountName(_, row),
               summary: accountSummary(all),
               table: { groups: accountGroups(_, url, matching, grouped) },
-            }),
+            })
+            if (!modalOpen) return workspace
+            return modalWorkspace(
+              workspace,
+              accountFormModal(_, {
+                frame,
+                action: formPath,
+                cancelHref: returnTo,
+                editing,
+                displayName: (row) => accountName(_, row),
+                errors:
+                  rejected?.messages ??
+                  (url.searchParams.get('invalid') === '1'
+                    ? [_('account_backend.error.invalid')]
+                    : undefined),
+                fields: accountFields(_, editing, rejected),
+              }),
+            )
+          },
         })
       },
     '/admin/accounting/accounts/new':
       (ctx): Route =>
       async (url, req) => {
-        let rejected: Rejection | undefined
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const result = await saveAccount(ctx, url, req, form)
           if (succeeded(result)) return seeOther(safeAccountReturnTo(url))
-          rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+          return seeOther(accountModalPath(url, editingId(url), true))
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('account.listAccounts', { includeArchived: true }, url, req)) as AnyRow[]
-        const editing = editTarget(rows, url)
-        const returnTo = safeAccountReturnTo(url)
-        const formPath = accountFormPath(url, returnTo, editing?.id ?? editingId(url))
-        return adminPage(ctx, url, req, {
-          title: editing ? 'account_backend.account.edit.title' : 'account_backend.account.create.title',
-          body: (_, frame) =>
-            accountFormScreen(_, {
-              frame,
-              action: formPath,
-              cancelHref: returnTo,
-              editing,
-              displayName: (row) => accountName(_, row),
-              errors: rejected?.messages,
-              fields: accountFields(_, editing, rejected),
-            }),
-        })
+        return seeOther(accountModalPath(url, editingId(url), url.searchParams.get('invalid') === '1'))
       },
     '/admin/accounting/journals':
       (ctx): Route =>
@@ -1324,22 +1307,9 @@ export default defineModule({
         const all = (await ctx.call('account.listJournals', { includeArchived: true }, url, req)) as AnyRow[]
         const editing = editTarget(all, url)
         const returnTo = journalListPath(url)
-        const formPath = journalFormPath(url, returnTo, editing?.id ?? editingId(url))
-        if (req.method === 'POST' || editingId(url)) {
-          if (req.method === 'GET') return seeOther(formPath)
-          return adminPage(ctx, url, req, {
-            title: editing ? 'account_backend.journal.edit.title' : 'account_backend.journal.create.title',
-            body: async (_, frame) =>
-              journalFormScreen(_, {
-                frame,
-                action: formPath,
-                cancelHref: returnTo,
-                editing,
-                errors: rejected?.messages,
-                fields: await journalFields(ctx, url, req, _, data.accounts, editing, rejected),
-              }),
-          })
-        }
+        const modalOpen =
+          req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url))
+        const formPath = journalModalPath(url, editing?.id ?? editingId(url))
         const page = pageOf(url)
         const search = searchOf(url)
         const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
@@ -1359,8 +1329,8 @@ export default defineModule({
         const journals = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.journals.title',
-          body: (_, frame) =>
-            journalsListScreen(_, {
+          body: async (_, frame) => {
+            const workspace = journalsListScreen(_, {
               frame: {
                 ...frame,
                 chrome: {
@@ -1426,46 +1396,41 @@ export default defineModule({
               },
               rows: journals,
               accounts: data.accounts,
-              createHref: journalFormPath(url, returnTo),
-              rowHref: (row) => journalFormPath(url, returnTo, row.id),
+              createHref: journalModalPath(url),
+              rowHref: (row) => journalModalPath(url, row.id),
               displayAccountName: (row) => accountName(_, row),
               summary: journalSummary(all),
-            }),
+            })
+            if (!modalOpen) return workspace
+            return modalWorkspace(
+              workspace,
+              journalFormModal(_, {
+                frame,
+                action: formPath,
+                cancelHref: returnTo,
+                editing,
+                errors:
+                  rejected?.messages ??
+                  (url.searchParams.get('invalid') === '1'
+                    ? [_('account_backend.error.invalid')]
+                    : undefined),
+                fields: await journalFields(ctx, url, req, _, data.accounts, editing, rejected),
+              }),
+            )
+          },
         })
       },
     '/admin/accounting/journals/new':
       (ctx): Route =>
       async (url, req) => {
-        let rejected: Rejection | undefined
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const result = await saveJournal(ctx, url, req, form)
           if (succeeded(result)) return seeOther(safeJournalReturnTo(url))
-          rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+          return seeOther(journalModalPath(url, editingId(url), true))
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const data = await common(ctx, url, req)
-        const journals = (await ctx.call(
-          'account.listJournals',
-          { includeArchived: true },
-          url,
-          req,
-        )) as AnyRow[]
-        const editing = editTarget(journals, url)
-        const returnTo = safeJournalReturnTo(url)
-        const formPath = journalFormPath(url, returnTo, editing?.id ?? editingId(url))
-        return adminPage(ctx, url, req, {
-          title: editing ? 'account_backend.journal.edit.title' : 'account_backend.journal.create.title',
-          body: async (_, frame) =>
-            journalFormScreen(_, {
-              frame,
-              action: formPath,
-              cancelHref: returnTo,
-              editing,
-              errors: rejected?.messages,
-              fields: await journalFields(ctx, url, req, _, data.accounts, editing, rejected),
-            }),
-        })
+        return seeOther(journalModalPath(url, editingId(url), url.searchParams.get('invalid') === '1'))
       },
     '/admin/accounting/taxes':
       (ctx): Route =>

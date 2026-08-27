@@ -22,6 +22,9 @@ packages/ketsuite/src/modules/backend/design/client/relation-select.mjs
 packages/ketsuite/src/modules/backend/design/client/relation-select.mjs.map
 packages/ketsuite/src/modules/backend/design/client/table-selection.mjs
 packages/ketsuite/src/modules/backend/design/client/table-selection.mjs.map
+# The public design-system entry is bundled into the backend asset root so
+# source-mode development and production serve the same fingerprinted bytes.
+packages/ketsuite/src/modules/backend/design/design-system.css
 # The chart island bundles chart.js, so it has its own builder for the same
 # reason the Live Doc editor does — tools/build-chart-client.mjs, on every build.
 packages/ketsuite/src/modules/backend/design/client/chart.mjs

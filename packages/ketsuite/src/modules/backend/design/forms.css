@@ -386,6 +386,9 @@
     min-inline-size: 0;
     justify-items: end;
   }
+  body:has([data-ui="modal-layer"][data-route-modal="true"]) {
+    overflow: hidden;
+  }
   [data-ui="modal-backdrop"] {
     position: absolute;
     z-index: 0;
@@ -429,6 +432,11 @@
     padding: var(--admin-gap) var(--admin-gap-md);
     border-block-end: 1px solid var(--admin-line);
   }
+  [data-ui="modal-heading"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap-xs);
+  }
   [data-ui="modal-title"] {
     min-inline-size: 0;
     margin: 0;
@@ -438,6 +446,12 @@
     line-height: 1.35;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  [data-ui="modal-description"] {
+    margin: 0;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+    line-height: 1.45;
   }
   [data-ui="modal-close"] {
     display: grid;

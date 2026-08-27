@@ -175,7 +175,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
       assert.match(html, /data-ui="list-page"/)
       assert.match(html, /data-ui="table"/)
       assert.match(html, /Theo số lượng giao/)
-      assert.match(html, /href="\/admin\/sales\/invoicing-policies\/new\?returnTo=/)
+      assert.match(html, /href="\/admin\/sales\/invoicing-policies\?create=1"/)
       assert.doesNotMatch(html, /id="invoicing-policy-form"|data-ui="record-workspace"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
@@ -273,10 +273,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   const englishPoliciesHtml = await englishPolicies.text()
   assert.match(englishPoliciesHtml, /data-ui="list-page"/)
   assert.match(englishPoliciesHtml, /Delivered quantities/)
-  assert.match(
-    englishPoliciesHtml,
-    /href="\/admin\/sales\/invoicing-policies\/new\?lang=en&amp;returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Den"/,
-  )
+  assert.match(englishPoliciesHtml, /href="\/admin\/sales\/invoicing-policies\?lang=en&amp;create=1"/)
   assert.doesNotMatch(englishPoliciesHtml, /id="invoicing-policy-form"/)
   assert.doesNotMatch(englishPoliciesHtml, /data-island="mail\.chatter"/)
   const englishPolicyForm = await e2e.client.get(
@@ -284,10 +281,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     { headers: { accept: 'text/html' } },
   )
   const englishPolicyFormHtml = await englishPolicyForm.text()
-  assert.match(
-    englishPolicyFormHtml,
-    /data-ui="form-page" data-scope="sales-invoicing-policy-form-page" data-has-aside="false"/,
-  )
+  assert.match(englishPolicyFormHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(englishPolicyFormHtml, /id="invoicing-policy-form"/)
   assert.match(englishPolicyFormHtml, /type="radio" name="invoicePolicy" autocomplete="off" value="delivery"/)
   assert.match(englishPolicyFormHtml, /Delivered quantities/)
@@ -308,7 +302,7 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   assert.equal(rejectedPolicy.status, 303)
   assert.equal(
     rejectedPolicy.headers.get('location'),
-    '/admin/sales/invoicing-policies/new?lang=en&returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Den&invalid=1',
+    '/admin/sales/invoicing-policies?lang=en&create=1&invalid=1',
   )
   const rejectedPolicyForm = await e2e.client.get(rejectedPolicy.headers.get('location') ?? '', {
     headers: { accept: 'text/html' },

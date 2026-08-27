@@ -47,7 +47,7 @@ test('flow project routes: split list/create while preserving validation, locale
   assert.equal(list.status, 200)
   assert.match(listHtml, /data-ui="list-page"/)
   assert.doesNotMatch(listHtml, /data-ui="form-page"|flow-project-create-form/)
-  assert.match(listHtml, /href="\/admin\/flow\/projects\/new\?lang=en&amp;returnTo=/)
+  assert.match(listHtml, /href="\/admin\/flow\/projects\?tab=mine&amp;lang=en&amp;create=1"/)
   assert.match(listHtml, /href="\/admin\/flow\/projects\?tab=mine&amp;lang=en"/)
 
   const create = await app.client.get(
@@ -55,11 +55,11 @@ test('flow project routes: split list/create while preserving validation, locale
   )
   const createHtml = await create.text()
   assert.equal(create.status, 200)
-  assert.match(createHtml, /data-ui="form-page"/)
+  assert.match(createHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(createHtml, /name="key"[^>]*value="OPS"/)
   assert.match(createHtml, /name="name"[^>]*value="Operations"/)
   assert.match(createHtml, /value="custom" selected/)
-  assert.match(createHtml, /action="\/admin\/flow\/projects\/new\?lang=en"/)
+  assert.match(createHtml, /action="\/admin\/flow\/projects\?tab=mine&amp;lang=en&amp;create=1"/)
   assert.match(createHtml, /href="\/admin\/flow\/projects\?tab=mine&amp;lang=en"/)
 
   const unsafe = await app.client.get(
@@ -82,15 +82,15 @@ test('flow project routes: split list/create while preserving validation, locale
     }),
     post,
   )
-  const invalidHtml = await invalid.text()
-  assert.equal(invalid.status, 200)
-  assert.match(invalidHtml, /data-ui="form-page"/)
+  assert.equal(invalid.status, 303)
+  const invalidHtml = await (await app.client.get(invalid.headers.get('location') ?? '')).text()
+  assert.match(invalidHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(invalidHtml, /The custom template needs at least one status name/)
   assert.match(invalidHtml, /name="key"[^>]*value="OPS"/)
   assert.match(invalidHtml, /name="name"[^>]*value="Operations"/)
   assert.match(invalidHtml, /Workflow modernization/)
   assert.match(invalidHtml, /value="custom" selected/)
-  assert.match(invalidHtml, /action="\/admin\/flow\/projects\/new\?lang=en"/)
+  assert.match(invalidHtml, /action="\/admin\/flow\/projects\?tab=mine&amp;lang=en&amp;create=1"/)
 
   const invalidLegacy = await app.client.post(
     '/admin/flow/projects?tab=mine&lang=en',
@@ -102,10 +102,10 @@ test('flow project routes: split list/create while preserving validation, locale
     }),
     post,
   )
-  const invalidLegacyHtml = await invalidLegacy.text()
-  assert.equal(invalidLegacy.status, 200)
-  assert.match(invalidLegacyHtml, /data-ui="form-page"/)
-  assert.match(invalidLegacyHtml, /action="\/admin\/flow\/projects\?lang=en"/)
+  assert.equal(invalidLegacy.status, 303)
+  const invalidLegacyHtml = await (await app.client.get(invalidLegacy.headers.get('location') ?? '')).text()
+  assert.match(invalidLegacyHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(invalidLegacyHtml, /action="\/admin\/flow\/projects\?tab=mine&amp;lang=en&amp;create=1"/)
   assert.match(invalidLegacyHtml, /name="returnTo" value="\/admin\/flow\/projects\?tab=mine&amp;lang=en"/)
   assert.match(invalidLegacyHtml, /name="key"[^>]*value="OLD"/)
 

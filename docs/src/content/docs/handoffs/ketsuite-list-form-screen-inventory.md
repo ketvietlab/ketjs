@@ -82,8 +82,9 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 
 ### Sales lane
 
-Structure debt: move the routed dashboard and the split screen files into `sale_backend/screens/`; remove
-unrouted legacy exports from the old `screens.tsx` only after confirming the route registry.
+Structure debt resolved in the modal follow-up: the remaining shared label helper moved to
+`sale_backend/screens/shared.tsx`, unrouted legacy renderers were removed, and the root `screens.tsx` no
+longer exists.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
@@ -890,3 +891,49 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 ![Wave 14 Manufacturing Order Execution evidence](/assets/manufacturing-order-execution-wave14/manufacturing-order-execution-browser-skill.png)
 
 ![Wave 14 Manufacturing Order Execution mobile evidence](/assets/manufacturing-order-execution-wave14/manufacturing-order-execution-mobile-browser-skill.png)
+
+### Modal consolidation through Wave 14 — PR 253
+
+The follow-up audit keeps long operational workflows as routes and moves short, contextual configuration
+forms into URL-addressable modals. The list or detail screen remains mounted underneath, `/new` stays as a
+compatibility redirect, and validation returns to the same modal state.
+
+| Work item | Modalized workflow | Background context | Presentation |
+|---|---|---|---|
+| STOCK-04 | Warehouse create | Warehouse list | large dialog |
+| STOCK-05 | Location create | Location list | dialog |
+| STOCK-06 | Operation-type create | Operation-type list | large sheet |
+| STOCK-07 | Lot/serial create | Lot/serial list | dialog |
+| STOCK-09 | Supply-route create | Supply-route list | dialog |
+| PROD-02 | Save favorite filter | Product list with current query state | dialog |
+| SALE-05 | Invoicing-policy create | Invoicing-policy list | dialog |
+| ACC-02 | Account create/edit | Chart of accounts | large sheet |
+| ACC-03 | Journal create/edit | Journal list | large sheet |
+| AP-01 | Partner accounting terms | Partner detail with Chatter | large dialog |
+| CRM-06 | Create/edit on all configuration tabs | Active configuration tab and table | dialog or large sheet by field count |
+| FLOW-01 | Project create | Project list and selected tab | large sheet |
+
+The audit intentionally keeps Stock transfers and replenishment, Product creation, Sales/Purchase documents,
+Accounting taxes, CRM cases, Manufacturing orders/execution, record details, dashboards, boards and reports as
+full routes. Those workflows either have enough fields, cross-record work, lifecycle actions, or Chatter/task
+context to justify a stable page rather than a transient modal.
+
+The shared modal contract owns focus entry, focus trapping, Escape/backdrop close, scroll containment,
+responsive full-screen fallback and immutable client bundling. Because this is shared UI/runtime code, CI
+selection expands to every group even though the business-route changes stop at Wave 14.
+
+Browser QA also caught the public design-system stylesheet resolving to an unversioned 404 in source-mode
+development. The canonical CSS entry is now bundled into the backend asset root before both `dev` and `build`,
+served from the same fingerprinted URL in both modes, and only rewritten when its bytes change so the watcher
+does not loop. Login verification loaded all 22 stylesheets with zero failures.
+
+Nested relation-select QA verifies that the first Escape closes only the relation dialog and preserves the
+route modal URL; the second Escape closes the route modal and returns to its background list.
+
+![PR 253 journal modal at 1440 px](/assets/modal-consolidation-pr253/journal-modal-desktop-1440.png)
+
+![PR 253 journal modal at 390 px](/assets/modal-consolidation-pr253/journal-modal-mobile-390.png)
+
+![PR 253 partner accounting modal over detail and Chatter](/assets/modal-consolidation-pr253/partner-accounting-modal-chatter.png)
+
+![PR 253 login font and controls after design-system bundling fix](/assets/modal-consolidation-pr253/login-font-fixed.png)

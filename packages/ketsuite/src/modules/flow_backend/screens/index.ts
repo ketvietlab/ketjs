@@ -6,7 +6,7 @@
 export { projectNav } from './nav.tsx'
 export { projectsListScreen } from './projects-list.tsx'
 export type { ProjectsOverview } from './projects-list.tsx'
-export { projectCreateScreen, TEMPLATE_OPTIONS } from './project-create.tsx'
+export { projectCreateModal, projectCreateScreen, TEMPLATE_OPTIONS } from './project-create.tsx'
 export type { ProjectCreateScreenOptions } from './project-create.tsx'
 export { boardScreen } from './board.tsx'
 export { ganttScreen } from './gantt.tsx'

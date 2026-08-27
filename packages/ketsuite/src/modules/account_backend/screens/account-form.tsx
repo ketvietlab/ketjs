@@ -6,6 +6,7 @@ import {
   FormCluster,
   FormPage,
   linkButton,
+  modalForm,
   RecordForm,
   shell,
   stack,
@@ -23,6 +24,34 @@ export type AccountFormScreenOptions = {
   editing?: AccountFormRow | null
   displayName?: (row: AccountFormRow) => string
   errors?: string[]
+}
+
+export const accountFormModal = (_: Translator, options: AccountFormScreenOptions): TemplateResult => {
+  const editing = options.editing ?? null
+  const name = options.displayName ?? ((row: AccountFormRow) => String(row.name))
+  const title = editing ? _('account_backend.account.edit.title') : _('account_backend.account.create.title')
+  return modalForm({
+    id: 'account-chart-form',
+    title,
+    description: editing
+      ? `${String(editing.code)} · ${name(editing)}`
+      : _('account_backend.account.create.hint'),
+    closeHref: options.cancelHref,
+    closeLabel: _('account_backend.action.cancelEdit'),
+    presentation: 'sheet',
+    size: 'large',
+    form: {
+      id: 'account-create-form',
+      scope: 'account-chart',
+      action: options.action,
+      submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
+      submitVariant: 'primary',
+      cancelHref: options.cancelHref,
+      cancelLabel: _('account_backend.action.cancelEdit'),
+      fields: options.fields,
+      errors: options.errors,
+    },
+  })
 }
 
 export const accountFormScreen = (_: Translator, options: AccountFormScreenOptions): TemplateResult => {

@@ -1183,6 +1183,7 @@ export const routes: Record<string, RouteEntry> = {
             tab,
             rows,
             editing,
+            creating: url.searchParams.get('create') === '1' || (req.method === 'POST' && !editing),
             errors,
             locale: localeQuery(url),
             fields: configurationFields(_, tab, editing, teams, users),

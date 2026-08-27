@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField } from '../../ui/index.ts'
-import { backendPage } from '../../ui/index.ts'
+import { backendPage, modalWorkspace } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
@@ -10,7 +10,8 @@ import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
 import {
   invoicingPoliciesListScreen,
-  invoicingPolicyCreateScreen,
+  invoicingPolicyCreateModal,
+  labelOf,
   orderDetailScreen,
   overviewScreen,
   quotationCreateScreen,
@@ -18,7 +19,6 @@ import {
   salesOrdersListScreen,
 } from './screens/index.ts'
 import type { SaleCounts } from './screens/index.ts'
-import { labelOf } from './screens.tsx'
 import {
   accountOptions,
   accountRelationControl,
@@ -68,6 +68,12 @@ const quotationListQuery = (url: URL): string => {
 const quotationListPath = (url: URL): string => `/admin/sales/quotations${quotationListQuery(url)}`
 const quotationCreatePath = (url: URL): string => `/admin/sales/quotations/new${quotationListQuery(url)}`
 const invoicingPoliciesPath = (url: URL): string => `/admin/sales/invoicing-policies${localeQuery(url)}`
+const invoicingPolicyModalPath = (url: URL, invalid = false): string => {
+  const target = new URL(invoicingPoliciesPath(url), 'http://ket.local')
+  target.searchParams.set('create', '1')
+  if (invalid) target.searchParams.set('invalid', '1')
+  return `${target.pathname}${target.search}`
+}
 const safeInvoicingPoliciesReturnTo = (url: URL): string => {
   const fallback = invoicingPoliciesPath(url)
   const raw = url.searchParams.get('returnTo')
@@ -969,46 +975,25 @@ export default defineModule({
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const result = await setInvoicingPolicy(ctx, url, req)
-          return (result as AnyRow).ok
-            ? seeOther(returnTo)
-            : seeOther(`${createPath}${createPath.includes('?') ? '&' : '?'}invalid=1`)
+          return (result as AnyRow).ok ? seeOther(returnTo) : seeOther(invoicingPolicyModalPath(url, true))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[]
         return adminPage(ctx, url, req, {
           title: 'sale_backend.policies.title',
-          body: async (_, shell) =>
-            invoicingPoliciesListScreen(
+          body: async (_, shell) => {
+            const workspace = invoicingPoliciesListScreen(
               _,
               {
-                createHref: createPath,
+                createHref: invoicingPolicyModalPath(url),
                 rows,
               },
               shell,
-            ),
-        })
-      },
-    '/admin/sales/invoicing-policies/new':
-      (ctx): Route =>
-      async (url, req) => {
-        const returnTo = safeInvoicingPoliciesReturnTo(url)
-        const createPath = invoicingPolicyCreatePath(url, returnTo)
-        if (req.method === 'POST') {
-          if (crossSite(req)) return text('Forbidden', { status: 403 })
-          const result = await setInvoicingPolicy(ctx, url, req)
-          return (result as AnyRow).ok
-            ? seeOther(returnTo)
-            : seeOther(`${createPath}${createPath.includes('?') ? '&' : '?'}invalid=1`)
-        }
-        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[],
-          _ = ctx.translate(ctx.localeOf(url, req))
-        return adminPage(ctx, url, req, {
-          title: 'sale_backend.policy.edit.title',
-          body: async (_, shell) =>
-            invoicingPolicyCreateScreen(
-              _,
-              {
+            )
+            if (url.searchParams.get('create') !== '1') return workspace
+            return modalWorkspace(
+              workspace,
+              invoicingPolicyCreateModal(_, {
                 action: createPath,
                 cancelHref: returnTo,
                 errors:
@@ -1039,10 +1024,22 @@ export default defineModule({
                     required: true,
                   },
                 ],
-              },
-              shell,
-            ),
+              }),
+            )
+          },
         })
+      },
+    '/admin/sales/invoicing-policies/new':
+      (ctx): Route =>
+      async (url, req) => {
+        const returnTo = safeInvoicingPoliciesReturnTo(url)
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const result = await setInvoicingPolicy(ctx, url, req)
+          return (result as AnyRow).ok ? seeOther(returnTo) : seeOther(invoicingPolicyModalPath(url, true))
+        }
+        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        return seeOther(invoicingPolicyModalPath(url, url.searchParams.get('invalid') === '1'))
       },
   },
   messages: { vi, en },

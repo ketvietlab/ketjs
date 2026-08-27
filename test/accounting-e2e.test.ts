@@ -187,13 +187,13 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     if (path === '/admin/accounting/accounts') {
       assert.match(html, /data-ui="list-page"/)
       assert.doesNotMatch(html, /id="account-create-form"/)
-      assert.match(html, /href="\/admin\/accounting\/accounts\/new\?returnTo=/)
+      assert.match(html, /href="\/admin\/accounting\/accounts\?create=1"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/journals') {
       assert.match(html, /data-ui="list-page"/)
       assert.doesNotMatch(html, /id="journal-create-form"/)
-      assert.match(html, /href="\/admin\/accounting\/journals\/new\?returnTo=/)
+      assert.match(html, /href="\/admin\/accounting\/journals\?create=1"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/taxes') {
@@ -245,18 +245,18 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
   const target = accounts.find((row) => row.code === '111')!
   const path = '/admin/accounting/accounts'
 
-  const createPage = await e2e.client.get(`${path}/new?lang=vi`, {
+  const createPage = await e2e.client.get(`${path}?lang=vi&create=1`, {
     headers: { accept: 'text/html' },
   })
   const createHtml = await createPage.text()
   assert.equal(createPage.status, 200)
-  assert.match(createHtml, /data-ui="form-page"/)
+  assert.match(createHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(createHtml, /id="account-create-form"/)
-  assert.doesNotMatch(createHtml, /data-ui="list-page"/)
+  assert.match(createHtml, /data-ui="list-page"/)
   assert.doesNotMatch(createHtml, /data-island="mail\.chatter"/)
 
   const invalid = await e2e.client.post(
-    `${path}/new?lang=vi`,
+    `${path}?lang=vi&create=1`,
     new URLSearchParams({
       code: 'ACC INVALID',
       name: 'Tài khoản nhập dở',
@@ -267,7 +267,7 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
   )
   const invalidHtml = await invalid.text()
   assert.equal(invalid.status, 200)
-  assert.match(invalidHtml, /data-ui="form-page"/)
+  assert.match(invalidHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(invalidHtml, /value="ACC INVALID"/)
   assert.match(invalidHtml, /value="Tài khoản nhập dở"/)
 
@@ -306,12 +306,13 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
   assert.match(filteredHtml, /data-ui="facet"/)
   assert.match(filteredHtml, /ACC999/)
 
-  // Legacy edit links still land on the dedicated form route and prefill the record.
+  // Editing stays URL-addressable while preserving the list underneath the modal.
   const editor = await e2e.client.get(`${path}?edit=${encodeURIComponent(String(target.id))}`, {
     headers: { accept: 'text/html' },
   })
   const editorHtml = await editor.text()
   assert.equal(editor.status, 200)
+  assert.match(editorHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(editorHtml, /Sửa tài khoản/)
   assert.match(editorHtml, /value="111"/)
 
@@ -352,19 +353,19 @@ test('e2e accounting: journal list and form preserve relations, correction, arch
   const defaultAccount = accounts.find((row) => row.code === '112')!
   const path = '/admin/accounting/journals'
 
-  const createPage = await e2e.client.get(`${path}/new?lang=vi`, {
+  const createPage = await e2e.client.get(`${path}?lang=vi&create=1`, {
     headers: { accept: 'text/html' },
   })
   const createHtml = await createPage.text()
   assert.equal(createPage.status, 200)
-  assert.match(createHtml, /data-ui="form-page"/)
+  assert.match(createHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(createHtml, /id="journal-create-form"/)
   assert.match(createHtml, /data-island="backend\.relation-select"/)
   assert.match(createHtml, /&quot;listFunction&quot;:&quot;account\.listAccounts&quot;/)
   assert.doesNotMatch(createHtml, /data-island="mail\.chatter"/)
 
   const invalid = await e2e.client.post(
-    `${path}/new?lang=vi`,
+    `${path}?lang=vi&create=1`,
     new URLSearchParams({
       name: 'Ngân hàng nhập dở',
       code: 'BAD CODE',
@@ -376,7 +377,7 @@ test('e2e accounting: journal list and form preserve relations, correction, arch
   )
   const invalidHtml = await invalid.text()
   assert.equal(invalid.status, 200)
-  assert.match(invalidHtml, /data-ui="form-page"/)
+  assert.match(invalidHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(invalidHtml, /value="Ngân hàng nhập dở"/)
   assert.match(invalidHtml, /value="BAD CODE"/)
   assert.match(invalidHtml, new RegExp(`value="${String(defaultAccount.id)}"`))
@@ -423,13 +424,13 @@ test('e2e accounting: journal list and form preserve relations, correction, arch
   assert.match(filteredHtml, /HTTPJ/)
   assert.match(filteredHtml, new RegExp(`${String(defaultAccount.code)} · ${String(defaultAccount.name)}`))
 
-  // Old links and POST targets remain valid while landing on the dedicated form/list split.
+  // Editing preserves the relation control while keeping the list in context.
   const legacyEditor = await e2e.client.get(`${path}?lang=vi&edit=${encodeURIComponent(String(target.id))}`, {
     headers: { accept: 'text/html' },
   })
   const legacyEditorHtml = await legacyEditor.text()
   assert.equal(legacyEditor.status, 200)
-  assert.match(legacyEditorHtml, /data-ui="form-page"/)
+  assert.match(legacyEditorHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(legacyEditorHtml, /value="HTTPJ"/)
 
   const legacySave = await e2e.client.post(

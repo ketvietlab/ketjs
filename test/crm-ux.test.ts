@@ -305,7 +305,7 @@ test('crm backend: configuration records can be edited and archived, not only cr
   const invalidHtml = await invalid.text()
   assert.equal(invalid.status, 200)
   assert.match(invalidHtml, /data-ui="form-errors"/)
-  assert.match(invalidHtml, /action="\/admin\/crm\/configuration\?tab=tags&amp;lang=en"/)
+  assert.match(invalidHtml, /action="\/admin\/crm\/configuration\?tab=tags&amp;lang=en&amp;create=1"/)
   assert.match(invalidHtml, /href="\/admin\/crm\/configuration\?tab=members&amp;lang=en"/)
 
   const created = await app.client.post(
@@ -324,7 +324,10 @@ test('crm backend: configuration records can be edited and archived, not only cr
   const html = await page.text()
   assert.match(html, /value="Field sales"/, 'the edit form is pre-filled from the row')
   assert.match(html, /href="\/admin\/crm\/configuration\?tab=teams&amp;lang=en"/)
-  assert.match(html, /action="\/admin\/crm\/configuration\?tab=teams&amp;lang=en"/)
+  assert.match(
+    html,
+    new RegExp(`action="/admin/crm/configuration\\?tab=teams&amp;lang=en&amp;edit=${String(team.id)}"`),
+  )
 
   const renamed = await app.client.post(
     '/admin/crm/configuration?tab=teams&lang=en',

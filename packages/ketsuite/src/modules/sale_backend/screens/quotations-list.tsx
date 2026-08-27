@@ -15,7 +15,7 @@ import {
   shell,
 } from '../../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../../ui/index.ts'
-import { labelOf } from '../screens.tsx'
+import { labelOf } from './shared.tsx'
 
 export type QuotationListRow = Record<string, unknown>
 

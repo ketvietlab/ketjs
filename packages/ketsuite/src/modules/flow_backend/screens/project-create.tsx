@@ -1,6 +1,15 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { button, FormCluster, FormPage, linkButton, RecordForm, shell, Surface } from '../../../ui/index.ts'
+import {
+  button,
+  FormCluster,
+  FormPage,
+  linkButton,
+  modalForm,
+  RecordForm,
+  shell,
+  Surface,
+} from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
 
 /** Column-template presets offered while creating a project. */
@@ -18,6 +27,29 @@ export type ProjectCreateScreenOptions = {
   returnTo: string
   errors?: readonly string[]
 }
+
+export const projectCreateModal = (_: Translator, options: ProjectCreateScreenOptions): TemplateResult =>
+  modalForm({
+    id: 'flow-project-create',
+    title: _('flow_backend.projects.create'),
+    description: _('flow_backend.projects.subtitle'),
+    closeHref: options.cancelHref,
+    closeLabel: _('flow_backend.action.cancel'),
+    presentation: 'sheet',
+    size: 'large',
+    form: {
+      id: 'flow-project-create-form',
+      scope: 'flow-project-create',
+      action: options.action,
+      submit: _('flow_backend.projects.create'),
+      submitVariant: 'primary',
+      cancelHref: options.cancelHref,
+      cancelLabel: _('flow_backend.action.cancel'),
+      hidden: { returnTo: options.returnTo },
+      fields: options.fields,
+      errors: options.errors,
+    },
+  })
 
 export const projectCreateScreen = (
   _: Translator,

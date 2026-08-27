@@ -5,6 +5,7 @@ import {
   FormCluster,
   FormPage,
   linkButton,
+  modalForm,
   RecordForm,
   Section,
   shell,
@@ -25,6 +26,64 @@ export type AccountingTermsOptions = {
   receivable: FormOption[]
   payable: FormOption[]
 }
+
+const accountingTermsFields = (
+  _: Translator,
+  terms: AccountingTerms | null,
+  options: AccountingTermsOptions,
+) => [
+  {
+    name: 'paymentTermId',
+    label: _('account_partner_backend.field.paymentTerm'),
+    type: 'select' as const,
+    value: terms?.paymentTermId,
+    options: [{ value: '', label: '—' }, ...options.paymentTerms],
+  },
+  {
+    name: 'receivableAccountId',
+    label: _('account_partner_backend.field.receivable'),
+    type: 'select' as const,
+    value: terms?.receivableAccountId,
+    options: [{ value: '', label: '—' }, ...options.receivable],
+  },
+  {
+    name: 'payableAccountId',
+    label: _('account_partner_backend.field.payable'),
+    type: 'select' as const,
+    value: terms?.payableAccountId,
+    options: [{ value: '', label: '—' }, ...options.payable],
+  },
+]
+
+export const accountingTermsModal = (
+  _: Translator,
+  partner: AccountingTermsPartner,
+  terms: AccountingTerms | null,
+  options: AccountingTermsOptions,
+  action: string,
+  backHref: string,
+  errors?: string[],
+): TemplateResult =>
+  modalForm({
+    id: 'partner-accounting-terms',
+    title: _('account_partner_backend.screen.title', { name: partner.name }),
+    description: _('account_partner_backend.section.hint'),
+    closeHref: backHref,
+    closeLabel: _('account_partner_backend.action.back'),
+    presentation: 'dialog',
+    size: 'large',
+    form: {
+      id: 'partner-accounting-terms-form',
+      scope: 'partner-accounting-terms',
+      action,
+      submit: _('account_partner_backend.action.save'),
+      submitVariant: 'primary',
+      cancelHref: backHref,
+      cancelLabel: _('account_partner_backend.action.back'),
+      errors,
+      fields: accountingTermsFields(_, terms, options),
+    },
+  })
 
 export const accountingTermsScreen = (
   _: Translator,
@@ -78,29 +137,7 @@ export const accountingTermsScreen = (
                   submitVariant="primary"
                   submitPlacement="external"
                   errors={errors}
-                  fields={[
-                    {
-                      name: 'paymentTermId',
-                      label: _('account_partner_backend.field.paymentTerm'),
-                      type: 'select',
-                      value: terms?.paymentTermId,
-                      options: [{ value: '', label: '—' }, ...options.paymentTerms],
-                    },
-                    {
-                      name: 'receivableAccountId',
-                      label: _('account_partner_backend.field.receivable'),
-                      type: 'select',
-                      value: terms?.receivableAccountId,
-                      options: [{ value: '', label: '—' }, ...options.receivable],
-                    },
-                    {
-                      name: 'payableAccountId',
-                      label: _('account_partner_backend.field.payable'),
-                      type: 'select',
-                      value: terms?.payableAccountId,
-                      options: [{ value: '', label: '—' }, ...options.payable],
-                    },
-                  ]}
+                  fields={accountingTermsFields(_, terms, options)}
                 />
               }
             />

@@ -6,6 +6,7 @@ import {
   FormCluster,
   FormPage,
   linkButton,
+  modalForm,
   RecordForm,
   shell,
   stack,
@@ -22,6 +23,33 @@ export type JournalFormScreenOptions = {
   cancelHref: string
   editing?: JournalFormRow | null
   errors?: string[]
+}
+
+export const journalFormModal = (_: Translator, options: JournalFormScreenOptions): TemplateResult => {
+  const editing = options.editing ?? null
+  const title = editing ? _('account_backend.journal.edit.title') : _('account_backend.journal.create.title')
+  return modalForm({
+    id: 'account-journal-form',
+    title,
+    description: editing
+      ? `${String(editing.code)} · ${String(editing.name)}`
+      : _('account_backend.journal.create.hint'),
+    closeHref: options.cancelHref,
+    closeLabel: _('account_backend.action.cancelEdit'),
+    presentation: 'sheet',
+    size: 'large',
+    form: {
+      id: 'journal-create-form',
+      scope: 'account-journal',
+      action: options.action,
+      submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
+      submitVariant: 'primary',
+      cancelHref: options.cancelHref,
+      cancelLabel: _('account_backend.action.cancelEdit'),
+      fields: options.fields,
+      errors: options.errors,
+    },
+  })
 }
 
 export const journalFormScreen = (_: Translator, options: JournalFormScreenOptions): TemplateResult => {
