@@ -1,16 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import {
-  badge,
-  dataTable,
-  emptyState,
-  Framed,
-  RecordActions,
-  RecordForm,
-  Section,
-  stack,
-  Surface,
-} from '../../ui/index.ts'
+import { badge, dataTable, emptyState, Framed, RecordActions } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 
 type R = Record<string, unknown>
@@ -20,117 +10,6 @@ const stateBadge = (_: Translator, value: unknown) => {
   return badge(
     _(`hr_backend.state.${state}`),
     state === 'published' || state === 'approved' ? 'positive' : state === 'rejected' ? 'danger' : 'neutral',
-  )
-}
-
-export const rosterScreen = (
-  _: Translator,
-  frame: Frame,
-  rows: R[],
-  branchId: string,
-  weekStart: string,
-  errors: string[] = [],
-): TemplateResult => {
-  const roster = rows[0]
-  const shifts = (roster?.shifts as R[] | undefined) ?? []
-  return (
-    <Framed
-      translator={_}
-      title={_('hr_backend.roster.title')}
-      frame={frame}
-      body={stack([
-        <Section
-          title={_('hr_backend.roster.generate')}
-          body={
-            <Surface
-              body={
-                <RecordForm
-                  action="/admin/hr/roster"
-                  errors={errors}
-                  submit={_('hr_backend.action.generate')}
-                  submitVariant="primary"
-                  fields={[
-                    {
-                      name: 'branchId',
-                      label: _('hr_backend.field.branchId'),
-                      value: branchId,
-                      required: true,
-                    },
-                    {
-                      name: 'weekStart',
-                      label: _('hr_backend.field.weekStart'),
-                      type: 'date',
-                      value: weekStart,
-                      required: true,
-                    },
-                  ]}
-                />
-              }
-            />
-          }
-        />,
-        ...(roster
-          ? [
-              <Section
-                title={`${_('hr_backend.roster.week')} ${String(roster.weekStart)}`}
-                description={_('hr_backend.roster.hint')}
-                body={stack([
-                  stateBadge(_, roster.state),
-                  <Surface
-                    body={
-                      <RecordActions
-                        action={`/admin/hr/roster?id=${encodeURIComponent(String(roster.id))}&version=${encodeURIComponent(String(roster.version))}&branch=${encodeURIComponent(branchId)}&week=${encodeURIComponent(weekStart)}`}
-                        actions={
-                          roster.state === 'published'
-                            ? [
-                                {
-                                  value: 'reopen',
-                                  label: _('hr_backend.action.reopen'),
-                                  variant: 'secondary',
-                                },
-                              ]
-                            : [
-                                {
-                                  value: 'publish',
-                                  label: _('hr_backend.action.publish'),
-                                  variant: 'primary',
-                                },
-                              ]
-                        }
-                      />
-                    }
-                  />,
-                ])}
-              />,
-              shifts.length
-                ? dataTable(_, {
-                    rows: shifts,
-                    id: (row) => String(row.id),
-                    columns: [
-                      {
-                        key: 'employee',
-                        label: _('hr_backend.field.employee'),
-                        cell: (row) => String(row.employeeName),
-                        priority: 'primary',
-                      },
-                      {
-                        key: 'date',
-                        label: _('hr_backend.field.date'),
-                        cell: (row) => String(row.localDate),
-                      },
-                      {
-                        key: 'start',
-                        label: _('hr_backend.field.startAt'),
-                        cell: (row) => String(row.startAt),
-                      },
-                      { key: 'stop', label: _('hr_backend.field.stopAt'), cell: (row) => String(row.stopAt) },
-                    ],
-                  })
-                : emptyState(_('hr_backend.empty.shifts'), _('hr_backend.empty.shiftsHint')),
-            ]
-          : []),
-      ])}
-    />
   )
 }
 

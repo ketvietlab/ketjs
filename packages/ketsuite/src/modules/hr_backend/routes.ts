@@ -5,9 +5,9 @@ import type { FormOption, Frame } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
-import { employeeFormModal, employeesListScreen } from './screens/index.ts'
+import { employeeFormModal, employeesListScreen, rosterScreen } from './screens/index.ts'
 import type { EmployeeFormValues } from './screens/index.ts'
-import { leavesScreen, rosterScreen } from './screens.tsx'
+import { leavesScreen } from './screens.tsx'
 
 const errors = (result: unknown, _: Translator) => resultErrors(result, _, 'hr_backend.error.invalid')
 
@@ -45,6 +45,20 @@ const employeeValues = (values: Record<string, unknown> = {}): EmployeeWriteValu
 const employeeListPath = (url: URL): string => inLocale(url, '/admin/hr')
 const employeeModalPath = (url: URL, edit?: string): string =>
   inLocale(url, edit ? `/admin/hr?edit=${encodeURIComponent(edit)}` : '/admin/hr?create=1')
+
+const rosterPath = (url: URL, branchId?: string, weekStart?: string): string =>
+  inLocale(
+    url,
+    branchId && weekStart
+      ? `/admin/hr/roster?branch=${encodeURIComponent(branchId)}&week=${encodeURIComponent(weekStart)}`
+      : '/admin/hr/roster',
+  )
+
+const rosterWorkflowPath = (url: URL, roster: AnyRow, branchId: string, weekStart: string): string =>
+  inLocale(
+    url,
+    `/admin/hr/roster?id=${encodeURIComponent(String(roster.id))}&version=${encodeURIComponent(String(roster.version))}&branch=${encodeURIComponent(branchId)}&week=${encodeURIComponent(weekStart)}`,
+  )
 
 const branchesOf = async (ctx: ServeContext, url: URL, req: Req): Promise<Array<AnyRow>> => {
   const scope = await ctx.scopeOf(url, req)
@@ -229,6 +243,7 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hr/roster':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       let branchId = url.searchParams.get('branch') ?? '',
         weekStart = url.searchParams.get('week') ?? ''
@@ -253,10 +268,7 @@ export const routes: Record<string, RouteEntry> = {
                   req,
                 )
               : await ctx.call('hr.roster.generate', { branchId, weekStart }, url, req)
-        if ((result as { ok?: boolean }).ok)
-          return seeOther(
-            `/admin/hr/roster?branch=${encodeURIComponent(branchId)}&week=${encodeURIComponent(weekStart)}`,
-          )
+        if ((result as { ok?: boolean }).ok) return seeOther(rosterPath(url, branchId, weekStart))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows =
         branchId && weekStart
@@ -264,7 +276,20 @@ export const routes: Record<string, RouteEntry> = {
           : []
       return adminPage(ctx, url, req, {
         title: 'hr_backend.roster.title',
-        body: (_, frame) => rosterScreen(_, frame, rows, branchId, weekStart, errors(result, _)),
+        active: '/admin/hr/roster',
+        body: (_, frame) =>
+          rosterScreen(
+            _,
+            {
+              action: rosterPath(url),
+              branchId,
+              errors: errors(result, _),
+              rows,
+              weekStart,
+              workflowAction: (roster) => rosterWorkflowPath(url, roster, branchId, weekStart),
+            },
+            frame,
+          ),
       })
     },
   '/admin/hr/leaves':

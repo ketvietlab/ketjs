@@ -164,11 +164,13 @@ export {
   employeeFormScreen,
   employeeListColumns,
   employeesListScreen,
+  rosterScreen,
 } from './screens/index.ts'
 export type {
   EmployeeFormScreenOptions,
   EmployeeFormValues,
   EmployeeListRow,
   EmployeesListScreenOptions,
+  RosterScreenOptions,
 } from './screens/index.ts'
-export { leavesScreen, rosterScreen } from './screens.tsx'
+export { leavesScreen } from './screens.tsx'

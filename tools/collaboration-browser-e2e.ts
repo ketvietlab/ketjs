@@ -484,8 +484,8 @@ try {
     },
     {
       name: 'accounting-customer-invoices',
-      path: '/admin/accounting/customer-invoices?lang=vi',
-      ready: `document.querySelector('#customer-invoice-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      path: '/admin/accounting/customer-invoices/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#customer-invoice-create-form')`,
     },
     {
       name: 'accounting-vendor-bills',
@@ -3193,20 +3193,19 @@ try {
         await evaluate(
           cdp,
           `({
-        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
         form: Boolean(document.querySelector('#customer-invoice-create-form')),
-        invoice: document.querySelector('[data-ui="table"]')?.textContent.includes('invoice-collab'),
         chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
         rowsAtLeast28: Array.from(document.querySelectorAll('#customer-invoice-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
         overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
       })`,
         ),
-        { workspace: true, form: true, invoice: true, chatter: false, rowsAtLeast28: true, overflow: false },
+        { formPage: true, form: true, chatter: false, rowsAtLeast28: true, overflow: false },
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts)
         await capture(cdp, join(customerInvoicesEvidenceDir, 'customer-invoices-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/customer-invoices?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/customer-invoices/new?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#customer-invoice-create-form') && document.documentElement.lang === 'en'`,
@@ -3228,7 +3227,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/customer-invoices?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/customer-invoices/new?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#customer-invoice-create-form') && document.documentElement.lang === '${lang}'`,

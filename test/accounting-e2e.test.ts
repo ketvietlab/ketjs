@@ -144,7 +144,6 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     // dialog rather than a select the reader scrolls.
     if (
       [
-        '/admin/accounting/customer-invoices',
         '/admin/accounting/vendor-bills',
         '/admin/accounting/payments',
         '/admin/accounting/general-ledger',
@@ -170,8 +169,9 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/customer-invoices') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="customer-invoice-create-form"/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.match(html, /href="\/admin\/accounting\/customer-invoices\/new\?returnTo=/)
+      assert.doesNotMatch(html, /id="customer-invoice-create-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/entries') {
@@ -1045,7 +1045,7 @@ test('e2e accounting: an invoice form no longer asks which accounts to post to',
 
   // Neither account field is required, and each says where its value comes from.
   const form = await (
-    await e2e.client.get('/admin/accounting/customer-invoices?lang=vi', {
+    await e2e.client.get('/admin/accounting/customer-invoices/new?lang=vi', {
       headers: { accept: 'text/html' },
     })
   ).text()

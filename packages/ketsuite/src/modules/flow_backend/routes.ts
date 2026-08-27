@@ -35,6 +35,7 @@ import {
   mapScreen,
   crossProjectScreen,
   pagesScreen,
+  projectPageCreateFields,
   pageDetailScreen,
   allPagesScreen,
   projectCreateModal,
@@ -443,27 +444,6 @@ const crossProjectIssues =
     })
   }
 
-/**
- * The "new page" form: a title, and optionally somewhere to put it.
- *
- * The parent choices are a plain select over the pages already in the project
- * rather than a relation picker — a wiki is small enough to read in a list,
- * and the picker would be a second island for no gain.
- */
-const pageFields = (_: Translator, pages: readonly AnyRow[]): FormField[] => [
-  { name: 'title', label: _('flow_backend.pages.name'), value: '', required: true },
-  {
-    name: 'parentPageId',
-    label: _('flow_backend.pages.parent'),
-    type: 'select',
-    value: '',
-    options: [
-      { value: '', label: _('flow_backend.pages.root') },
-      ...pages.map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
-    ],
-  },
-]
-
 /** The move form's one control: every page except this one and its descendants. */
 const parentField = (_: Translator, pages: readonly AnyRow[], pageId: string, current: string): FormField => {
   // A page cannot move under itself or under anything below it. The server
@@ -640,6 +620,36 @@ const projectIssueCreateFailureHref = (
   target.searchParams.set('create', '1')
   if (errors.length) target.searchParams.set('invalid', '1')
   for (const name of ['title', 'columnId', 'priority'] as const) {
+    const value = values[name]
+    if (value) target.searchParams.set(name, value)
+  }
+  for (const error of errors) target.searchParams.append('error', error)
+  return `${target.pathname}${target.search}`
+}
+
+const projectPagesCollection = (url: URL, projectId: string): string => {
+  const target = new URL(url)
+  target.pathname = `/admin/flow/projects/${encodeURIComponent(projectId)}/pages`
+  for (const key of ['create', 'invalid', 'error', 'id', 'idempotencyKey', 'title', 'parentPageId'])
+    target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const projectPageCreateHref = (url: URL, projectId: string): string => {
+  const target = new URL(projectPagesCollection(url, projectId), url)
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const projectPageCreateFailureHref = (
+  url: URL,
+  projectId: string,
+  values: Record<string, string>,
+  errors: readonly string[],
+): string => {
+  const target = new URL(projectPageCreateHref(url, projectId), url)
+  if (errors.length) target.searchParams.set('invalid', '1')
+  for (const name of ['id', 'idempotencyKey', 'title', 'parentPageId']) {
     const value = values[name]
     if (value) target.searchParams.set(name, value)
   }
@@ -1394,10 +1404,10 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       const refused = refusePost(req)
       if (refused) return refused
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const projectId = String(params.id)
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const endpoint = `/admin/flow/projects/${projectId}/pages`
-      let errors: string[] = []
+      const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/pages`
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'save') {
@@ -1408,13 +1418,14 @@ export const routes: Record<string, RouteEntry> = {
               projectId,
               title: form.title ?? '',
               parentPageId: form.parentPageId || null,
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
-          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${String(result.id)}`))
-          errors = errorsOf(result, _)
+          if (result.ok)
+            return seeOther(inLocale(url, `/admin/flow/pages/${encodeURIComponent(String(result.id))}`))
+          return seeOther(projectPageCreateFailureHref(url, projectId, form, errorsOf(result, _)))
         }
       }
       const project = (await ctx.call('flow.project.get', { id: projectId }, url, req)) as AnyRow | null
@@ -1429,8 +1440,29 @@ export const routes: Record<string, RouteEntry> = {
         title: String(project.name ?? ''),
         translate: false,
         active: endpoint,
-        body: (t, frame) =>
-          pagesScreen(t, frame, String(project.name ?? ''), endpoint, pages, pageFields(t, pages), errors),
+        body: (t, frame) => {
+          const errors = url.searchParams.getAll('error')
+          return pagesScreen(t, frame, {
+            projectName: String(project.name ?? ''),
+            pages,
+            createHref: projectPageCreateHref(url, projectId),
+            createFields: projectPageCreateFields(t, pages, {
+              title: url.searchParams.get('title') ?? '',
+              parentPageId: url.searchParams.get('parentPageId') ?? '',
+            }),
+            createAction: projectPageCreateHref(url, projectId),
+            closeHref: projectPagesCollection(url, projectId),
+            locale: localeQuery(url),
+            createOpen: url.searchParams.get('create') === '1',
+            errors: errors.length
+              ? errors
+              : url.searchParams.get('invalid') === '1'
+                ? [t('flow_backend.error.invalid')]
+                : undefined,
+            recordId: url.searchParams.get('id') || randomUUID(),
+            idempotencyKey: url.searchParams.get('idempotencyKey') || randomUUID(),
+          })
+        },
       })
     },
 

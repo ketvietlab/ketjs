@@ -2,7 +2,6 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   Breadcrumbs,
-  DocTree,
   Framed,
   RecordForm,
   RecordList,
@@ -14,68 +13,6 @@ import {
 import type { FormField, Frame } from '../../../ui/index.ts'
 import type { AnyRow } from './shared.tsx'
 import { empty } from './shared.tsx'
-
-/**
- * The project's documents, as the hierarchy they form.
- *
- * `DocTree` nests the markup rather than indenting a flat list, so a page that
- * sits under another says so to a screen reader and not only to the eye. Rows
- * arrive flat from `page.list` — there is no recursive read — and the tree is
- * assembled from `parentPageId` inside the component.
- */
-export const pagesScreen = (
-  _: Translator,
-  frame: Frame,
-  projectName: string,
-  endpoint: string,
-  pages: readonly AnyRow[],
-  fields: FormField[],
-  errors: string[] = [],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={projectName}
-    frame={frame}
-    body={stack([
-      <Surface
-        body={
-          <RecordForm
-            action={endpoint}
-            hidden={{ action: 'save' }}
-            fields={fields}
-            errors={errors}
-            submit={_('flow_backend.pages.create')}
-            submitVariant="primary"
-          />
-        }
-      />,
-      pages.length ? (
-        <Section
-          title={_('flow_backend.pages.title')}
-          body={
-            <DocTree
-              rows={pages}
-              id={(page) => String(page.id)}
-              parent={(page) => (page.parentPageId ? String(page.parentPageId) : null)}
-              title={(page) => String(page.title ?? '')}
-              href={(page) => `/admin/flow/pages/${String(page.id)}`}
-              summary={(page) =>
-                String(page.previewText ?? '').slice(0, 140) || _('flow_backend.pages.emptyDocument')
-              }
-              count={(page) =>
-                Number(page.childCount ?? 0) > 0
-                  ? _('flow_backend.pages.childCount', { count: Number(page.childCount) })
-                  : null
-              }
-            />
-          }
-        />
-      ) : (
-        empty(_)
-      ),
-    ])}
-  />
-)
 
 /**
  * Every document the reader can see, across projects.

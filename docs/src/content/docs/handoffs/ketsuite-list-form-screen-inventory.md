@@ -59,8 +59,9 @@ The current snapshot contains **173 stable work-item IDs** with no duplicates.
 
 ### Accounting lane
 
-Structure debt: `account_backend` still has root-level `*-screen.tsx` files plus `screens.tsx`; move each
-assigned renderer into `screens/` and finish with a barrel. `account_partner_backend` follows the same rule.
+Structure debt: the customer-invoice root renderer moved into `account_backend/screens/` in Wave 18;
+vendor bills, shared document detail, payments and report renderers remain to be split. `account_partner_backend`
+follows the same rule.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
 |---|---|---|---|---|---|---|---|
@@ -71,7 +72,7 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 | ACC-05 | done | Payment terms | `/admin/accounting/terms` | `screens/payment-terms-list.tsx`, `screens/payment-term-form.tsx` | Split | no | Curie |
 | ACC-06 | done | Accounting defaults | `/admin/accounting/defaults` | `screens/account-defaults.tsx::accountDefaultsScreen` | FormPage | no | Curie |
 | ACC-07 | done | Journal entries | `/admin/accounting/entries` | `screens/journal-entries-list.tsx`, `screens/journal-entry-create.tsx` | Split | list/new: no | Curie |
-| ACC-08 | ready | Customer invoices | `/admin/accounting/customer-invoices` | `customerInvoicesScreen` | Split | list/new: no | — |
+| ACC-08 | done | Customer invoices | `/admin/accounting/customer-invoices`, `/admin/accounting/customer-invoices/new` | `screens/customer-invoices-list.tsx`, `screens/customer-invoice-form.tsx` | Split | list/new: no | Curie |
 | ACC-09 | ready | Vendor bills | `/admin/accounting/vendor-bills` | `vendorBillsScreen` | Split | list/new: no | — |
 | ACC-10 | ready | Shared accounting document detail | `/admin/accounting/entries/{id}`, `/customer-invoices/{id}`, `/vendor-bills/{id}` | `moveDetailScreen` | FormPage | `account_mail_backend` | — |
 | ACC-11 | ready | Payments | `/admin/accounting/payments` | `paymentsScreen` | Split | no | — |
@@ -167,8 +168,9 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 
 ### Flow lane
 
-`flow_backend/screens/` exists. Before parallel work, split multi-renderer `pages.tsx` and `epics.tsx` into
-leaf files; generated Live Doc endpoints belong to the detail renderer that consumes them.
+`flow_backend/screens/` exists. Wave 18 moved the project tree to its own leaf; `pages.tsx` now contains only
+the all-pages and page-detail renderers. Split those and `epics.tsx` one assignment at a time; generated Live
+Doc endpoints belong to the detail renderer that consumes them.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
@@ -177,7 +179,7 @@ leaf files; generated Live Doc endpoints belong to the detail renderer that cons
 | FLOW-03 | done | My/all cross-project issues | `/admin/flow/mine`, `/admin/flow/issues` | `screens/my-work.tsx::crossProjectScreen` | ListPage | Huygens |
 | FLOW-04 | done | Project issues | `/admin/flow/projects/{id}/issues` | `screens/issues.tsx::issuesScreen` | Split | Huygens |
 | FLOW-05 | done | Issue detail | `/admin/flow/issues/{id}` | `screens/issue-detail.tsx::issueDetailScreen` | FormPage/Specialized | Huygens |
-| FLOW-06 | ready | Project page tree | `/admin/flow/projects/{id}/pages` | `screens/pages.tsx::pagesScreen` | Specialized | — |
+| FLOW-06 | done | Project page tree | `/admin/flow/projects/{id}/pages` | `screens/project-pages.tsx::pagesScreen` | Specialized | Huygens |
 | FLOW-07 | ready | All pages | `/admin/flow/pages` | `screens/pages.tsx::allPagesScreen` | ListPage | — |
 | FLOW-08 | ready | Page live editor | `/admin/flow/pages/{id}` | `screens/pages.tsx::pageDetailScreen` | Specialized | — |
 | FLOW-09 | ready | Project epics | `/admin/flow/projects/{id}/epics` | `screens/epics.tsx::epicsScreen` | Specialized | — |
@@ -202,14 +204,14 @@ the barrel owns public exports, and the empty root `screens.tsx` no longer exist
 
 ### HR and attendance lanes
 
-Structure debt: `hr_backend/screens.tsx` now contains only roster and leave renderers after Employees moved
-to `hr_backend/screens/`; continue the incremental split. `attendance_backend` still starts from monolithic
+Structure debt: `hr_backend/screens.tsx` now contains only leave approvals after Employees and Weekly Roster
+moved to `hr_backend/screens/`; HR-03 removes the final legacy file. `attendance_backend` still starts from monolithic
 `screens.tsx` and creates its own folder one assignment at a time.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
 | HR-01 | hr | done | Employees | `/admin/hr` | `screens/employees-list.tsx`, `screens/employee-form.tsx` | Split | Kant |
-| HR-02 | hr | ready | Weekly roster | `/admin/hr/roster` | `rosterScreen` | Specialized | — |
+| HR-02 | hr | done | Weekly roster | `/admin/hr/roster` | `screens/roster.tsx::rosterScreen` | Specialized | Kant |
 | HR-03 | hr | ready | Leave approvals | `/admin/hr/leaves` | `leavesScreen` | ListPage | — |
 | ATT-01 | attendance | ready | My work | `/my/work` | `myWorkScreen` | Specialized | — |
 | ATT-02 | attendance | keep | Attendance kiosk | `/attendance/kiosk/{secret}` | `kioskScreen` | Specialized public kiosk | — |
@@ -961,6 +963,24 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   Collaboration 94/94 and Identity 103 passed with the existing PostgreSQL-only test skipped locally. Browser
   screenshots remain deferred with Wave 16 until the in-app tab is manually returned from its generated
   network-error page to localhost.
+
+### Wave 18 — ACC-08, FLOW-06 and HR-02
+
+- Customer Invoices is now a `ListPage` with URL-driven search, customer, lifecycle, payment and document-type
+  filters, totals and paging. Its 17-field create workflow remains a full `/new` `FormPage` because it is a
+  complete accounting document rather than a short contextual action. Locale, CSRF, safe return state,
+  relation-backed values, rejected input, legacy collection POST and retry-stable invoice identity remain.
+- Flow Project Pages remains a Specialized hierarchical document tree. Its two-field create action now opens
+  in a URL-owned dialog over that tree, preserving parent selection, locale, CSRF, rejected values, record ID
+  and idempotency key. The audit also makes unsupported PUT requests return 405 instead of falling through to
+  the GET renderer. The project-tree renderer moved from the shared pages file into `screens/project-pages.tsx`.
+- HR Weekly Roster remains a Specialized planning workflow: branch/week generation, timezone-aware shifts and
+  draft/publish/reopen lifecycle stay together. Locale, CSRF, rejected generation values, relation labels and
+  retry idempotency remain; its renderer moved into `screens/roster.tsx`, leaving only HR-03 in the legacy file.
+- Integrated focused validation passes 28/28 tests. The affected CI groups pass Accounting 86/86,
+  Collaboration 97/97 and Identity 107 passed with one existing PostgreSQL-only test skipped locally. Browser
+  QA covers all three surfaces at desktop and 390 px: the invoice controls measure 302 px, roster inputs 308 px,
+  the Flow dialog fills the 390 px viewport, and none of the pages has document-level horizontal overflow.
 
 ### Modal consolidation through Wave 14 — PR 253
 

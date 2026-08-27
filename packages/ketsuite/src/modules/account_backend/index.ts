@@ -11,6 +11,7 @@ import {
   JOURNAL_TYPES,
   MOVE_STATES,
   PARTNER_TYPES,
+  PAYMENT_STATES,
   PAYMENT_TERM_DELAY_TYPES,
   PAYMENT_TERM_VALUES,
   PAYMENT_TYPES,
@@ -22,6 +23,8 @@ import {
   accountFormModal,
   accountingOverviewScreen,
   accountsListScreen,
+  customerInvoiceFormScreen,
+  customerInvoicesListScreen,
   journalEntriesListScreen,
   journalEntryCreateModal,
   journalFormModal,
@@ -35,7 +38,6 @@ import {
   taxFormScreen,
   taxesListScreen,
 } from './screens/index.ts'
-import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
@@ -175,6 +177,35 @@ const journalEntryListPath = (url: URL): string => {
 const journalEntryModalPath = (url: URL): string => {
   const target = new URL(journalEntryListPath(url), 'http://ket.local')
   target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const CUSTOMER_INVOICE_TYPES = ['out_invoice', 'out_refund', 'out_receipt'] as const
+
+const customerInvoiceListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/customer-invoices'
+  for (const key of ['create', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safeCustomerInvoiceReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/customer-invoices${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' &&
+    candidate.pathname === '/admin/accounting/customer-invoices'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const customerInvoiceFormPath = (url: URL, returnTo: string): string => {
+  const target = new URL('/admin/accounting/customer-invoices/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
   return `${target.pathname}${target.search}`
 }
 
@@ -666,6 +697,7 @@ const invoiceFields = async (
   _: Translator,
   data: Awaited<ReturnType<typeof common>>,
   types: readonly string[],
+  values?: Record<string, string>,
 ): Promise<FormField[]> => {
   const customer = types.every((type) => type.startsWith('out_'))
   const journals = data.journals.filter((journal) => journal.type === (customer ? 'sale' : 'purchase'))
@@ -708,6 +740,7 @@ const invoiceFields = async (
         fieldLabel: _('account_backend.field.partnerId'),
         title: _('account_backend.relation.partners'),
         required: true,
+        value: values?.partnerId,
       }),
       required: true,
     },
@@ -764,6 +797,7 @@ const invoiceFields = async (
         accounts: accountOptions(lineAccounts),
         accountTypes: customer ? ['income*'] : ['expense*'],
         allowEmpty: true,
+        value: values?.lineAccountId,
       }),
     },
     {
@@ -779,6 +813,7 @@ const invoiceFields = async (
         accounts: accountOptions(counterpartAccounts),
         accountTypes: [customer ? 'asset_receivable' : 'liability_payable'],
         allowEmpty: true,
+        value: values?.counterpartAccountId,
       }),
     },
     { name: 'taxId', label: _('account_backend.field.taxId'), type: 'select', options: choices(taxes, true) },
@@ -802,6 +837,7 @@ const invoiceFields = async (
         label: _('account_backend.field.taxAccountId'),
         accounts: accountOptions(data.accounts),
         allowEmpty: true,
+        value: values?.taxAccountId,
       }),
       help: _('account_backend.field.taxAccountIdHint'),
     },
@@ -819,7 +855,7 @@ const createInvoice = async (
   const taxIds = [form.taxId, form.secondTaxId].filter(
     (id, at, all): id is string => Boolean(id) && all.indexOf(id) === at,
   )
-  const id = randomUUID()
+  const id = form.id || randomUUID()
   const result = await ctx.call(
     'account.createInvoice',
     {
@@ -846,7 +882,8 @@ const createInvoice = async (
     url,
     req,
   )
-  if (!succeeded(result)) return { rejected: rejection(result, ctx.translate(ctx.localeOf(url, req)), form) }
+  if (!succeeded(result))
+    return { rejected: rejection(result, ctx.translate(ctx.localeOf(url, req)), { ...form, id }) }
   // A new invoice is a draft that still has to be posted, so the reader goes to it
   // rather than back to a list where it is one unnamed row among many.
   const opened = `${encodeURIComponent(id)}${localeQuery(url)}`
@@ -2198,31 +2235,165 @@ export default defineModule({
     '/admin/accounting/customer-invoices':
       (ctx): Route =>
       async (url, req) => {
-        const data = await common(ctx, url, req)
         let rejected: Rejection | undefined
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const outcome = await createInvoice(ctx, url, req)
           if ('done' in outcome) return outcome.done
           rejected = outcome.rejected
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call(
+        const data = await common(ctx, url, req)
+        if (rejected)
+          return adminPage(ctx, url, req, {
+            title: 'account_backend.customerInvoice.create.title',
+            body: async (_, frame) =>
+              customerInvoiceFormScreen(_, {
+                frame,
+                action: customerInvoiceListPath(url),
+                cancelHref: customerInvoiceListPath(url),
+                idempotencyKey: rejected.values.id ?? randomUUID(),
+                fields: restore(
+                  await invoiceFields(ctx, url, req, _, data, CUSTOMER_INVOICE_TYPES, rejected.values),
+                  rejected,
+                ),
+                errors: rejected.messages,
+              }),
+          })
+        const all = (await ctx.call(
           'account.listMoves',
-          { moveTypes: ['out_invoice', 'out_refund', 'out_receipt'], limit: LIST_PAGE },
+          { moveTypes: CUSTOMER_INVOICE_TYPES, limit: LIST_PAGE },
           url,
           req,
         )) as AnyRow[]
+        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
+          ? url.searchParams.get('state')
+          : null
+        const payment = PAYMENT_STATES.includes(String(url.searchParams.get('payment')) as never)
+          ? url.searchParams.get('payment')
+          : null
+        const type = CUSTOMER_INVOICE_TYPES.includes(String(url.searchParams.get('type')) as never)
+          ? url.searchParams.get('type')
+          : null
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const partnerLabels = new Map(
+          data.partners.map((partner) => [String(partner.id), String(partner.name)]),
+        )
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          if (state && row.state !== state) return false
+          if (payment && row.paymentState !== payment) return false
+          if (type && row.moveType !== type) return false
+          return (
+            !needle ||
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const returnTo = customerInvoiceListPath(url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.customerInvoices.title',
+          body: (_, frame) =>
+            customerInvoicesListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.customerInvoices.title'),
+                    keep: {
+                      ...(state ? { state } : {}),
+                      ...(payment ? { payment } : {}),
+                      ...(type ? { type } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(state
+                        ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
+                        : []),
+                      ...(payment
+                        ? [
+                            {
+                              label: labelOf(_, 'paymentState', payment),
+                              without: withParam(url, 'payment', null),
+                            },
+                          ]
+                        : []),
+                      ...(type
+                        ? [{ label: labelOf(_, 'moveType', type), without: withParam(url, 'type', null) }]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          ...MOVE_STATES.map((value) => ({
+                            id: `state:${value}`,
+                            label: labelOf(_, 'moveState', value),
+                            path: withParam(url, 'state', state === value ? null : value),
+                            active: state === value,
+                          })),
+                          ...PAYMENT_STATES.map((value) => ({
+                            id: `payment:${value}`,
+                            label: labelOf(_, 'paymentState', value),
+                            path: withParam(url, 'payment', payment === value ? null : value),
+                            active: payment === value,
+                          })),
+                          ...CUSTOMER_INVOICE_TYPES.map((value) => ({
+                            id: `type:${value}`,
+                            label: labelOf(_, 'moveType', value),
+                            path: withParam(url, 'type', type === value ? null : value),
+                            active: type === value,
+                          })),
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, rows.length, matching.length),
+                },
+              },
+              rows,
+              createHref: customerInvoiceFormPath(url, returnTo),
+              rowHref: (row) =>
+                `/admin/accounting/customer-invoices/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
+              partnerLabel: (row) => partnerLabels.get(String(row.partnerId)) ?? '—',
+              summary: {
+                total: all.length,
+                draft: all.filter((row) => row.state === 'draft').length,
+                posted: all.filter((row) => row.state === 'posted').length,
+                unpaid: all.filter((row) => row.paymentState === 'not_paid').length,
+              },
+            }),
+        })
+      },
+    '/admin/accounting/customer-invoices/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const outcome = await createInvoice(ctx, url, req)
+          if ('done' in outcome) return outcome.done
+          rejected = outcome.rejected
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const returnTo = safeCustomerInvoiceReturnTo(url)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.customerInvoice.create.title',
           body: async (_, frame) =>
-            customerInvoicesScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/customer-invoices${localeQuery(url)}`,
+            customerInvoiceFormScreen(_, {
+              frame,
+              action: customerInvoiceFormPath(url, returnTo),
+              cancelHref: returnTo,
+              idempotencyKey: rejected?.values.id ?? randomUUID(),
               fields: restore(
-                await invoiceFields(ctx, url, req, _, data, ['out_invoice', 'out_refund', 'out_receipt']),
+                await invoiceFields(ctx, url, req, _, data, CUSTOMER_INVOICE_TYPES, rejected?.values),
                 rejected,
               ),
-              rows,
-              locale: localeQuery(url),
               errors: rejected?.messages,
             }),
         })

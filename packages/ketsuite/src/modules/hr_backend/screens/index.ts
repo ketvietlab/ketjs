@@ -11,3 +11,4 @@ export {
   type EmployeesListScreenOptions,
   employeesListScreen,
 } from './employees-list.tsx'
+export { rosterScreen, type RosterScreenOptions } from './roster.tsx'
