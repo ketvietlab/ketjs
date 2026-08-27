@@ -12,12 +12,10 @@ import {
   RecordActions,
   Section,
   stack,
-} from '../../ui/index.ts'
-import type { Frame } from '../../ui/index.ts'
-import { localized } from '../backend/screen.ts'
-
-import type { CatalogRow, DivisionRow } from './screens/index.ts'
-export type { CatalogRow, DivisionRow } from './screens/index.ts'
+} from '../../../ui/index.ts'
+import type { Frame } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
+import type { CatalogRow, DivisionRow } from './types.ts'
 
 export const countryScreen = (
   _: Translator,
@@ -32,8 +30,9 @@ export const countryScreen = (
   locale = '',
 ): TemplateResult => {
   const countryName = options.countryCode === 'VN' ? _('address_backend.country.VN') : options.countryCode
+  const countryCode = encodeURIComponent(options.countryCode)
   const back = options.parent
-    ? localized(`/admin/addresses/${options.countryCode}`, locale)
+    ? localized(`/admin/addresses/${countryCode}`, locale)
     : localized('/admin/addresses', locale)
   return (
     <Framed
@@ -46,7 +45,7 @@ export const countryScreen = (
           ...(!options.status?.installed
             ? [
                 <RecordActions
-                  action={localized(`/admin/addresses/${options.countryCode}/install`, locale)}
+                  action={localized(`/admin/addresses/${countryCode}/install`, locale)}
                   actions={[
                     {
                       value: options.status?.version ?? '2025-07-01',
@@ -102,7 +101,7 @@ export const countryScreen = (
                           linkButton({
                             label: row.officialName,
                             href: localized(
-                              `/admin/addresses/${options.countryCode}?parentId=${encodeURIComponent(row.id)}`,
+                              `/admin/addresses/${countryCode}?parentId=${encodeURIComponent(row.id)}`,
                               locale,
                             ),
                             variant: 'tertiary',

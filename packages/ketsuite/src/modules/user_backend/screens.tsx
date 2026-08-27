@@ -5,71 +5,19 @@ import {
   code,
   Framed,
   inline,
-  Notice,
   person,
   RecordForm,
   Section,
   stack,
   Surface,
 } from '../../ui/index.ts'
-import type { FormOption, Frame } from '../../ui/index.ts'
+import type { Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
 
 import { sessionsScreen } from './screens/index.ts'
 import type { SessionRow, UserRow } from './screens/index.ts'
 
 export type { PermissionRow, RoleRow, SessionRow, UserRow } from './screens/index.ts'
-
-export const presetsScreen = (
-  _: Translator,
-  modules: FormOption[],
-  frame: Frame,
-  locale = '',
-  result?: string,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('user_backend.presets.title')}
-    frame={frame}
-    body={stack([
-      ...(result ? [<Notice tone="positive" title={_('user_backend.presets.done')} message={result} />] : []),
-      <Section
-        title={_('user_backend.presets.apply')}
-        description={_('user_backend.presets.hint')}
-        body={
-          <Surface
-            body={
-              <RecordForm
-                action={localized('/admin/permission-presets', locale)}
-                submit={_('user_backend.action.applyPreset')}
-                submitVariant="primary"
-                fields={[
-                  {
-                    name: 'module',
-                    label: _('user_backend.presets.module'),
-                    type: 'select',
-                    options: modules,
-                    required: true,
-                  },
-                  {
-                    name: 'level',
-                    label: _('user_backend.presets.level'),
-                    type: 'select',
-                    options: [
-                      { value: 'user', label: _('user_backend.presets.user') },
-                      { value: 'manager', label: _('user_backend.presets.manager') },
-                    ],
-                    required: true,
-                  },
-                ]}
-              />
-            }
-          />
-        }
-      />,
-    ])}
-  />
-)
 
 export const profileScreen = (
   _: Translator,

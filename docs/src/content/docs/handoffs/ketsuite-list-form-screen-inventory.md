@@ -232,8 +232,8 @@ routed Company renderer now lives in `company_backend/screens/` and the former r
 
 ### User and authentication lanes
 
-Structure debt: Waves 25–28 created `user_backend/screens/` with shared types, users/roles lists and forms, and
-shared session leaves. Move presets and profile incrementally; USER-06 reuses
+Structure debt: Waves 25–29 created `user_backend/screens/` with shared types, users/roles lists and forms,
+permission presets, and shared session leaves. Move profile incrementally; USER-06 reuses
 `screens/sessions.tsx`. The public login renderer is a separate user module surface and is intentionally not
 forced into FormPage.
 
@@ -243,21 +243,21 @@ forced into FormPage.
 | USER-02 | user-backend | done | User create/detail/access | `/admin/users/new`, `/admin/users/{id}` | `screens/user-form.tsx::userFormScreen`, `screens/sessions.tsx::sessionsScreen` | FormPage | Codex |
 | USER-03 | user-backend | done | Roles | `/admin/roles` | `screens/roles-list.tsx::rolesScreen` | ListPage | Codex |
 | USER-04 | user-backend | done | Role create/detail | `/admin/roles/new`, `/admin/roles/{id}` | `screens/role-form.tsx::roleScreen` | FormPage | Codex |
-| USER-05 | user-backend | ready | Permission presets | `/admin/permission-presets` | `presetsScreen` | FormPage/Specialized | — |
+| USER-05 | user-backend | done | Permission presets | `/admin/permission-presets` | `screens/presets-form.tsx::presetsScreen` | FormPage | Codex |
 | USER-06 | user-backend | ready | Profile/security/preferences | `/admin/profile` | `profileScreen`, `sessionsScreen` | FormPage | — |
 | AUTH-01 | user | keep | Login | `/login` | `user/screens.tsx::loginScreen` | Specialized public auth | — |
 
 ### Address, activity, and calendar lanes
 
-Wave 28 removed the Activity root `screens.tsx` and started the Address split. The country browser remains in
-the Address root until ADDRESS-02 moves; Calendar still needs its first module-local screen leaf.
+Wave 29 completed the Address split and removed both Address and Calendar root `screens.tsx` files. Their
+routed renderers now live in focused module-local leaves.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
 | ADDRESS-01 | address | done | Address catalogs | `/admin/addresses` | `screens/catalogs-list.tsx::catalogsScreen` | ListPage | Codex |
-| ADDRESS-02 | address | ready | Country/division browser | `/admin/addresses/{countryCode}` | `countryScreen` | Specialized | — |
+| ADDRESS-02 | address | done | Country/division browser | `/admin/addresses/{countryCode}` | `screens/country-browser.tsx::countryScreen` | Specialized | Codex |
 | ACTIVITY-01 | activity | done | Activities/to-do queue | `/admin/activities` | `screens/activities-list.tsx::activitiesScreen` | ListPage | Codex |
-| CALENDAR-01 | calendar | ready | Calendar | `/admin/calendar` | `calendarScreen` | Specialized | — |
+| CALENDAR-01 | calendar | done | Calendar | `/admin/calendar` | `screens/calendar.tsx::calendarScreen` | Specialized | Codex |
 
 ### Loyalty lane
 
@@ -1186,6 +1186,19 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   `screens/activities-list.tsx`.
 - Wave 28 follows the CI-first rule: source and focused test changes are pushed without local execution,
   formatter or browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 29 — USER-05, ADDRESS-02 and CALENDAR-01
+
+- Permission Presets now uses `FormPage` with one external apply action. The route requires an explicit save
+  command, preserves rejected module/level selections, keeps locale and uses PRG for the success notice. Its
+  renderer moved to `screens/presets-form.tsx`.
+- Country/Division Browser remains Specialized because it is a hierarchical catalog drill-down rather than a
+  record collection. Country, division and install destinations are encoded and locale-safe; moving the renderer
+  to `screens/country-browser.tsx` removes the final Address root `screens.tsx`.
+- Calendar remains a Specialized board joint for agenda/week/month interaction. Its renderer moved to
+  `screens/calendar.tsx`, the route now declares its active navigation state, and the root `screens.tsx` is gone.
+- Wave 29 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253
 

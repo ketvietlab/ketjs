@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { presetsScreen, profileScreen } from './screens.tsx'
-import { rolesScreen, roleScreen, userFormScreen, usersScreen } from './screens/index.ts'
+import { profileScreen } from './screens.tsx'
+import { presetsScreen, rolesScreen, roleScreen, userFormScreen, usersScreen } from './screens/index.ts'
 import type {
   PermissionRow,
   RoleFormValues,
@@ -740,22 +740,44 @@ export const routes: Record<string, RouteEntry> = {
         value: name,
         label: _(`${name}.app.title`),
       }))
-      let resultText: string | undefined
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
+        if (form.action !== 'save') return text('invalid action', { status: 400 })
         const result = (await ctx.call(
           'user.applyPreset',
           { module: form.module ?? '', level: form.level ?? '' },
           url,
           req,
         )) as { ok?: boolean; granted?: number; roleId?: string }
-        if (!result.ok) return failure(ctx, url, req, result)
-        resultText = `${result.roleId}: ${result.granted ?? 0}`
+        if (!result.ok)
+          return adminPage(ctx, url, req, {
+            title: 'user_backend.presets.title',
+            active: '/admin/roles',
+            body: (_, frame) =>
+              presetsScreen(_, frame, {
+                modules,
+                action: inLocale(url, '/admin/permission-presets'),
+                values: form,
+                errors: translatedErrors(ctx, url, req, result),
+              }),
+          })
+        const next = new URL(inLocale(url, '/admin/permission-presets'), url)
+        next.searchParams.set('appliedRole', result.roleId ?? '')
+        next.searchParams.set('granted', String(result.granted ?? 0))
+        return seeOther(`${next.pathname}${next.search}`)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const appliedRole = url.searchParams.get('appliedRole')
+      const granted = url.searchParams.get('granted')
       return adminPage(ctx, url, req, {
         title: 'user_backend.presets.title',
-        body: (_, frame) => presetsScreen(_, modules, frame, localeQuery(url), resultText),
+        active: '/admin/roles',
+        body: (_, frame) =>
+          presetsScreen(_, frame, {
+            modules,
+            action: inLocale(url, '/admin/permission-presets'),
+            result: appliedRole ? `${appliedRole}: ${granted ?? 0}` : undefined,
+          }),
       })
     },
 

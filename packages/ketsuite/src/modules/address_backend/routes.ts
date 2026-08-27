@@ -1,9 +1,8 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { seeOther } from '../backend/forms.ts'
-import { countryScreen } from './screens.tsx'
-import type { CatalogRow, DivisionRow } from './screens.tsx'
-import { catalogsScreen } from './screens/index.ts'
+import { catalogsScreen, countryScreen } from './screens/index.ts'
+import type { CatalogRow, DivisionRow } from './screens/index.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 
@@ -101,6 +100,8 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as { ok?: boolean; errors?: unknown }
       if (!result.ok) return text(JSON.stringify(result.errors ?? []), { status: 400 })
-      return seeOther(inLocale(url, `/admin/addresses/${params.countryCode.toUpperCase()}`))
+      return seeOther(
+        inLocale(url, `/admin/addresses/${encodeURIComponent(params.countryCode.toUpperCase())}`),
+      )
     },
 }
