@@ -10,8 +10,8 @@ Baseline ID: `mobile-channel-wave-0-2026-08-27`.
 
 | Repository | Wave 0 source revision | Branch |
 | --- | --- | --- |
-| `ketvietlab/ketviet` | `b36ac1a06bc294543e471be758594e07920e6c9e` | `codex/mobile-channel-wave-0` |
-| `ketvietlab/ketjs` | `f012f39b54913a3ec3bd83be703a548f7374a89b` | `feat/mobile-channel-wave-0` |
+| `ketvietlab/ketviet` | `20409699e6e220843dea901c609d731a485db575` | `codex/mobile-channel-wave-0` |
+| `ketvietlab/ketjs` | `d1e703d4636d9ccfee842dd31a13ba2bac63b5e7` | `feat/mobile-channel-wave-0` |
 | `ketvietlab/ketviet-app` | `9986e08e4d3c3149605aa0ddcd77fae9d5a11aba` | `codex/mobile-channel-wave-0` |
 
 The legacy mobile OpenAPI document has 154 operations and SHA-256
