@@ -764,13 +764,16 @@ export const defineChannelRoute = <P extends ChannelProfile>(
                   req,
                 )) as { ok?: boolean } | null
                 if (claimed?.ok !== true)
-                  return envelope({
-                    status: 429,
-                    error: channelError(ctx, url, req, 'channel_api.rateLimited', {
-                      messageKey: 'channel_api.error.rateLimited',
-                      retryable: true,
-                    }),
-                  })
+                  return envelope(
+                    {
+                      status: 429,
+                      error: channelError(ctx, url, req, 'channel_api.rateLimited', {
+                        messageKey: 'channel_api.error.rateLimited',
+                        retryable: true,
+                      }),
+                    },
+                    { 'retry-after': String(Math.max(1, Math.ceil(spec.rateLimit.windowMs / 1_000))) },
+                  )
               }
             }
             if (spec.request?.query) {

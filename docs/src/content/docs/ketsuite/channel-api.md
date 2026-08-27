@@ -251,6 +251,8 @@ Mutating operations that advertise idempotency require `Idempotency-Key`. Reusin
 request body returns `409 channel_api.idempotencyConflict` instead of replaying the wrong result, and reusing
 it while the first attempt is still running returns `409 channel_api.idempotencyInFlight` with
 `retryable: true`. Invalid media types, oversized bodies, and invalid JSON are rejected at the HTTP boundary.
+Rate-limited requests return `429 channel_api.rateLimited`, set `retryable: true`, and publish a bounded
+`Retry-After` value derived from the declared route window so native clients do not invent a retry cadence.
 
 ## Retail storefront
 
