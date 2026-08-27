@@ -29,6 +29,7 @@ import {
   epicDetailScreen,
   allEpicsScreen,
   issueDetailScreen,
+  issueCreateModal,
   issuesScreen,
   ganttScreen,
   mapScreen,
@@ -552,6 +553,93 @@ const projectCreateFailureHref = (
   target.searchParams.set('create', '1')
   if (errors.length) target.searchParams.set('invalid', '1')
   for (const name of ['key', 'name', 'description', 'template', 'customColumns']) {
+    const value = values[name]
+    if (value) target.searchParams.set(name, value)
+  }
+  for (const error of errors) target.searchParams.append('error', error)
+  return `${target.pathname}${target.search}`
+}
+
+type IssueCreateValues = Record<string, string>
+
+const issueCreateValues = (values: IssueCreateValues = {}): IssueCreateValues => ({
+  title: values.title ?? '',
+  columnId: values.columnId ?? '',
+  priority: values.priority || 'normal',
+})
+
+const issueCreateFields = (
+  _: Translator,
+  columns: readonly AnyRow[],
+  values: IssueCreateValues = {},
+): FormField[] => {
+  const held = issueCreateValues(values)
+  const columnOptions = columns.map((column) => ({
+    value: String(column.id),
+    label: String(column.name),
+  }))
+  if (held.columnId && !columnOptions.some((option) => option.value === held.columnId)) {
+    columnOptions.unshift({ value: held.columnId, label: held.columnId })
+  }
+  return [
+    { name: 'title', label: _('flow_backend.field.title'), value: held.title, required: true },
+    {
+      name: 'columnId',
+      label: _('flow_backend.field.column'),
+      type: 'select',
+      value: held.columnId || String(columns[0]?.id ?? ''),
+      options: columnOptions,
+    },
+    {
+      name: 'priority',
+      label: _('flow_backend.field.priority'),
+      type: 'select',
+      value: held.priority,
+      options: ISSUE_PRIORITIES.map((value) => ({
+        value,
+        label: _.resolves(`flow.priority.${value}`) ? _(`flow.priority.${value}`) : value,
+      })),
+    },
+  ]
+}
+
+const projectIssuesCollection = (url: URL, projectId: string): string => {
+  const target = new URL(url)
+  target.pathname = `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`
+  for (const key of ['create', 'invalid', 'error', 'title', 'columnId', 'priority', 'returnTo'])
+    target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const projectIssuesReturnTo = (url: URL, projectId: string, requested?: string | null): string => {
+  const fallback = projectIssuesCollection(url, projectId)
+  if (!requested) return fallback
+  try {
+    const target = new URL(requested, url)
+    const expected = `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`
+    if (target.origin !== url.origin || target.pathname !== expected) return fallback
+    return projectIssuesCollection(target, projectId)
+  } catch {
+    return fallback
+  }
+}
+
+const projectIssueCreateHref = (url: URL, projectId: string): string => {
+  const target = new URL(projectIssuesCollection(url, projectId), url)
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const projectIssueCreateFailureHref = (
+  url: URL,
+  returnTo: string,
+  values: IssueCreateValues,
+  errors: readonly string[],
+): string => {
+  const target = new URL(returnTo, url)
+  target.searchParams.set('create', '1')
+  if (errors.length) target.searchParams.set('invalid', '1')
+  for (const name of ['title', 'columnId', 'priority'] as const) {
     const value = values[name]
     if (value) target.searchParams.set(name, value)
   }
@@ -1176,31 +1264,40 @@ export const routes: Record<string, RouteEntry> = {
       if (!project) return text('not found', { status: 404 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const columns = (await ctx.call('flow.column.list', { projectId }, url, req)) as AnyRow[]
-      let errors: string[] = []
+      let values = issueCreateValues(
+        Object.fromEntries(
+          ['title', 'columnId', 'priority']
+            .map((name) => [name, url.searchParams.get(name) ?? ''])
+            .filter(([, value]) => value),
+        ),
+      )
       if (req.method === 'POST') {
         const form = await readForm(req)
+        values = issueCreateValues(form)
+        const returnTo = projectIssuesReturnTo(url, projectId, form.returnTo)
         const result = (await ctx.call(
           'flow.issue.save',
           {
             id: randomUUID(),
             projectId,
-            columnId: form.columnId || String(columns[0]?.id ?? ''),
-            title: form.title ?? '',
-            priority: form.priority || undefined,
-            idempotencyKey: randomUUID(),
+            columnId: values.columnId || String(columns[0]?.id ?? ''),
+            title: values.title,
+            priority: values.priority || undefined,
+            idempotencyKey: form.idempotencyKey || randomUUID(),
           },
           url,
           req,
         )) as AnyRow
-        if (result.ok) return seeOther(inLocale(url, `/admin/flow/projects/${projectId}/issues`))
-        errors = errorsOf(result, _)
+        if (result.ok) return seeOther(returnTo)
+        return seeOther(projectIssueCreateFailureHref(url, returnTo, values, errorsOf(result, _)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       // The project's own fields have to be in the spec before the URL is
       // parsed: a rule naming a field the spec does not know is dropped as
       // unknown, and the filter would silently do nothing.
       const fieldDefs = (await ctx.call('flow.field.list', { projectId }, url, req)) as AnyRow[]
       const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'), fieldDefs)
-      const parsed = parseListState(spec, url)
+      const listUrl = new URL(projectIssuesCollection(url, projectId), url)
+      const parsed = parseListState(spec, listUrl)
       const state = parsed.state
       const timezone = 'UTC'
       const grouped = state.groupBy.length > 0
@@ -1218,7 +1315,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as AnyRow
       const groups = grouped
-        ? await loadListGroups(ctx, url, req, state, timezone, {
+        ? await loadListGroups(ctx, listUrl, req, state, timezone, {
             groupFunction: 'flow.issue.group',
             listFunction: 'flow.issue.list',
             listArgs: { projectId },
@@ -1228,48 +1325,47 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
+        active: `/admin/flow/projects/${projectId}/issues`,
         body: (_, frame) => {
           frame.chrome = {
             search: {
               name: 'q',
               value: state.q ?? '',
               placeholder: _('flow_backend.search.issues'),
-              keep: keepForListSearch(url),
-              facets: listFacets(_, url, state, spec),
-              menus: listMenus(_, url, state, spec),
+              keep: keepForListSearch(listUrl),
+              facets: listFacets(_, listUrl, state, spec),
+              menus: listMenus(_, listUrl, state, spec),
             },
             pager: grouped
               ? null
-              : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
+              : pager(listUrl, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
           }
-          return issuesScreen(
-            _,
-            frame,
-            String(project.name),
-            `/admin/flow/projects/${projectId}/issues`,
-            [
-              { name: 'title', label: _('flow_backend.field.title'), required: true },
-              {
-                name: 'columnId',
-                label: _('flow_backend.field.column'),
-                type: 'select',
-                options: columns.map((column) => ({ value: String(column.id), label: String(column.name) })),
-              },
-              {
-                name: 'priority',
-                label: _('flow_backend.field.priority'),
-                type: 'select',
-                value: 'normal',
-                options: ISSUE_PRIORITIES.map((value) => ({
-                  value,
-                  label: _.resolves(`flow.priority.${value}`) ? _(`flow.priority.${value}`) : value,
-                })),
-              },
-            ],
-            grouped ? [] : ((result.rows as AnyRow[]) ?? []),
+          const returnTo = projectIssuesCollection(url, projectId)
+          const workspace = issuesScreen(_, frame, {
+            projectName: String(project.name),
+            rows: grouped ? [] : ((result.rows as AnyRow[]) ?? []),
             groups,
-            errors,
-            fieldDefs,
+            fields: fieldDefs,
+            total: Number(result.total ?? 0),
+            createHref: projectIssueCreateHref(url, projectId),
+            locale: localeQuery(url),
+          })
+          if (url.searchParams.get('create') !== '1') return workspace
+          const errors = url.searchParams.getAll('error')
+          return modalWorkspace(
+            workspace,
+            issueCreateModal(_, {
+              projectName: String(project.name),
+              fields: issueCreateFields(_, columns, values),
+              action: projectIssueCreateHref(url, projectId),
+              cancelHref: returnTo,
+              idempotencyKey: randomUUID(),
+              errors: errors.length
+                ? errors
+                : url.searchParams.get('invalid') === '1'
+                  ? [_('flow_backend.error.invalid')]
+                  : undefined,
+            }),
           )
         },
       })

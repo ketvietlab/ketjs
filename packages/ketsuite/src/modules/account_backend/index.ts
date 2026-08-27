@@ -16,8 +16,8 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import { accountDefaultsScreen } from './account-defaults-screen.tsx'
 import {
+  accountDefaultsScreen,
   accountFormModal,
   accountingOverviewScreen,
   accountsListScreen,
@@ -533,6 +533,40 @@ const accountLabel = (_: Translator, rows: AnyRow[], id: unknown): string => {
   const held = rows.find((row) => String(row.id) === String(id))
   return held ? `${String(held.code)} · ${accountName(_, held)}` : String(id ?? '')
 }
+
+type AccountFieldRelation = {
+  accounts: AnyRow[]
+  accountTypes: string[]
+}
+
+/** Add the searchable account picker without losing the value restored by formState. */
+const accountRelationFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  scope: string,
+  fields: FormField[],
+  relations: Record<string, AccountFieldRelation>,
+): Promise<FormField[]> =>
+  Promise.all(
+    fields.map(async (field) => {
+      const relation = relations[field.name]
+      if (!relation) return field
+      return {
+        ...field,
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: `${scope}:${field.name}`,
+          name: field.name,
+          label: field.label,
+          value: field.value === undefined || field.value === null ? '' : String(field.value),
+          accounts: accountOptions(relation.accounts),
+          accountTypes: relation.accountTypes,
+          allowEmpty: true,
+        }),
+      }
+    }),
+  )
 
 /** The control accounts a payment can settle: receivables and payables, nothing else. */
 const CONTROL_TYPES = ['asset_receivable', 'liability_payable']
@@ -1850,6 +1884,7 @@ export default defineModule({
         let rejected: Rejection | undefined
         let rejectedCategory: Rejection | undefined
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const category = form.action === 'category'
           const result = category
@@ -1909,22 +1944,14 @@ export default defineModule({
         }
         return adminPage(ctx, url, req, {
           title: 'account_backend.defaults.title',
-          body: (_, frame) =>
-            accountDefaultsScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/defaults${localeQuery(url)}`,
-              categoryAction: categoryTarget(url.searchParams.get('editCategory')),
-              rows,
-              accountLabel: (id) => accountLabel(_, data.accounts, id),
-              editing: editingCategory,
-              categorySubmit: editingCategory
-                ? _('account_backend.action.save')
-                : _('account_backend.action.create'),
-              categoryHref: (row) => categoryTarget(row.categoryId),
-              cancelHref: `/admin/accounting/defaults${localeQuery(url)}`,
-              errors: rejected?.messages,
-              categoryErrors: rejectedCategory?.messages,
-              defaultsFields: formState(
+          body: async (_, frame) => {
+            const defaultsFields = await accountRelationFields(
+              ctx,
+              url,
+              req,
+              _,
+              'account-defaults',
+              formState(
                 [
                   {
                     name: 'incomeAccountId',
@@ -1958,8 +1985,24 @@ export default defineModule({
                 defaults,
                 rejected,
               ),
-              categoryFields: categories.length
-                ? formState(
+              {
+                incomeAccountId: { accounts: income, accountTypes: ['income', 'income_other'] },
+                expenseAccountId: {
+                  accounts: expense,
+                  accountTypes: ['expense', 'expense_other', 'expense_depreciation', 'expense_direct_cost'],
+                },
+                receivableAccountId: { accounts: receivable, accountTypes: ['asset_receivable'] },
+                payableAccountId: { accounts: payable, accountTypes: ['liability_payable'] },
+              },
+            )
+            const categoryFields = categories.length
+              ? await accountRelationFields(
+                  ctx,
+                  url,
+                  req,
+                  _,
+                  'account-category-defaults',
+                  formState(
                     [
                       {
                         name: 'categoryId',
@@ -1983,9 +2026,39 @@ export default defineModule({
                     ],
                     editingCategory,
                     rejectedCategory,
-                  )
-                : undefined,
-            }),
+                  ),
+                  {
+                    incomeAccountId: { accounts: income, accountTypes: ['income', 'income_other'] },
+                    expenseAccountId: {
+                      accounts: expense,
+                      accountTypes: [
+                        'expense',
+                        'expense_other',
+                        'expense_depreciation',
+                        'expense_direct_cost',
+                      ],
+                    },
+                  },
+                )
+              : undefined
+            return accountDefaultsScreen(_, {
+              frame: frame,
+              action: `/admin/accounting/defaults${localeQuery(url)}`,
+              categoryAction: categoryTarget(url.searchParams.get('editCategory')),
+              rows,
+              accountLabel: (id) => accountLabel(_, data.accounts, id),
+              editing: editingCategory,
+              categorySubmit: editingCategory
+                ? _('account_backend.action.save')
+                : _('account_backend.action.create'),
+              categoryHref: (row) => categoryTarget(row.categoryId),
+              cancelHref: `/admin/accounting/defaults${localeQuery(url)}`,
+              errors: rejected?.messages,
+              categoryErrors: rejectedCategory?.messages,
+              defaultsFields,
+              categoryFields,
+            })
+          },
         })
       },
     '/admin/accounting/entries':

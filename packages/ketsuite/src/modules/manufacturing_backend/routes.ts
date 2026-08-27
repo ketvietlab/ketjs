@@ -12,8 +12,10 @@ import {
   orderCreateScreen,
   orderScreen,
   ordersListScreen,
+  workCenterFormModal,
+  workCentersListScreen,
 } from './screens/index.ts'
-import { workCentersScreen } from './screens.tsx'
+import type { WorkCenterFormValues } from './screens/index.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -302,6 +304,94 @@ const bomsPage = async (
     },
   })
 
+const workCenterValues = (values: Record<string, unknown> = {}): WorkCenterFormValues => ({
+  id: values.id == null ? undefined : String(values.id),
+  code: String(values.code ?? ''),
+  name: String(values.name ?? ''),
+  capacity: String(values.capacity || '1'),
+  timeEfficiency: String(values.timeEfficiency || '100'),
+  costPerHour: String(values.costPerHour || '0'),
+})
+
+const workCenterListPath = (url: URL): string => inLocale(url, '/admin/manufacturing/work-centers')
+
+const workCenterModalPath = (url: URL, edit?: string): string =>
+  inLocale(
+    url,
+    edit
+      ? `/admin/manufacturing/work-centers?edit=${encodeURIComponent(edit)}`
+      : '/admin/manufacturing/work-centers?create=1',
+  )
+
+const saveWorkCenter = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  values: WorkCenterFormValues,
+  active: boolean,
+) =>
+  ctx.call(
+    'manufacturing.saveWorkCenter',
+    {
+      id: values.id || crypto.randomUUID(),
+      code: values.code ?? '',
+      name: values.name ?? '',
+      capacity: values.capacity || '1',
+      timeEfficiency: values.timeEfficiency || '100',
+      costPerHour: values.costPerHour || '0',
+      active,
+    },
+    url,
+    req,
+  )
+
+const workCentersPage = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  rows: AnyRow[],
+  values?: WorkCenterFormValues,
+  errors: readonly string[] = [],
+  editing = false,
+  forceModal = false,
+) =>
+  adminPage(ctx, url, req, {
+    title: 'manufacturing_backend.workCenters.title',
+    active: '/admin/manufacturing/work-centers',
+    body: (_, frame) => {
+      const collection = workCenterListPath(url)
+      const list = workCentersListScreen(
+        _,
+        {
+          action: collection,
+          createHref: workCenterModalPath(url),
+          rows: rows.map((row) => ({
+            id: String(row.id),
+            code: String(row.code),
+            name: String(row.name),
+            capacity: String(row.capacity),
+            timeEfficiency: String(row.timeEfficiency),
+            costPerHour: String(row.costPerHour),
+            active: row.active !== false,
+            editHref: workCenterModalPath(url, String(row.id)),
+          })),
+        },
+        frame,
+      )
+      if (!forceModal && url.searchParams.get('create') !== '1' && !url.searchParams.get('edit')) return list
+      return modalWorkspace(
+        list,
+        workCenterFormModal(_, {
+          action: editing && values?.id ? workCenterModalPath(url, values.id) : workCenterModalPath(url),
+          cancelHref: collection,
+          editing,
+          errors,
+          values,
+        }),
+      )
+    },
+  })
+
 const saveProduction = async (
   ctx: ServeContext,
   url: URL,
@@ -545,30 +635,64 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (crossSite(req)) return text('Forbidden', { status: 403 })
-      const _ = ctx.translate(ctx.localeOf(url, req))
-      let result: unknown = { ok: true }
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const rows = (await ctx.call(
+        'manufacturing.listWorkCenters',
+        { includeArchived: true },
+        url,
+        req,
+      )) as AnyRow[]
+      const editId = url.searchParams.get('edit') ?? ''
+      const editingRow = editId ? (rows.find((row) => String(row.id) === editId) ?? null) : null
+      if (editId && !editingRow) return text('not found', { status: 404 })
       if (req.method === 'POST') {
         const form = await readForm(req)
-        result = await ctx.call(
-          'manufacturing.saveWorkCenter',
-          {
-            id: form.id || crypto.randomUUID(),
-            code: form.code,
-            name: form.name,
-            capacity: form.capacity || '1',
-            timeEfficiency: form.timeEfficiency || '100',
-            costPerHour: form.costPerHour || '0',
-          },
+        const command = form.action ?? ''
+        if (command === 'archive' || command === 'restore') {
+          const target = rows.find((row) => String(row.id) === String(form.id ?? ''))
+          if (!target) return text('not found', { status: 404 })
+          const values = workCenterValues(target)
+          const result = await saveWorkCenter(ctx, url, req, values, command === 'restore')
+          if ((result as AnyRow).ok) return seeOther(workCenterListPath(url))
+          const _ = ctx.translate(ctx.localeOf(url, req))
+          return workCentersPage(
+            ctx,
+            url,
+            req,
+            rows,
+            values,
+            resultErrors(result, _, 'manufacturing_backend.error.invalid'),
+            true,
+            true,
+          )
+        }
+
+        const legacyId = form.id ?? ''
+        const legacyRow = legacyId ? (rows.find((row) => String(row.id) === String(legacyId)) ?? null) : null
+        const current = editingRow ?? legacyRow
+        const values = workCenterValues({ ...form, id: editId || legacyId || undefined })
+        const result = await saveWorkCenter(ctx, url, req, values, current?.active !== false)
+        if ((result as AnyRow).ok) return seeOther(workCenterListPath(url))
+        const _ = ctx.translate(ctx.localeOf(url, req))
+        return workCentersPage(
+          ctx,
           url,
           req,
+          rows,
+          values,
+          resultErrors(result, _, 'manufacturing_backend.error.invalid'),
+          Boolean(current),
+          true,
         )
-        if ((result as AnyRow).ok) return seeOther('/admin/manufacturing/work-centers')
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('manufacturing.listWorkCenters', {}, url, req)) as AnyRow[]
-      return adminPage(ctx, url, req, {
-        title: 'manufacturing_backend.workCenters.title',
-        body: (_, frame) =>
-          workCentersScreen(_, frame, rows, resultErrors(result, _, 'manufacturing_backend.error.invalid')),
-      })
+      }
+      return workCentersPage(
+        ctx,
+        url,
+        req,
+        rows,
+        editingRow ? workCenterValues(editingRow) : undefined,
+        [],
+        Boolean(editingRow),
+      )
     },
 }
