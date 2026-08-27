@@ -16,11 +16,7 @@ const tone = (state: string): Tone =>
         ? 'warning'
         : 'neutral'
 
-export const inboundScreen = (
-  _: Translator,
-  frame: Frame,
-  options: InboundScreenOptions,
-): TemplateResult =>
+export const inboundScreen = (_: Translator, frame: Frame, options: InboundScreenOptions): TemplateResult =>
   shell(
     _,
     _('mail_inbound_backend.title'),

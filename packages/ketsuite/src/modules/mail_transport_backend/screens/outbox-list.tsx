@@ -36,11 +36,7 @@ const recipients = (value: unknown): string => {
     .join(', ')
 }
 
-export const outboxScreen = (
-  _: Translator,
-  frame: Frame,
-  options: OutboxScreenOptions,
-): TemplateResult =>
+export const outboxScreen = (_: Translator, frame: Frame, options: OutboxScreenOptions): TemplateResult =>
   shell(
     _,
     _('mail_transport_backend.title'),

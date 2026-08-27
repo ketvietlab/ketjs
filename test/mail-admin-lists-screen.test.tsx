@@ -13,18 +13,22 @@ translate.resolves = () => true
 
 test('inbox uses ListPage and a route-owned mark-read action', () => {
   const html = renderToString(
-    inboxScreen(translate, {}, {
-      rows: [
-        {
-          id: 'message/a',
-          subject: 'Inventory changed',
-          kind: 'comment',
-          body: 'Please review the new quantity.',
-          createdAt: '2026-08-27T08:00:00.000Z',
-        },
-      ],
-      action: '/admin/inbox?lang=en',
-    }),
+    inboxScreen(
+      translate,
+      {},
+      {
+        rows: [
+          {
+            id: 'message/a',
+            subject: 'Inventory changed',
+            kind: 'comment',
+            body: 'Please review the new quantity.',
+            createdAt: '2026-08-27T08:00:00.000Z',
+          },
+        ],
+        action: '/admin/inbox?lang=en',
+      },
+    ),
   )
 
   assert.match(html, /data-ui="list-page"/)
@@ -35,20 +39,24 @@ test('inbox uses ListPage and a route-owned mark-read action', () => {
 
 test('inbound email log uses ListPage and retains diagnostic state', () => {
   const html = renderToString(
-    inboundScreen(translate, {}, {
-      rows: [
-        {
-          id: 'event/a',
-          providerEventId: 'provider/a',
-          subject: 'Re: Order',
-          fromAddress: 'buyer@example.com',
-          provider: 'smtp',
-          kind: 'reply',
-          state: 'failed',
-          diagnostic: 'Target was not found',
-        },
-      ],
-    }),
+    inboundScreen(
+      translate,
+      {},
+      {
+        rows: [
+          {
+            id: 'event/a',
+            providerEventId: 'provider/a',
+            subject: 'Re: Order',
+            fromAddress: 'buyer@example.com',
+            provider: 'smtp',
+            kind: 'reply',
+            state: 'failed',
+            diagnostic: 'Target was not found',
+          },
+        ],
+      },
+    ),
   )
 
   assert.match(html, /data-ui="list-page"/)
@@ -58,27 +66,31 @@ test('inbound email log uses ListPage and retains diagnostic state', () => {
 
 test('outbox uses ListPage and route-owned retry and cancel actions', () => {
   const html = renderToString(
-    outboxScreen(translate, {}, {
-      rows: [
-        {
-          id: 'delivery/failed',
-          subject: 'Failed delivery',
-          to: JSON.stringify([{ address: 'buyer@example.com' }]),
-          state: 'failed',
-          attempts: 2,
-          lastError: 'Connection refused',
-        },
-        {
-          id: 'delivery/queued',
-          subject: 'Queued delivery',
-          to: JSON.stringify([{ address: 'vendor@example.com' }]),
-          state: 'queued',
-          attempts: 0,
-          text: 'Waiting to send',
-        },
-      ],
-      action: '/admin/outbox?lang=en',
-    }),
+    outboxScreen(
+      translate,
+      {},
+      {
+        rows: [
+          {
+            id: 'delivery/failed',
+            subject: 'Failed delivery',
+            to: JSON.stringify([{ address: 'buyer@example.com' }]),
+            state: 'failed',
+            attempts: 2,
+            lastError: 'Connection refused',
+          },
+          {
+            id: 'delivery/queued',
+            subject: 'Queued delivery',
+            to: JSON.stringify([{ address: 'vendor@example.com' }]),
+            state: 'queued',
+            attempts: 0,
+            text: 'Waiting to send',
+          },
+        ],
+        action: '/admin/outbox?lang=en',
+      },
+    ),
   )
 
   assert.match(html, /data-ui="list-page"/)

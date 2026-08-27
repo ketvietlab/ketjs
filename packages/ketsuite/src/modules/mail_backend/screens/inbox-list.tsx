@@ -8,11 +8,7 @@ export type InboxScreenOptions = {
   action: string
 }
 
-export const inboxScreen = (
-  _: Translator,
-  frame: Frame,
-  options: InboxScreenOptions,
-): TemplateResult =>
+export const inboxScreen = (_: Translator, frame: Frame, options: InboxScreenOptions): TemplateResult =>
   shell(
     _,
     _('mail_backend.inbox.title'),
