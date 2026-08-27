@@ -25,6 +25,7 @@ import {
   accountsListScreen,
   customerInvoiceFormScreen,
   customerInvoicesListScreen,
+  generalLedgerScreen,
   journalEntriesListScreen,
   journalEntryCreateModal,
   journalFormModal,
@@ -44,7 +45,6 @@ import {
   vendorBillFormScreen,
   vendorBillsListScreen,
 } from './screens/index.ts'
-import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
@@ -3083,33 +3083,97 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const data = await common(ctx, url, req),
-          accountId = url.searchParams.get('accountId') ?? '',
+        const accountId = url.searchParams.get('accountId') ?? '',
           dateFrom = url.searchParams.get('dateFrom') ?? '',
-          dateTo = url.searchParams.get('dateTo') ?? ''
+          dateTo = url.searchParams.get('dateTo') ?? '',
+          search = searchOf(url) ?? '',
+          page = pageOf(url),
+          inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
         const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
         const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
-        const rows = (await ctx.call(
-          'account.generalLedger',
-          {
-            ...(accountId ? { accountId } : {}),
-            ...(fromInstant ? { dateFrom: fromInstant } : {}),
-            ...(toInstant ? { dateTo: toInstant } : {}),
-            limit: LIST_PAGE,
-          },
-          url,
-          req,
-        )) as AnyRow[]
+        await ctx.call('account.initializeCompany', {}, url, req)
+        const [accounts, companies, allRows] = (await Promise.all([
+          ctx.call('account.listAccounts', {}, url, req),
+          ctx.call('company.listCompanies', {}, url, req),
+          inverted
+            ? Promise.resolve([])
+            : ctx.call(
+                'account.generalLedger',
+                {
+                  ...(accountId ? { accountId } : {}),
+                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
+                  ...(toInstant ? { dateTo: toInstant } : {}),
+                },
+                url,
+                req,
+              ),
+        ])) as [AnyRow[], AnyRow[], AnyRow[]]
         return adminPage(ctx, url, req, {
           title: 'account_backend.generalLedger.title',
           body: async (_, frame) => {
-            const currency = currencyOf(data.companies, frame)
+            const unknownAccount = Boolean(
+              accountId && !accounts.some((account) => String(account.id) === accountId),
+            )
+            const unavailableAccount = {
+              id: accountId,
+              code: accountId,
+              name: _('account_backend.ledger.filter.unavailableAccount'),
+              nameEn: _('account_backend.ledger.filter.unavailableAccount'),
+            }
+            const filterAccounts = unknownAccount ? [unavailableAccount, ...accounts] : accounts
+            const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
+            const matching = allRows.filter((row) => {
+              if (!needle) return true
+              const move = (row.move ?? {}) as AnyRow
+              return [
+                move.name,
+                move.ref,
+                move.date,
+                row.name,
+                row.accountId,
+                accountLabel(_, accounts, row.accountId),
+              ].some((value) =>
+                String(value ?? '')
+                  .toLocaleLowerCase(ctx.localeOf(url, req))
+                  .includes(needle),
+              )
+            })
+            const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+            const errors = [
+              ...(inverted ? [_('account_backend.trial.filter.rangeError')] : []),
+              ...(unknownAccount ? [_('account_backend.ledger.filter.accountError')] : []),
+            ]
+            frame.chrome = {
+              search: {
+                name: 'q',
+                value: search,
+                placeholder: _('account_backend.ledger.search'),
+                keep: {
+                  ...(accountId ? { accountId } : {}),
+                  ...(dateFrom ? { dateFrom } : {}),
+                  ...(dateTo ? { dateTo } : {}),
+                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                },
+              },
+              pager: pager(url, page, rows.length, matching.length),
+            }
+            const currency = currencyOf(companies, frame)
             return generalLedgerScreen(_, {
               frame: frame,
-              action: `/admin/accounting/general-ledger${localeQuery(url)}`,
+              action: '/admin/accounting/general-ledger',
               rows,
+              summary: {
+                lines: matching.length,
+                debit: matching.reduce((total, row) => total + Number(row.debit ?? 0), 0),
+                credit: matching.reduce((total, row) => total + Number(row.credit ?? 0), 0),
+              },
               currency,
-              accountLabel: (id) => accountLabel(_, data.accounts, id),
+              hidden: {
+                ...(search ? { q: search } : {}),
+                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+              },
+              errors: errors.length ? errors : undefined,
+              accountLabel: (id) => accountLabel(_, accounts, id),
               entryHref: (row) =>
                 `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
               fields: [
@@ -3118,13 +3182,16 @@ export default defineModule({
                   label: _('account_backend.field.accountId'),
                   type: 'select',
                   value: accountId,
-                  options: choices(data.accounts, true),
+                  error: unknownAccount ? _('account_backend.ledger.filter.accountError') : null,
+                  options: accountChoices(_, filterAccounts, true),
                   control: await accountRelationControl(ctx, url, req, _, {
                     id: 'general-ledger-account',
                     name: 'accountId',
                     label: _('account_backend.field.accountId'),
                     value: accountId,
-                    accounts: accountOptions(data.accounts),
+                    accounts: accountOptions(
+                      filterAccounts.map((account) => ({ ...account, name: accountName(_, account) })),
+                    ),
                     allowEmpty: true,
                   }),
                 },
@@ -3133,8 +3200,15 @@ export default defineModule({
                   label: _('account_backend.field.dateFrom'),
                   type: 'date',
                   value: dateFrom,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
                 },
-                { name: 'dateTo', label: _('account_backend.field.dateTo'), type: 'date', value: dateTo },
+                {
+                  name: 'dateTo',
+                  label: _('account_backend.field.dateTo'),
+                  type: 'date',
+                  value: dateTo,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
+                },
               ],
             })
           },
@@ -3431,6 +3505,9 @@ const vi: Record<string, string> = {
   'ledger.summary.credit': 'Tổng Có',
   'ledger.filter.title': 'Bộ lọc sổ cái',
   'ledger.filter.hint': 'Chọn một tài khoản hoặc để trống để xem toàn bộ dòng đã ghi sổ.',
+  'ledger.filter.unavailableAccount': 'Tài khoản không còn khả dụng',
+  'ledger.filter.accountError': 'Tài khoản đã chọn không còn khả dụng. Hãy xóa bộ lọc tài khoản.',
+  'ledger.search': 'Tìm theo bút toán, tài khoản hoặc nội dung…',
   'ledger.result.title': 'Chi tiết phát sinh',
   'ledger.result.hint': 'Mỗi dòng liên kết phát sinh với bút toán và ngày ghi sổ.',
   'ledger.empty': 'Không có phát sinh phù hợp',
@@ -3808,6 +3885,9 @@ const en: Record<string, string> = {
   'ledger.summary.credit': 'Total credit',
   'ledger.filter.title': 'Ledger filters',
   'ledger.filter.hint': 'Choose an account or leave it blank to show all posted journal items.',
+  'ledger.filter.unavailableAccount': 'Account no longer available',
+  'ledger.filter.accountError': 'The selected account is no longer available. Clear the account filter.',
+  'ledger.search': 'Search entries, accounts, or descriptions…',
   'ledger.result.title': 'Account movements',
   'ledger.result.hint': 'Each item relates the movement to its journal entry and posting date.',
   'ledger.empty': 'No matching movements',

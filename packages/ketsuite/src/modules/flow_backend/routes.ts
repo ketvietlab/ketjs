@@ -1582,9 +1582,18 @@ export const routes: Record<string, RouteEntry> = {
       const held = (await ctx.call('flow.epic.get', { id: epicId }, url, req)) as { value: AnyRow | null }
       const epic = held.value
       if (!epic) return text('not found', { status: 404 })
+      const projectId = String(epic.projectId)
+      // Project identity enriches the shell when this reader may see it, but
+      // is not a second gate on an epic they may already read.
+      const project = await projectOf(ctx, url, req, projectId)
       const issues = (await ctx.call(
         'flow.issue.list',
-        { listState: emptyIssueListState(), epicId, limit: 100 },
+        {
+          listState: emptyIssueListState(),
+          projectId,
+          epicId,
+          limit: LIST_PAGE_SIZE,
+        },
         url,
         req,
       )) as AnyRow
@@ -1596,8 +1605,17 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(epic.title ?? ''),
         translate: false,
-        active: `/admin/flow/projects/${String(epic.projectId)}/epics`,
-        body: (t, frame) => epicDetailScreen(t, frame, epic, document, (issues.rows as AnyRow[]) ?? []),
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`,
+        body: (t, frame) =>
+          epicDetailScreen(t, frame, {
+            epic,
+            document,
+            issues: (issues.rows as AnyRow[]) ?? [],
+            issueTotal: Number(issues.total ?? 0),
+            issuesHref: issuesFilteredBy(projectId, 'epicId', epicId),
+            projectName: String(project?.name ?? projectId),
+            locale: localeQuery(url),
+          }),
       })
     },
 

@@ -40,6 +40,12 @@ export {
   type JournalsListScreenOptions,
 } from './journals-list.tsx'
 export {
+  type GeneralLedgerRow,
+  type GeneralLedgerScreenOptions,
+  type GeneralLedgerSummary,
+  generalLedgerScreen,
+} from './general-ledger.tsx'
+export {
   type JournalFormRow,
   journalFormModal,
   journalFormScreen,

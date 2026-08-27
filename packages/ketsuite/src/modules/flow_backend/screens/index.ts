@@ -28,6 +28,7 @@ export type {
 } from './project-epics.tsx'
 export { allEpicsScreen } from './all-epics.tsx'
 export type { AllEpicsScreenOptions } from './all-epics.tsx'
-export { epicDetailScreen } from './epics.tsx'
+export { epicDetailScreen } from './epic-detail.tsx'
+export type { EpicDetailScreenOptions } from './epic-detail.tsx'
 export { sprintsScreen } from './sprints.tsx'
 export { settingsScreen } from './settings.tsx'

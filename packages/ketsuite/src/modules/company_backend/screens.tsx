@@ -16,96 +16,9 @@ import {
 } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
+import type { BranchRow, CompanyRow } from './screens/index.ts'
 
-export type CompanyRow = {
-  id: string
-  code: string
-  name: string
-  partnerId: string
-  parentId?: string | null
-  currency: string
-  active: boolean
-}
-
-export type BranchRow = {
-  id: string
-  companyId: string
-  code: string
-  name: string
-  parentId?: string | null
-  isRoot?: boolean
-  active: boolean
-}
-
-export const companiesScreen = (
-  _: Translator,
-  rows: CompanyRow[],
-  frame: Frame,
-  locale = '',
-  includeArchived = false,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('company_backend.screen.title')}
-    frame={frame}
-    body={stack([
-      inline([
-        linkButton({
-          label: _('company_backend.action.create'),
-          href: localized('/admin/companies/new', locale),
-          variant: 'primary',
-        }),
-        linkButton({
-          label: _('company_backend.action.hierarchy'),
-          href: localized('/admin/companies/hierarchy', locale),
-        }),
-        linkButton({
-          label: includeArchived
-            ? _('company_backend.filter.activeOnly')
-            : _('company_backend.filter.includeArchived'),
-          href: localized(includeArchived ? '/admin/companies' : '/admin/companies?archived=1', locale),
-          variant: 'tertiary',
-        }),
-      ]),
-      rows.length === 0
-        ? emptyState(_('company_backend.screen.empty'), _('company_backend.screen.emptyHint'))
-        : dataTable(_, {
-            rows,
-            id: (row) => row.id,
-            columns: [
-              {
-                key: 'name',
-                label: _('company_backend.field.name'),
-                priority: 'primary',
-                cell: (row) =>
-                  linkButton({
-                    label: row.name,
-                    href: localized(`/admin/companies/${row.id}`, locale),
-                    variant: 'tertiary',
-                  }),
-              },
-              {
-                key: 'code',
-                label: _('company_backend.field.code'),
-                kind: 'identifier',
-                cell: (row) => code(row.code, 'identifier'),
-              },
-              { key: 'currency', label: _('company_backend.field.currency'), cell: (row) => row.currency },
-              {
-                key: 'state',
-                label: _('company_backend.field.state'),
-                kind: 'status',
-                cell: (row) =>
-                  badge(
-                    row.active ? _('company_backend.state.active') : _('company_backend.state.archived'),
-                    row.active ? 'positive' : 'neutral',
-                  ),
-              },
-            ],
-          }),
-    ])}
-  />
-)
+export type { BranchRow, CompanyRow } from './screens/index.ts'
 
 type CompanyFormOptions = {
   partners: FormOption[]

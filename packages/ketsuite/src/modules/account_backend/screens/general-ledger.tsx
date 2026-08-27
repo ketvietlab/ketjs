@@ -13,25 +13,32 @@ import {
   Section,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { FormField, Frame } from '../../ui/index.ts'
+} from '../../../ui/index.ts'
+import type { FormField, Frame } from '../../../ui/index.ts'
 
-type Row = Record<string, unknown>
+export type GeneralLedgerRow = Record<string, unknown>
 
-export const generalLedgerScreen = (
-  _: Translator,
-  options: {
-    frame: Frame
-    fields: FormField[]
-    rows: Row[]
-    action: string
-    currency: unknown
-    accountLabel?: (id: unknown) => string
-    entryHref?: (row: Row) => string
-  },
-): TemplateResult => {
-  const total = (field: 'debit' | 'credit') =>
-    options.rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0)
+export type GeneralLedgerSummary = {
+  lines: number
+  debit: number
+  credit: number
+}
+
+export type GeneralLedgerScreenOptions = {
+  frame: Frame
+  fields: FormField[]
+  rows: GeneralLedgerRow[]
+  summary: GeneralLedgerSummary
+  action: string
+  currency: unknown
+  hidden?: Record<string, string>
+  errors?: readonly string[]
+  accountLabel?: (id: unknown) => string
+  entryHref?: (row: GeneralLedgerRow) => string
+}
+
+/** A specialized journal report: URL-owned filters, exact control totals, and paged lines. */
+export const generalLedgerScreen = (_: Translator, options: GeneralLedgerScreenOptions): TemplateResult => {
   const table = options.rows.length ? (
     dataTable(_, {
       rows: options.rows,
@@ -41,7 +48,7 @@ export const generalLedgerScreen = (
           key: 'date',
           label: _('account_backend.field.date'),
           priority: 'primary',
-          cell: (row) => String((row.move as Row)?.date ?? '').slice(0, 10),
+          cell: (row) => String((row.move as GeneralLedgerRow)?.date ?? '').slice(0, 10),
         },
         {
           key: 'entry',
@@ -49,11 +56,11 @@ export const generalLedgerScreen = (
           cell: (row) =>
             options.entryHref
               ? linkButton({
-                  label: String((row.move as Row)?.name ?? ''),
+                  label: String((row.move as GeneralLedgerRow)?.name ?? ''),
                   href: options.entryHref(row),
                   variant: 'tertiary',
                 })
-              : String((row.move as Row)?.name ?? ''),
+              : String((row.move as GeneralLedgerRow)?.name ?? ''),
         },
         {
           // A general ledger without the account each line posts to is a list of
@@ -100,16 +107,20 @@ export const generalLedgerScreen = (
           subtitle={_('account_backend.ledger.subtitle')}
           imageFallback={icon('notebook-tabs')}
           summary={[
-            { id: 'lines', label: _('account_backend.ledger.summary.lines'), value: options.rows.length },
+            {
+              id: 'lines',
+              label: _('account_backend.ledger.summary.lines'),
+              value: options.summary.lines,
+            },
             {
               id: 'debit',
               label: _('account_backend.ledger.summary.debit'),
-              value: formatMoney(_, total('debit'), options.currency),
+              value: formatMoney(_, options.summary.debit, options.currency),
             },
             {
               id: 'credit',
               label: _('account_backend.ledger.summary.credit'),
-              value: formatMoney(_, total('credit'), options.currency),
+              value: formatMoney(_, options.summary.credit, options.currency),
             },
           ]}
           body={stack(
@@ -129,6 +140,8 @@ export const generalLedgerScreen = (
                         submit={_('account_backend.action.calculate')}
                         submitVariant="secondary"
                         fields={options.fields}
+                        hidden={options.hidden}
+                        errors={options.errors}
                       />
                     }
                   />

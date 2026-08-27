@@ -2,16 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import {
-  branchFormScreen,
-  companiesScreen,
-  companyFormScreen,
-  contextScreen,
-  hierarchyScreen,
-} from './screens.tsx'
-import type { BranchRow, CompanyRow } from './screens.tsx'
-import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
+import { adminPage, inLocale, localeQuery, localized } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+import { companiesListScreen } from './screens/index.ts'
+import type { BranchRow, CompanyRow } from './screens/index.ts'
+import { branchFormScreen, companyFormScreen, contextScreen, hierarchyScreen } from './screens.tsx'
 
 const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate']>): string[] =>
   ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
@@ -116,12 +112,49 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const _ = ctx.translate(ctx.localeOf(url, req))
       const includeArchived = url.searchParams.get('archived') === '1'
-      const rows = (await ctx.call('company.listCompanies', { includeArchived }, url, req)) as CompanyRow[]
+      const search = searchOf(url) ?? ''
+      const currentPage = pageOf(url)
+      const locale = ctx.localeOf(url, req)
+      const needle = search.toLocaleLowerCase(locale)
+      const allRows = (await ctx.call('company.listCompanies', { includeArchived }, url, req)) as CompanyRow[]
+      const matching = needle
+        ? allRows.filter((row) =>
+            [row.code, row.name, row.currency].some((value) =>
+              String(value).toLocaleLowerCase(locale).includes(needle),
+            ),
+          )
+        : allRows
+      const rows = matching.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
       return adminPage(ctx, url, req, {
         title: 'company_backend.screen.title',
-        body: (_, frame) => companiesScreen(_, rows, frame, localeQuery(url), includeArchived),
+        active: '/admin/companies',
+        body: (_, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: search,
+              placeholder: _('company_backend.search.companies'),
+              keep: {
+                ...(includeArchived ? { archived: '1' } : {}),
+                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+              },
+            },
+            pager: pager(url, currentPage, rows.length, matching.length),
+          }
+          const locale = localeQuery(url)
+          return companiesListScreen(_, frame, {
+            rows: rows.map((row) => ({
+              ...row,
+              detailHref: localized(`/admin/companies/${encodeURIComponent(row.id)}`, locale),
+            })),
+            total: matching.length,
+            createHref: localized('/admin/companies/new', locale),
+            hierarchyHref: localized('/admin/companies/hierarchy', locale),
+            toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
+            includeArchived,
+          })
+        },
       })
     },
 

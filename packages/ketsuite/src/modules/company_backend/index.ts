@@ -19,8 +19,10 @@ export default defineModule({
       'menu.companies': 'Công ty',
       'menu.hierarchy': 'Cây pháp nhân',
       'screen.title': 'Công ty',
+      'screen.subtitle': 'Quản lý pháp nhân, tiền tệ và trạng thái hoạt động theo mã ổn định.',
       'screen.empty': 'Chưa có công ty nào',
       'screen.emptyHint': 'Tạo pháp nhân đầu tiên từ một đối tác loại công ty.',
+      'search.companies': 'Tìm theo mã, tên hoặc tiền tệ…',
       'filter.includeArchived': 'Gồm đã lưu trữ',
       'filter.activeOnly': 'Chỉ đang hoạt động',
       'action.create': 'Tạo công ty',
@@ -78,8 +80,10 @@ export default defineModule({
       'menu.companies': 'Companies',
       'menu.hierarchy': 'Legal-entity tree',
       'screen.title': 'Companies',
+      'screen.subtitle': 'Manage legal entities, currencies and active state by stable code.',
       'screen.empty': 'No companies yet',
       'screen.emptyHint': 'Create the first legal entity from a company partner.',
+      'search.companies': 'Search by code, name or currency…',
       'filter.includeArchived': 'Include archived',
       'filter.activeOnly': 'Active only',
       'action.create': 'Create company',
@@ -136,7 +140,13 @@ export default defineModule({
 
 export { routes } from './routes.ts'
 export {
-  companiesScreen,
+  companiesListScreen,
+  companyListColumns,
+  type CompaniesListScreenOptions,
+  type CompanyListRow,
+} from './screens/index.ts'
+export type { BranchRow, CompanyRow } from './screens/index.ts'
+export {
   companyFormScreen,
   branchFormScreen,
   hierarchyScreen,

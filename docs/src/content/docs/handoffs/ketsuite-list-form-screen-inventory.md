@@ -36,13 +36,14 @@ All sub-agents work in the same checkout and on the same feature branch.
    their screen; only genuinely reused, domain-neutral helpers enter `screens/shared.tsx`.
 9. Every migrated screen preserves locale, permissions, POST semantics, named joints, partial-save
    controllers, validation, empty/error states, responsive behavior, and existing Chatter/Activity islands.
-10. Completion requires a focused render/HTTP test, an owner self-check, and desktop/mobile browser evidence.
-    A visual change without behavioral coverage remains `review`; cross-review is requested only for a concrete
-    cross-module, security, concurrency, or shared-contract risk instead of being a mandatory all-agent cycle.
-11. Validation follows CI's affected-group planner. Screen agents run only focused source tests and targeted
-    static checks; the coordinator builds once and runs each owning group once after integration
-    (`stock_backend` is `catalog`). Shared UI, framework, build, tooling, workflow, or otherwise unclassified
-    code expands to all groups. Do not rerun unrelated domain groups inside every wave.
+10. Through Wave 23, completion requires a focused render/HTTP test, an owner self-check, and desktop/mobile
+    browser evidence. A visual change without behavioral coverage remains `review`; cross-review is requested
+    only for a concrete cross-module, security, concurrency, or shared-contract risk.
+11. Through Wave 23, validation follows CI's affected-group planner: screen agents run focused source tests and
+    targeted static checks, then the coordinator builds once and runs each owning group once after integration.
+    Starting with Wave 24, local execution is removed entirely: agents and coordinator only edit code/tests,
+    commit and push, then follow the PR matrix. No local tests, build, typecheck, lint, diff check, or localhost
+    browser QA runs unless the user explicitly requests it; a CI failure triggers the next diagnosis/fix push.
 
 Statuses: `ready`, `in-progress`, `blocked`, `review`, `done`, `keep` (intentional specialized layout).
 
@@ -61,8 +62,8 @@ The current snapshot contains **173 stable work-item IDs** with no duplicates.
 
 ### Accounting lane
 
-Structure debt: the customer-invoice, vendor-bill, shared document-detail, payment and trial-balance renderers
-moved into `account_backend/screens/` in Waves 18–22; general-ledger and partner-statement remain to be split.
+Structure debt: the customer-invoice, vendor-bill, shared document-detail, payment, trial-balance and
+general-ledger renderers moved into `account_backend/screens/` in Waves 18–23; only partner-statement remains.
 `account_partner_backend` follows the same rule.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
@@ -79,7 +80,7 @@ moved into `account_backend/screens/` in Waves 18–22; general-ledger and partn
 | ACC-10 | done | Shared accounting document detail | `/admin/accounting/entries/{id}`, `/customer-invoices/{id}`, `/vendor-bills/{id}` | `screens/move-detail.tsx::moveDetailScreen` | FormPage | `account_mail_backend` | Curie |
 | ACC-11 | done | Payments | `/admin/accounting/payments`, `/admin/accounting/payments/new` | `screens/payments-list.tsx`, `screens/payment-form.tsx` | Split | no | Curie |
 | ACC-12 | done | Trial balance | `/admin/accounting/trial-balance` | `screens/trial-balance.tsx::trialBalanceScreen` | Specialized | no | Curie |
-| ACC-13 | ready | General ledger | `/admin/accounting/general-ledger` | `generalLedgerScreen` | Specialized | no | — |
+| ACC-13 | done | General ledger | `/admin/accounting/general-ledger` | `screens/general-ledger.tsx::generalLedgerScreen` | Specialized | no | Curie |
 | ACC-14 | ready | Partner statement | `/admin/accounting/partner-statement` | `partnerLedgerScreen` | Specialized | no | — |
 | AP-01 | done | Partner accounting terms | `/admin/partner/partners/{id}/accounting` | `screens/accounting-terms.tsx::accountingTermsScreen` | FormPage | no | Kant |
 
@@ -170,8 +171,8 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 
 ### Flow lane
 
-`flow_backend/screens/` exists. Waves 18–22 moved the project tree, all-pages list, page detail, project epics and
-all-epics list to their own leaves, removing the former `pages.tsx`; `epics.tsx` now holds only epic detail. Generated Live Doc endpoints
+`flow_backend/screens/` exists. Waves 18–23 moved the project tree, all-pages list, page detail, project epics,
+all-epics list and epic detail to their own leaves; the former `pages.tsx` and `epics.tsx` no longer exist. Generated Live Doc endpoints
 belong to the detail renderer that consumes them.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
@@ -186,7 +187,7 @@ belong to the detail renderer that consumes them.
 | FLOW-08 | done | Page live editor | `/admin/flow/pages/{id}` | `screens/page-detail.tsx::pageDetailScreen` | FormPage/Specialized | Huygens |
 | FLOW-09 | done | Project epics | `/admin/flow/projects/{id}/epics` | `screens/project-epics.tsx::epicsScreen` | Specialized | Huygens |
 | FLOW-10 | done | All epics | `/admin/flow/epics` | `screens/all-epics.tsx::allEpicsScreen` | ListPage | Huygens |
-| FLOW-11 | ready | Epic detail | `/admin/flow/epics/{id}` | `screens/epics.tsx::epicDetailScreen` | FormPage/Specialized | — |
+| FLOW-11 | done | Epic detail | `/admin/flow/epics/{id}` | `screens/epic-detail.tsx::epicDetailScreen` | FormPage/Specialized | Huygens |
 | FLOW-12 | ready | Epic dependency map | `/admin/flow/projects/{id}/epics/{epicId}/map` | `screens/map.tsx::mapScreen` | Specialized | — |
 | FLOW-13 | ready | Project Gantt | `/admin/flow/projects/{id}/gantt` | `screens/gantt.tsx::ganttScreen` | Specialized | — |
 | FLOW-14 | ready | Project sprints | `/admin/flow/projects/{id}/sprints` | `screens/sprints.tsx::sprintsScreen` | Split/Specialized | — |
@@ -222,12 +223,12 @@ Attendance Period and Credential Issuance; only the intentional public kiosk rem
 
 ### Company lane
 
-Structure debt: split `company_backend/screens.tsx` into `screens/` before running more than one company
-assignment.
+Structure debt: Wave 23 created `company_backend/screens/`, shared company/branch types and the companies-list
+leaf. The root `screens.tsx` retains company form, branch form, hierarchy and context until their assignments.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| COMPANY-01 | ready | Companies | `/admin/companies` | `companiesScreen` | ListPage | — |
+| COMPANY-01 | done | Companies | `/admin/companies` | `screens/companies-list.tsx::companiesScreen` | ListPage | Kant |
 | COMPANY-02 | ready | Company create/detail | `/admin/companies/new`, `/admin/companies/{id}` | `companyFormScreen` | FormPage | — |
 | COMPANY-03 | ready | Branch create/detail | `/admin/companies/{id}/branches/new`, `/admin/companies/{companyId}/branches/{id}` | `branchFormScreen` | FormPage | — |
 | COMPANY-04 | ready | Company hierarchy | `/admin/companies/hierarchy` | `hierarchyScreen` | Specialized | — |
@@ -1074,6 +1075,32 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   audit, Biome and diff validation pass. Browser QA at 1440×1000 and 390×844 covers the Trial Balance report, All
   Epics ListPage and Credential hub/kiosk dialog; fields stack cleanly and full-screen mobile dialogs do not wrap
   into their background content.
+
+### Wave 23 — ACC-13, FLOW-11 and COMPANY-01
+
+- General Ledger remains a Specialized report with one filter/totals/table workspace. The route no longer caps
+  the source at 200 rows: it computes exact matching totals, then applies localized search and 30-row paging to
+  the table. Inclusive accounting days, inverted-range errors, locale-safe GET state, unavailable account
+  fallback and encoded entry links remain consistent with Trial Balance. Its loader now requests only the four
+  capabilities it uses, and the renderer moved to `screens/general-ledger.tsx`.
+- Epic Detail now uses the public `FormPage` identity/navigation shell while retaining the Live Doc editor and
+  related issues as specialized body sections. Project breadcrumb, dependency-map action and issue links are
+  encoded and locale-safe. The route scopes issues by project and epic, shows an exact total plus 50-row preview
+  and links the full result to the filtered project collection, avoiding the former silent 100-row cap. The last
+  `screens/epics.tsx` leaf became `screens/epic-detail.tsx`; Live Doc read/write permissions remain separate.
+- Companies is now a public `ListPage` with localized search, exact 30-row paging, create/hierarchy actions and
+  an archive-inclusion toggle. The existing `archived=1` contract still means active plus archived, domain code
+  order remains stable, and all list state/row links retain locale. Wave 23 starts the incremental company split
+  with `screens/types.ts`, `screens/companies-list.tsx` and `screens/index.ts`; create/detail stays a full route
+  for COMPANY-02 rather than being pulled into this collection.
+- Integrated focused validation passes 11/11 tests. The affected groups pass Accounting 106/106, Collaboration
+  115/115 and Identity 126 passed with one existing PostgreSQL-only test skipped locally. Build, typecheck, UI
+  audit, Biome, docs and diff validation pass. Browser QA at desktop and 390 px covers General Ledger, populated
+  Companies and a real Epic Detail with Live Doc; filters stack, tables contain their own overflow, and the editor
+  remains usable on mobile.
+- This is the final wave with local validation. Starting in Wave 24, the shared branch only edits code/tests,
+  pushes the wave and follows CI; local test, build, lint, typecheck, diff and browser runs are skipped unless the
+  user requests them explicitly.
 
 ### Modal consolidation through Wave 14 — PR 253
 
