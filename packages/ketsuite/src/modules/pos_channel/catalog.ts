@@ -47,6 +47,13 @@ const fail = (ctx: ServeContext, url: URL, req: Req, code: string, status = 409)
 
 const active = (value: unknown): boolean => value !== false && value !== 0
 
+const revisionRows = (rows: Row[]): Row[] =>
+  rows.map((row) =>
+    Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
+    ),
+  )
+
 async function snapshot(ctx: Ctx, posConfigId: string) {
   const config = (await ctx.db.select('pos.Config', { id: posConfigId }))[0]
   if (!config || !active(config.active)) return null
@@ -62,15 +69,73 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
   const variants = (await ctx.db.select('product.Product')).sort((a, b) =>
     String(a.id).localeCompare(String(b.id)),
   )
+  const methodLinks = await ctx.db.select('pos.ConfigPaymentMethod', { configId: config.id })
+  const paymentMethods = (
+    await Promise.all(
+      methodLinks.map(
+        async (link) => (await ctx.db.select('pos.PaymentMethod', { id: link.paymentMethodId }))[0],
+      ),
+    )
+  )
+    .filter((method): method is Row => Boolean(method && active(method.active)))
+    .map((method) => ({
+      id: String(method.id),
+      name: String(method.name),
+      isCashCount: method.isCash === true,
+      type: method.isCash === true ? 'cash' : 'bank',
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id))
+  const currency = String(pricelist?.currency ?? '')
+
+  // Hash source rows instead of calculated prices. Pagination can then calculate only the variants
+  // on the requested page while a cursor still detects any catalog or price-input change.
+  const [templates, templateUoms, productUoms, categories, costs, units, pricelists, pricelistItems] =
+    await Promise.all([
+      ctx.db.select('product.Template'),
+      ctx.db.select('product.TemplateUom'),
+      ctx.db.select('product.ProductUom'),
+      ctx.db.select('product.Category'),
+      ctx.db.select('product.Cost'),
+      ctx.db.select('uom.Unit'),
+      ctx.db.select('pricing.Pricelist'),
+      ctx.db.select('pricing.PricelistItem'),
+    ])
+  const revision = stableHash({
+    config: revisionRows([config]),
+    variants: revisionRows(variants),
+    templates: revisionRows(templates),
+    templateUoms: revisionRows(templateUoms),
+    productUoms: revisionRows(productUoms),
+    categories: revisionRows(categories),
+    costs: revisionRows(costs),
+    units: revisionRows(units),
+    pricelists: revisionRows(pricelists),
+    pricelistItems: revisionRows(pricelistItems),
+    methodLinks: revisionRows(methodLinks),
+    paymentMethods,
+    currency,
+    cashRoundingStep: null,
+  })
+  return { config, currency, variants, breakpoints, pricelist, paymentMethods, revision }
+}
+
+async function pageOf(
+  ctx: Ctx,
+  held: NonNullable<Awaited<ReturnType<typeof snapshot>>>,
+  offset: number,
+  limit: number,
+) {
   const products: Row[] = []
-  for (const variant of variants) {
+  let nextOffset = offset
+  while (nextOffset < held.variants.length && products.length < limit) {
+    const variant = held.variants[nextOffset++]!
     const resolved = await sellableProduct(ctx, variant.id)
     if (!resolved.ok) continue
     const { product, template, uoms } = resolved.value
     const prices: Row[] = []
     for (const uom of uoms)
-      for (const quantity of breakpoints) {
-        if (!pricelist) {
+      for (const quantity of held.breakpoints) {
+        if (!held.pricelist) {
           prices.push({
             uomId: uom.id,
             minQuantity: String(quantity),
@@ -80,7 +145,7 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
           continue
         }
         const priced = (await pricingFunctions.priceFor!.handler(ctx, {
-          pricelistId: pricelist.id,
+          pricelistId: held.pricelist.id,
           productId: product.id,
           quantity: String(quantity),
           uomId: uom.id,
@@ -109,38 +174,12 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
       prices,
     })
   }
-
-  const methodLinks = await ctx.db.select('pos.ConfigPaymentMethod', { configId: config.id })
-  const paymentMethods = (
-    await Promise.all(
-      methodLinks.map(
-        async (link) => (await ctx.db.select('pos.PaymentMethod', { id: link.paymentMethodId }))[0],
-      ),
-    )
-  )
-    .filter((method): method is Row => Boolean(method && active(method.active)))
-    .map((method) => ({
-      id: String(method.id),
-      name: String(method.name),
-      isCashCount: method.isCash === true,
-      type: method.isCash === true ? 'cash' : 'bank',
-    }))
-    .sort((a, b) => a.id.localeCompare(b.id))
-  const currency = String(pricelist?.currency ?? '')
-  const revision = stableHash({
-    configId: String(config.id),
-    pricelistId: pricelist?.id == null ? null : String(pricelist.id),
-    currency,
-    products,
-    paymentMethods,
-    cashRoundingStep: null,
-  })
-  return { config, currency, products, paymentMethods, revision }
+  return { ...held, products, nextOffset, done: nextOffset >= held.variants.length, mismatch: false }
 }
 
 export const catalogFunctions: Record<string, FnSpec> = {
   priceBook: defineFn({
-    input: { posConfigId: 'id' },
+    input: { posConfigId: 'id', offset: 'int?', limit: 'int?', revision: 'text?' },
     effects: [
       'read:pos.Config',
       'read:pos.ConfigPaymentMethod',
@@ -155,8 +194,15 @@ export const catalogFunctions: Record<string, FnSpec> = {
       'read:product.Cost',
       'read:uom.Unit',
     ],
-    agent: true,
-    handler: (ctx, args) => snapshot(ctx, String(args.posConfigId)),
+    exposure: 'internal',
+    handler: async (ctx, args) => {
+      const held = await snapshot(ctx, String(args.posConfigId))
+      if (!held) return null
+      const offset = Math.max(0, Number(args.offset ?? 0))
+      if (args.revision && args.revision !== held.revision)
+        return { ...held, products: [], nextOffset: offset, done: true, mismatch: true }
+      return pageOf(ctx, held, offset, Math.max(1, Math.min(200, Number(args.limit ?? 100))))
+    },
   }),
 }
 
@@ -176,24 +222,20 @@ export const catalogRoutes = routesOf(
       '422': envelope({ type: 'null' }),
     },
     handler: async (ctx, url, req, _params, request) => {
-      const held = (await ctx.call(
-        'pos_channel.priceBook',
-        { posConfigId: request.identity!.posConfigId },
-        url,
-        req,
-      )) as Awaited<ReturnType<typeof snapshot>>
-      if (!held) return fail(ctx, url, req, 'pos.catalogUnavailable', 404)
       const cursor = readCursor(url.searchParams.get('cursor'))
       if (url.searchParams.has('cursor') && !cursor)
         return fail(ctx, url, req, 'pos.catalogCursorInvalid', 422)
       const requestedRevision = url.searchParams.get('revision') ?? cursor?.revision ?? null
-      if (requestedRevision && requestedRevision !== held.revision)
-        return fail(ctx, url, req, 'pos.catalogRevisionMismatch')
-
       const limit = Math.max(1, Math.min(200, Number(url.searchParams.get('limit') ?? 100)))
       const offset = cursor?.offset ?? 0
-      const page = held.products.slice(offset, offset + limit)
-      const nextOffset = offset + page.length
+      const held = (await ctx.call(
+        'pos_channel.priceBook',
+        { posConfigId: request.identity!.posConfigId, offset, limit, revision: requestedRevision },
+        url,
+        req,
+      )) as Awaited<ReturnType<typeof pageOf>> | null
+      if (!held) return fail(ctx, url, req, 'pos.catalogUnavailable', 404)
+      if (held.mismatch === true) return fail(ctx, url, req, 'pos.catalogRevisionMismatch')
       const now = new Date()
       return {
         data: {
@@ -203,15 +245,12 @@ export const catalogRoutes = routesOf(
           content: {
             configId: String(held.config.id),
             currency: held.currency,
-            products: page,
+            products: held.products,
             paymentMethods: held.paymentMethods,
             rounding: null,
           },
         },
-        nextCursor:
-          nextOffset < held.products.length
-            ? cursorOf({ revision: held.revision, offset: nextOffset })
-            : null,
+        nextCursor: held.done ? null : cursorOf({ revision: held.revision, offset: held.nextOffset }),
       }
     },
   }),

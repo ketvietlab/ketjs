@@ -29,6 +29,7 @@ export async function sellableProduct(
   ctx: Ctx,
   productId: unknown,
   requestedUomId?: unknown,
+  options: { allowMeasurementTreeUom?: boolean } = {},
 ): Promise<SellableProductResult> {
   const product = (await ctx.db.select('product.Product', { id: productId }))[0]
   if (!product || !active(product.active))
@@ -66,8 +67,21 @@ export async function sellableProduct(
     }))
     .sort((a, b) => a.id.localeCompare(b.id))
 
-  if (requestedUomId != null && !uoms.some((unit) => unit.id === String(requestedUomId)))
-    return { ok: false, field: 'uomId', message: 'unit of measure is not enabled for this product' }
+  if (requestedUomId != null && !uoms.some((unit) => unit.id === String(requestedUomId))) {
+    const requested = (await ctx.db.select('uom.Unit', { id: requestedUomId }))[0]
+    if (!options.allowMeasurementTreeUom || !requested || rootOf(requested) !== root)
+      return { ok: false, field: 'uomId', message: 'unit of measure is not enabled for this product' }
+    // Sales historically accepts every unit in the product measurement tree. Keep that public
+    // behaviour while POS catalog discovery remains restricted to explicitly enabled units.
+    uoms.push({
+      id: String(requested.id),
+      name: String(requested.name),
+      barcode: null,
+      relativeFactor: String(requested.relativeFactor),
+      rounding: String(requested.rounding),
+    })
+    uoms.sort((a, b) => a.id.localeCompare(b.id))
+  }
 
   return { ok: true, value: { product, template, uoms } }
 }

@@ -578,7 +578,9 @@ export const functions: Record<string, FnSpec> = {
       if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
         return invalid('orderId', 'lines can only be added to an unlocked quotation')
       if (!(n(args.productUomQty) > 0)) return invalid('productUomQty', 'ordered quantity must be positive')
-      const sellable = await sellableProduct(ctx, args.productId, args.productUomId)
+      const sellable = await sellableProduct(ctx, args.productId, args.productUomId, {
+        allowMeasurementTreeUom: true,
+      })
       if (!sellable.ok)
         return invalid(sellable.field === 'uomId' ? 'productUomId' : sellable.field, sellable.message)
       const context = sellable.value

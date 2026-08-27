@@ -138,6 +138,35 @@ test('sale: quotation pricing, confirmation and delivery integrate with Stock', 
   }
 })
 
+test('sale: keeps accepting a compatible measurement-tree unit without a product link', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'uom.saveUnit',
+      { id: 'box', name: 'Box', relativeUomId: 'unit', relativeFactor: '10' },
+      adapter,
+    )
+    await call('sale.createOrder', { id: 'so', partnerId: 'customer', warehouseId: 'wh' }, adapter)
+    const line = (
+      await call(
+        'sale.addLine',
+        {
+          id: 'so:line',
+          orderId: 'so',
+          productId: 'goods-1',
+          productUomQty: '1',
+          productUomId: 'box',
+          priceUnit: '1000',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(line.ok, true)
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('sale: delivered quantity creates a balanced multi-line customer invoice', async () => {
   const adapter = await boot()
   try {
