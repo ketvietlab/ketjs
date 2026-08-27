@@ -689,6 +689,7 @@ export const defineChannelRoute = <P extends ChannelProfile>(
                   meta: {
                     requestId,
                     serverTime: new Date().toISOString(),
+                    contractVersion: CHANNEL_API_VERSION,
                     nextCursor: outcome.nextCursor ?? null,
                   },
                 },

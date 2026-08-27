@@ -233,12 +233,14 @@ Every response uses one envelope:
   "meta": {
     "requestId": "req_…",
     "serverTime": "2026-08-21T00:00:00.000Z",
+    "contractVersion": "1.0.0",
     "nextCursor": null
   }
 }
 ```
 
-Errors carry a stable code and localized message metadata. A request that does not match its declared schema
+`contractVersion` identifies the Channel API wire contract decoded by generated clients; it is present on
+success and error envelopes. Errors carry a stable code and localized message metadata. A request that does not match its declared schema
 is answered `422` with one entry per offending field in `error.fieldErrors`, keyed by path — the published
 schema is the check, so the generated document cannot claim more than the server enforces. That covers query
 parameters as well as bodies: a declared `enum` or `maximum` is refused rather than silently clamped. Because
