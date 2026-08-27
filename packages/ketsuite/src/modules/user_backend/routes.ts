@@ -2,13 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import {
-  presetsScreen,
-  profileScreen,
-  roleScreen,
-  rolesScreen,
-  userFormScreen,
-} from './screens.tsx'
+import { presetsScreen, profileScreen, roleScreen, rolesScreen, userFormScreen } from './screens.tsx'
 import type { PermissionRow, RoleRow, SessionRow } from './screens.tsx'
 import { usersScreen } from './screens/index.ts'
 import type { UserRow } from './screens/index.ts'
@@ -189,15 +183,16 @@ export const routes: Record<string, RouteEntry> = {
       const locale = ctx.localeOf(url, req)
       const needle = search.toLocaleLowerCase(locale)
       const allRows = (await ctx.call('user.listUsers', { includeArchived }, url, req)) as UserRow[]
-      const matching = (needle
-        ? allRows.filter((row) =>
-            [row.name, row.login, row.email, row.accessKind].some((value) =>
-              String(value ?? '')
-                .toLocaleLowerCase(locale)
-                .includes(needle),
-            ),
-          )
-        : allRows
+      const matching = (
+        needle
+          ? allRows.filter((row) =>
+              [row.name, row.login, row.email, row.accessKind].some((value) =>
+                String(value ?? '')
+                  .toLocaleLowerCase(locale)
+                  .includes(needle),
+              ),
+            )
+          : allRows
       ).sort(
         (left, right) =>
           left.name.localeCompare(right.name, locale) || left.login.localeCompare(right.login, locale),

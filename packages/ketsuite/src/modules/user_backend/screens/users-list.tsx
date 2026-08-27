@@ -64,11 +64,7 @@ export const userListColumns = (_: Translator): Array<Column<UserListRow>> => [
   },
 ]
 
-export const usersScreen = (
-  _: Translator,
-  frame: Frame,
-  options: UsersListScreenOptions,
-): TemplateResult =>
+export const usersScreen = (_: Translator, frame: Frame, options: UsersListScreenOptions): TemplateResult =>
   shell(
     _,
     _('user_backend.users.title'),
@@ -76,7 +72,11 @@ export const usersScreen = (
       title={_('user_backend.users.title')}
       description={_('user_backend.users.subtitle')}
       actions={inline([
-        <LinkButton label={_('user_backend.action.createUser')} href={options.createHref} variant="primary" />,
+        <LinkButton
+          label={_('user_backend.action.createUser')}
+          href={options.createHref}
+          variant="primary"
+        />,
         <LinkButton
           label={
             options.includeArchived

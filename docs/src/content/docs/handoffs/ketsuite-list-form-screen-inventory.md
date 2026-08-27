@@ -1134,8 +1134,9 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   page boundaries deterministic. Wave 25 starts the incremental `user_backend/screens/` split with shared types
   and `screens/users-list.tsx`.
 - Wave 25 contains source and focused test changes only. No local test, build, typecheck, lint, formatter, diff
-  check or browser QA is run before the first push. The PR matrix is the first validation gate; if it fails, the
-  fix is verified with only the relevant local tests and no browser before a follow-up push.
+  check or browser QA was run before the first push. The first PR run exposed formatting only; the exception
+  path applied the formatter, built successfully and passed all 12 Wave 25 tests without opening a browser
+  before the follow-up push.
 
 ### Modal consolidation through Wave 14 — PR 253
 

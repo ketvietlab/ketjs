@@ -196,10 +196,7 @@ const branchOf = async (ctx: ServeContext, url: URL, req: Req, companyId: string
 }
 
 const branchDetailPath = (url: URL, companyId: string, id: string): string =>
-  inLocale(
-    url,
-    `/admin/companies/${encodeURIComponent(companyId)}/branches/${encodeURIComponent(id)}`,
-  )
+  inLocale(url, `/admin/companies/${encodeURIComponent(companyId)}/branches/${encodeURIComponent(id)}`)
 
 const branchValues = (form: Record<string, string>, id: string): BranchFormValues => ({
   id,
@@ -239,10 +236,7 @@ const renderBranch = async (
             `/admin/companies/${encodeURIComponent(held.company.id)}/branches/${encodeURIComponent(held.branch.id)}/archive`,
             localeQuery(url),
           ),
-          cancelHref: localized(
-            `/admin/companies/${encodeURIComponent(held.company.id)}`,
-            localeQuery(url),
-          ),
+          cancelHref: localized(`/admin/companies/${encodeURIComponent(held.company.id)}`, localeQuery(url)),
           parents,
           errors: state.errors,
         },
@@ -444,8 +438,7 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok)
-          return seeOther(branchDetailPath(url, company.id, id))
+        if ((result as { ok?: boolean }).ok) return seeOther(branchDetailPath(url, company.id, id))
         return adminPage(ctx, url, req, {
           title: 'company_backend.branch.createTitle',
           active: '/admin/companies',
@@ -460,10 +453,7 @@ export const routes: Record<string, RouteEntry> = {
                   `/admin/companies/${encodeURIComponent(company.id)}/branches/new`,
                   localeQuery(url),
                 ),
-                cancelHref: localized(
-                  `/admin/companies/${encodeURIComponent(company.id)}`,
-                  localeQuery(url),
-                ),
+                cancelHref: localized(`/admin/companies/${encodeURIComponent(company.id)}`, localeQuery(url)),
                 parents,
                 errors: translatedErrors(result, _),
               },
@@ -487,10 +477,7 @@ export const routes: Record<string, RouteEntry> = {
                 `/admin/companies/${encodeURIComponent(company.id)}/branches/new`,
                 localeQuery(url),
               ),
-              cancelHref: localized(
-                `/admin/companies/${encodeURIComponent(company.id)}`,
-                localeQuery(url),
-              ),
+              cancelHref: localized(`/admin/companies/${encodeURIComponent(company.id)}`, localeQuery(url)),
               parents,
             },
             frame,
@@ -522,17 +509,10 @@ export const routes: Record<string, RouteEntry> = {
       )
       if ((result as { ok?: boolean }).ok)
         return seeOther(branchDetailPath(url, held.company.id, held.branch.id))
-      return renderBranch(
-        ctx,
-        url,
-        req,
-        params.companyId,
-        params.id,
-        {
-          errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
-          values: branchValues(form, params.id),
-        },
-      )
+      return renderBranch(ctx, url, req, params.companyId, params.id, {
+        errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+        values: branchValues(form, params.id),
+      })
     },
 
   '/admin/companies/{companyId}/branches/{id}/archive':
@@ -553,14 +533,9 @@ export const routes: Record<string, RouteEntry> = {
       )
       if ((result as { ok?: boolean }).ok)
         return seeOther(branchDetailPath(url, held.company.id, held.branch.id))
-      return renderBranch(
-        ctx,
-        url,
-        req,
-        params.companyId,
-        params.id,
-        { errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))) },
-      )
+      return renderBranch(ctx, url, req, params.companyId, params.id, {
+        errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+      })
     },
 
   '/admin/context': {

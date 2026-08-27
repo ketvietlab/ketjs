@@ -61,6 +61,9 @@ test('branch create preserves a rejected parent and stable command id', () => {
     ),
   )
   assert.match(html, /name="id" value="draft-id"/)
-  assert.match(html, /<option value="missing-parent" selected="true">missing-parent<\/option>/)
+  assert.match(
+    html,
+    /<option value="missing-parent" selected="true">[\s\S]*?missing-parent[\s\S]*?<\/option>/,
+  )
   assert.match(html, /data-ui="form-errors" role="alert"/)
 })

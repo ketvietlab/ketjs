@@ -203,10 +203,7 @@ test('branch create/detail uses FormPage, stable retry identity and company-scop
   assert.match(detail, /name="action" value="archive"/)
   assert.match(detail, /href="\/admin\/companies\/beta\?lang=en"/)
 
-  assert.equal(
-    (await app.client.get('/admin/companies/acme/branches/beta%3Anorth?lang=en')).status,
-    404,
-  )
+  assert.equal((await app.client.get('/admin/companies/acme/branches/beta%3Anorth?lang=en')).status, 404)
   assert.equal(
     (
       await app.client.post(

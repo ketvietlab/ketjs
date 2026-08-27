@@ -53,13 +53,17 @@ test('users list uses public ListPage chrome, exact status and encoded row navig
 
 test('users list keeps ListPage identity and empty state without decorative pager', () => {
   const html = renderToString(
-    usersScreen(translate, {}, {
-      rows: [],
-      total: 0,
-      createHref: '/admin/users/new',
-      toggleHref: '/admin/users?archived=1',
-      includeArchived: false,
-    }),
+    usersScreen(
+      translate,
+      {},
+      {
+        rows: [],
+        total: 0,
+        createHref: '/admin/users/new',
+        toggleHref: '/admin/users?archived=1',
+        includeArchived: false,
+      },
+    ),
   )
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /user_backend\.users\.empty/)

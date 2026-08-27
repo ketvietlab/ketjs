@@ -59,7 +59,9 @@ export const branchFormScreen = (
   frame: Frame = {},
 ): TemplateResult => {
   const detail = options.mode === 'detail'
-  const title = detail ? String(values.name ?? values.code ?? values.id) : _('company_backend.branch.createTitle')
+  const title = detail
+    ? String(values.name ?? values.code ?? values.id)
+    : _('company_backend.branch.createTitle')
   const formId = 'branch-record-form'
   const archive =
     detail && options.archiveAction ? (
