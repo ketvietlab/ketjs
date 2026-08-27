@@ -610,7 +610,9 @@ export const routes: Record<string, RouteEntry> = {
         if (req.method !== 'POST') return text('GET or POST', { status: 405 })
         if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
-        if (form.action !== 'save') return text('invalid action', { status: 400 })
+        // The new form names its save command. Keep accepting an absent action
+        // for established API/test clients that predate explicit commands.
+        if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
         const companies = Object.keys(form)
           .filter((key) => key.startsWith('company.'))
           .map((key) => key.slice('company.'.length))
