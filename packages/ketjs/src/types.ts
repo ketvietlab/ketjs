@@ -42,6 +42,8 @@ export type HttpRouteContract = {
   summary?: string
   /** Application-defined authentication policy interpreted by the contract facade. */
   auth?: string
+  /** Additional credential schemes documented for a route whose handler resolves another trust boundary. */
+  credentials?: string[]
   capability?: { key: string; action: string }
   request?: {
     params?: JsonSchema

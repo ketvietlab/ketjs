@@ -14,13 +14,41 @@ const SCHEMES: Record<ChannelProfile, Record<string, unknown>> = {
     customerCookie: { type: 'apiKey', in: 'cookie', name: 'ket_customer_session' },
   },
   staff: { staffCookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE } },
-  pos: {},
+  pos: {
+    posBearer: { type: 'http', scheme: 'bearer' },
+    operatorBearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+  },
   integration: {},
 }
 
-const securityFor = (profile: ChannelProfile, auth: ChannelAuth): unknown[] => {
+/**
+ * Schemes the facade never offers on its own.
+ *
+ * `operatorBearer` is the upstream identity an enrollment handler verifies for
+ * itself, so it belongs to the routes that name it in `credentials` and to no
+ * other. Naming the exceptions rather than re-listing every profile's schemes
+ * keeps `SCHEMES` the only place a scheme is declared: a new one added there is
+ * offered, instead of being silently dropped from every route's security.
+ */
+const HANDLER_VERIFIED: Record<ChannelProfile, readonly string[]> = {
+  customer: [],
+  staff: [],
+  pos: ['operatorBearer'],
+  integration: [],
+}
+
+const offeredSchemes = (profile: ChannelProfile): string[] =>
+  Object.keys(SCHEMES[profile]).filter((name) => !HANDLER_VERIFIED[profile].includes(name))
+
+const securityFor = (profile: ChannelProfile, auth: ChannelAuth, credentials?: string[]): unknown[] => {
+  if (credentials?.length) {
+    for (const name of credentials)
+      if (!(name in SCHEMES[profile]))
+        throw new Error(`channel profile "${profile}" does not define credential scheme "${name}"`)
+    return credentials.map((name) => ({ [name]: [] }))
+  }
   if (!resolves(auth)) return []
-  const offered = Object.keys(SCHEMES[profile]).map((name) => ({ [name]: [] }))
+  const offered = offeredSchemes(profile).map((name) => ({ [name]: [] }))
   return demands(auth) ? offered : [{}, ...offered]
 }
 
@@ -44,7 +72,7 @@ export const openApiDocument = (manifest: Manifest, profile: ChannelProfile) => 
       [contract.method.toLowerCase()]: {
         operationId: contract.operationId,
         ...(contract.summary ? { summary: contract.summary } : {}),
-        security: securityFor(profile, (contract.auth ?? 'public') as ChannelAuth),
+        security: securityFor(profile, (contract.auth ?? 'public') as ChannelAuth, contract.credentials),
         ...(parameters.length ? { parameters } : {}),
         ...(contract.request?.body
           ? {

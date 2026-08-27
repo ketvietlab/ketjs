@@ -75,6 +75,7 @@ export type {
   ChannelIdentities,
   ChannelIdentityFor,
   CustomerIdentity,
+  PosIdentity,
   StaffIdentity,
   ChannelAuth,
   ChannelIdentity,
