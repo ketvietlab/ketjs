@@ -2,13 +2,13 @@
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { ListPage } from '@ketvietlab/design-system'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import { sidebar, sidebarMain } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
+import { recordWorkspace } from './record.tsx'
 
 export const HOOKS = [
   'shell',
@@ -137,11 +137,11 @@ export const backendPage = async (
 
 /**
  * Compatibility frame for operational screens that have not yet selected a more
- * specific page pattern. It follows the same compact title/action/toolbar rhythm
- * as migrated list screens: the sidebar already carries the module identity, so
- * repeating it as a breadcrumb, kicker and large glyph only consumes the first
- * fold. A richer RecordWorkspace nested in the body keeps its own record header;
- * the compatibility heading is flattened for that case in record.css.
+ * specific page pattern. It keeps the operational workspace semantics used by
+ * boards and reports, while the compact RecordWorkspace header avoids repeating
+ * the module identity as a breadcrumb, kicker and large glyph. A richer
+ * RecordWorkspace nested in the body keeps its own record header; the
+ * compatibility heading is flattened for that case in record.css.
  */
 export const framedPage = (options: {
   translator: Translator
@@ -181,18 +181,25 @@ export const framedPage = (options: {
   return shell(
     options.translator,
     options.title,
-    <ListPage
-      title={options.title}
-      description={options.subtitle ?? undefined}
-      actions={actions}
-      controls={
-        options.frame.chrome
-          ? listChrome(options.translator, options.title, options.frame.chrome, false)
-          : undefined
-      }
-      body={options.body}
-    />,
-    { ...options.frame, chrome: null, titled: false, topbar: false },
+    recordWorkspace({
+      pageFrame: true,
+      title: options.title,
+      subtitle: options.subtitle ?? null,
+      imageFallback: '',
+      controller:
+        options.frame.chrome || actions !== undefined ? (
+          <>
+            {options.frame.chrome
+              ? listChrome(options.translator, options.title, options.frame.chrome, false)
+              : ''}
+            {actions ?? ''}
+          </>
+        ) : undefined,
+      body: options.body,
+      aside: options.aside,
+      asideLabel: options.asideLabel ?? null,
+    }),
+    { ...options.frame, titled: false, topbar: false },
   )
 }
 

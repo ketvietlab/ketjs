@@ -921,8 +921,8 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
 
 test('backend layout: framed screens use the compact page header and flatten around rich records', () => {
   const list = renderToString(pagesScreen(_, [page()], {}))
-  assert.match(list, /data-ui="list-page"/)
-  assert.match(list, /data-ui="list-page-title"[\s\S]*Trang/)
+  assert.match(list, /data-ui="record-workspace" data-page-frame="true"/)
+  assert.match(list, /data-ui="record-heading"[\s\S]*Trang/)
   assert.doesNotMatch(list, /data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/)
 
   const rich = renderToString(
@@ -937,13 +937,13 @@ test('backend layout: framed screens use the compact page header and flatten aro
       }),
     }),
   )
-  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 1)
-  assert.equal(rich.match(/data-ui="list-page"/g)?.length, 1)
+  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
+  assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
 
   const css = ADMIN_CSS
-  assert.match(css, /data-ui="list-page"\]:has/)
+  assert.match(css, /data-page-frame="true"\]:has/)
   assert.ok(
-    css.includes('> [data-ui="list-page-body"] [data-ui="record-workspace"]'),
+    css.includes('> [data-ui="record-body"] [data-ui="record-workspace"]'),
     'the compatibility frame also flattens a rich workspace wrapped by feedback or a stack',
   )
 })
@@ -1096,7 +1096,7 @@ test('backend layout: a framed screen uses one compact title without breadcrumb,
   )
   // The title is owned by the compact page header, not repeated by the shell.
   assert.equal(framed.match(/data-ui="title"/g), null, 'the bar does not repeat the heading')
-  assert.equal(framed.match(/data-ui="list-page-title"/g)?.length, 1)
+  assert.equal(framed.match(/data-ui="record-heading"/g)?.length, 1)
   assert.doesNotMatch(framed, /data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/)
 
   // A list keeps its toolbar; it just stops naming the page twice.
