@@ -105,6 +105,7 @@ try {
     countryId: 'VN',
     divisionId: 'VN:2025-07-01:70101063',
     defaultCancellationPolicyId: 'flexible',
+    allowWeekly: true,
   })
   for (const fee of [
     { id: 'city-tax', chargeType: 'city_tax', name: 'Thuế lưu trú thành phố', amount: '35000' },
@@ -166,6 +167,7 @@ try {
     color: '#0f766e',
     cancellationPolicyId: 'flexible',
     published: true,
+    allowWeekly: true,
   })
   await call('hospitality_core.saveBed', {
     id: 'deluxe-king-bed',
