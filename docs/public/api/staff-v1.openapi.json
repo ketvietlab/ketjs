@@ -30,7 +30,83 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {},
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "contractVersion": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id"]
+                        },
+                        "csrfToken": {
+                          "type": ["string", "null"]
+                        },
+                        "scope": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "companyId": {
+                              "type": ["string", "null"]
+                            },
+                            "branchId": {
+                              "type": ["string", "null"]
+                            },
+                            "companies": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "branches": {
+                              "type": ["array", "null"],
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": ["companyId", "branchId", "companies", "branches"]
+                        },
+                        "capabilities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "actions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": ["key", "actions"]
+                          }
+                        },
+                        "capabilityRevision": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "contractVersion",
+                        "user",
+                        "csrfToken",
+                        "scope",
+                        "capabilities",
+                        "capabilityRevision"
+                      ]
+                    },
                     "error": {},
                     "meta": {
                       "type": "object"
@@ -66,7 +142,29 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {},
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": ["string", "null"]
+                            },
+                            "login": {
+                              "type": ["string", "null"]
+                            }
+                          },
+                          "required": ["id", "name", "login"]
+                        }
+                      },
+                      "required": ["user"]
+                    },
                     "error": {},
                     "meta": {
                       "type": "object"
@@ -2035,7 +2133,26 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {},
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "onClock": {
+                          "type": "boolean"
+                        },
+                        "sessionId": {
+                          "type": ["string", "null"]
+                        },
+                        "startAt": {
+                          "type": ["string", "null"],
+                          "format": "date-time"
+                        },
+                        "branchId": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["onClock"]
+                    },
                     "error": {},
                     "meta": {
                       "type": "object"
@@ -2074,7 +2191,49 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {},
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "branchId": {
+                            "type": "string"
+                          },
+                          "startAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "stopAt": {
+                            "type": ["string", "null"],
+                            "format": "date-time"
+                          },
+                          "correctedStartAt": {
+                            "type": ["string", "null"],
+                            "format": "date-time"
+                          },
+                          "correctedStopAt": {
+                            "type": ["string", "null"],
+                            "format": "date-time"
+                          },
+                          "state": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "branchId",
+                          "startAt",
+                          "stopAt",
+                          "correctedStartAt",
+                          "correctedStopAt",
+                          "state"
+                        ]
+                      }
+                    },
                     "error": {},
                     "meta": {
                       "type": "object"
@@ -2123,7 +2282,24 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {},
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["in", "out"]
+                        },
+                        "occurredAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["kind", "occurredAt", "sessionId"]
+                    },
                     "error": {},
                     "meta": {
                       "type": "object"
@@ -2172,7 +2348,24 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {},
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": ["in", "out"]
+                        },
+                        "occurredAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["kind", "occurredAt", "sessionId"]
+                    },
                     "error": {},
                     "meta": {
                       "type": "object"
