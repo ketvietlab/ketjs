@@ -139,6 +139,8 @@ export const contentCard = (o: {
  * is good news depends on the metric — see `delta` in `charts.tsx`. Everything
  * else on the card stays in the ink the rest of the page uses.
  */
+const TONES = new Set(['neutral', 'info', 'positive', 'warning', 'danger'])
+
 export const metric = (o: {
   label: string
   value: string
@@ -155,16 +157,42 @@ export const metric = (o: {
    * the label remains the name of the number.
    */
   icon?: JSXChild
-}): TemplateResult => (
-  <article data-ui="metric" data-tone={o.tone ?? 'neutral'}>
-    {o.icon !== undefined && (
-      <span data-ui="metric-icon" aria-hidden="true">
-        {o.icon}
-      </span>
-    )}
-    <p data-ui="metric-label">{o.label}</p>
-    <p data-ui="metric-value">{o.value}</p>
-    {o.trend !== undefined && <p data-ui="metric-trend">{o.trend}</p>}
-    {!!o.detail && <p data-ui="metric-detail">{o.detail}</p>}
-  </article>
-)
+  /**
+   * Makes the whole card the link rather than a word inside it. A metric has
+   * nothing else to click, which is why `contentCard` does the opposite.
+   */
+  href?: string | null
+}): TemplateResult => {
+  // `tone` is open here in a way the public `Metric` is not: hospitality passes a
+  // room status through it to colour a board. The dot is the design system's, and
+  // only its five semantic tones mean anything to it — a room status would draw a
+  // grey bullet in front of every label and say nothing. A card with a glyph gets
+  // no dot either: one marker to a card, and the glyph is already the marker.
+  const attributes = {
+    'data-ui': 'metric',
+    'data-tone': o.tone ?? 'neutral',
+    'data-dot': String(TONES.has(o.tone ?? '') && o.icon === undefined),
+  }
+  const body = (
+    <>
+      {o.icon !== undefined && (
+        <span data-ui="metric-icon" aria-hidden="true">
+          {o.icon}
+        </span>
+      )}
+      <p data-ui="metric-label">{o.label}</p>
+      <p data-ui="metric-value">{o.value}</p>
+      {o.trend !== undefined && <p data-ui="metric-trend">{o.trend}</p>}
+      {!!o.detail && <p data-ui="metric-detail">{o.detail}</p>}
+    </>
+  )
+  return o.href ? (
+    <a {...attributes} data-interactive="true" href={o.href}>
+      {body}
+    </a>
+  ) : (
+    <article {...attributes} data-interactive="false">
+      {body}
+    </article>
+  )
+}

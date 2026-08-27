@@ -14,6 +14,26 @@
 // public components. New shared UI must enter through that public contract.
 
 export * as designSystem from '@ketvietlab/design-system'
+export { FormPage, LinkButton, ListPage, Tabs as CollectionTabs } from '@ketvietlab/design-system'
+export type {
+  FormPageProps,
+  FormPageSlots,
+  LinkButtonProps,
+  ListPageProps,
+  TabItem as CollectionTabItem,
+} from '@ketvietlab/design-system'
+
+/**
+ * Public components a screen uses directly, with no compatibility copy here.
+ *
+ * The rule in the header is that new shared UI enters through the public
+ * contract; a mirror of it in this file would be a second place for the markup
+ * to drift. `Pipeline` owns its own hooks, stylesheet and catalogue specimen in
+ * `@ketvietlab/design-system`, and the backend already loads that stylesheet and
+ * marks its root with `data-kv-design-system`.
+ */
+export { Pipeline } from '@ketvietlab/design-system'
+export type { PipelineStep } from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
 export { formatMoney } from './format.ts'
@@ -74,6 +94,7 @@ export {
   recordFieldGrid,
   recordRail,
   recordHeaderActions,
+  recordMore,
 } from './record-detail.tsx'
 export type { RecordRailFact, RecordRailSwitch, RecordRailActivity } from './record-detail.tsx'
 export { modalSheet } from './modal.tsx'
@@ -85,7 +106,7 @@ export type {
 } from './record.tsx'
 export { sidebar, sidebarMain, sidebarFoot, navGroup } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
-export { listChrome, topbarSearch } from './chrome.tsx'
+export { bulkActions, listChrome, topbarSearch } from './chrome.tsx'
 export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
 export { backendPage, shell, framedPage, definitionList } from './layout.tsx'
 export type { Extras, Frame } from './layout.tsx'
@@ -96,10 +117,9 @@ export { calendarContractCases } from './calendar.ts'
 export {
   PartnerFacts,
   PartnerInitials,
-  PartnerListLayout,
   PartnerPanel,
 } from './partner.tsx'
-export type { PartnerFact, PartnerStat } from './partner.tsx'
+export type { PartnerFact } from './partner.tsx'
 
 /**
  * The same components, under the names JSX wants.
@@ -129,6 +149,7 @@ export {
   recordFieldGrid as RecordFieldGrid,
   recordRail as RecordRail,
   recordHeaderActions as RecordHeaderActions,
+  recordMore as RecordMore,
 } from './record-detail.tsx'
 export { notice as Notice } from './state.tsx'
 export { breadcrumbs as Breadcrumbs, tabs as Tabs } from './navigation.tsx'

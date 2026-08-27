@@ -62,6 +62,7 @@ const labelsOf = (props) => LABELS[String(props.lang).toLowerCase().startsWith('
 const localeOf = (props) => (String(props.lang).toLowerCase().startsWith('en') ? 'en-US' : 'vi-VN')
 
 const apiFor = (resModel) => {
+  if (resModel === 'partner.Partner') return 'partner_mail_backend'
   if (resModel === 'product.Template') return 'product_mail_backend'
   if (resModel === 'product.Product') return 'product_variant_mail_backend'
   if (resModel === 'stock.Picking') return 'stock_mail_backend'

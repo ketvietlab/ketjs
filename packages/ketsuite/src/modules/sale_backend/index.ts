@@ -12,14 +12,28 @@ import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
 import { orderDetailScreen } from './order-detail-screen.tsx'
 import { quotationsScreen } from './quotations-screen.tsx'
 import { salesOrdersScreen } from './sales-orders-screen.tsx'
-import { dashboard, labelOf } from './screens.tsx'
+import { overviewScreen } from './overview-screen.tsx'
+import type { SaleCounts } from './overview-screen.tsx'
+import { labelOf } from './screens.tsx'
 import {
   accountOptions,
   accountRelationControl,
   taxRelationControl,
 } from '../account_backend/relation-control.ts'
-import { adminPage, choices, frameOf, localeQuery, needs, optional, printGroup } from '../backend/screen.ts'
+import {
+  adminPage,
+  choices,
+  frameOf,
+  localeQuery,
+  needs,
+  optional,
+  printGroup,
+  timezoneOf,
+} from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
+
+/** How many sales orders the overview shows before handing over to the list. */
+const RECENT_ORDERS = 5
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -434,6 +448,16 @@ const vi = {
   'dashboard.sent': 'Báo giá đã gửi',
   'dashboard.toInvoice': 'Chờ lập hoá đơn',
   'dashboard.records': 'Bản ghi',
+  'dashboard.subtitle': 'Theo dõi báo giá, đơn bán và công việc cần xử lý.',
+  'dashboard.draftToday': '{count} mới hôm nay',
+  'dashboard.sentValue': '{amount} chờ phản hồi',
+  'dashboard.saleValue': '{amount} tổng giá trị',
+  'dashboard.toInvoiceValue': '{amount} cần xử lý',
+  'dashboard.flow.title': 'Dòng bán hàng',
+  'dashboard.flow.hint': 'Tiến độ từ báo giá đến lập hoá đơn',
+  'dashboard.recent.title': 'Đơn gần đây',
+  'dashboard.recent.hint': 'Các đơn bán được cập nhật mới nhất',
+  'dashboard.recent.all': 'Xem tất cả',
   'quotations.title': 'Báo giá',
   'quotation.kicker': 'Báo giá khách hàng',
   'quotation.title': 'Báo giá',
@@ -570,6 +594,16 @@ const en = {
   'dashboard.sent': 'Quotation Sent',
   'dashboard.toInvoice': 'To Invoice',
   'dashboard.records': 'Records',
+  'dashboard.subtitle': 'Quotations, sales orders, and the work waiting on you.',
+  'dashboard.draftToday': '{count} new today',
+  'dashboard.sentValue': '{amount} awaiting a reply',
+  'dashboard.saleValue': '{amount} in total',
+  'dashboard.toInvoiceValue': '{amount} to handle',
+  'dashboard.flow.title': 'Sales flow',
+  'dashboard.flow.hint': 'From quotation through to invoicing',
+  'dashboard.recent.title': 'Recent orders',
+  'dashboard.recent.hint': 'The sales orders updated most recently',
+  'dashboard.recent.all': 'View all',
   'quotations.title': 'Quotations',
   'quotation.kicker': 'Customer quotations',
   'quotation.title': 'Quotations',
@@ -743,24 +777,34 @@ export default defineModule({
   routes: {
     '/admin/sales':
       (ctx): Route =>
-      async (url, req) =>
-        req.method === 'GET'
-          ? adminPage(ctx, url, req, {
-              title: 'sale_backend.dashboard.title',
-              body: async (_, shell) =>
-                dashboard(
-                  _,
-                  (await ctx.call('sale.countOrders', {}, url, req)) as {
-                    draft: number
-                    sent: number
-                    sale: number
-                    toInvoice: number
-                  },
-                  shell,
-                  localeQuery(url),
-                ),
-            })
-          : text('GET', { status: 405 }),
+      async (url, req) => {
+        if (req.method !== 'GET') return text('GET', { status: 405 })
+        // "New today" is the reader's today, so the counting happens in their
+        // timezone rather than the server's.
+        const [counts, recent] = await Promise.all([
+          ctx.call(
+            'sale.countOrders',
+            { timezone: await timezoneOf(ctx, url, req) },
+            url,
+            req,
+          ) as Promise<SaleCounts>,
+          // The last few, not a page of them: the overview links to the list for
+          // the rest, and a dashboard that loads five hundred rows to show five
+          // is the same mistake the counters were moved into the database to fix.
+          ctx.call('sale.listOrders', { state: 'sale', limit: RECENT_ORDERS }, url, req) as Promise<AnyRow[]>,
+        ])
+        const names = await partnerNames(ctx, url, req, recent)
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.dashboard.title',
+          body: async (_, shell) =>
+            overviewScreen(_, {
+              frame: shell,
+              counts,
+              recent: recent.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
+              localeQuery: localeQuery(url),
+            }),
+        })
+      },
     '/admin/sales/quotations':
       (ctx): Route =>
       async (url, req) => {

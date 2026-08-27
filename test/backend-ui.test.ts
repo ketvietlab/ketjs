@@ -4,6 +4,7 @@ import { globSync, readFileSync } from 'node:fs'
 import { html as html2, renderToString } from '@ketvietlab/ketjs-view'
 import { buildMenu, compose, document as ketDocument, translator } from '@ketvietlab/ketjs'
 import { LAYER_ORDER_CSS } from '@ketvietlab/ketjs/theme'
+import { HOOKS as PUBLIC_HOOKS } from '@ketvietlab/design-system'
 import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import backend from '@ketvietlab/ketsuite/backend'
@@ -645,6 +646,12 @@ test('ui contract: the stylesheet targets no hook nothing emits', () => {
   // ui-audit's pending list — so their hooks are read from the source that emits
   // them, and stop being read from there the day that markup moves into the kit.
   const RESERVED_FOR_FILLS = ['nav-item']
+  // A public component's markup lives in @ketvietlab/design-system, not in this
+  // kit, so its hooks are absent from `HOOKS` — but a backend screen composes
+  // those components and the admin stylesheet is entitled to say how they sit in
+  // an admin page. Without this, moving a component out to the public package
+  // turned every rule that mentioned it into an orphan.
+  const PUBLIC = PUBLIC_HOOKS
   // An island's markup is behaviour, so it lives in the browser file rather than in
   // the kit; the login screen and the design catalogue are on ui-audit's pending
   // list. Both are read from the source that emits them, so the day that markup
@@ -657,6 +664,7 @@ test('ui contract: the stylesheet targets no hook nothing emits', () => {
   ]
   const emitted = new Set<string>([
     ...HOOKS,
+    ...PUBLIC,
     ...RESERVED_FOR_FILLS,
     ...OTHER_SOURCES.flatMap((path) =>
       [...readFileSync(path, 'utf8').matchAll(/data-ui=(?:"|\{?')([a-z0-9-]+)/g)].map((m) => m[1] as string),
