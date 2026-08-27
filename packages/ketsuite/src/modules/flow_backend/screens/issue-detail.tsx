@@ -3,19 +3,26 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   AttachmentPanel,
   badge,
+  button,
   dataTable,
   DefinitionList,
-  Framed,
+  FormCluster,
+  FormPage,
+  inline,
   linkButton,
+  modalForm,
+  modalWorkspace,
   Progress,
   RecordForm,
   Section,
+  shell,
   stack,
   Surface,
 } from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
-import { empty, entryBody, when } from './shared.tsx'
+import { empty, entryBody, priorityBadge, when } from './shared.tsx'
 
 export type IssueDetailControls = {
   assignee?: JSXChild
@@ -25,27 +32,32 @@ export type IssueDetailControls = {
   dependencyTarget?: JSXChild
 }
 
+export type IssueDetailOptions = {
+  fields: FormField[]
+  columns: AnyRow[]
+  sprints: AnyRow[]
+  controls?: IssueDetailControls
+  editor: JSXChild
+  /** Files on this issue, and where a new one is posted. */
+  attachments: AnyRow[]
+  /** The project's own field definitions, which name the values on the row. */
+  fieldDefs: AnyRow[]
+  locale?: string
+  dialog?: 'move' | 'assignSprint'
+  submitted?: Record<string, string>
+  idempotencyKey?: string
+  /**
+   * Which action failed, and why. This screen carries several forms; naming
+   * the action keeps each rejection beside the action that produced it.
+   */
+  errors?: { action: string; messages: string[] }
+}
+
 export const issueDetailScreen = (
   _: Translator,
   frame: Frame,
   row: AnyRow,
-  options: {
-    fields: FormField[]
-    columns: AnyRow[]
-    sprints: AnyRow[]
-    controls?: IssueDetailControls
-    editor: JSXChild
-    /** Files on this issue, and where a new one is posted. */
-    attachments: AnyRow[]
-    /** The project's own field definitions, which name the values on the row. */
-    fieldDefs: AnyRow[]
-    /**
-     * Which action failed, and why. This screen carries six forms; naming the
-     * action is what puts a rejected dependency under the dependency form
-     * instead of at the top of the save form three sections above it.
-     */
-    errors?: { action: string; messages: string[] }
-  },
+  options: IssueDetailOptions,
 ): TemplateResult => {
   const tags = (row.tags as AnyRow[] | undefined) ?? []
   const dependencies = (row.dependencies as AnyRow[] | undefined) ?? []
@@ -54,7 +66,17 @@ export const issueDetailScreen = (
   const children = (row.children as AnyRow[] | undefined) ?? []
   const controls = options.controls ?? {}
   const fieldValues = (row.fieldValues as Record<string, unknown> | undefined) ?? {}
-  const endpoint = `/admin/flow/issues/${String(row.id)}`
+  const endpoint = localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, options.locale ?? '')
+  const attachmentEndpoint = localized(
+    `/admin/flow/issues/${encodeURIComponent(String(row.id))}/attachments`,
+    options.locale ?? '',
+  )
+  const dialogHref = (dialog: 'move' | 'assignSprint'): string => {
+    const target = new URL(endpoint, 'http://ket.local')
+    target.searchParams.set('dialog', dialog)
+    return `${target.pathname}${target.search}`
+  }
+  const formId = 'flow-issue-detail-form'
   const dash = '\u2014'
 
   /**
@@ -107,12 +129,111 @@ export const issueDetailScreen = (
   ]
   const errorsFor = (action: string): string[] | undefined =>
     options.errors?.action === action ? options.errors.messages : undefined
+  const activeDialog =
+    options.dialog ??
+    (options.errors?.action === 'move' || options.errors?.action === 'assignSprint'
+      ? options.errors.action
+      : undefined)
+  const withIdempotency = (hidden: Record<string, string>): Record<string, string> =>
+    options.idempotencyKey ? { ...hidden, idempotencyKey: options.idempotencyKey } : hidden
+  const selectedColumn = options.submitted?.columnId ?? String(row.columnId ?? '')
+  const columnOptions = options.columns.map((column) => ({
+    value: String(column.id),
+    label: String(column.name),
+  }))
+  if (selectedColumn && !columnOptions.some((option) => option.value === selectedColumn)) {
+    columnOptions.unshift({ value: selectedColumn, label: selectedColumn })
+  }
+  const selectedSprint = options.submitted?.sprintId ?? String(row.sprintId ?? '')
+  const sprintOptions = [
+    { value: '', label: '—' },
+    ...options.sprints.map((sprint) => ({
+      value: String(sprint.id),
+      label: String(sprint.name),
+    })),
+  ]
+  if (selectedSprint && !sprintOptions.some((option) => option.value === selectedSprint)) {
+    sprintOptions.unshift({ value: selectedSprint, label: selectedSprint })
+  }
+  const overlay = activeDialog
+    ? modalForm({
+        id: `flow-issue-${activeDialog}`,
+        title: _(`flow_backend.action.${activeDialog}`),
+        description: String(row.title),
+        closeHref: endpoint,
+        closeLabel: _('flow_backend.action.cancel'),
+        form: {
+          id: `flow-issue-${activeDialog}-form`,
+          scope: `flow-issue-${activeDialog}`,
+          action: dialogHref(activeDialog),
+          submit: _(`flow_backend.action.${activeDialog}`),
+          submitVariant: 'primary',
+          cancelHref: endpoint,
+          cancelLabel: _('flow_backend.action.cancel'),
+          hidden: withIdempotency({
+            action: activeDialog,
+            expectedVersion: String(row.version ?? 0),
+          }),
+          fields:
+            activeDialog === 'move'
+              ? [
+                  {
+                    name: 'columnId',
+                    label: _('flow_backend.field.column'),
+                    type: 'select',
+                    required: true,
+                    value: selectedColumn,
+                    options: columnOptions,
+                  },
+                ]
+              : [
+                  {
+                    name: 'sprintId',
+                    label: _('flow_backend.field.sprint'),
+                    type: 'select',
+                    value: selectedSprint,
+                    options: sprintOptions,
+                  },
+                ],
+          errors: errorsFor(activeDialog),
+        },
+      })
+    : undefined
 
-  return (
-    <Framed
-      translator={_}
+  const page = (
+    <FormPage
+      scope="flow-issue-detail-form-page"
       title={String(row.title)}
-      frame={frame}
+      description={String(row.projectName ?? '') || undefined}
+      status={badge(String(row.columnName ?? dash), 'info', String(row.columnId ?? ''))}
+      meta={inline([
+        priorityBadge(_, row.priority),
+        badge(`${_('flow_backend.field.assignee')}: ${String(row.assigneeName ?? dash)}`, 'neutral'),
+      ])}
+      actions={inline([
+        <FormCluster
+          label={_('flow_backend.issue.summary')}
+          forms={[
+            button({
+              label: _('flow_backend.action.save'),
+              type: 'submit',
+              form: formId,
+              variant: 'primary',
+            }),
+            linkButton({
+              label: _('flow_backend.action.move'),
+              href: dialogHref('move'),
+              variant: 'secondary',
+            }),
+            linkButton({
+              label: _('flow_backend.action.assignSprint'),
+              href: dialogHref('assignSprint'),
+              variant: 'secondary',
+            }),
+          ]}
+        />,
+        frame.extras?.['topbar.end'] ?? '',
+      ])}
       asideLabel={_('flow_backend.issue.attributes')}
       aside={stack([
         <DefinitionList title={_('flow_backend.issue.attributes')} items={attributes} />,
@@ -127,7 +248,7 @@ export const issueDetailScreen = (
                 size: Number(item.size ?? 0),
                 mimetype: String(item.mimetype ?? ''),
               }))}
-              uploadAction={`${endpoint}/attachments`}
+              uploadAction={attachmentEndpoint}
               emptyTitle={_('flow_backend.attachments.empty')}
               emptyHint={_('flow_backend.attachments.emptyHint')}
               chooseLabel={_('flow_backend.attachments.choose')}
@@ -136,69 +257,21 @@ export const issueDetailScreen = (
           }
         />,
       ])}
+      slots={{ header: 'flow.issue-header', body: 'flow.issue-body' }}
       body={stack([
         <DefinitionList title={_('flow_backend.issue.summary')} items={summary} />,
         <Surface
           body={
             <RecordForm
+              id={formId}
+              scope="flow-issue-detail"
               action={endpoint}
-              hidden={{ action: 'save', expectedVersion: String(row.version ?? 0) }}
+              hidden={withIdempotency({ action: 'save', expectedVersion: String(row.version ?? 0) })}
               fields={options.fields}
               errors={errorsFor('save')}
               submit={_('flow_backend.action.save')}
               submitVariant="primary"
-            />
-          }
-        />,
-        <Section
-          title={_('flow_backend.action.move')}
-          body={
-            <RecordForm
-              action={endpoint}
-              hidden={{ action: 'move', expectedVersion: String(row.version ?? 0) }}
-              fields={[
-                {
-                  name: 'columnId',
-                  label: _('flow_backend.field.column'),
-                  type: 'select',
-                  required: true,
-                  value: String(row.columnId ?? ''),
-                  options: options.columns.map((column) => ({
-                    value: String(column.id),
-                    label: String(column.name),
-                  })),
-                },
-              ]}
-              errors={errorsFor('move')}
-              submit={_('flow_backend.action.move')}
-              submitVariant="secondary"
-            />
-          }
-        />,
-        <Section
-          title={_('flow_backend.action.assignSprint')}
-          body={
-            <RecordForm
-              action={endpoint}
-              hidden={{ action: 'assignSprint', expectedVersion: String(row.version ?? 0) }}
-              fields={[
-                {
-                  name: 'sprintId',
-                  label: _('flow_backend.field.sprint'),
-                  type: 'select',
-                  value: String(row.sprintId ?? ''),
-                  options: [
-                    { value: '', label: '—' },
-                    ...options.sprints.map((sprint) => ({
-                      value: String(sprint.id),
-                      label: String(sprint.name),
-                    })),
-                  ],
-                },
-              ]}
-              errors={errorsFor('assignSprint')}
-              submit={_('flow_backend.action.assignSprint')}
-              submitVariant="secondary"
+              submitPlacement="external"
             />
           }
         />,
@@ -229,7 +302,10 @@ export const issueDetailScreen = (
                       priority: 'primary',
                       cell: (item) =>
                         linkButton({
-                          href: `/admin/flow/issues/${String(item.id)}`,
+                          href: localized(
+                            `/admin/flow/issues/${encodeURIComponent(String(item.id))}`,
+                            options.locale ?? '',
+                          ),
                           label: String(item.title),
                           variant: 'tertiary',
                           size: 'compact',
@@ -315,7 +391,12 @@ export const issueDetailScreen = (
                       label: _('flow_backend.dependencies.target'),
                       cell: (item) =>
                         linkButton({
-                          href: `/admin/flow/issues/${String(item.direction === 'out' ? item.dependsOnIssueId : item.issueId)}`,
+                          href: localized(
+                            `/admin/flow/issues/${encodeURIComponent(
+                              String(item.direction === 'out' ? item.dependsOnIssueId : item.issueId),
+                            )}`,
+                            options.locale ?? '',
+                          ),
                           label: String(item.direction === 'out' ? item.dependsOnTitle : item.issueTitle),
                           variant: 'tertiary',
                           size: 'compact',
@@ -438,4 +519,6 @@ export const issueDetailScreen = (
       ])}
     />
   )
+  const workspace = shell(_, String(row.title), page, { ...frame, topbar: false, titled: false })
+  return overlay ? modalWorkspace(workspace, overlay) : workspace
 }

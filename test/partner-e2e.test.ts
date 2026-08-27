@@ -171,6 +171,70 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   assert.match(partnerForm, /name="customer"[^>]*checked/)
   assert.doesNotMatch(partnerForm, /action="[^"]*\/roles/)
 
+  const accountingForm = await (
+    await e2e.client.get('/admin/partner/partners/customer/accounting?lang=vi')
+  ).text()
+  assert.match(accountingForm, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(accountingForm, /id="partner-accounting-terms-form"/)
+  assert.match(accountingForm, /data-ui="form-actions"[\s\S]*?type="submit"/)
+  assert.match(accountingForm, /action="\/admin\/partner\/partners\/customer\/accounting\?lang=vi"/)
+  assert.match(accountingForm, /href="\/admin\/partner\/partners\/customer\?lang=vi"/)
+  assert.match(accountingForm, /name="paymentTermId"[\s\S]*?value="net30" selected="true"/)
+  assert.match(accountingForm, /name="receivableAccountId"[\s\S]*?value="receivable" selected="true"/)
+  assert.match(accountingForm, /name="payableAccountId"[\s\S]*?value="payable" selected="true"/)
+  assert.match(accountingForm, /data-ui="form-page-aside"[\s\S]*?data-island="mail\.chatter"/)
+  assert.doesNotMatch(accountingForm, /data-ui="record-workspace"/)
+
+  const englishAccountingForm = await (
+    await e2e.client.get('/admin/partner/partners/customer/accounting?lang=en')
+  ).text()
+  assert.match(englishAccountingForm, /Accounting · Công ty Minh An/)
+  assert.match(englishAccountingForm, /action="\/admin\/partner\/partners\/customer\/accounting\?lang=en"/)
+  assert.match(englishAccountingForm, /href="\/admin\/partner\/partners\/customer\?lang=en"/)
+
+  const rejectedAccounting = await e2e.client.post(
+    '/admin/partner/partners/customer/accounting?lang=vi',
+    new URLSearchParams({
+      paymentTermId: 'net30',
+      receivableAccountId: 'bank',
+      payableAccountId: 'payable',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(rejectedAccounting.status, 200)
+  const rejectedAccountingHtml = await rejectedAccounting.text()
+  assert.match(rejectedAccountingHtml, /receivableAccountId: Loại tài khoản không phù hợp/)
+  assert.match(rejectedAccountingHtml, /value="receivable" selected="true"/)
+
+  const refusedAccounting = await e2e.client.post(
+    '/admin/partner/partners/customer/accounting?lang=en',
+    new URLSearchParams({
+      paymentTermId: 'net30',
+      receivableAccountId: 'receivable',
+      payableAccountId: 'payable',
+    }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'https://cross-site.example',
+      },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(refusedAccounting.status, 403)
+
+  const savedAccounting = await e2e.client.post(
+    '/admin/partner/partners/customer/accounting?lang=en',
+    new URLSearchParams({
+      paymentTermId: 'net30',
+      receivableAccountId: 'receivable',
+      payableAccountId: 'payable',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(savedAccounting.status, 303)
+  assert.equal(savedAccounting.headers.get('location'), '/admin/partner/partners/customer?lang=en')
+
   const savedWithRoles = await e2e.client.post(
     '/admin/partner/partners/customer?lang=vi',
     new URLSearchParams({

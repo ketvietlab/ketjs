@@ -5,7 +5,7 @@ import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { formatMoney } from '../../ui/index.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { choices, adminPage, inLocale, optional, timezoneOf } from '../backend/screen.ts'
+import { choices, adminPage, inLocale, localeQuery, optional, timezoneOf } from '../backend/screen.ts'
 import { withParam } from '../backend/paging.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { RelationOption } from '../backend/relation-select.ts'
@@ -22,15 +22,16 @@ import {
 } from './relation-control.ts'
 import {
   CONFIGURATION_TABS,
+  caseCreateScreen,
   caseDetailScreen,
-  casesScreen,
+  casesListScreen,
   configurationScreen,
   leaderboardScreen,
+  plannerScreen,
   permissionScreen,
   pipelineScreen,
-  plannerScreen,
-} from './screens.tsx'
-import type { CaseDetailControls, ConfigurationTab, PipelineFigure } from './screens.tsx'
+} from './screens/index.ts'
+import type { CaseDetailControls, ConfigurationTab, PipelineFigure } from './screens/index.ts'
 import {
   keepForListSearch,
   LIST_PAGE_SIZE,
@@ -258,6 +259,75 @@ const saveInput = (id: string, form: Record<string, string>, kind = form.kind ??
   ...(form.expectedVersion ? { expectedVersion: Number(form.expectedVersion) } : {}),
   idempotencyKey: form.idempotencyKey || randomUUID(),
 })
+
+/** A dedicated create URL that still knows which list or board the reader came from. */
+const caseCreateHref = (
+  url: URL,
+  preset: { stageId?: string; kind?: 'lead' | 'opportunity' } = {},
+): string => {
+  const target = new URL('/admin/crm/cases/new', 'http://ket.local')
+  if (preset.stageId) target.searchParams.set('stageId', preset.stageId)
+  if (preset.kind) target.searchParams.set('kind', preset.kind)
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', `${url.pathname}${url.search}`)
+  return `${target.pathname}${target.search}`
+}
+
+/** Only the CRM board and case list are valid destinations carried through the create form. */
+const caseReturnTo = (url: URL, raw?: string | null): string => {
+  const fallback = inLocale(url, '/admin/crm/cases')
+  if (!raw) return fallback
+  const target = new URL(raw, 'http://ket.local')
+  return ['/admin/crm/cases', '/admin/crm/pipeline'].includes(target.pathname)
+    ? `${target.pathname}${target.search}`
+    : fallback
+}
+
+const caseCreatePage = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  options: {
+    actionPath: '/admin/crm/cases' | '/admin/crm/cases/new'
+    errors?: readonly string[]
+    form?: Record<string, string>
+  },
+) => {
+  const _ = ctx.translate(ctx.localeOf(url, req))
+  const askedStage = url.searchParams.get('stageId')
+  const askedKind = url.searchParams.get('kind')
+  const submitted = options.form ?? {}
+  const preset: AnyRow = {
+    ...(askedStage ? { stageId: askedStage } : {}),
+    ...(askedKind === 'lead' || askedKind === 'opportunity' ? { kind: askedKind } : {}),
+    ...submitted,
+    ...(options.form
+      ? {
+          salesDetail: {
+            expectedRevenue: submitted.expectedRevenue ?? '0',
+            probability: submitted.probability ?? '0',
+            expectedClosing: submitted.expectedClosing ?? '',
+          },
+        }
+      : {}),
+  }
+  const data = await references(ctx, url, req)
+  const controls = await caseControls(ctx, url, req, _, data, 'crm-create', preset)
+  const returnTo = caseReturnTo(url, submitted.returnTo ?? url.searchParams.get('returnTo'))
+  return adminPage(ctx, url, req, {
+    title: 'crm_backend.cases.title',
+    active: '/admin/crm/cases',
+    body: (_, frame) =>
+      caseCreateScreen(_, frame, {
+        fields: caseFields(_, preset, controls),
+        action: inLocale(url, options.actionPath),
+        cancelHref: returnTo,
+        returnTo,
+        errors: options.errors,
+      }),
+  })
+}
 
 const pager = (url: URL, state: ListState, rows: number, total: number) => {
   const link = (target: number) => encodeListState({ ...state, page: target }, url)
@@ -508,10 +578,10 @@ export const routes: Record<string, RouteEntry> = {
               // column offered "new lead" on every stage and the save was then
               // refused for the kind, which is an affordance that points at a
               // column and then argues with it.
-              createHref: inLocale(
-                url,
-                `/admin/crm/cases?stageId=${encodeURIComponent(String(stage.id))}&kind=${kindFor(stage)}`,
-              ),
+              createHref: caseCreateHref(url, {
+                stageId: String(stage.id),
+                kind: kindFor(stage),
+              }),
               createLabel: _(`crm_backend.kanban.create.${kindFor(stage)}`),
             }
           }),
@@ -537,7 +607,7 @@ export const routes: Record<string, RouteEntry> = {
         title: 'crm_backend.pipeline.title',
         body: (_, frame) => {
           frame.chrome = {
-            create: { label: _('crm_backend.action.createLead'), path: inLocale(url, '/admin/crm/cases') },
+            create: { label: _('crm_backend.action.createLead'), path: caseCreateHref(url) },
             search: {
               name: 'q',
               value: search ?? '',
@@ -646,38 +716,34 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req) => {
       const refused = refusePost(req)
       if (refused) return refused
-      const _ = ctx.translate(ctx.localeOf(url, req))
-      let errors: string[] = []
       if (req.method === 'POST') {
-        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const id = randomUUID()
         const result = (await ctx.call('crm.case.save', saveInput(id, form), url, req)) as AnyRow
         if (result.ok) return seeOther(inLocale(url, `/admin/crm/cases/${id}`))
-        errors = errorsOf(result, _)
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const data = await references(ctx, url, req)
-      // `?stageId=` and `?kind=` are how the board's per-column create names the
-      // column it was pressed in, and the only kind that column can hold.
-      const askedStage = url.searchParams.get('stageId')
-      const askedKind = url.searchParams.get('kind')
-      const preset: AnyRow = {
-        ...(askedStage ? { stageId: askedStage } : {}),
-        ...(askedKind === 'lead' || askedKind === 'opportunity' ? { kind: askedKind } : {}),
+        return caseCreatePage(ctx, url, req, {
+          actionPath: '/admin/crm/cases',
+          errors: errorsOf(result, ctx.translate(ctx.localeOf(url, req))),
+          form,
+        })
       }
-      const controls = await caseControls(ctx, url, req, _, data, 'crm-create', preset)
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
       const spec = caseListSearch(table(ctx.manifest, 'crm.Case'))
       const parsed = parseListState(spec, url)
       const state = parsed.state
       const timezone = await timezoneOf(ctx, url, req)
       const grouped = state.groupBy.length > 0
       const cursor = (state.page - 1) * LIST_PAGE_SIZE
-      const result = (await ctx.call(
-        'crm.case.list',
-        { listState: state, timezone, cursor: String(cursor), limit: grouped ? 1 : LIST_PAGE_SIZE },
-        url,
-        req,
-      )) as AnyRow
+      const [result, live] = await Promise.all([
+        ctx.call(
+          'crm.case.list',
+          { listState: state, timezone, cursor: String(cursor), limit: grouped ? 1 : LIST_PAGE_SIZE },
+          url,
+          req,
+        ) as Promise<AnyRow>,
+        ctx.live(req),
+      ])
       const groups = grouped
         ? await loadListGroups(ctx, url, req, state, timezone, {
             groupFunction: 'crm.case.group',
@@ -702,16 +768,35 @@ export const routes: Record<string, RouteEntry> = {
               ? null
               : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
           }
-          return casesScreen(
-            _,
-            frame,
-            grouped ? [] : ((result.rows as AnyRow[]) ?? []),
-            caseFields(_, preset, controls),
-            errors,
+          return casesListScreen(_, frame, {
+            rows: grouped ? [] : ((result.rows as AnyRow[]) ?? []),
             groups,
-          )
+            total: Number(result.total ?? 0),
+            createHref: live.functions['crm.case.save'] ? caseCreateHref(url) : undefined,
+            locale: localeQuery(url),
+          })
         },
       })
+    },
+
+  '/admin/crm/cases/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const refused = refusePost(req)
+      if (refused) return refused
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        const id = randomUUID()
+        const result = (await ctx.call('crm.case.save', saveInput(id, form), url, req)) as AnyRow
+        if (result.ok) return seeOther(inLocale(url, `/admin/crm/cases/${id}`))
+        return caseCreatePage(ctx, url, req, {
+          actionPath: '/admin/crm/cases/new',
+          errors: errorsOf(result, ctx.translate(ctx.localeOf(url, req))),
+          form,
+        })
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      return caseCreatePage(ctx, url, req, { actionPath: '/admin/crm/cases/new' })
     },
 
   '/admin/crm/cases/{id}':
@@ -911,6 +996,7 @@ export const routes: Record<string, RouteEntry> = {
             quotations,
             controls,
             errors,
+            locale: localeQuery(url),
             tab: ['overview', 'sales', 'activities', 'timeline'].includes(url.searchParams.get('tab') ?? '')
               ? String(url.searchParams.get('tab'))
               : 'overview',
@@ -1022,6 +1108,7 @@ export const routes: Record<string, RouteEntry> = {
             activityTypes,
             controls,
             errors,
+            locale: localeQuery(url),
           }),
       })
     },
@@ -1045,7 +1132,12 @@ export const routes: Record<string, RouteEntry> = {
       const listed = (await ctx.call('crm.gamification.list', { limit: 50 }, url, req)) as AnyRow
       return adminPage(ctx, url, req, {
         title: 'crm_backend.leaderboard.title',
-        body: (_, frame) => leaderboardScreen(_, frame, (listed.profiles as AnyRow[]) ?? [], errors),
+        body: (_, frame) =>
+          leaderboardScreen(_, frame, {
+            profiles: (listed.profiles as AnyRow[]) ?? [],
+            errors,
+            locale: localeQuery(url),
+          }),
       })
     },
 
@@ -1056,7 +1148,7 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       const _ = ctx.translate(ctx.localeOf(url, req))
       const tab = configurationTabOf(url)
-      const back = `/admin/crm/configuration?tab=${tab}`
+      const back = inLocale(url, `/admin/crm/configuration?tab=${tab}`)
       let errors: string[] = []
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
@@ -1091,7 +1183,9 @@ export const routes: Record<string, RouteEntry> = {
             tab,
             rows,
             editing,
+            creating: url.searchParams.get('create') === '1' || (req.method === 'POST' && !editing),
             errors,
+            locale: localeQuery(url),
             fields: configurationFields(_, tab, editing, teams, users),
             ...(tab === 'members'
               ? {

@@ -1,3 +1,5 @@
+export { attributesScreen } from './attributes.tsx'
+export { newProductScreen, type ProductCreateOptions } from './create.tsx'
 export {
   productsScreen,
   templateColumns,
@@ -5,7 +7,7 @@ export {
 } from './list.tsx'
 export type { MenuNode, TemplateRow, View } from './list.tsx'
 
-export { favoriteScreen } from './favorite.tsx'
+export { favoriteModal, favoriteScreen } from './favorite.tsx'
 
 export { productDetailScreen, PRODUCT_DETAIL_TABS } from './detail.tsx'
 export type { ProductDetailTab } from './detail.tsx'

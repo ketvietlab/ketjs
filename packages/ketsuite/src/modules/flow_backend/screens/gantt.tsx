@@ -26,7 +26,7 @@ export const ganttScreen = (
   const items: GanttItem[] = rows.map((row) => ({
     id: String(row.id),
     title: String(row.title),
-    href: `/admin/flow/issues/${String(row.id)}`,
+    href: String(row.detailHref ?? `/admin/flow/issues/${encodeURIComponent(String(row.id))}`),
     startsOn: row.startsOn ? String(row.startsOn) : null,
     endsOn: row.dueDate ? String(row.dueDate) : null,
     inferredStart: !row.startDate,

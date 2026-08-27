@@ -475,7 +475,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'epic.list': defineFn({
-    input: { projectId: 'id', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
+    input: { projectId: 'id', id: 'id?', search: 'text?', limit: 'int?', includeArchived: 'bool?' },
     output: {
       id: 'id',
       projectId: 'id',
@@ -488,16 +488,53 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:flow.Epic'],
     agent: true,
     handler: async (ctx, args) => {
-      const rows = await ctx.db.select(
-        'flow.Epic',
-        args.includeArchived === true
-          ? { projectId: args.projectId }
-          : { projectId: args.projectId, active: true },
-      )
+      const where: Row = { projectId: args.projectId }
+      if (args.id) where.id = args.id
+      if (args.includeArchived !== true) where.active = true
+      const rows = await ctx.db.select('flow.Epic', where)
       const needle = normalized(args.search)
-      return rows
-        .filter((row) => !needle || normalized(row.title).includes(needle))
-        .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+      const filtered = rows.filter((row) => !needle || normalized(row.title).includes(needle))
+      return args.id ? filtered : filtered.slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+    },
+  }),
+
+  /**
+   * The menu-level epic collection, paged after one company-scoped read.
+   *
+   * `epic.list` remains project-scoped for relation controls and project
+   * screens. Folding those calls together in the backend inherited both its
+   * 80-row default and `project.list`'s 200-row cap, so an "all" screen could
+   * silently omit valid records.
+   */
+  'epic.listAll': defineFn({
+    input: { search: 'text?', cursor: 'int?', limit: 'int?' },
+    output: { rows: 'json', total: 'int' },
+    effects: ['read:flow.Epic', 'read:flow.Project'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const [epics, projects] = await Promise.all([
+        ctx.db.select('flow.Epic', { active: true }),
+        ctx.db.select('flow.Project', { active: true }),
+      ])
+      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
+      const needle = normalized(args.search)
+      const rows = epics
+        .filter(
+          (epic) => named.has(String(epic.projectId)) && (!needle || normalized(epic.title).includes(needle)),
+        )
+        .map((epic): Row & { projectName: string } => ({
+          ...(epic as Row),
+          projectName: named.get(String(epic.projectId)) ?? '',
+        }))
+        .sort(
+          (a, b) =>
+            String(a.projectName).localeCompare(String(b.projectName)) ||
+            String(a.title ?? '').localeCompare(String(b.title ?? '')) ||
+            String(a.id).localeCompare(String(b.id)),
+        )
+      const cursor = Math.max(0, n(args.cursor ?? 0))
+      const limit = Math.max(1, Math.min(200, n(args.limit ?? 50)))
+      return { rows: rows.slice(cursor, cursor + limit), total: rows.length }
     },
   }),
 
@@ -1083,11 +1120,15 @@ export const functions: Record<string, FnSpec> = {
 
   /** Blocking edges among a node set — the map view's one batch read, see dependenciesFor. */
   'issue.dependencies': defineFn({
-    input: { issueIds: 'json' },
+    input: { issueIds: 'json', includeExternalTargets: 'bool?' },
     output: { issueId: 'id', dependsOnIssueId: 'id', relation: 'text' },
     effects: ['read:flow.IssueDependency'],
     agent: true,
     handler: (ctx, args) =>
-      dependenciesFor(ctx, Array.isArray(args.issueIds) ? args.issueIds.map(String) : []),
+      dependenciesFor(
+        ctx,
+        Array.isArray(args.issueIds) ? args.issueIds.map(String) : [],
+        args.includeExternalTargets === true,
+      ),
   }),
 }

@@ -90,7 +90,7 @@ export default defineModule({
       label: 'flow_backend.menu.epics',
       path: '/admin/flow/epics',
       sequence: 30,
-      needs: 'flow.epic.list',
+      needs: 'flow.epic.listAll',
     },
   },
 })

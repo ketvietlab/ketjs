@@ -29,6 +29,7 @@ const dataOf = (props) => {
   try {
     const value = JSON.parse(String(props.data ?? '{}'))
     return {
+      locale: String(value.locale ?? ''),
       rows: Array.isArray(value.rows) ? value.rows : [],
       columns: Array.isArray(value.columns) ? value.columns : [],
       labels: {
@@ -38,8 +39,16 @@ const dataOf = (props) => {
       },
     }
   } catch {
-    return { rows: [], columns: [], labels: fallback }
+    return { locale: '', rows: [], columns: [], labels: fallback }
   }
+}
+
+const localized = (path, locale) => {
+  if (!locale) return path
+  const target = new URL(path, 'http://ket.local')
+  const lang = new URLSearchParams(String(locale).replace(/^\?/, '')).get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  return `${target.pathname}${target.search}`
 }
 
 export const boardMovePayload = (id, columnId, expectedVersion, idempotencyKey) => ({
@@ -119,12 +128,12 @@ export function createFlowBoardView(runtime, props, seed = {}) {
           (entry) => entry.id,
           (entry) => html`<article data-ui="flow-board-card" draggable="true"
           on:dragstart=${() => dragId.set(entry.id)} data-priority=${String(entry.priority ?? 'normal')} data-busy=${busy() === entry.id}>
-          <h3><a href=${`/admin/flow/issues/${entry.id}`}>${entry.title}</a></h3>
+          <h3><a href=${localized(`/admin/flow/issues/${entry.id}`, initial.locale)}>${entry.title}</a></h3>
           <p data-ui="flow-board-figures">
             <small>${entry.assigneeName ?? labels.unassigned}</small>
             ${entry.dueDate ? html`<small>${entry.dueDate}</small>` : ''}
           </p>
-          <form data-ui="flow-board-move" method="post" action=${`/admin/flow/projects/${entry.projectId}/board/move`}>
+          <form data-ui="flow-board-move" method="post" action=${localized(`/admin/flow/projects/${entry.projectId}/board/move`, initial.locale)}>
             <input type="hidden" name="id" value=${entry.id} autocomplete="off">
             <input type="hidden" name="expectedVersion" value=${String(entry.version)} autocomplete="off">
             <input type="hidden" name="idempotencyKey" value=${`board:${entry.id}:${entry.version}`} autocomplete="off">
@@ -141,7 +150,7 @@ export function createFlowBoardView(runtime, props, seed = {}) {
         </article>`,
         )}
       </div>
-      ${column.loadMoreHref ? html`<a data-ui="action" data-variant="secondary" data-size="compact" href=${column.loadMoreHref}>${labels.loadMore}</a>` : ''}
+      ${column.loadMoreHref ? html`<a data-ui="action" data-variant="secondary" data-size="compact" href=${localized(column.loadMoreHref, initial.locale)}>${labels.loadMore}</a>` : ''}
     </section>`
   }
 

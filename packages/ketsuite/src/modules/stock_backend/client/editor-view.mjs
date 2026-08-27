@@ -45,18 +45,20 @@ const errorText = async (response, fallback) => {
   }
 }
 
-const replaceRecordParts = (markup) => {
+const replaceRecordParts = (markup, props) => {
   const parsed = new DOMParser().parseFromString(markup, 'text/html')
-  const nextHeader = parsed.querySelector('[data-ui="record-header"]')
-  const nextBody = parsed.querySelector('[data-ui="record-body"]')
-  const currentHeader = document.querySelector('[data-ui="record-header"]')
-  const currentBody = document.querySelector('[data-ui="record-body"]')
+  const prefix = props.lotId ? 'stock.lot' : 'stock.transfer'
+  const envelope = parsed.querySelector('ket-fragments')
+  const nextHeader = parsed.querySelector(`template[data-ket-slot="${prefix}-header"]`)
+  const nextBody = parsed.querySelector(`template[data-ket-slot="${prefix}-body"]`)
+  const currentHeader = document.querySelector(`[data-ket-slot="${prefix}-header"]`)
+  const currentBody = document.querySelector(`[data-ket-slot="${prefix}-body"]`)
   if (!nextHeader || !nextBody || !currentHeader || !currentBody)
-    throw new Error('The refreshed record fragment is incomplete.')
+    throw new Error('The refreshed stock fragment is incomplete.')
 
-  currentHeader.replaceWith(document.importNode(nextHeader, true))
-  currentBody.replaceWith(document.importNode(nextBody, true))
-  if (parsed.title) document.title = parsed.title
+  currentHeader.replaceChildren(document.importNode(nextHeader.content, true))
+  currentBody.replaceChildren(document.importNode(nextBody.content, true))
+  if (envelope?.getAttribute('data-title') !== null) document.title = envelope.getAttribute('data-title')
 }
 
 const editorHostFor = (props) => {
@@ -116,7 +118,7 @@ export function createStockEditorView(runtime, props) {
         signal: activeRequest.signal,
       })
       if (!response.ok) throw new Error(await errorText(response, labels.failed))
-      replaceRecordParts(await response.text())
+      replaceRecordParts(await response.text(), props)
       if (disposed) return
       showState('saved', labels.saved)
     } catch (caught) {

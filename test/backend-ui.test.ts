@@ -1364,6 +1364,15 @@ test('table selection: the checkbox cell is a navigation dead zone', () => {
   )
 })
 
+test('route modal runtime traps focus without focusing the backdrop and keeps close navigation local', () => {
+  const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  assert.match(source, /\[data-route-modal="true"\]/)
+  assert.match(source, /event\s*\.composedPath\(\)/)
+  assert.match(source, /!item\.matches\('\[data-ui="modal-backdrop"\]'\)/)
+  assert.match(source, /event\.key === 'Escape'/)
+  assert.match(source, /close\.getAttribute\('href'\) \?\? close\.href/)
+})
+
 test('catalogue: covers empty, long, blocked and error, not just the happy path', () => {
   const ids = CASES.map((c) => c.id)
   for (const needed of ['pages-empty', 'pages-long', 'kit-form', 'state-error']) {

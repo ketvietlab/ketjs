@@ -97,7 +97,7 @@ export {
   recordMore,
 } from './record-detail.tsx'
 export type { RecordRailFact, RecordRailSwitch, RecordRailActivity } from './record-detail.tsx'
-export { modalSheet } from './modal.tsx'
+export { modalForm, modalSheet, modalWorkspace } from './modal.tsx'
 export type {
   RecordBreadcrumbs,
   RecordSummaryItem,
@@ -154,6 +154,7 @@ export {
 export { notice as Notice } from './state.tsx'
 export { breadcrumbs as Breadcrumbs, tabs as Tabs } from './navigation.tsx'
 export { modalSheet as ModalSheet } from './modal.tsx'
+export { modalForm as ModalForm } from './modal.tsx'
 export { datePicker as DatePicker } from './date-picker.tsx'
 export { mediaPanel as MediaPanel } from './media.tsx'
 export { attachmentPanel as AttachmentPanel } from './attachments.tsx'

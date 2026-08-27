@@ -58,6 +58,7 @@ test('user-provision: an empty database becomes one complete legal entity and su
     assert.equal(companyRow?.code, 'KET')
     assert.equal(companyRow?.currency, 'VND')
     assert.equal(companyRow?.partnerId, result.partnerId)
+    assert.equal(companyRow?.version, 1)
     assert.equal(branch?.id, result.branchId)
     assert.equal(branch?.rootKey, result.companyId)
     assert.equal(partnerRow?.kind, 'company')

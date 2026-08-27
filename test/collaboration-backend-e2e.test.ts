@@ -329,8 +329,8 @@ test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer 
   assert.match(html, /data-island="mail\.chatter"/)
   assert.match(html, /&quot;resModel&quot;:&quot;stock\.Picking&quot;/)
   assert.match(html, /WH\/OUT\/COLLAB/)
-  assert.match(html, /data-ui="record-workspace"/)
-  assert.match(html, /data-ui="record-aside"/)
+  assert.match(html, /data-ui="form-page"/)
+  assert.match(html, /data-ui="form-page-aside"/)
   assert.match(html, /data-island="stock\.editor"/)
   assert.match(html, /data-scope="stock-transfer"/)
 
@@ -340,10 +340,12 @@ test('Chatter backend E2E: Stock bridge is company-scoped and owns the transfer 
     { headers: { accept: 'text/html', 'x-ket-partial': 'stock-transfer' } },
   )
   assert.equal(partial.status, 200)
+  assert.match(partial.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
   const partialHtml = await partial.text()
-  assert.match(partialHtml, /data-ui="record-header"/)
-  assert.match(partialHtml, /data-ui="record-body"/)
+  assert.match(partialHtml, /data-ket-slot="stock\.transfer-header"/)
+  assert.match(partialHtml, /data-ket-slot="stock\.transfer-body"/)
   assert.match(partialHtml, /Đã xác nhận/)
+  assert.doesNotMatch(partialHtml, /data-island="(?:stock\.editor|mail\.chatter|activity\.record)"/)
 
   await member.call('stock_mail_backend.follow', { targetId: 'pick-collab' })
   await call('stock_mail_backend.post', {

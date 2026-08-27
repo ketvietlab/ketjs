@@ -422,7 +422,8 @@ cùng một hàng: label nằm trong rail hẹp, control chiếm phần còn l�
 theo cột control. Input và nút liền kề dùng `layout: 'inline'`, chung baseline và chỉ
 wrap theo **cả cụm** khi không đủ chỗ. Mọi `form-control`, kể cả
 `date`/`datetime-local`, có `inline-size: 100%`, `min-inline-size: 0` và chiều cao
-`28px` để native picker không tự nới grid. Mobile hẹp xếp label trên control; action
+`28px` để native picker không tự nới grid. Dưới `768px`, mọi field xếp label trên
+control và control chiếm trọn chiều rộng; action
 giữ touch target `44px`.
 
 `mediaPanel` không biết storage schema. Adapter chỉ đưa URL và POST endpoint; component

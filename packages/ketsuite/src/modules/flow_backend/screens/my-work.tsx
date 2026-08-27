@@ -2,18 +2,23 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   avatar,
+  CardGrid,
   deadline,
   dataTable,
   emptyState,
-  Framed,
   linkButton,
+  ListPage,
+  listChrome,
+  Metric,
   Progress,
   RecordList,
   Section,
+  shell,
   stack,
   Tabs,
 } from '../../../ui/index.ts'
 import type { Frame, TableGroup } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
 import { priorityBadge, when } from './shared.tsx'
 
@@ -30,55 +35,64 @@ export type IssueOverview = {
   late: AnyRow[]
   tab: string
   tabs: Array<{ id: string; label: string; href: string; count: number }>
+  locale?: string
 }
 
 const share = (part: number, whole: number): string => (whole ? `${Math.round((part * 100) / whole)}%` : '—')
 
 /**
- * The counts, as a definition list rather than four cards.
- *
- * They belong together — each is a share of the same total — and reading them
- * as a column of label/number pairs makes that relationship visible in a way
- * four separate cards do not.
+ * The issue buckets are the compact operational summary above the collection.
+ * Their values partition the same result set, so every share is calculated
+ * against the total currently selected by the URL-driven list state.
  */
 const overviewPanel = (_: Translator, o: IssueOverview): TemplateResult => {
-  const lines = [
-    { id: 'total', label: _('flow_backend.overview.total'), value: String(o.total), share: '' },
+  const metrics = [
+    {
+      id: 'total',
+      label: _('flow_backend.overview.total'),
+      value: String(o.total),
+      detail: null as string | null,
+      tone: 'neutral' as const,
+    },
     {
       id: 'done',
       label: _('flow_backend.overview.done'),
       value: String(o.done),
-      share: share(o.done, o.total),
+      detail: share(o.done, o.total),
+      tone: 'positive' as const,
     },
     {
       id: 'working',
       label: _('flow_backend.overview.working'),
       value: String(o.working),
-      share: share(o.working, o.total),
+      detail: share(o.working, o.total),
+      tone: 'info' as const,
     },
     {
       id: 'waiting',
       label: _('flow_backend.overview.waiting'),
       value: String(o.waiting),
-      share: share(o.waiting, o.total),
+      detail: share(o.waiting, o.total),
+      tone: 'neutral' as const,
     },
     {
       id: 'overdue',
       label: _('flow_backend.overview.overdue'),
       value: String(o.overdue),
-      share: share(o.overdue, o.total),
+      detail: share(o.overdue, o.total),
+      tone: 'danger' as const,
     },
   ]
   return (
     <Section
       title={_('flow_backend.overview.title')}
       body={stack([
-        <RecordList
-          rows={lines}
-          id={(line) => line.id}
-          title={(line) => line.label}
-          href={() => ''}
-          value={(line) => `${line.value}${line.share ? `  ${line.share}` : ''}`}
+        <CardGrid
+          items={metrics}
+          id={(metric) => metric.id}
+          card={(metric) => (
+            <Metric label={metric.label} value={metric.value} detail={metric.detail} tone={metric.tone} />
+          )}
         />,
         <Progress
           value={o.total ? Math.round((o.done * 100) / o.total) : null}
@@ -106,130 +120,155 @@ export const crossProjectScreen = (
   rows: AnyRow[],
   groups: TableGroup<AnyRow>[] = [],
   overview?: IssueOverview,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={title}
-    subtitle={_('flow_backend.issues.subtitle')}
-    frame={frame}
-    asideLabel={overview ? _('flow_backend.overview.title') : null}
-    aside={
-      overview
-        ? stack([
-            overviewPanel(_, overview),
-            <Section
-              title={_('flow_backend.overview.lateTitle')}
-              body={
-                overview.late.length ? (
-                  <RecordList
-                    rows={overview.late}
-                    id={(row) => String(row.id)}
-                    title={(row) => String(row.title ?? '')}
-                    href={(row) => `/admin/flow/issues/${String(row.id)}`}
-                    summary={(row) => String(row.projectName ?? '')}
-                    value={(row) => when(row.dueDate)}
-                  />
-                ) : (
-                  emptyState(_('flow_backend.overview.lateNone'), _('flow_backend.overview.lateNoneHint'))
-                )
-              }
-            />,
-          ])
-        : undefined
-    }
-    body={stack([
-      ...(overview
-        ? [
-            <Tabs
-              label={_('flow_backend.issues.tabsLabel')}
-              items={overview.tabs.map((tab) => ({
-                id: tab.id,
-                label: tab.label,
-                href: tab.href,
-                count: tab.count,
-                active: tab.id === overview.tab,
-              }))}
-            />,
-          ]
-        : []),
-      rows.length || groups.length
-        ? dataTable(_, {
-            rows,
-            groups,
-            id: (row) => String(row.id),
-            columns: [
+): TemplateResult => {
+  const locale = overview?.locale ?? ''
+  return shell(
+    _,
+    title,
+    <ListPage
+      title={title}
+      description={_('flow_backend.issues.subtitle')}
+      actions={frame.extras?.['topbar.end']}
+      controls={
+        frame.chrome
+          ? listChrome(
+              _,
+              title,
               {
-                key: 'title',
-                label: _('flow_backend.field.title'),
-                priority: 'primary',
-                cell: (row) =>
-                  linkButton({
-                    href: `/admin/flow/issues/${String(row.id)}`,
-                    label: String(row.title),
-                    variant: 'tertiary',
-                    size: 'compact',
-                  }),
+                ...frame.chrome,
+                layout: 'command',
+                section: undefined,
+                create: null,
+                selection: null,
               },
-              {
-                key: 'project',
-                label: _('flow_backend.field.project'),
-                cell: (row) =>
-                  linkButton({
-                    href: `/admin/flow/projects/${String(row.projectId)}/board`,
-                    label: String(row.projectName ?? '\u2014'),
-                    variant: 'tertiary',
-                    size: 'compact',
-                  }),
-              },
-              {
-                key: 'assignee',
-                label: _('flow_backend.field.assignee'),
-                cell: (row) =>
-                  row.assigneeName ? (
-                    <>
-                      {avatar(String(row.assigneeName))}
-                      {String(row.assigneeName)}
-                    </>
-                  ) : (
-                    '\u2014'
+              false,
+            )
+          : undefined
+      }
+      status={`${title}: ${String(overview?.total ?? rows.length)}`}
+      body={stack([
+        ...(overview
+          ? [
+              overviewPanel(_, overview),
+              <Tabs
+                label={_('flow_backend.issues.tabsLabel')}
+                items={overview.tabs.map((tab) => ({
+                  id: tab.id,
+                  label: tab.label,
+                  href: localized(tab.href, locale),
+                  count: tab.count,
+                  active: tab.id === overview.tab,
+                }))}
+              />,
+            ]
+          : []),
+        rows.length || groups.length
+          ? dataTable(_, {
+              rows,
+              groups,
+              id: (row) => String(row.id),
+              rowHref: (row) => localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
+              columns: [
+                {
+                  key: 'title',
+                  label: _('flow_backend.field.title'),
+                  priority: 'primary',
+                  cell: (row) =>
+                    linkButton({
+                      href: localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
+                      label: String(row.title),
+                      variant: 'tertiary',
+                      size: 'compact',
+                    }),
+                },
+                {
+                  key: 'project',
+                  label: _('flow_backend.field.project'),
+                  cell: (row) =>
+                    linkButton({
+                      href: localized(
+                        `/admin/flow/projects/${encodeURIComponent(String(row.projectId))}/board`,
+                        locale,
+                      ),
+                      label: String(row.projectName ?? '\u2014'),
+                      variant: 'tertiary',
+                      size: 'compact',
+                    }),
+                },
+                {
+                  key: 'assignee',
+                  label: _('flow_backend.field.assignee'),
+                  cell: (row) =>
+                    row.assigneeName ? (
+                      <>
+                        {avatar(String(row.assigneeName))}
+                        {String(row.assigneeName)}
+                      </>
+                    ) : (
+                      '\u2014'
+                    ),
+                },
+                {
+                  key: 'priority',
+                  label: _('flow_backend.field.priority'),
+                  cell: (row) => priorityBadge(_, row.priority),
+                },
+                {
+                  key: 'column',
+                  label: _('flow_backend.field.column'),
+                  cell: (row) => String(row.columnName ?? '\u2014'),
+                },
+                {
+                  key: 'dueDate',
+                  label: _('flow_backend.field.dueDate'),
+                  kind: 'date',
+                  // A date that has passed is the one thing on this row somebody
+                  // has to act on, so it is marked rather than left to be noticed.
+                  cell: (row) => deadline({ date: when(row.dueDate), late: row.overdue === true }),
+                },
+                {
+                  key: 'progress',
+                  label: _('flow_backend.field.progress'),
+                  cell: (row) => (
+                    <Progress
+                      value={row.progress == null ? null : Number(row.progress)}
+                      label={_('flow_backend.field.progress')}
+                      text={
+                        row.progress == null
+                          ? null
+                          : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
+                      }
+                    />
                   ),
-              },
-              {
-                key: 'priority',
-                label: _('flow_backend.field.priority'),
-                cell: (row) => priorityBadge(_, row.priority),
-              },
-              {
-                key: 'column',
-                label: _('flow_backend.field.column'),
-                cell: (row) => String(row.columnName ?? '\u2014'),
-              },
-              {
-                key: 'dueDate',
-                label: _('flow_backend.field.dueDate'),
-                kind: 'date',
-                // A date that has passed is the one thing on this row somebody
-                // has to act on, so it is marked rather than left to be noticed.
-                cell: (row) => deadline({ date: when(row.dueDate), late: row.overdue === true }),
-              },
-              {
-                key: 'progress',
-                label: _('flow_backend.field.progress'),
-                cell: (row) => (
-                  <Progress
-                    value={row.progress == null ? null : Number(row.progress)}
-                    label={_('flow_backend.field.progress')}
-                    text={
-                      row.progress == null
-                        ? null
-                        : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
-                    }
-                  />
-                ),
-              },
-            ],
-          })
-        : emptyState(_('flow_backend.mine.emptyTitle'), _('flow_backend.mine.emptyHint')),
-    ])}
-  />
-)
+                },
+              ],
+            })
+          : emptyState(_('flow_backend.mine.emptyTitle'), _('flow_backend.mine.emptyHint')),
+        ...(overview
+          ? [
+              <Section
+                title={_('flow_backend.overview.lateTitle')}
+                body={
+                  overview.late.length ? (
+                    <RecordList
+                      rows={overview.late}
+                      id={(row) => String(row.id)}
+                      title={(row) => String(row.title ?? '')}
+                      href={(row) =>
+                        localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale)
+                      }
+                      summary={(row) => String(row.projectName ?? '')}
+                      value={(row) => when(row.dueDate)}
+                    />
+                  ) : (
+                    emptyState(_('flow_backend.overview.lateNone'), _('flow_backend.overview.lateNoneHint'))
+                  )
+                }
+              />,
+            ]
+          : []),
+      ])}
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
+}

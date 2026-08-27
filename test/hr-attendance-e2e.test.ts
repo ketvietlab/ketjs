@@ -191,7 +191,9 @@ test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n'
   assert.equal(english.status, 200)
   const englishHtml = await english.text()
   assert.match(englishHtml, /Employees/)
-  assert.match(englishHtml, /name="name"/)
+  assert.match(englishHtml, /data-ui="list-page"/)
+  assert.match(englishHtml, /href="\/admin\/hr\?create=1&amp;lang=en"/)
+  assert.doesNotMatch(englishHtml, /id="hr-employee-form"|data-ui="modal-layer"/)
   assert.doesNotMatch(englishHtml, /name="partnerId"|Partner ID/)
   assert.doesNotMatch(englishHtml, /hr_backend\.[A-Za-z]/)
 

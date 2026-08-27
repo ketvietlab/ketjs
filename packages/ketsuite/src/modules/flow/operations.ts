@@ -701,21 +701,25 @@ export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {
  * No JOIN in this query builder by design, so this is one query against
  * `IssueDependency` alone.
  *
- * Both ends are matched here rather than only `issueId`: an edge pointing out
- * of the set is not an edge of the set, and leaving that to the caller meant
- * `flow.issue.dependencies` — an agent-callable function — answered with
- * edges nobody asked about. The id list is capped for the same reason every
- * other read in this module is: it arrives over HTTP.
+ * Both ends are matched by default: an edge pointing out of the set is not an
+ * edge of the set. The map opts into outgoing edges so it can page a large
+ * source set in bounded chunks, then filters both ends against the complete
+ * epic after aggregation. The id list remains capped because it arrives over
+ * HTTP.
  */
 export const DEPENDENCY_BATCH = 200
 
-export async function dependenciesFor(ctx: Ctx, issueIds: readonly string[]): Promise<Row[]> {
+export async function dependenciesFor(
+  ctx: Ctx,
+  issueIds: readonly string[],
+  includeExternalTargets = false,
+): Promise<Row[]> {
   const ids = [...new Set(issueIds.map(String))].slice(0, DEPENDENCY_BATCH)
   if (!ids.length) return []
   const D = ctx.table('flow.IssueDependency')
   const held = new Set(ids)
   const rows = await ctx.db.all(from(D).where(inArray(D.issueId, ids), eq(D.relation, 'blocks')))
-  return rows.filter((row) => held.has(String(row.dependsOnIssueId)))
+  return includeExternalTargets ? rows : rows.filter((row) => held.has(String(row.dependsOnIssueId)))
 }
 
 export type SaveIssueInput = {

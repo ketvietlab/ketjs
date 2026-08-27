@@ -163,53 +163,76 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /sale_backend\.[A-Za-z]/, path)
     if (path === '/admin/sales/orders') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /Đơn bán đã xác nhận/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.match(html, /data-ui="table"/)
+      assert.match(html, /Theo dõi đơn đã xác nhận, trạng thái lập hoá đơn và tổng giá trị\./)
       assert.match(html, /Khách hàng Minh Anh/)
+      assert.match(html, /href="\/admin\/sales\/orders\/so-1"/)
+      assert.doesNotMatch(html, /data-ui="record-workspace"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/sales/invoicing-policies') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="invoicing-policy-form"/)
-      assert.match(html, /type="radio" name="invoicePolicy" autocomplete="off" value="delivery"/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.match(html, /data-ui="table"/)
       assert.match(html, /Theo số lượng giao/)
+      assert.match(html, /href="\/admin\/sales\/invoicing-policies\?create=1"/)
+      assert.doesNotMatch(html, /id="invoicing-policy-form"|data-ui="record-workspace"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/sales/orders/so-1') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /data-ui="record-aside"/)
+      assert.match(html, /data-ui="form-page" data-scope="sale-order-form-page" data-has-aside="true"/)
+      assert.match(html, /data-ui="form-page-aside"/)
       assert.match(html, /data-island="mail\.chatter"/)
       assert.match(html, /data-island="activity\.record"/)
       assert.match(html, /data-island="sale\.editor"/)
       assert.match(html, /data-scope="sale-order"/)
       assert.match(html, /Thông tin đơn hàng/)
+      assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="record-aside"/)
     }
   }
   const quotationsPage = await e2e.client.get('/admin/sales/quotations?lang=vi', {
     headers: { accept: 'text/html' },
   })
   const quotationsHtml = await quotationsPage.text()
-  assert.match(quotationsHtml, /data-ui="record-workspace"/)
-  assert.match(quotationsHtml, /id="quotation-create-form"/)
-  assert.match(quotationsHtml, /data-scope="sale-quotation-create"/)
-  assert.match(quotationsHtml, /<option value=""/)
+  assert.match(quotationsHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(quotationsHtml, /id="quotation-create-form"/)
   assert.match(quotationsHtml, /Chưa có báo giá/)
   assert.doesNotMatch(quotationsHtml, /data-island="mail\.chatter"/)
+  const quotationCreatePage = await e2e.client.get('/admin/sales/quotations/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const quotationCreateHtml = await quotationCreatePage.text()
+  assert.match(quotationCreateHtml, /data-ui="form-page"/)
+  assert.match(quotationCreateHtml, /id="quotation-create-form"/)
+  assert.match(quotationCreateHtml, /data-scope="sale-quotation-create"/)
+  assert.match(quotationCreateHtml, /<option value=""/)
+  assert.doesNotMatch(quotationCreateHtml, /data-island="mail\.chatter"/)
 
   const salesDashboard = await e2e.client.get('/admin/sales?lang=vi', {
     headers: { accept: 'text/html' },
   })
   const salesDashboardHtml = await salesDashboard.text()
   assert.match(salesDashboardHtml, /Tạo báo giá/)
-  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\?lang=vi#quotation-create-form"/)
+  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\/new\?lang=vi"/)
+  assert.match(salesDashboardHtml, /href="\/admin\/sales\/quotations\?lang=vi&amp;state=draft"/)
   assert.match(salesDashboardHtml, /href="\/admin\/sales\/orders\?lang=vi"/)
 
-  const invalidQuotation = await e2e.client.form<string>('/admin/sales/quotations?lang=vi', {
+  const legacyInvalidRedirect = await e2e.client.post(
+    '/admin/sales/quotations?lang=vi',
+    new URLSearchParams({ partnerId: '', warehouseId: '' }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(legacyInvalidRedirect.status, 303)
+  assert.equal(legacyInvalidRedirect.headers.get('location'), '/admin/sales/quotations/new?lang=vi&invalid=1')
+  const invalidQuotation = await e2e.client.form<string>('/admin/sales/quotations/new?lang=vi', {
     partnerId: '',
     warehouseId: '',
   })
   assert.match(invalidQuotation, /Dữ liệu chưa hợp lệ/)
-  const createdQuotation = await e2e.client.form<string>('/admin/sales/quotations?lang=vi', {
+  const createdQuotation = await e2e.client.form<string>('/admin/sales/quotations/new?lang=vi', {
     partnerId: 'customer',
     warehouseId: 'wh',
     clientOrderRef: 'KH/2026/HTTP',
@@ -228,27 +251,75 @@ test('sale-e2e: quotation to delivery and invoice crosses real HTTP', async (t) 
   })
   const englishDashboardHtml = await englishDashboard.text()
   assert.match(englishDashboardHtml, /Create Quotation/)
-  assert.match(englishDashboardHtml, /href="\/admin\/sales\/quotations\?lang=en#quotation-create-form"/)
+  assert.match(englishDashboardHtml, /href="\/admin\/sales\/quotations\/new\?lang=en"/)
   const english = await e2e.client.get('/admin/sales/orders/so-1?lang=en', {
     headers: { accept: 'text/html' },
   })
   assert.equal(english.status, 200)
-  assert.match(await english.text(), /Sales Order Detail/)
+  const englishDetailHtml = await english.text()
+  assert.match(englishDetailHtml, /data-ui="form-page" data-scope="sale-order-form-page"/)
+  assert.match(englishDetailHtml, /Sales order · Khách hàng Minh Anh/)
   const englishOrders = await e2e.client.get('/admin/sales/orders?lang=en', {
     headers: { accept: 'text/html' },
   })
   const englishOrdersHtml = await englishOrders.text()
-  assert.match(englishOrdersHtml, /Confirmed sales orders/)
+  assert.match(englishOrdersHtml, /data-ui="list-page"/)
+  assert.match(englishOrdersHtml, /Track confirmed orders, invoicing status and total value\./)
   assert.match(englishOrdersHtml, /href="\/admin\/sales\/orders\/so-1\?lang=en"/)
   assert.doesNotMatch(englishOrdersHtml, /data-island="mail\.chatter"/)
   const englishPolicies = await e2e.client.get('/admin/sales/invoicing-policies?lang=en', {
     headers: { accept: 'text/html' },
   })
   const englishPoliciesHtml = await englishPolicies.text()
-  assert.match(englishPoliciesHtml, /Policies by product/)
+  assert.match(englishPoliciesHtml, /data-ui="list-page"/)
   assert.match(englishPoliciesHtml, /Delivered quantities/)
-  assert.match(englishPoliciesHtml, /action="\/admin\/sales\/invoicing-policies\?lang=en"/)
+  assert.match(englishPoliciesHtml, /href="\/admin\/sales\/invoicing-policies\?lang=en&amp;create=1"/)
+  assert.doesNotMatch(englishPoliciesHtml, /id="invoicing-policy-form"/)
   assert.doesNotMatch(englishPoliciesHtml, /data-island="mail\.chatter"/)
+  const englishPolicyForm = await e2e.client.get(
+    '/admin/sales/invoicing-policies/new?lang=en&returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Den',
+    { headers: { accept: 'text/html' } },
+  )
+  const englishPolicyFormHtml = await englishPolicyForm.text()
+  assert.match(englishPolicyFormHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(englishPolicyFormHtml, /id="invoicing-policy-form"/)
+  assert.match(englishPolicyFormHtml, /type="radio" name="invoicePolicy" autocomplete="off" value="delivery"/)
+  assert.match(englishPolicyFormHtml, /Delivered quantities/)
+  assert.match(
+    englishPolicyFormHtml,
+    /action="\/admin\/sales\/invoicing-policies\/new\?lang=en&amp;returnTo=%2Fadmin%2Fsales%2Finvoicing-policies%3Flang%3Den"/,
+  )
+  assert.match(englishPolicyFormHtml, /href="\/admin\/sales\/invoicing-policies\?lang=en"/)
+  assert.doesNotMatch(englishPolicyFormHtml, /data-island="mail\.chatter"/)
+  const rejectedPolicy = await e2e.client.post(
+    '/admin/sales/invoicing-policies/new?lang=en&returnTo=https%3A%2F%2Fevil.example%2Fsteal',
+    new URLSearchParams({ templateId: '', invoicePolicy: '' }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(rejectedPolicy.status, 303)
+  assert.equal(
+    rejectedPolicy.headers.get('location'),
+    '/admin/sales/invoicing-policies?lang=en&create=1&invalid=1',
+  )
+  const rejectedPolicyForm = await e2e.client.get(rejectedPolicy.headers.get('location') ?? '', {
+    headers: { accept: 'text/html' },
+  })
+  assert.match(
+    await rejectedPolicyForm.text(),
+    /The form is invalid\. Check the required fields and try again\./,
+  )
+  const crossSitePolicy = await e2e.client.post(
+    '/admin/sales/invoicing-policies/new?lang=en',
+    new URLSearchParams({ templateId: 'goods', invoicePolicy: 'order' }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://evil.example' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(crossSitePolicy.status, 403)
   const updatePolicy = await e2e.client.post(
     '/admin/sales/invoicing-policies?lang=en',
     new URLSearchParams({ templateId: 'goods', invoicePolicy: 'order' }),

@@ -2,36 +2,52 @@ import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { formatMoney } from '../../ui/index.ts'
+import { formatMoney, modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { accountOptions, accountRelationControl } from './relation-control.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import {
   ACCOUNT_TYPES,
   JOURNAL_TYPES,
+  MOVE_STATES,
   PARTNER_TYPES,
+  PAYMENT_STATES,
   PAYMENT_TERM_DELAY_TYPES,
   PAYMENT_TERM_VALUES,
   PAYMENT_TYPES,
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
-import { moveTitle, optionsOf } from './screens.tsx'
-import { accountDefaultsScreen } from './account-defaults-screen.tsx'
-import { accountingOverviewScreen } from './accounting-overview-screen.tsx'
-import { accountsScreen } from './accounts-screen.tsx'
-import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
-import { journalsScreen } from './journals-screen.tsx'
-import { generalLedgerScreen } from './general-ledger-screen.tsx'
-import { moveDetailScreen } from './move-detail-screen.tsx'
-import { journalEntriesScreen } from './journal-entries-screen.tsx'
-import { paymentsScreen } from './payments-screen.tsx'
-import { paymentTermsScreen } from './payment-terms-screen.tsx'
-import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
-import { taxesScreen } from './taxes-screen.tsx'
-import { trialBalanceScreen } from './trial-balance-screen.tsx'
-import { vendorBillsScreen } from './vendor-bills-screen.tsx'
+import {
+  accountDefaultsScreen,
+  accountFormModal,
+  accountingOverviewScreen,
+  accountsListScreen,
+  customerInvoiceFormScreen,
+  customerInvoicesListScreen,
+  generalLedgerScreen,
+  journalEntriesListScreen,
+  journalEntryCreateModal,
+  journalFormModal,
+  journalsListScreen,
+  labelOf,
+  moveDetailScreen,
+  moveTitle,
+  optionsOf,
+  paymentFormScreen,
+  paymentsListScreen,
+  partnerLedgerScreen,
+  paymentTermFormModal,
+  paymentTermLineFormModal,
+  paymentTermsListScreen,
+  taxFormScreen,
+  taxesListScreen,
+  trialBalanceScreen,
+  vendorBillFormScreen,
+  vendorBillsListScreen,
+} from './screens/index.ts'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { overviewCharts, periodOf, yearsOf } from './overview.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
@@ -122,16 +138,6 @@ const editTarget = (rows: AnyRow[], url: URL): AnyRow | null => {
   return id ? (rows.find((row) => String(row.id) === id) ?? null) : null
 }
 
-/** The form target for a config screen, carrying the edited id and the locale. */
-const configAction = (url: URL, path: string): string => {
-  const target = new URL(path, url)
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  const id = editingId(url)
-  if (id) target.searchParams.set('edit', id)
-  return `${target.pathname}${target.search}`
-}
-
 /** The milestone a payment-term screen is correcting, found across every term's lines. */
 const termLineTarget = (terms: AnyRow[], url: URL): AnyRow | null => {
   const id = url.searchParams.get('editLine') ?? ''
@@ -141,30 +147,135 @@ const termLineTarget = (terms: AnyRow[], url: URL): AnyRow | null => {
   return null
 }
 
-const lineHref = (url: URL, id: unknown): string => {
-  const target = new URL('/admin/accounting/terms', url)
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  target.searchParams.set('editLine', String(id))
+const paymentTermListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/terms'
+  for (const key of ['create', 'edit', 'line', 'editLine', 'invalid', 'returnTo'])
+    target.searchParams.delete(key)
   return `${target.pathname}${target.search}`
 }
 
-const lineFormAction = (url: URL): string => {
-  const target = new URL('/admin/accounting/terms', url)
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  const line = url.searchParams.get('editLine')
-  if (line) target.searchParams.set('editLine', line)
+const paymentTermModalPath = (url: URL, edit?: unknown): string => {
+  const target = new URL(paymentTermListPath(url), 'http://ket.local')
+  if (edit !== undefined && edit !== null && String(edit)) target.searchParams.set('edit', String(edit))
+  else target.searchParams.set('create', '1')
   return `${target.pathname}${target.search}`
 }
 
-const editHref = (url: URL, path: string, id: unknown): string => {
-  const target = new URL(path, url)
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  target.searchParams.set('edit', String(id))
+const paymentTermLineModalPath = (url: URL, edit?: unknown): string => {
+  const target = new URL(paymentTermListPath(url), 'http://ket.local')
+  if (edit !== undefined && edit !== null && String(edit)) target.searchParams.set('editLine', String(edit))
+  else target.searchParams.set('line', '1')
   return `${target.pathname}${target.search}`
 }
+
+const journalEntryListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/entries'
+  for (const key of ['create', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const journalEntryModalPath = (url: URL): string => {
+  const target = new URL(journalEntryListPath(url), 'http://ket.local')
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const CUSTOMER_INVOICE_TYPES = ['out_invoice', 'out_refund', 'out_receipt'] as const
+
+const customerInvoiceListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/customer-invoices'
+  for (const key of ['create', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safeCustomerInvoiceReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/customer-invoices${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' &&
+    candidate.pathname === '/admin/accounting/customer-invoices'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const customerInvoiceFormPath = (url: URL, returnTo: string): string => {
+  const target = new URL('/admin/accounting/customer-invoices/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+
+const VENDOR_BILL_TYPES = ['in_invoice', 'in_refund', 'in_receipt'] as const
+
+const vendorBillListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/vendor-bills'
+  for (const key of ['create', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safeVendorBillReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/vendor-bills${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/vendor-bills'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const vendorBillFormPath = (url: URL, returnTo: string): string => {
+  const target = new URL('/admin/accounting/vendor-bills/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+
+const paymentListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/payments'
+  for (const key of ['create', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safePaymentReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/payments${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/payments'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const paymentFormPath = (url: URL, returnTo: string): string => {
+  const target = new URL('/admin/accounting/payments/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+
+/** HTML date fields are accounting days; domain report filters compare instants in UTC. */
+const accountingRangeInstant = (value: string, edge: 'start' | 'end'): string =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `${value}T${edge === 'start' ? '00:00:00.000' : '23:59:59.999'}Z`
+    : value
+
+const paymentTermSummary = (rows: AnyRow[]) => ({
+  total: rows.length,
+  configured: rows.filter((row) => Array.isArray(row.lines) && row.lines.length > 0).length,
+  lines: rows.reduce((total, row) => total + (Array.isArray(row.lines) ? row.lines.length : 0), 0),
+})
 
 /** The value a field should show: what the row holds when editing, the default otherwise. */
 const prefill = (fields: FormField[], row: AnyRow | null): FormField[] =>
@@ -189,6 +300,338 @@ const targetId = (url: URL): string => editingId(url) || randomUUID()
 const accountName = (_: Translator, account: AnyRow): string =>
   String((_.locale.startsWith('en') && account.nameEn) || account.name)
 
+const accountListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/accounts'
+  for (const key of ['create', 'edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const accountModalPath = (url: URL, edit?: unknown, invalid = false): string => {
+  const target = new URL(accountListPath(url), 'http://ket.local')
+  if (edit) target.searchParams.set('edit', String(edit))
+  else target.searchParams.set('create', '1')
+  if (invalid) target.searchParams.set('invalid', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const safeAccountReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/accounts${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/accounts'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const accountSummary = (rows: AnyRow[]) => {
+  const count = (prefixes: string[]) =>
+    rows.filter((row) => prefixes.some((prefix) => String(row.accountType).startsWith(prefix))).length
+  return {
+    total: rows.length,
+    asset: count(['asset']),
+    liability: count(['liability', 'equity']),
+    profit: count(['income', 'expense']),
+  }
+}
+
+const accountGroups = (_: Translator, url: URL, rows: AnyRow[], grouped: boolean) => {
+  if (!grouped) return undefined
+  const groups = new Map<string, AnyRow[]>()
+  for (const row of rows) {
+    const type = String(row.accountType)
+    groups.set(type, [...(groups.get(type) ?? []), row])
+  }
+  return [...groups.entries()].map(([type, groupRows]) => ({
+    id: `type:${type}`,
+    label: labelOf(_, 'accountType', type),
+    count: groupRows.length,
+    depth: 0,
+    open: true,
+    href: withParam(url, 'group', null),
+    rows: groupRows,
+  }))
+}
+
+const saveAccount = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  form: Awaited<ReturnType<typeof readForm>>,
+) =>
+  ctx.call(
+    'account.saveAccount',
+    {
+      id: targetId(url),
+      code: form.code ?? '',
+      name: form.name ?? '',
+      accountType: form.accountType ?? '',
+      reconcile: form.reconcile === '1',
+      active: form.active === '1',
+    },
+    url,
+    req,
+  )
+
+const accountFields = (_: Translator, editing: AnyRow | null, rejected?: Rejection): FormField[] =>
+  formState(
+    [
+      { name: 'code', label: _('account_backend.field.code'), required: true },
+      {
+        name: 'name',
+        label: _('account_backend.field.name'),
+        required: true,
+        // A bundled account reads under its English name in an English session,
+        // so say which name this field is editing.
+        help: editing?.nameEn ? `${_('account_backend.field.nameEn')}: ${String(editing.nameEn)}` : undefined,
+      },
+      {
+        name: 'accountType',
+        label: _('account_backend.field.accountType'),
+        type: 'select',
+        options: optionsOf(_, 'accountType', ACCOUNT_TYPES),
+      },
+      { name: 'reconcile', label: _('account_backend.field.reconcile'), type: 'checkbox' },
+      {
+        name: 'active',
+        label: _('account_backend.field.active'),
+        type: 'checkbox',
+        value: true,
+        help: _('account_backend.field.activeHint'),
+      },
+    ],
+    editing,
+    rejected,
+  )
+
+const journalListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/journals'
+  for (const key of ['create', 'edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const journalModalPath = (url: URL, edit?: unknown, invalid = false): string => {
+  const target = new URL(journalListPath(url), 'http://ket.local')
+  if (edit) target.searchParams.set('edit', String(edit))
+  else target.searchParams.set('create', '1')
+  if (invalid) target.searchParams.set('invalid', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const safeJournalReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/journals${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/journals'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const journalSummary = (rows: AnyRow[]) => ({
+  total: rows.length,
+  sale: rows.filter((row) => row.type === 'sale').length,
+  purchase: rows.filter((row) => row.type === 'purchase').length,
+  liquidity: rows.filter((row) => ['bank', 'cash'].includes(String(row.type))).length,
+})
+
+const saveJournal = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  form: Awaited<ReturnType<typeof readForm>>,
+) =>
+  ctx.call(
+    'account.saveJournal',
+    {
+      id: targetId(url),
+      name: form.name ?? '',
+      code: form.code ?? '',
+      type: form.type ?? '',
+      ...optional(form, 'defaultAccountId'),
+      active: form.active === '1',
+    },
+    url,
+    req,
+  )
+
+const journalFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  accounts: AnyRow[],
+  editing: AnyRow | null,
+  rejected?: Rejection,
+): Promise<FormField[]> =>
+  formState(
+    [
+      { name: 'name', label: _('account_backend.field.name'), required: true },
+      { name: 'code', label: _('account_backend.field.code'), required: true },
+      {
+        name: 'type',
+        label: _('account_backend.field.type'),
+        type: 'select',
+        options: optionsOf(_, 'journalType', JOURNAL_TYPES),
+      },
+      {
+        name: 'defaultAccountId',
+        label: _('account_backend.field.defaultAccountId'),
+        type: 'select',
+        options: accountChoices(_, accounts, true),
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'journal-default-account',
+          name: 'defaultAccountId',
+          label: _('account_backend.field.defaultAccountId'),
+          accounts: accountOptions(accounts),
+          allowEmpty: true,
+        }),
+      },
+      {
+        name: 'active',
+        label: _('account_backend.field.active'),
+        type: 'checkbox',
+        value: true,
+        help: _('account_backend.field.activeHint'),
+      },
+    ],
+    editing,
+    rejected,
+  )
+
+const taxListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/taxes'
+  for (const key of ['edit', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safeTaxReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/taxes${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/taxes'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const taxFormPath = (url: URL, returnTo: string, edit?: unknown): string => {
+  const target = new URL('/admin/accounting/taxes/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  if (edit) target.searchParams.set('edit', String(edit))
+  return `${target.pathname}${target.search}`
+}
+
+const taxSummary = (rows: AnyRow[]) => ({
+  total: rows.length,
+  sale: rows.filter((row) => row.typeTaxUse === 'sale').length,
+  purchase: rows.filter((row) => row.typeTaxUse === 'purchase').length,
+  included: rows.filter((row) => row.priceInclude).length,
+})
+
+const saveTax = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  form: Awaited<ReturnType<typeof readForm>>,
+) =>
+  ctx.call(
+    'account.saveTax',
+    {
+      id: targetId(url),
+      name: form.name ?? '',
+      ...optional(form, 'description'),
+      typeTaxUse: form.typeTaxUse ?? 'sale',
+      ...optional(form, 'taxScope'),
+      amountType: form.amountType ?? 'percent',
+      amount: form.amount || '0',
+      priceInclude: form.priceInclude === '1',
+      includeBaseAmount: form.includeBaseAmount === '1',
+      ...optional(form, 'accountId'),
+      sequence: Number(form.sequence || 10),
+      active: form.active === '1',
+    },
+    url,
+    req,
+  )
+
+const taxFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  accounts: AnyRow[],
+  editing: AnyRow | null,
+  rejected?: Rejection,
+): Promise<FormField[]> =>
+  formState(
+    [
+      { name: 'name', label: _('account_backend.field.name'), required: true },
+      { name: 'description', label: _('account_backend.field.description') },
+      {
+        name: 'typeTaxUse',
+        label: _('account_backend.field.typeTaxUse'),
+        type: 'select',
+        options: optionsOf(_, 'taxUse', TAX_USES),
+      },
+      {
+        name: 'amountType',
+        label: _('account_backend.field.amountType'),
+        type: 'select',
+        options: optionsOf(_, 'taxAmountType', TAX_AMOUNT_TYPES),
+      },
+      {
+        name: 'amount',
+        label: _('account_backend.field.amount'),
+        type: 'decimal',
+        value: 0,
+        required: true,
+      },
+      {
+        name: 'accountId',
+        label: _('account_backend.field.accountId'),
+        type: 'select',
+        options: accountChoices(_, accounts, true),
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'tax-account',
+          name: 'accountId',
+          label: _('account_backend.field.accountId'),
+          accounts: accountOptions(accounts),
+          allowEmpty: true,
+        }),
+      },
+      { name: 'priceInclude', label: _('account_backend.field.priceInclude'), type: 'checkbox' },
+      {
+        name: 'includeBaseAmount',
+        label: _('account_backend.field.includeBaseAmount'),
+        type: 'checkbox',
+        help: _('account_backend.field.includeBaseAmountHint'),
+      },
+      {
+        name: 'sequence',
+        label: _('account_backend.field.sequence'),
+        type: 'number',
+        value: 10,
+        help: _('account_backend.field.sequenceHint'),
+      },
+      {
+        name: 'active',
+        label: _('account_backend.field.active'),
+        type: 'checkbox',
+        value: true,
+        help: _('account_backend.field.activeHint'),
+      },
+    ],
+    editing,
+    rejected,
+  )
+
 const accountChoices = (_: Translator, rows: AnyRow[], empty = false) => [
   ...(empty ? [{ value: '', label: '—' }] : []),
   ...rows.map((row) => ({ value: String(row.id), label: `${String(row.code)} · ${accountName(_, row)}` })),
@@ -198,6 +641,40 @@ const accountLabel = (_: Translator, rows: AnyRow[], id: unknown): string => {
   const held = rows.find((row) => String(row.id) === String(id))
   return held ? `${String(held.code)} · ${accountName(_, held)}` : String(id ?? '')
 }
+
+type AccountFieldRelation = {
+  accounts: AnyRow[]
+  accountTypes: string[]
+}
+
+/** Add the searchable account picker without losing the value restored by formState. */
+const accountRelationFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  scope: string,
+  fields: FormField[],
+  relations: Record<string, AccountFieldRelation>,
+): Promise<FormField[]> =>
+  Promise.all(
+    fields.map(async (field) => {
+      const relation = relations[field.name]
+      if (!relation) return field
+      return {
+        ...field,
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: `${scope}:${field.name}`,
+          name: field.name,
+          label: field.label,
+          value: field.value === undefined || field.value === null ? '' : String(field.value),
+          accounts: accountOptions(relation.accounts),
+          accountTypes: relation.accountTypes,
+          allowEmpty: true,
+        }),
+      }
+    }),
+  )
 
 /** The control accounts a payment can settle: receivables and payables, nothing else. */
 const CONTROL_TYPES = ['asset_receivable', 'liability_payable']
@@ -229,6 +706,121 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   }
 }
 
+const paymentFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  data: Awaited<ReturnType<typeof common>>,
+  openItems: AnyRow[],
+  rejected?: Rejection,
+): Promise<FormField[]> => {
+  const values = rejected?.values ?? {}
+  const keepRow = (rows: AnyRow[], id: string, fallback: AnyRow): AnyRow[] =>
+    id && !rows.some((row) => String(row.id) === id) ? [fallback, ...rows] : rows
+  const partners = keepRow(data.partners, values.partnerId ?? '', {
+    id: values.partnerId,
+    name: values.partnerId,
+  })
+  const liquidityJournals = keepRow(
+    data.journals.filter((journal) => ['bank', 'cash'].includes(String(journal.type))),
+    values.journalId ?? '',
+    { id: values.journalId, name: values.journalId },
+  )
+  const settleable = controlAccounts(data.accounts)
+  const selectedAccount = data.accounts.find(
+    (account) => String(account.id) === String(values.destinationAccountId ?? ''),
+  )
+  const destinationAccounts = keepRow(settleable, values.destinationAccountId ?? '', {
+    id: values.destinationAccountId,
+    code: values.destinationAccountId,
+    name: selectedAccount ? accountName(_, selectedAccount) : values.destinationAccountId,
+    accountType: selectedAccount?.accountType ?? '',
+  })
+  const reconciliationItems = keepRow(openItems, values.reconcileLineId ?? '', {
+    id: values.reconcileLineId,
+  })
+  const fields: FormField[] = [
+    { name: 'name', label: _('account_backend.field.name'), required: true },
+    {
+      name: 'paymentType',
+      label: _('account_backend.field.paymentType'),
+      type: 'select',
+      options: optionsOf(_, 'paymentType', PAYMENT_TYPES),
+    },
+    {
+      name: 'partnerType',
+      label: _('account_backend.field.partnerType'),
+      type: 'select',
+      options: optionsOf(_, 'partnerType', PARTNER_TYPES),
+    },
+    {
+      name: 'partnerId',
+      label: _('account_backend.field.partnerId'),
+      type: 'select',
+      options: choices(partners, true),
+      control: await partnerRelationControl(ctx, url, req, _, {
+        id: 'payment-partner',
+        partners: partners as Array<{ id: string; name: string; ref?: string | null }>,
+        fieldLabel: _('account_backend.field.partnerId'),
+        title: _('account_backend.relation.partners'),
+        allowEmpty: true,
+        value: values.partnerId,
+      }),
+    },
+    {
+      name: 'journalId',
+      label: _('account_backend.field.journalId'),
+      type: 'select',
+      options: choices(liquidityJournals),
+      required: true,
+    },
+    {
+      name: 'destinationAccountId',
+      label: _('account_backend.field.destinationAccountId'),
+      type: 'select',
+      options: accountChoices(_, destinationAccounts),
+      required: true,
+      help: _('account_backend.field.destinationAccountIdHint'),
+      control: await accountRelationControl(ctx, url, req, _, {
+        id: 'payment-destination-account',
+        name: 'destinationAccountId',
+        label: _('account_backend.field.destinationAccountId'),
+        value: values.destinationAccountId,
+        accounts: accountOptions(destinationAccounts),
+        accountTypes: CONTROL_TYPES,
+        required: true,
+      }),
+    },
+    {
+      name: 'amount',
+      label: _('account_backend.field.paymentAmount'),
+      type: 'decimal',
+      value: 0,
+      required: true,
+    },
+    { name: 'date', label: _('account_backend.field.date'), type: 'date' },
+    { name: 'memo', label: _('account_backend.field.memo') },
+    { name: 'paymentReference', label: _('account_backend.field.paymentReference') },
+    {
+      name: 'reconcileLineId',
+      label: _('account_backend.field.reconcileLineId'),
+      type: 'select',
+      options: [
+        { value: '', label: '—' },
+        ...reconciliationItems.map((line) => ({
+          value: String(line.id),
+          label:
+            line.accountId == null
+              ? String((line.move as AnyRow | undefined)?.name ?? line.moveId ?? line.id)
+              : `${String((line.move as AnyRow | undefined)?.name ?? line.moveId)} · ${accountLabel(_, data.accounts, line.accountId)} · ${formatMoney(_, line.amountResidual, (line.move as AnyRow | undefined)?.currency)}`,
+        })),
+      ],
+    },
+  ]
+  return restore(fields, rejected)
+}
+
 const moveFields = async (
   ctx: ServeContext,
   url: URL,
@@ -236,6 +828,7 @@ const moveFields = async (
   _: Translator,
   data: Awaited<ReturnType<typeof common>>,
   types: readonly string[],
+  partnerValue?: string,
 ): Promise<FormField[]> => [
   {
     name: 'journalId',
@@ -269,6 +862,7 @@ const moveFields = async (
       fieldLabel: _('account_backend.field.partnerId'),
       title: _('account_backend.relation.partners'),
       allowEmpty: true,
+      value: partnerValue,
     }),
   },
 ]
@@ -280,6 +874,7 @@ const invoiceFields = async (
   _: Translator,
   data: Awaited<ReturnType<typeof common>>,
   types: readonly string[],
+  values?: Record<string, string>,
 ): Promise<FormField[]> => {
   const customer = types.every((type) => type.startsWith('out_'))
   const journals = data.journals.filter((journal) => journal.type === (customer ? 'sale' : 'purchase'))
@@ -322,6 +917,7 @@ const invoiceFields = async (
         fieldLabel: _('account_backend.field.partnerId'),
         title: _('account_backend.relation.partners'),
         required: true,
+        value: values?.partnerId,
       }),
       required: true,
     },
@@ -378,6 +974,7 @@ const invoiceFields = async (
         accounts: accountOptions(lineAccounts),
         accountTypes: customer ? ['income*'] : ['expense*'],
         allowEmpty: true,
+        value: values?.lineAccountId,
       }),
     },
     {
@@ -393,6 +990,7 @@ const invoiceFields = async (
         accounts: accountOptions(counterpartAccounts),
         accountTypes: [customer ? 'asset_receivable' : 'liability_payable'],
         allowEmpty: true,
+        value: values?.counterpartAccountId,
       }),
     },
     { name: 'taxId', label: _('account_backend.field.taxId'), type: 'select', options: choices(taxes, true) },
@@ -416,6 +1014,7 @@ const invoiceFields = async (
         label: _('account_backend.field.taxAccountId'),
         accounts: accountOptions(data.accounts),
         allowEmpty: true,
+        value: values?.taxAccountId,
       }),
       help: _('account_backend.field.taxAccountIdHint'),
     },
@@ -433,7 +1032,7 @@ const createInvoice = async (
   const taxIds = [form.taxId, form.secondTaxId].filter(
     (id, at, all): id is string => Boolean(id) && all.indexOf(id) === at,
   )
-  const id = randomUUID()
+  const id = form.id || randomUUID()
   const result = await ctx.call(
     'account.createInvoice',
     {
@@ -460,7 +1059,8 @@ const createInvoice = async (
     url,
     req,
   )
-  if (!succeeded(result)) return { rejected: rejection(result, ctx.translate(ctx.localeOf(url, req)), form) }
+  if (!succeeded(result))
+    return { rejected: rejection(result, ctx.translate(ctx.localeOf(url, req)), { ...form, id }) }
   // A new invoice is a draft that still has to be posted, so the reader goes to it
   // rather than back to a list where it is one unnamed row among many.
   const opened = `${encodeURIComponent(id)}${localeQuery(url)}`
@@ -473,34 +1073,121 @@ const createInvoice = async (
   }
 }
 
+const submitPayment = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+): Promise<{ done: ReturnType<typeof seeOther> | ReturnType<typeof text> } | { rejected: Rejection }> => {
+  const form = await readForm(req)
+  // The action marker belongs to the new form. Missing remains the legacy
+  // collection POST; a named foreign action must never register money.
+  if (form.action && form.action !== 'register')
+    return { done: text('invalid payment action', { status: 400 }) }
+  const id = form.id || randomUUID()
+  const result = await ctx.call(
+    'account.registerPayment',
+    {
+      id,
+      name: form.name ?? '',
+      paymentType: form.paymentType ?? 'inbound',
+      partnerType: form.partnerType ?? 'customer',
+      ...optional(form, 'partnerId'),
+      journalId: form.journalId ?? '',
+      destinationAccountId: form.destinationAccountId ?? '',
+      amount: form.amount || '0',
+      ...optional(form, 'date'),
+      ...optional(form, 'memo'),
+      ...optional(form, 'paymentReference'),
+      ...optional(form, 'reconcileLineId'),
+    },
+    url,
+    req,
+  )
+  if (succeeded(result)) return { done: seeOther(safePaymentReturnTo(url)) }
+  return {
+    rejected: rejection(result, ctx.translate(ctx.localeOf(url, req)), { ...form, id }),
+  }
+}
+
+type MoveRouteFamily = 'entry' | 'customer' | 'vendor'
+
+const moveFamily = (move: AnyRow): MoveRouteFamily =>
+  (CUSTOMER_INVOICE_TYPES as readonly string[]).includes(String(move.moveType))
+    ? 'customer'
+    : (VENDOR_BILL_TYPES as readonly string[]).includes(String(move.moveType))
+      ? 'vendor'
+      : 'entry'
+
+const canonicalMovePath = (move: AnyRow, url: URL): string => {
+  const family = moveFamily(move)
+  const collection =
+    family === 'customer'
+      ? '/admin/accounting/customer-invoices'
+      : family === 'vendor'
+        ? '/admin/accounting/vendor-bills'
+        : '/admin/accounting/entries'
+  return `${collection}/${encodeURIComponent(String(move.id))}${localeQuery(url)}`
+}
+
 const accountMoveRoute =
+  (family: MoveRouteFamily) =>
   (ctx: ServeContext): Route =>
   async (url, req, params) => {
+    if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+    if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+    let move = (await ctx.call('account.getMove', { id: params.id }, url, req)) as AnyRow | null
+    if (!move)
+      return text(ctx.translate(ctx.localeOf(url, req))('account_backend.move.notFound'), { status: 404 })
+    if (moveFamily(move) !== family) return seeOther(canonicalMovePath(move, url))
+
     let rejected: Rejection | undefined
     if (req.method === 'POST') {
-      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       const result =
         form.action === 'post'
-          ? await ctx.call('account.postMove', { id: params.id }, url, req)
+          ? await ctx.call(
+              'account.postMove',
+              {
+                id: params.id,
+                ...(form.expectedRevision ? { expectedRevision: Number(form.expectedRevision) } : {}),
+              },
+              url,
+              req,
+            )
           : form.action === 'cancel'
-            ? await ctx.call('account.cancelMove', { id: params.id }, url, req)
+            ? await ctx.call(
+                'account.cancelMove',
+                {
+                  id: params.id,
+                  ...(form.expectedRevision ? { expectedRevision: Number(form.expectedRevision) } : {}),
+                },
+                url,
+                req,
+              )
             : form.action === 'reverse'
-              ? await ctx.call('account.reverseMove', { id: params.id, reversalId: randomUUID() }, url, req)
-              : await ctx.call(
-                  'account.addMoveLine',
-                  {
-                    id: randomUUID(),
-                    moveId: params.id,
-                    name: form.name ?? '',
-                    accountId: form.accountId ?? '',
-                    ...optional(form, 'partnerId'),
-                    debit: form.debit || '0',
-                    credit: form.credit || '0',
-                  },
+              ? await ctx.call(
+                  'account.reverseMove',
+                  { id: params.id, reversalId: form.reversalId || randomUUID() },
                   url,
                   req,
                 )
+              : form.action === 'add-line'
+                ? await ctx.call(
+                    'account.addMoveLine',
+                    {
+                      id: form.lineId || randomUUID(),
+                      moveId: params.id,
+                      name: form.name ?? '',
+                      accountId: form.accountId ?? '',
+                      ...optional(form, 'partnerId'),
+                      debit: form.debit || '0',
+                      credit: form.credit || '0',
+                    },
+                    url,
+                    req,
+                  )
+                : null
+      if (!result) return text('invalid action', { status: 400 })
       if (succeeded(result))
         // A reversal is a journal entry of its own, so the user lands on it rather
         // than on the document they just corrected.
@@ -510,13 +1197,11 @@ const accountMoveRoute =
             : `${url.pathname}${localeQuery(url)}`,
         )
       rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
-    } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-    const [move, accounts] = (await Promise.all([
-      ctx.call('account.getMove', { id: params.id }, url, req),
-      ctx.call('account.listAccounts', {}, url, req),
-    ])) as [AnyRow | null, AnyRow[]]
-    if (!move)
-      return text(ctx.translate(ctx.localeOf(url, req))('account_backend.move.notFound'), { status: 404 })
+      move = (await ctx.call('account.getMove', { id: params.id }, url, req)) as AnyRow | null
+      if (!move)
+        return text(ctx.translate(ctx.localeOf(url, req))('account_backend.move.notFound'), { status: 404 })
+    }
+    const accounts = (await ctx.call('account.listAccounts', {}, url, req)) as AnyRow[]
     const lang = ctx.localeOf(url, req)
     const collaboration = await ctx.joint(url, req, 'account_backend:move.collaboration', {
       resModel: 'account.Move',
@@ -536,17 +1221,18 @@ const accountMoveRoute =
       title: moveTitle(ctx.translate(lang), move),
       translate: false,
       body: (_, frame) =>
-        moveDetailScreen(
-          _,
+        moveDetailScreen(_, {
           move,
-          (move.lines as AnyRow[]) ?? [],
+          lines: (move.lines as AnyRow[]) ?? [],
           frame,
-          accountChoices(_, accounts),
-          `${url.pathname}${localeQuery(url)}`,
+          accountOptions: accountChoices(_, accounts),
+          action: `${url.pathname}${localeQuery(url)}`,
           collaboration,
-          printGroup(_, printable, String(move.id), url.search),
-          rejected?.messages,
-        ),
+          printActions: printGroup(_, printable, String(move.id), url.search),
+          rejected,
+          lineId: rejected?.values.lineId || randomUUID(),
+          reversalId: rejected?.values.reversalId || randomUUID(),
+        }),
     })
   }
 
@@ -772,6 +1458,8 @@ export default defineModule({
               partnerHref: (partnerId) => {
                 const target = new URL('/admin/accounting/partner-statement', url)
                 target.searchParams.set('partnerId', partnerId)
+                target.searchParams.set('dateFrom', period.fromDay)
+                target.searchParams.set('dateTo', period.toDay)
                 const lang = url.searchParams.get('lang')
                 if (lang) target.searchParams.set('lang', lang)
                 return `${target.pathname}${target.search}`
@@ -787,70 +1475,170 @@ export default defineModule({
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const result = await ctx.call(
-            'account.saveAccount',
-            {
-              id: targetId(url),
-              code: form.code ?? '',
-              name: form.name ?? '',
-              accountType: form.accountType ?? '',
-              reconcile: form.reconcile === '1',
-              active: form.active === '1',
-            },
-            url,
-            req,
-          )
-          if (succeeded(result)) return seeOther(`/admin/accounting/accounts${localeQuery(url)}`)
+          const result = await saveAccount(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(accountListPath(url))
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('account.listAccounts', { includeArchived: true }, url, req)) as AnyRow[]
-        const editing = editTarget(rows, url)
+        const all = (await ctx.call('account.listAccounts', { includeArchived: true }, url, req)) as AnyRow[]
+        const editing = editTarget(all, url)
+        const returnTo = accountListPath(url)
+        const modalOpen =
+          req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url))
+        const formPath = accountModalPath(url, editing?.id ?? editingId(url))
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
+          ? url.searchParams.get('status')
+          : null
+        const family = ['asset', 'liability', 'profit'].includes(String(url.searchParams.get('family')))
+          ? url.searchParams.get('family')
+          : null
+        const grouped = url.searchParams.get('group') === 'type'
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          const active = row.active === true
+          if (status === 'active' && !active) return false
+          if (status === 'archived' && active) return false
+          const type = String(row.accountType)
+          if (family === 'asset' && !type.startsWith('asset')) return false
+          if (family === 'liability' && !['liability', 'equity'].some((prefix) => type.startsWith(prefix)))
+            return false
+          if (family === 'profit' && !['income', 'expense'].some((prefix) => type.startsWith(prefix)))
+            return false
+          return (
+            !needle ||
+            `${String(row.code)} ${accountName(ctx.translate(ctx.localeOf(url, req)), row)}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = grouped ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.accounts.title',
-          body: (_, frame) =>
-            accountsScreen(_, {
-              frame: frame,
-              action: configAction(url, '/admin/accounting/accounts'),
+          body: (_, frame) => {
+            const workspace = accountsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.accounts.title'),
+                    keep: {
+                      ...(status ? { status } : {}),
+                      ...(family ? { family } : {}),
+                      ...(grouped ? { group: 'type' } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(status
+                        ? [
+                            {
+                              label:
+                                status === 'active'
+                                  ? _('account_backend.active')
+                                  : _('account_backend.archived'),
+                              without: withParam(url, 'status', null),
+                            },
+                          ]
+                        : []),
+                      ...(family
+                        ? [
+                            {
+                              label: _(`account_backend.account.summary.${family}`),
+                              without: withParam(url, 'family', null),
+                            },
+                          ]
+                        : []),
+                      ...(grouped
+                        ? [
+                            {
+                              label: `${_('backend.chrome.groupBy')}: ${_('account_backend.field.accountType')}`,
+                              without: withParam(url, 'group', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          {
+                            id: 'status:active',
+                            label: _('account_backend.active'),
+                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
+                            active: status === 'active',
+                          },
+                          {
+                            id: 'status:archived',
+                            label: _('account_backend.archived'),
+                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
+                            active: status === 'archived',
+                          },
+                          ...(['asset', 'liability', 'profit'] as const).map((value) => ({
+                            id: `family:${value}`,
+                            label: _(`account_backend.account.summary.${value}`),
+                            path: withParam(url, 'family', family === value ? null : value),
+                            active: family === value,
+                          })),
+                        ],
+                      },
+                      {
+                        id: 'group',
+                        label: _('backend.chrome.groupBy'),
+                        items: [
+                          {
+                            id: 'group:type',
+                            label: _('account_backend.field.accountType'),
+                            path: withParam(url, 'group', grouped ? null : 'type'),
+                            active: grouped,
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  pager: grouped ? null : pager(url, page, rows.length, matching.length),
+                },
+              },
               rows,
-              editing,
-              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
-              rowHref: (row) => editHref(url, '/admin/accounting/accounts', row.id),
-              cancelHref: `/admin/accounting/accounts${localeQuery(url)}`,
+              createHref: accountModalPath(url),
+              rowHref: (row) => accountModalPath(url, row.id),
               displayName: (row) => accountName(_, row),
-              errors: rejected?.messages,
-              fields: formState(
-                [
-                  { name: 'code', label: _('account_backend.field.code'), required: true },
-                  {
-                    name: 'name',
-                    label: _('account_backend.field.name'),
-                    required: true,
-                    // A bundled account reads under its English name in an English
-                    // session, so say which name this field is editing.
-                    help: editing?.nameEn
-                      ? `${_('account_backend.field.nameEn')}: ${String(editing.nameEn)}`
-                      : undefined,
-                  },
-                  {
-                    name: 'accountType',
-                    label: _('account_backend.field.accountType'),
-                    type: 'select',
-                    options: optionsOf(_, 'accountType', ACCOUNT_TYPES),
-                  },
-                  { name: 'reconcile', label: _('account_backend.field.reconcile'), type: 'checkbox' },
-                  {
-                    name: 'active',
-                    label: _('account_backend.field.active'),
-                    type: 'checkbox',
-                    value: true,
-                    help: _('account_backend.field.activeHint'),
-                  },
-                ],
+              summary: accountSummary(all),
+              table: { groups: accountGroups(_, url, matching, grouped) },
+            })
+            if (!modalOpen) return workspace
+            return modalWorkspace(
+              workspace,
+              accountFormModal(_, {
+                frame,
+                action: formPath,
+                cancelHref: returnTo,
                 editing,
-                rejected,
-              ),
-            }),
+                displayName: (row) => accountName(_, row),
+                errors:
+                  rejected?.messages ??
+                  (url.searchParams.get('invalid') === '1'
+                    ? [_('account_backend.error.invalid')]
+                    : undefined),
+                fields: accountFields(_, editing, rejected),
+              }),
+            )
+          },
         })
+      },
+    '/admin/accounting/accounts/new':
+      (ctx): Route =>
+      async (url, req) => {
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const result = await saveAccount(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(safeAccountReturnTo(url))
+          return seeOther(accountModalPath(url, editingId(url), true))
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        return seeOther(accountModalPath(url, editingId(url), url.searchParams.get('invalid') === '1'))
       },
     '/admin/accounting/journals':
       (ctx): Route =>
@@ -859,80 +1647,138 @@ export default defineModule({
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const result = await ctx.call(
-            'account.saveJournal',
-            {
-              id: targetId(url),
-              name: form.name ?? '',
-              code: form.code ?? '',
-              type: form.type ?? '',
-              ...optional(form, 'defaultAccountId'),
-              active: form.active === '1',
-            },
-            url,
-            req,
-          )
-          if (succeeded(result)) return seeOther(`/admin/accounting/journals${localeQuery(url)}`)
+          const result = await saveJournal(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(journalListPath(url))
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const data = await common(ctx, url, req)
-        const journals = (await ctx.call(
-          'account.listJournals',
-          { includeArchived: true },
-          url,
-          req,
-        )) as AnyRow[]
-        const editing = editTarget(journals, url)
+        const all = (await ctx.call('account.listJournals', { includeArchived: true }, url, req)) as AnyRow[]
+        const editing = editTarget(all, url)
+        const returnTo = journalListPath(url)
+        const modalOpen =
+          req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url))
+        const formPath = journalModalPath(url, editing?.id ?? editingId(url))
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
+          ? url.searchParams.get('status')
+          : null
+        const type = JOURNAL_TYPES.includes(String(url.searchParams.get('type')) as never)
+          ? url.searchParams.get('type')
+          : null
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          const active = row.active === true
+          if (status === 'active' && !active) return false
+          if (status === 'archived' && active) return false
+          if (type && row.type !== type) return false
+          return !needle || `${String(row.code)} ${String(row.name)}`.toLocaleLowerCase().includes(needle)
+        })
+        const journals = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.journals.title',
-          body: async (_, frame) =>
-            journalsScreen(_, {
-              frame: frame,
-              action: configAction(url, '/admin/accounting/journals'),
+          body: async (_, frame) => {
+            const workspace = journalsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.journals.title'),
+                    keep: {
+                      ...(status ? { status } : {}),
+                      ...(type ? { type } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(status
+                        ? [
+                            {
+                              label:
+                                status === 'active'
+                                  ? _('account_backend.active')
+                                  : _('account_backend.archived'),
+                              without: withParam(url, 'status', null),
+                            },
+                          ]
+                        : []),
+                      ...(type
+                        ? [
+                            {
+                              label: labelOf(_, 'journalType', type),
+                              without: withParam(url, 'type', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          {
+                            id: 'status:active',
+                            label: _('account_backend.active'),
+                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
+                            active: status === 'active',
+                          },
+                          {
+                            id: 'status:archived',
+                            label: _('account_backend.archived'),
+                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
+                            active: status === 'archived',
+                          },
+                          ...JOURNAL_TYPES.map((value) => ({
+                            id: `type:${value}`,
+                            label: labelOf(_, 'journalType', value),
+                            path: withParam(url, 'type', type === value ? null : value),
+                            active: type === value,
+                          })),
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, journals.length, matching.length),
+                },
+              },
               rows: journals,
               accounts: data.accounts,
-              editing,
-              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
-              rowHref: (row) => editHref(url, '/admin/accounting/journals', row.id),
-              cancelHref: `/admin/accounting/journals${localeQuery(url)}`,
-              displayName: (row) => accountName(_, row),
-              errors: rejected?.messages,
-              fields: formState(
-                [
-                  { name: 'name', label: _('account_backend.field.name'), required: true },
-                  { name: 'code', label: _('account_backend.field.code'), required: true },
-                  {
-                    name: 'type',
-                    label: _('account_backend.field.type'),
-                    type: 'select',
-                    options: optionsOf(_, 'journalType', JOURNAL_TYPES),
-                  },
-                  {
-                    name: 'defaultAccountId',
-                    label: _('account_backend.field.defaultAccountId'),
-                    type: 'select',
-                    options: accountChoices(_, data.accounts, true),
-                    control: await accountRelationControl(ctx, url, req, _, {
-                      id: 'journal-default-account',
-                      name: 'defaultAccountId',
-                      label: _('account_backend.field.defaultAccountId'),
-                      accounts: accountOptions(data.accounts),
-                      allowEmpty: true,
-                    }),
-                  },
-                  {
-                    name: 'active',
-                    label: _('account_backend.field.active'),
-                    type: 'checkbox',
-                    value: true,
-                    help: _('account_backend.field.activeHint'),
-                  },
-                ],
+              createHref: journalModalPath(url),
+              rowHref: (row) => journalModalPath(url, row.id),
+              displayAccountName: (row) => accountName(_, row),
+              summary: journalSummary(all),
+            })
+            if (!modalOpen) return workspace
+            return modalWorkspace(
+              workspace,
+              journalFormModal(_, {
+                frame,
+                action: formPath,
+                cancelHref: returnTo,
                 editing,
-                rejected,
-              ),
-            }),
+                errors:
+                  rejected?.messages ??
+                  (url.searchParams.get('invalid') === '1'
+                    ? [_('account_backend.error.invalid')]
+                    : undefined),
+                fields: await journalFields(ctx, url, req, _, data.accounts, editing, rejected),
+              }),
+            )
+          },
         })
+      },
+    '/admin/accounting/journals/new':
+      (ctx): Route =>
+      async (url, req) => {
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const result = await saveJournal(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(safeJournalReturnTo(url))
+          return seeOther(journalModalPath(url, editingId(url), true))
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        return seeOther(journalModalPath(url, editingId(url), url.searchParams.get('invalid') === '1'))
       },
     '/admin/accounting/taxes':
       (ctx): Route =>
@@ -941,109 +1787,191 @@ export default defineModule({
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const result = await ctx.call(
-            'account.saveTax',
-            {
-              id: targetId(url),
-              name: form.name ?? '',
-              ...optional(form, 'description'),
-              typeTaxUse: form.typeTaxUse ?? 'sale',
-              ...optional(form, 'taxScope'),
-              amountType: form.amountType ?? 'percent',
-              amount: form.amount || '0',
-              priceInclude: form.priceInclude === '1',
-              includeBaseAmount: form.includeBaseAmount === '1',
-              ...optional(form, 'accountId'),
-              sequence: Number(form.sequence || 10),
-              active: form.active === '1',
-            },
-            url,
-            req,
+          const result = await saveTax(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(taxListPath(url))
+          rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const all = (await ctx.call('account.listTaxes', { includeArchived: true }, url, req)) as AnyRow[]
+        const editing = editTarget(all, url)
+        const returnTo = taxListPath(url)
+        const formPath = taxFormPath(url, returnTo, editing?.id ?? editingId(url))
+        if (req.method === 'POST' || editingId(url)) {
+          if (req.method === 'GET') return seeOther(formPath)
+          return adminPage(ctx, url, req, {
+            title: editing ? 'account_backend.tax.edit.title' : 'account_backend.tax.create.title',
+            body: async (_, frame) =>
+              taxFormScreen(_, {
+                frame,
+                action: formPath,
+                cancelHref: returnTo,
+                editing,
+                errors: rejected?.messages,
+                fields: await taxFields(ctx, url, req, _, data.accounts, editing, rejected),
+              }),
+          })
+        }
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
+          ? url.searchParams.get('status')
+          : null
+        const use = TAX_USES.includes(String(url.searchParams.get('use')) as never)
+          ? url.searchParams.get('use')
+          : null
+        const computation = TAX_AMOUNT_TYPES.includes(String(url.searchParams.get('computation')) as never)
+          ? url.searchParams.get('computation')
+          : null
+        const included = url.searchParams.get('included') === '1'
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          const active = row.active === true
+          if (status === 'active' && !active) return false
+          if (status === 'archived' && active) return false
+          if (use && row.typeTaxUse !== use) return false
+          if (computation && row.amountType !== computation) return false
+          if (included && row.priceInclude !== true) return false
+          return (
+            !needle ||
+            `${String(row.name)} ${String(row.description ?? '')} ${String(row.amount)}`
+              .toLocaleLowerCase()
+              .includes(needle)
           )
-          if (succeeded(result)) return seeOther(`/admin/accounting/taxes${localeQuery(url)}`)
+        })
+        const taxes = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.taxes.title',
+          body: (_, frame) =>
+            taxesListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.taxes.title'),
+                    keep: {
+                      ...(status ? { status } : {}),
+                      ...(use ? { use } : {}),
+                      ...(computation ? { computation } : {}),
+                      ...(included ? { included: '1' } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(status
+                        ? [
+                            {
+                              label:
+                                status === 'active'
+                                  ? _('account_backend.active')
+                                  : _('account_backend.archived'),
+                              without: withParam(url, 'status', null),
+                            },
+                          ]
+                        : []),
+                      ...(use
+                        ? [
+                            {
+                              label: labelOf(_, 'taxUse', use),
+                              without: withParam(url, 'use', null),
+                            },
+                          ]
+                        : []),
+                      ...(computation
+                        ? [
+                            {
+                              label: labelOf(_, 'taxAmountType', computation),
+                              without: withParam(url, 'computation', null),
+                            },
+                          ]
+                        : []),
+                      ...(included
+                        ? [
+                            {
+                              label: _('account_backend.tax.summary.included'),
+                              without: withParam(url, 'included', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          {
+                            id: 'status:active',
+                            label: _('account_backend.active'),
+                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
+                            active: status === 'active',
+                          },
+                          {
+                            id: 'status:archived',
+                            label: _('account_backend.archived'),
+                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
+                            active: status === 'archived',
+                          },
+                          ...TAX_USES.map((value) => ({
+                            id: `use:${value}`,
+                            label: labelOf(_, 'taxUse', value),
+                            path: withParam(url, 'use', use === value ? null : value),
+                            active: use === value,
+                          })),
+                          ...TAX_AMOUNT_TYPES.map((value) => ({
+                            id: `computation:${value}`,
+                            label: labelOf(_, 'taxAmountType', value),
+                            path: withParam(url, 'computation', computation === value ? null : value),
+                            active: computation === value,
+                          })),
+                          {
+                            id: 'included',
+                            label: _('account_backend.tax.summary.included'),
+                            path: withParam(url, 'included', included ? null : '1'),
+                            active: included,
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, taxes.length, matching.length),
+                },
+              },
+              rows: taxes,
+              accounts: data.accounts,
+              currency: currencyOf(data.companies, frame),
+              createHref: taxFormPath(url, returnTo),
+              rowHref: (row) => taxFormPath(url, returnTo, row.id),
+              summary: taxSummary(all),
+            }),
+        })
+      },
+    '/admin/accounting/taxes/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const result = await saveTax(ctx, url, req, form)
+          if (succeeded(result)) return seeOther(safeTaxReturnTo(url))
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const data = await common(ctx, url, req)
         const taxes = (await ctx.call('account.listTaxes', { includeArchived: true }, url, req)) as AnyRow[]
         const editing = editTarget(taxes, url)
+        const returnTo = safeTaxReturnTo(url)
+        const formPath = taxFormPath(url, returnTo, editing?.id ?? editingId(url))
         return adminPage(ctx, url, req, {
-          title: 'account_backend.taxes.title',
-          body: async (_, frame) => {
-            const currency = currencyOf(data.companies, frame)
-            return taxesScreen(_, {
-              frame: frame,
-              action: configAction(url, '/admin/accounting/taxes'),
-              rows: taxes,
-              accounts: data.accounts,
-              currency,
+          title: editing ? 'account_backend.tax.edit.title' : 'account_backend.tax.create.title',
+          body: async (_, frame) =>
+            taxFormScreen(_, {
+              frame,
+              action: formPath,
+              cancelHref: returnTo,
               editing,
-              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
-              rowHref: (row) => editHref(url, '/admin/accounting/taxes', row.id),
-              cancelHref: `/admin/accounting/taxes${localeQuery(url)}`,
               errors: rejected?.messages,
-              fields: formState(
-                [
-                  { name: 'name', label: _('account_backend.field.name'), required: true },
-                  { name: 'description', label: _('account_backend.field.description') },
-                  {
-                    name: 'typeTaxUse',
-                    label: _('account_backend.field.typeTaxUse'),
-                    type: 'select',
-                    options: optionsOf(_, 'taxUse', TAX_USES),
-                  },
-                  {
-                    name: 'amountType',
-                    label: _('account_backend.field.amountType'),
-                    type: 'select',
-                    options: optionsOf(_, 'taxAmountType', TAX_AMOUNT_TYPES),
-                  },
-                  {
-                    name: 'amount',
-                    label: _('account_backend.field.amount'),
-                    type: 'decimal',
-                    value: 0,
-                    required: true,
-                  },
-                  {
-                    name: 'accountId',
-                    label: _('account_backend.field.accountId'),
-                    type: 'select',
-                    options: accountChoices(_, data.accounts, true),
-                    control: await accountRelationControl(ctx, url, req, _, {
-                      id: 'tax-account',
-                      name: 'accountId',
-                      label: _('account_backend.field.accountId'),
-                      accounts: accountOptions(data.accounts),
-                      allowEmpty: true,
-                    }),
-                  },
-                  { name: 'priceInclude', label: _('account_backend.field.priceInclude'), type: 'checkbox' },
-                  {
-                    name: 'includeBaseAmount',
-                    label: _('account_backend.field.includeBaseAmount'),
-                    type: 'checkbox',
-                    help: _('account_backend.field.includeBaseAmountHint'),
-                  },
-                  {
-                    name: 'sequence',
-                    label: _('account_backend.field.sequence'),
-                    type: 'number',
-                    value: 10,
-                    help: _('account_backend.field.sequenceHint'),
-                  },
-                  {
-                    name: 'active',
-                    label: _('account_backend.field.active'),
-                    type: 'checkbox',
-                    value: true,
-                    help: _('account_backend.field.activeHint'),
-                  },
-                ],
-                editing,
-                rejected,
-              ),
-            })
-          },
+              fields: await taxFields(ctx, url, req, _, data.accounts, editing, rejected),
+            }),
         })
       },
     '/admin/accounting/terms':
@@ -1052,10 +1980,12 @@ export default defineModule({
         // Two forms post here, so a refusal has to land on the one that caused it.
         let rejected: Rejection | undefined
         let rejectedLine: Rejection | undefined
+        let submittedLine = false
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const line = form.action === 'line'
+          submittedLine = line
           const result = line
             ? await ctx.call(
                 'account.savePaymentTermLine',
@@ -1083,7 +2013,7 @@ export default defineModule({
                 url,
                 req,
               )
-          if (succeeded(result)) return seeOther(`/admin/accounting/terms${localeQuery(url)}`)
+          if (succeeded(result)) return seeOther(paymentTermListPath(url))
           const failure = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
           if (line) rejectedLine = failure
           else rejected = failure
@@ -1096,45 +2026,96 @@ export default defineModule({
         )) as AnyRow[]
         const editing = editTarget(rows, url)
         const editingLine = termLineTarget(rows, url)
+        const returnTo = paymentTermListPath(url)
+        const lineModalOpen =
+          submittedLine || url.searchParams.get('line') === '1' || Boolean(url.searchParams.get('editLine'))
+        const termModalOpen =
+          !lineModalOpen &&
+          (req.method === 'POST' || url.searchParams.get('create') === '1' || Boolean(editingId(url)))
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const status = ['active', 'archived'].includes(String(url.searchParams.get('status')))
+          ? url.searchParams.get('status')
+          : null
+        const needle = search?.toLocaleLowerCase()
+        const matching = rows.filter((row) => {
+          const active = row.active === true
+          if (status === 'active' && !active) return false
+          if (status === 'archived' && active) return false
+          return (
+            !needle || `${String(row.name)} ${String(row.note ?? '')}`.toLocaleLowerCase().includes(needle)
+          )
+        })
+        const listed = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
         return adminPage(ctx, url, req, {
           title: 'account_backend.terms.title',
-          body: (_, frame) =>
-            paymentTermsScreen(_, {
-              frame: frame,
-              action: configAction(url, '/admin/accounting/terms'),
-              rows,
-              editing,
-              submit: editing ? _('account_backend.action.save') : _('account_backend.action.create'),
-              rowHref: (row) => editHref(url, '/admin/accounting/terms', row.id),
-              cancelHref: `/admin/accounting/terms${localeQuery(url)}`,
-              errors: rejected?.messages,
-              lineErrors: rejectedLine?.messages,
-              editingLine,
-              lineSubmit: editingLine
-                ? _('account_backend.action.save')
-                : _('account_backend.action.addTermLine'),
-              lineHref: (line) => lineHref(url, line.id),
-              lineCancelHref: `/admin/accounting/terms${localeQuery(url)}`,
-              lineAction: lineFormAction(url),
+          body: (_, frame) => {
+            const workspace = paymentTermsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.terms.title'),
+                    keep: {
+                      ...(status ? { status } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: status
+                      ? [
+                          {
+                            label:
+                              status === 'active'
+                                ? _('account_backend.active')
+                                : _('account_backend.archived'),
+                            without: withParam(url, 'status', null),
+                          },
+                        ]
+                      : [],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          {
+                            id: 'status:active',
+                            label: _('account_backend.active'),
+                            path: withParam(url, 'status', status === 'active' ? null : 'active'),
+                            active: status === 'active',
+                          },
+                          {
+                            id: 'status:archived',
+                            label: _('account_backend.archived'),
+                            path: withParam(url, 'status', status === 'archived' ? null : 'archived'),
+                            active: status === 'archived',
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, listed.length, matching.length),
+                },
+              },
+              rows: listed,
+              createHref: paymentTermModalPath(url),
+              lineCreateHref: rows.length ? paymentTermLineModalPath(url) : undefined,
+              rowHref: (row) => paymentTermModalPath(url, row.id),
+              lineHref: (line) => paymentTermLineModalPath(url, line.id),
               delayLabel: (line) => selectionLabel(_, 'account_backend', 'paymentTermDelay', line.delayType),
               valueLabel: (line) => selectionLabel(_, 'account_backend', 'paymentTermValue', line.value),
-              termFields: formState(
-                [
-                  { name: 'name', label: _('account_backend.field.name'), required: true },
-                  { name: 'note', label: _('account_backend.field.note'), type: 'textarea', span: 'full' },
-                  {
-                    name: 'active',
-                    label: _('account_backend.field.active'),
-                    type: 'checkbox',
-                    value: true,
-                    help: _('account_backend.field.activeHint'),
-                  },
-                ],
-                editing,
-                rejected,
-              ),
-              lineFields: rows.length
-                ? formState(
+              summary: paymentTermSummary(rows),
+            })
+            if (lineModalOpen && rows.length)
+              return modalWorkspace(
+                workspace,
+                paymentTermLineFormModal(_, {
+                  frame,
+                  action: paymentTermLineModalPath(url, editingLine?.id ?? url.searchParams.get('editLine')),
+                  cancelHref: returnTo,
+                  editing: editingLine,
+                  errors: rejectedLine?.messages,
+                  fields: formState(
                     [
                       {
                         name: 'paymentId',
@@ -1184,9 +2165,36 @@ export default defineModule({
                     ],
                     editingLine,
                     rejectedLine,
-                  )
-                : undefined,
-            }),
+                  ),
+                }),
+              )
+            if (!termModalOpen) return workspace
+            return modalWorkspace(
+              workspace,
+              paymentTermFormModal(_, {
+                frame,
+                action: paymentTermModalPath(url, editing?.id ?? editingId(url)),
+                cancelHref: returnTo,
+                editing,
+                errors: rejected?.messages,
+                fields: formState(
+                  [
+                    { name: 'name', label: _('account_backend.field.name'), required: true },
+                    { name: 'note', label: _('account_backend.field.note'), type: 'textarea', span: 'full' },
+                    {
+                      name: 'active',
+                      label: _('account_backend.field.active'),
+                      type: 'checkbox',
+                      value: true,
+                      help: _('account_backend.field.activeHint'),
+                    },
+                  ],
+                  editing,
+                  rejected,
+                ),
+              }),
+            )
+          },
         })
       },
     '/admin/accounting/defaults':
@@ -1195,6 +2203,7 @@ export default defineModule({
         let rejected: Rejection | undefined
         let rejectedCategory: Rejection | undefined
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const category = form.action === 'category'
           const result = category
@@ -1254,22 +2263,14 @@ export default defineModule({
         }
         return adminPage(ctx, url, req, {
           title: 'account_backend.defaults.title',
-          body: (_, frame) =>
-            accountDefaultsScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/defaults${localeQuery(url)}`,
-              categoryAction: categoryTarget(url.searchParams.get('editCategory')),
-              rows,
-              accountLabel: (id) => accountLabel(_, data.accounts, id),
-              editing: editingCategory,
-              categorySubmit: editingCategory
-                ? _('account_backend.action.save')
-                : _('account_backend.action.create'),
-              categoryHref: (row) => categoryTarget(row.categoryId),
-              cancelHref: `/admin/accounting/defaults${localeQuery(url)}`,
-              errors: rejected?.messages,
-              categoryErrors: rejectedCategory?.messages,
-              defaultsFields: formState(
+          body: async (_, frame) => {
+            const defaultsFields = await accountRelationFields(
+              ctx,
+              url,
+              req,
+              _,
+              'account-defaults',
+              formState(
                 [
                   {
                     name: 'incomeAccountId',
@@ -1303,8 +2304,24 @@ export default defineModule({
                 defaults,
                 rejected,
               ),
-              categoryFields: categories.length
-                ? formState(
+              {
+                incomeAccountId: { accounts: income, accountTypes: ['income', 'income_other'] },
+                expenseAccountId: {
+                  accounts: expense,
+                  accountTypes: ['expense', 'expense_other', 'expense_depreciation', 'expense_direct_cost'],
+                },
+                receivableAccountId: { accounts: receivable, accountTypes: ['asset_receivable'] },
+                payableAccountId: { accounts: payable, accountTypes: ['liability_payable'] },
+              },
+            )
+            const categoryFields = categories.length
+              ? await accountRelationFields(
+                  ctx,
+                  url,
+                  req,
+                  _,
+                  'account-category-defaults',
+                  formState(
                     [
                       {
                         name: 'categoryId',
@@ -1328,9 +2345,39 @@ export default defineModule({
                     ],
                     editingCategory,
                     rejectedCategory,
-                  )
-                : undefined,
-            }),
+                  ),
+                  {
+                    incomeAccountId: { accounts: income, accountTypes: ['income', 'income_other'] },
+                    expenseAccountId: {
+                      accounts: expense,
+                      accountTypes: [
+                        'expense',
+                        'expense_other',
+                        'expense_depreciation',
+                        'expense_direct_cost',
+                      ],
+                    },
+                  },
+                )
+              : undefined
+            return accountDefaultsScreen(_, {
+              frame: frame,
+              action: `/admin/accounting/defaults${localeQuery(url)}`,
+              categoryAction: categoryTarget(url.searchParams.get('editCategory')),
+              rows,
+              accountLabel: (id) => accountLabel(_, data.accounts, id),
+              editing: editingCategory,
+              categorySubmit: editingCategory
+                ? _('account_backend.action.save')
+                : _('account_backend.action.create'),
+              categoryHref: (row) => categoryTarget(row.categoryId),
+              cancelHref: `/admin/accounting/defaults${localeQuery(url)}`,
+              errors: rejected?.messages,
+              categoryErrors: rejectedCategory?.messages,
+              defaultsFields,
+              categoryFields,
+            })
+          },
         })
       },
     '/admin/accounting/entries':
@@ -1338,10 +2385,12 @@ export default defineModule({
       async (url, req) => {
         const data = await common(ctx, url, req)
         let rejected: Rejection | undefined
+        let idempotencyKey = ''
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const id = randomUUID()
+          const id = form.id || randomUUID()
+          idempotencyKey = id
           const result = await ctx.call(
             'account.createMove',
             {
@@ -1361,54 +2410,255 @@ export default defineModule({
             return seeOther(`/admin/accounting/entries/${encodeURIComponent(id)}${localeQuery(url)}`)
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const state = url.searchParams.get('state')
-        const rows = (await ctx.call(
+        const all = (await ctx.call(
           'account.listMoves',
-          { moveType: 'entry', ...(state ? { state } : {}), limit: LIST_PAGE },
+          { moveType: 'entry', limit: LIST_PAGE },
           url,
           req,
         )) as AnyRow[]
+        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
+          ? url.searchParams.get('state')
+          : null
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          if (state && row.state !== state) return false
+          return (
+            !needle ||
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${String(row.partnerId ?? '')}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const returnTo = journalEntryListPath(url)
+        const modalOpen = req.method === 'POST' || url.searchParams.get('create') === '1'
+        if (modalOpen && !idempotencyKey) idempotencyKey = randomUUID()
         return adminPage(ctx, url, req, {
           title: 'account_backend.entries.title',
-          body: async (_, frame) =>
-            journalEntriesScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/entries${localeQuery(url)}`,
-              fields: restore(await moveFields(ctx, url, req, _, data, ['entry']), rejected),
+          body: async (_, frame) => {
+            const workspace = journalEntriesListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.entries.title'),
+                    keep: {
+                      ...(state ? { state } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: state
+                      ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
+                      : [],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: MOVE_STATES.map((value) => ({
+                          id: `state:${value}`,
+                          label: labelOf(_, 'moveState', value),
+                          path: withParam(url, 'state', state === value ? null : value),
+                          active: state === value,
+                        })),
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, rows.length, matching.length),
+                },
+              },
               rows,
-              locale: localeQuery(url),
-              errors: rejected?.messages,
-            }),
+              createHref: journalEntryModalPath(url),
+              rowHref: (row) =>
+                `/admin/accounting/entries/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
+              summary: {
+                total: all.length,
+                draft: all.filter((row) => row.state === 'draft').length,
+                posted: all.filter((row) => row.state === 'posted').length,
+              },
+            })
+            if (!modalOpen) return workspace
+            return modalWorkspace(
+              workspace,
+              journalEntryCreateModal(_, {
+                frame,
+                action: journalEntryModalPath(url),
+                cancelHref: returnTo,
+                idempotencyKey,
+                fields: restore(
+                  await moveFields(ctx, url, req, _, data, ['entry'], rejected?.values.partnerId),
+                  rejected,
+                ),
+                errors: rejected?.messages,
+              }),
+            )
+          },
         })
       },
     '/admin/accounting/customer-invoices':
       (ctx): Route =>
       async (url, req) => {
-        const data = await common(ctx, url, req)
         let rejected: Rejection | undefined
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const outcome = await createInvoice(ctx, url, req)
           if ('done' in outcome) return outcome.done
           rejected = outcome.rejected
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call(
+        const data = await common(ctx, url, req)
+        if (rejected)
+          return adminPage(ctx, url, req, {
+            title: 'account_backend.customerInvoice.create.title',
+            body: async (_, frame) =>
+              customerInvoiceFormScreen(_, {
+                frame,
+                action: customerInvoiceListPath(url),
+                cancelHref: customerInvoiceListPath(url),
+                idempotencyKey: rejected.values.id ?? randomUUID(),
+                fields: restore(
+                  await invoiceFields(ctx, url, req, _, data, CUSTOMER_INVOICE_TYPES, rejected.values),
+                  rejected,
+                ),
+                errors: rejected.messages,
+              }),
+          })
+        const all = (await ctx.call(
           'account.listMoves',
-          { moveTypes: ['out_invoice', 'out_refund', 'out_receipt'], limit: LIST_PAGE },
+          { moveTypes: CUSTOMER_INVOICE_TYPES, limit: LIST_PAGE },
           url,
           req,
         )) as AnyRow[]
+        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
+          ? url.searchParams.get('state')
+          : null
+        const payment = PAYMENT_STATES.includes(String(url.searchParams.get('payment')) as never)
+          ? url.searchParams.get('payment')
+          : null
+        const type = CUSTOMER_INVOICE_TYPES.includes(String(url.searchParams.get('type')) as never)
+          ? url.searchParams.get('type')
+          : null
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const partnerLabels = new Map(
+          data.partners.map((partner) => [String(partner.id), String(partner.name)]),
+        )
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          if (state && row.state !== state) return false
+          if (payment && row.paymentState !== payment) return false
+          if (type && row.moveType !== type) return false
+          return (
+            !needle ||
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const returnTo = customerInvoiceListPath(url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.customerInvoices.title',
+          body: (_, frame) =>
+            customerInvoicesListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.customerInvoices.title'),
+                    keep: {
+                      ...(state ? { state } : {}),
+                      ...(payment ? { payment } : {}),
+                      ...(type ? { type } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(state
+                        ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
+                        : []),
+                      ...(payment
+                        ? [
+                            {
+                              label: labelOf(_, 'paymentState', payment),
+                              without: withParam(url, 'payment', null),
+                            },
+                          ]
+                        : []),
+                      ...(type
+                        ? [{ label: labelOf(_, 'moveType', type), without: withParam(url, 'type', null) }]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          ...MOVE_STATES.map((value) => ({
+                            id: `state:${value}`,
+                            label: labelOf(_, 'moveState', value),
+                            path: withParam(url, 'state', state === value ? null : value),
+                            active: state === value,
+                          })),
+                          ...PAYMENT_STATES.map((value) => ({
+                            id: `payment:${value}`,
+                            label: labelOf(_, 'paymentState', value),
+                            path: withParam(url, 'payment', payment === value ? null : value),
+                            active: payment === value,
+                          })),
+                          ...CUSTOMER_INVOICE_TYPES.map((value) => ({
+                            id: `type:${value}`,
+                            label: labelOf(_, 'moveType', value),
+                            path: withParam(url, 'type', type === value ? null : value),
+                            active: type === value,
+                          })),
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, rows.length, matching.length),
+                },
+              },
+              rows,
+              createHref: customerInvoiceFormPath(url, returnTo),
+              rowHref: (row) =>
+                `/admin/accounting/customer-invoices/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
+              partnerLabel: (row) => partnerLabels.get(String(row.partnerId)) ?? '—',
+              summary: {
+                total: all.length,
+                draft: all.filter((row) => row.state === 'draft').length,
+                posted: all.filter((row) => row.state === 'posted').length,
+                unpaid: all.filter((row) => row.paymentState === 'not_paid').length,
+              },
+            }),
+        })
+      },
+    '/admin/accounting/customer-invoices/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const outcome = await createInvoice(ctx, url, req)
+          if ('done' in outcome) return outcome.done
+          rejected = outcome.rejected
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const returnTo = safeCustomerInvoiceReturnTo(url)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.customerInvoice.create.title',
           body: async (_, frame) =>
-            customerInvoicesScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/customer-invoices${localeQuery(url)}`,
+            customerInvoiceFormScreen(_, {
+              frame,
+              action: customerInvoiceFormPath(url, returnTo),
+              cancelHref: returnTo,
+              idempotencyKey: rejected?.values.id ?? randomUUID(),
               fields: restore(
-                await invoiceFields(ctx, url, req, _, data, ['out_invoice', 'out_refund', 'out_receipt']),
+                await invoiceFields(ctx, url, req, _, data, CUSTOMER_INVOICE_TYPES, rejected?.values),
                 rejected,
               ),
-              rows,
-              locale: localeQuery(url),
               errors: rejected?.messages,
             }),
         })
@@ -1416,158 +2666,352 @@ export default defineModule({
     '/admin/accounting/vendor-bills':
       (ctx): Route =>
       async (url, req) => {
-        const data = await common(ctx, url, req)
         let rejected: Rejection | undefined
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const outcome = await createInvoice(ctx, url, req)
           if ('done' in outcome) return outcome.done
           rejected = outcome.rejected
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call(
+        const data = await common(ctx, url, req)
+        if (rejected)
+          return adminPage(ctx, url, req, {
+            title: 'account_backend.vendorBill.create.title',
+            body: async (_, frame) =>
+              vendorBillFormScreen(_, {
+                frame,
+                action: vendorBillListPath(url),
+                cancelHref: vendorBillListPath(url),
+                idempotencyKey: rejected.values.id ?? randomUUID(),
+                fields: restore(
+                  await invoiceFields(ctx, url, req, _, data, VENDOR_BILL_TYPES, rejected.values),
+                  rejected,
+                ),
+                errors: rejected.messages,
+              }),
+          })
+        const all = (await ctx.call(
           'account.listMoves',
-          { moveTypes: ['in_invoice', 'in_refund', 'in_receipt'], limit: LIST_PAGE },
+          { moveTypes: VENDOR_BILL_TYPES, limit: LIST_PAGE },
           url,
           req,
         )) as AnyRow[]
+        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
+          ? url.searchParams.get('state')
+          : null
+        const payment = PAYMENT_STATES.includes(String(url.searchParams.get('payment')) as never)
+          ? url.searchParams.get('payment')
+          : null
+        const type = VENDOR_BILL_TYPES.includes(String(url.searchParams.get('type')) as never)
+          ? url.searchParams.get('type')
+          : null
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const partnerLabels = new Map(
+          data.partners.map((partner) => [String(partner.id), String(partner.name)]),
+        )
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          if (state && row.state !== state) return false
+          if (payment && row.paymentState !== payment) return false
+          if (type && row.moveType !== type) return false
+          return (
+            !needle ||
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const returnTo = vendorBillListPath(url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.vendorBills.title',
+          body: (_, frame) =>
+            vendorBillsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.vendorBills.title'),
+                    keep: {
+                      ...(state ? { state } : {}),
+                      ...(payment ? { payment } : {}),
+                      ...(type ? { type } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(state
+                        ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
+                        : []),
+                      ...(payment
+                        ? [
+                            {
+                              label: labelOf(_, 'paymentState', payment),
+                              without: withParam(url, 'payment', null),
+                            },
+                          ]
+                        : []),
+                      ...(type
+                        ? [{ label: labelOf(_, 'moveType', type), without: withParam(url, 'type', null) }]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          ...MOVE_STATES.map((value) => ({
+                            id: `state:${value}`,
+                            label: labelOf(_, 'moveState', value),
+                            path: withParam(url, 'state', state === value ? null : value),
+                            active: state === value,
+                          })),
+                          ...PAYMENT_STATES.map((value) => ({
+                            id: `payment:${value}`,
+                            label: labelOf(_, 'paymentState', value),
+                            path: withParam(url, 'payment', payment === value ? null : value),
+                            active: payment === value,
+                          })),
+                          ...VENDOR_BILL_TYPES.map((value) => ({
+                            id: `type:${value}`,
+                            label: labelOf(_, 'moveType', value),
+                            path: withParam(url, 'type', type === value ? null : value),
+                            active: type === value,
+                          })),
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, rows.length, matching.length),
+                },
+              },
+              rows,
+              createHref: vendorBillFormPath(url, returnTo),
+              rowHref: (row) =>
+                `/admin/accounting/vendor-bills/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
+              partnerLabel: (row) => partnerLabels.get(String(row.partnerId)) ?? '—',
+              summary: {
+                total: all.length,
+                draft: all.filter((row) => row.state === 'draft').length,
+                posted: all.filter((row) => row.state === 'posted').length,
+                unpaid: all.filter((row) => row.paymentState === 'not_paid').length,
+              },
+            }),
+        })
+      },
+    '/admin/accounting/vendor-bills/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const outcome = await createInvoice(ctx, url, req)
+          if ('done' in outcome) return outcome.done
+          rejected = outcome.rejected
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const returnTo = safeVendorBillReturnTo(url)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.vendorBill.create.title',
           body: async (_, frame) =>
-            vendorBillsScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/vendor-bills${localeQuery(url)}`,
+            vendorBillFormScreen(_, {
+              frame,
+              action: vendorBillFormPath(url, returnTo),
+              cancelHref: returnTo,
+              idempotencyKey: rejected?.values.id ?? randomUUID(),
               fields: restore(
-                await invoiceFields(ctx, url, req, _, data, ['in_invoice', 'in_refund', 'in_receipt']),
+                await invoiceFields(ctx, url, req, _, data, VENDOR_BILL_TYPES, rejected?.values),
                 rejected,
               ),
-              rows,
-              locale: localeQuery(url),
               errors: rejected?.messages,
             }),
         })
       },
-    '/admin/accounting/entries/{id}': accountMoveRoute,
-    '/admin/accounting/customer-invoices/{id}': accountMoveRoute,
-    '/admin/accounting/vendor-bills/{id}': accountMoveRoute,
+    '/admin/accounting/entries/{id}': accountMoveRoute('entry'),
+    '/admin/accounting/customer-invoices/{id}': accountMoveRoute('customer'),
+    '/admin/accounting/vendor-bills/{id}': accountMoveRoute('vendor'),
     '/admin/accounting/payments':
       (ctx): Route =>
       async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const outcome = await submitPayment(ctx, url, req)
+          if ('done' in outcome) return outcome.done
+          rejected = outcome.rejected
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [data, openItems] = await Promise.all([
           common(ctx, url, req),
           ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
         ])
+        // Legacy collection POSTs still render the new full form when refused.
+        if (rejected)
+          return adminPage(ctx, url, req, {
+            title: 'account_backend.payment.create.title',
+            body: async (_, frame) =>
+              paymentFormScreen(_, {
+                frame,
+                action: paymentListPath(url),
+                cancelHref: paymentListPath(url),
+                paymentId: rejected.values.id ?? randomUUID(),
+                fields: await paymentFields(ctx, url, req, _, data, openItems, rejected),
+                errors: rejected.messages,
+              }),
+          })
+        const all = (await ctx.call('account.listPayments', { limit: LIST_PAGE }, url, req)) as AnyRow[]
+        const paymentType = PAYMENT_TYPES.includes(String(url.searchParams.get('type')) as never)
+          ? url.searchParams.get('type')
+          : null
+        const partnerType = PARTNER_TYPES.includes(String(url.searchParams.get('partnerType')) as never)
+          ? url.searchParams.get('partnerType')
+          : null
+        const state = PAYMENT_STATES.includes(String(url.searchParams.get('state')) as never)
+          ? url.searchParams.get('state')
+          : null
+        const partnerId = url.searchParams.get('partnerId') || null
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const partnerLabels = new Map(
+          data.partners.map((partner) => [String(partner.id), String(partner.name)]),
+        )
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          if (paymentType && row.paymentType !== paymentType) return false
+          if (partnerType && row.partnerType !== partnerType) return false
+          if (state && row.state !== state) return false
+          if (partnerId && String(row.partnerId ?? '') !== partnerId) return false
+          return (
+            !needle ||
+            `${String(row.name ?? '')} ${String(row.date ?? '')} ${String(row.memo ?? '')} ${String(row.paymentReference ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const returnTo = paymentListPath(url)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.payments.title',
+          body: (_, frame) =>
+            paymentsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.payments.title'),
+                    keep: {
+                      ...(paymentType ? { type: paymentType } : {}),
+                      ...(partnerType ? { partnerType } : {}),
+                      ...(state ? { state } : {}),
+                      ...(partnerId ? { partnerId } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(paymentType
+                        ? [
+                            {
+                              label: labelOf(_, 'paymentType', paymentType),
+                              without: withParam(url, 'type', null),
+                            },
+                          ]
+                        : []),
+                      ...(partnerType
+                        ? [
+                            {
+                              label: labelOf(_, 'partnerType', partnerType),
+                              without: withParam(url, 'partnerType', null),
+                            },
+                          ]
+                        : []),
+                      ...(state
+                        ? [
+                            {
+                              label: labelOf(_, 'paymentStatus', state),
+                              without: withParam(url, 'state', null),
+                            },
+                          ]
+                        : []),
+                      ...(partnerId
+                        ? [
+                            {
+                              label: partnerLabels.get(partnerId) ?? partnerId,
+                              without: withParam(url, 'partnerId', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          ...PAYMENT_TYPES.map((value) => ({
+                            id: `type:${value}`,
+                            label: labelOf(_, 'paymentType', value),
+                            path: withParam(url, 'type', paymentType === value ? null : value),
+                            active: paymentType === value,
+                          })),
+                          ...PARTNER_TYPES.map((value) => ({
+                            id: `partnerType:${value}`,
+                            label: labelOf(_, 'partnerType', value),
+                            path: withParam(url, 'partnerType', partnerType === value ? null : value),
+                            active: partnerType === value,
+                          })),
+                          ...PAYMENT_STATES.map((value) => ({
+                            id: `state:${value}`,
+                            label: labelOf(_, 'paymentStatus', value),
+                            path: withParam(url, 'state', state === value ? null : value),
+                            active: state === value,
+                          })),
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, rows.length, matching.length),
+                },
+              },
+              rows,
+              createHref: paymentFormPath(url, returnTo),
+              rowHref: (row) =>
+                `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
+              partnerLabel: (row) => partnerLabels.get(String(row.partnerId)) ?? '—',
+              summary: {
+                total: all.length,
+                inbound: all.filter((row) => row.paymentType === 'inbound').length,
+                outbound: all.filter((row) => row.paymentType === 'outbound').length,
+                open: openItems.length,
+              },
+            }),
+        })
+      },
+    '/admin/accounting/payments/new':
+      (ctx): Route =>
+      async (url, req) => {
         let rejected: Rejection | undefined
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
-          const form = await readForm(req)
-          const result = await ctx.call(
-            'account.registerPayment',
-            {
-              id: randomUUID(),
-              name: form.name ?? '',
-              paymentType: form.paymentType ?? 'inbound',
-              partnerType: form.partnerType ?? 'customer',
-              ...optional(form, 'partnerId'),
-              journalId: form.journalId ?? '',
-              destinationAccountId: form.destinationAccountId ?? '',
-              amount: form.amount || '0',
-              ...optional(form, 'date'),
-              ...optional(form, 'memo'),
-              ...optional(form, 'paymentReference'),
-              ...optional(form, 'reconcileLineId'),
-            },
-            url,
-            req,
-          )
-          if (succeeded(result)) return seeOther(`/admin/accounting/payments${localeQuery(url)}`)
-          rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+          const outcome = await submitPayment(ctx, url, req)
+          if ('done' in outcome) return outcome.done
+          rejected = outcome.rejected
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('account.listPayments', { limit: LIST_PAGE }, url, req)) as AnyRow[]
-        const settleable = controlAccounts(data.accounts)
+        const [data, openItems] = await Promise.all([
+          common(ctx, url, req),
+          ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
+        ])
+        const returnTo = safePaymentReturnTo(url)
         return adminPage(ctx, url, req, {
-          title: 'account_backend.payments.title',
+          title: 'account_backend.payment.create.title',
           body: async (_, frame) =>
-            paymentsScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/payments${localeQuery(url)}`,
-              rows,
-              openItems: openItems.length,
-              entryHref: (row) =>
-                `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
+            paymentFormScreen(_, {
+              frame,
+              action: paymentFormPath(url, returnTo),
+              cancelHref: returnTo,
+              paymentId: rejected?.values.id ?? randomUUID(),
+              fields: await paymentFields(ctx, url, req, _, data, openItems, rejected),
               errors: rejected?.messages,
-              fields: restore(
-                [
-                  { name: 'name', label: _('account_backend.field.name'), required: true },
-                  {
-                    name: 'paymentType',
-                    label: _('account_backend.field.paymentType'),
-                    type: 'select',
-                    options: optionsOf(_, 'paymentType', PAYMENT_TYPES),
-                  },
-                  {
-                    name: 'partnerType',
-                    label: _('account_backend.field.partnerType'),
-                    type: 'select',
-                    options: optionsOf(_, 'partnerType', PARTNER_TYPES),
-                  },
-                  {
-                    name: 'partnerId',
-                    label: _('account_backend.field.partnerId'),
-                    type: 'select',
-                    options: choices(data.partners, true),
-                  },
-                  {
-                    name: 'journalId',
-                    label: _('account_backend.field.journalId'),
-                    type: 'select',
-                    options: choices(
-                      data.journals.filter((journal) => ['bank', 'cash'].includes(String(journal.type))),
-                    ),
-                    required: true,
-                  },
-                  {
-                    name: 'destinationAccountId',
-                    label: _('account_backend.field.destinationAccountId'),
-                    type: 'select',
-                    // Only a control account can be settled, and which one depends on
-                    // the partner type chosen alongside it. Offering the whole chart
-                    // made the default selection a guaranteed refusal.
-                    options: accountChoices(_, settleable),
-                    required: true,
-                    help: _('account_backend.field.destinationAccountIdHint'),
-                    control: await accountRelationControl(ctx, url, req, _, {
-                      id: 'payment-destination-account',
-                      name: 'destinationAccountId',
-                      label: _('account_backend.field.destinationAccountId'),
-                      accounts: accountOptions(settleable),
-                      accountTypes: CONTROL_TYPES,
-                      required: true,
-                    }),
-                  },
-                  {
-                    name: 'amount',
-                    label: _('account_backend.field.paymentAmount'),
-                    type: 'decimal',
-                    value: 0,
-                    required: true,
-                  },
-                  { name: 'date', label: _('account_backend.field.date'), type: 'date' },
-                  { name: 'memo', label: _('account_backend.field.memo') },
-                  { name: 'paymentReference', label: _('account_backend.field.paymentReference') },
-                  {
-                    name: 'reconcileLineId',
-                    label: _('account_backend.field.reconcileLineId'),
-                    type: 'select',
-                    options: [
-                      { value: '', label: '—' },
-                      ...openItems.map((line) => ({
-                        value: String(line.id),
-                        label: `${String((line.move as AnyRow)?.name ?? line.moveId)} · ${accountLabel(_, data.accounts, line.accountId)} · ${formatMoney(_, line.amountResidual, (line.move as AnyRow)?.currency)}`,
-                      })),
-                    ],
-                  },
-                ],
-                rejected,
-              ),
             }),
         })
       },
@@ -1577,22 +3021,34 @@ export default defineModule({
         if (req.method !== 'GET') return text('GET', { status: 405 })
         const dateFrom = url.searchParams.get('dateFrom') ?? '',
           dateTo = url.searchParams.get('dateTo') ?? ''
+        const inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
+        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
+        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
         const [rows, companies] = (await Promise.all([
-          ctx.call(
-            'account.trialBalance',
-            { ...(dateFrom ? { dateFrom } : {}), ...(dateTo ? { dateTo } : {}) },
-            url,
-            req,
-          ),
+          inverted
+            ? Promise.resolve([])
+            : ctx.call(
+                'account.trialBalance',
+                {
+                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
+                  ...(toInstant ? { dateTo: toInstant } : {}),
+                },
+                url,
+                req,
+              ),
           ctx.call('company.listCompanies', {}, url, req),
         ])) as [AnyRow[], AnyRow[]]
+        rows.sort((a, b) =>
+          String(a.code ?? '').localeCompare(String(b.code ?? ''), undefined, { numeric: true }),
+        )
         return adminPage(ctx, url, req, {
           title: 'account_backend.trialBalance.title',
           body: (_, frame) => {
             const currency = currencyOf(companies, frame)
             return trialBalanceScreen(_, {
               frame: frame,
-              action: `/admin/accounting/trial-balance${localeQuery(url)}`,
+              action: '/admin/accounting/trial-balance',
+              locale: url.searchParams.get('lang') ?? '',
               rows,
               currency,
               // The balance carries its own date window into the ledger, so the
@@ -1607,9 +3063,20 @@ export default defineModule({
                 return `${target.pathname}${target.search}`
               },
               fields: [
-                { name: 'dateFrom', label: _('account_backend.field.dateFrom'), value: dateFrom },
-                { name: 'dateTo', label: _('account_backend.field.dateTo'), value: dateTo },
+                {
+                  name: 'dateFrom',
+                  label: _('account_backend.field.dateFrom'),
+                  value: dateFrom,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
+                },
+                {
+                  name: 'dateTo',
+                  label: _('account_backend.field.dateTo'),
+                  value: dateTo,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
+                },
               ],
+              errors: inverted ? [_('account_backend.trial.filter.rangeError')] : undefined,
             })
           },
         })
@@ -1618,31 +3085,97 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const data = await common(ctx, url, req),
-          accountId = url.searchParams.get('accountId') ?? '',
+        const accountId = url.searchParams.get('accountId') ?? '',
           dateFrom = url.searchParams.get('dateFrom') ?? '',
-          dateTo = url.searchParams.get('dateTo') ?? ''
-        const rows = (await ctx.call(
-          'account.generalLedger',
-          {
-            ...(accountId ? { accountId } : {}),
-            ...(dateFrom ? { dateFrom } : {}),
-            ...(dateTo ? { dateTo } : {}),
-            limit: LIST_PAGE,
-          },
-          url,
-          req,
-        )) as AnyRow[]
+          dateTo = url.searchParams.get('dateTo') ?? '',
+          search = searchOf(url) ?? '',
+          page = pageOf(url),
+          inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
+        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
+        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
+        await ctx.call('account.initializeCompany', {}, url, req)
+        const [accounts, companies, allRows] = (await Promise.all([
+          ctx.call('account.listAccounts', {}, url, req),
+          ctx.call('company.listCompanies', {}, url, req),
+          inverted
+            ? Promise.resolve([])
+            : ctx.call(
+                'account.generalLedger',
+                {
+                  ...(accountId ? { accountId } : {}),
+                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
+                  ...(toInstant ? { dateTo: toInstant } : {}),
+                },
+                url,
+                req,
+              ),
+        ])) as [AnyRow[], AnyRow[], AnyRow[]]
         return adminPage(ctx, url, req, {
           title: 'account_backend.generalLedger.title',
           body: async (_, frame) => {
-            const currency = currencyOf(data.companies, frame)
+            const unknownAccount = Boolean(
+              accountId && !accounts.some((account) => String(account.id) === accountId),
+            )
+            const unavailableAccount = {
+              id: accountId,
+              code: accountId,
+              name: _('account_backend.ledger.filter.unavailableAccount'),
+              nameEn: _('account_backend.ledger.filter.unavailableAccount'),
+            }
+            const filterAccounts = unknownAccount ? [unavailableAccount, ...accounts] : accounts
+            const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
+            const matching = allRows.filter((row) => {
+              if (!needle) return true
+              const move = (row.move ?? {}) as AnyRow
+              return [
+                move.name,
+                move.ref,
+                move.date,
+                row.name,
+                row.accountId,
+                accountLabel(_, accounts, row.accountId),
+              ].some((value) =>
+                String(value ?? '')
+                  .toLocaleLowerCase(ctx.localeOf(url, req))
+                  .includes(needle),
+              )
+            })
+            const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+            const errors = [
+              ...(inverted ? [_('account_backend.trial.filter.rangeError')] : []),
+              ...(unknownAccount ? [_('account_backend.ledger.filter.accountError')] : []),
+            ]
+            frame.chrome = {
+              search: {
+                name: 'q',
+                value: search,
+                placeholder: _('account_backend.ledger.search'),
+                keep: {
+                  ...(accountId ? { accountId } : {}),
+                  ...(dateFrom ? { dateFrom } : {}),
+                  ...(dateTo ? { dateTo } : {}),
+                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                },
+              },
+              pager: pager(url, page, rows.length, matching.length),
+            }
+            const currency = currencyOf(companies, frame)
             return generalLedgerScreen(_, {
               frame: frame,
-              action: `/admin/accounting/general-ledger${localeQuery(url)}`,
+              action: '/admin/accounting/general-ledger',
               rows,
+              summary: {
+                lines: matching.length,
+                debit: matching.reduce((total, row) => total + Number(row.debit ?? 0), 0),
+                credit: matching.reduce((total, row) => total + Number(row.credit ?? 0), 0),
+              },
               currency,
-              accountLabel: (id) => accountLabel(_, data.accounts, id),
+              hidden: {
+                ...(search ? { q: search } : {}),
+                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+              },
+              errors: errors.length ? errors : undefined,
+              accountLabel: (id) => accountLabel(_, accounts, id),
               entryHref: (row) =>
                 `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
               fields: [
@@ -1651,13 +3184,16 @@ export default defineModule({
                   label: _('account_backend.field.accountId'),
                   type: 'select',
                   value: accountId,
-                  options: choices(data.accounts, true),
+                  error: unknownAccount ? _('account_backend.ledger.filter.accountError') : null,
+                  options: accountChoices(_, filterAccounts, true),
                   control: await accountRelationControl(ctx, url, req, _, {
                     id: 'general-ledger-account',
                     name: 'accountId',
                     label: _('account_backend.field.accountId'),
                     value: accountId,
-                    accounts: accountOptions(data.accounts),
+                    accounts: accountOptions(
+                      filterAccounts.map((account) => ({ ...account, name: accountName(_, account) })),
+                    ),
                     allowEmpty: true,
                   }),
                 },
@@ -1666,8 +3202,15 @@ export default defineModule({
                   label: _('account_backend.field.dateFrom'),
                   type: 'date',
                   value: dateFrom,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
                 },
-                { name: 'dateTo', label: _('account_backend.field.dateTo'), type: 'date', value: dateTo },
+                {
+                  name: 'dateTo',
+                  label: _('account_backend.field.dateTo'),
+                  type: 'date',
+                  value: dateTo,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
+                },
               ],
             })
           },
@@ -1677,26 +3220,107 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const data = await common(ctx, url, req)
-        const partnerId = url.searchParams.get('partnerId') ?? ''
-        const rows = partnerId
-          ? ((await ctx.call(
-              'account.partnerStatement',
-              { partnerId, limit: LIST_PAGE },
-              url,
-              req,
-            )) as AnyRow[])
-          : []
+        const partnerId = url.searchParams.get('partnerId') ?? '',
+          dateFrom = url.searchParams.get('dateFrom') ?? '',
+          dateTo = url.searchParams.get('dateTo') ?? '',
+          search = searchOf(url) ?? '',
+          page = pageOf(url),
+          inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
+        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
+        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
+        await ctx.call('account.initializeCompany', {}, url, req)
+        const [accounts, companies, initialPartners, selectedPartners, allRows] = (await Promise.all([
+          ctx.call('account.listAccounts', {}, url, req),
+          ctx.call('company.listCompanies', {}, url, req),
+          ctx.call('partner.listPartners', { limit: PAGE_SIZE }, url, req),
+          partnerId
+            ? ctx.call('partner.listPartners', { ids: [partnerId], includeArchived: true }, url, req)
+            : Promise.resolve([]),
+          partnerId && !inverted
+            ? ctx.call(
+                'account.partnerStatement',
+                {
+                  partnerId,
+                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
+                  ...(toInstant ? { dateTo: toInstant } : {}),
+                },
+                url,
+                req,
+              )
+            : Promise.resolve([]),
+        ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow[], AnyRow[]]
         return adminPage(ctx, url, req, {
           title: 'account_backend.partnerStatement.title',
-          body: (_, frame) => {
-            const currency = currencyOf(data.companies, frame)
+          body: async (_, frame) => {
+            const companyPartners = new Set(companies.map((company) => String(company.partnerId)))
+            const selectedPartner = selectedPartners.find(
+              (partner) => !companyPartners.has(String(partner.id)),
+            )
+            const unknownPartner = Boolean(partnerId && !selectedPartner)
+            const unavailablePartner: AnyRow = {
+              id: partnerId,
+              name: _('account_backend.partnerLedger.filter.unavailablePartner'),
+            }
+            const bundledPartners = [
+              ...(selectedPartner ? [selectedPartner] : unknownPartner ? [unavailablePartner] : []),
+              ...initialPartners.filter(
+                (partner) => !companyPartners.has(String(partner.id)) && String(partner.id) !== partnerId,
+              ),
+            ]
+            const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
+            const matching = allRows.filter((row) => {
+              if (!needle) return true
+              const move = (row.move ?? {}) as AnyRow
+              return [
+                move.name,
+                move.ref,
+                move.date,
+                row.name,
+                row.accountId,
+                accountLabel(_, accounts, row.accountId),
+              ].some((value) =>
+                String(value ?? '')
+                  .toLocaleLowerCase(ctx.localeOf(url, req))
+                  .includes(needle),
+              )
+            })
+            const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+            const errors = [
+              ...(inverted ? [_('account_backend.trial.filter.rangeError')] : []),
+              ...(unknownPartner ? [_('account_backend.partnerLedger.filter.partnerError')] : []),
+            ]
+            frame.chrome = {
+              search: {
+                name: 'q',
+                value: search,
+                placeholder: _('account_backend.partnerLedger.search'),
+                keep: {
+                  ...(partnerId ? { partnerId } : {}),
+                  ...(dateFrom ? { dateFrom } : {}),
+                  ...(dateTo ? { dateTo } : {}),
+                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                },
+              },
+              pager: pager(url, page, rows.length, matching.length),
+            }
+            const currency = currencyOf(companies, frame)
             return partnerLedgerScreen(_, {
               frame: frame,
-              action: `/admin/accounting/partner-statement${localeQuery(url)}`,
+              action: '/admin/accounting/partner-statement',
               rows,
+              summary: {
+                debit: matching.reduce((total, row) => total + Number(row.debit ?? 0), 0),
+                credit: matching.reduce((total, row) => total + Number(row.credit ?? 0), 0),
+                residual: matching.reduce((total, row) => total + Number(row.amountResidual ?? 0), 0),
+              },
               currency,
               selected: Boolean(partnerId),
+              hidden: {
+                ...(search ? { q: search } : {}),
+                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+              },
+              errors: errors.length ? errors : undefined,
+              accountLabel: (id) => accountLabel(_, accounts, id),
               entryHref: (row) =>
                 `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
               fields: [
@@ -1705,7 +3329,36 @@ export default defineModule({
                   label: _('account_backend.field.partnerId'),
                   type: 'select',
                   value: partnerId,
-                  options: choices(data.partners, true),
+                  error: unknownPartner ? _('account_backend.partnerLedger.filter.partnerError') : null,
+                  options: choices(bundledPartners, true),
+                  control: await partnerRelationControl(ctx, url, req, _, {
+                    id: 'partner-statement-partner',
+                    name: 'partnerId',
+                    value: partnerId,
+                    partners: bundledPartners.map((partner) => ({
+                      id: String(partner.id),
+                      name: String(partner.name),
+                      ref: partner.ref ? String(partner.ref) : null,
+                    })),
+                    fieldLabel: _('account_backend.field.partnerId'),
+                    title: _('account_backend.relation.partners'),
+                    allowEmpty: true,
+                    excludeIds: [...companyPartners],
+                  }),
+                },
+                {
+                  name: 'dateFrom',
+                  label: _('account_backend.field.dateFrom'),
+                  type: 'date',
+                  value: dateFrom,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
+                },
+                {
+                  name: 'dateTo',
+                  label: _('account_backend.field.dateTo'),
+                  type: 'date',
+                  value: dateTo,
+                  error: inverted ? _('account_backend.trial.filter.rangeError') : null,
                 },
               ],
             })
@@ -1951,6 +3604,7 @@ const vi: Record<string, string> = {
   'trial.summary.balance': 'Chênh lệch',
   'trial.filter.title': 'Kỳ báo cáo',
   'trial.filter.hint': 'Để trống ngày để tính trên toàn bộ bút toán đã ghi sổ.',
+  'trial.filter.rangeError': 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.',
   'trial.result.title': 'Số dư theo tài khoản',
   'trial.result.hint': 'Tổng Nợ và Có phải cân bằng trên toàn bộ hệ thống tài khoản.',
   'trial.empty': 'Không có số liệu trong kỳ',
@@ -1963,6 +3617,9 @@ const vi: Record<string, string> = {
   'ledger.summary.credit': 'Tổng Có',
   'ledger.filter.title': 'Bộ lọc sổ cái',
   'ledger.filter.hint': 'Chọn một tài khoản hoặc để trống để xem toàn bộ dòng đã ghi sổ.',
+  'ledger.filter.unavailableAccount': 'Tài khoản không còn khả dụng',
+  'ledger.filter.accountError': 'Tài khoản đã chọn không còn khả dụng. Hãy xóa bộ lọc tài khoản.',
+  'ledger.search': 'Tìm theo bút toán, tài khoản hoặc nội dung…',
   'ledger.result.title': 'Chi tiết phát sinh',
   'ledger.result.hint': 'Mỗi dòng liên kết phát sinh với bút toán và ngày ghi sổ.',
   'ledger.empty': 'Không có phát sinh phù hợp',
@@ -1975,6 +3632,9 @@ const vi: Record<string, string> = {
   'partnerLedger.summary.residual': 'Còn lại',
   'partnerLedger.filter.title': 'Chọn đối tác',
   'partnerLedger.filter.hint': 'Báo cáo chỉ bao gồm tài khoản phải thu và phải trả trên bút toán đã ghi sổ.',
+  'partnerLedger.filter.unavailablePartner': 'Đối tác không còn khả dụng',
+  'partnerLedger.filter.partnerError': 'Đối tác đã chọn không còn khả dụng. Hãy xóa bộ lọc đối tác.',
+  'partnerLedger.search': 'Tìm theo chứng từ, tài khoản hoặc nội dung…',
   'partnerLedger.result.title': 'Chi tiết công nợ',
   'partnerLedger.result.hint': 'Theo dõi chứng từ, phát sinh Nợ/Có và phần chưa đối soát.',
   'partnerLedger.select': 'Chưa chọn đối tác',
@@ -2327,6 +3987,7 @@ const en: Record<string, string> = {
   'trial.summary.balance': 'Difference',
   'trial.filter.title': 'Reporting period',
   'trial.filter.hint': 'Leave dates blank to calculate across all posted entries.',
+  'trial.filter.rangeError': 'The end date must be on or after the start date.',
   'trial.result.title': 'Balances by account',
   'trial.result.hint': 'Total debit and credit must balance across the chart of accounts.',
   'trial.empty': 'No figures for this period',
@@ -2339,6 +4000,9 @@ const en: Record<string, string> = {
   'ledger.summary.credit': 'Total credit',
   'ledger.filter.title': 'Ledger filters',
   'ledger.filter.hint': 'Choose an account or leave it blank to show all posted journal items.',
+  'ledger.filter.unavailableAccount': 'Account no longer available',
+  'ledger.filter.accountError': 'The selected account is no longer available. Clear the account filter.',
+  'ledger.search': 'Search entries, accounts, or descriptions…',
   'ledger.result.title': 'Account movements',
   'ledger.result.hint': 'Each item relates the movement to its journal entry and posting date.',
   'ledger.empty': 'No matching movements',
@@ -2351,6 +4015,10 @@ const en: Record<string, string> = {
   'partnerLedger.summary.residual': 'Residual',
   'partnerLedger.filter.title': 'Select a partner',
   'partnerLedger.filter.hint': 'The report includes only posted receivable and payable journal items.',
+  'partnerLedger.filter.unavailablePartner': 'Partner no longer available',
+  'partnerLedger.filter.partnerError':
+    'The selected partner is no longer available. Clear the partner filter.',
+  'partnerLedger.search': 'Search documents, accounts, or descriptions…',
   'partnerLedger.result.title': 'Partner movements',
   'partnerLedger.result.hint': 'Review documents, debit/credit movements, and unreconciled amounts.',
   'partnerLedger.select': 'No partner selected',
