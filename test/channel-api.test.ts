@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { callFn, compose, defineModule, text } from '@ketvietlab/ketjs'
+import { callFn, compose, defineModule, text, type Row } from '@ketvietlab/ketjs'
 import { channelCommandId, defineChannelRoute, openApiDocument } from '@ketvietlab/ketsuite'
 import type { PosIdentity } from '@ketvietlab/ketsuite'
 import { ketsuite } from '@ketvietlab/ketsuite/deployment'
@@ -212,6 +212,22 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     key: 'pos.loyalty',
     action: 'read',
   })
+  const removeReward = document.paths['/orders/{id}/loyalty/rewards/{programId}']?.delete as Record<
+    string,
+    unknown
+  >
+  const parameters = removeReward.parameters as Array<Record<string, unknown>>
+  assert.deepEqual(
+    parameters.find((parameter) => parameter.in === 'header'),
+    { name: 'If-Match', in: 'header', required: true, schema: { type: 'string' } },
+  )
+  assert.equal(removeReward.requestBody, undefined)
+  const loyaltyResponse = ((loyalty as Record<string, unknown>).responses as Record<string, Row>)['200']
+  const loyaltySchema = ((loyaltyResponse.content as Row)['application/json'] as Row).schema as Row
+  const loyaltyData = (loyaltySchema.properties as Row).data as Row
+  const programs = ((loyaltyData.properties as Row).programs as Row).items as Row
+  const rewards = ((programs.properties as Row).rewards as Row).items as Row
+  assert.deepEqual((rewards.properties as Row).discountAmount, { type: 'string' })
   const withoutAdapter = openApiDocument(
     compose(
       ketsuite.modules.filter((module) => !['loyalty_pos', 'loyalty_backend'].includes(module.name)),

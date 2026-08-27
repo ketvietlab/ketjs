@@ -92,6 +92,38 @@ const removeRewardLines = async (ctx: Ctx, orderId: string, programId?: string) 
   await recompute(ctx, orderId)
 }
 
+const taxIdsOf = (line: Row): string[] =>
+  Array.isArray(line.taxIds) ? line.taxIds.map(String) : line.taxId ? [String(line.taxId)] : []
+
+const scaledTaxEvidence = (lines: Row[], allocatedTax: number): Row | null => {
+  const source = lines
+    .map((line) => line.taxEvidence as Row | null)
+    .find((evidence) => evidence && Array.isArray(evidence.taxes))
+  if (!source) return null
+  const definitions = new Map<string, Row>()
+  const shares = new Map<string, number>()
+  for (const line of lines) {
+    const evidence = line.taxEvidence as Row | null
+    for (const tax of (evidence?.taxes as Row[] | undefined) ?? []) {
+      const id = String(tax.id)
+      definitions.set(id, tax)
+      shares.set(id, (shares.get(id) ?? 0) + n(tax.share))
+    }
+  }
+  const sourceTax = [...shares.values()].reduce((sum, share) => sum + share, 0)
+  const entries = [...definitions.entries()]
+  let remaining = money(allocatedTax)
+  const taxes = entries.map(([id, tax], index) => {
+    const share =
+      index === entries.length - 1
+        ? remaining
+        : money(sourceTax ? allocatedTax * ((shares.get(id) ?? 0) / sourceTax) : 0)
+    remaining = money(remaining - share)
+    return { ...tax, share: decimal(-share) }
+  })
+  return { currency: source.currency, scale: source.scale, taxes }
+}
+
 const materializeReward = async (ctx: Ctx, orderId: string, programId: string, payload: Row) => {
   const order = (await ctx.db.select('pos.Order', { id: orderId }))[0]
   if (!order) return invalid(issue('orderId', 'loyalty.error.state'))
@@ -108,27 +140,78 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
   if (!product || !uomId) return invalid(issue('rewardId', 'loyalty.error.rewardProduct'))
   await removeRewardLines(ctx, orderId, programId)
   const productReward = payload.rewardType === 'product'
-  const quantity = productReward ? n(payload.productQuantity ?? 1) : 1
-  const priceUnit = productReward ? 0 : -Math.abs(n(payload.discountAmount))
-  await ctx.db.insert('pos.OrderLine', {
-    id: `loyalty:${orderId}:${programId}`,
-    orderId,
-    productId,
-    productUomId: uomId,
-    name: reward.description,
-    qty: decimal(quantity),
-    priceUnit: decimal(priceUnit),
-    discount: '0',
-    taxId: null,
-    priceSubtotal: decimal(quantity * priceUnit),
-    priceSubtotalIncl: decimal(quantity * priceUnit),
-    refundedOrderlineId: null,
-    sequence: 9000,
-    lineKind: 'reward',
-    loyaltyApplicationId: `pos:${orderId}:${programId}`,
-    loyaltyRewardId: reward.id,
-    loyaltyPointsCost: decimal(n(payload.requiredPoints)),
-  })
+  if (productReward) {
+    const quantity = n(payload.productQuantity ?? 1)
+    const source = ordinary.find((line) => line.productId === productId) ?? ordinary[0]
+    const taxIds = source ? taxIdsOf(source) : []
+    await ctx.db.insert('pos.OrderLine', {
+      id: `loyalty:${orderId}:${programId}`,
+      orderId,
+      productId,
+      productUomId: uomId,
+      name: reward.description,
+      qty: decimal(quantity),
+      priceUnit: '0',
+      discount: '0',
+      taxId: taxIds[0] ?? null,
+      taxIds,
+      taxEvidence: source?.taxEvidence ?? null,
+      quoteRevision: order.priceBookRevision ?? source?.quoteRevision ?? null,
+      priceSubtotal: '0',
+      priceSubtotalIncl: '0',
+      refundedOrderlineId: null,
+      sequence: 9000,
+      lineKind: 'reward',
+      loyaltyApplicationId: `pos:${orderId}:${programId}`,
+      loyaltyRewardId: reward.id,
+      loyaltyPointsCost: decimal(n(payload.requiredPoints)),
+    })
+  } else {
+    const eligible = ordinary.filter((line) => n(line.priceSubtotalIncl) > 0)
+    const discountAmount = Math.abs(n(payload.discountAmount))
+    const basis = eligible.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0)
+    if (!(basis > 0) || !(discountAmount > 0)) return invalid(issue('rewardId', 'loyalty.error.rewardAmount'))
+    const groups = new Map<string, Row[]>()
+    for (const line of eligible) {
+      const key = JSON.stringify(taxIdsOf(line))
+      const rows = groups.get(key) ?? []
+      rows.push(line)
+      groups.set(key, rows)
+    }
+    const entries = [...groups.entries()]
+    let remaining = money(discountAmount)
+    for (const [index, [key, lines]] of entries.entries()) {
+      const groupTotal = lines.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0)
+      const groupUntaxed = lines.reduce((sum, line) => sum + n(line.priceSubtotal), 0)
+      const allocatedTotal =
+        index === entries.length - 1 ? remaining : money(discountAmount * (groupTotal / basis))
+      remaining = money(remaining - allocatedTotal)
+      const allocatedUntaxed = money(allocatedTotal * (groupUntaxed / groupTotal))
+      const taxIds = JSON.parse(key) as string[]
+      await ctx.db.insert('pos.OrderLine', {
+        id: `loyalty:${orderId}:${programId}${index ? `:${index}` : ''}`,
+        orderId,
+        productId,
+        productUomId: uomId,
+        name: reward.description,
+        qty: '1',
+        priceUnit: decimal(-allocatedUntaxed),
+        discount: '0',
+        taxId: taxIds[0] ?? null,
+        taxIds,
+        taxEvidence: scaledTaxEvidence(lines, allocatedTotal - allocatedUntaxed),
+        quoteRevision: order.priceBookRevision ?? lines[0]?.quoteRevision ?? null,
+        priceSubtotal: decimal(-allocatedUntaxed),
+        priceSubtotalIncl: decimal(-allocatedTotal),
+        refundedOrderlineId: null,
+        sequence: 9000 + index,
+        lineKind: 'reward',
+        loyaltyApplicationId: `pos:${orderId}:${programId}`,
+        loyaltyRewardId: reward.id,
+        loyaltyPointsCost: decimal(index ? 0 : n(payload.requiredPoints)),
+      })
+    }
+  }
   await recompute(ctx, orderId)
   return { ok: true }
 }
@@ -140,22 +223,21 @@ export const preflightOrder = async (ctx: Ctx, orderId: string): Promise<Row> =>
     (application) => application.state !== 'reversed',
   )
   const codes = applications.map((application) => normalizeCode(application.code)).filter(Boolean)
-  const programs = await evaluate(ctx, {
-    ...snapshot,
-    codes: [...new Set(codes)],
-  })
+  const requestedPointsByProgram = Object.fromEntries(
+    applications
+      .filter((application) => n(application.pointsSpent) > 0)
+      .map((application) => [String(application.programId), n(application.pointsSpent)]),
+  )
+  const programs = await evaluate(
+    ctx,
+    { ...snapshot, codes: [...new Set(codes)] },
+    { requestedPointsByProgram },
+  )
+  const byProgram = new Map(programs.map((program) => [String(program.programId), program]))
   const lines = await ctx.db.select('pos.OrderLine', { orderId })
 
   for (const application of applications) {
-    const evaluated = await evaluate(
-      ctx,
-      { ...snapshot, codes: [...new Set(codes)] },
-      {
-        onlyProgramId: String(application.programId),
-        ...(n(application.pointsSpent) > 0 ? { requestedPoints: n(application.pointsSpent) } : {}),
-      },
-    )
-    const program = evaluated[0]
+    const program = byProgram.get(String(application.programId))
     if (!program) return invalid(issue('programId', 'loyalty.error.ineligible'))
     if (!application.rewardId) continue
     const quote = program.rewards.find((reward) => reward.rewardId === application.rewardId)
@@ -167,18 +249,24 @@ export const preflightOrder = async (ctx: Ctx, orderId: string): Promise<Row> =>
       !same(quote.discountAmount, application.discountAmount)
     )
       return invalid(issue('rewardId', 'loyalty.error.ineligible'))
-    const rewardLine = lines.find(
+    const rewardLines = lines.filter(
       (line) => line.lineKind === 'reward' && line.loyaltyApplicationId === application.id,
     )
-    if (!rewardLine) return invalid(issue('rewardId', 'loyalty.error.ineligible'))
+    if (!rewardLines.length) return invalid(issue('rewardId', 'loyalty.error.ineligible'))
     if (quote.rewardType === 'product') {
       if (
-        rewardLine.productId !== quote.productId ||
-        !same(rewardLine.qty, quote.productQuantity) ||
-        !same(rewardLine.priceSubtotalIncl, 0)
+        rewardLines.length !== 1 ||
+        rewardLines[0]!.productId !== quote.productId ||
+        !same(rewardLines[0]!.qty, quote.productQuantity) ||
+        !same(rewardLines[0]!.priceSubtotalIncl, 0)
       )
         return invalid(issue('rewardId', 'loyalty.error.ineligible'))
-    } else if (!same(rewardLine.priceSubtotalIncl, -quote.discountAmount))
+    } else if (
+      !same(
+        rewardLines.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0),
+        -quote.discountAmount,
+      )
+    )
       return invalid(issue('rewardId', 'loyalty.error.ineligible'))
 
     const heldProgram = (await ctx.db.select('loyalty.Program', { id: application.programId }))[0]
@@ -209,6 +297,61 @@ export const preflightOrder = async (ctx: Ctx, orderId: string): Promise<Row> =>
   }
   return { ok: true, programs }
 }
+
+const isConcurrentFailure = (result: Row): boolean =>
+  ((result.errors as Row[] | undefined) ?? []).some((error) => error.code === 'loyalty.error.concurrent')
+
+export const reconcileOrder = async (ctx: Ctx, orderId: string, attempts = 1): Promise<Row> => {
+  const held = (await ctx.db.select('pos.Order', { id: orderId }))[0]
+  if (!held) return invalid(issue('id', 'loyalty.error.order'))
+  if (!['paid', 'done'].includes(String(held.state))) return invalid(issue('state', 'loyalty.error.state'))
+  if (
+    (!held.isRefund && held.loyaltyState === 'finalized') ||
+    (held.isRefund && held.loyaltyState === 'reversed')
+  )
+    return { ok: true, replayed: true }
+
+  let loyalty: Row = invalid(issue('id', 'loyalty.error.concurrent'))
+  for (let attempt = 0; attempt < Math.max(1, attempts); attempt += 1) {
+    const current = (await ctx.db.select('pos.Order', { id: orderId }))[0]
+    if (!current) return invalid(issue('id', 'loyalty.error.order'))
+    if (current.isRefund && current.refundedOrderId)
+      loyalty = (await orderFunctions['order.reverse']!.handler(ctx, {
+        orderType: 'pos',
+        orderId: current.refundedOrderId,
+      })) as Row
+    else {
+      const snapshot = await posSnapshot(ctx, orderId)
+      if (!snapshot) return invalid(issue('id', 'loyalty.error.order'))
+      loyalty = (await orderFunctions['order.finalize']!.handler(ctx, { order: snapshot })) as Row
+    }
+    if (loyalty.ok === true || !isConcurrentFailure(loyalty)) break
+  }
+  if (loyalty.ok !== true) return loyalty
+
+  const applications = (loyalty.applications as Row[] | undefined) ?? []
+  await ctx.db.update(
+    'pos.Order',
+    { id: orderId },
+    {
+      loyaltyState: held.isRefund ? 'reversed' : 'finalized',
+      loyaltyPointsEarned: decimal(applications.reduce((sum, row) => sum + n(row.pointsEarned), 0)),
+      loyaltyPointsSpent: decimal(applications.reduce((sum, row) => sum + n(row.pointsSpent), 0)),
+    },
+  )
+  return { ok: true, loyalty }
+}
+
+const enqueueReconciliation = async (ctx: Ctx, orderId: string): Promise<string> =>
+  ctx.tx(async (tx) => {
+    await tx.db.update('pos.Order', { id: orderId }, { loyaltyState: 'pending_reconcile' })
+    const queued = await tx.jobs.enqueue(
+      'loyalty_pos.reconcileOrder',
+      { orderId },
+      { uniqueKey: `loyalty-pos-reconcile:${orderId}` },
+    )
+    return queued.id
+  })
 
 const snapshotEffects = [
   'read:pos.Order',
@@ -263,6 +406,34 @@ export const functions: Record<string, FnSpec> = {
       const order = await posSnapshot(ctx, String(args.orderId))
       if (!order) return invalid(issue('orderId', 'loyalty.error.order'))
       return orderFunctions.evaluateOrder!.handler(ctx, { order })
+    },
+  }),
+
+  reconcileOrderAsync: defineFn({
+    input: { orderId: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', jobId: 'id?', duplicate: 'bool?', errors: 'json?' },
+    effects: ['read:pos.Order', 'write:pos.Order', 'enqueue:loyalty_pos.reconcileOrder'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
+      if (!order) return invalid(issue('orderId', 'loyalty.error.order'))
+      if (!['paid', 'done'].includes(String(order.state)))
+        return invalid(issue('state', 'loyalty.error.state'))
+      if (
+        (!order.isRefund && order.loyaltyState === 'finalized') ||
+        (order.isRefund && order.loyaltyState === 'reversed')
+      )
+        return { ok: true, duplicate: true }
+      return ctx.tx(async (tx) => {
+        await tx.db.update('pos.Order', { id: args.orderId }, { loyaltyState: 'pending_reconcile' })
+        const queued = await tx.jobs.enqueue(
+          'loyalty_pos.reconcileOrder',
+          { orderId: args.orderId },
+          { uniqueKey: `loyalty-pos-reconcile:${String(args.orderId)}:${String(args.idempotencyKey)}` },
+        )
+        return { ok: true, jobId: queued.id, duplicate: queued.existing }
+      })
     },
   }),
 
@@ -351,12 +522,24 @@ export const functions: Record<string, FnSpec> = {
 
   validateOrder: defineFn({
     input: { id: 'id', expectedRevision: 'int?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      state: 'text?',
+      pickingId: 'id?',
+      accountMoveId: 'id?',
+      revision: 'int?',
+      reconciliationJobId: 'id?',
+      loyalty: 'json?',
+      errors: 'json?',
+    },
     effects: [
       ...effectsOf(posFunctions.validateOrder),
       ...snapshotEffects,
       ...effectsOf(orderFunctions['order.finalize']),
       ...effectsOf(orderFunctions['order.reverse']),
       'write:pos.Order',
+      'enqueue:loyalty_pos.reconcileOrder',
     ],
     idempotent: true,
     agent: true,
@@ -369,44 +552,12 @@ export const functions: Record<string, FnSpec> = {
       }
       const validated = (await posFunctions.validateOrder!.handler(ctx, args)) as Row
       if (validated.ok !== true) return validated
-      const held = (await ctx.db.select('pos.Order', { id: args.id }))[0]!
-      let loyalty: Row
-      if (held.isRefund && held.refundedOrderId)
-        loyalty = (await orderFunctions['order.reverse']!.handler(ctx, {
-          orderType: 'pos',
-          orderId: held.refundedOrderId,
-        })) as Row
-      else {
-        const order = await posSnapshot(ctx, String(args.id))
-        if (!order) return invalid(issue('id', 'loyalty.error.order'))
-        loyalty = (await orderFunctions['order.finalize']!.handler(ctx, {
-          order,
-        })) as Row
-        for (let retry = 0; loyalty.ok !== true && retry < 2; retry += 1) {
-          const concurrent = ((loyalty.errors as Row[] | undefined) ?? []).some(
-            (error) => error.code === 'loyalty.error.concurrent',
-          )
-          if (!concurrent) break
-          loyalty = (await orderFunctions['order.finalize']!.handler(ctx, {
-            order,
-          })) as Row
-        }
+      const reconciled = await reconcileOrder(ctx, String(args.id), 3)
+      if (reconciled.ok !== true) {
+        const reconciliationJobId = await enqueueReconciliation(ctx, String(args.id))
+        return { ...reconciled, reconciliationJobId }
       }
-      if (loyalty.ok !== true) {
-        await ctx.db.update('pos.Order', { id: args.id }, { loyaltyState: 'pending_reconcile' })
-        return loyalty
-      }
-      const applications = (loyalty.applications as Row[] | undefined) ?? []
-      await ctx.db.update(
-        'pos.Order',
-        { id: args.id },
-        {
-          loyaltyState: held.isRefund ? 'reversed' : 'finalized',
-          loyaltyPointsEarned: decimal(applications.reduce((sum, row) => sum + n(row.pointsEarned), 0)),
-          loyaltyPointsSpent: decimal(applications.reduce((sum, row) => sum + n(row.pointsSpent), 0)),
-        },
-      )
-      return { ...validated, loyalty }
+      return { ...validated, loyalty: reconciled.loyalty }
     },
   }),
 

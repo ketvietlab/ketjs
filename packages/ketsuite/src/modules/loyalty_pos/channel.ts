@@ -38,8 +38,8 @@ const reward = {
     programId: string,
     description: string,
     rewardType: string,
-    requiredPoints: { type: 'number' },
-    discountAmount: { type: 'number' },
+    requiredPoints: string,
+    discountAmount: string,
     productId: nullableString,
     productQuantity: { type: ['number', 'null'] },
   },
@@ -61,8 +61,8 @@ const program = {
     programId: string,
     programName: string,
     programType: string,
-    points: { type: 'number' },
-    availablePoints: { type: 'number' },
+    points: string,
+    availablePoints: string,
     pointName: string,
     rewards: { type: 'array', items: reward },
   },
@@ -101,16 +101,16 @@ const projectPrograms = (rows: Row[]) =>
     programId: String(row.programId),
     programName: String(row.programName),
     programType: String(row.programType),
-    points: Number(row.points ?? 0),
-    availablePoints: Number(row.availablePoints ?? 0),
+    points: String(row.points ?? 0),
+    availablePoints: String(row.availablePoints ?? 0),
     pointName: String(row.pointName),
     rewards: ((row.rewards as Row[] | undefined) ?? []).map((held) => ({
       rewardId: String(held.rewardId),
       programId: String(held.programId),
       description: String(held.description),
       rewardType: String(held.rewardType),
-      requiredPoints: Number(held.requiredPoints ?? 0),
-      discountAmount: Number(held.discountAmount ?? 0),
+      requiredPoints: String(held.requiredPoints ?? 0),
+      discountAmount: String(held.discountAmount ?? 0),
       productId: held.productId == null ? null : String(held.productId),
       productQuantity: held.productQuantity == null ? null : Number(held.productQuantity),
     })),
@@ -159,6 +159,15 @@ const mutate = async (
   )) as Row
   if (result.ok !== true) return posFailure(ctx, url, req, result)
   return loyaltyResult(ctx, url, req, orderId, identity)
+}
+
+const ifMatchRevision = (req: Req): number | null => {
+  const header = req.headers['if-match']
+  const value = Array.isArray(header) ? header[0] : header
+  const match = /^"pos-order-(\d+)-loyalty"$/.exec(String(value ?? ''))
+  if (!match) return null
+  const revision = Number(match[1])
+  return Number.isSafeInteger(revision) ? revision : null
 }
 
 export const channelRoutes = routesOf(
@@ -259,11 +268,11 @@ export const channelRoutes = routesOf(
     capability: { key: 'pos.loyalty', action: 'remove_reward' },
     request: {
       params: rewardParams,
-      body: {
+      headers: {
         type: 'object',
         additionalProperties: false,
-        properties: { expectedRevision: integer },
-        required: ['expectedRevision'],
+        properties: { 'If-Match': string },
+        required: ['If-Match'],
       },
     },
     responses: {
@@ -274,11 +283,18 @@ export const channelRoutes = routesOf(
       '422': envelope(object),
     },
     idempotent: true,
-    handler: (ctx, url, req, params, request) =>
-      mutate(ctx, url, req, request.identity!, params.id, 'removeReward', {
+    handler: (ctx, url, req, params, request) => {
+      const expectedRevision = ifMatchRevision(req)
+      if (expectedRevision === null)
+        return posFailure(ctx, url, req, {
+          ok: false,
+          errors: [{ field: 'If-Match', message: 'a current POS Loyalty ETag is required' }],
+        })
+      return mutate(ctx, url, req, request.identity!, params.id, 'removeReward', {
         orderId: params.id,
-        expectedRevision: request.body.expectedRevision,
+        expectedRevision,
         programId: params.programId,
-      }),
+      })
+    },
   }),
 )

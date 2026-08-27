@@ -250,7 +250,11 @@ export type EvaluatedProgram = EligibilityResult & {
 export const evaluate = async (
   ctx: Ctx,
   snapshot: OrderSnapshot,
-  options: { onlyProgramId?: string; requestedPoints?: number } = {},
+  options: {
+    onlyProgramId?: string
+    requestedPoints?: number
+    requestedPointsByProgram?: Readonly<Record<string, number>>
+  } = {},
 ): Promise<EvaluatedProgram[]> => {
   const cache = new Map<string, ProductContext | null>()
   const allPrograms = await ctx.db.select('loyalty.Program', { active: true })
@@ -422,7 +426,7 @@ export const evaluate = async (
         available,
         cache,
         rewardProducts.get(String(reward.id)) ?? new Set(),
-        options.requestedPoints,
+        options.requestedPointsByProgram?.[String(program.id)] ?? options.requestedPoints,
       )
       if (quote) rewards.push(quote)
     }
