@@ -40,7 +40,10 @@ export type PartnerStatementScreenOptions = {
 }
 
 /** A specialized receivable/payable report with exact totals above its paged movements. */
-export const partnerLedgerScreen = (_: Translator, options: PartnerStatementScreenOptions): TemplateResult => {
+export const partnerLedgerScreen = (
+  _: Translator,
+  options: PartnerStatementScreenOptions,
+): TemplateResult => {
   const table = options.rows.length ? (
     dataTable(_, {
       rows: options.rows,

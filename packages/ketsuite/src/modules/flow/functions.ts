@@ -494,9 +494,7 @@ export const functions: Record<string, FnSpec> = {
       const rows = await ctx.db.select('flow.Epic', where)
       const needle = normalized(args.search)
       const filtered = rows.filter((row) => !needle || normalized(row.title).includes(needle))
-      return args.id
-        ? filtered
-        : filtered.slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+      return args.id ? filtered : filtered.slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
     },
   }),
 

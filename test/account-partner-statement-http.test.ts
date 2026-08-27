@@ -112,9 +112,7 @@ test('partner statement HTTP keeps exact totals while paging, searching, and fil
   assert.equal((accountHtml.match(/data-ui="row"/g) ?? []).length, 30)
 
   const overviewHtml = clean(
-    await (
-      await app.client.get('/admin/accounting?lang=en&dateFrom=2026-06-30&dateTo=2026-06-30')
-    ).text(),
+    await (await app.client.get('/admin/accounting?lang=en&dateFrom=2026-06-30&dateTo=2026-06-30')).text(),
   )
   assert.match(
     overviewHtml,
@@ -150,8 +148,14 @@ test('partner statement HTTP explains rejected filters, stays GET-only, and avoi
   assert.match(unavailableHtml, /retired-partner/)
   assert.match(unavailableHtml, /Partner no longer available/)
 
-  assert.equal((await app.client.request('/admin/accounting/partner-statement', { method: 'POST' })).status, 405)
-  assert.equal((await app.client.request('/admin/accounting/partner-statement', { method: 'PUT' })).status, 405)
+  assert.equal(
+    (await app.client.request('/admin/accounting/partner-statement', { method: 'POST' })).status,
+    405,
+  )
+  assert.equal(
+    (await app.client.request('/admin/accounting/partner-statement', { method: 'PUT' })).status,
+    405,
+  )
 
   await fixture('user.createUser', {
     id: 'statement-reader',

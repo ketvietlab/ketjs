@@ -212,9 +212,7 @@ export function createFlowMapView(runtime, props) {
             ${each(
               model.nodes,
               (node) => node.id,
-              (
-                node,
-              ) => html`<a data-ui="flow-map-node" data-tone=${node.tone} href=${issueHref(node)}
+              (node) => html`<a data-ui="flow-map-node" data-tone=${node.tone} href=${issueHref(node)}
                 style=${`left:${node.x}px;top:${node.y}px;width:${LAYOUT.nodeWidth}px;height:${LAYOUT.nodeHeight}px`}>
                 <span data-ui="flow-map-node-top">
                   <span data-ui="flow-map-node-column">${node.columnName ?? ''}</span>

@@ -12,11 +12,7 @@ export type EpicMapScreenOptions = {
 }
 
 /** The dependency atlas remains the workspace; its frame only restores identity and escape paths. */
-export const mapScreen = (
-  _: Translator,
-  frame: Frame,
-  options: EpicMapScreenOptions,
-): TemplateResult => (
+export const mapScreen = (_: Translator, frame: Frame, options: EpicMapScreenOptions): TemplateResult => (
   <Framed
     translator={_}
     title={options.epicTitle}

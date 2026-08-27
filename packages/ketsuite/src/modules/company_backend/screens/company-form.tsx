@@ -38,10 +38,7 @@ export type CompanyFormScreenOptions = {
   returnTo?: string
 }
 
-const withRejectedOption = (
-  options: readonly FormOption[],
-  value: unknown,
-): readonly FormOption[] => {
+const withRejectedOption = (options: readonly FormOption[], value: unknown): readonly FormOption[] => {
   const selected = String(value ?? '')
   return selected && !options.some((option) => option.value === selected)
     ? [{ value: selected, label: selected }, ...options]
@@ -91,9 +88,7 @@ export const companyFormScreen = (
 ): TemplateResult => {
   const detail = options.mode === 'detail'
   const branches = options.branches ?? []
-  const title = detail
-    ? String(values.name ?? values.code ?? values.id)
-    : _('company_backend.create.title')
+  const title = detail ? String(values.name ?? values.code ?? values.id) : _('company_backend.create.title')
   const formId = 'company-record-form'
   const hidden = {
     action: 'save',
@@ -172,10 +167,7 @@ export const companyFormScreen = (
             }
             body={
               branches.length === 0
-                ? emptyState(
-                    _('company_backend.branches.empty'),
-                    _('company_backend.branches.emptyHint'),
-                  )
+                ? emptyState(_('company_backend.branches.empty'), _('company_backend.branches.emptyHint'))
                 : dataTable(_, {
                     rows: branches,
                     id: (branch) => branch.id,
@@ -263,9 +255,7 @@ export const companyFormScreen = (
               ? [
                   <RecordMore
                     label={_('company_backend.action.more')}
-                    body={
-                      <FormCluster label={_('company_backend.action.more')} forms={[archive]} />
-                    }
+                    body={<FormCluster label={_('company_backend.action.more')} forms={[archive]} />}
                   />,
                 ]
               : []),

@@ -22,11 +22,7 @@ const call = <T = Record<string, unknown>>(
   input: Record<string, unknown>,
 ) => callFn(name, input, { ...runtime, scope }).then((result) => result.value as T)
 
-const createCompany = async (
-  runtime: { adapter: Adapter; manifest: Manifest },
-  id: string,
-  code: string,
-) => {
+const createCompany = async (runtime: { adapter: Adapter; manifest: Manifest }, id: string, code: string) => {
   await call(runtime, 'partner.savePartner', {
     id: `${id}:partner`,
     kind: 'company',

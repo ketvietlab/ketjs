@@ -180,11 +180,7 @@ export const functions: Record<string, FnSpec> = {
           rootBranchId: String((await rootFor(ctx, id))?.id ?? `root:${id}`),
           version: currentVersion,
         }
-      if (
-        existing &&
-        a.expectedVersion != null &&
-        currentVersion !== Number(a.expectedVersion)
-      )
+      if (existing && a.expectedVersion != null && currentVersion !== Number(a.expectedVersion))
         return invalid([issue('expectedVersion', 'company.error.versionConflict')])
 
       const rootId = `root:${id}`
@@ -321,8 +317,7 @@ export const functions: Record<string, FnSpec> = {
       const row = await ctx.db.one(from(C).where(eq(C.id, a.id)))
       if (!row) return invalid([issue('id', 'company.error.missing')])
       const currentVersion = Number(row.version ?? 0)
-      if (row.active === a.active)
-        return { ok: true, id: a.id, active: row.active, version: currentVersion }
+      if (row.active === a.active) return { ok: true, id: a.id, active: row.active, version: currentVersion }
       if (a.expectedVersion != null && currentVersion !== Number(a.expectedVersion))
         return invalid([issue('expectedVersion', 'company.error.versionConflict')])
       if (a.active === false && ctx.manifest.models['user.User'])

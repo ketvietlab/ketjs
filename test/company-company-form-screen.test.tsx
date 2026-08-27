@@ -47,8 +47,7 @@ test('company create is a full FormPage with stable identity and no premature ch
       { id: '2e71eaf2-8404-4c31-83f6-78f300611250', currency: 'VND' },
       {
         mode: 'create',
-        action:
-          '/admin/companies/new?lang=vi&returnTo=%2Fadmin%2Fcompanies%3Fq%3DKET%26lang%3Dvi',
+        action: '/admin/companies/new?lang=vi&returnTo=%2Fadmin%2Fcompanies%3Fq%3DKET%26lang%3Dvi',
         cancelHref: '/admin/companies?q=KET&lang=vi',
         returnTo: '/admin/companies?q=KET&lang=vi',
         partners: [{ value: 'partner-1', label: 'Công ty Két Việt' }],
@@ -84,8 +83,7 @@ test('company detail keeps lifecycle, branches, rejected relations and one-third
       {
         mode: 'detail',
         action: '/admin/companies/company-1?lang=vi&returnTo=%2Fadmin%2Fcompanies%3Flang%3Dvi',
-        archiveAction:
-          '/admin/companies/company-1/archive?lang=vi&returnTo=%2Fadmin%2Fcompanies%3Flang%3Dvi',
+        archiveAction: '/admin/companies/company-1/archive?lang=vi&returnTo=%2Fadmin%2Fcompanies%3Flang%3Dvi',
         cancelHref: '/admin/companies?lang=vi',
         returnTo: '/admin/companies?lang=vi',
         manageAddressHref: '/admin/partner/partners/backing-partner?lang=vi',

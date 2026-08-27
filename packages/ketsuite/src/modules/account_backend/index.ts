@@ -3234,12 +3234,7 @@ export default defineModule({
           ctx.call('company.listCompanies', {}, url, req),
           ctx.call('partner.listPartners', { limit: PAGE_SIZE }, url, req),
           partnerId
-            ? ctx.call(
-                'partner.listPartners',
-                { ids: [partnerId], includeArchived: true },
-                url,
-                req,
-              )
+            ? ctx.call('partner.listPartners', { ids: [partnerId], includeArchived: true }, url, req)
             : Promise.resolve([]),
           partnerId && !inverted
             ? ctx.call(
@@ -3269,8 +3264,7 @@ export default defineModule({
             const bundledPartners = [
               ...(selectedPartner ? [selectedPartner] : unknownPartner ? [unavailablePartner] : []),
               ...initialPartners.filter(
-                (partner) =>
-                  !companyPartners.has(String(partner.id)) && String(partner.id) !== partnerId,
+                (partner) => !companyPartners.has(String(partner.id)) && String(partner.id) !== partnerId,
               ),
             ]
             const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
@@ -3317,10 +3311,7 @@ export default defineModule({
               summary: {
                 debit: matching.reduce((total, row) => total + Number(row.debit ?? 0), 0),
                 credit: matching.reduce((total, row) => total + Number(row.credit ?? 0), 0),
-                residual: matching.reduce(
-                  (total, row) => total + Number(row.amountResidual ?? 0),
-                  0,
-                ),
+                residual: matching.reduce((total, row) => total + Number(row.amountResidual ?? 0), 0),
               },
               currency,
               selected: Boolean(partnerId),
@@ -4025,7 +4016,8 @@ const en: Record<string, string> = {
   'partnerLedger.filter.title': 'Select a partner',
   'partnerLedger.filter.hint': 'The report includes only posted receivable and payable journal items.',
   'partnerLedger.filter.unavailablePartner': 'Partner no longer available',
-  'partnerLedger.filter.partnerError': 'The selected partner is no longer available. Clear the partner filter.',
+  'partnerLedger.filter.partnerError':
+    'The selected partner is no longer available. Clear the partner filter.',
   'partnerLedger.search': 'Search documents, accounts, or descriptions…',
   'partnerLedger.result.title': 'Partner movements',
   'partnerLedger.result.hint': 'Review documents, debit/credit movements, and unreconciled amounts.',

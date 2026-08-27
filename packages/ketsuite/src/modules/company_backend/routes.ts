@@ -83,10 +83,7 @@ const renderCompany = async (
   options: { errors?: string[]; values?: CompanyFormValues; returnTo?: string } = {},
 ) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
-  const [row, form] = await Promise.all([
-    companyOf(ctx, url, req, id),
-    dataForCompanyForm(ctx, url, req, id),
-  ])
+  const [row, form] = await Promise.all([companyOf(ctx, url, req, id), dataForCompanyForm(ctx, url, req, id)])
   if (!row) return text(_('company_backend.error.notFound'), { status: 404 })
   const lang = ctx.localeOf(url, req)
   const returnTo = safeReturnTo(url, options.returnTo ?? url.searchParams.get('returnTo'))
@@ -302,8 +299,7 @@ export const routes: Record<string, RouteEntry> = {
         const returnTo = safeReturnTo(url, form.returnTo ?? requestedReturnTo)
         const id = validCreateId(form.id) ? form.id : randomUUID()
         const result = await saveCompany(ctx, url, req, id, form)
-        if ((result as { ok?: boolean }).ok)
-          return seeOther(companyDetailPath(url, id, returnTo))
+        if ((result as { ok?: boolean }).ok) return seeOther(companyDetailPath(url, id, returnTo))
         return renderCompanyCreate(
           ctx,
           url,
@@ -357,19 +353,12 @@ export const routes: Record<string, RouteEntry> = {
       if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
       const returnTo = safeReturnTo(url, form.returnTo ?? url.searchParams.get('returnTo'))
       const result = await saveCompany(ctx, url, req, params.id, form)
-      if ((result as { ok?: boolean }).ok)
-        return seeOther(companyDetailPath(url, params.id, returnTo))
-      return renderCompany(
-        ctx,
-        url,
-        req,
-        params.id,
-        {
-          errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
-          values: companyValues(form),
-          returnTo,
-        },
-      )
+      if ((result as { ok?: boolean }).ok) return seeOther(companyDetailPath(url, params.id, returnTo))
+      return renderCompany(ctx, url, req, params.id, {
+        errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+        values: companyValues(form),
+        returnTo,
+      })
     },
 
   '/admin/companies/{id}/archive':
@@ -393,18 +382,11 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )
-      if ((result as { ok?: boolean }).ok)
-        return seeOther(companyDetailPath(url, params.id, returnTo))
-      return renderCompany(
-        ctx,
-        url,
-        req,
-        params.id,
-        {
-          errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
-          returnTo,
-        },
-      )
+      if ((result as { ok?: boolean }).ok) return seeOther(companyDetailPath(url, params.id, returnTo))
+      return renderCompany(ctx, url, req, params.id, {
+        errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+        returnTo,
+      })
     },
 
   '/admin/companies/{id}/branches/new':

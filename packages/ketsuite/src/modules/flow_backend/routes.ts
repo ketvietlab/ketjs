@@ -1986,16 +1986,18 @@ export const routes: Record<string, RouteEntry> = {
       }
       const issueIds = issues.map((row) => String(row.id))
       const dependencyPages = await Promise.all(
-        Array.from({ length: Math.ceil(issueIds.length / MAP_BATCH_SIZE) }, (_, index) =>
-          ctx.call(
-            'flow.issue.dependencies',
-            {
-              issueIds: issueIds.slice(index * MAP_BATCH_SIZE, (index + 1) * MAP_BATCH_SIZE),
-              includeExternalTargets: true,
-            },
-            url,
-            req,
-          ) as Promise<AnyRow[]>,
+        Array.from(
+          { length: Math.ceil(issueIds.length / MAP_BATCH_SIZE) },
+          (_, index) =>
+            ctx.call(
+              'flow.issue.dependencies',
+              {
+                issueIds: issueIds.slice(index * MAP_BATCH_SIZE, (index + 1) * MAP_BATCH_SIZE),
+                includeExternalTargets: true,
+              },
+              url,
+              req,
+            ) as Promise<AnyRow[]>,
         ),
       )
       const deps = dependencyPages.flat()
@@ -2045,10 +2047,7 @@ export const routes: Record<string, RouteEntry> = {
             projectName: String(project.name ?? projectId),
             epicTitle: String(epic.title),
             epicHref: inLocale(url, `/admin/flow/epics/${encodeURIComponent(epicId)}`),
-            epicsHref: inLocale(
-              url,
-              `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`,
-            ),
+            epicsHref: inLocale(url, `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`),
             map,
           }),
       })
