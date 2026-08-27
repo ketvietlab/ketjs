@@ -66,11 +66,7 @@ export const contextFields = (_: Translator, options: ContextScreenOptions): For
   ]
 }
 
-export const contextScreen = (
-  _: Translator,
-  frame: Frame,
-  options: ContextScreenOptions,
-): TemplateResult => {
+export const contextScreen = (_: Translator, frame: Frame, options: ContextScreenOptions): TemplateResult => {
   const formId = 'working-context-form'
   return shell(
     _,

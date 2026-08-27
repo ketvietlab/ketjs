@@ -46,12 +46,7 @@ const editAction = (_: Translator, href: string): TemplateResult => (
   <LinkButton label={_('flow_backend.action.edit')} href={href} variant="tertiary" size="compact" />
 )
 
-const archiveAction = (
-  _: Translator,
-  endpoint: string,
-  action: string,
-  id: string,
-): TemplateResult => (
+const archiveAction = (_: Translator, endpoint: string, action: string, id: string): TemplateResult => (
   <RecordForm
     action={endpoint}
     hidden={{ action, id }}
@@ -89,19 +84,39 @@ export const settingsScreen = (
                   rows: options.columns,
                   id: (row) => String(row.id),
                   columns: [
-                    { key: 'sequence', label: _('flow_backend.field.sequence'), cell: (row) => String(row.sequence) },
                     {
-                      key: 'name', label: _('flow_backend.field.name'), priority: 'primary', cell: (row) => String(row.name),
+                      key: 'sequence',
+                      label: _('flow_backend.field.sequence'),
+                      cell: (row) => String(row.sequence),
                     },
                     {
-                      key: 'code', label: _('flow_backend.field.code'), kind: 'identifier', cell: (row) => String(row.code),
+                      key: 'name',
+                      label: _('flow_backend.field.name'),
+                      priority: 'primary',
+                      cell: (row) => String(row.name),
                     },
                     {
-                      key: 'terminal', label: _('flow_backend.field.terminalState'), cell: (row) => (row.terminalState ? '✓' : '—'),
+                      key: 'code',
+                      label: _('flow_backend.field.code'),
+                      kind: 'identifier',
+                      cell: (row) => String(row.code),
                     },
-                    { key: 'edit', label: '', align: 'end', cell: (row) => editAction(_, options.editColumnHref(row)) },
                     {
-                      key: 'archive', label: '', align: 'end', cell: (row) =>
+                      key: 'terminal',
+                      label: _('flow_backend.field.terminalState'),
+                      cell: (row) => (row.terminalState ? '✓' : '—'),
+                    },
+                    {
+                      key: 'edit',
+                      label: '',
+                      align: 'end',
+                      cell: (row) => editAction(_, options.editColumnHref(row)),
+                    },
+                    {
+                      key: 'archive',
+                      label: '',
+                      align: 'end',
+                      cell: (row) =>
                         row.terminalState || row.active === false
                           ? '—'
                           : archiveAction(_, options.endpoint, 'archiveColumn', String(row.id)),
@@ -121,17 +136,34 @@ export const settingsScreen = (
                   rows: options.types,
                   id: (row) => String(row.id),
                   columns: [
-                    { key: 'sequence', label: _('flow_backend.field.sequence'), cell: (row) => String(row.sequence) },
                     {
-                      key: 'name', label: _('flow_backend.field.name'), priority: 'primary', cell: (row) => String(row.name),
+                      key: 'sequence',
+                      label: _('flow_backend.field.sequence'),
+                      cell: (row) => String(row.sequence),
                     },
                     {
-                      key: 'code', label: _('flow_backend.field.code'), kind: 'identifier', cell: (row) => String(row.code),
+                      key: 'name',
+                      label: _('flow_backend.field.name'),
+                      priority: 'primary',
+                      cell: (row) => String(row.name),
                     },
-                    { key: 'edit', label: '', align: 'end', cell: (row) => editAction(_, options.editTypeHref(row)) },
                     {
-                      key: 'archive', label: '', align: 'end', cell: (row) =>
-                        archiveAction(_, options.endpoint, 'archiveType', String(row.id)),
+                      key: 'code',
+                      label: _('flow_backend.field.code'),
+                      kind: 'identifier',
+                      cell: (row) => String(row.code),
+                    },
+                    {
+                      key: 'edit',
+                      label: '',
+                      align: 'end',
+                      cell: (row) => editAction(_, options.editTypeHref(row)),
+                    },
+                    {
+                      key: 'archive',
+                      label: '',
+                      align: 'end',
+                      cell: (row) => archiveAction(_, options.endpoint, 'archiveType', String(row.id)),
                     },
                   ],
                 })
@@ -148,24 +180,47 @@ export const settingsScreen = (
                   rows: options.fields,
                   id: (row) => String(row.id),
                   columns: [
-                    { key: 'sequence', label: _('flow_backend.field.sequence'), cell: (row) => String(row.sequence) },
                     {
-                      key: 'name', label: _('flow_backend.field.name'), priority: 'primary', cell: (row) => String(row.name),
+                      key: 'sequence',
+                      label: _('flow_backend.field.sequence'),
+                      cell: (row) => String(row.sequence),
                     },
                     {
-                      key: 'code', label: _('flow_backend.field.code'), kind: 'identifier', cell: (row) => String(row.code),
+                      key: 'name',
+                      label: _('flow_backend.field.name'),
+                      priority: 'primary',
+                      cell: (row) => String(row.name),
                     },
-                    { key: 'kind', label: _('flow_backend.field.kind'), cell: (row) => _(`flow_backend.kind.${String(row.kind)}`) },
                     {
-                      key: 'options', label: _('flow_backend.field.options'), cell: (row) =>
+                      key: 'code',
+                      label: _('flow_backend.field.code'),
+                      kind: 'identifier',
+                      cell: (row) => String(row.code),
+                    },
+                    {
+                      key: 'kind',
+                      label: _('flow_backend.field.kind'),
+                      cell: (row) => _(`flow_backend.kind.${String(row.kind)}`),
+                    },
+                    {
+                      key: 'options',
+                      label: _('flow_backend.field.options'),
+                      cell: (row) =>
                         (((row.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? [])
                           .map((option) => String(option.label ?? option.code))
                           .join(', ') || '—',
                     },
-                    { key: 'edit', label: '', align: 'end', cell: (row) => editAction(_, options.editFieldHref(row)) },
                     {
-                      key: 'archive', label: '', align: 'end', cell: (row) =>
-                        archiveAction(_, options.endpoint, 'archiveField', String(row.id)),
+                      key: 'edit',
+                      label: '',
+                      align: 'end',
+                      cell: (row) => editAction(_, options.editFieldHref(row)),
+                    },
+                    {
+                      key: 'archive',
+                      label: '',
+                      align: 'end',
+                      cell: (row) => archiveAction(_, options.endpoint, 'archiveField', String(row.id)),
                     },
                   ],
                 })
@@ -182,12 +237,22 @@ export const settingsScreen = (
                   id: (row) => String(row.id),
                   columns: [
                     {
-                      key: 'name', label: _('flow_backend.field.name'), priority: 'primary', cell: (row) => String(row.name),
+                      key: 'name',
+                      label: _('flow_backend.field.name'),
+                      priority: 'primary',
+                      cell: (row) => String(row.name),
                     },
-                    { key: 'edit', label: '', align: 'end', cell: (row) => editAction(_, options.editTagHref(row)) },
                     {
-                      key: 'archive', label: '', align: 'end', cell: (row) =>
-                        archiveAction(_, options.endpoint, 'archiveTag', String(row.id)),
+                      key: 'edit',
+                      label: '',
+                      align: 'end',
+                      cell: (row) => editAction(_, options.editTagHref(row)),
+                    },
+                    {
+                      key: 'archive',
+                      label: '',
+                      align: 'end',
+                      cell: (row) => archiveAction(_, options.endpoint, 'archiveTag', String(row.id)),
                     },
                   ],
                 })

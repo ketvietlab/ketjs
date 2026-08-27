@@ -11,15 +11,19 @@ translate.resolves = () => true
 
 test('working context uses FormPage with one external primary form action', () => {
   const html = renderToString(
-    contextScreen(translate, {}, {
-      companies: [{ id: 'acme', code: 'ACME', name: 'ACME' }],
-      branches: [{ id: 'root:acme', companyId: 'acme', code: 'ROOT', name: 'Root', isRoot: true }],
-      selectedCompanies: ['acme'],
-      selectedBranches: ['root:acme'],
-      companyId: 'acme',
-      branchId: 'root:acme',
-      action: '/admin/context?lang=en',
-    }),
+    contextScreen(
+      translate,
+      {},
+      {
+        companies: [{ id: 'acme', code: 'ACME', name: 'ACME' }],
+        branches: [{ id: 'root:acme', companyId: 'acme', code: 'ROOT', name: 'Root', isRoot: true }],
+        selectedCompanies: ['acme'],
+        selectedBranches: ['root:acme'],
+        companyId: 'acme',
+        branchId: 'root:acme',
+        action: '/admin/context?lang=en',
+      },
+    ),
   )
   assert.match(html, /data-ui="form-page" data-scope="working-context-page"/)
   assert.match(html, /id="working-context-form"/)

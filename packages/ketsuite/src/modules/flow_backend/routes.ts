@@ -2389,31 +2389,72 @@ export const routes: Record<string, RouteEntry> = {
         submitted[name] ?? String(fallback ?? '')
       const selected =
         editorKind === 'column'
-          ? editingColumn ?? columns.find((row) => String(row.id) === submitted.id)
+          ? (editingColumn ?? columns.find((row) => String(row.id) === submitted.id))
           : editorKind === 'type'
-            ? editingType ?? types.find((row) => String(row.id) === submitted.id)
+            ? (editingType ?? types.find((row) => String(row.id) === submitted.id))
             : editorKind === 'field'
-              ? editingField ?? fields.find((row) => String(row.id) === submitted.id)
-              : editingTag ?? tags.find((row) => String(row.id) === submitted.id)
+              ? (editingField ?? fields.find((row) => String(row.id) === submitted.id))
+              : (editingTag ?? tags.find((row) => String(row.id) === submitted.id))
       const editorFields: FormField[] =
         editorKind === 'column'
           ? [
-              { name: 'name', label: _('flow_backend.field.name'), required: true, value: value('name', selected?.name) },
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: value('name', selected?.name),
+              },
               { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
-              { name: 'sequence', label: _('flow_backend.field.sequence'), type: 'number', value: value('sequence', selected?.sequence ?? 10) },
-              { name: 'terminalState', label: _('flow_backend.field.terminalState'), type: 'checkbox', value: submitted.terminalState ? submitted.terminalState === '1' : selected?.terminalState === true },
+              {
+                name: 'sequence',
+                label: _('flow_backend.field.sequence'),
+                type: 'number',
+                value: value('sequence', selected?.sequence ?? 10),
+              },
+              {
+                name: 'terminalState',
+                label: _('flow_backend.field.terminalState'),
+                type: 'checkbox',
+                value: submitted.terminalState
+                  ? submitted.terminalState === '1'
+                  : selected?.terminalState === true,
+              },
             ]
           : editorKind === 'type'
             ? [
-                { name: 'name', label: _('flow_backend.field.name'), required: true, value: value('name', selected?.name) },
+                {
+                  name: 'name',
+                  label: _('flow_backend.field.name'),
+                  required: true,
+                  value: value('name', selected?.name),
+                },
                 { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
-                { name: 'sequence', label: _('flow_backend.field.sequence'), type: 'number', value: value('sequence', selected?.sequence ?? 10) },
+                {
+                  name: 'sequence',
+                  label: _('flow_backend.field.sequence'),
+                  type: 'number',
+                  value: value('sequence', selected?.sequence ?? 10),
+                },
               ]
             : editorKind === 'field'
               ? [
-                  { name: 'name', label: _('flow_backend.field.name'), required: true, value: value('name', selected?.name) },
+                  {
+                    name: 'name',
+                    label: _('flow_backend.field.name'),
+                    required: true,
+                    value: value('name', selected?.name),
+                  },
                   { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
-                  { name: 'kind', label: _('flow_backend.field.kind'), type: 'select', value: value('kind', selected?.kind ?? 'text'), options: FIELD_KINDS.map((kind) => ({ value: kind, label: _(`flow_backend.kind.${kind}`) })) },
+                  {
+                    name: 'kind',
+                    label: _('flow_backend.field.kind'),
+                    type: 'select',
+                    value: value('kind', selected?.kind ?? 'text'),
+                    options: FIELD_KINDS.map((kind) => ({
+                      value: kind,
+                      label: _(`flow_backend.kind.${kind}`),
+                    })),
+                  },
                   {
                     name: 'options',
                     label: _('flow_backend.field.options'),
@@ -2425,12 +2466,27 @@ export const routes: Record<string, RouteEntry> = {
                         .join(', '),
                     ),
                   },
-                  { name: 'sequence', label: _('flow_backend.field.sequence'), type: 'number', value: value('sequence', selected?.sequence ?? 10) },
+                  {
+                    name: 'sequence',
+                    label: _('flow_backend.field.sequence'),
+                    type: 'number',
+                    value: value('sequence', selected?.sequence ?? 10),
+                  },
                 ]
               : editorKind === 'tag'
                 ? [
-                    { name: 'name', label: _('flow_backend.field.name'), required: true, value: value('name', selected?.name) },
-                    { name: 'color', label: _('flow_backend.field.color'), type: 'color', value: value('color', selected?.color) },
+                    {
+                      name: 'name',
+                      label: _('flow_backend.field.name'),
+                      required: true,
+                      value: value('name', selected?.name),
+                    },
+                    {
+                      name: 'color',
+                      label: _('flow_backend.field.color'),
+                      type: 'color',
+                      value: value('color', selected?.color),
+                    },
                   ]
                 : []
       const editorErrors =

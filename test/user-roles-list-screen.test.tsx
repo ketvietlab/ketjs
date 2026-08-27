@@ -11,18 +11,22 @@ translate.resolves = () => true
 
 test('roles list uses ListPage with row navigation and collection actions', () => {
   const html = renderToString(
-    rolesScreen(translate, {}, {
-      rows: [
-        {
-          id: 'manager/a',
-          name: 'Manager',
-          description: 'Operational manager',
-          detailHref: '/admin/roles/manager%2Fa?lang=en',
-        },
-      ],
-      createHref: '/admin/roles/new?lang=en',
-      presetsHref: '/admin/permission-presets?lang=en',
-    }),
+    rolesScreen(
+      translate,
+      {},
+      {
+        rows: [
+          {
+            id: 'manager/a',
+            name: 'Manager',
+            description: 'Operational manager',
+            detailHref: '/admin/roles/manager%2Fa?lang=en',
+          },
+        ],
+        createHref: '/admin/roles/new?lang=en',
+        presetsHref: '/admin/permission-presets?lang=en',
+      },
+    ),
   )
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /data-row-href="\/admin\/roles\/manager%2Fa\?lang=en"/)

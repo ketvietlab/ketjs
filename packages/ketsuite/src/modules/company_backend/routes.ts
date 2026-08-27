@@ -595,20 +595,16 @@ export const routes: Record<string, RouteEntry> = {
             title: 'company_backend.context.title',
             active: '/admin/context',
             body: (_, frame) =>
-              contextScreen(
-                _,
-                frame,
-                {
-                  ...options,
-                  selectedCompanies: values.companies ?? record.companies,
-                  selectedBranches:
-                    values.branches ?? record.branches ?? options.branches.map((branch) => branch.id),
-                  companyId: values.companyId ?? record.company ?? '',
-                  branchId: values.branchId ?? record.branch ?? '',
-                  action: inLocale(url, '/admin/context'),
-                  errors,
-                },
-              ),
+              contextScreen(_, frame, {
+                ...options,
+                selectedCompanies: values.companies ?? record.companies,
+                selectedBranches:
+                  values.branches ?? record.branches ?? options.branches.map((branch) => branch.id),
+                companyId: values.companyId ?? record.company ?? '',
+                branchId: values.branchId ?? record.branch ?? '',
+                action: inLocale(url, '/admin/context'),
+                errors,
+              }),
           })
         if (req.method === 'GET') return render()
         if (req.method !== 'POST') return text('GET or POST', { status: 405 })

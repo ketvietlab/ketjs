@@ -27,11 +27,7 @@ export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
   },
 ]
 
-export const rolesScreen = (
-  _: Translator,
-  frame: Frame,
-  options: RolesListScreenOptions,
-): TemplateResult =>
+export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScreenOptions): TemplateResult =>
   shell(
     _,
     _('user_backend.roles.title'),

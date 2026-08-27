@@ -8,10 +8,17 @@ test('roles HTTP list preserves locale, encoded identity and GET-only semantics'
   const app = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => app.close())
   const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
-  const fixture = (name: string, input: Record<string, unknown>) => app.fixture.call<Row>(name, input, { scope })
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    app.fixture.call<Row>(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', { id: 'acme', code: 'ACME', partnerId: 'acme-party', currency: 'VND' })
-  await fixture('user.createUser', { id: 'admin', login: 'admin', password: 'correct horse', name: 'Admin', superuser: true })
+  await fixture('user.createUser', {
+    id: 'admin',
+    login: 'admin',
+    password: 'correct horse',
+    name: 'Admin',
+    superuser: true,
+  })
   await fixture('user.grantCompany', { id: 'admin:acme', userId: 'admin', companyId: 'acme' })
   await fixture('user.saveRole', { id: 'manager/a', name: 'Manager', description: 'Operational manager' })
   await app.client.login({ login: 'admin', password: 'correct horse' })
