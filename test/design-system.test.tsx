@@ -63,6 +63,26 @@ test('design system: application regions are square while independent objects ar
   assert.match(shell, /data-ui="app-right-rail"/)
 })
 
+test('design system: a stacked FormPage rail keeps space above its content', () => {
+  assert.match(
+    css,
+    /@media \(max-width: 63\.9375rem\)[\s\S]*?\[data-ui="form-page-aside"\][\s\S]*?padding-top: var\(--kv-space-5\)/,
+  )
+})
+
+test('design system: form controls stack below 768px', () => {
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const compatibility = readFileSync('packages/ketsuite/src/modules/backend/design/forms.css', 'utf8')
+  const partner = readFileSync('packages/ketsuite/src/modules/partner_backend/client/partner.css', 'utf8')
+  for (const source of [patterns, compatibility]) {
+    assert.match(source, /@media \(max-width: 47\.9375rem\)/)
+    assert.match(source, /grid-template-columns: minmax\(0, 1fr\)/)
+  }
+  assert.doesNotMatch(patterns, /minmax\(5\.25rem, 6\.25rem\)/)
+  assert.doesNotMatch(compatibility, /minmax\(5\.25rem, 6\.25rem\)/)
+  assert.doesNotMatch(partner, /\[data-ui="form-field"\]/)
+})
+
 test('design system: controls preserve their native semantics and accessible state', () => {
   const button = renderToString(<Button label="Saving" variant="primary" loading />)
   assert.match(button, /^<button/)
@@ -215,7 +235,7 @@ test('design system: KetSuite consumes the public package through aliases and ge
   const backend = readFileSync('packages/ketsuite/src/modules/backend/index.ts', 'utf8')
   const aliases = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   assert.match(packageJson, /"@ketvietlab\/design-system": "0\.1\.3"/)
-  assert.match(backend, /'design-system\/styles\.css'/)
+  assert.match(backend, /'design-system\.css'/)
   assert.match(aliases, /--admin-bg: var\(--kv-page-bg\)/)
   assert.match(aliases, /--color-primary: var\(--kv-ref-primary\)/)
 })

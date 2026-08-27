@@ -186,6 +186,9 @@ test('crm backend: the case workspace exposes assign, merge and a lost reason', 
   assert.match(html, /name="action" value="assign"/)
   assert.match(html, /name="action" value="merge"/)
   assert.match(html, /name="lostReason"/)
+  assert.match(html, /href="\/admin\/crm\/cases\/workspace\?tab=timeline&amp;lang=en"/)
+  assert.match(html, /action="\/admin\/crm\/cases\/workspace\?lang=en"/)
+  assert.match(html, /action="\/admin\/crm\/cases\/workspace\/attachments\?lang=en"/)
   // Duplicate detection has always run here; now it renders what it found.
   assert.match(html, /Possible duplicates/)
   assert.match(html, /Workspace twin/)
@@ -271,7 +274,13 @@ test('crm backend: an activity can be completed from the case and from the plann
   assert.match(caseHtml, /name="action" value="completeActivity"/)
 
   const planner = await app.client.get('/admin/crm/activities?tab=mine&lang=en')
-  assert.match(await planner.text(), /name="action" value="complete"/)
+  const plannerHtml = await planner.text()
+  assert.match(plannerHtml, /data-ui="record-workspace"/)
+  assert.doesNotMatch(plannerHtml, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(plannerHtml, /name="action" value="complete"/)
+  assert.match(plannerHtml, /action="\/admin\/crm\/activities\?tab=mine&amp;lang=en"/)
+  assert.match(plannerHtml, /href="\/admin\/crm\/activities\?tab=calendar&amp;lang=en"/)
+  assert.match(plannerHtml, /href="\/admin\/crm\/cases\/follow-up\?lang=en"/)
 
   const completed = await app.client.post(
     '/admin/crm/cases/follow-up?tab=activities&lang=en',
@@ -288,12 +297,24 @@ test('crm backend: an activity can be completed from the case and from the plann
 
 test('crm backend: configuration records can be edited and archived, not only created', async (t) => {
   const { app, call } = await boot(t)
+  const invalid = await app.client.post(
+    '/admin/crm/configuration?tab=tags&lang=en',
+    new URLSearchParams({ name: '', active: 'on' }),
+    post,
+  )
+  const invalidHtml = await invalid.text()
+  assert.equal(invalid.status, 200)
+  assert.match(invalidHtml, /data-ui="form-errors"/)
+  assert.match(invalidHtml, /action="\/admin\/crm\/configuration\?tab=tags&amp;lang=en&amp;create=1"/)
+  assert.match(invalidHtml, /href="\/admin\/crm\/configuration\?tab=members&amp;lang=en"/)
+
   const created = await app.client.post(
     '/admin/crm/configuration?tab=teams&lang=en',
     new URLSearchParams({ name: 'Field sales', code: 'field', active: 'on', assignmentMode: 'round_robin' }),
     post,
   )
   assert.equal(created.status, 303)
+  assert.equal(created.headers.get('location'), '/admin/crm/configuration?tab=teams&lang=en')
   const teamOf = async () =>
     (await call<Record<string, Row[]>>('crm.configuration.get')).teams.find((row) => row.code === 'field')!
   let team = await teamOf()
@@ -302,6 +323,11 @@ test('crm backend: configuration records can be edited and archived, not only cr
   const page = await app.client.get(`/admin/crm/configuration?tab=teams&edit=${String(team.id)}&lang=en`)
   const html = await page.text()
   assert.match(html, /value="Field sales"/, 'the edit form is pre-filled from the row')
+  assert.match(html, /href="\/admin\/crm\/configuration\?tab=teams&amp;lang=en"/)
+  assert.match(
+    html,
+    new RegExp(`action="/admin/crm/configuration\\?tab=teams&amp;lang=en&amp;edit=${String(team.id)}"`),
+  )
 
   const renamed = await app.client.post(
     '/admin/crm/configuration?tab=teams&lang=en',
@@ -400,6 +426,12 @@ test('crm backend: the leaderboard is reachable and refreshes', async (t) => {
   assert.equal(page.status, 200)
   assert.match(html, /Leaderboard/)
   assert.match(html, /Administrator/)
+  assert.match(html, /data-ui="list-page"/)
+  assert.match(html, /data-col="rank"/)
+  assert.match(html, /data-col="points"/)
+  assert.match(html, /href="\/admin\/users\/admin\?lang=en"/)
+  assert.match(html, /action="\/admin\/crm\/leaderboard\?lang=en"/)
+  assert.match(html, /name="action" value="refresh"/)
 })
 
 test('crm: a case kind another module owns stays out of the CRM screens', async (t) => {
@@ -493,6 +525,12 @@ test('crm backend: a cross-origin POST is refused', async (t) => {
     { headers: { ...form, origin: 'https://evil.test' }, redirect: 'manual' },
   )
   assert.equal(forged.status, 403)
+  const forgedConfiguration = await app.client.post(
+    '/admin/crm/configuration?tab=teams&lang=en',
+    new URLSearchParams({ name: 'Forged team', code: 'forged' }),
+    { headers: { ...form, origin: 'https://evil.test' }, redirect: 'manual' },
+  )
+  assert.equal(forgedConfiguration.status, 403)
 })
 
 test('crm: a second company in the tenant gets its own pipeline', async (t) => {
@@ -793,10 +831,13 @@ test('crm pipeline: a column offers only the record kind that column can hold', 
 
   // And the form the column points at arrives with that stage already chosen.
   const create = await app.client.get(
-    '/admin/crm/cases?stageId=crm-stage-proposition&kind=opportunity&lang=en',
+    '/admin/crm/cases/new?stageId=crm-stage-proposition&kind=opportunity&lang=en',
   )
   const html = await create.text()
-  assert.match(html, /name="stageId"[^>]*value="crm-stage-proposition"/)
+  assert.match(
+    html,
+    /<select[^>]*name="stageId"[\s\S]*?<option[^>]*value="crm-stage-proposition"[^>]*selected/,
+  )
 
   const made = await app.client.post(
     '/admin/crm/cases?lang=en',

@@ -168,23 +168,84 @@ test('purchase-e2e: RFQ to receipt and vendor bill crosses real HTTP', async (t)
   })
   const purchaseDashboardHtml = await purchaseDashboard.text()
   assert.match(purchaseDashboardHtml, /Tạo yêu cầu báo giá/)
-  assert.match(purchaseDashboardHtml, /href="\/admin\/purchase\/rfqs\?lang=vi#rfq-create-form"/)
+  assert.match(purchaseDashboardHtml, /href="\/admin\/purchase\/rfqs\/new\?lang=vi"/)
   assert.match(purchaseDashboardHtml, /href="\/admin\/purchase\/orders\?lang=vi"/)
 
   const rfqsPage = await e2e.client.get('/admin/purchase/rfqs?lang=vi', {
     headers: { accept: 'text/html' },
   })
   const rfqsHtml = await rfqsPage.text()
-  assert.match(rfqsHtml, /id="rfq-create-form"/)
-  assert.match(rfqsHtml, /data-scope="purchase-rfq-create"/)
-  assert.match(rfqsHtml, /action="\/admin\/purchase\/rfqs\?lang=vi"/)
+  assert.match(rfqsHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(rfqsHtml, /id="purchase-rfq-create"/)
+  assert.match(rfqsHtml, /href="\/admin\/purchase\/rfqs\/new\?lang=vi&amp;returnTo=/)
+  assert.match(rfqsHtml, /data-ui="chrome-search"/)
+  assert.doesNotMatch(rfqsHtml, /data-island="mail\.chatter"/)
+
+  const rfqCreatePage = await e2e.client.get('/admin/purchase/rfqs/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const rfqCreateHtml = await rfqCreatePage.text()
+  assert.match(rfqCreateHtml, /data-ui="form-page"/)
+  assert.match(rfqCreateHtml, /id="purchase-rfq-create"/)
+  assert.match(rfqCreateHtml, /data-scope="purchase-rfq-create"/)
+  assert.match(rfqCreateHtml, /action="\/admin\/purchase\/rfqs\/new\?lang=vi&amp;returnTo=/)
+  assert.match(rfqCreateHtml, /href="\/admin\/purchase\/rfqs\?lang=vi"/)
+  assert.doesNotMatch(rfqCreateHtml, /data-island="mail\.chatter"/)
+
+  const legacyInvalid = await e2e.client.post(
+    '/admin/purchase/rfqs?lang=vi',
+    new URLSearchParams({ partnerId: '', pickingTypeId: '' }),
+    {
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(legacyInvalid.status, 303)
+  assert.match(
+    legacyInvalid.headers.get('location') ?? '',
+    /^\/admin\/purchase\/rfqs\/new\?lang=vi&returnTo=.*&invalid=partnerId$/,
+  )
+  const invalidRfq = await e2e.client.form<string>('/admin/purchase/rfqs/new?lang=vi', {
+    partnerId: '',
+    pickingTypeId: '',
+  })
+  assert.match(invalidRfq, /Chưa lưu được/)
+  assert.match(invalidRfq, /data-ui="form-page"/)
+  const createdRfq = await e2e.client.form<string>('/admin/purchase/rfqs/new?lang=vi', {
+    partnerId: 'vendor',
+    pickingTypeId: 'incoming',
+    partnerRef: 'HTTP/RFQ',
+  })
+  assert.match(createdRfq, /data-ui="list-page"/)
+  assert.match(createdRfq, /Nhà cung cấp ABC/)
+  assert.match(createdRfq, /HTTP\/RFQ|PO0000/)
+  const groupedRfqs = await e2e.client.get(
+    '/admin/purchase/rfqs?lang=vi&q=HTTP%2FRFQ&state=draft&group=vendor',
+    { headers: { accept: 'text/html' } },
+  )
+  const groupedRfqsHtml = await groupedRfqs.text()
+  assert.match(groupedRfqsHtml, /data-ui="group-row"/)
+  assert.match(groupedRfqsHtml, /Nhà cung cấp ABC/)
+  assert.match(groupedRfqsHtml, /data-ui="facet"/)
+  const crossSiteCreate = await e2e.client.post(
+    '/admin/purchase/rfqs/new?lang=vi',
+    new URLSearchParams({ partnerId: 'vendor', pickingTypeId: 'incoming' }),
+    {
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'https://evil.example',
+      },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(crossSiteCreate.status, 403)
 
   const englishDashboard = await e2e.client.get('/admin/purchase?lang=en', {
     headers: { accept: 'text/html' },
   })
   const englishDashboardHtml = await englishDashboard.text()
   assert.match(englishDashboardHtml, /Create RFQ/)
-  assert.match(englishDashboardHtml, /href="\/admin\/purchase\/rfqs\?lang=en#rfq-create-form"/)
+  assert.match(englishDashboardHtml, /href="\/admin\/purchase\/rfqs\/new\?lang=en"/)
   const english = await e2e.client.get('/admin/purchase/orders/po-1?lang=en', {
     headers: { accept: 'text/html' },
   })

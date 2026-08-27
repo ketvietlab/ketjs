@@ -189,7 +189,7 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   })
   assert.equal(productCreatePage.status, 200)
   const productCreateHtml = await productCreatePage.text()
-  assert.match(productCreateHtml, /data-ui="record-workspace"/)
+  assert.match(productCreateHtml, /data-ui="form-page"/)
   assert.match(productCreateHtml, /id="product-create-form"/)
   assert.match(productCreateHtml, /data-scope="product-create"/)
   assert.equal((productCreateHtml.match(/name="type"/g) ?? []).length, 2)
@@ -198,6 +198,19 @@ test('product-stock-e2e: UoM, variants, media and pricing cross real HTTP', asyn
   assert.match(productCreateHtml, /name="purchaseOk"[^>]*form="product-create-form"/)
   assert.match(productCreateHtml, /name="isStorable"[^>]*form="product-create-form"/)
   assert.doesNotMatch(productCreateHtml, /data-island="mail\.chatter"/)
+
+  const favoritePage = await e2e.client.get(
+    '/admin/product/templates/favorites/new?returnTo=%2Fadmin%2Fproduct%2Ftemplates%3Fq%3DAO&lang=vi',
+    { headers: { accept: 'text/html' } },
+  )
+  assert.equal(favoritePage.status, 200)
+  const favoriteHtml = await favoritePage.text()
+  assert.match(favoriteHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(favoriteHtml, /id="product-favorite-create-form"/)
+  assert.match(favoriteHtml, /name="returnTo"[^>]*value="\/admin\/product\/templates\?q=AO"/)
+  assert.match(favoriteHtml, /name="name"[^>]*required/)
+  assert.match(favoriteHtml, /name="default"[^>]*type="checkbox"|type="checkbox"[^>]*name="default"/)
+  assert.doesNotMatch(favoriteHtml, /data-island="mail\.chatter"/)
 
   const invalidProductPage = await e2e.client.post(
     '/admin/product/templates/new?lang=vi',
@@ -454,15 +467,23 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const warehousesHtml = await warehousesPage.text()
-  assert.match(warehousesHtml, /data-ui="record-workspace"/)
-  assert.match(warehousesHtml, /id="warehouse-create-form"/)
-  assert.match(warehousesHtml, /data-scope="warehouse-create"/)
-  assert.match(warehousesHtml, /name="receptionSteps" autocomplete="off" value="one_step"/)
-  assert.match(warehousesHtml, /name="deliverySteps" autocomplete="off" value="pick_pack_ship"/)
+  assert.match(warehousesHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(warehousesHtml, /id="warehouse-create-form"/)
+  assert.match(warehousesHtml, /href="\/admin\/stock\/warehouses\?create=1&amp;lang=vi"/)
   assert.match(warehousesHtml, /Lô hàng đến/)
   assert.match(warehousesHtml, /Kho chính/)
   assert.doesNotMatch(warehousesHtml, /data-island="mail\.chatter"/)
-  await e2e.client.form<string>('/admin/stock/warehouses?lang=vi', {
+  const warehouseCreatePage = await e2e.client.get('/admin/stock/warehouses/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const warehouseCreateHtml = await warehouseCreatePage.text()
+  assert.match(warehouseCreateHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(warehouseCreateHtml, /id="warehouse-create-form"/)
+  assert.match(warehouseCreateHtml, /data-scope="warehouse-create"/)
+  assert.match(warehouseCreateHtml, /name="receptionSteps" autocomplete="off" value="one_step"/)
+  assert.match(warehouseCreateHtml, /name="deliverySteps" autocomplete="off" value="pick_pack_ship"/)
+  assert.doesNotMatch(warehouseCreateHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/stock/warehouses/new?lang=vi', {
     name: 'Kho phụ form',
     code: 'WH2',
     receptionSteps: 'two_steps',
@@ -477,14 +498,23 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const locationsHtml = await locationsPage.text()
-  assert.match(locationsHtml, /data-ui="record-workspace"/)
-  assert.match(locationsHtml, /id="location-create-form"/)
-  assert.match(locationsHtml, /data-scope="location-create"/)
+  assert.match(locationsHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(locationsHtml, /id="location-create-form"/)
+  assert.match(locationsHtml, /href="\/admin\/stock\/locations\?create=1&amp;lang=vi"/)
   assert.match(locationsHtml, /Kho chính \/ Tồn kho/)
   assert.match(locationsHtml, /Loại vị trí/)
   assert.match(locationsHtml, /Vị trí nội bộ/)
   assert.doesNotMatch(locationsHtml, /data-island="mail\.chatter"/)
-  await e2e.client.form<string>('/admin/stock/locations?lang=vi', {
+  const locationCreatePage = await e2e.client.get('/admin/stock/locations/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const locationCreateHtml = await locationCreatePage.text()
+  assert.match(locationCreateHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(locationCreateHtml, /id="location-create-form"/)
+  assert.match(locationCreateHtml, /data-scope="location-create"/)
+  assert.match(locationCreateHtml, /Kho chính \/ Tồn kho/)
+  assert.doesNotMatch(locationCreateHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/stock/locations/new?lang=vi', {
     name: 'Kệ HTTP',
     parentId: 'wh:stock',
     usage: 'internal',
@@ -574,16 +604,28 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const transfersHtml = await transfersPage.text()
-  assert.match(transfersHtml, /data-ui="record-workspace"/)
-  assert.match(transfersHtml, /id="transfer-create-form"/)
-  assert.match(transfersHtml, /data-scope="transfer-create"/)
+  assert.match(transfersHtml, /data-ui="list-page"/)
+  assert.match(transfersHtml, /href="\/admin\/stock\/transfers\/new\?lang=vi"/)
   assert.match(transfersHtml, /Phiếu chuyển kho/)
   assert.match(transfersHtml, />Từ</)
   assert.match(transfersHtml, />Đến</)
   assert.match(transfersHtml, /Loại hoạt động/)
   assert.match(transfersHtml, /Tồn kho/)
+  assert.doesNotMatch(transfersHtml, /id="transfer-create-form"|data-scope="transfer-create"/)
   assert.doesNotMatch(transfersHtml, /data-island="mail\.chatter"/)
-  await e2e.client.form<string>('/admin/stock/transfers?lang=vi', {
+
+  const transferCreatePage = await e2e.client.get('/admin/stock/transfers/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const transferCreateHtml = await transferCreatePage.text()
+  assert.equal(transferCreatePage.status, 200)
+  assert.match(transferCreateHtml, /data-ui="form-page"/)
+  assert.match(transferCreateHtml, /id="transfer-create-form"/)
+  assert.match(transferCreateHtml, /data-scope="transfer-create"/)
+  assert.match(transferCreateHtml, /name="pickingTypeId"/)
+  assert.match(transferCreateHtml, /value="wh:internal"/)
+  assert.doesNotMatch(transferCreateHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/stock/transfers/new?lang=vi', {
     name: 'WH/INT/FORM',
     pickingTypeId: 'wh:internal',
     scheduledDate: '2026-08-22T09:00',
@@ -616,8 +658,8 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const uiHtml = await uiPage.text()
-  assert.match(uiHtml, /data-ui="record-workspace"/)
-  assert.match(uiHtml, /data-ui="record-aside"/)
+  assert.match(uiHtml, /data-ui="form-page"/)
+  assert.match(uiHtml, /data-ui="form-page-aside"/)
   assert.match(uiHtml, /data-island="stock\.editor"/)
   assert.match(uiHtml, /data-scope="stock-transfer"/)
   assert.match(uiHtml, /<select[^>]*name="productId"/)
@@ -658,18 +700,27 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const operationTypesHtml = await operationTypesPage.text()
-  assert.match(operationTypesHtml, /data-ui="record-workspace"/)
-  assert.match(operationTypesHtml, /id="picking-type-create-form"/)
-  assert.match(operationTypesHtml, /data-scope="picking-type-create"/)
+  assert.match(operationTypesHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(operationTypesHtml, /id="picking-type-create-form"/)
+  assert.match(operationTypesHtml, /href="\/admin\/stock\/picking-types\?create=1&amp;lang=vi"/)
   assert.match(operationTypesHtml, /Kiểm tra chất lượng/)
   assert.match(operationTypesHtml, /Nhập kho nội bộ/)
   assert.match(operationTypesHtml, /Lấy hàng/)
   assert.match(operationTypesHtml, /Đóng gói/)
   assert.doesNotMatch(operationTypesHtml, /Quality Control|Store|Pick|Pack/)
   assert.match(operationTypesHtml, /Kho cấu hình \/ Tồn kho/)
-  assert.match(operationTypesHtml, /Hỏi khi hoàn tất/)
   assert.doesNotMatch(operationTypesHtml, /data-island="mail\.chatter"/)
-  await e2e.client.form<string>('/admin/stock/picking-types?lang=vi', {
+  const operationTypeCreatePage = await e2e.client.get('/admin/stock/picking-types/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const operationTypeCreateHtml = await operationTypeCreatePage.text()
+  assert.match(operationTypeCreateHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(operationTypeCreateHtml, /id="picking-type-create-form"/)
+  assert.match(operationTypeCreateHtml, /data-scope="picking-type-create"/)
+  assert.match(operationTypeCreateHtml, /Kho cấu hình \/ Tồn kho/)
+  assert.match(operationTypeCreateHtml, /Hỏi khi hoàn tất/)
+  assert.doesNotMatch(operationTypeCreateHtml, /data-island="mail\.chatter"/)
+  await e2e.client.form<string>('/admin/stock/picking-types/new?lang=vi', {
     name: 'Điều chuyển HTTP',
     code: 'internal',
     warehouseId: 'wh-config',
@@ -687,20 +738,28 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
   })
   const routesHtml = await routesPage.text()
   assert.equal(routesPage.status, 200)
-  assert.match(routesHtml, /data-ui="record-workspace"/)
-  assert.match(routesHtml, /id="stock-route-create-form"/)
-  assert.match(routesHtml, /data-scope="stock-route-create"/)
-  assert.match(routesHtml, /Tuyến cung ứng đã cấu hình/)
+  assert.match(routesHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(routesHtml, /id="stock-route-create-form"/)
+  assert.match(routesHtml, /href="\/admin\/stock\/routes\?create=1&amp;lang=vi"/)
   assert.match(routesHtml, /Kho chính: Nhận hàng trực tiếp/)
   assert.doesNotMatch(routesHtml, /one_step|ship_only/)
   assert.match(routesHtml, />Quy tắc</)
   assert.doesNotMatch(routesHtml, /data-island="mail\.chatter"/)
 
-  const createdRoutePage = await e2e.client.form<string>('/admin/stock/routes?lang=vi', {
+  const routeCreatePage = await e2e.client.get('/admin/stock/routes/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const routeCreateHtml = await routeCreatePage.text()
+  assert.match(routeCreateHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(routeCreateHtml, /id="stock-route-create-form"/)
+  assert.match(routeCreateHtml, /data-scope="stock-route-create"/)
+  assert.doesNotMatch(routeCreateHtml, /data-island="mail\.chatter"/)
+
+  const createdRoutePage = await e2e.client.form<string>('/admin/stock/routes/new?lang=vi', {
     name: 'Tuyến HTTP hai bước',
     sequence: '15',
   })
-  assert.match(createdRoutePage, /data-ui="record-workspace"/)
+  assert.match(createdRoutePage, /data-ui="form-page"/)
   assert.match(createdRoutePage, /id="stock-route-detail-form"/)
   assert.match(createdRoutePage, /data-scope="stock-route"/)
   assert.match(createdRoutePage, /id="stock-route-rule-form"/)
@@ -751,7 +810,7 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
   )
   assert.match(await (await e2e.client.get('/admin/stock/routes?lang=vi')).text(), /Tuyến HTTP ưu tiên/)
 
-  const invalidRoutePage = await e2e.client.form<string>('/admin/stock/routes?lang=vi', {
+  const invalidRoutePage = await e2e.client.form<string>('/admin/stock/routes/new?lang=vi', {
     name: '',
     sequence: '10',
   })
@@ -761,14 +820,21 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const replenishmentHtml = await replenishmentPage.text()
-  assert.match(replenishmentHtml, /data-ui="record-workspace"/)
-  assert.match(replenishmentHtml, /id="replenishment-create-form"/)
-  assert.match(replenishmentHtml, /data-scope="stock-replenishment-create"/)
-  assert.match(replenishmentHtml, /<select[^>]*name="productId"/)
-  assert.match(replenishmentHtml, /Áo thun · AO/)
-  assert.doesNotMatch(replenishmentHtml, /Dịch vụ tư vấn/)
+  assert.match(replenishmentHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(replenishmentHtml, /id="replenishment-create-form"/)
+  assert.match(replenishmentHtml, /href="\/admin\/stock\/replenishment\/new\?lang=vi"/)
   assert.doesNotMatch(replenishmentHtml, /data-island="mail\.chatter"/)
-  const replenishmentWithRule = await e2e.client.form<string>('/admin/stock/replenishment?lang=vi', {
+  const replenishmentCreatePage = await e2e.client.get('/admin/stock/replenishment/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const replenishmentCreateHtml = await replenishmentCreatePage.text()
+  assert.match(replenishmentCreateHtml, /data-ui="form-page"/)
+  assert.match(replenishmentCreateHtml, /id="replenishment-create-form"/)
+  assert.match(replenishmentCreateHtml, /data-scope="stock-replenishment-create"/)
+  assert.match(replenishmentCreateHtml, /<select[^>]*name="productId"/)
+  assert.match(replenishmentCreateHtml, /Áo thun · AO/)
+  assert.doesNotMatch(replenishmentCreateHtml, /Dịch vụ tư vấn|data-island="mail\.chatter"/)
+  const replenishmentWithRule = await e2e.client.form<string>('/admin/stock/replenishment/new?lang=vi', {
     productId: 'p1',
     warehouseId: 'wh',
     locationId: 'wh:stock',
@@ -778,7 +844,7 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     replenishmentUomId: 'dozen',
     routeId: 'wh:receipt-route',
   })
-  assert.match(replenishmentWithRule, /Đề xuất bổ sung/)
+  assert.match(replenishmentWithRule, /Cần đặt/)
   assert.match(replenishmentWithRule, /Áo thun · AO/)
   assert.match(replenishmentWithRule, /data-ui="badge" data-tone="warning"[\s\S]{0,80}1/)
   assert.match(replenishmentWithRule, /Dozen/)
@@ -804,29 +870,40 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
   })
   const lotsHtml = await lotsPage.text()
   assert.equal(lotsPage.status, 200)
-  assert.match(lotsHtml, /data-ui="record-workspace"/)
-  assert.match(lotsHtml, /id="lot-create-form"/)
-  assert.match(lotsHtml, /data-scope="lot-create"/)
-  assert.match(lotsHtml, /<select[^>]*name="productId"/)
-  assert.match(lotsHtml, /Áo thun · AO/)
+  assert.match(lotsHtml, /data-ui="list-page"/)
+  assert.match(lotsHtml, /href="\/admin\/stock\/lots\?create=1&amp;lang=vi"/)
   assert.match(lotsHtml, /LOT\/LIST\/001/)
   assert.match(lotsHtml, /href="\/admin\/stock\/lots\/lot-list-http\?lang=vi"/)
   assert.match(lotsHtml, />3</)
+  assert.doesNotMatch(lotsHtml, /id="lot-create-form"|data-scope="lot-create"/)
   assert.doesNotMatch(lotsHtml, /Dịch vụ tư vấn|service-variant/)
   assert.doesNotMatch(lotsHtml, /data-island="mail\.chatter"/)
 
-  await e2e.client.form<string>('/admin/stock/lots?lang=vi', {
+  const lotCreatePage = await e2e.client.get('/admin/stock/lots/new?lang=vi', {
+    headers: { accept: 'text/html' },
+  })
+  const lotCreateHtml = await lotCreatePage.text()
+  assert.equal(lotCreatePage.status, 200)
+  assert.match(lotCreateHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(lotCreateHtml, /id="lot-create-form"/)
+  assert.match(lotCreateHtml, /data-scope="lot-create"/)
+  assert.match(lotCreateHtml, /<select[^>]*name="productId"/)
+  assert.match(lotCreateHtml, /Áo thun · AO/)
+  assert.doesNotMatch(lotCreateHtml, /Dịch vụ tư vấn|service-variant/)
+  assert.doesNotMatch(lotCreateHtml, /data-island="mail\.chatter"/)
+
+  await e2e.client.form<string>('/admin/stock/lots/new?lang=vi', {
     productId: 'p1',
     name: 'LOT/LIST/FORM',
     ref: 'FORM-REF',
-    note: 'Được tạo từ danh sách.',
+    note: 'Được tạo từ form riêng.',
   })
   assert.equal(
     (await call<Row[]>('stock.listLots', {})).value.some((row) => row.name === 'LOT/LIST/FORM'),
     true,
   )
 
-  const invalidLotPage = await e2e.client.form<string>('/admin/stock/lots?lang=vi', {
+  const invalidLotPage = await e2e.client.form<string>('/admin/stock/lots/new?lang=vi', {
     productId: 'missing-product',
     name: 'LOT/INVALID',
   })
@@ -853,12 +930,30 @@ test('product-stock-e2e: inventory, reservation, partial completion and backorde
     headers: { accept: 'text/html' },
   })
   const lotHtml = await lotPage.text()
-  assert.match(lotHtml, /data-ui="record-workspace"/)
+  assert.match(lotHtml, /data-ui="form-page"/)
+  assert.match(lotHtml, /data-ui="form-page-aside"/)
   assert.match(lotHtml, /id="lot-detail-form"/)
   assert.match(lotHtml, /data-scope="stock-lot"/)
   assert.match(lotHtml, /data-island="mail\.chatter"/)
   assert.match(lotHtml, /data-island="activity\.record"/)
   assert.match(lotHtml, /Lô \/ Sê-ri/)
+  const partialLotSave = await e2e.client.post(
+    '/admin/stock/lots/lot-http?lang=vi',
+    new URLSearchParams({
+      productId: 'p1',
+      name: 'LOT/HTTP/001',
+      ref: 'HTTP-REF-PARTIAL',
+      note: 'Cập nhật một phần qua HTTP.',
+    }),
+    { headers: { accept: 'text/html', 'x-ket-partial': 'stock-lot' } },
+  )
+  assert.equal(partialLotSave.status, 200)
+  assert.match(partialLotSave.headers.get('content-type') ?? '', /^text\/vnd\.ket\.fragments\+html/)
+  const partialLotHtml = await partialLotSave.text()
+  assert.match(partialLotHtml, /data-ket-slot="stock\.lot-header"/)
+  assert.match(partialLotHtml, /data-ket-slot="stock\.lot-body"/)
+  assert.doesNotMatch(partialLotHtml, /data-ui="sidebar"|<!doctype/)
+  assert.doesNotMatch(partialLotHtml, /data-island="(?:stock\.editor|mail\.chatter|activity\.record)"/)
   await e2e.client.form<string>('/admin/stock/lots/lot-http?lang=vi', {
     productId: 'p1',
     name: 'LOT/HTTP/001',

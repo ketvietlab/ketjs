@@ -203,8 +203,8 @@ tiếng Việt hardcode.
   back link hoặc hero title nặng nề;
 - edit header chỉ giữ Save và More; Kế toán/Email/Gọi điện nằm trong More để action phụ không làm
   header vỡ hoặc tăng chiều cao trên mobile;
-- form giữ invariant ERP ở mọi viewport: label luôn ở cột trái và control ở cột phải; responsive chỉ
-  thu hẹp cột label, khoảng cách và chuyển rail ngữ cảnh xuống dưới, không xếp label lên trên input;
+- form giữ invariant ERP `label | control` từ `768px` trở lên; dưới breakpoint đó field chuyển thành
+  stack thông thường với label ở trên, control full-width ở dưới và rail ngữ cảnh chuyển xuống cuối;
 - form Partner duy nhất tại `/admin/partner/partners/:id` gồm contact, roles, addresses/default và
   company terms; quick facts nằm trong rail ngữ cảnh độc lập;
 - customer/supplier/employee là ba checkbox đầu tiên của form thông tin chính; create/save Partner

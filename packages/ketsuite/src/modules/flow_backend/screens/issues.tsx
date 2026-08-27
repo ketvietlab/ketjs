@@ -1,111 +1,187 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { dataTable, Framed, linkButton, Progress, RecordForm, stack, Surface } from '../../../ui/index.ts'
+import {
+  dataTable,
+  emptyState,
+  inline,
+  LinkButton,
+  linkButton,
+  ListPage,
+  listChrome,
+  modalForm,
+  Progress,
+  shell,
+} from '../../../ui/index.ts'
 import type { FormField, Frame, TableGroup } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
-import { empty, priorityBadge, when } from './shared.tsx'
+import { priorityBadge, when } from './shared.tsx'
 
-export const issuesScreen = (
-  _: Translator,
-  frame: Frame,
-  projectName: string,
-  endpoint: string,
-  createFields: FormField[],
-  rows: AnyRow[],
-  groups: TableGroup<AnyRow>[] = [],
-  errors: string[] = [],
+export type ProjectIssuesOptions = {
+  projectName: string
+  rows: AnyRow[]
+  groups?: TableGroup<AnyRow>[]
   /** This project's custom fields, each becoming a column of its own. */
-  fields: AnyRow[] = [],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={projectName}
-    frame={frame}
-    body={stack([
-      <Surface
-        body={
-          <RecordForm
-            action={endpoint}
-            fields={createFields}
-            errors={errors}
-            submit={_('flow_backend.action.create')}
-            submitVariant="primary"
-            layout="inline"
-          />
-        }
-      />,
-      rows.length || groups.length
-        ? dataTable(_, {
-            rows,
-            groups,
-            id: (row) => String(row.id),
-            columns: [
+  fields?: AnyRow[]
+  total: number
+  createHref: string
+  locale?: string
+}
+
+export type IssueCreateModalOptions = {
+  projectName: string
+  fields: FormField[]
+  action: string
+  cancelHref: string
+  idempotencyKey: string
+  errors?: readonly string[]
+}
+
+export const issueCreateModal = (_: Translator, options: IssueCreateModalOptions): TemplateResult =>
+  modalForm({
+    id: 'flow-issue-create',
+    title: _('flow_backend.action.create'),
+    description: options.projectName,
+    closeHref: options.cancelHref,
+    closeLabel: _('flow_backend.action.cancel'),
+    form: {
+      id: 'flow-issue-create-form',
+      scope: 'flow-issue-create',
+      action: options.action,
+      submit: _('flow_backend.action.create'),
+      submitVariant: 'primary',
+      cancelHref: options.cancelHref,
+      cancelLabel: _('flow_backend.action.cancel'),
+      hidden: {
+        returnTo: options.cancelHref,
+        idempotencyKey: options.idempotencyKey,
+      },
+      fields: options.fields,
+      errors: options.errors,
+    },
+  })
+
+export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssuesOptions): TemplateResult => {
+  const groups = options.groups ?? []
+  const fields = options.fields ?? []
+  const locale = options.locale ?? ''
+  const hasActions = options.createHref || frame.extras?.['topbar.end'] !== undefined
+
+  return shell(
+    _,
+    options.projectName,
+    <ListPage
+      title={options.projectName}
+      description={_('flow_backend.issues.subtitle')}
+      actions={
+        hasActions
+          ? inline([
+              options.createHref ? (
+                <LinkButton
+                  label={_('flow_backend.action.create')}
+                  href={options.createHref}
+                  variant="primary"
+                />
+              ) : (
+                ''
+              ),
+              frame.extras?.['topbar.end'] ?? '',
+            ])
+          : undefined
+      }
+      controls={
+        frame.chrome
+          ? listChrome(
+              _,
+              options.projectName,
               {
-                key: 'title',
-                label: _('flow_backend.field.title'),
-                priority: 'primary',
-                cell: (row) =>
-                  linkButton({
-                    href: `/admin/flow/issues/${String(row.id)}`,
-                    label: String(row.title),
-                    variant: 'tertiary',
-                    size: 'compact',
-                  }),
+                ...frame.chrome,
+                layout: 'command',
+                section: undefined,
+                create: null,
+                selection: null,
               },
-              {
-                key: 'column',
-                label: _('flow_backend.field.column'),
-                cell: (row) => String(row.columnName ?? '—'),
-              },
-              {
-                key: 'assignee',
-                label: _('flow_backend.field.assignee'),
-                cell: (row) => String(row.assigneeName ?? '—'),
-              },
-              {
-                key: 'priority',
-                label: _('flow_backend.field.priority'),
-                cell: (row) => priorityBadge(_, row.priority),
-              },
-              {
-                key: 'dueDate',
-                label: _('flow_backend.field.dueDate'),
-                kind: 'date',
-                cell: (row) => when(row.dueDate),
-              },
-              // One column per field the project defined, after everything Flow
-              // itself asks about. A select shows the option's label rather
-              // than its code — the code is what the filter speaks, not what
-              // anybody named it.
-              ...fields.map((field) => ({
-                key: `field:${String(field.code)}`,
-                label: String(field.name),
-                cell: (row: AnyRow) => {
-                  const held = (row.fieldValues as Record<string, unknown> | undefined)?.[String(field.id)]
-                  if (held == null || held === '') return '\u2014'
-                  const options = ((field.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? []
-                  const chosen = options.find((option) => String(option.code) === String(held))
-                  return String(chosen?.label ?? held)
+              false,
+            )
+          : undefined
+      }
+      status={`${options.projectName}: ${String(options.total)}`}
+      body={
+        options.rows.length || groups.length
+          ? dataTable(_, {
+              rows: options.rows,
+              groups,
+              id: (row) => String(row.id),
+              rowHref: (row) => localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
+              columns: [
+                {
+                  key: 'title',
+                  label: _('flow_backend.field.title'),
+                  priority: 'primary',
+                  cell: (row) =>
+                    linkButton({
+                      href: localized(`/admin/flow/issues/${encodeURIComponent(String(row.id))}`, locale),
+                      label: String(row.title),
+                      variant: 'tertiary',
+                      size: 'compact',
+                    }),
                 },
-              })),
-              {
-                key: 'progress',
-                label: _('flow_backend.field.progress'),
-                cell: (row) => (
-                  <Progress
-                    value={row.progress == null ? null : Number(row.progress)}
-                    label={_('flow_backend.field.progress')}
-                    text={
-                      row.progress == null
-                        ? null
-                        : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
-                    }
-                  />
-                ),
-              },
-            ],
-          })
-        : empty(_),
-    ])}
-  />
-)
+                {
+                  key: 'column',
+                  label: _('flow_backend.field.column'),
+                  cell: (row) => String(row.columnName ?? '—'),
+                },
+                {
+                  key: 'assignee',
+                  label: _('flow_backend.field.assignee'),
+                  cell: (row) => String(row.assigneeName ?? '—'),
+                },
+                {
+                  key: 'priority',
+                  label: _('flow_backend.field.priority'),
+                  cell: (row) => priorityBadge(_, row.priority),
+                },
+                {
+                  key: 'dueDate',
+                  label: _('flow_backend.field.dueDate'),
+                  kind: 'date',
+                  cell: (row) => when(row.dueDate),
+                },
+                // One column per field the project defined, after everything Flow
+                // itself asks about. A select shows the option's label rather
+                // than its code — the code is what the filter speaks, not what
+                // anybody named it.
+                ...fields.map((field) => ({
+                  key: `field:${String(field.code)}`,
+                  label: String(field.name),
+                  cell: (row: AnyRow) => {
+                    const held = (row.fieldValues as Record<string, unknown> | undefined)?.[String(field.id)]
+                    if (held == null || held === '') return '\u2014'
+                    const choices = ((field.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? []
+                    const chosen = choices.find((choice) => String(choice.code) === String(held))
+                    return String(chosen?.label ?? held)
+                  },
+                })),
+                {
+                  key: 'progress',
+                  label: _('flow_backend.field.progress'),
+                  cell: (row) => (
+                    <Progress
+                      value={row.progress == null ? null : Number(row.progress)}
+                      label={_('flow_backend.field.progress')}
+                      text={
+                        row.progress == null
+                          ? null
+                          : `${String(row.subtaskDone ?? 0)}/${String(row.subtaskTotal ?? 0)}`
+                      }
+                    />
+                  ),
+                },
+              ],
+            })
+          : emptyState(_('flow_backend.empty.title'), _('flow_backend.empty.hint'))
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
+}

@@ -1,9 +1,17 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { adminPage } from '../backend/screen.ts'
+import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow } from '../backend/screen.ts'
-import { activitiesScreen } from './screens.tsx'
+import { activitiesScreen } from './screens/index.ts'
+
+const targetPath = (row: AnyRow): string | null => {
+  const id = encodeURIComponent(String(row.resId))
+  if (row.resModel === 'product.Template') return `/admin/product/templates/${id}`
+  if (row.resModel === 'stock.Picking') return `/admin/stock/transfers/${id}`
+  if (row.resModel === 'sale.Order') return `/admin/sales/quotations/${id}`
+  return null
+}
 
 const todayOf = (url: URL): string => {
   const requested = url.searchParams.get('today')
@@ -30,7 +38,10 @@ export const routes = {
           await ctx.call('activity.reschedule', { id: form.id ?? '', dueDate: form.dueDate ?? '' }, url, req)
         else if (form.action === 'cancel') await ctx.call('activity.cancel', { id: form.id ?? '' }, url, req)
         else return text('unknown activity action', { status: 400 })
-        return seeOther(`/admin/activities?today=${encodeURIComponent(form.today ?? today)}`)
+        const next = new URL(inLocale(url, '/admin/activities'), url)
+        next.searchParams.set('today', form.today ?? today)
+        if (url.searchParams.get('done') === '1') next.searchParams.set('done', '1')
+        return seeOther(`${next.pathname}${next.search}`)
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const includeDone = url.searchParams.get('done') === '1'
@@ -39,7 +50,22 @@ export const routes = {
       }
       return adminPage(ctx, url, req, {
         title: 'activity_backend.title',
-        body: (_, frame) => activitiesScreen(_, result.activities, frame, today, includeDone),
+        active: '/admin/activities',
+        body: (_, frame) => {
+          const toggle = new URL(inLocale(url, '/admin/activities'), url)
+          toggle.searchParams.set('today', today)
+          if (!includeDone) toggle.searchParams.set('done', '1')
+          return activitiesScreen(_, frame, {
+            rows: result.activities.map((row) => {
+              const path = targetPath(row)
+              return { ...row, targetHref: path ? inLocale(url, path) : null }
+            }),
+            action: inLocale(url, '/admin/activities'),
+            toggleHref: `${toggle.pathname}${toggle.search}`,
+            includeDone,
+            today,
+          })
+        },
       })
     },
 }

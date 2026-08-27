@@ -29,9 +29,9 @@ import {
   uom,
   user,
 } from '@ketvietlab/ketsuite'
-import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/attributes-screen.tsx'
-import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens.tsx'
-import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens.tsx'
+import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/screens/attributes.tsx'
+import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens/index.ts'
+import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens/index.ts'
 
 const modules = [
   address,
@@ -94,8 +94,15 @@ test('ketsuite i18n: Pricing and Stock badges render localized labels while reta
     base: 'list_price',
   }
   const list = { id: 'list', name: 'Retail', currency: 'VND', sequence: 16, active: true }
-  const viPricing = renderToString(pricelistDetailScreen(vi, list, [item], {}))
-  const enPricing = renderToString(pricelistDetailScreen(en, list, [item], {}))
+  const pricingOptions = {
+    action: '/admin/pricing/pricelists/list',
+    cancelHref: '/admin/pricing/pricelists',
+    values: list,
+    items: [item],
+    itemValues: { id: 'draft' },
+  }
+  const viPricing = renderToString(pricelistDetailScreen(vi, {}, pricingOptions))
+  const enPricing = renderToString(pricelistDetailScreen(en, {}, pricingOptions))
   const viStock = renderToString(
     stockScreen(vi, 'Kho', [{ id: 'move', name: 'WH/OUT/1', kind: 'outgoing', state: 'assigned' }], {}),
   )

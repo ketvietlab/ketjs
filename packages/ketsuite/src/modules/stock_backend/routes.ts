@@ -1,20 +1,30 @@
 import { randomUUID } from 'node:crypto'
-import { json, text } from '@ketvietlab/ketjs'
+import { fragment, json, NAVIGATION_TYPE, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
-import { backendPage } from '../../ui/index.ts'
+import { backendPage, modalWorkspace } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
-import { inventoryScreen } from './inventory-screen.tsx'
-import { forecastScreen } from './forecast-screen.tsx'
-import { locationsScreen } from './locations-screen.tsx'
-import { lotDetailScreen } from './lot-screen.tsx'
-import { lotsScreen } from './lots-screen.tsx'
-import { pickingTypesScreen } from './picking-types-screen.tsx'
-import { replenishmentScreen } from './replenishment-screen.tsx'
-import { stockRouteDetailScreen } from './stock-route-screen.tsx'
-import { stockRoutesScreen } from './stock-routes-screen.tsx'
-import { transferDetailScreen } from './transfer-screen.tsx'
-import { transfersScreen } from './transfers-screen.tsx'
+import {
+  forecastScreen,
+  inventoryScreen,
+  lotCreateModal,
+  lotDetailScreen,
+  lotsListScreen,
+  locationCreateModal,
+  locationsListScreen,
+  pickingTypeCreateModal,
+  pickingTypesListScreen,
+  replenishmentCreateScreen,
+  replenishmentListScreen,
+  stockRouteCreateModal,
+  stockRouteDetailScreen,
+  stockRoutesListScreen,
+  transferCreateScreen,
+  transferDetailScreen,
+  transfersListScreen,
+  warehouseCreateModal,
+  warehousesListScreen,
+} from './screens/index.ts'
 
 const crossSite = (req: Parameters<Route>[1]): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -40,7 +50,6 @@ const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
       ? text('Forbidden', { status: 403 })
       : null
 
-import { warehousesScreen } from './warehouses-screen.tsx'
 import { adminPage, frameOf, inLocale, printGroup } from '../backend/screen.ts'
 import { selectionLabel as resolveSelection } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
@@ -116,11 +125,26 @@ const localizeGeneratedRecords = (_: Translator, rows: AnyRow[], group: 'locatio
   })
 const invalid = (url: URL, _: Translator) =>
   url.searchParams.has('invalid') ? [_('stock_backend.error.invalid')] : undefined
+const createModalHref = (url: URL, collection: string): string => inLocale(url, `${collection}?create=1`)
+const createModalOpen = (url: URL): boolean => url.searchParams.get('create') === '1'
+const createModalErrorHref = (url: URL, collection: string): string =>
+  inLocale(url, `${collection}?create=1&invalid=1`)
 const resultRedirect = (result: unknown, success: string) =>
   (result as { ok?: boolean }).ok
     ? seeOther(success)
     : seeOther(`${success}${success.includes('?') ? '&' : '?'}invalid=1`)
 const isStockPartial = (req: Req): boolean => req.headers['x-ket-partial'] === 'stock-transfer'
+const lotProductOptions = (products: AnyRow[]) =>
+  products.flatMap((template) =>
+    (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+      .filter((variant) => variant.active !== false)
+      .map((variant) => ({
+        value: String(variant.id),
+        label: variant.defaultCode
+          ? `${String(template.name)} · ${String(variant.defaultCode)}`
+          : String(template.name),
+      })),
+  )
 const dateTimeLabel = (value: unknown, lang: string): string => {
   const raw = String(value ?? '')
   if (!raw) return ''
@@ -276,7 +300,7 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'stock_backend.transfers',
         body: (_, frame) =>
-          transfersScreen(
+          transfersListScreen(
             _,
             {
               rows: pickings.map((row) => ({
@@ -289,8 +313,49 @@ export const routes: Record<string, RouteEntry> = {
                 state: String(row.state),
                 href: inLocale(url, `/admin/stock/transfers/${String(row.id)}`),
               })),
+              createHref: inLocale(url, '/admin/stock/transfers/new'),
+            },
+            frame,
+          ),
+      })
+    },
+
+  '/admin/stock/transfers/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      const here = inLocale(url, '/admin/stock/transfers/new')
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const id = randomUUID()
+        const result = await ctx.call(
+          'stock.createPicking',
+          {
+            id,
+            name: form.name || id,
+            pickingTypeId: form.pickingTypeId ?? '',
+            ...(form.scheduledDate ? { scheduledDate: form.scheduledDate } : {}),
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, `/admin/stock/transfers/${id}`))
+          : seeOther(`${here}${here.includes('?') ? '&' : '?'}invalid=1`)
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const data = await common(ctx, url, req)
+      return adminPage(ctx, url, req, {
+        title: 'stock_backend.transfer.create.title',
+        body: (_, frame) =>
+          transferCreateScreen(
+            _,
+            {
               pickingTypes: options(data.pickingTypes),
-              action: inLocale(url, '/admin/stock/transfers'),
+              action: here,
+              cancelHref: inLocale(url, '/admin/stock/transfers'),
               errors: invalid(url, _),
             },
             frame,
@@ -428,41 +493,45 @@ export const routes: Record<string, RouteEntry> = {
           detail: `${String(line.quantity)} ${String(line.productUomId)}`,
         })),
       ])
+      const screenOptions = {
+        transfer: {
+          id: String(current.id),
+          name: String(current.name),
+          state,
+          scheduledDate: dateTimeLabel(current.scheduledDate, lang),
+          pickingTypeName: String(pickingType?.name ?? current.pickingTypeId ?? ''),
+        },
+        rows: moveRows,
+        products,
+        units: options(data.units),
+        lots: options(data.lots),
+        operationOptions,
+        backorderPolicy,
+        printActions: printGroup(_, printable, String(current.id), url.search),
+        action: here,
+        collaboration: savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
+              resModel: 'stock.Picking',
+              resId: String(current.id),
+              lang,
+            }),
+        editor: savedPartial
+          ? ''
+          : await ctx.joint(url, req, 'stock_backend:picking.editor', {
+              identity: `picking:${String(current.id)}`,
+              pickingId: String(current.id),
+              lang,
+            }),
+        errors: invalid(url, _),
+      }
+      if (savedPartial) {
+        const body = transferDetailScreen(_, screenOptions, {}, true)
+        return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
+      }
       return adminPage(ctx, url, req, {
         title: 'stock_backend.transferDetail',
-        body: async (_, frame) =>
-          transferDetailScreen(
-            _,
-            {
-              transfer: {
-                id: String(current.id),
-                name: String(current.name),
-                state,
-                scheduledDate: dateTimeLabel(current.scheduledDate, lang),
-                pickingTypeName: String(pickingType?.name ?? current.pickingTypeId ?? ''),
-              },
-              rows: moveRows,
-              products,
-              units: options(data.units),
-              lots: options(data.lots),
-              operationOptions,
-              backorderPolicy,
-              printActions: printGroup(_, printable, String(current.id), url.search),
-              action: here,
-              collaboration: await ctx.joint(url, req, 'stock_backend:picking.collaboration', {
-                resModel: 'stock.Picking',
-                resId: String(current.id),
-                lang,
-              }),
-              editor: await ctx.joint(url, req, 'stock_backend:picking.editor', {
-                identity: `picking:${String(current.id)}`,
-                pickingId: String(current.id),
-                lang,
-              }),
-              errors: invalid(url, _),
-            },
-            frame,
-          ),
+        body: (_, frame) => transferDetailScreen(_, screenOptions, frame),
       })
     },
 
@@ -486,14 +555,17 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/stock/warehouses'))
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/warehouses'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/warehouses'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('stock.listWarehouses', {}, url, req)) as AnyRow[]
       return adminPage(ctx, url, req, {
         title: 'stock_backend.warehouses',
-        body: (_, frame) =>
-          warehousesScreen(
+        body: (_, frame) => {
+          const collection = inLocale(url, '/admin/stock/warehouses')
+          const list = warehousesListScreen(
             _,
             {
               rows: rows.map((row) => ({
@@ -503,12 +575,50 @@ export const routes: Record<string, RouteEntry> = {
                 receptionSteps: String(row.receptionSteps),
                 deliverySteps: String(row.deliverySteps),
               })),
-              action: inLocale(url, '/admin/stock/warehouses'),
-              errors: invalid(url, _),
+              createHref: createModalHref(url, '/admin/stock/warehouses'),
             },
             frame,
-          ),
+          )
+          return createModalOpen(url)
+            ? modalWorkspace(
+                list,
+                warehouseCreateModal(_, {
+                  action: inLocale(url, '/admin/stock/warehouses/new'),
+                  cancelHref: collection,
+                  errors: invalid(url, _),
+                }),
+              )
+            : list
+        },
       })
+    },
+
+  '/admin/stock/warehouses/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const result = await ctx.call(
+          'stock.saveWarehouse',
+          {
+            id: randomUUID(),
+            name: form.name ?? '',
+            code: form.code ?? '',
+            receptionSteps: form.receptionSteps || 'one_step',
+            deliverySteps: form.deliverySteps || 'ship_only',
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/warehouses'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/warehouses'))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      return seeOther(createModalHref(url, '/admin/stock/warehouses'))
     },
 
   '/admin/stock/locations':
@@ -531,7 +641,9 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/stock/locations'))
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/locations'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/locations'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
@@ -539,8 +651,9 @@ export const routes: Record<string, RouteEntry> = {
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
       return adminPage(ctx, url, req, {
         title: 'stock_backend.locations',
-        body: (_, frame) =>
-          locationsScreen(
+        body: (_, frame) => {
+          const collection = inLocale(url, '/admin/stock/locations')
+          const list = locationsListScreen(
             _,
             {
               rows: data.locations.map((row) => ({
@@ -549,17 +662,54 @@ export const routes: Record<string, RouteEntry> = {
                 usage: String(row.usage),
                 warehouse: warehouseById.get(String(row.warehouseId)) ?? '',
               })),
+              createHref: createModalHref(url, '/admin/stock/locations'),
+            },
+            frame,
+          )
+          if (!createModalOpen(url)) return list
+          return modalWorkspace(
+            list,
+            locationCreateModal(_, {
               warehouses: options(data.warehouses),
               parents: data.locations.map((row) => ({
                 value: String(row.id),
                 label: completeLocationName(row, nameById),
               })),
-              action: inLocale(url, '/admin/stock/locations'),
+              action: inLocale(url, '/admin/stock/locations/new'),
+              cancelHref: collection,
               errors: invalid(url, _),
-            },
-            frame,
-          ),
+            }),
+          )
+        },
       })
+    },
+
+  '/admin/stock/locations/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const result = await ctx.call(
+          'stock.saveLocation',
+          {
+            id: randomUUID(),
+            name: form.name ?? '',
+            usage: form.usage || 'internal',
+            ...(form.parentId ? { parentId: form.parentId } : {}),
+            ...(form.warehouseId ? { warehouseId: form.warehouseId } : {}),
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/locations'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/locations'))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      return seeOther(createModalHref(url, '/admin/stock/locations'))
     },
 
   '/admin/stock/picking-types':
@@ -584,7 +734,9 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/stock/picking-types'))
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/picking-types'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/picking-types'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const data = await common(ctx, url, req)
@@ -595,8 +747,9 @@ export const routes: Record<string, RouteEntry> = {
       const warehouseById = new Map(data.warehouses.map((row) => [String(row.id), String(row.name)]))
       return adminPage(ctx, url, req, {
         title: 'stock_backend.pickingTypes',
-        body: (_, frame) =>
-          pickingTypesScreen(
+        body: (_, frame) => {
+          const collection = inLocale(url, '/admin/stock/picking-types')
+          const list = pickingTypesListScreen(
             _,
             {
               rows: data.pickingTypes.map((row) => ({
@@ -608,17 +761,56 @@ export const routes: Record<string, RouteEntry> = {
                 destination: completeLocationNameById.get(String(row.defaultLocationDestId)) ?? '',
                 createBackorder: String(row.createBackorder ?? 'ask'),
               })),
+              createHref: createModalHref(url, '/admin/stock/picking-types'),
+            },
+            frame,
+          )
+          if (!createModalOpen(url)) return list
+          return modalWorkspace(
+            list,
+            pickingTypeCreateModal(_, {
               warehouses: options(data.warehouses),
               locations: data.locations.map((row) => ({
                 value: String(row.id),
                 label: completeLocationNameById.get(String(row.id)) ?? String(row.name),
               })),
-              action: inLocale(url, '/admin/stock/picking-types'),
+              action: inLocale(url, '/admin/stock/picking-types/new'),
+              cancelHref: collection,
               errors: invalid(url, _),
-            },
-            frame,
-          ),
+            }),
+          )
+        },
       })
+    },
+
+  '/admin/stock/picking-types/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const result = await ctx.call(
+          'stock.savePickingType',
+          {
+            id: randomUUID(),
+            name: form.name ?? '',
+            code: form.code || 'internal',
+            ...(form.warehouseId ? { warehouseId: form.warehouseId } : {}),
+            ...(form.defaultLocationSrcId ? { defaultLocationSrcId: form.defaultLocationSrcId } : {}),
+            ...(form.defaultLocationDestId ? { defaultLocationDestId: form.defaultLocationDestId } : {}),
+            createBackorder: form.createBackorder || 'ask',
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/picking-types'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/picking-types'))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      return seeOther(createModalHref(url, '/admin/stock/picking-types'))
     },
 
   '/admin/stock/lots':
@@ -641,7 +833,9 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/stock/lots'))
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/lots'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/lots'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [lots, products, locations, quants] = (await Promise.all([
@@ -650,16 +844,7 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('stock.listLocations', {}, url, req),
         ctx.call('stock.listQuants', {}, url, req),
       ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow[]]
-      const productOptions = products.flatMap((template) =>
-        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
-          .filter((variant) => variant.active !== false)
-          .map((variant) => ({
-            value: String(variant.id),
-            label: variant.defaultCode
-              ? `${String(template.name)} · ${String(variant.defaultCode)}`
-              : String(template.name),
-          })),
-      )
+      const productOptions = lotProductOptions(products)
       const productById = new Map(productOptions.map((product) => [product.value, product.label]))
       const stockLocationIds = new Set(
         locations
@@ -677,8 +862,9 @@ export const routes: Record<string, RouteEntry> = {
       })
       return adminPage(ctx, url, req, {
         title: 'stock_backend.lots',
-        body: (_, frame) =>
-          lotsScreen(
+        body: (_, frame) => {
+          const collection = inLocale(url, '/admin/stock/lots')
+          const list = lotsListScreen(
             _,
             {
               rows: lots.map((row) => ({
@@ -691,13 +877,51 @@ export const routes: Record<string, RouteEntry> = {
                 active: row.active !== false,
                 href: inLocale(url, `/admin/stock/lots/${String(row.id)}`),
               })),
-              products: productOptions,
-              action: inLocale(url, '/admin/stock/lots'),
-              errors: invalid(url, _),
+              createHref: createModalHref(url, '/admin/stock/lots'),
             },
             frame,
-          ),
+          )
+          return createModalOpen(url)
+            ? modalWorkspace(
+                list,
+                lotCreateModal(_, {
+                  products: productOptions,
+                  action: inLocale(url, '/admin/stock/lots/new'),
+                  cancelHref: collection,
+                  errors: invalid(url, _),
+                }),
+              )
+            : list
+        },
       })
+    },
+
+  '/admin/stock/lots/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const result = await ctx.call(
+          'stock.createLot',
+          {
+            id: randomUUID(),
+            productId: form.productId ?? '',
+            name: form.name ?? '',
+            ref: form.ref || null,
+            note: form.note || null,
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/lots'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/lots'))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      return seeOther(createModalHref(url, '/admin/stock/lots'))
     },
 
   '/admin/stock/lots/{id}':
@@ -706,13 +930,13 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const here = inLocale(url, `/admin/stock/lots/${params.id}`)
+      const partial = req.headers['x-ket-partial'] === 'stock-lot'
       if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const lots = (await ctx.call('stock.listLots', {}, url, req)) as AnyRow[]
       let current = lots.find((row) => String(row.id) === params.id)
       if (!current) return text(_('stock_backend.lot.error.notFound'), { status: 404 })
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
-        const partial = req.headers['x-ket-partial'] === 'stock-lot'
         const form = await readForm(req)
         const values = {
           productId: form.productId ?? '',
@@ -746,16 +970,7 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('stock.listQuants', { productId: String(current.productId) }, url, req),
       ])) as [AnyRow[], AnyRow[], AnyRow[]]
       const locations = localizeGeneratedRecords(_, rawLocations, 'location')
-      const listedProductOptions = products.flatMap((template) =>
-        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
-          .filter((variant) => variant.active !== false)
-          .map((variant) => ({
-            value: String(variant.id),
-            label: variant.defaultCode
-              ? `${String(template.name)} · ${String(variant.defaultCode)}`
-              : String(template.name),
-          })),
-      )
+      const listedProductOptions = lotProductOptions(products)
       const productOptions = listedProductOptions.some(
         (product) => product.value === String(current.productId),
       )
@@ -818,7 +1033,9 @@ export const routes: Record<string, RouteEntry> = {
           errors: invalid(url, _),
         },
         await frameOf(ctx, url, req),
+        partial,
       )
+      if (partial) return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
       return backendPage(ctx, req, {
         lang,
         title: String(current.name),
@@ -843,7 +1060,7 @@ export const routes: Record<string, RouteEntry> = {
         )
         return (result as { ok?: boolean }).ok
           ? seeOther(inLocale(url, `/admin/stock/routes/${id}`))
-          : seeOther(inLocale(url, '/admin/stock/routes?invalid=1'))
+          : seeOther(createModalErrorHref(url, '/admin/stock/routes'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [rows, rules] = (await Promise.all([
@@ -857,8 +1074,9 @@ export const routes: Record<string, RouteEntry> = {
       }
       return adminPage(ctx, url, req, {
         title: 'stock_backend.routes',
-        body: (_, frame) =>
-          stockRoutesScreen(
+        body: (_, frame) => {
+          const collection = inLocale(url, '/admin/stock/routes')
+          const list = stockRoutesListScreen(
             _,
             {
               rows: rows.map((row) => ({
@@ -868,12 +1086,45 @@ export const routes: Record<string, RouteEntry> = {
                 ruleCount: ruleCountByRoute.get(String(row.id)) ?? 0,
                 href: inLocale(url, `/admin/stock/routes/${String(row.id)}`),
               })),
-              action: inLocale(url, '/admin/stock/routes'),
-              errors: invalid(url, _),
+              createHref: createModalHref(url, '/admin/stock/routes'),
             },
             frame,
-          ),
+          )
+          return createModalOpen(url)
+            ? modalWorkspace(
+                list,
+                stockRouteCreateModal(_, {
+                  action: inLocale(url, '/admin/stock/routes/new'),
+                  cancelHref: collection,
+                  errors: invalid(url, _),
+                }),
+              )
+            : list
+        },
       })
+    },
+
+  '/admin/stock/routes/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const id = randomUUID()
+        const result = await ctx.call(
+          'stock.saveRoute',
+          { id, name: form.name ?? '', sequence: Number(form.sequence || 10) },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, `/admin/stock/routes/${id}`))
+          : seeOther(createModalErrorHref(url, '/admin/stock/routes'))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      return seeOther(createModalHref(url, '/admin/stock/routes'))
     },
 
   '/admin/stock/routes/{id}':
@@ -995,7 +1246,9 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        return resultRedirect(result, inLocale(url, '/admin/stock/replenishment'))
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/replenishment'))
+          : seeOther(inLocale(url, '/admin/stock/replenishment/new?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [points, data, templates] = (await Promise.all([
@@ -1033,7 +1286,7 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'stock_backend.replenishment',
         body: (_, frame) =>
-          replenishmentScreen(
+          replenishmentListScreen(
             _,
             {
               rows: points.map((row, index) => {
@@ -1069,6 +1322,62 @@ export const routes: Record<string, RouteEntry> = {
                   runAction: inLocale(url, `/admin/stock/replenishment/${String(row.id)}/run`),
                 }
               }),
+              createHref: inLocale(url, '/admin/stock/replenishment/new'),
+            },
+            frame,
+          ),
+      })
+    },
+
+  '/admin/stock/replenishment/new':
+    (ctx): Route =>
+    async (url, req) => {
+      const lang = ctx.localeOf(url, req)
+      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
+        const form = await readForm(req)
+        const result = await ctx.call(
+          'stock.saveOrderpoint',
+          {
+            id: randomUUID(),
+            productId: form.productId ?? '',
+            warehouseId: form.warehouseId ?? '',
+            locationId: form.locationId ?? '',
+            trigger: form.trigger || 'auto',
+            minQuantity: form.minQuantity || '0',
+            maxQuantity: form.maxQuantity || '0',
+            ...(form.replenishmentUomId ? { replenishmentUomId: form.replenishmentUomId } : {}),
+            ...(form.routeId ? { routeId: form.routeId } : {}),
+          },
+          url,
+          req,
+        )
+        return (result as { ok?: boolean }).ok
+          ? seeOther(inLocale(url, '/admin/stock/replenishment'))
+          : seeOther(inLocale(url, '/admin/stock/replenishment/new?invalid=1'))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const [data, templates] = (await Promise.all([
+        common(ctx, url, req),
+        ctx.call('stock.listStorableProducts', {}, url, req),
+      ])) as [Awaited<ReturnType<typeof common>>, AnyRow[]]
+      const products = templates.flatMap((template) =>
+        (Array.isArray(template.variants) ? (template.variants as AnyRow[]) : [])
+          .filter((variant) => variant.active !== false)
+          .map((variant) => ({
+            value: String(variant.id),
+            label: variant.defaultCode
+              ? `${String(template.name)} · ${String(variant.defaultCode)}`
+              : String(template.name),
+          })),
+      )
+      return adminPage(ctx, url, req, {
+        title: 'stock_backend.replenishment.create.title',
+        body: (_, frame) =>
+          replenishmentCreateScreen(
+            _,
+            {
               products,
               warehouses: options(data.warehouses),
               locations: options(data.locations),
@@ -1077,7 +1386,8 @@ export const routes: Record<string, RouteEntry> = {
                 value: String(row.id),
                 label: localizedGeneratedRouteName(_, row),
               })),
-              action: inLocale(url, '/admin/stock/replenishment'),
+              action: inLocale(url, '/admin/stock/replenishment/new'),
+              cancelHref: inLocale(url, '/admin/stock/replenishment'),
               errors: invalid(url, _),
             },
             frame,

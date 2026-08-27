@@ -3,6 +3,7 @@ import type { IslandController, IslandProps } from '@ketvietlab/ketjs-view'
 const tableSelectionMarker = Symbol.for('ket.backend.table-selection')
 const dropdownDismissMarker = Symbol.for('ket.backend.dropdown-dismiss')
 const globalFilterMarker = Symbol.for('ket.backend.global-filter')
+const routeModalMarker = Symbol.for('ket.backend.route-modal')
 const dismissibleDropdown = [
   '[data-ui="search-menu"]',
   '[data-ui="col-config"]',
@@ -145,6 +146,88 @@ const installGlobalFilter = (): void => {
   )
 }
 
+const focusable = [
+  'a[href]',
+  'button:not(:disabled)',
+  'input:not(:disabled):not([type="hidden"])',
+  'select:not(:disabled)',
+  'textarea:not(:disabled)',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ')
+
+const activeRouteModal = (): HTMLElement | null =>
+  document.querySelector<HTMLElement>('[data-ui="modal-layer"][data-route-modal="true"]')
+
+const modalFocusables = (modal: HTMLElement): HTMLElement[] =>
+  [...modal.querySelectorAll<HTMLElement>(focusable)].filter(
+    (item) =>
+      !item.hidden &&
+      item.getAttribute('aria-hidden') !== 'true' &&
+      !item.matches('[data-ui="modal-backdrop"]'),
+  )
+
+const navigateTo = (href: string): void => {
+  if (browserGlobals.__ketNavigation?.navigate) void browserGlobals.__ketNavigation.navigate(href)
+  else browserGlobals.location.assign(href)
+}
+
+const eventStartedInNestedModal = (event: KeyboardEvent, routeModal: HTMLElement): boolean =>
+  event
+    .composedPath()
+    .some(
+      (target) =>
+        target instanceof HTMLElement &&
+        target !== routeModal &&
+        target.matches('[data-ui="modal-layer"][data-presentation="dialog"]'),
+    )
+
+/** Progressive keyboard behavior for URL-owned create/edit workspaces. */
+const installRouteModal = (): void => {
+  if (browserGlobals[routeModalMarker]) return
+  browserGlobals[routeModalMarker] = true
+  const focused = new WeakSet<HTMLElement>()
+  const focusModal = (): void => {
+    const modal = activeRouteModal()
+    if (!modal || focused.has(modal)) return
+    focused.add(modal)
+    requestAnimationFrame(() => {
+      const sheet = modal.querySelector<HTMLElement>('[data-ui="modal-sheet"]')
+      const target = modalFocusables(modal).find((item) => !item.matches('[data-ui="modal-close"]'))
+      ;(target ?? sheet)?.focus()
+    })
+  }
+  focusModal()
+  new MutationObserver(focusModal).observe(document.body, { childList: true, subtree: true })
+
+  document.addEventListener('keydown', (event) => {
+    const modal = activeRouteModal()
+    if (!modal) return
+    // Relation-select removes its dialog synchronously on Escape. The event's
+    // composed path is stable even after that DOM subtree disappears, so the
+    // route layer must use it instead of querying the now-removed target.
+    if (eventStartedInNestedModal(event, modal)) return
+    if (event.key === 'Escape') {
+      const close = modal.querySelector<HTMLAnchorElement>('[data-ui="modal-close"]')
+      if (!close) return
+      event.preventDefault()
+      navigateTo(close.getAttribute('href') ?? close.href)
+      return
+    }
+    if (event.key !== 'Tab') return
+    const items = modalFocusables(modal)
+    if (!items.length) return
+    const first = items[0]
+    const last = items.at(-1)!
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  })
+}
+
 export const createTableSelectionView = (): IslandController => ({
   view: () => <span data-ui="table-selection-runtime" hidden />,
 })
@@ -153,5 +236,6 @@ export const tableSelection = (_props: IslandProps): IslandController => {
   installTableSelection()
   installDropdownDismiss()
   installGlobalFilter()
+  installRouteModal()
   return createTableSelectionView()
 }

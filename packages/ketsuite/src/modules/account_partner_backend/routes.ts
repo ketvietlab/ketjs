@@ -2,9 +2,20 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { accountingTermsScreen } from './screens.tsx'
-import { adminPage, inLocale } from '../backend/screen.ts'
+import { accountingTermsModal } from './screens/index.ts'
+import { inLocale } from '../backend/screen.ts'
+import { renderPartnerForm } from '../partner_backend/routes.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+
+const crossSite = (req: Req): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
 
 const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, errors?: string[]) => {
   const lang = ctx.localeOf(url, req)
@@ -25,21 +36,23 @@ const render = async (ctx: ServeContext, url: URL, req: Req, partnerId: string, 
       .filter((row) => row.accountType === 'liability_payable')
       .map((row) => ({ value: String(row.id), label: `${row.code} · ${row.name}` })),
   }
-  return adminPage(ctx, url, req, {
-    title: _('account_partner_backend.screen.title', { name: String(partner.name) }),
-    translate: false,
-    body: (_, frame) =>
-      accountingTermsScreen(
-        _,
-        partner as never,
-        terms as never,
-        options,
-        frame,
-        inLocale(url, `/admin/partner/partners/${partnerId}/accounting`),
-        inLocale(url, `/admin/partner/partners/${partnerId}`),
-        errors,
-      ),
-  })
+  const backHref = inLocale(url, `/admin/partner/partners/${partnerId}`)
+  return renderPartnerForm(
+    ctx,
+    url,
+    req,
+    partnerId,
+    undefined,
+    accountingTermsModal(
+      _,
+      partner as never,
+      terms as never,
+      options,
+      inLocale(url, `/admin/partner/partners/${partnerId}/accounting`),
+      backHref,
+      errors,
+    ),
+  )
 }
 
 export const routes: Record<string, RouteEntry> = {
@@ -48,6 +61,7 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method === 'GET') return render(ctx, url, req, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       const result = await ctx.call(
         'account_partner.saveAccountingTerms',

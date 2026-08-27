@@ -19,7 +19,9 @@ import type {
   ServeContext,
 } from '@ketvietlab/ketjs'
 import {
-  favoriteScreen,
+  attributesScreen,
+  favoriteModal,
+  newProductScreen,
   PRODUCT_DETAIL_TABS,
   productDetailScreen,
   productsScreen,
@@ -27,8 +29,6 @@ import {
   variantScreen,
   VIEWS,
 } from './screens/index.ts'
-import { attributesScreen } from './attributes-screen.tsx'
-import { newProductScreen } from './create-screen.tsx'
 import {
   attributeControl,
   attributeValuesControl,
@@ -39,7 +39,7 @@ import {
 import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens/index.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
 import type { SearchMenu, TableGroup, TableSelection } from '../../ui/index.ts'
-import { backendPage } from '../../ui/index.ts'
+import { backendPage, modalWorkspace } from '../../ui/index.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { productListSearch } from '../product/search.ts'
@@ -347,10 +347,8 @@ const productMenus = (
     }
   })
   const returnTo = encodeListState({ ...cloneState(state), favoriteId: undefined }, url)
-  const saveUrl = new URL('/admin/product/templates/favorites/new', url)
-  saveUrl.searchParams.set('returnTo', returnTo)
-  const lang = url.searchParams.get('lang')
-  if (lang) saveUrl.searchParams.set('lang', lang)
+  const saveUrl = new URL(returnTo, url)
+  saveUrl.searchParams.set('modal', 'favorite')
   return [
     {
       id: 'filters',
@@ -723,8 +721,8 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'KetSuite',
         translate: false,
-        body: (_, frame) =>
-          productsScreen(
+        body: (_, frame) => {
+          const workspace = productsScreen(
             _,
             decoratedRows,
             view,
@@ -757,7 +755,22 @@ export const routes: Record<string, RouteEntry> = {
             { shown: colsOf(url), colsHref: colsHref(url), groups, selection },
             localeQuery(url),
             count,
-          ),
+          )
+          if (url.searchParams.get('modal') !== 'favorite') return workspace
+          const returnUrl = new URL(url)
+          returnUrl.searchParams.delete('modal')
+          returnUrl.searchParams.delete('favoriteError')
+          const returnTo = `${returnUrl.pathname}${returnUrl.search}`
+          return modalWorkspace(
+            workspace,
+            favoriteModal(
+              _,
+              returnTo,
+              localeQuery(url),
+              url.searchParams.has('favoriteError') ? [_('product_backend.favorite.invalid')] : undefined,
+            ),
+          )
+        },
       })
     },
   '/admin/product/templates/bulk':
@@ -804,6 +817,12 @@ export const routes: Record<string, RouteEntry> = {
         source.pathname === '/admin/product/templates'
           ? `${source.pathname}${source.search}`
           : '/admin/product/templates'
+      const modalHref = (invalid = false) => {
+        const target = new URL(returnTo, 'http://ket.local')
+        target.searchParams.set('modal', 'favorite')
+        if (invalid) target.searchParams.set('favoriteError', '1')
+        return `${target.pathname}${target.search}`
+      }
       if (req.method === 'POST') {
         const spec = productListSearch(table(ctx.manifest, 'product.Template'))
         const state = parseListState(spec, new URL(returnTo, 'http://ket.local')).state
@@ -824,16 +843,9 @@ export const routes: Record<string, RouteEntry> = {
           state.favoriteId = id
           return seeOther(encodeListState(state, new URL(returnTo, 'http://ket.local')))
         }
-        return adminPage(ctx, url, req, {
-          title: 'product_backend.favorite.create',
-          body: (_, frame) =>
-            favoriteScreen(_, frame, returnTo, localeQuery(url), [_('product_backend.favorite.invalid')]),
-        })
+        return seeOther(modalHref(true))
       }
-      return adminPage(ctx, url, req, {
-        title: 'product_backend.favorite.create',
-        body: (_, frame) => favoriteScreen(_, frame, returnTo, localeQuery(url)),
-      })
+      return seeOther(modalHref())
     },
   '/admin/product/templates/new':
     (ctx: ServeContext): Route =>

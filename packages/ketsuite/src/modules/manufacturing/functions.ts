@@ -341,7 +341,15 @@ export const functions: Record<string, FnSpec> = {
 
   listWorkCenters: defineFn({
     input: { includeArchived: 'bool?' },
-    output: { id: 'id', code: 'text', name: 'text', capacity: 'decimal', active: 'bool' },
+    output: {
+      id: 'id',
+      code: 'text',
+      name: 'text',
+      capacity: 'decimal',
+      timeEfficiency: 'decimal',
+      costPerHour: 'decimal',
+      active: 'bool',
+    },
     effects: ['read:manufacturing.WorkCenter'],
     agent: true,
     handler: async (ctx, args) =>

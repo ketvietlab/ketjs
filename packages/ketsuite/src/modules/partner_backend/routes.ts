@@ -176,7 +176,14 @@ const addressFormsFor = async (
   ])
 }
 
-const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
+export const renderPartnerForm = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  id: string,
+  errors?: string[],
+  overlay?: import('@ketvietlab/ketjs-view').JSXChild,
+) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
   const [row, parents, terms, integration, collaboration] = await Promise.all([
@@ -223,6 +230,7 @@ const renderPartnerForm = async (ctx: ServeContext, url: URL, req: Req, id: stri
           collaboration,
           addressForms,
           parentControl,
+          overlay,
         },
         frame,
         url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',

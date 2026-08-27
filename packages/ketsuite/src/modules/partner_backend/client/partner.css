@@ -7,8 +7,8 @@
     background: var(--admin-card);
   }
   /* Partner is the first consumer of the shared FormPage baseline. The public
-     pattern owns page hierarchy; this module only adapts its domain sections
-     and preserves the ERP label/control rhythm at every viewport. */
+     pattern owns page hierarchy and field responsiveness; this module only
+     adapts its domain sections. */
   [data-ui="form-page"] [data-ui="section"] > [data-ui="section-body"] > [data-ui="surface"] {
     padding: 0;
     border: 0;
@@ -44,43 +44,6 @@
     border: 0;
     background: transparent;
     box-shadow: none;
-  }
-  [data-ui="form-page"]
-    [data-ui="record-form"][data-layout="default"]
-    > [data-ui="form-grid"]
-    > [data-ui="form-field"]:not([data-kind="checkbox"]) {
-    grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
-    align-items: center;
-    column-gap: var(--admin-gap);
-  }
-  [data-ui="form-page"]
-    [data-ui="record-form"][data-layout="default"]
-    > [data-ui="form-grid"]
-    > [data-ui="form-field"]:not([data-kind="checkbox"])
-    > [data-ui="form-label"] {
-    grid-column: 1;
-  }
-  [data-ui="form-page"]
-    [data-ui="record-form"][data-layout="default"]
-    > [data-ui="form-grid"]
-    > [data-ui="form-field"]:not([data-kind="checkbox"])
-    > :is(
-      [data-ui="form-control"],
-      [data-ui="form-options"],
-      [data-ui="form-help"],
-      [data-ui="form-error"],
-      ket-island
-    ) {
-    grid-column: 2;
-  }
-  [data-ui="form-page"] [data-ui="form-field"][data-kind="textarea"] {
-    align-items: start;
-  }
-  [data-ui="form-page"] [data-ui="form-field"][data-kind="textarea"] > [data-ui="form-label"] {
-    margin-block-start: 0.375rem;
-  }
-  [data-ui="form-page"] [data-ui="form-label"] {
-    overflow-wrap: anywhere;
   }
   [data-ui="partner-panel-head"] {
     margin-block-end: var(--admin-gap-md);
@@ -142,60 +105,12 @@
     font-size: var(--admin-size-xl);
     font-weight: 700;
   }
-  @media (max-width: 89.9375rem) {
-    [data-ui="form-page"]
-      [data-ui="record-form"][data-layout="default"]
-      > [data-ui="form-grid"]
-      > [data-ui="form-field"]:not([data-kind="checkbox"]) {
-      grid-template-columns: minmax(6.5rem, 7.5rem) minmax(0, 1fr);
-      column-gap: var(--admin-gap-sm);
-    }
-  }
-  @media (max-width: 63.9375rem) {
-    [data-ui="form-page"] [data-ui="record-form"][data-layout="default"] > [data-ui="form-grid"] {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    [data-ui="form-page"] [data-ui="form-field"][data-span="full"] {
-      grid-column: auto;
-    }
-  }
   @media (max-width: 47.9375rem) {
     [data-ui="partner-facts"] {
       grid-template-columns: minmax(0, 1fr);
     }
     [data-ui="partner-fact"] {
       grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 1.2fr);
-    }
-    [data-ui="form-page"]
-      [data-ui="record-form"][data-layout="default"]
-      > [data-ui="form-grid"]
-      > [data-ui="form-field"]:not([data-kind="checkbox"]) {
-      grid-template-columns: minmax(5.25rem, 6.25rem) minmax(0, 1fr);
-      align-items: center;
-      column-gap: var(--admin-gap-sm);
-    }
-    [data-ui="form-page"]
-      [data-ui="record-form"][data-layout="default"]
-      > [data-ui="form-grid"]
-      > [data-ui="form-field"]:not([data-kind="checkbox"])
-      > [data-ui="form-label"] {
-      grid-column: 1;
-    }
-    [data-ui="form-page"]
-      [data-ui="record-form"][data-layout="default"]
-      > [data-ui="form-grid"]
-      > [data-ui="form-field"]:not([data-kind="checkbox"])
-      > :is(
-        [data-ui="form-control"],
-        [data-ui="form-options"],
-        [data-ui="form-help"],
-        [data-ui="form-error"],
-        ket-island
-      ) {
-      grid-column: 2;
-    }
-    [data-ui="form-page"] [data-ui="form-field"][data-kind="textarea"] > [data-ui="form-label"] {
-      margin-block-start: 0.375rem;
     }
   }
 }

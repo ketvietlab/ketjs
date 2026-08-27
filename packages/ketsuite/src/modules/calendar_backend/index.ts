@@ -43,4 +43,4 @@ export default defineModule({
 })
 
 export { islands } from './islands.ts'
-export { calendarScreen } from './screens.tsx'
+export { calendarScreen } from './screens/index.ts'

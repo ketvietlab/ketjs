@@ -1,7 +1,7 @@
 import { json, text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { adminPage } from '../backend/screen.ts'
-import { calendarScreen } from './screens.tsx'
+import { calendarScreen } from './screens/index.ts'
 
 export const routes: Record<string, RouteEntry> = {
   '/admin/calendar':
@@ -16,6 +16,7 @@ export const routes: Record<string, RouteEntry> = {
       })
       return adminPage(ctx, url, req, {
         title: 'calendar_backend.title',
+        active: '/admin/calendar',
         body: (_, frame) => calendarScreen(_, board, frame),
       })
     },

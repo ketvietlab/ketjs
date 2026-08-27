@@ -6,6 +6,7 @@ import {
   FormCluster,
   FormPage,
   linkButton,
+  modalWorkspace,
   RecordForm,
   RecordMore,
   Section,
@@ -28,6 +29,7 @@ export const partnerFormScreen = (
     integration?: JSXChild
     collaboration: JSXChild
     addressForms: Array<{ title: string; body: JSXChild }>
+    overlay?: JSXChild
   },
   frame: Frame,
   locale = '',
@@ -179,7 +181,7 @@ export const partnerFormScreen = (
       ]}
     />
   )
-  return shell(
+  const workspace = shell(
     _,
     row.name,
     <FormPage
@@ -193,4 +195,5 @@ export const partnerFormScreen = (
     />,
     { ...frame, topbar: false, titled: false },
   )
+  return options.overlay ? modalWorkspace(workspace, options.overlay) : workspace
 }

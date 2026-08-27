@@ -4,9 +4,10 @@ import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { FIELD_KINDS, ISSUE_PRIORITIES } from '../flow/types.ts'
 import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
-import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
+import { adminPage, inLocale, localeQuery, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField } from '../../ui/index.ts'
+import { modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
   assigneeControl,
@@ -22,30 +23,38 @@ import {
   listMenus,
   loadListGroups,
 } from '../backend/list-search.ts'
+import { pageOf } from '../backend/paging.ts'
 import {
   boardScreen,
   epicsScreen,
   epicDetailScreen,
   allEpicsScreen,
   issueDetailScreen,
+  issueCreateModal,
   issuesScreen,
   ganttScreen,
   mapScreen,
   crossProjectScreen,
   pagesScreen,
+  projectPageCreateFields,
+  projectEpicCreateFields,
   pageDetailScreen,
   allPagesScreen,
-  projectsScreen,
+  projectCreateModal,
+  projectsListScreen,
   settingsScreen,
   sprintsScreen,
   TEMPLATE_OPTIONS,
 } from './screens/index.ts'
-import type { IssueDetailControls } from './screens/index.ts'
+import type { IssueDetailControls, PageDetailAction, SettingsEditorKind } from './screens/index.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { documentRoutes } from '../livedoc/index.ts'
 import type { DocumentOwner } from '../livedoc/index.ts'
 
 type Translator = ReturnType<ServeContext['translate']>
+
+/** Domain reads stay bounded; the map assembles complete epics one page at a time. */
+const MAP_BATCH_SIZE = 200
 
 /** Column-name presets offered when creating a project — the "Custom" option types its own list. */
 const COLUMN_TEMPLATES: Record<string, string[]> = {
@@ -209,6 +218,36 @@ const issueFields = (
  */
 const GANTT_ROWS = 200
 
+const allGanttIssues = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  projectId: string,
+): Promise<AnyRow[]> => {
+  const rows: AnyRow[] = []
+  let total = Number.POSITIVE_INFINITY
+  while (rows.length < total) {
+    const found = (await ctx.call(
+      'flow.issue.list',
+      { projectId, cursor: String(rows.length), limit: GANTT_ROWS },
+      url,
+      req,
+    )) as AnyRow
+    const batch = (found.rows as AnyRow[]) ?? []
+    total = Number(found.total ?? rows.length + batch.length)
+    rows.push(...batch)
+    if (batch.length === 0) break
+  }
+  return rows
+}
+
+const ganttPageHref = (url: URL, page: number): string => {
+  const target = new URL(url)
+  if (page <= 1) target.searchParams.delete('page')
+  else target.searchParams.set('page', String(page))
+  return `${target.pathname}${target.search}`
+}
+
 /**
  * The two things every mutating route here has to establish before it reads a
  * form or body. The admin authenticates with a session cookie, so a POST
@@ -365,6 +404,18 @@ const crossProjectIssues =
             )) as AnyRow
           ).total ?? 0,
         )
+    const allCount = options.mine
+      ? Number(
+          (
+            (await ctx.call(
+              'flow.issue.buckets',
+              { listState: emptyIssueListState(), today },
+              url,
+              req,
+            )) as AnyRow
+          ).total ?? 0,
+        )
+      : Number(buckets.total ?? 0)
     const late = (await ctx.call(
       'flow.issue.list',
       {
@@ -398,7 +449,7 @@ const crossProjectIssues =
             ? null
             : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
         }
-        const at = url.searchParams.get('view') ?? 'all'
+        const at = url.searchParams.get('view') ?? (options.mine ? 'mine' : 'all')
         return crossProjectScreen(_, frame, _(options.title), grouped ? [] : marked, groups, {
           total: Number(buckets.total ?? 0),
           done: Number(buckets.done ?? 0),
@@ -408,12 +459,13 @@ const crossProjectIssues =
           mine: mineCount,
           late: ((late.rows as AnyRow[]) ?? []).slice(0, 5),
           tab: at,
+          locale: localeQuery(url),
           tabs: [
             {
               id: 'all',
               label: _('flow_backend.issues.tabAll'),
               href: '/admin/flow/issues',
-              count: Number(buckets.total ?? 0),
+              count: allCount,
             },
             {
               id: 'mine',
@@ -426,27 +478,6 @@ const crossProjectIssues =
       },
     })
   }
-
-/**
- * The "new page" form: a title, and optionally somewhere to put it.
- *
- * The parent choices are a plain select over the pages already in the project
- * rather than a relation picker — a wiki is small enough to read in a list,
- * and the picker would be a second island for no gain.
- */
-const pageFields = (_: Translator, pages: readonly AnyRow[]): FormField[] => [
-  { name: 'title', label: _('flow_backend.pages.name'), value: '', required: true },
-  {
-    name: 'parentPageId',
-    label: _('flow_backend.pages.parent'),
-    type: 'select',
-    value: '',
-    options: [
-      { value: '', label: _('flow_backend.pages.root') },
-      ...pages.map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
-    ],
-  },
-]
 
 /** The move form's one control: every page except this one and its descendants. */
 const parentField = (_: Translator, pages: readonly AnyRow[], pageId: string, current: string): FormField => {
@@ -465,19 +496,343 @@ const parentField = (_: Translator, pages: readonly AnyRow[], pageId: string, cu
       }
     }
   }
+  const options = [
+    { value: '', label: _('flow_backend.pages.root') },
+    ...pages
+      .filter((page) => !banned.has(String(page.id)))
+      .map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
+  ]
+  if (current && !options.some((option) => option.value === current)) {
+    options.unshift({ value: current, label: current })
+  }
   return {
     name: 'parentPageId',
     label: _('flow_backend.pages.parent'),
     type: 'select',
     value: current,
-    options: [
-      { value: '', label: _('flow_backend.pages.root') },
-      ...pages
-        .filter((page) => !banned.has(String(page.id)))
-        .map((page) => ({ value: String(page.id), label: String(page.title ?? '') })),
-    ],
+    options,
   }
 }
+
+const projectCreateFields = (_: Translator, values: Record<string, string> = {}): FormField[] => [
+  { name: 'key', label: _('flow_backend.field.key'), value: values.key ?? '', required: true },
+  { name: 'name', label: _('flow_backend.field.name'), value: values.name ?? '', required: true },
+  {
+    name: 'description',
+    label: _('flow_backend.field.description'),
+    type: 'textarea',
+    value: values.description ?? '',
+    span: 'full',
+  },
+  {
+    name: 'template',
+    label: _('flow_backend.field.template'),
+    type: 'select',
+    value: values.template ?? 'simple',
+    options: TEMPLATE_OPTIONS(_),
+  },
+  {
+    name: 'customColumns',
+    label: _('flow_backend.field.customColumns'),
+    help: _('flow_backend.field.customColumnsHint'),
+    value: values.customColumns ?? '',
+    span: 'full',
+  },
+]
+
+/** Only the project collection is a valid create-form return target. */
+const projectReturnTo = (url: URL, requested?: string | null): string => {
+  const fallback = inLocale(url, '/admin/flow/projects')
+  if (!requested) return fallback
+  try {
+    const target = new URL(requested, url)
+    if (target.origin !== url.origin || target.pathname !== '/admin/flow/projects') return fallback
+    return `${target.pathname}${target.search}`
+  } catch {
+    return fallback
+  }
+}
+
+const projectCreateHref = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/flow/projects'
+  for (const key of ['create', 'invalid', 'error', 'key', 'name', 'description', 'template', 'customColumns'])
+    target.searchParams.delete(key)
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const projectCreateFailureHref = (
+  url: URL,
+  returnTo: string,
+  values: Record<string, string>,
+  errors: readonly string[],
+): string => {
+  const target = new URL(returnTo, url)
+  target.searchParams.set('create', '1')
+  if (errors.length) target.searchParams.set('invalid', '1')
+  for (const name of ['key', 'name', 'description', 'template', 'customColumns']) {
+    const value = values[name]
+    if (value) target.searchParams.set(name, value)
+  }
+  for (const error of errors) target.searchParams.append('error', error)
+  return `${target.pathname}${target.search}`
+}
+
+type IssueCreateValues = Record<string, string>
+
+const issueCreateValues = (values: IssueCreateValues = {}): IssueCreateValues => ({
+  title: values.title ?? '',
+  columnId: values.columnId ?? '',
+  priority: values.priority || 'normal',
+})
+
+const issueCreateFields = (
+  _: Translator,
+  columns: readonly AnyRow[],
+  values: IssueCreateValues = {},
+): FormField[] => {
+  const held = issueCreateValues(values)
+  const columnOptions = columns.map((column) => ({
+    value: String(column.id),
+    label: String(column.name),
+  }))
+  if (held.columnId && !columnOptions.some((option) => option.value === held.columnId)) {
+    columnOptions.unshift({ value: held.columnId, label: held.columnId })
+  }
+  return [
+    { name: 'title', label: _('flow_backend.field.title'), value: held.title, required: true },
+    {
+      name: 'columnId',
+      label: _('flow_backend.field.column'),
+      type: 'select',
+      value: held.columnId || String(columns[0]?.id ?? ''),
+      options: columnOptions,
+    },
+    {
+      name: 'priority',
+      label: _('flow_backend.field.priority'),
+      type: 'select',
+      value: held.priority,
+      options: ISSUE_PRIORITIES.map((value) => ({
+        value,
+        label: _.resolves(`flow.priority.${value}`) ? _(`flow.priority.${value}`) : value,
+      })),
+    },
+  ]
+}
+
+const projectIssuesCollection = (url: URL, projectId: string): string => {
+  const target = new URL(url)
+  target.pathname = `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`
+  for (const key of ['create', 'invalid', 'error', 'title', 'columnId', 'priority', 'returnTo'])
+    target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const projectIssuesReturnTo = (url: URL, projectId: string, requested?: string | null): string => {
+  const fallback = projectIssuesCollection(url, projectId)
+  if (!requested) return fallback
+  try {
+    const target = new URL(requested, url)
+    const expected = `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`
+    if (target.origin !== url.origin || target.pathname !== expected) return fallback
+    return projectIssuesCollection(target, projectId)
+  } catch {
+    return fallback
+  }
+}
+
+const projectIssueCreateHref = (url: URL, projectId: string): string => {
+  const target = new URL(projectIssuesCollection(url, projectId), url)
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const projectIssueCreateFailureHref = (
+  url: URL,
+  returnTo: string,
+  values: IssueCreateValues,
+  errors: readonly string[],
+): string => {
+  const target = new URL(returnTo, url)
+  target.searchParams.set('create', '1')
+  if (errors.length) target.searchParams.set('invalid', '1')
+  for (const name of ['title', 'columnId', 'priority'] as const) {
+    const value = values[name]
+    if (value) target.searchParams.set(name, value)
+  }
+  for (const error of errors) target.searchParams.append('error', error)
+  return `${target.pathname}${target.search}`
+}
+
+const projectPagesCollection = (url: URL, projectId: string): string => {
+  const target = new URL(url)
+  target.pathname = `/admin/flow/projects/${encodeURIComponent(projectId)}/pages`
+  for (const key of ['create', 'invalid', 'error', 'id', 'idempotencyKey', 'title', 'parentPageId'])
+    target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const projectPageCreateHref = (url: URL, projectId: string): string => {
+  const target = new URL(projectPagesCollection(url, projectId), url)
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const projectPageCreateFailureHref = (
+  url: URL,
+  projectId: string,
+  values: Record<string, string>,
+  errors: readonly string[],
+): string => {
+  const target = new URL(projectPageCreateHref(url, projectId), url)
+  if (errors.length) target.searchParams.set('invalid', '1')
+  for (const name of ['id', 'idempotencyKey', 'title', 'parentPageId']) {
+    const value = values[name]
+    if (value) target.searchParams.set(name, value)
+  }
+  for (const error of errors) target.searchParams.append('error', error)
+  return `${target.pathname}${target.search}`
+}
+
+const projectEpicsCollection = (url: URL, projectId: string): string => {
+  const target = new URL(url)
+  target.pathname = `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`
+  for (const key of [
+    'create',
+    'invalid',
+    'createError',
+    'archiveError',
+    'id',
+    'idempotencyKey',
+    'title',
+    'color',
+  ])
+    target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const projectEpicCreateHref = (url: URL, projectId: string): string => {
+  const target = new URL(projectEpicsCollection(url, projectId), url)
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const projectEpicCreateFailureHref = (
+  url: URL,
+  projectId: string,
+  values: Record<string, string>,
+  errors: readonly string[],
+): string => {
+  const target = new URL(projectEpicCreateHref(url, projectId), url)
+  if (errors.length) target.searchParams.set('invalid', '1')
+  for (const name of ['id', 'idempotencyKey', 'title', 'color']) {
+    const value = values[name]
+    if (value) target.searchParams.set(name, value)
+  }
+  for (const error of errors) target.searchParams.append('createError', error)
+  return `${target.pathname}${target.search}`
+}
+
+const projectEpicArchiveFailureHref = (url: URL, projectId: string, errors: readonly string[]): string => {
+  const target = new URL(projectEpicsCollection(url, projectId), url)
+  for (const error of errors) target.searchParams.append('archiveError', error)
+  return `${target.pathname}${target.search}`
+}
+
+const projectCreateRoute =
+  (actionPath: '/admin/flow/projects' | '/admin/flow/projects/new') =>
+  (ctx: ServeContext): Route =>
+  async (url, req) => {
+    const refused = refusePost(req)
+    if (refused) return refused
+    const _ = ctx.translate(ctx.localeOf(url, req))
+    let errors: string[] = []
+    let values: Record<string, string> = Object.fromEntries(
+      ['key', 'name', 'description', 'template', 'customColumns']
+        .map((name) => [name, url.searchParams.get(name) ?? ''])
+        .filter(([, value]) => value),
+    )
+    let submittedReturnTo =
+      url.searchParams.get('returnTo') ??
+      (actionPath === '/admin/flow/projects' ? `${url.pathname}${url.search}` : null)
+
+    if (req.method === 'POST') {
+      const form = await readForm(req)
+      values = form
+      submittedReturnTo = form.returnTo ?? submittedReturnTo
+      const names =
+        form.template === 'custom'
+          ? (form.customColumns ?? '')
+              .split(',')
+              .map((name) => name.trim())
+              .filter(Boolean)
+          : (COLUMN_TEMPLATES[form.template ?? 'simple'] ?? COLUMN_TEMPLATES.simple)
+      if (!names.length) {
+        errors = [_('flow_backend.error.customColumnsRequired')]
+      } else {
+        const id = randomUUID()
+        const result = (await ctx.call(
+          'flow.project.save',
+          {
+            values: {
+              id,
+              key: form.key ?? '',
+              name: form.name ?? '',
+              description: form.description || null,
+            },
+            idempotencyKey: randomUUID(),
+          },
+          url,
+          req,
+        )) as AnyRow
+        if (result.ok) {
+          for (const [index, name] of names.entries()) {
+            const column = (await ctx.call(
+              'flow.column.save',
+              {
+                values: {
+                  id: randomUUID(),
+                  projectId: id,
+                  code: slugify(name),
+                  name,
+                  sequence: (index + 1) * 10,
+                  terminalState: index === names.length - 1,
+                },
+                idempotencyKey: randomUUID(),
+              },
+              url,
+              req,
+            )) as AnyRow
+            if (!column.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
+          }
+          for (const [index, name] of (TYPE_TEMPLATES[form.template ?? 'simple'] ??
+            TYPE_TEMPLATES.simple)!.entries())
+            await ctx.call(
+              'flow.issueType.save',
+              {
+                values: {
+                  id: randomUUID(),
+                  projectId: id,
+                  code: slugify(name),
+                  name,
+                  sequence: (index + 1) * 10,
+                },
+                idempotencyKey: randomUUID(),
+              },
+              url,
+              req,
+            )
+          return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
+        }
+        errors = errorsOf(result, _)
+      }
+    } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+
+    const returnTo = projectReturnTo(url, submittedReturnTo)
+    return seeOther(projectCreateFailureHref(url, returnTo, values, errors))
+  }
 
 export const routes: Record<string, RouteEntry> = {
   // The document endpoints under `/admin/flow/issues/{id}` — content, push,
@@ -527,10 +882,14 @@ export const routes: Record<string, RouteEntry> = {
       // Tagged with the action that produced them, so the screen can put each
       // message under the form it belongs to rather than all of them on top.
       let errors: { action: string; messages: string[] } | undefined
+      let submitted: Record<string, string> = {}
+      let renderedIdempotencyKey: string = randomUUID()
       if (req.method === 'POST') {
         const form = await readForm(req)
+        submitted = form
         const action = form.action ?? ''
-        const idempotencyKey = form.idempotencyKey || randomUUID()
+        renderedIdempotencyKey = form.idempotencyKey || renderedIdempotencyKey
+        const idempotencyKey = renderedIdempotencyKey
         let result: AnyRow | null = null
         if (action === 'save') {
           const existing = (await readable(ctx, url, req, issueId)) as Row | null
@@ -751,102 +1110,27 @@ export const routes: Record<string, RouteEntry> = {
             fieldDefs,
             editor,
             errors,
+            submitted,
+            locale: localeQuery(url),
+            dialog:
+              url.searchParams.get('dialog') === 'move' || url.searchParams.get('dialog') === 'assignSprint'
+                ? (url.searchParams.get('dialog') as 'move' | 'assignSprint')
+                : undefined,
+            idempotencyKey: renderedIdempotencyKey,
           }),
       })
     },
 
+  '/admin/flow/projects/new': projectCreateRoute('/admin/flow/projects/new'),
+
   '/admin/flow/projects':
     (ctx: ServeContext): Route =>
     async (url, req) => {
-      const refused = refusePost(req)
-      if (refused) return refused
+      if (req.method === 'POST') return projectCreateRoute('/admin/flow/projects')(ctx)(url, req, {})
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let errors: string[] = []
-      if (req.method === 'POST') {
-        const form = await readForm(req)
-        const names =
-          form.template === 'custom'
-            ? (form.customColumns ?? '')
-                .split(',')
-                .map((name) => name.trim())
-                .filter(Boolean)
-            : (COLUMN_TEMPLATES[form.template ?? 'simple'] ?? COLUMN_TEMPLATES.simple)
-        // Refused before the project row exists, not after: a board with no
-        // column cannot hold an issue, so "Custom" with an empty list used to
-        // build a project whose Issues screen rejected every create with an
-        // error the screen had nowhere to show.
-        if (!names.length) {
-          errors = [_('flow_backend.error.customColumnsRequired')]
-        } else {
-          const id = randomUUID()
-          const result = (await ctx.call(
-            'flow.project.save',
-            {
-              values: {
-                id,
-                key: form.key ?? '',
-                name: form.name ?? '',
-                description: form.description || null,
-              },
-              idempotencyKey: randomUUID(),
-            },
-            url,
-            req,
-          )) as AnyRow
-          if (result.ok) {
-            for (const [index, name] of names.entries()) {
-              const column = (await ctx.call(
-                'flow.column.save',
-                {
-                  values: {
-                    id: randomUUID(),
-                    projectId: id,
-                    code: slugify(name),
-                    name,
-                    sequence: (index + 1) * 10,
-                    terminalState: index === names.length - 1,
-                  },
-                  idempotencyKey: randomUUID(),
-                },
-                url,
-                req,
-              )) as AnyRow
-              // A column that will not save leaves a half-built board, and
-              // the settings screen is the only place to repair one — so say
-              // so here rather than landing on a board missing a column.
-              if (!column.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
-            }
-            for (const [index, name] of (TYPE_TEMPLATES[form.template ?? 'simple'] ??
-              TYPE_TEMPLATES.simple)!.entries()) {
-              // Unlike a column, a project with no type is still a working
-              // board — the field is simply not offered — so a type that will
-              // not save is not worth diverting the whole creation for.
-              await ctx.call(
-                'flow.issueType.save',
-                {
-                  values: {
-                    id: randomUUID(),
-                    projectId: id,
-                    code: slugify(name),
-                    name,
-                    sequence: (index + 1) * 10,
-                  },
-                  idempotencyKey: randomUUID(),
-                },
-                url,
-                req,
-              )
-            }
-            return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
-          }
-          errors = errorsOf(result, _)
-        }
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const all = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
-      // Counts for every project the reader can see, in two reads rather than
-      // one per row — see `projectStats`. Taken over the whole set, not the
-      // tab, so the cards keep describing the same thing when a tab narrows
-      // the table.
       const stats = (await ctx.call(
         'flow.project.stats',
         { projectIds: all.map((project) => String(project.id)) },
@@ -856,9 +1140,6 @@ export const routes: Record<string, RouteEntry> = {
       const statsBy = new Map(stats.map((row) => [String(row.id), row]))
       const counted = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
 
-      // "Mine" is the projects holding an issue assigned to me. A project has
-      // no membership to read instead, so this answers the question the tab
-      // actually asks rather than inventing a list nobody maintains.
       const tab = url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
       const mine = (await ctx.call(
         'flow.issue.list',
@@ -867,10 +1148,9 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as AnyRow
       const mineProjects = new Set(((mine.rows as AnyRow[]) ?? []).map((issue) => String(issue.projectId)))
-      const rows = tab === 'mine' ? counted.filter((p) => mineProjects.has(String(p.id))) : counted
+      const rows =
+        tab === 'mine' ? counted.filter((project) => mineProjects.has(String(project.id))) : counted
 
-      // The one rail the design asks for: what changed most recently, across
-      // every project, newest first.
       const recent = (await ctx.call(
         'flow.issue.list',
         {
@@ -882,56 +1162,67 @@ export const routes: Record<string, RouteEntry> = {
       )) as AnyRow
       return adminPage(ctx, url, req, {
         title: 'flow_backend.projects.title',
-        body: (_, frame) =>
-          projectsScreen(
-            _,
-            frame,
-            {
-              rows,
-              projectCount: all.length,
-              issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
-              issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
-              activeCount: stats.filter((row) => String(row.state) === 'active').length,
-              activity: ((recent.rows as AnyRow[]) ?? []).slice(0, 6),
-              tab,
-              tabs: [
-                {
-                  id: 'all',
-                  label: _('flow_backend.projects.tabAll'),
-                  href: '/admin/flow/projects',
-                },
-                {
-                  id: 'mine',
-                  label: _('flow_backend.projects.tabMine'),
-                  href: '/admin/flow/projects?tab=mine',
-                },
-              ],
-            },
-            [
-              { name: 'key', label: _('flow_backend.field.key'), required: true },
-              { name: 'name', label: _('flow_backend.field.name'), required: true },
+        body: (_, frame) => {
+          const workspace = projectsListScreen(_, frame, {
+            rows,
+            projectCount: all.length,
+            issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
+            issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
+            activeCount: stats.filter((row) => String(row.state) === 'active').length,
+            activity: ((recent.rows as AnyRow[]) ?? []).slice(0, 6),
+            tab,
+            tabs: [
               {
-                name: 'description',
-                label: _('flow_backend.field.description'),
-                type: 'textarea',
-                span: 'full',
+                id: 'all',
+                label: _('flow_backend.projects.tabAll'),
+                href: '/admin/flow/projects',
               },
               {
-                name: 'template',
-                label: _('flow_backend.field.template'),
-                type: 'select',
-                value: 'simple',
-                options: TEMPLATE_OPTIONS(_),
-              },
-              {
-                name: 'customColumns',
-                label: _('flow_backend.field.customColumns'),
-                help: _('flow_backend.field.customColumnsHint'),
-                span: 'full',
+                id: 'mine',
+                label: _('flow_backend.projects.tabMine'),
+                href: '/admin/flow/projects?tab=mine',
               },
             ],
-            errors,
-          ),
+            createHref: projectCreateHref(url),
+            locale: localeQuery(url),
+          })
+          if (url.searchParams.get('create') !== '1') return workspace
+          const returnUrl = new URL(url)
+          for (const key of [
+            'create',
+            'invalid',
+            'error',
+            'key',
+            'name',
+            'description',
+            'template',
+            'customColumns',
+          ])
+            returnUrl.searchParams.delete(key)
+          const returnTo = `${returnUrl.pathname}${returnUrl.search}`
+          const errors = url.searchParams.getAll('error')
+          return modalWorkspace(
+            workspace,
+            projectCreateModal(_, {
+              action: projectCreateHref(url),
+              cancelHref: returnTo,
+              returnTo,
+              fields: projectCreateFields(
+                _,
+                Object.fromEntries(
+                  ['key', 'name', 'description', 'template', 'customColumns']
+                    .map((name) => [name, url.searchParams.get(name) ?? ''])
+                    .filter(([, value]) => value),
+                ),
+              ),
+              errors: errors.length
+                ? errors
+                : url.searchParams.get('invalid') === '1'
+                  ? [_('flow_backend.error.invalid')]
+                  : undefined,
+            }),
+          )
+        },
       })
     },
 
@@ -996,6 +1287,7 @@ export const routes: Record<string, RouteEntry> = {
       const board = await ctx.joint(url, req, 'flow_backend:screen.board', {
         lang: ctx.localeOf(url, req),
         data: JSON.stringify({
+          locale: localeQuery(url),
           rows: pages.flatMap((item) => item.rows.map((row) => ({ ...row, projectId }))),
           columns: pages.map((item) => item.column),
           labels: {
@@ -1077,31 +1369,40 @@ export const routes: Record<string, RouteEntry> = {
       if (!project) return text('not found', { status: 404 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const columns = (await ctx.call('flow.column.list', { projectId }, url, req)) as AnyRow[]
-      let errors: string[] = []
+      let values = issueCreateValues(
+        Object.fromEntries(
+          ['title', 'columnId', 'priority']
+            .map((name) => [name, url.searchParams.get(name) ?? ''])
+            .filter(([, value]) => value),
+        ),
+      )
       if (req.method === 'POST') {
         const form = await readForm(req)
+        values = issueCreateValues(form)
+        const returnTo = projectIssuesReturnTo(url, projectId, form.returnTo)
         const result = (await ctx.call(
           'flow.issue.save',
           {
             id: randomUUID(),
             projectId,
-            columnId: form.columnId || String(columns[0]?.id ?? ''),
-            title: form.title ?? '',
-            priority: form.priority || undefined,
-            idempotencyKey: randomUUID(),
+            columnId: values.columnId || String(columns[0]?.id ?? ''),
+            title: values.title,
+            priority: values.priority || undefined,
+            idempotencyKey: form.idempotencyKey || randomUUID(),
           },
           url,
           req,
         )) as AnyRow
-        if (result.ok) return seeOther(inLocale(url, `/admin/flow/projects/${projectId}/issues`))
-        errors = errorsOf(result, _)
+        if (result.ok) return seeOther(returnTo)
+        return seeOther(projectIssueCreateFailureHref(url, returnTo, values, errorsOf(result, _)))
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       // The project's own fields have to be in the spec before the URL is
       // parsed: a rule naming a field the spec does not know is dropped as
       // unknown, and the filter would silently do nothing.
       const fieldDefs = (await ctx.call('flow.field.list', { projectId }, url, req)) as AnyRow[]
       const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'), fieldDefs)
-      const parsed = parseListState(spec, url)
+      const listUrl = new URL(projectIssuesCollection(url, projectId), url)
+      const parsed = parseListState(spec, listUrl)
       const state = parsed.state
       const timezone = 'UTC'
       const grouped = state.groupBy.length > 0
@@ -1119,7 +1420,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as AnyRow
       const groups = grouped
-        ? await loadListGroups(ctx, url, req, state, timezone, {
+        ? await loadListGroups(ctx, listUrl, req, state, timezone, {
             groupFunction: 'flow.issue.group',
             listFunction: 'flow.issue.list',
             listArgs: { projectId },
@@ -1129,48 +1430,47 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
+        active: `/admin/flow/projects/${projectId}/issues`,
         body: (_, frame) => {
           frame.chrome = {
             search: {
               name: 'q',
               value: state.q ?? '',
               placeholder: _('flow_backend.search.issues'),
-              keep: keepForListSearch(url),
-              facets: listFacets(_, url, state, spec),
-              menus: listMenus(_, url, state, spec),
+              keep: keepForListSearch(listUrl),
+              facets: listFacets(_, listUrl, state, spec),
+              menus: listMenus(_, listUrl, state, spec),
             },
             pager: grouped
               ? null
-              : pager(url, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
+              : pager(listUrl, state, ((result.rows as AnyRow[]) ?? []).length, Number(result.total ?? 0)),
           }
-          return issuesScreen(
-            _,
-            frame,
-            String(project.name),
-            `/admin/flow/projects/${projectId}/issues`,
-            [
-              { name: 'title', label: _('flow_backend.field.title'), required: true },
-              {
-                name: 'columnId',
-                label: _('flow_backend.field.column'),
-                type: 'select',
-                options: columns.map((column) => ({ value: String(column.id), label: String(column.name) })),
-              },
-              {
-                name: 'priority',
-                label: _('flow_backend.field.priority'),
-                type: 'select',
-                value: 'normal',
-                options: ISSUE_PRIORITIES.map((value) => ({
-                  value,
-                  label: _.resolves(`flow.priority.${value}`) ? _(`flow.priority.${value}`) : value,
-                })),
-              },
-            ],
-            grouped ? [] : ((result.rows as AnyRow[]) ?? []),
+          const returnTo = projectIssuesCollection(url, projectId)
+          const workspace = issuesScreen(_, frame, {
+            projectName: String(project.name),
+            rows: grouped ? [] : ((result.rows as AnyRow[]) ?? []),
             groups,
-            errors,
-            fieldDefs,
+            fields: fieldDefs,
+            total: Number(result.total ?? 0),
+            createHref: projectIssueCreateHref(url, projectId),
+            locale: localeQuery(url),
+          })
+          if (url.searchParams.get('create') !== '1') return workspace
+          const errors = url.searchParams.getAll('error')
+          return modalWorkspace(
+            workspace,
+            issueCreateModal(_, {
+              projectName: String(project.name),
+              fields: issueCreateFields(_, columns, values),
+              action: projectIssueCreateHref(url, projectId),
+              cancelHref: returnTo,
+              idempotencyKey: randomUUID(),
+              errors: errors.length
+                ? errors
+                : url.searchParams.get('invalid') === '1'
+                  ? [_('flow_backend.error.invalid')]
+                  : undefined,
+            }),
           )
         },
       })
@@ -1188,10 +1488,10 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       const refused = refusePost(req)
       if (refused) return refused
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const projectId = String(params.id)
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const endpoint = `/admin/flow/projects/${projectId}/pages`
-      let errors: string[] = []
+      const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/pages`
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'save') {
@@ -1202,13 +1502,14 @@ export const routes: Record<string, RouteEntry> = {
               projectId,
               title: form.title ?? '',
               parentPageId: form.parentPageId || null,
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
-          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${String(result.id)}`))
-          errors = errorsOf(result, _)
+          if (result.ok)
+            return seeOther(inLocale(url, `/admin/flow/pages/${encodeURIComponent(String(result.id))}`))
+          return seeOther(projectPageCreateFailureHref(url, projectId, form, errorsOf(result, _)))
         }
       }
       const project = (await ctx.call('flow.project.get', { id: projectId }, url, req)) as AnyRow | null
@@ -1223,8 +1524,29 @@ export const routes: Record<string, RouteEntry> = {
         title: String(project.name ?? ''),
         translate: false,
         active: endpoint,
-        body: (t, frame) =>
-          pagesScreen(t, frame, String(project.name ?? ''), endpoint, pages, pageFields(t, pages), errors),
+        body: (t, frame) => {
+          const errors = url.searchParams.getAll('error')
+          return pagesScreen(t, frame, {
+            projectName: String(project.name ?? ''),
+            pages,
+            createHref: projectPageCreateHref(url, projectId),
+            createFields: projectPageCreateFields(t, pages, {
+              title: url.searchParams.get('title') ?? '',
+              parentPageId: url.searchParams.get('parentPageId') ?? '',
+            }),
+            createAction: projectPageCreateHref(url, projectId),
+            closeHref: projectPagesCollection(url, projectId),
+            locale: localeQuery(url),
+            createOpen: url.searchParams.get('create') === '1',
+            errors: errors.length
+              ? errors
+              : url.searchParams.get('invalid') === '1'
+                ? [t('flow_backend.error.invalid')]
+                : undefined,
+            recordId: url.searchParams.get('id') || randomUUID(),
+            idempotencyKey: url.searchParams.get('idempotencyKey') || randomUUID(),
+          })
+        },
       })
     },
 
@@ -1236,23 +1558,46 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
-      // `epic.list` is scoped to a project — there is no JOIN to fold the two
-      // reads into one, so the epics come back per project and are stitched
-      // here, capped by the project list's own limit.
-      const perProject = await Promise.all(
-        projects.map(
-          (project) =>
-            ctx.call('flow.epic.list', { projectId: String(project.id) }, url, req) as Promise<AnyRow[]>,
-        ),
-      )
-      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
-      const epics = perProject
-        .flat()
-        .map((epic) => ({ ...epic, projectName: named.get(String(epic.projectId)) ?? '' }))
+      const search = url.searchParams.get('q') ?? ''
+      const currentPage = Math.max(1, Number(url.searchParams.get('page') ?? 1) || 1)
+      const cursor = (currentPage - 1) * LIST_PAGE_SIZE
+      const result = (await ctx.call(
+        'flow.epic.listAll',
+        { search, cursor, limit: LIST_PAGE_SIZE },
+        url,
+        req,
+      )) as { rows: AnyRow[]; total: number }
+      const pageHref = (page: number): string => {
+        const target = new URL(url)
+        if (page <= 1) target.searchParams.delete('page')
+        else target.searchParams.set('page', String(page))
+        return `${target.pathname}${target.search}`
+      }
       return adminPage(ctx, url, req, {
         title: 'flow_backend.epics.allTitle',
-        body: (t, frame) => allEpicsScreen(t, frame, t('flow_backend.epics.allTitle'), epics),
+        body: (t, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: search,
+              placeholder: t('flow_backend.epics.search'),
+              keep: keepForListSearch(url),
+            },
+            pager: {
+              from: result.rows.length ? cursor + 1 : 0,
+              to: Math.min(cursor + result.rows.length, result.total),
+              total: result.total,
+              prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
+              next: cursor + result.rows.length < result.total ? pageHref(currentPage + 1) : null,
+            },
+          }
+          return allEpicsScreen(t, frame, {
+            title: t('flow_backend.epics.allTitle'),
+            epics: result.rows,
+            total: result.total,
+            locale: localeQuery(url),
+          })
+        },
       })
     },
 
@@ -1271,9 +1616,18 @@ export const routes: Record<string, RouteEntry> = {
       const held = (await ctx.call('flow.epic.get', { id: epicId }, url, req)) as { value: AnyRow | null }
       const epic = held.value
       if (!epic) return text('not found', { status: 404 })
+      const projectId = String(epic.projectId)
+      // Project identity enriches the shell when this reader may see it, but
+      // is not a second gate on an epic they may already read.
+      const project = await projectOf(ctx, url, req, projectId)
       const issues = (await ctx.call(
         'flow.issue.list',
-        { listState: emptyIssueListState(), epicId, limit: 100 },
+        {
+          listState: emptyIssueListState(),
+          projectId,
+          epicId,
+          limit: LIST_PAGE_SIZE,
+        },
         url,
         req,
       )) as AnyRow
@@ -1285,8 +1639,17 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(epic.title ?? ''),
         translate: false,
-        active: `/admin/flow/projects/${String(epic.projectId)}/epics`,
-        body: (t, frame) => epicDetailScreen(t, frame, epic, document, (issues.rows as AnyRow[]) ?? []),
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`,
+        body: (t, frame) =>
+          epicDetailScreen(t, frame, {
+            epic,
+            document,
+            issues: (issues.rows as AnyRow[]) ?? [],
+            issueTotal: Number(issues.total ?? 0),
+            issuesHref: issuesFilteredBy(projectId, 'epicId', epicId),
+            projectName: String(project?.name ?? projectId),
+            locale: localeQuery(url),
+          }),
       })
     },
 
@@ -1298,23 +1661,50 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const pages = (await ctx.call(
-        'flow.page.list',
-        { search: url.searchParams.get('q') ?? '' },
-        url,
-        req,
-      )) as AnyRow[]
+      const search = url.searchParams.get('q') ?? ''
+      const pages = (await ctx.call('flow.page.list', { search, limit: 500 }, url, req)) as AnyRow[]
       // The project each page belongs to, batched — there is no JOIN, so the
       // names come back in one `inArray` read rather than one call per row.
       const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
       const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
-      const rows = pages.map((page) => ({
+      const namedPages = pages.map((page) => ({
         ...page,
         projectName: named.get(String(page.projectId)) ?? '',
       }))
+      const currentPage = Math.max(1, Number(url.searchParams.get('page') ?? 1) || 1)
+      const cursor = (currentPage - 1) * LIST_PAGE_SIZE
+      const rows = namedPages.slice(cursor, cursor + LIST_PAGE_SIZE)
+      const pageHref = (page: number): string => {
+        const target = new URL(url)
+        if (page <= 1) target.searchParams.delete('page')
+        else target.searchParams.set('page', String(page))
+        return `${target.pathname}${target.search}`
+      }
       return adminPage(ctx, url, req, {
         title: 'flow_backend.pages.allTitle',
-        body: (t, frame) => allPagesScreen(t, frame, t('flow_backend.pages.allTitle'), rows),
+        body: (t, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: search,
+              placeholder: t('flow_backend.pages.search'),
+              keep: keepForListSearch(url),
+            },
+            pager: {
+              from: rows.length ? cursor + 1 : 0,
+              to: Math.min(cursor + rows.length, namedPages.length),
+              total: namedPages.length,
+              prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
+              next: cursor + rows.length < namedPages.length ? pageHref(currentPage + 1) : null,
+            },
+          }
+          return allPagesScreen(t, frame, {
+            title: t('flow_backend.pages.allTitle'),
+            pages: rows,
+            total: namedPages.length,
+            locale: localeQuery(url),
+          })
+        },
       })
     },
 
@@ -1328,10 +1718,12 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       const pageId = String(params.id)
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const endpoint = `/admin/flow/pages/${pageId}`
-      let errors: string[] = []
+      const endpoint = `/admin/flow/pages/${encodeURIComponent(pageId)}`
+      let errors: { action: PageDetailAction; messages: string[] } | undefined
+      let submitted: Record<string, string> = {}
       if (req.method === 'POST') {
         const form = await readForm(req)
+        submitted = form
         const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
         const current = held.value
         if (!current) return text('not found', { status: 404 })
@@ -1343,28 +1735,29 @@ export const routes: Record<string, RouteEntry> = {
               projectId: String(current.projectId),
               title: form.title ?? '',
               expectedVersion: Number(form.expectedVersion ?? current.version ?? 0),
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
+          errors = { action: 'save', messages: errorsOf(result, _) }
         } else if (form.action === 'addChild') {
           const result = (await ctx.call(
             'flow.page.save',
             {
-              id: randomUUID(),
+              id: form.childId || randomUUID(),
               projectId: String(current.projectId),
               title: form.title ?? '',
               parentPageId: pageId,
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
-          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${String(result.id)}`))
-          errors = errorsOf(result, _)
+          if (result.ok)
+            return seeOther(inLocale(url, `/admin/flow/pages/${encodeURIComponent(String(result.id))}`))
+          errors = { action: 'addChild', messages: errorsOf(result, _) }
         } else if (form.action === 'move') {
           const result = (await ctx.call(
             'flow.page.move',
@@ -1373,23 +1766,27 @@ export const routes: Record<string, RouteEntry> = {
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
+          errors = { action: 'move', messages: errorsOf(result, _) }
         } else if (form.action === 'orderUp' || form.action === 'orderDown') {
+          const idempotencyKey = form.idempotencyKey || randomUUID()
           const result = (await ctx.call(
             'flow.page.reorder',
             { id: pageId, direction: form.action === 'orderUp' ? 'up' : 'down' },
             url,
             req,
+            { idempotencyKey },
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
+          errors = { action: form.action, messages: errorsOf(result, _) }
         } else if (form.action === 'archive') {
           const result = (await ctx.call('flow.page.archive', { id: pageId }, url, req)) as AnyRow
           if (result.ok)
-            return seeOther(inLocale(url, `/admin/flow/projects/${String(current.projectId)}/pages`))
-          errors = errorsOf(result, _)
+            return seeOther(
+              inLocale(url, `/admin/flow/projects/${encodeURIComponent(String(current.projectId))}/pages`),
+            )
+          errors = { action: 'archive', messages: errorsOf(result, _) }
         }
-      }
+      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
       const page = held.value
       if (!page) return text('not found', { status: 404 })
@@ -1411,24 +1808,53 @@ export const routes: Record<string, RouteEntry> = {
         // project rather than emptying out — same reason the issue detail does.
         active: `/admin/flow/projects/${String(page.projectId)}/pages`,
         body: (t, frame) =>
-          pageDetailScreen(
-            t,
-            frame,
+          pageDetailScreen(t, frame, {
             page,
-            endpoint,
             editor,
-            [
+            titleFields: [
               {
                 name: 'title',
                 label: t('flow_backend.pages.name'),
-                value: String(page.title ?? ''),
+                value: errors?.action === 'save' ? (submitted.title ?? '') : String(page.title ?? ''),
                 required: true,
               },
             ],
-            [{ name: 'title', label: t('flow_backend.pages.childName'), value: '', required: true }],
-            [parentField(t, siblings, pageId, page.parentPageId ? String(page.parentPageId) : '')],
+            childFields: [
+              {
+                name: 'title',
+                label: t('flow_backend.pages.childName'),
+                value: errors?.action === 'addChild' ? (submitted.title ?? '') : '',
+                required: true,
+              },
+            ],
+            moveFields: [
+              parentField(
+                t,
+                siblings,
+                pageId,
+                errors?.action === 'move'
+                  ? (submitted.parentPageId ?? '')
+                  : page.parentPageId
+                    ? String(page.parentPageId)
+                    : '',
+              ),
+            ],
             errors,
-          ),
+            locale: localeQuery(url),
+            dialog:
+              url.searchParams.get('dialog') === 'addChild' || url.searchParams.get('dialog') === 'move'
+                ? (url.searchParams.get('dialog') as 'addChild' | 'move')
+                : undefined,
+            childId: errors?.action === 'addChild' ? submitted.childId || randomUUID() : randomUUID(),
+            idempotencyKey:
+              errors?.action === 'save' || errors?.action === 'addChild'
+                ? submitted.idempotencyKey || randomUUID()
+                : randomUUID(),
+            orderUpIdempotencyKey:
+              errors?.action === 'orderUp' ? submitted.idempotencyKey || randomUUID() : randomUUID(),
+            orderDownIdempotencyKey:
+              errors?.action === 'orderDown' ? submitted.idempotencyKey || randomUUID() : randomUUID(),
+          }),
       })
     },
 
@@ -1437,32 +1863,54 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       const refused = refusePost(req)
       if (refused) return refused
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const projectId = String(params.id)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let errors: string[] = []
-      const endpoint = `/admin/flow/projects/${projectId}/epics`
+      const endpoint = projectEpicsCollection(url, projectId)
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'archive') {
-          const archived = (await ctx.call('flow.epic.archive', { id: form.id ?? '' }, url, req)) as AnyRow
+          const held = form.id
+            ? ((await ctx.call('flow.epic.get', { id: form.id }, url, req)) as {
+                value: AnyRow | null
+              })
+            : { value: null }
+          const archived =
+            held.value && String(held.value.projectId) === projectId
+              ? ((await ctx.call('flow.epic.archive', { id: form.id ?? '' }, url, req)) as AnyRow)
+              : {
+                  ok: false,
+                  errors: [{ field: 'id', code: 'flow.error.notFound' }],
+                }
           if (archived.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(archived, _)
-        } else {
+          return seeOther(projectEpicArchiveFailureHref(url, projectId, errorsOf(archived, _)))
+        } else if (!form.action || form.action === 'save') {
+          const values = {
+            id: form.id || randomUUID(),
+            idempotencyKey: form.idempotencyKey || randomUUID(),
+            title: form.title ?? '',
+            color: form.color ?? '',
+          }
           const result = (await ctx.call(
             'flow.epic.save',
             {
-              values: { id: randomUUID(), projectId, title: form.title ?? '', color: form.color || null },
-              idempotencyKey: randomUUID(),
+              values: {
+                id: values.id,
+                projectId,
+                title: values.title,
+                color: values.color || null,
+              },
+              idempotencyKey: values.idempotencyKey,
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
-        }
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+          return seeOther(projectEpicCreateFailureHref(url, projectId, values, errorsOf(result, _)))
+        } else return text('invalid action', { status: 400 })
+      }
       const epics = (await ctx.call('flow.epic.list', { projectId }, url, req)) as AnyRow[]
       const withCounts = await Promise.all(
         epics.map(async (epic) => {
@@ -1485,19 +1933,32 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
-        body: (_, frame) =>
-          epicsScreen(
-            _,
-            frame,
-            String(project.name),
-            endpoint,
-            withCounts,
-            [
-              { name: 'title', label: _('flow_backend.field.title'), required: true },
-              { name: 'color', label: _('flow_backend.field.color'), type: 'color' },
-            ],
-            errors,
-          ),
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`,
+        body: (t, frame) => {
+          const createErrors = url.searchParams.getAll('createError')
+          return epicsScreen(t, frame, {
+            projectName: String(project.name),
+            epics: withCounts,
+            action: endpoint,
+            closeHref: endpoint,
+            createAction: projectEpicCreateHref(url, projectId),
+            createHref: projectEpicCreateHref(url, projectId),
+            createOpen: url.searchParams.get('create') === '1',
+            createFields: projectEpicCreateFields(t, {
+              title: url.searchParams.get('title') ?? '',
+              color: url.searchParams.get('color') ?? '',
+            }),
+            createErrors: createErrors.length
+              ? createErrors
+              : url.searchParams.get('invalid') === '1'
+                ? [t('flow_backend.error.invalid')]
+                : undefined,
+            recordId: url.searchParams.get('id') || randomUUID(),
+            idempotencyKey: url.searchParams.get('idempotencyKey') || randomUUID(),
+            locale: localeQuery(url),
+            errors: url.searchParams.getAll('archiveError'),
+          })
+        },
       })
     },
 
@@ -1516,19 +1977,61 @@ export const routes: Record<string, RouteEntry> = {
       const epicId = String(params.epicId)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
-      const [epics, columns, found] = await Promise.all([
-        ctx.call('flow.epic.list', { projectId, includeArchived: true }, url, req) as Promise<AnyRow[]>,
+      const [epics, columns, firstPage] = await Promise.all([
+        ctx.call(
+          'flow.epic.list',
+          { projectId, id: epicId, includeArchived: true, limit: 1 },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
         ctx.call('flow.column.list', { projectId }, url, req) as Promise<AnyRow[]>,
-        ctx.call('flow.issue.list', { projectId, epicId, limit: 200 }, url, req) as Promise<AnyRow>,
+        ctx.call(
+          'flow.issue.list',
+          { projectId, epicId, cursor: '0', limit: MAP_BATCH_SIZE },
+          url,
+          req,
+        ) as Promise<AnyRow>,
       ])
-      const epic = epics.find((row) => String(row.id) === epicId)
+      const epic = epics[0]
       if (!epic) return text('not found', { status: 404 })
       const terminalColumnIds = new Set(
         columns.filter((column) => column.terminalState).map((column) => String(column.id)),
       )
-      const issues = (found.rows as AnyRow[]) ?? []
+      const issues = [...((firstPage.rows as AnyRow[]) ?? [])]
+      const issueTotal = Number(firstPage.total ?? issues.length)
+      while (issues.length < issueTotal) {
+        const found = (await ctx.call(
+          'flow.issue.list',
+          {
+            projectId,
+            epicId,
+            cursor: String(issues.length),
+            limit: MAP_BATCH_SIZE,
+          },
+          url,
+          req,
+        )) as AnyRow
+        const page = (found.rows as AnyRow[]) ?? []
+        if (!page.length) break
+        issues.push(...page)
+      }
       const issueIds = issues.map((row) => String(row.id))
-      const deps = (await ctx.call('flow.issue.dependencies', { issueIds }, url, req)) as AnyRow[]
+      const dependencyPages = await Promise.all(
+        Array.from(
+          { length: Math.ceil(issueIds.length / MAP_BATCH_SIZE) },
+          (_, index) =>
+            ctx.call(
+              'flow.issue.dependencies',
+              {
+                issueIds: issueIds.slice(index * MAP_BATCH_SIZE, (index + 1) * MAP_BATCH_SIZE),
+                includeExternalTargets: true,
+              },
+              url,
+              req,
+            ) as Promise<AnyRow[]>,
+        ),
+      )
+      const deps = dependencyPages.flat()
       const issueIdSet = new Set(issueIds)
       const _ = ctx.translate(ctx.localeOf(url, req))
       const map = await ctx.joint(url, req, 'flow_backend:screen.map', {
@@ -1538,6 +2041,7 @@ export const routes: Record<string, RouteEntry> = {
           nodes: issues.map((row) => ({
             id: row.id,
             title: row.title,
+            href: inLocale(url, `/admin/flow/issues/${encodeURIComponent(String(row.id))}`),
             columnName: row.columnName ?? null,
             assigneeName: row.assigneeName ?? null,
             done: terminalColumnIds.has(String(row.columnId)),
@@ -1568,7 +2072,15 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(epic.title),
         translate: false,
-        body: (_, frame) => mapScreen(_, frame, String(epic.title), map),
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`,
+        body: (_, frame) =>
+          mapScreen(_, frame, {
+            projectName: String(project.name ?? projectId),
+            epicTitle: String(epic.title),
+            epicHref: inLocale(url, `/admin/flow/epics/${encodeURIComponent(epicId)}`),
+            epicsHref: inLocale(url, `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`),
+            map,
+          }),
       })
     },
 
@@ -1586,26 +2098,44 @@ export const routes: Record<string, RouteEntry> = {
       const projectId = String(params.id)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
-      const found = (await ctx.call('flow.issue.list', { projectId, limit: GANTT_ROWS }, url, req)) as AnyRow
-      const rows = ((found.rows as AnyRow[]) ?? []).slice().sort((a, b) => {
+      const allRows = await allGanttIssues(ctx, url, req, projectId)
+      allRows.sort((a, b) => {
         const left = String(a.startsOn ?? '')
         const right = String(b.startsOn ?? '')
         return left.localeCompare(right) || String(a.title).localeCompare(String(b.title))
       })
+      const currentPage = pageOf(url)
+      const offset = (currentPage - 1) * GANTT_ROWS
+      const rows = allRows.slice(offset, offset + GANTT_ROWS).map((row) => ({
+        ...row,
+        detailHref: inLocale(url, `/admin/flow/issues/${encodeURIComponent(String(row.id))}`),
+      }))
       const locale = ctx.localeOf(url, req)
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
-        active: `/admin/flow/projects/${projectId}/issues`,
-        body: (_, frame) =>
-          ganttScreen(
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
+        body: (_, frame) => {
+          const from = rows.length ? offset + 1 : 0
+          const to = Math.min(offset + rows.length, allRows.length)
+          frame.chrome = {
+            pager: {
+              from,
+              to,
+              total: allRows.length,
+              prev: currentPage > 1 ? ganttPageHref(url, currentPage - 1) : null,
+              next: to < allRows.length ? ganttPageHref(url, currentPage + 1) : null,
+            },
+          }
+          return ganttScreen(
             _,
             frame,
             String(project.name),
             rows,
             new Date().toISOString().slice(0, 10),
             locale.startsWith('en') ? 'en-GB' : 'vi-VN',
-          ),
+          )
+        },
       })
     },
 
@@ -1619,7 +2149,13 @@ export const routes: Record<string, RouteEntry> = {
       if (!project) return text('not found', { status: 404 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       let errors: string[] = []
-      const endpoint = `/admin/flow/projects/${projectId}/sprints`
+      let createErrors: string[] = []
+      let createValues: Record<string, string> = {}
+      let recordId: string = randomUUID()
+      let idempotencyKey: string = randomUUID()
+      const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/sprints`
+      const action = inLocale(url, endpoint)
+      const createOpen = url.searchParams.get('dialog') === 'create'
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'start' || form.action === 'close') {
@@ -1628,48 +2164,53 @@ export const routes: Record<string, RouteEntry> = {
           // and dropping the result reported those refusals as a success.
           const changed = (await ctx.call(
             form.action === 'start' ? 'flow.sprint.start' : 'flow.sprint.close',
-            { id: form.id ?? '', idempotencyKey: randomUUID() },
+            { id: form.id ?? '', idempotencyKey: form.idempotencyKey || randomUUID() },
             url,
             req,
           )) as AnyRow
           if (changed.ok) return seeOther(inLocale(url, endpoint))
           errors = errorsOf(changed, _)
-        } else {
+        } else if (form.action === 'save') {
+          recordId = form.id || recordId
+          idempotencyKey = form.idempotencyKey || idempotencyKey
+          createValues = form
           const result = (await ctx.call(
             'flow.sprint.save',
             {
-              id: randomUUID(),
+              id: recordId,
               projectId,
               name: form.name ?? '',
               startDate: form.startDate || undefined,
               endDate: form.endDate || undefined,
-              idempotencyKey: randomUUID(),
+              idempotencyKey,
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
-        }
+          createErrors = errorsOf(result, _)
+        } else return text('invalid action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const sprints = (await ctx.call('flow.sprint.list', { projectId }, url, req)) as AnyRow[]
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
         body: (_, frame) =>
-          sprintsScreen(
-            _,
-            frame,
-            String(project.name),
-            endpoint,
+          sprintsScreen(_, frame, {
+            projectName: String(project.name),
             sprints,
-            [
-              { name: 'name', label: _('flow_backend.field.name'), required: true },
-              { name: 'startDate', label: _('flow_backend.field.startDate'), type: 'date' },
-              { name: 'endDate', label: _('flow_backend.field.endDate'), type: 'date' },
-            ],
+            action,
+            createHref: inLocale(url, `${endpoint}?dialog=create`),
+            closeHref: inLocale(url, endpoint),
+            createOpen: createOpen || createErrors.length > 0,
+            createValues,
+            createErrors,
             errors,
-          ),
+            recordId,
+            idempotencyKey,
+            transitionKey: (sprint) => `sprint:${String(sprint.id)}:${String(sprint.state)}`,
+          }),
       })
     },
 
@@ -1688,7 +2229,10 @@ export const routes: Record<string, RouteEntry> = {
       let typeErrors: string[] = []
       let fieldErrors: string[] = []
       let tagErrors: string[] = []
-      const endpoint = `/admin/flow/projects/${projectId}/settings`
+      let submitted: Record<string, string> = {}
+      let forcedEditor: SettingsEditorKind | undefined
+      const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/settings`
+      const action = inLocale(url, endpoint)
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'archiveColumn') {
@@ -1698,6 +2242,8 @@ export const routes: Record<string, RouteEntry> = {
           const archived = (await ctx.call('flow.column.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           columnErrors = errorsOf(archived, _)
+          submitted = form
+          forcedEditor = 'column'
         } else if (form.action === 'archiveType') {
           const archived = (await ctx.call(
             'flow.issueType.archive',
@@ -1707,6 +2253,8 @@ export const routes: Record<string, RouteEntry> = {
           )) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           typeErrors = errorsOf(archived, _)
+          submitted = form
+          forcedEditor = 'type'
         } else if (form.action === 'saveType') {
           const result = (await ctx.call(
             'flow.issueType.save',
@@ -1718,17 +2266,21 @@ export const routes: Record<string, RouteEntry> = {
                 name: form.name ?? '',
                 sequence: Number(form.sequence ?? 10),
               },
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           typeErrors = errorsOf(result, _)
+          submitted = form
+          forcedEditor = 'type'
         } else if (form.action === 'archiveField') {
           const archived = (await ctx.call('flow.field.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           fieldErrors = errorsOf(archived, _)
+          submitted = form
+          forcedEditor = 'field'
         } else if (form.action === 'saveField') {
           // Options arrive as one line of text, the same way the project
           // wizard takes custom column names: a list edited as a unit.
@@ -1748,17 +2300,21 @@ export const routes: Record<string, RouteEntry> = {
                 ? { options: labels.map((label) => ({ code: slugify(label), label })) }
                 : null,
               sequence: Number(form.sequence ?? 10),
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           fieldErrors = errorsOf(result, _)
+          submitted = form
+          forcedEditor = 'field'
         } else if (form.action === 'archiveTag') {
           const archived = (await ctx.call('flow.tag.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           tagErrors = errorsOf(archived, _)
+          submitted = form
+          forcedEditor = 'tag'
         } else if (form.action === 'saveColumn') {
           const result = (await ctx.call(
             'flow.column.save',
@@ -1771,13 +2327,15 @@ export const routes: Record<string, RouteEntry> = {
                 sequence: Number(form.sequence ?? 10),
                 terminalState: form.terminalState === '1',
               },
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           columnErrors = errorsOf(result, _)
+          submitted = form
+          forcedEditor = 'column'
         } else if (form.action === 'saveTag') {
           const result = (await ctx.call(
             'flow.tag.save',
@@ -1787,6 +2345,8 @@ export const routes: Record<string, RouteEntry> = {
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           tagErrors = errorsOf(result, _)
+          submitted = form
+          forcedEditor = 'tag'
         } else return text('unknown action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [columns, types, fields, tags] = await Promise.all([
@@ -1803,6 +2363,140 @@ export const routes: Record<string, RouteEntry> = {
       const editingType = editType ? types.find((row) => String(row.id) === editType) : undefined
       const editingField = editField ? fields.find((row) => String(row.id) === editField) : undefined
       const editingTag = editTag ? tags.find((row) => String(row.id) === editTag) : undefined
+      const requestedEditor = url.searchParams.get('dialog')
+      const editorKind: SettingsEditorKind | undefined =
+        forcedEditor ??
+        (editingColumn
+          ? 'column'
+          : editingType
+            ? 'type'
+            : editingField
+              ? 'field'
+              : editingTag
+                ? 'tag'
+                : requestedEditor === 'column' ||
+                    requestedEditor === 'type' ||
+                    requestedEditor === 'field' ||
+                    requestedEditor === 'tag'
+                  ? requestedEditor
+                  : undefined)
+      const settingsHref = (name: string, value: string) => {
+        const target = new URL(action, 'http://ket.local')
+        target.searchParams.set(name, value)
+        return `${target.pathname}${target.search}`
+      }
+      const value = (name: string, fallback: unknown = ''): string =>
+        submitted[name] ?? String(fallback ?? '')
+      const selected =
+        editorKind === 'column'
+          ? (editingColumn ?? columns.find((row) => String(row.id) === submitted.id))
+          : editorKind === 'type'
+            ? (editingType ?? types.find((row) => String(row.id) === submitted.id))
+            : editorKind === 'field'
+              ? (editingField ?? fields.find((row) => String(row.id) === submitted.id))
+              : (editingTag ?? tags.find((row) => String(row.id) === submitted.id))
+      const editorFields: FormField[] =
+        editorKind === 'column'
+          ? [
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: value('name', selected?.name),
+              },
+              { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
+              {
+                name: 'sequence',
+                label: _('flow_backend.field.sequence'),
+                type: 'number',
+                value: value('sequence', selected?.sequence ?? 10),
+              },
+              {
+                name: 'terminalState',
+                label: _('flow_backend.field.terminalState'),
+                type: 'checkbox',
+                value: submitted.terminalState
+                  ? submitted.terminalState === '1'
+                  : selected?.terminalState === true,
+              },
+            ]
+          : editorKind === 'type'
+            ? [
+                {
+                  name: 'name',
+                  label: _('flow_backend.field.name'),
+                  required: true,
+                  value: value('name', selected?.name),
+                },
+                { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
+                {
+                  name: 'sequence',
+                  label: _('flow_backend.field.sequence'),
+                  type: 'number',
+                  value: value('sequence', selected?.sequence ?? 10),
+                },
+              ]
+            : editorKind === 'field'
+              ? [
+                  {
+                    name: 'name',
+                    label: _('flow_backend.field.name'),
+                    required: true,
+                    value: value('name', selected?.name),
+                  },
+                  { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
+                  {
+                    name: 'kind',
+                    label: _('flow_backend.field.kind'),
+                    type: 'select',
+                    value: value('kind', selected?.kind ?? 'text'),
+                    options: FIELD_KINDS.map((kind) => ({
+                      value: kind,
+                      label: _(`flow_backend.kind.${kind}`),
+                    })),
+                  },
+                  {
+                    name: 'options',
+                    label: _('flow_backend.field.options'),
+                    help: _('flow_backend.field.optionsHint'),
+                    value: value(
+                      'options',
+                      (((selected?.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? [])
+                        .map((option) => String(option.label ?? option.code))
+                        .join(', '),
+                    ),
+                  },
+                  {
+                    name: 'sequence',
+                    label: _('flow_backend.field.sequence'),
+                    type: 'number',
+                    value: value('sequence', selected?.sequence ?? 10),
+                  },
+                ]
+              : editorKind === 'tag'
+                ? [
+                    {
+                      name: 'name',
+                      label: _('flow_backend.field.name'),
+                      required: true,
+                      value: value('name', selected?.name),
+                    },
+                    {
+                      name: 'color',
+                      label: _('flow_backend.field.color'),
+                      type: 'color',
+                      value: value('color', selected?.color),
+                    },
+                  ]
+                : []
+      const editorErrors =
+        editorKind === 'column'
+          ? columnErrors
+          : editorKind === 'type'
+            ? typeErrors
+            : editorKind === 'field'
+              ? fieldErrors
+              : tagErrors
       const brief = await ctx.joint(url, req, 'flow_backend:screen.project', {
         docId: projectId,
         base: '/admin/flow/projects',
@@ -1811,104 +2505,37 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
         body: (_, frame) =>
-          settingsScreen(_, frame, String(project.name), endpoint, {
+          settingsScreen(_, frame, String(project.name), {
             brief,
+            endpoint: action,
             columns,
-            columnFields: [
-              {
-                name: 'name',
-                label: _('flow_backend.field.name'),
-                required: true,
-                value: String(editingColumn?.name ?? ''),
-              },
-              { name: 'code', label: _('flow_backend.field.code'), value: String(editingColumn?.code ?? '') },
-              {
-                name: 'sequence',
-                label: _('flow_backend.field.sequence'),
-                type: 'number',
-                value: String(editingColumn?.sequence ?? 10),
-              },
-              {
-                name: 'terminalState',
-                label: _('flow_backend.field.terminalState'),
-                type: 'checkbox',
-                value: editingColumn?.terminalState === true,
-              },
-            ],
-            editingColumnId: editingColumn ? String(editingColumn.id) : undefined,
             tags,
-            tagFields: [
-              {
-                name: 'name',
-                label: _('flow_backend.field.name'),
-                required: true,
-                value: String(editingTag?.name ?? ''),
-              },
-              {
-                name: 'color',
-                label: _('flow_backend.field.color'),
-                type: 'color',
-                value: String(editingTag?.color ?? ''),
-              },
-            ],
-            editingTagId: editingTag ? String(editingTag.id) : undefined,
-            columnErrors,
             types,
-            editingTypeId: editingType ? String(editingType.id) : undefined,
-            typeFields: [
-              {
-                name: 'name',
-                label: _('flow_backend.field.name'),
-                required: true,
-                value: String(editingType?.name ?? ''),
-              },
-              { name: 'code', label: _('flow_backend.field.code'), value: String(editingType?.code ?? '') },
-              {
-                name: 'sequence',
-                label: _('flow_backend.field.sequence'),
-                type: 'number',
-                value: String(editingType?.sequence ?? 10),
-              },
-            ],
-            typeErrors,
             fields,
-            editingFieldId: editingField ? String(editingField.id) : undefined,
-            fieldFields: [
-              {
-                name: 'name',
-                label: _('flow_backend.field.name'),
-                required: true,
-                value: String(editingField?.name ?? ''),
-              },
-              { name: 'code', label: _('flow_backend.field.code'), value: String(editingField?.code ?? '') },
-              {
-                name: 'kind',
-                label: _('flow_backend.field.kind'),
-                type: 'select',
-                value: String(editingField?.kind ?? 'text'),
-                options: FIELD_KINDS.map((kind) => ({
-                  value: kind,
-                  label: _(`flow_backend.kind.${kind}`),
-                })),
-              },
-              {
-                name: 'options',
-                label: _('flow_backend.field.options'),
-                help: _('flow_backend.field.optionsHint'),
-                value: (((editingField?.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? [])
-                  .map((option) => String(option.label ?? option.code))
-                  .join(', '),
-              },
-              {
-                name: 'sequence',
-                label: _('flow_backend.field.sequence'),
-                type: 'number',
-                value: String(editingField?.sequence ?? 10),
-              },
-            ],
-            fieldErrors,
-            tagErrors,
+            createHref: {
+              column: settingsHref('dialog', 'column'),
+              type: settingsHref('dialog', 'type'),
+              field: settingsHref('dialog', 'field'),
+              tag: settingsHref('dialog', 'tag'),
+            },
+            editColumnHref: (row) => settingsHref('editColumnId', String(row.id)),
+            editTypeHref: (row) => settingsHref('editTypeId', String(row.id)),
+            editFieldHref: (row) => settingsHref('editFieldId', String(row.id)),
+            editTagHref: (row) => settingsHref('editTagId', String(row.id)),
+            editor: editorKind
+              ? {
+                  kind: editorKind,
+                  title: _(`flow_backend.settings.${editorKind === 'type' ? 'types' : `${editorKind}s`}`),
+                  action,
+                  closeHref: action,
+                  fields: editorFields,
+                  errors: editorErrors,
+                  recordId: submitted.id || String(selected?.id ?? randomUUID()),
+                  idempotencyKey: submitted.idempotencyKey || randomUUID(),
+                }
+              : undefined,
           }),
       })
     },
