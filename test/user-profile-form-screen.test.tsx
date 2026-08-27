@@ -37,7 +37,8 @@ test('profile uses FormPage with security integrations and sessions in the aside
         ],
         timezoneAction: '/admin/profile/timezone?lang=en',
         passwordAction: '/admin/profile/password?lang=en',
-        sessionAction: (session) => `/admin/users/user%2Fa/sessions/${encodeURIComponent(session.id)}?lang=en`,
+        sessionAction: (session) =>
+          `/admin/users/user%2Fa/sessions/${encodeURIComponent(session.id)}?lang=en`,
         integration: <div data-integration="oauth">OAuth</div>,
       },
     ),

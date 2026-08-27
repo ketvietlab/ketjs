@@ -15,19 +15,23 @@ translate.resolves = () => true
 
 test('pricelist collection uses ListPage and route-owned navigation', () => {
   const html = renderToString(
-    pricelistsScreen(translate, {}, {
-      rows: [
-        {
-          id: 'retail/a',
-          name: 'Retail',
-          currency: 'VND',
-          state: 'active',
-          sequence: '16',
-          detailHref: '/admin/pricing/pricelists/retail%2Fa?lang=en',
-        },
-      ],
-      createHref: '/admin/pricing/pricelists?lang=en&create=1',
-    }),
+    pricelistsScreen(
+      translate,
+      {},
+      {
+        rows: [
+          {
+            id: 'retail/a',
+            name: 'Retail',
+            currency: 'VND',
+            state: 'active',
+            sequence: '16',
+            detailHref: '/admin/pricing/pricelists/retail%2Fa?lang=en',
+          },
+        ],
+        createHref: '/admin/pricing/pricelists?lang=en&create=1',
+      },
+    ),
   )
   assert.match(html, /data-ui="list-page"/)
   assert.match(html, /data-row-href="\/admin\/pricing\/pricelists\/retail%2Fa\?lang=en"/)
@@ -51,20 +55,24 @@ test('pricelist create is a URL-addressable modal with stable identity', () => {
 
 test('pricelist detail uses FormPage and preserves rejected rule values', () => {
   const html = renderToString(
-    pricelistDetailScreen(translate, {}, {
-      action: '/admin/pricing/pricelists/retail%2Fa?lang=en',
-      cancelHref: '/admin/pricing/pricelists?lang=en',
-      values: { id: 'retail/a', name: 'Retail', currency: 'VND', sequence: 16, active: true },
-      items: [],
-      itemValues: {
-        id: 'rule-id',
-        appliedOn: '3_global',
-        minQuantity: '-1',
-        base: 'list_price',
-        computePrice: 'fixed',
+    pricelistDetailScreen(
+      translate,
+      {},
+      {
+        action: '/admin/pricing/pricelists/retail%2Fa?lang=en',
+        cancelHref: '/admin/pricing/pricelists?lang=en',
+        values: { id: 'retail/a', name: 'Retail', currency: 'VND', sequence: 16, active: true },
+        items: [],
+        itemValues: {
+          id: 'rule-id',
+          appliedOn: '3_global',
+          minQuantity: '-1',
+          base: 'list_price',
+          computePrice: 'fixed',
+        },
+        itemErrors: ['minQuantity: invalid'],
       },
-      itemErrors: ['minQuantity: invalid'],
-    }),
+    ),
   )
   assert.match(html, /data-ui="form-page" data-scope="pricelist-detail-page"/)
   assert.match(html, /form="pricelist-settings-form"/)

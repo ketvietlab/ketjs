@@ -69,8 +69,7 @@ export default defineModule({
             url,
             req,
           )
-          if ((result as { ok?: boolean }).ok)
-            return seeOther(inLocale(url, '/admin/pricing/pricelists'))
+          if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, '/admin/pricing/pricelists'))
           rejected = { values: { ...form, id }, errors: errorsOf(result) }
         }
         if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
@@ -144,9 +143,7 @@ export default defineModule({
               req,
             )
             if ((result as { ok?: boolean }).ok)
-              return seeOther(
-                pathWith(url, `/admin/pricing/pricelists/${encodeURIComponent(params.id)}`),
-              )
+              return seeOther(pathWith(url, `/admin/pricing/pricelists/${encodeURIComponent(params.id)}`))
             values = { ...values, ...form, id: params.id, active: form.active === '1' }
             errors = errorsOf(result)
           } else if (form.action === 'add-item') {
@@ -179,9 +176,7 @@ export default defineModule({
               req,
             )
             if ((result as { ok?: boolean }).ok)
-              return seeOther(
-                pathWith(url, `/admin/pricing/pricelists/${encodeURIComponent(params.id)}`),
-              )
+              return seeOther(pathWith(url, `/admin/pricing/pricelists/${encodeURIComponent(params.id)}`))
             itemValues = { ...form, id }
             itemErrors = errorsOf(result)
           } else return text('invalid action', { status: 400 })

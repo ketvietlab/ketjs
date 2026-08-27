@@ -18,6 +18,11 @@ import type { Frame } from '../../../ui/index.ts'
 import { pricingSelectionLabel } from './shared.ts'
 import type { PricelistItemValues, PricelistValues } from './shared.ts'
 
+const formValue = (value: unknown): string | number | boolean | null | undefined =>
+  value == null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+    ? value
+    : undefined
+
 export type PricelistDetailScreenOptions = {
   action: string
   cancelHref: string
@@ -164,37 +169,49 @@ export const pricelistDetailScreen = (
                       name: 'appliedOn',
                       label: _('pricing_backend.field.appliedOn'),
                       type: 'select',
-                      value: item.appliedOn,
+                      value: formValue(item.appliedOn),
                       options: ['3_global', '2_product_category', '1_product', '0_product_variant'].map(
                         (value) => ({ value, label: pricingSelectionLabel(_, 'appliedOn', value) }),
                       ),
                     },
-                    { name: 'categoryId', label: _('pricing_backend.field.categoryId'), value: item.categoryId },
-                    { name: 'templateId', label: _('pricing_backend.field.templateId'), value: item.templateId },
-                    { name: 'productId', label: _('pricing_backend.field.productId'), value: item.productId },
+                    {
+                      name: 'categoryId',
+                      label: _('pricing_backend.field.categoryId'),
+                      value: formValue(item.categoryId),
+                    },
+                    {
+                      name: 'templateId',
+                      label: _('pricing_backend.field.templateId'),
+                      value: formValue(item.templateId),
+                    },
+                    {
+                      name: 'productId',
+                      label: _('pricing_backend.field.productId'),
+                      value: formValue(item.productId),
+                    },
                     {
                       name: 'minQuantity',
                       label: _('pricing_backend.field.minQuantity'),
                       type: 'decimal',
-                      value: item.minQuantity ?? 0,
+                      value: formValue(item.minQuantity) ?? 0,
                     },
                     {
                       name: 'dateStart',
                       label: _('pricing_backend.field.dateStart'),
                       type: 'datetime-local',
-                      value: item.dateStart,
+                      value: formValue(item.dateStart),
                     },
                     {
                       name: 'dateEnd',
                       label: _('pricing_backend.field.dateEnd'),
                       type: 'datetime-local',
-                      value: item.dateEnd,
+                      value: formValue(item.dateEnd),
                     },
                     {
                       name: 'base',
                       label: _('pricing_backend.field.base'),
                       type: 'select',
-                      value: item.base,
+                      value: formValue(item.base),
                       options: ['list_price', 'standard_price', 'pricelist'].map((value) => ({
                         value,
                         label: pricingSelectionLabel(_, 'base', value),
@@ -203,13 +220,13 @@ export const pricelistDetailScreen = (
                     {
                       name: 'basePricelistId',
                       label: _('pricing_backend.field.basePricelistId'),
-                      value: item.basePricelistId,
+                      value: formValue(item.basePricelistId),
                     },
                     {
                       name: 'computePrice',
                       label: _('pricing_backend.field.computePrice'),
                       type: 'select',
-                      value: item.computePrice,
+                      value: formValue(item.computePrice),
                       options: ['fixed', 'percentage', 'formula'].map((value) => ({
                         value,
                         label: pricingSelectionLabel(_, 'compute', value),
@@ -227,7 +244,7 @@ export const pricelistDetailScreen = (
                       name,
                       label: _(`pricing_backend.field.${name}`),
                       type: 'decimal' as const,
-                      value: item[name] ?? 0,
+                      value: formValue(item[name]) ?? 0,
                     })),
                   ]}
                 />
