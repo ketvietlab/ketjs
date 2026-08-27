@@ -19,6 +19,7 @@ export default defineModule({
       'error.methodNotAllowed': 'Phương thức không hợp lệ; hãy dùng {method}.',
       'error.internal': 'Không thể xử lý yêu cầu lúc này.',
       'error.unauthenticated': 'Bạn cần đăng nhập để tiếp tục.',
+      'error.credentialConflict': 'Yêu cầu chứa nhiều thông tin đăng nhập không tương thích.',
       'error.forbidden': 'Bạn không có quyền thực hiện thao tác này.',
       'error.idempotencyRequired': 'Yêu cầu cần khóa chống xử lý lặp.',
       'error.idempotencyConflict': 'Khóa chống xử lý lặp đã được dùng cho một yêu cầu khác.',
@@ -42,6 +43,7 @@ export default defineModule({
       'error.methodNotAllowed': 'Method not allowed; use {method}.',
       'error.internal': 'The request cannot be processed right now.',
       'error.unauthenticated': 'Sign in to continue.',
+      'error.credentialConflict': 'The request contains conflicting credentials.',
       'error.forbidden': 'You do not have permission to perform this action.',
       'error.idempotencyRequired': 'This request requires an idempotency key.',
       'error.idempotencyConflict': 'The idempotency key was already used for another request.',
@@ -63,17 +65,22 @@ export default defineModule({
 
 export {
   CHANNEL_API_VERSION,
+  channelCredentialFailure,
   channelCommandId,
   defineChannelRoute,
   registerChannelIdentity,
+  registerChannelIdentityPresentation,
   registerChannelRealm,
   routesOf,
 } from './core.ts'
 export { openApiDocument } from './openapi.ts'
 export type {
   ChannelAccount,
+  ChannelCredentialFailure,
   ChannelIdentities,
   ChannelIdentityFor,
+  ChannelIdentityPresentation,
+  ChannelIdentityPresentationResolver,
   CustomerIdentity,
   PosIdentity,
   StaffIdentity,

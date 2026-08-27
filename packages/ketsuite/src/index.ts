@@ -9,17 +9,22 @@
 export { default as channelApi } from './modules/channel_api/index.ts'
 export {
   CHANNEL_API_VERSION,
+  channelCredentialFailure,
   channelCommandId,
   defineChannelRoute,
   openApiDocument,
   registerChannelIdentity,
+  registerChannelIdentityPresentation,
   registerChannelRealm,
   routesOf as channelRoutesOf,
 } from './modules/channel_api/index.ts'
 export type {
   ChannelAccount,
+  ChannelCredentialFailure,
   ChannelIdentities,
   ChannelIdentityFor,
+  ChannelIdentityPresentation,
+  ChannelIdentityPresentationResolver,
   CustomerIdentity,
   PosIdentity,
   StaffIdentity,

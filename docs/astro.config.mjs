@@ -183,6 +183,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { label: 'Hospitality to Website', slug: 'handoffs/hospitality-website' },
+                { label: 'Mobile Channel API baseline', slug: 'handoffs/mobile-channel-baseline' },
                 { label: 'View system to KetSuite', slug: 'handoffs/view-system-ketsuite' },
               ],
             },

@@ -16,6 +16,9 @@
         "summary": "Resolve the signed-in operator, their company scope and live capabilities.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -48,6 +51,9 @@
         "operationId": "staff.me",
         "summary": "The operator this session belongs to.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -84,6 +90,9 @@
         "operationId": "staff.accounting.invoices.list",
         "summary": "List or search customer invoices and credit notes.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -276,6 +285,9 @@
         "operationId": "staff.accounting.invoices.get",
         "summary": "Read one customer invoice without exposing ledger posting lines.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -515,6 +527,9 @@
         "summary": "Review the canonical residual and journals for a full customer-invoice payment.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -659,6 +674,9 @@
         "summary": "Review generic workflow actions supported by the current customer-invoice state.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -752,6 +770,9 @@
         "operationId": "staff.accounting.invoices.collectPayment",
         "summary": "Collect the complete reviewed residual through one allowed journal.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -1078,6 +1099,9 @@
         "summary": "Reconcile one completed payment command without collecting again.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -1388,6 +1412,9 @@
         "summary": "Execute one supported invoice lifecycle action under a strong version.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -1697,6 +1724,9 @@
         "summary": "Reconcile one completed invoice lifecycle command without executing it again.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -1991,6 +2021,9 @@
         "summary": "Whether the signed-in operator is on the clock, and since when.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -2027,6 +2060,9 @@
         "summary": "The operator’s own attendance sessions, newest first.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -2062,6 +2098,9 @@
         "operationId": "staff.attendance.checkIn",
         "summary": "Start a shift. Refused when one is already open.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -2109,6 +2148,9 @@
         "summary": "End the open shift. Refused when there is none.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -2154,6 +2196,9 @@
         "operationId": "staff.reports.businessOverview",
         "summary": "Read one bounded cross-domain business snapshot for the selected period.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -2696,6 +2741,9 @@
         "summary": "Read an exact actor-visible CRM pipeline and overdue-activity aggregate.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -2778,6 +2826,9 @@
         "operationId": "staff.crm.leads.list",
         "summary": "List actor-visible CRM leads and opportunities without mutation actions.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -2958,6 +3009,9 @@
         "operationId": "staff.crm.leads.create",
         "summary": "Create a lead or opportunity owned by the authenticated staff actor.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -3175,6 +3229,9 @@
         "summary": "Read one actor-visible CRM record without exposing a writable aggregate.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -3370,6 +3427,9 @@
         "operationId": "staff.crm.leads.transition",
         "summary": "Move an actor-visible CRM record with optimistic concurrency and replay protection.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -3626,6 +3686,9 @@
         "summary": "Assign an actor-visible CRM record inside its current team.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -3881,6 +3944,9 @@
         "summary": "Move an actor-visible opportunity to the canonical won stage.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -4132,6 +4198,9 @@
         "operationId": "staff.crm.leads.markLost",
         "summary": "Move an actor-visible opportunity to the canonical lost stage.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -4389,6 +4458,9 @@
         "operationId": "staff.crm.leads.scheduleActivity",
         "summary": "Schedule the next CRM activity against a current lead version.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -4652,6 +4724,9 @@
         "operationId": "staff.crm.leads.completeActivity",
         "summary": "Complete one pending activity owned by the actor-visible CRM record.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -4921,6 +4996,9 @@
         "summary": "List actor-visible hospitality properties and their operational defaults.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -4958,6 +5036,9 @@
         "operationId": "staff.hospitality.frontDesk.today",
         "summary": "Read the current property-local arrival, in-house and departure board.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -5025,6 +5106,9 @@
         "operationId": "staff.hospitality.reservations.list",
         "summary": "List actor-visible reservations for one property.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -5237,6 +5321,9 @@
         "summary": "Read one actor-visible reservation aggregate.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -5303,6 +5390,9 @@
         "operationId": "staff.hospitality.stays.get",
         "summary": "Read one stay, its guests, room and folio reference.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -5379,6 +5469,9 @@
         "summary": "Read one operational folio and its billing projection.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -5453,6 +5546,9 @@
         "operationId": "staff.hospitality.housekeeping.tasks.list",
         "summary": "List actor-visible housekeeping tasks with record-valid actions.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -5632,6 +5728,9 @@
         "summary": "Read the bounded references used by supported hospitality commands.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -5698,6 +5797,9 @@
         "operationId": "staff.hospitality.housekeeping.tasks.start",
         "summary": "Start a housekeeping task with replay and optimistic-concurrency protection.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -5837,6 +5939,9 @@
         "summary": "Complete a housekeeping task with replay and optimistic-concurrency protection.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -5974,6 +6079,9 @@
         "operationId": "staff.hospitality.operations.execute",
         "summary": "Execute one supported hospitality domain command.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -6184,6 +6292,9 @@
         "summary": "List goods with company availability and channel eligibility.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -6371,6 +6482,9 @@
         "operationId": "staff.inventory.products.create",
         "summary": "Create or replay one canonical goods product aggregate.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -6685,6 +6799,9 @@
         "summary": "List bounded canonical choices used by inventory product management.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -6814,6 +6931,9 @@
         "operationId": "staff.inventory.products.get",
         "summary": "Read one goods variant with its company stock positions.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -7044,6 +7164,9 @@
         "operationId": "staff.inventory.products.update",
         "summary": "Update one product aggregate under a strong version.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -7392,6 +7515,9 @@
         "summary": "Archive one product aggregate under a strong version.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -7658,6 +7784,9 @@
         "operationId": "staff.inventory.products.restore",
         "summary": "Restore one product aggregate under a strong version.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -7926,6 +8055,9 @@
         "summary": "Apply one inventory count against fresh stock-position evidence.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -8084,6 +8216,9 @@
         "summary": "List the signed-in staff member’s notifications.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -8214,6 +8349,9 @@
         "summary": "Count unread notifications for the signed-in staff member.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -8259,6 +8397,9 @@
         "operationId": "staff.notifications.markRead",
         "summary": "Mark one actor-owned notification as read.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -8339,6 +8480,9 @@
         "summary": "Mark every currently unread actor-owned notification as read.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -8388,6 +8532,9 @@
         "operationId": "staff.purchasing.vendors.list",
         "summary": "List or search active vendors available to the signed-in purchaser.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -8482,6 +8629,9 @@
         "summary": "Read one active vendor available to the signed-in purchaser.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -8566,6 +8716,9 @@
         "operationId": "staff.purchasing.products.list",
         "summary": "List or search active purchasable products without supplier pricing or barcode data.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -8680,6 +8833,9 @@
         "summary": "Read one active purchasable product without supplier pricing or barcode data.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -8783,6 +8939,9 @@
         "operationId": "staff.purchasing.orders.list",
         "summary": "List or search purchase orders available to the signed-in purchaser.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -8929,6 +9088,9 @@
         "operationId": "staff.purchasing.orders.detail",
         "summary": "Read one purchase order without exposing a mutation contract.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -9224,6 +9386,9 @@
         "operationId": "staff.purchasing.orders.create",
         "summary": "Create or replay one canonical RFQ and its complete line set.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -9564,6 +9729,9 @@
         "operationId": "staff.purchasing.orders.update",
         "summary": "Replace one RFQ vendor and complete line set under a strong version.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -9938,6 +10106,9 @@
         "summary": "Submit one reviewed RFQ for explicit approval under a strong version.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -10269,6 +10440,9 @@
         "operationId": "staff.purchasing.orders.approve",
         "summary": "Approve one submitted RFQ and create its receipt under a strong version.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -10602,6 +10776,9 @@
         "summary": "Cancel one unreceived and unbilled RFQ under a strong version.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -10933,6 +11110,9 @@
         "operationId": "staff.purchasing.orders.receive",
         "summary": "Receive one fully prepared receipt under the current purchase-order version.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -11295,6 +11475,9 @@
         "summary": "List or search read-only vendor bills and credit notes.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -11465,6 +11648,9 @@
         "summary": "Read one vendor bill without exposing ledger posting lines.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -11609,6 +11795,9 @@
         "operationId": "staff.quality.checks.get",
         "summary": "Read one canonical quality requirement and its immutable inspection template.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -11836,6 +12025,9 @@
         "summary": "Store one bounded quality photograph against fresh check evidence.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -12039,6 +12231,9 @@
         "summary": "Submit one complete inspection attempt against the canonical template and uploads.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -12240,6 +12435,9 @@
         "summary": "List or search active customers available to the signed-in salesperson.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -12333,6 +12531,9 @@
         "summary": "Read one active customer available to the signed-in salesperson.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -12417,6 +12618,9 @@
         "operationId": "staff.sales.products.list",
         "summary": "List or search active sellable products without price or inventory data.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -12531,6 +12735,9 @@
         "summary": "Read one active sellable product without price or inventory data.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -12634,6 +12841,9 @@
         "operationId": "staff.sales.orders.get",
         "summary": "Read the canonical versioned sales order used by staff commands.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -12856,6 +13066,9 @@
         "summary": "List or search sales orders available to the signed-in salesperson.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -12986,6 +13199,9 @@
         "operationId": "staff.sales.orders.detail",
         "summary": "Read one sales order without exposing a mutation contract.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -13207,6 +13423,9 @@
         "operationId": "staff.sales.orders.create",
         "summary": "Create or replay one canonical draft sales order and all of its lines atomically.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -13487,6 +13706,9 @@
         "operationId": "staff.sales.orders.update",
         "summary": "Replace one draft order header and line set under a strong version.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -13801,6 +14023,9 @@
         "summary": "Confirm one reviewed quotation against fresh order and availability evidence.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -14063,6 +14288,9 @@
         "summary": "Cancel one undelivered and uninvoiced sales order under a strong version.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -14321,6 +14549,9 @@
         "summary": "Read the canonical delivery and invoice lifecycle of one sales order.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -14455,6 +14686,9 @@
         "operationId": "staff.warehouse.pickings.list",
         "summary": "List warehouse transfers available in the signed-in staff company.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -14800,6 +15034,9 @@
         "operationId": "staff.warehouse.pickings.get",
         "summary": "Read one warehouse transfer and its execution lines.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -15230,6 +15467,9 @@
         "operationId": "staff.warehouse.pickings.claim",
         "summary": "Claim a warehouse transfer for the verified staff actor.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -15775,6 +16015,9 @@
         "summary": "Release a transfer claim owned by the verified staff actor.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -16319,6 +16562,9 @@
         "summary": "Complete a claimed outgoing transfer from exact barcode evidence.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -16450,6 +16696,9 @@
         "operationId": "staff.warehouse.pickings.execution.get",
         "summary": "Read the canonical execution preview for a warehouse transfer.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -16621,6 +16870,9 @@
         "operationId": "staff.warehouse.pickings.execution.complete",
         "summary": "Complete a claimed transfer with canonical move-line evidence.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -16832,6 +17084,9 @@
         "summary": "Read the reverse-movement preview for a completed transfer.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -16968,6 +17223,9 @@
         "operationId": "staff.warehouse.pickings.returnExecution.complete",
         "summary": "Complete a claimed reverse warehouse movement.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -17166,6 +17424,9 @@
         "operationId": "staff.warehouse.scanSessions.start",
         "summary": "Start or replay a scan session for a claimed transfer.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -17384,6 +17645,9 @@
         "summary": "Read a scan session owned by the verified staff actor.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -17564,6 +17828,9 @@
         "operationId": "staff.warehouse.scanSessions.events.submit",
         "summary": "Submit one private barcode event to an active scan session.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -17788,6 +18055,9 @@
         "summary": "Pause, resume, or cancel a scan session.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -18008,6 +18278,9 @@
         "operationId": "staff.warehouse.countSessions.list",
         "summary": "List inventory count sessions visible in the signed-in company.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -18288,6 +18561,9 @@
         "summary": "Read one inventory count session and the actor own attempt.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -18557,6 +18833,9 @@
         "summary": "Claim an inventory count session and snapshot its positions.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -18715,6 +18994,9 @@
         "summary": "Renew the verified actor lease on an inventory count attempt.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -18872,6 +19154,9 @@
         "operationId": "staff.warehouse.countLines.entries.record",
         "summary": "Record one canonical non-negative quantity on an owned count line.",
         "security": [
+          {
+            "staffBearer": []
+          },
           {
             "staffCookie": []
           }
@@ -19035,6 +19320,9 @@
         "summary": "Submit a fully counted attempt for review.",
         "security": [
           {
+            "staffBearer": []
+          },
+          {
             "staffCookie": []
           }
         ],
@@ -19190,6 +19478,10 @@
   },
   "components": {
     "securitySchemes": {
+      "staffBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
       "staffCookie": {
         "type": "apiKey",
         "in": "cookie",

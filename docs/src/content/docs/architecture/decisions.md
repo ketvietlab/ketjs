@@ -2021,3 +2021,32 @@ product shape.
 
 **Reversible:** by adding a separate plugin/lifecycle product later, without weakening the deployment
 contract or restoring hidden state to every KetJS runtime.
+
+## D68 — Staff identity is transport-neutral; native Bearer is a server session
+
+**Chosen:** browser staff calls keep the signed `HttpOnly` session cookie, while native staff calls use a
+short-lived opaque Bearer access token backed by a deployment-owned server session and a rotating refresh
+token. Both presentations resolve to the same live `StaffIdentity` before a Channel route runs.
+
+The native authorization ceremony remains OpenID Connect Authorization Code with PKCE. The identity edge may
+verify the provider result during exchange, but the provider access token is not the credential accepted by
+staff business routes. Company, branch, role, and membership are re-resolved from current server data; a raw
+claim or client-supplied tenant hint never becomes business scope.
+
+**Why:** the POS identity foundation proved the reusable framework boundary: an identity declares its
+presentation, CSRF follows that presentation, OpenAPI publishes credentials per profile, and a deployment
+resolver turns an opaque token into live scope. Native staff needs that boundary without inheriting POS device
+grants or making a generic Bearer string trustworthy.
+
+**Security consequences:** cookie-authenticated unsafe requests still require same-origin and CSRF proof.
+Bearer-authenticated requests do not require CSRF, but remain subject to rate limits, idempotency,
+authorization, live security-version checks, expiry, refresh reuse detection, and revocation. Credential
+precedence must fail closed when multiple presentations are supplied.
+
+**Ownership:** KetJS owns the `StaffIdentity` presentation union, resolver-composition seam, CSRF behavior,
+and OpenAPI schemes. The private deployment owns token persistence, exchange, refresh, revocation, IdP
+integration, and membership resolution. Mobile owns PKCE and secure token storage.
+
+**Cost:** the framework now publishes both staff schemes and provides deterministic presentation resolver
+composition. A deployment still has to implement the private Bearer session resolver; this decision does not
+authorize accepting raw IdP JWTs or reusing POS tokens.

@@ -4,16 +4,19 @@ import { type ChannelAuth, type ChannelProfile, demands, resolves } from './core
 /**
  * Each profile presents its credential differently, and a document naming the
  * wrong one produces a generated client that cannot authenticate at all. A
- * customer arrives with a bearer token or the storefront cookie; a staff caller
- * only ever arrives with the verified session cookie, which is why there is no
- * bearer scheme on that side to offer.
+ * customer arrives with a bearer token or the storefront cookie; staff uses the
+ * framework session cookie in browsers and a deployment-resolved opaque Bearer
+ * session in native clients.
  */
 const SCHEMES: Record<ChannelProfile, Record<string, unknown>> = {
   customer: {
     bearer: { type: 'http', scheme: 'bearer' },
     customerCookie: { type: 'apiKey', in: 'cookie', name: 'ket_customer_session' },
   },
-  staff: { staffCookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE } },
+  staff: {
+    staffBearer: { type: 'http', scheme: 'bearer' },
+    staffCookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE },
+  },
   pos: {
     posBearer: { type: 'http', scheme: 'bearer' },
     operatorBearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },

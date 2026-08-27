@@ -12,6 +12,7 @@ import type {
 export const CHANNEL_API_VERSION = '1.0.0'
 export const CHANNEL_PROFILES = ['customer', 'staff', 'pos', 'integration'] as const
 export type ChannelProfile = (typeof CHANNEL_PROFILES)[number]
+export type ChannelIdentityPresentation = 'cookie' | 'bearer'
 
 export const profilePrefix = (profile: ChannelProfile): string => `/api/${profile}/v1/`
 
@@ -54,7 +55,7 @@ export type CustomerIdentity = {
   realmId: string
   siteId: string | null
   token: string
-  presentation: 'cookie' | 'bearer'
+  presentation: ChannelIdentityPresentation
 }
 
 /** The name every customer route already imports. */
@@ -77,7 +78,7 @@ export type StaffIdentity = {
   branches: readonly string[] | null
   securityVersion: number
   sessionId: string
-  presentation: 'cookie'
+  presentation: ChannelIdentityPresentation
 }
 
 /**
@@ -191,11 +192,93 @@ export type ChannelIdentityResolver<P extends ChannelProfile = ChannelProfile> =
  */
 const identityResolvers = new Map<ChannelProfile, ChannelIdentityResolver<ChannelProfile>>()
 
+export type ChannelIdentityPresentationResolver<P extends ChannelProfile = ChannelProfile> = {
+  presentation: ChannelIdentityPresentation
+  presented: (req: Req) => boolean
+  resolve: ChannelIdentityResolver<P>
+}
+
+const identityPresentationResolvers = new Map<
+  ChannelProfile,
+  Map<ChannelIdentityPresentation, ChannelIdentityPresentationResolver<ChannelProfile>>
+>()
+
 export const registerChannelIdentity = <P extends ChannelProfile>(
   profile: P,
   resolve: ChannelIdentityResolver<P>,
 ): void => {
   identityResolvers.set(profile, resolve as ChannelIdentityResolver<ChannelProfile>)
+}
+
+/**
+ * Add one credential presentation without replacing another profile resolver.
+ *
+ * A private deployment can register its staff Bearer resolver beside the public
+ * cookie resolver. Registration order cannot choose a winner: duplicate
+ * presentations are rejected, and a request presenting more than one kind of
+ * credential fails before either resolver sees it.
+ */
+export const registerChannelIdentityPresentation = <P extends ChannelProfile>(
+  profile: P,
+  registration: ChannelIdentityPresentationResolver<P>,
+): void => {
+  const registered =
+    identityPresentationResolvers.get(profile) ??
+    new Map<ChannelIdentityPresentation, ChannelIdentityPresentationResolver<ChannelProfile>>()
+  if (registered.has(registration.presentation))
+    throw new Error(
+      `channel identity presentation "${registration.presentation}" is already registered for "${profile}"`,
+    )
+  registered.set(
+    registration.presentation,
+    registration as ChannelIdentityPresentationResolver<ChannelProfile>,
+  )
+  identityPresentationResolvers.set(profile, registered)
+}
+
+export type ChannelCredentialFailure = 'invalid' | 'expired' | 'revoked' | 'identity-context'
+
+/** A credential rejection safe to map without logging or reflecting its secret. */
+export const channelCredentialFailure = (reason: ChannelCredentialFailure): Error =>
+  Object.assign(new Error('channel credential rejected'), {
+    code: `E_CHANNEL_CREDENTIAL_${reason.replace('-', '_').toUpperCase()}`,
+  })
+
+const resolveChannelIdentity = async <P extends ChannelProfile>(
+  profile: P,
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+): Promise<ChannelIdentityFor<P> | null> => {
+  const registered = identityPresentationResolvers.get(profile)
+  if (!registered) {
+    const resolve = identityResolvers.get(profile)
+    if (!resolve)
+      throw Object.assign(new Error(`no identity resolver registered for the "${profile}" profile`), {
+        code: 'E_CHANNEL_IDENTITY',
+      })
+    return (await resolve(ctx, url, req)) as ChannelIdentityFor<P> | null
+  }
+
+  const presented = new Set<ChannelIdentityPresentation>()
+  if (String(req.headers.authorization ?? '').trim()) presented.add('bearer')
+  for (const registration of registered.values())
+    if (registration.presented(req)) presented.add(registration.presentation)
+  if (presented.size > 1)
+    throw Object.assign(new Error('ambiguous channel credential presentations'), {
+      code: 'E_CHANNEL_CREDENTIAL_CONFLICT',
+    })
+
+  const presentation = presented.values().next().value as ChannelIdentityPresentation | undefined
+  if (!presentation) return null
+  const registration = registered.get(presentation)
+  if (!registration) return null
+  const identity = (await registration.resolve(ctx, url, req)) as ChannelIdentityFor<P> | null
+  if (identity && identity.presentation !== presentation)
+    throw Object.assign(new Error('channel identity presentation does not match its resolver'), {
+      code: 'E_CHANNEL_IDENTITY',
+    })
+  return identity
 }
 
 /**
@@ -499,6 +582,31 @@ const fieldErrorsOf = (issues: FieldIssue[]): Record<string, FieldError> =>
 // --- failure mapping -------------------------------------------------------
 
 const FAILURES: Record<string, { status: number; code: string; messageKey: string; retryable?: boolean }> = {
+  E_CHANNEL_CREDENTIAL_CONFLICT: {
+    status: 401,
+    code: 'channel_api.credentialConflict',
+    messageKey: 'channel_api.error.credentialConflict',
+  },
+  E_CHANNEL_CREDENTIAL_INVALID: {
+    status: 401,
+    code: 'channel_api.unauthenticated',
+    messageKey: 'channel_api.error.unauthenticated',
+  },
+  E_CHANNEL_CREDENTIAL_EXPIRED: {
+    status: 401,
+    code: 'channel_api.unauthenticated',
+    messageKey: 'channel_api.error.unauthenticated',
+  },
+  E_CHANNEL_CREDENTIAL_REVOKED: {
+    status: 401,
+    code: 'channel_api.unauthenticated',
+    messageKey: 'channel_api.error.unauthenticated',
+  },
+  E_CHANNEL_CREDENTIAL_IDENTITY_CONTEXT: {
+    status: 401,
+    code: 'channel_api.unauthenticated',
+    messageKey: 'channel_api.error.unauthenticated',
+  },
   E_FN_NOT_PERMITTED: {
     status: 403,
     code: 'channel_api.forbidden',
@@ -612,13 +720,7 @@ export const defineChannelRoute = <P extends ChannelProfile>(
           try {
             let identity: ChannelIdentityFor<P> | null = null
             if (resolves(auth)) {
-              const resolve = identityResolvers.get(spec.profile)
-              if (!resolve)
-                throw Object.assign(
-                  new Error(`no identity resolver registered for the "${spec.profile}" profile`),
-                  { code: 'E_CHANNEL_IDENTITY' },
-                )
-              identity = (await resolve(ctx, url, req)) as ChannelIdentityFor<P> | null
+              identity = await resolveChannelIdentity(spec.profile, ctx, url, req)
               if (!identity && demands(auth))
                 return fail(401, 'channel_api.unauthenticated', 'channel_api.error.unauthenticated')
             }
