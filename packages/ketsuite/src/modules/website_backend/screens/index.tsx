@@ -14,8 +14,9 @@ import {
   Section,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { FormOption, Frame } from '../../ui/index.ts'
+} from '../../../ui/index.ts'
+import type { FormOption, Frame } from '../../../ui/index.ts'
+import { FormScreenFrame, ListScreenFrame } from './page-frame.tsx'
 
 export type SiteRow = {
   id: string
@@ -87,7 +88,7 @@ const statusTone = (status: string): 'positive' | 'info' | 'warning' | 'neutral'
         : 'neutral'
 
 export const sitesScreen = (_: Translator, rows: SiteRow[], frame: Frame, locale = ''): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('website_backend.sites.title')}
     frame={frame}
@@ -154,7 +155,7 @@ export const siteFormScreen = (
 ): TemplateResult => {
   const existing = !!row.id
   return (
-    <Framed
+    <FormScreenFrame
       translator={_}
       title={existing ? String(row.title ?? row.name) : _('website_backend.sites.newTitle')}
       frame={frame}
@@ -231,7 +232,7 @@ export const contentScreen = (
   locale = '',
   kind: EntryKind = { basePath: '/admin/website/pages', titleKey: 'pages' },
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_(`website_backend.${kind.titleKey}.title`)}
     frame={frame}
@@ -321,7 +322,7 @@ export const entryFormScreen = (
     JSON.stringify(revision?.layout ?? [{ type: 'website.rich_text', settings: { body: '' } }], null, 2)
   const fields = values.fields ?? JSON.stringify(revision?.fields ?? {}, null, 2)
   return (
-    <Framed
+    <FormScreenFrame
       translator={_}
       title={existing ? String(entry.title) : _(`website_backend.${kind.titleKey}.newTitle`)}
       frame={frame}
@@ -447,7 +448,7 @@ export const revisionsScreen = (
   locale = '',
   basePath = '/admin/website/pages',
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('website_backend.revisions.title')}
     frame={frame}
@@ -570,7 +571,7 @@ export const taxonomyScreen = (
   frame: Frame,
   locale = '',
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('website_backend.taxonomies.title')}
     frame={frame}
@@ -619,7 +620,7 @@ export const taxonomyFormScreen = (
 ): TemplateResult => {
   const existing = !!row.id
   return (
-    <Framed
+    <FormScreenFrame
       translator={_}
       title={existing ? String(row.name) : _('website_backend.taxonomies.newTitle')}
       frame={frame}
@@ -705,7 +706,7 @@ export const mediaScreen = (
   frame: Frame,
   locale = '',
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('website_backend.media.title')}
     frame={frame}
@@ -751,7 +752,7 @@ export const mediaFormScreen = (
 ): TemplateResult => {
   const existing = !!row.id
   return (
-    <Framed
+    <FormScreenFrame
       translator={_}
       title={existing ? String(row.attachmentId) : _('website_backend.media.newTitle')}
       frame={frame}
@@ -839,7 +840,7 @@ export const menusScreen = (
   frame: Frame,
   locale = '',
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('website_backend.menus.title')}
     frame={frame}
@@ -888,7 +889,7 @@ export const menuFormScreen = (
 ): TemplateResult => {
   const existing = !!row.id
   return (
-    <Framed
+    <FormScreenFrame
       translator={_}
       title={existing ? String(row.label) : _('website_backend.menus.newTitle')}
       frame={frame}
@@ -970,7 +971,7 @@ export const formsScreen = (
   frame: Frame,
   locale = '',
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('website_backend.forms.title')}
     frame={frame}
@@ -1016,7 +1017,7 @@ export const formCreateScreen = (
   frame: Frame,
   options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
 ): TemplateResult => (
-  <Framed
+  <FormScreenFrame
     translator={_}
     title={_('website_backend.forms.newTitle')}
     frame={frame}
@@ -1080,7 +1081,7 @@ export const submissionsScreen = (
   rows: Array<{ id: string; payload: unknown; consent: boolean; status: string; createdAt: string }>,
   frame: Frame,
 ): TemplateResult => (
-  <Framed
+  <ListScreenFrame
     translator={_}
     title={_('website_backend.submissions.title')}
     frame={frame}
