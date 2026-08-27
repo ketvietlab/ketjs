@@ -17,4 +17,12 @@ export {
   type CompanyFormValues,
 } from './company-form.tsx'
 export { hierarchyScreen, type CompanyHierarchyRow, type HierarchyScreenOptions } from './hierarchy.tsx'
+export {
+  contextFields,
+  contextScreen,
+  type ContextBranch,
+  type ContextCompany,
+  type ContextFormValues,
+  type ContextScreenOptions,
+} from './context.tsx'
 export type { BranchRow, CompanyRow } from './types.ts'

@@ -187,7 +187,7 @@ detail renderer that consumes them.
 | FLOW-12 | done | Epic dependency map | `/admin/flow/projects/{id}/epics/{epicId}/map` | `screens/map.tsx::mapScreen` | Specialized | Huygens |
 | FLOW-13 | done | Project Gantt | `/admin/flow/projects/{id}/gantt` | `screens/gantt.tsx::ganttScreen` | Specialized | Codex |
 | FLOW-14 | done | Project sprints | `/admin/flow/projects/{id}/sprints` | `screens/sprints.tsx::sprintsScreen` | Split/Specialized | Codex |
-| FLOW-15 | ready | Project settings | `/admin/flow/projects/{id}/settings` | `screens/settings.tsx::settingsScreen` | Specialized | — |
+| FLOW-15 | done | Project settings | `/admin/flow/projects/{id}/settings` | `screens/project-settings.tsx::settingsScreen` | Specialized | Codex |
 
 ### Manufacturing lane
 
@@ -219,8 +219,8 @@ Attendance Period and Credential Issuance; only the intentional public kiosk rem
 
 ### Company lane
 
-Structure debt: Waves 23–26 created `company_backend/screens/`, shared company/branch types, list, form and
-hierarchy leaves. The root `screens.tsx` now retains only active-context configuration.
+Structure debt resolved in Wave 27: active-context configuration moved into `screens/context.tsx`; every
+routed Company renderer now lives in `company_backend/screens/` and the former root `screens.tsx` is gone.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
@@ -228,19 +228,20 @@ hierarchy leaves. The root `screens.tsx` now retains only active-context configu
 | COMPANY-02 | done | Company create/detail | `/admin/companies/new`, `/admin/companies/{id}` | `screens/company-form.tsx::companyFormScreen` | FormPage | Kant |
 | COMPANY-03 | done | Branch create/detail | `/admin/companies/{id}/branches/new`, `/admin/companies/{companyId}/branches/{id}` | `screens/branch-form.tsx::branchFormScreen` | FormPage | Codex |
 | COMPANY-04 | done | Company hierarchy | `/admin/companies/hierarchy` | `screens/hierarchy.tsx::hierarchyScreen` | Specialized | Codex |
-| COMPANY-05 | ready | Active company/branch context | `/admin/context` | `contextScreen` | FormPage/Specialized | — |
+| COMPANY-05 | done | Active company/branch context | `/admin/context` | `screens/context.tsx::contextScreen` | FormPage/Specialized | Codex |
 
 ### User and authentication lanes
 
-Structure debt: Waves 25–26 created `user_backend/screens/` with shared types, users list, user form and shared
-session leaves. Move roles, presets and profile incrementally; USER-06 reuses `screens/sessions.tsx`. The public
-login renderer is a separate user module surface and is intentionally not forced into FormPage.
+Structure debt: Waves 25–27 created `user_backend/screens/` with shared types, users/roles lists, user form and
+shared session leaves. Move role detail, presets and profile incrementally; USER-06 reuses
+`screens/sessions.tsx`. The public login renderer is a separate user module surface and is intentionally not
+forced into FormPage.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
 | USER-01 | user-backend | done | Users | `/admin/users` | `screens/users-list.tsx::usersScreen` | ListPage | Codex |
 | USER-02 | user-backend | done | User create/detail/access | `/admin/users/new`, `/admin/users/{id}` | `screens/user-form.tsx::userFormScreen`, `screens/sessions.tsx::sessionsScreen` | FormPage | Codex |
-| USER-03 | user-backend | ready | Roles | `/admin/roles` | `rolesScreen` | ListPage | — |
+| USER-03 | user-backend | done | Roles | `/admin/roles` | `screens/roles-list.tsx::rolesScreen` | ListPage | Codex |
 | USER-04 | user-backend | ready | Role create/detail | `/admin/roles/new`, `/admin/roles/{id}` | `roleScreen` | FormPage | — |
 | USER-05 | user-backend | ready | Permission presets | `/admin/permission-presets` | `presetsScreen` | FormPage/Specialized | — |
 | USER-06 | user-backend | ready | Profile/security/preferences | `/admin/profile` | `profileScreen`, `sessionsScreen` | FormPage | — |
@@ -1153,6 +1154,22 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   The renderer and shared session table moved to `screens/user-form.tsx` and `screens/sessions.tsx`.
 - Wave 26 follows the CI-first rule: source and focused tests are committed without local execution or browser
   QA. A CI failure activates the exception path—fix, build and relevant tests without a browser—before repush.
+
+### Wave 27 — FLOW-15, COMPANY-05 and USER-03
+
+- Project Settings remains a Specialized multi-collection workspace. Column, issue-type, custom-field and tag
+  create/edit forms now open as URL-addressable modals over their collections; rejected saves preserve record
+  IDs, idempotency keys and submitted values. Route-owned create/edit links preserve locale, commands remain
+  explicit and the project brief stays mounted behind every editor.
+- Working Context now uses `FormPage` with one external primary action and responsive shared form controls.
+  The route preserves submitted company, branch and readable-set choices after validation, requires an explicit
+  save command and keeps locale through PRG. Extracting `screens/context.tsx` removes the final Company root
+  `screens.tsx`.
+- Roles is now a public `ListPage` with exact count, encoded row navigation, locale-preserving create/preset
+  actions and a focused `screens/roles-list.tsx` leaf. Role create/detail remains USER-04 and is intentionally
+  unchanged in this wave.
+- Wave 27 follows the CI-first rule: source and focused tests are committed without local execution, formatter
+  or browser QA. CI failures activate only the targeted no-browser exception path before a follow-up push.
 
 ### Modal consolidation through Wave 14 — PR 253
 

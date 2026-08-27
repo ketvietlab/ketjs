@@ -13,3 +13,10 @@ export {
   type UserFormValues,
 } from './user-form.tsx'
 export type { SessionRow } from './types.ts'
+export {
+  roleListColumns,
+  rolesScreen,
+  type RoleListRow,
+  type RolesListScreenOptions,
+} from './roles-list.tsx'
+export type { RoleRow } from './types.ts'

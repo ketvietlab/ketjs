@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { presetsScreen, profileScreen, roleScreen, rolesScreen } from './screens.tsx'
+import { presetsScreen, profileScreen, roleScreen } from './screens.tsx'
 import type { PermissionRow, RoleRow, SessionRow } from './screens.tsx'
-import { userFormScreen, usersScreen } from './screens/index.ts'
+import { rolesScreen, userFormScreen, usersScreen } from './screens/index.ts'
 import type { UserFormValues, UserRow } from './screens/index.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
@@ -591,7 +591,16 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       return adminPage(ctx, url, req, {
         title: 'user_backend.roles.title',
-        body: async (_, frame) => rolesScreen(_, await rolesOf(ctx, url, req), frame, localeQuery(url)),
+        active: '/admin/roles',
+        body: async (_, frame) =>
+          rolesScreen(_, frame, {
+            rows: (await rolesOf(ctx, url, req)).map((row) => ({
+              ...row,
+              detailHref: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}`),
+            })),
+            createHref: inLocale(url, '/admin/roles/new'),
+            presetsHref: inLocale(url, '/admin/permission-presets'),
+          }),
       })
     },
 

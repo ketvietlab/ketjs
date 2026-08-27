@@ -3,8 +3,6 @@ import type { Translator } from '@ketvietlab/ketjs'
 import {
   badge,
   code,
-  dataTable,
-  emptyState,
   Framed,
   inline,
   linkButton,
@@ -19,9 +17,9 @@ import type { FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
 
 import { sessionsScreen } from './screens/index.ts'
-import type { SessionRow, UserRow } from './screens/index.ts'
+import type { RoleRow, SessionRow, UserRow } from './screens/index.ts'
 
-export type { SessionRow, UserRow } from './screens/index.ts'
+export type { RoleRow, SessionRow, UserRow } from './screens/index.ts'
 
 export type PermissionRow = {
   key: string
@@ -31,58 +29,6 @@ export type PermissionRow = {
   label: string
   checked: boolean
 }
-
-export type RoleRow = {
-  id: string
-  name: string
-  description?: string | null
-  grants?: Array<{ fnKey: string }>
-}
-
-export const rolesScreen = (_: Translator, rows: RoleRow[], frame: Frame, locale = ''): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('user_backend.roles.title')}
-    frame={frame}
-    body={stack([
-      inline([
-        linkButton({
-          label: _('user_backend.action.createRole'),
-          href: localized('/admin/roles/new', locale),
-          variant: 'primary',
-        }),
-        linkButton({
-          label: _('user_backend.action.presets'),
-          href: localized('/admin/permission-presets', locale),
-          variant: 'secondary',
-        }),
-      ]),
-      rows.length === 0
-        ? emptyState(_('user_backend.roles.empty'), _('user_backend.roles.emptyHint'))
-        : dataTable(_, {
-            rows,
-            id: (row) => row.id,
-            columns: [
-              {
-                key: 'name',
-                label: _('user_backend.field.name'),
-                cell: (row) =>
-                  linkButton({
-                    label: row.name,
-                    href: localized(`/admin/roles/${row.id}`, locale),
-                    variant: 'tertiary',
-                  }),
-              },
-              {
-                key: 'description',
-                label: _('user_backend.field.description'),
-                cell: (row) => row.description || '—',
-              },
-            ],
-          }),
-    ])}
-  />
-)
 
 export const roleScreen = (
   _: Translator,

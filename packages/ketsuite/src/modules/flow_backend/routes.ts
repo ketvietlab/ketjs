@@ -46,7 +46,7 @@ import {
   sprintsScreen,
   TEMPLATE_OPTIONS,
 } from './screens/index.ts'
-import type { IssueDetailControls, PageDetailAction } from './screens/index.ts'
+import type { IssueDetailControls, PageDetailAction, SettingsEditorKind } from './screens/index.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { documentRoutes } from '../livedoc/index.ts'
 import type { DocumentOwner } from '../livedoc/index.ts'
@@ -2229,7 +2229,10 @@ export const routes: Record<string, RouteEntry> = {
       let typeErrors: string[] = []
       let fieldErrors: string[] = []
       let tagErrors: string[] = []
-      const endpoint = `/admin/flow/projects/${projectId}/settings`
+      let submitted: Record<string, string> = {}
+      let forcedEditor: SettingsEditorKind | undefined
+      const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/settings`
+      const action = inLocale(url, endpoint)
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'archiveColumn') {
@@ -2239,6 +2242,8 @@ export const routes: Record<string, RouteEntry> = {
           const archived = (await ctx.call('flow.column.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           columnErrors = errorsOf(archived, _)
+          submitted = form
+          forcedEditor = 'column'
         } else if (form.action === 'archiveType') {
           const archived = (await ctx.call(
             'flow.issueType.archive',
@@ -2248,6 +2253,8 @@ export const routes: Record<string, RouteEntry> = {
           )) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           typeErrors = errorsOf(archived, _)
+          submitted = form
+          forcedEditor = 'type'
         } else if (form.action === 'saveType') {
           const result = (await ctx.call(
             'flow.issueType.save',
@@ -2259,17 +2266,21 @@ export const routes: Record<string, RouteEntry> = {
                 name: form.name ?? '',
                 sequence: Number(form.sequence ?? 10),
               },
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           typeErrors = errorsOf(result, _)
+          submitted = form
+          forcedEditor = 'type'
         } else if (form.action === 'archiveField') {
           const archived = (await ctx.call('flow.field.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           fieldErrors = errorsOf(archived, _)
+          submitted = form
+          forcedEditor = 'field'
         } else if (form.action === 'saveField') {
           // Options arrive as one line of text, the same way the project
           // wizard takes custom column names: a list edited as a unit.
@@ -2289,17 +2300,21 @@ export const routes: Record<string, RouteEntry> = {
                 ? { options: labels.map((label) => ({ code: slugify(label), label })) }
                 : null,
               sequence: Number(form.sequence ?? 10),
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           fieldErrors = errorsOf(result, _)
+          submitted = form
+          forcedEditor = 'field'
         } else if (form.action === 'archiveTag') {
           const archived = (await ctx.call('flow.tag.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
           tagErrors = errorsOf(archived, _)
+          submitted = form
+          forcedEditor = 'tag'
         } else if (form.action === 'saveColumn') {
           const result = (await ctx.call(
             'flow.column.save',
@@ -2312,13 +2327,15 @@ export const routes: Record<string, RouteEntry> = {
                 sequence: Number(form.sequence ?? 10),
                 terminalState: form.terminalState === '1',
               },
-              idempotencyKey: randomUUID(),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           columnErrors = errorsOf(result, _)
+          submitted = form
+          forcedEditor = 'column'
         } else if (form.action === 'saveTag') {
           const result = (await ctx.call(
             'flow.tag.save',
@@ -2328,6 +2345,8 @@ export const routes: Record<string, RouteEntry> = {
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
           tagErrors = errorsOf(result, _)
+          submitted = form
+          forcedEditor = 'tag'
         } else return text('unknown action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [columns, types, fields, tags] = await Promise.all([
@@ -2344,6 +2363,84 @@ export const routes: Record<string, RouteEntry> = {
       const editingType = editType ? types.find((row) => String(row.id) === editType) : undefined
       const editingField = editField ? fields.find((row) => String(row.id) === editField) : undefined
       const editingTag = editTag ? tags.find((row) => String(row.id) === editTag) : undefined
+      const requestedEditor = url.searchParams.get('dialog')
+      const editorKind: SettingsEditorKind | undefined =
+        forcedEditor ??
+        (editingColumn
+          ? 'column'
+          : editingType
+            ? 'type'
+            : editingField
+              ? 'field'
+              : editingTag
+                ? 'tag'
+                : requestedEditor === 'column' ||
+                    requestedEditor === 'type' ||
+                    requestedEditor === 'field' ||
+                    requestedEditor === 'tag'
+                  ? requestedEditor
+                  : undefined)
+      const settingsHref = (name: string, value: string) => {
+        const target = new URL(action, 'http://ket.local')
+        target.searchParams.set(name, value)
+        return `${target.pathname}${target.search}`
+      }
+      const value = (name: string, fallback: unknown = ''): string =>
+        submitted[name] ?? String(fallback ?? '')
+      const selected =
+        editorKind === 'column'
+          ? editingColumn ?? columns.find((row) => String(row.id) === submitted.id)
+          : editorKind === 'type'
+            ? editingType ?? types.find((row) => String(row.id) === submitted.id)
+            : editorKind === 'field'
+              ? editingField ?? fields.find((row) => String(row.id) === submitted.id)
+              : editingTag ?? tags.find((row) => String(row.id) === submitted.id)
+      const editorFields: FormField[] =
+        editorKind === 'column'
+          ? [
+              { name: 'name', label: _('flow_backend.field.name'), required: true, value: value('name', selected?.name) },
+              { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
+              { name: 'sequence', label: _('flow_backend.field.sequence'), type: 'number', value: value('sequence', selected?.sequence ?? 10) },
+              { name: 'terminalState', label: _('flow_backend.field.terminalState'), type: 'checkbox', value: submitted.terminalState ? submitted.terminalState === '1' : selected?.terminalState === true },
+            ]
+          : editorKind === 'type'
+            ? [
+                { name: 'name', label: _('flow_backend.field.name'), required: true, value: value('name', selected?.name) },
+                { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
+                { name: 'sequence', label: _('flow_backend.field.sequence'), type: 'number', value: value('sequence', selected?.sequence ?? 10) },
+              ]
+            : editorKind === 'field'
+              ? [
+                  { name: 'name', label: _('flow_backend.field.name'), required: true, value: value('name', selected?.name) },
+                  { name: 'code', label: _('flow_backend.field.code'), value: value('code', selected?.code) },
+                  { name: 'kind', label: _('flow_backend.field.kind'), type: 'select', value: value('kind', selected?.kind ?? 'text'), options: FIELD_KINDS.map((kind) => ({ value: kind, label: _(`flow_backend.kind.${kind}`) })) },
+                  {
+                    name: 'options',
+                    label: _('flow_backend.field.options'),
+                    help: _('flow_backend.field.optionsHint'),
+                    value: value(
+                      'options',
+                      (((selected?.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? [])
+                        .map((option) => String(option.label ?? option.code))
+                        .join(', '),
+                    ),
+                  },
+                  { name: 'sequence', label: _('flow_backend.field.sequence'), type: 'number', value: value('sequence', selected?.sequence ?? 10) },
+                ]
+              : editorKind === 'tag'
+                ? [
+                    { name: 'name', label: _('flow_backend.field.name'), required: true, value: value('name', selected?.name) },
+                    { name: 'color', label: _('flow_backend.field.color'), type: 'color', value: value('color', selected?.color) },
+                  ]
+                : []
+      const editorErrors =
+        editorKind === 'column'
+          ? columnErrors
+          : editorKind === 'type'
+            ? typeErrors
+            : editorKind === 'field'
+              ? fieldErrors
+              : tagErrors
       const brief = await ctx.joint(url, req, 'flow_backend:screen.project', {
         docId: projectId,
         base: '/admin/flow/projects',
@@ -2352,104 +2449,37 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
         body: (_, frame) =>
-          settingsScreen(_, frame, String(project.name), endpoint, {
+          settingsScreen(_, frame, String(project.name), {
             brief,
+            endpoint: action,
             columns,
-            columnFields: [
-              {
-                name: 'name',
-                label: _('flow_backend.field.name'),
-                required: true,
-                value: String(editingColumn?.name ?? ''),
-              },
-              { name: 'code', label: _('flow_backend.field.code'), value: String(editingColumn?.code ?? '') },
-              {
-                name: 'sequence',
-                label: _('flow_backend.field.sequence'),
-                type: 'number',
-                value: String(editingColumn?.sequence ?? 10),
-              },
-              {
-                name: 'terminalState',
-                label: _('flow_backend.field.terminalState'),
-                type: 'checkbox',
-                value: editingColumn?.terminalState === true,
-              },
-            ],
-            editingColumnId: editingColumn ? String(editingColumn.id) : undefined,
             tags,
-            tagFields: [
-              {
-                name: 'name',
-                label: _('flow_backend.field.name'),
-                required: true,
-                value: String(editingTag?.name ?? ''),
-              },
-              {
-                name: 'color',
-                label: _('flow_backend.field.color'),
-                type: 'color',
-                value: String(editingTag?.color ?? ''),
-              },
-            ],
-            editingTagId: editingTag ? String(editingTag.id) : undefined,
-            columnErrors,
             types,
-            editingTypeId: editingType ? String(editingType.id) : undefined,
-            typeFields: [
-              {
-                name: 'name',
-                label: _('flow_backend.field.name'),
-                required: true,
-                value: String(editingType?.name ?? ''),
-              },
-              { name: 'code', label: _('flow_backend.field.code'), value: String(editingType?.code ?? '') },
-              {
-                name: 'sequence',
-                label: _('flow_backend.field.sequence'),
-                type: 'number',
-                value: String(editingType?.sequence ?? 10),
-              },
-            ],
-            typeErrors,
             fields,
-            editingFieldId: editingField ? String(editingField.id) : undefined,
-            fieldFields: [
-              {
-                name: 'name',
-                label: _('flow_backend.field.name'),
-                required: true,
-                value: String(editingField?.name ?? ''),
-              },
-              { name: 'code', label: _('flow_backend.field.code'), value: String(editingField?.code ?? '') },
-              {
-                name: 'kind',
-                label: _('flow_backend.field.kind'),
-                type: 'select',
-                value: String(editingField?.kind ?? 'text'),
-                options: FIELD_KINDS.map((kind) => ({
-                  value: kind,
-                  label: _(`flow_backend.kind.${kind}`),
-                })),
-              },
-              {
-                name: 'options',
-                label: _('flow_backend.field.options'),
-                help: _('flow_backend.field.optionsHint'),
-                value: (((editingField?.config as AnyRow | null)?.options as AnyRow[] | undefined) ?? [])
-                  .map((option) => String(option.label ?? option.code))
-                  .join(', '),
-              },
-              {
-                name: 'sequence',
-                label: _('flow_backend.field.sequence'),
-                type: 'number',
-                value: String(editingField?.sequence ?? 10),
-              },
-            ],
-            fieldErrors,
-            tagErrors,
+            createHref: {
+              column: settingsHref('dialog', 'column'),
+              type: settingsHref('dialog', 'type'),
+              field: settingsHref('dialog', 'field'),
+              tag: settingsHref('dialog', 'tag'),
+            },
+            editColumnHref: (row) => settingsHref('editColumnId', String(row.id)),
+            editTypeHref: (row) => settingsHref('editTypeId', String(row.id)),
+            editFieldHref: (row) => settingsHref('editFieldId', String(row.id)),
+            editTagHref: (row) => settingsHref('editTagId', String(row.id)),
+            editor: editorKind
+              ? {
+                  kind: editorKind,
+                  title: _(`flow_backend.settings.${editorKind === 'type' ? 'types' : `${editorKind}s`}`),
+                  action,
+                  closeHref: action,
+                  fields: editorFields,
+                  errors: editorErrors,
+                  recordId: submitted.id || String(selected?.id ?? randomUUID()),
+                  idempotencyKey: submitted.idempotencyKey || randomUUID(),
+                }
+              : undefined,
           }),
       })
     },

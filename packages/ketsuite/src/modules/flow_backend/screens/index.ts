@@ -33,4 +33,9 @@ export { epicDetailScreen } from './epic-detail.tsx'
 export type { EpicDetailScreenOptions } from './epic-detail.tsx'
 export { sprintCreateFields, sprintsScreen } from './sprints.tsx'
 export type { SprintCreateValues, SprintsScreenOptions } from './sprints.tsx'
-export { settingsScreen } from './settings.tsx'
+export {
+  settingsScreen,
+  type SettingsEditor,
+  type SettingsEditorKind,
+  type SettingsScreenOptions,
+} from './project-settings.tsx'

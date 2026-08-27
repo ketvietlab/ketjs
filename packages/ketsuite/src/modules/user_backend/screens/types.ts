@@ -26,3 +26,10 @@ export type SessionRow = {
   createdAt: number
   expiresAt: number
 }
+
+export type RoleRow = {
+  id: string
+  name: string
+  description?: string | null
+  grants?: Array<{ fnKey: string }>
+}
