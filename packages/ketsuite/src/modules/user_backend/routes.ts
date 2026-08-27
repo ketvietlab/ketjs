@@ -2,8 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { profileScreen } from './screens.tsx'
-import { presetsScreen, rolesScreen, roleScreen, userFormScreen, usersScreen } from './screens/index.ts'
+import {
+  presetsScreen,
+  profileScreen,
+  rolesScreen,
+  roleScreen,
+  userFormScreen,
+  usersScreen,
+} from './screens/index.ts'
 import type {
   PermissionRow,
   RoleFormValues,
@@ -12,7 +18,7 @@ import type {
   UserFormValues,
   UserRow,
 } from './screens/index.ts'
-import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
+import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 
@@ -795,15 +801,25 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       return adminPage(ctx, url, req, {
         title: 'user_backend.profile.title',
+        active: '/admin/profile',
         body: async (_, frame) =>
           profileScreen(
             _,
             row,
-            await sessionRows(ctx, url, req, row.id),
+            {
+              sessions: await sessionRows(ctx, url, req, row.id),
+              timezoneAction: inLocale(url, '/admin/profile/timezone'),
+              passwordAction: inLocale(url, '/admin/profile/password'),
+              sessionAction: (session) =>
+                inLocale(
+                  url,
+                  `/admin/users/${encodeURIComponent(row.id)}/sessions/${encodeURIComponent(session.id)}`,
+                ),
+              integration: await ctx.joint(url, req, 'user_backend:profile.external-identities', {
+                userId: row.id,
+              }),
+            },
             frame,
-            localeQuery(url),
-            undefined,
-            await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
           ),
       })
     },
@@ -818,6 +834,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!sessions || !record)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.unauthorized'), { status: 401 })
       const form = await readForm(req)
+      if (form.action && form.action !== 'change') return text('invalid action', { status: 400 })
       const result = (await ctx.call(
         'user.setPassword',
         {
@@ -844,15 +861,26 @@ export const routes: Record<string, RouteEntry> = {
         const _ = ctx.translate(ctx.localeOf(url, req))
         return adminPage(ctx, url, req, {
           title: 'user_backend.profile.title',
+          active: '/admin/profile',
           body: async (_, frame) =>
             profileScreen(
               _,
               row,
-              await sessionRows(ctx, url, req, row.id),
+              {
+                sessions: await sessionRows(ctx, url, req, row.id),
+                timezoneAction: inLocale(url, '/admin/profile/timezone'),
+                passwordAction: inLocale(url, '/admin/profile/password'),
+                sessionAction: (session) =>
+                  inLocale(
+                    url,
+                    `/admin/users/${encodeURIComponent(row.id)}/sessions/${encodeURIComponent(session.id)}`,
+                  ),
+                passwordErrors: translatedErrors(ctx, url, req, result),
+                integration: await ctx.joint(url, req, 'user_backend:profile.external-identities', {
+                  userId: row.id,
+                }),
+              },
               frame,
-              localeQuery(url),
-              translatedErrors(ctx, url, req, result),
-              await ctx.joint(url, req, 'user_backend:profile.external-identities', { userId: row.id }),
             ),
         })
       }
@@ -878,6 +906,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!record)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.unauthorized'), { status: 401 })
       const form = await readForm(req)
+      if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
       const result = (await ctx.callUnchecked(
         'user.setTimezone',
         { timezone: form.timezone ?? '' },

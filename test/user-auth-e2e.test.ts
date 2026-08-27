@@ -50,6 +50,10 @@ test('user-auth-e2e: every administration and profile screen crosses real HTTP',
     assert.equal(response.status, 200, path)
     assert.match(await response.text(), expected, path)
   }
+  const profile = await (await e2e.client.get('/admin/profile?lang=en')).text()
+  assert.match(profile, /data-ui="form-page" data-scope="profile-form-page" data-has-aside="true"/)
+  assert.match(profile, /action="\/admin\/profile\/timezone\?lang=en"/)
+  assert.match(profile, /action="\/admin\/profile\/password\?lang=en"/)
 })
 
 test('user-auth-e2e: invitation is digest-only, single-use and accepted over HTTP', async (t) => {

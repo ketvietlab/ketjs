@@ -232,10 +232,9 @@ routed Company renderer now lives in `company_backend/screens/` and the former r
 
 ### User and authentication lanes
 
-Structure debt: Waves 25–29 created `user_backend/screens/` with shared types, users/roles lists and forms,
-permission presets, and shared session leaves. Move profile incrementally; USER-06 reuses
-`screens/sessions.tsx`. The public login renderer is a separate user module surface and is intentionally not
-forced into FormPage.
+Structure debt resolved in Wave 30: all User Backend renderers now live in `user_backend/screens/`; the former
+root `screens.tsx` is gone. USER-06 reuses `screens/sessions.tsx`. The public login renderer is a separate user
+module surface and is intentionally not forced into FormPage.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
@@ -244,7 +243,7 @@ forced into FormPage.
 | USER-03 | user-backend | done | Roles | `/admin/roles` | `screens/roles-list.tsx::rolesScreen` | ListPage | Codex |
 | USER-04 | user-backend | done | Role create/detail | `/admin/roles/new`, `/admin/roles/{id}` | `screens/role-form.tsx::roleScreen` | FormPage | Codex |
 | USER-05 | user-backend | done | Permission presets | `/admin/permission-presets` | `screens/presets-form.tsx::presetsScreen` | FormPage | Codex |
-| USER-06 | user-backend | ready | Profile/security/preferences | `/admin/profile` | `profileScreen`, `sessionsScreen` | FormPage | — |
+| USER-06 | user-backend | done | Profile/security/preferences | `/admin/profile` | `screens/profile-form.tsx::profileScreen`, `screens/sessions.tsx::sessionsScreen` | FormPage | Codex |
 | AUTH-01 | user | keep | Login | `/login` | `user/screens.tsx::loginScreen` | Specialized public auth | — |
 
 ### Address, activity, and calendar lanes
@@ -278,12 +277,13 @@ tabs until their route/data loader is separated.
 
 ### Pricing lane
 
-Structure debt: split `pricing_backend/screens.tsx` into `screens/`.
+Structure debt resolved in Wave 30: list, create modal, detail and shared pricing types/labels moved into
+`pricing_backend/screens/`; the former root `screens.tsx` is gone.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| PRICE-01 | ready | Pricelists | `/admin/pricing/pricelists` | `pricelistsScreen` | Split | — |
-| PRICE-02 | ready | Pricelist detail/items | `/admin/pricing/pricelists/{id}` | `pricelistDetailScreen` | FormPage | — |
+| PRICE-01 | done | Pricelists | `/admin/pricing/pricelists` | `screens/pricelists-list.tsx`, `screens/pricelist-create.tsx` | ListPage + modal create | Codex |
+| PRICE-02 | done | Pricelist detail/items | `/admin/pricing/pricelists/{id}` | `screens/pricelist-detail.tsx::pricelistDetailScreen` | FormPage | Codex |
 
 ### POS lane
 
@@ -1198,6 +1198,21 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 - Calendar remains a Specialized board joint for agenda/week/month interaction. Its renderer moved to
   `screens/calendar.tsx`, the route now declares its active navigation state, and the root `screens.tsx` is gone.
 - Wave 29 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 30 — USER-06, PRICE-01 and PRICE-02
+
+- Profile/Security/Preferences now uses `FormPage`. Account, timezone and password controls remain in the body;
+  external identities and active sessions use the one-third aside. Route-owned actions encode user/session IDs,
+  preserve locale and explicitly identify timezone/password commands while accepting compatible legacy posts.
+  Moving the renderer to `screens/profile-form.tsx` removes the final User Backend root `screens.tsx`.
+- Pricelists now uses `ListPage` with encoded whole-row navigation and a URL-addressable two-field create modal.
+  Stable create IDs and submitted values survive validation, Origin CSRF and explicit commands protect mutation,
+  and the collection remains mounted under the dialog.
+- Pricelist detail now uses `FormPage` with an external settings save, price-rule table and full rule editor.
+  Stable rule IDs, rejected settings/rule values, command allowlists, encoded navigation and locale-safe PRG are
+  preserved. Focused leaves remove the Pricing Backend root `screens.tsx`.
+- Wave 30 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
   browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253
