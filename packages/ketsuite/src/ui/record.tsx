@@ -7,7 +7,6 @@
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { breadcrumbs as breadcrumbNavigation } from './navigation.tsx'
 import type { Breadcrumb } from './navigation.tsx'
 
 export const HOOKS = [
@@ -16,8 +15,6 @@ export const HOOKS = [
   'record-top',
   'record-header',
   'record-identity',
-  'record-thumbnail',
-  'record-kicker',
   'record-heading-row',
   'record-heading',
   'record-status',
@@ -110,23 +107,10 @@ export type RecordWorkspaceOptions = {
   slots?: RecordWorkspaceSlots
 }
 
-const recordBreadcrumbs = (options: RecordWorkspaceOptions): RecordBreadcrumbs => {
-  if (options.breadcrumbs) return options.breadcrumbs
-  const items: Breadcrumb[] = options.kicker
-    ? [{ label: options.kicker }, { label: options.title }]
-    : [{ label: options.title }]
-  return { label: options.title, items }
-}
-
 const recordHeader = (options: RecordWorkspaceOptions): TemplateResult => (
   <>
-    {breadcrumbNavigation(recordBreadcrumbs(options))}
     <div data-ui="record-identity">
-      <div data-ui="record-thumbnail" data-empty={String(!options.image)}>
-        {options.image ? <img src={options.image.src} alt={options.image.alt} /> : options.imageFallback}
-      </div>
       <div>
-        {!!options.kicker && <p data-ui="record-kicker">{options.kicker}</p>}
         <div data-ui="record-heading-row">
           <h1 data-ui="record-heading">{options.title}</h1>
           {options.status !== undefined && <span data-ui="record-status">{options.status}</span>}

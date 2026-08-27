@@ -342,37 +342,37 @@ its renderer. This lane is strictly serial until the monolith is gone.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| HOSP-01 | ready | Front desk | `/admin/hospitality/front-desk` | `frontDeskScreen` | Specialized | — |
-| HOSP-02 | ready | Reservations list/intake | `/admin/hospitality/reservations` | `reservationsScreen` | Split | — |
-| HOSP-03 | ready | Reservation detail | `/admin/hospitality/reservations/{id}` | `reservationDetailScreen` | FormPage/Specialized | — |
-| HOSP-04 | ready | Stays | `/admin/hospitality/stays` | `staysScreen` | ListPage | — |
-| HOSP-05 | ready | Stay detail | `/admin/hospitality/stays/{id}` | `stayDetailScreen` | FormPage/Specialized | — |
-| HOSP-06 | ready | Folios | `/admin/hospitality/folios` | `foliosScreen` | ListPage | — |
-| HOSP-07 | ready | Folio detail | `/admin/hospitality/folios/{id}` | `folioDetailScreen` | FormPage/Specialized | — |
-| HOSP-08 | ready | Tape chart | `/admin/hospitality/tape-chart` | `tapeChartScreen` | Specialized | — |
-| HOSP-09 | ready | Properties | `/admin/hospitality/properties` | `propertiesScreen` | ListPage | — |
-| HOSP-10 | ready | Property create | `/admin/hospitality/properties/new` | `newPropertyScreen` | FormPage | — |
-| HOSP-11 | ready | Property detail | `/admin/hospitality/properties/{id}` | `propertyDetailScreen` | FormPage | — |
-| HOSP-12 | ready | Building detail | `/admin/hospitality/buildings/{id}` | `buildingDetailScreen` | FormPage | — |
-| HOSP-13 | ready | Level/floor detail | `/admin/hospitality/levels/{id}` | `floorDetailScreen` | FormPage | — |
-| HOSP-14 | ready | Rooms | `/admin/hospitality/rooms` | `roomsScreen` | ListPage | — |
-| HOSP-15 | ready | Room create | `/admin/hospitality/rooms/new` | `newRoomScreen` | FormPage | — |
-| HOSP-16 | ready | Room detail | `/admin/hospitality/rooms/{id}` | `roomDetailScreen` | FormPage | — |
-| HOSP-17 | ready | Room types | `/admin/hospitality/room-types` | `roomTypesScreen` | ListPage | — |
-| HOSP-18 | ready | Room-type create | `/admin/hospitality/room-types/new` | `newRoomTypeScreen` | FormPage | — |
-| HOSP-19 | ready | Room-type detail | `/admin/hospitality/room-types/{id}` | `roomTypeDetailScreen` | FormPage | — |
-| HOSP-20 | ready | Rate plans | `/admin/hospitality/rate-plans` | `ratePlansScreen` | Split | — |
-| HOSP-21 | ready | Hospitality inventory calendar | `/admin/hospitality/inventory` | `inventoryScreen` | Specialized | — |
-| HOSP-22 | ready | Services and charges | `/admin/hospitality/services` | `servicesScreen` | Specialized | — |
-| HOSP-23 | ready | Night audit | `/admin/hospitality/night-audit` | `nightAuditScreen` | Specialized | — |
-| HOSP-24 | ready | Stay notices | `/admin/hospitality/stay-notices` | `stayNoticesScreen` | Specialized | — |
-| HOSP-25 | ready | Housekeeping tasks | `/admin/hospitality/housekeeping` | `cleaningTasksScreen` | Split | — |
-| HOSP-26 | ready | Cleaning-task detail | `/admin/hospitality/housekeeping/tasks/{id}` | `cleaningTaskDetailScreen` | FormPage/Specialized | — |
-| HOSP-27 | ready | Housekeeping room status | `/admin/hospitality/housekeeping/rooms` | `housekeepingRoomsScreen` | Specialized | — |
-| HOSP-28 | ready | Housekeeping room detail | `/admin/hospitality/housekeeping/rooms/{id}` | `housekeepingRoomDetailScreen` | Specialized | — |
-| HOSP-29 | ready | Hospitality content/media | `/admin/hospitality/content` | `contentScreen` | Specialized | — |
-| HOSP-30 | ready | Amenities | `/admin/hospitality/amenities` | `amenitiesScreen` | Split | — |
-| HOSP-31 | ready | Policies | `/admin/hospitality/policies` | `policiesScreen` | Split | — |
+| HOSP-01 | done | Front desk | `/admin/hospitality/front-desk` | `screens/front-desk.tsx::frontDeskScreen` | Specialized | Codex |
+| HOSP-02 | review | Reservations list/intake | `/admin/hospitality/reservations` | `screens/reservations.tsx::reservationsScreen` | Split | Codex |
+| HOSP-03 | done | Reservation detail | `/admin/hospitality/reservations/{id}` | `screens/reservation-detail.tsx::reservationDetailScreen` | FormPage/Specialized | Codex |
+| HOSP-04 | done | Stays | `/admin/hospitality/stays` | `screens/stays.tsx::staysScreen` | ListPage | Codex |
+| HOSP-05 | done | Stay detail | `/admin/hospitality/stays/{id}` | `screens/stay-detail.tsx::stayDetailScreen` | FormPage/Specialized | Codex |
+| HOSP-06 | done | Folios | `/admin/hospitality/folios` | `screens/folios.tsx::foliosScreen` | ListPage | Codex |
+| HOSP-07 | done | Folio detail | `/admin/hospitality/folios/{id}` | `screens/folio-detail.tsx::folioDetailScreen` | FormPage/Specialized | Codex |
+| HOSP-08 | done | Tape chart | `/admin/hospitality/tape-chart` | `screens/tape-chart.tsx::tapeChartScreen` | Specialized | Codex |
+| HOSP-09 | done | Properties | `/admin/hospitality/properties` | `screens/properties.tsx::propertiesScreen` | ListPage | Codex |
+| HOSP-10 | done | Property create | `/admin/hospitality/properties/new` | `screens/new-property.tsx::newPropertyScreen` | FormPage | Codex |
+| HOSP-11 | done | Property detail | `/admin/hospitality/properties/{id}` | `screens/property-detail.tsx::propertyDetailScreen` | FormPage | Codex |
+| HOSP-12 | done | Building detail | `/admin/hospitality/buildings/{id}` | `screens/building-detail.tsx::buildingDetailScreen` | FormPage | Codex |
+| HOSP-13 | done | Level/floor detail | `/admin/hospitality/levels/{id}` | `screens/floor-detail.tsx::floorDetailScreen` | FormPage | Codex |
+| HOSP-14 | done | Rooms | `/admin/hospitality/rooms` | `screens/rooms.tsx::roomsScreen` | ListPage | Codex |
+| HOSP-15 | done | Room create | `/admin/hospitality/rooms/new` | `screens/new-room.tsx::newRoomScreen` | FormPage | Codex |
+| HOSP-16 | done | Room detail | `/admin/hospitality/rooms/{id}` | `screens/room-detail.tsx::roomDetailScreen` | FormPage | Codex |
+| HOSP-17 | done | Room types | `/admin/hospitality/room-types` | `screens/room-types.tsx::roomTypesScreen` | ListPage | Codex |
+| HOSP-18 | done | Room-type create | `/admin/hospitality/room-types/new` | `screens/new-room-type.tsx::newRoomTypeScreen` | FormPage | Codex |
+| HOSP-19 | done | Room-type detail | `/admin/hospitality/room-types/{id}` | `screens/room-type-detail.tsx::roomTypeDetailScreen` | FormPage | Codex |
+| HOSP-20 | review | Rate plans | `/admin/hospitality/rate-plans` | `screens/rate-plans.tsx::ratePlansScreen` | Split | Codex |
+| HOSP-21 | done | Hospitality inventory calendar | `/admin/hospitality/inventory` | `screens/inventory.tsx::inventoryScreen` | Specialized | Codex |
+| HOSP-22 | done | Services and charges | `/admin/hospitality/services` | `screens/services.tsx::servicesScreen` | Specialized | Codex |
+| HOSP-23 | done | Night audit | `/admin/hospitality/night-audit` | `screens/night-audit.tsx::nightAuditScreen` | Specialized | Codex |
+| HOSP-24 | done | Stay notices | `/admin/hospitality/stay-notices` | `screens/stay-notices.tsx::stayNoticesScreen` | Specialized | Codex |
+| HOSP-25 | review | Housekeeping tasks | `/admin/hospitality/housekeeping` | `screens/cleaning-tasks.tsx::cleaningTasksScreen` | Split | Codex |
+| HOSP-26 | done | Cleaning-task detail | `/admin/hospitality/housekeeping/tasks/{id}` | `screens/cleaning-task-detail.tsx::cleaningTaskDetailScreen` | FormPage/Specialized | Codex |
+| HOSP-27 | done | Housekeeping room status | `/admin/hospitality/housekeeping/rooms` | `screens/housekeeping-rooms.tsx::housekeepingRoomsScreen` | Specialized | Codex |
+| HOSP-28 | done | Housekeeping room detail | `/admin/hospitality/housekeeping/rooms/{id}` | `screens/housekeeping-room-detail.tsx::housekeepingRoomDetailScreen` | Specialized | Codex |
+| HOSP-29 | done | Hospitality content/media | `/admin/hospitality/content` | `screens/content.tsx::contentScreen` | Specialized | Codex |
+| HOSP-30 | review | Amenities | `/admin/hospitality/amenities` | `screens/amenities.tsx::amenitiesScreen` | Split | Codex |
+| HOSP-31 | review | Policies | `/admin/hospitality/policies` | `screens/policies.tsx::policiesScreen` | Split | Codex |
 
 ### Hospitality billing lane
 
@@ -380,8 +380,8 @@ Structure debt: split `hospitality_billing/screens.tsx` into `screens/`.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| HOSP-BILL-01 | ready | Charge rules | `/admin/hospitality/billing/rules` | `chargeRulesScreen` | Split | — |
-| HOSP-BILL-02 | ready | Closed-folio billing queue | `/admin/hospitality/billing` | `billingScreen` | Specialized | — |
+| HOSP-BILL-01 | review | Charge rules | `/admin/hospitality/billing/rules` | `screens/charge-rules.tsx::chargeRulesScreen` | Split | Codex |
+| HOSP-BILL-02 | done | Closed-folio billing queue | `/admin/hospitality/billing` | `screens/billing.tsx::billingScreen` | Specialized | Codex |
 
 ### Mail operations lanes
 
@@ -1244,6 +1244,19 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
 - Report definitions now use `ListPage`, and both report renderers live in `report_backend/screens/`; routing,
   draft/publish/rollback commands and PDF preview remain in the route registry.
 - Wave 33 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 34 — HOSP-01 through HOSP-31 and HOSP-BILL-01 through HOSP-BILL-02
+
+- Hospitality Core's 31 renderers and Hospitality Billing's two renderers now live in focused files under
+  module-local `screens/` folders. `shared.tsx` contains only reused types/helpers and `index.ts` is a barrel;
+  this wave does not repeat Wave 33's monolithic `screens/index.tsx` shortcut.
+- Eleven collection surfaces use a `ListPage` adapter and twelve create/detail surfaces use a `FormPage`
+  adapter. Ten operational dashboards, calendars, workspaces and queues retain specialized rendering.
+- Six `Split` targets remain `review`: reservations, rate plans, housekeeping tasks, amenities, policies and
+  charge rules now have the list contract but still require their embedded create/edit controls to become
+  URL-addressable dialogs before they can be marked `done`.
+- Wave 34 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
   browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253

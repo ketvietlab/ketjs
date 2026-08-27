@@ -114,8 +114,11 @@ test('accounting overview stays specialized: preserves period, ledger KPIs, dril
   const html = renderToString(accountingOverviewScreen(translate, options))
 
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"/)
-  assert.match(html, /Không gian tài chính[\s\S]*?Tổng quan kế toán[\s\S]*?TT99\/2025/)
+  assert.doesNotMatch(
+    html,
+    /data-ui="list-page"|data-ui="form-page"|data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/,
+  )
+  assert.match(html, /Tổng quan kế toán[\s\S]*?TT99\/2025/)
   assert.match(html, /href="\/admin\/accounting\?period=2026&amp;lang=vi"[^>]*aria-current="page"/)
   assert.match(html, /data-ui="date-picker" method="get" action="\/admin\/accounting"/)
   assert.match(html, /name="lang" value="vi"/)
