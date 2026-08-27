@@ -27,6 +27,8 @@ export const quotationEffects = [
   'read:company.Company',
   'read:product.Product',
   'read:product.Template',
+  'read:product.TemplateUom',
+  'read:product.ProductUom',
   'read:product.Category',
   'read:product.Cost',
   'read:uom.Unit',

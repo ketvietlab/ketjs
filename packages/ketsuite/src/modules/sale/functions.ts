@@ -14,6 +14,7 @@ import {
 } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
+import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
 import { company, companyKey, ours } from './scope.ts'
 
@@ -561,6 +562,8 @@ export const functions: Record<string, FnSpec> = {
       'write:sale.Order',
       'read:product.Product',
       'read:product.Template',
+      'read:product.TemplateUom',
+      'read:product.ProductUom',
       'read:product.Category',
       'read:product.Cost',
       'read:uom.Unit',
@@ -575,21 +578,10 @@ export const functions: Record<string, FnSpec> = {
       if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
         return invalid('orderId', 'lines can only be added to an unlocked quotation')
       if (!(n(args.productUomQty) > 0)) return invalid('productUomQty', 'ordered quantity must be positive')
-      const context = await contextOf(ctx, args.productId)
-      if (!context?.template.saleOk) return invalid('productId', 'product is not sellable')
-      // The unit was never checked: the effect was declared and the read never
-      // made, so only pricelist pricing validated it — and that path is skipped
-      // whenever the caller supplies a price or the order has no pricelist. An
-      // unchecked unit is carried onto the stock move and the invoice line, where
-      // a quantity in kilograms bills against a product measured in units.
-      const unit = (await ctx.db.select('uom.Unit', { id: args.productUomId }))[0]
-      if (!unit) return invalid('productUomId', 'unit of measure does not exist')
-      if (context.template.uomId) {
-        const base = (await ctx.db.select('uom.Unit', { id: context.template.uomId }))[0]
-        const rootOf = (row: Row) => String(row.parentPath).split('/').filter(Boolean)[0] ?? ''
-        if (!base || rootOf(base) !== rootOf(unit))
-          return invalid('productUomId', 'unit of measure is not in the product\u2019s measurement tree')
-      }
+      const sellable = await sellableProduct(ctx, args.productId, args.productUomId)
+      if (!sellable.ok)
+        return invalid(sellable.field === 'uomId' ? 'productUomId' : sellable.field, sellable.message)
+      const context = sellable.value
       let priceUnit: unknown = args.priceUnit
       if (priceUnit === undefined && order.pricelistId) {
         const priced = (await pricingFunctions.priceFor!.handler(ctx, {

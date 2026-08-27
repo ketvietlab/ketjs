@@ -55,6 +55,8 @@ export type { Unit } from './modules/uom/convert.ts'
 
 // product vertical
 export { default as product } from './modules/product/index.ts'
+export { sellableProduct } from './modules/product/index.ts'
+export type { SellableProduct, SellableProductResult, SellableUom } from './modules/product/index.ts'
 export { default as productMedia } from './modules/product_media/index.ts'
 export { default as productBackend } from './modules/product_backend/index.ts'
 export { default as pricing } from './modules/pricing/index.ts'
@@ -95,6 +97,7 @@ export { default as qualityStaffChannel } from './modules/quality_staff_channel/
 export { default as businessReportStaffChannel } from './modules/business_report_staff_channel/index.ts'
 export { default as saleBackend } from './modules/sale_backend/index.ts'
 export { default as pos } from './modules/pos/index.ts'
+export { default as posChannel } from './modules/pos_channel/index.ts'
 export { default as posBackend } from './modules/pos_backend/index.ts'
 export { default as loyalty } from './modules/loyalty/index.ts'
 export { default as loyaltySale } from './modules/loyalty_sale/index.ts'

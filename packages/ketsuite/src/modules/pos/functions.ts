@@ -2,6 +2,7 @@ import { defineFn } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as accountFunctions } from '../account/functions.ts'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
+import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
 
 export const POS_ORDER_STATES = ['draft', 'cancel', 'paid', 'done'] as const
@@ -624,6 +625,8 @@ export const functions: Record<string, FnSpec> = {
       'write:pos.Order',
       'read:product.Product',
       'read:product.Template',
+      'read:product.TemplateUom',
+      'read:product.ProductUom',
       'read:product.Category',
       'read:product.Cost',
       'read:uom.Unit',
@@ -638,10 +641,10 @@ export const functions: Record<string, FnSpec> = {
       if (order?.state !== 'draft' || order.isRefund)
         return invalid('orderId', 'products can only be added to a new non-refund order')
       if (!(n(args.qty) > 0)) return invalid('qty', 'quantity must be positive')
-      const product = await productOf(ctx, args.productId)
-      if (!product?.template.saleOk) return invalid('productId', 'product is not available for sale')
-      if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
-        return invalid('productUomId', 'unit does not exist')
+      const sellable = await sellableProduct(ctx, args.productId, args.productUomId)
+      if (!sellable.ok)
+        return invalid(sellable.field === 'uomId' ? 'productUomId' : sellable.field, sellable.message)
+      const product = sellable.value
       const config = (await ctx.db.select('pos.Config', { id: order.configId }))[0]!,
         discount = args.discount ?? '0'
       let priceUnit: unknown = args.priceUnit
