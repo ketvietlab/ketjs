@@ -9,7 +9,7 @@ import {
   type Frame,
   linkButton,
   Metric,
-  modalSheet,
+  ModalSheet,
   modalWorkspace,
   RecordForm,
   reservationColumns,
@@ -204,15 +204,15 @@ export const reservationsScreen = (
 
   return modalWorkspace(
     list,
-    modalSheet({
-      id: 'hospitality-reservation-create',
-      title: _('hospitality_core.reservation.section.intake'),
-      description: _('hospitality_core.reservation.section.intakeHint'),
-      closeHref: modal.closeHref,
-      closeLabel: _('hospitality_core.action.cancel'),
-      presentation: 'dialog',
-      size: 'large',
-      body: stack([
+    <ModalSheet
+      id="hospitality-reservation-create"
+      title={_('hospitality_core.reservation.section.intake')}
+      description={_('hospitality_core.reservation.section.intakeHint')}
+      closeHref={modal.closeHref}
+      closeLabel={_('hospitality_core.action.cancel')}
+      presentation="dialog"
+      size="large"
+      body={stack([
         intake,
         quote ? (
           <Section
@@ -270,7 +270,7 @@ export const reservationsScreen = (
             ])}
           />
         ) : null,
-      ]),
-    }),
+      ])}
+    />,
   )
 }
