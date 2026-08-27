@@ -44,9 +44,6 @@ const withUserReturnTo = (url: URL, path: string, returnTo: string): string => {
 const userDetailPath = (url: URL, id: string, returnTo: string): string =>
   withUserReturnTo(url, `/admin/users/${encodeURIComponent(id)}`, returnTo)
 
-const userActionPath = (url: URL, id: string, action: string, returnTo: string): string =>
-  withUserReturnTo(url, `/admin/users/${encodeURIComponent(id)}/${action}`, returnTo)
-
 const translatedErrors = (ctx: ServeContext, url: URL, req: Req, result: unknown): string[] => {
   const _ = ctx.translate(ctx.localeOf(url, req))
   return ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
@@ -144,12 +141,24 @@ const renderUser = async (
           sessions,
           errors: state.errors,
           oneTimeLink: state.oneTimeLink,
-          companiesAction: userActionPath(url, row.id, 'companies', returnTo),
-          branchesAction: userActionPath(url, row.id, 'branches', returnTo),
-          rolesAction: userActionPath(url, row.id, 'roles', returnTo),
-          tokenAction: userActionPath(url, row.id, 'token', returnTo),
+          companiesAction: withUserReturnTo(
+            url,
+            `/admin/users/${encodeURIComponent(row.id)}/companies`,
+            returnTo,
+          ),
+          branchesAction: withUserReturnTo(
+            url,
+            `/admin/users/${encodeURIComponent(row.id)}/branches`,
+            returnTo,
+          ),
+          rolesAction: withUserReturnTo(url, `/admin/users/${encodeURIComponent(row.id)}/roles`, returnTo),
+          tokenAction: withUserReturnTo(url, `/admin/users/${encodeURIComponent(row.id)}/token`, returnTo),
           sessionAction: (session) =>
-            userActionPath(url, row.id, `sessions/${encodeURIComponent(session.id)}`, returnTo),
+            withUserReturnTo(
+              url,
+              `/admin/users/${encodeURIComponent(row.id)}/sessions/${encodeURIComponent(session.id)}`,
+              returnTo,
+            ),
           integration: state.integration ? [externalIdentities, state.integration] : externalIdentities,
         },
         frame,
