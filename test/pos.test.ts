@@ -83,6 +83,7 @@ async function boot() {
     ['receivable', '131', 'Receivable', 'asset_receivable'],
     ['tax', '3331', 'VAT', 'liability_current'],
     ['cash', '1111', 'Cash', 'asset_cash'],
+    ['cash-over-short', '8118', 'Cash over short', 'expense'],
   ])
     await call('account.saveAccount', { id, code, name, accountType }, adapter)
   await call('account.saveJournal', { id: 'sales', name: 'Sales', code: 'SAL', type: 'sale' }, adapter)
@@ -121,6 +122,7 @@ async function boot() {
       revenueAccountId: 'revenue',
       receivableAccountId: 'receivable',
       taxAccountId: 'tax',
+      cashOverShortAccountId: 'cash-over-short',
       maximumDifference: '0',
     },
     adapter,
@@ -141,7 +143,13 @@ async function boot() {
 test('pos: exact session/order states, pricing, payment, stock and accounting form one retail flow', async () => {
   const adapter = await boot()
   try {
-    assert.deepEqual(POS_SESSION_STATES, ['opening_control', 'opened', 'closing_control', 'closed'])
+    assert.deepEqual(POS_SESSION_STATES, [
+      'opening_control',
+      'opened',
+      'closing_control',
+      'pending_approval',
+      'closed',
+    ])
     assert.deepEqual(POS_ORDER_STATES, ['draft', 'cancel', 'paid', 'done'])
     await call(
       'pos.createSession',
@@ -399,6 +407,297 @@ test('pos: concurrent shift creation keeps one active shift per configuration', 
     assert.equal(answers.filter((answer) => answer.ok === true).length, 1)
     assert.equal(answers.filter((answer) => answer.ok === false).length, 1)
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM pos_session'))[0]!.n, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: cash tender separates applied amount and change and always posts a Vietnam invoice', async () => {
+  const adapter = await boot()
+  try {
+    await call('pos.createSession', { id: 'invoice-shift', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'invoice-shift', expectedRevision: 0 }, adapter)
+    await call('pos.createOrder', { id: 'anonymous-sale', sessionId: 'invoice-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'anonymous-sale:line',
+        orderId: 'anonymous-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    const tender = (
+      await call(
+        'pos.addPayment',
+        {
+          id: 'anonymous-sale:cash',
+          orderId: 'anonymous-sale',
+          paymentMethodId: 'cash-method',
+          tenderedAmount: '120',
+          expectedRevision: 1,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(tender.appliedAmount, '99')
+    assert.equal(tender.change, '21')
+    assert.equal(tender.revision, 2)
+    const paid = (await call('pos.getOrder', { id: 'anonymous-sale' }, adapter)).value as Row
+    assert.equal(paid.amountPaid, '99')
+    assert.equal(paid.amountReturn, '21')
+
+    const finalized = (
+      await call('pos.validateOrder', { id: 'anonymous-sale', expectedRevision: 2 }, adapter)
+    ).value as Row
+    assert.equal(finalized.ok, true)
+    assert.equal(finalized.revision, 3)
+    const order = (await call('pos.getOrder', { id: 'anonymous-sale' }, adapter)).value as Row
+    const buyer = (await adapter.all('SELECT name FROM partner_partner WHERE id = ?', [order.partnerId]))[0]
+    const move = (
+      await adapter.all('SELECT "moveType", "partnerId" FROM account_move WHERE id = ?', [
+        order.accountMoveId,
+      ])
+    )[0]
+    assert.equal(buyer?.name, 'Bán cho người tiêu dùng')
+    assert.equal(move?.moveType, 'out_invoice')
+    assert.equal(move?.partnerId, order.partnerId)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: split tender requires manual reference and voided tender stops covering the order', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.saveAccount',
+      { id: 'bank', code: '1121', name: 'Bank', accountType: 'asset_cash' },
+      adapter,
+    )
+    await call(
+      'account.saveJournal',
+      { id: 'bank-journal', name: 'Bank', code: 'BNK', type: 'bank', defaultAccountId: 'bank' },
+      adapter,
+    )
+    await call(
+      'pos.savePaymentMethod',
+      { id: 'manual-bank', name: 'Manual bank', journalId: 'bank-journal', isCash: false },
+      adapter,
+    )
+    await call(
+      'pos.linkPaymentMethod',
+      { id: 'shop:bank', configId: 'shop', paymentMethodId: 'manual-bank' },
+      adapter,
+    )
+    await call('pos.createSession', { id: 'split-shift', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'split-shift', expectedRevision: 0 }, adapter)
+    await call('pos.createOrder', { id: 'split-sale', sessionId: 'split-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'split-sale:line',
+        orderId: 'split-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    await call(
+      'pos.addPayment',
+      {
+        id: 'split-sale:cash',
+        orderId: 'split-sale',
+        paymentMethodId: 'cash-method',
+        tenderedAmount: '40',
+        expectedRevision: 1,
+      },
+      adapter,
+    )
+    const missingReference = (
+      await call(
+        'pos.addPayment',
+        {
+          id: 'split-sale:bank',
+          orderId: 'split-sale',
+          paymentMethodId: 'manual-bank',
+          tenderedAmount: '59',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(missingReference.ok, false)
+    const bank = (
+      await call(
+        'pos.addPayment',
+        {
+          id: 'split-sale:bank',
+          orderId: 'split-sale',
+          paymentMethodId: 'manual-bank',
+          tenderedAmount: '59',
+          reference: 'BANK-001',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(bank.revision, 3)
+    const conflictingReplay = (
+      await call(
+        'pos.addPayment',
+        {
+          id: 'split-sale:bank',
+          orderId: 'split-sale',
+          paymentMethodId: 'manual-bank',
+          tenderedAmount: '59',
+          reference: 'BANK-002',
+          expectedRevision: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(conflictingReplay.ok, false)
+    assert.equal((conflictingReplay.errors as Row[])[0]?.field, 'id')
+    await call(
+      'pos.voidPayment',
+      {
+        id: 'split-sale:bank',
+        orderId: 'split-sale',
+        expectedRevision: 3,
+        reason: 'Wrong bank reference',
+      },
+      adapter,
+    )
+    assert.equal(((await call('pos.getOrder', { id: 'split-sale' }, adapter)).value as Row).amountPaid, '40')
+    const incomplete = (await call('pos.validateOrder', { id: 'split-sale', expectedRevision: 4 }, adapter))
+      .value as Row
+    assert.equal(incomplete.ok, false)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: cash movements affect expected cash and corrections append a linked reversal', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'pos.createSession',
+      { id: 'movement-shift', configId: 'shop', userId: 'cashier', openingCash: '10' },
+      adapter,
+    )
+    await call('pos.openSession', { id: 'movement-shift', expectedRevision: 0 }, adapter)
+    const moved = (
+      await call(
+        'pos.recordCashMovement',
+        {
+          id: 'movement-out',
+          sessionId: 'movement-shift',
+          expectedRevision: 1,
+          direction: 'out',
+          amount: '2',
+          reason: 'petty_cash',
+          actorId: 'cashier',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(moved.revision, 2)
+    assert.equal(
+      ((await call('pos.getSession', { id: 'movement-shift' }, adapter)).value as Row).cashRegisterBalanceEnd,
+      '8',
+    )
+    const reversed = (
+      await call(
+        'pos.reverseCashMovement',
+        {
+          id: 'movement-reversal',
+          sessionId: 'movement-shift',
+          movementId: 'movement-out',
+          expectedRevision: 2,
+          reason: 'wrong_drawer',
+          actorId: 'cashier',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(reversed.revision, 3)
+    const shift = (await call('pos.getSession', { id: 'movement-shift' }, adapter)).value as Row
+    assert.equal(shift.cashRegisterBalanceEnd, '10')
+    assert.equal((shift.cashMovements as Row[]).length, 2)
+    assert.equal(
+      (shift.cashMovements as Row[]).find((row) => row.id === 'movement-reversal')?.reversalOfId,
+      'movement-out',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: a variance seals the old shift, permits a new shift and posts approval separately', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'pos.createSession',
+      { id: 'variance-shift', configId: 'shop', userId: 'cashier', openingCash: '10' },
+      adapter,
+    )
+    await call('pos.openSession', { id: 'variance-shift', expectedRevision: 0 }, adapter)
+    await call('pos.startClosing', { id: 'variance-shift', expectedRevision: 1 }, adapter)
+    const sealed = (
+      await call(
+        'pos.closeSession',
+        {
+          id: 'variance-shift',
+          closingCash: '8',
+          varianceReason: 'count_error',
+          varianceNote: 'Cashier counted twice',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(sealed.pendingApproval, true)
+    assert.equal(sealed.difference, '-2')
+    assert.equal(
+      ((await call('pos.getSession', { id: 'variance-shift' }, adapter)).value as Row).state,
+      'pending_approval',
+    )
+
+    const next = (
+      await call('pos.createSession', { id: 'next-shift', configId: 'shop', userId: 'cashier' }, adapter)
+    ).value as Row
+    assert.equal(next.ok, true)
+
+    const approved = (
+      await call(
+        'pos.approveSessionVariance',
+        { id: 'variance-shift', expectedRevision: 3, approvedBy: 'manager', note: 'Approved shortage' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(approved.ok, true)
+    assert.equal(approved.revision, 4)
+    const adjustment = (
+      await adapter.all(
+        'SELECT amount, "approvedBy", "accountMoveId" FROM pos_cash_adjustment WHERE "sessionId" = ?',
+        ['variance-shift'],
+      )
+    )[0]
+    assert.equal(adjustment?.amount, '-2')
+    assert.equal(adjustment?.approvedBy, 'manager')
+    const balances = await adapter.all('SELECT balance FROM account_move_line WHERE "moveId" = ?', [
+      adjustment?.accountMoveId,
+    ])
+    assert.deepEqual(
+      balances.map((row) => Number(row.balance)).sort((a, b) => a - b),
+      [-2, 2],
+    )
   } finally {
     await adapter.close()
   }

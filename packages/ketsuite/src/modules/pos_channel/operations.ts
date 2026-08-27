@@ -14,6 +14,8 @@ const string = { type: 'string' }
 const integer = { type: 'integer', minimum: 0 }
 const nullableString = { type: ['string', 'null'] }
 const object = { type: 'object' }
+const n = (value: unknown) => Number(value ?? 0)
+const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 const envelope = (data: unknown) => ({
   type: 'object',
   properties: { data, error: {}, meta: { type: 'object' } },
@@ -29,6 +31,18 @@ const lineParams = {
   additionalProperties: false,
   properties: { id: string, lineId: string },
   required: ['id', 'lineId'],
+}
+const tenderParams = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, tenderId: string },
+  required: ['id', 'tenderId'],
+}
+const movementParams = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, movementId: string },
+  required: ['id', 'movementId'],
 }
 const expectedBody = {
   type: 'object',
@@ -68,6 +82,32 @@ const orderLine = {
     'quoteRevision',
   ],
 }
+const tender = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    paymentMethodId: string,
+    state: string,
+    kind: string,
+    tenderedAmount: string,
+    appliedAmount: string,
+    change: string,
+    reference: nullableString,
+    paymentDate: string,
+  },
+  required: [
+    'id',
+    'paymentMethodId',
+    'state',
+    'kind',
+    'tenderedAmount',
+    'appliedAmount',
+    'change',
+    'reference',
+    'paymentDate',
+  ],
+}
 const order = {
   type: 'object',
   additionalProperties: false,
@@ -83,12 +123,15 @@ const order = {
     currency: string,
     amountUntaxed: string,
     amountTax: string,
+    amountExact: string,
+    amountRounding: string,
     amountTotal: string,
     amountPaid: string,
     amountReturn: string,
     priceBookRevision: nullableString,
     revision: integer,
     lines: { type: 'array', items: orderLine },
+    tenders: { type: 'array', items: tender },
     allowedActions: { type: 'array', items: string },
   },
   required: [
@@ -103,12 +146,15 @@ const order = {
     'currency',
     'amountUntaxed',
     'amountTax',
+    'amountExact',
+    'amountRounding',
     'amountTotal',
     'amountPaid',
     'amountReturn',
     'priceBookRevision',
     'revision',
     'lines',
+    'tenders',
     'allowedActions',
   ],
 }
@@ -127,6 +173,12 @@ const shift = {
     expectedCash: string,
     countedCash: string,
     difference: string,
+    cashMovementTotal: string,
+    varianceStatus: string,
+    varianceReason: nullableString,
+    varianceNote: nullableString,
+    varianceApprovedBy: nullableString,
+    cashAdjustmentId: nullableString,
     revision: integer,
     orderCount: integer,
   },
@@ -142,6 +194,12 @@ const shift = {
     'expectedCash',
     'countedCash',
     'difference',
+    'cashMovementTotal',
+    'varianceStatus',
+    'varianceReason',
+    'varianceNote',
+    'varianceApprovedBy',
+    'cashAdjustmentId',
     'revision',
     'orderCount',
   ],
@@ -151,7 +209,9 @@ const failure = (ctx: ServeContext, url: URL, req: Req, result: unknown) => {
   const issues = Array.isArray((result as { errors?: unknown })?.errors)
     ? ((result as { errors: Row[] }).errors ?? [])
     : []
-  const conflict = issues.some((issue) => ['expectedRevision', 'state'].includes(String(issue.field)))
+  const conflict = issues.some((issue) =>
+    ['expectedRevision', 'state', 'quoteRevision', 'priceBookRevision'].includes(String(issue.field)),
+  )
   return {
     status: conflict ? 409 : 422,
     error: channelError(ctx, url, req, conflict ? 'pos.commandConflict' : 'pos.commandInvalid', {
@@ -201,6 +261,8 @@ const projectOrder = (row: Row) => ({
   currency: String(row.currency),
   amountUntaxed: String(row.amountUntaxed),
   amountTax: String(row.amountTax),
+  amountExact: String(row.amountExact ?? row.amountTotal),
+  amountRounding: String(row.amountRounding ?? 0),
   amountTotal: String(row.amountTotal),
   amountPaid: String(row.amountPaid),
   amountReturn: String(row.amountReturn),
@@ -222,9 +284,30 @@ const projectOrder = (row: Row) => ({
       quoteRevision: line.quoteRevision == null ? null : String(line.quoteRevision),
     }))
     .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id)),
+  tenders: (Array.isArray(row.payments) ? (row.payments as Row[]) : []).map((payment) => ({
+    id: String(payment.id),
+    paymentMethodId: String(payment.paymentMethodId),
+    state: String(payment.state ?? 'captured'),
+    kind: String(payment.kind ?? 'manual'),
+    tenderedAmount: String(payment.tenderedAmount ?? payment.amount),
+    appliedAmount: String(payment.appliedAmount ?? payment.amount),
+    change: String(n(payment.tenderedAmount ?? payment.amount) - n(payment.appliedAmount ?? payment.amount)),
+    reference: payment.reference == null ? null : String(payment.reference),
+    paymentDate: String(payment.paymentDate),
+  })),
   allowedActions:
     row.state === 'draft'
-      ? ['update', 'add_line', 'update_line', 'remove_line', 'reorder_lines', 'cancel']
+      ? [
+          'update',
+          'add_line',
+          'update_line',
+          'remove_line',
+          'reorder_lines',
+          'add_tender',
+          'void_tender',
+          'finalize',
+          'cancel',
+        ]
       : [],
 })
 
@@ -254,6 +337,17 @@ const projectShift = (row: Row) => ({
   expectedCash: String(row.cashRegisterBalanceEnd),
   countedCash: String(row.cashRegisterBalanceEndReal),
   difference: String(row.cashRegisterDifference),
+  cashMovementTotal: String(
+    (Array.isArray(row.cashMovements) ? (row.cashMovements as Row[]) : []).reduce(
+      (sum, movement) => sum + (movement.direction === 'in' ? n(movement.amount) : -n(movement.amount)),
+      0,
+    ),
+  ),
+  varianceStatus: String(row.varianceStatus ?? 'none'),
+  varianceReason: row.varianceReason == null ? null : String(row.varianceReason),
+  varianceNote: row.varianceNote == null ? null : String(row.varianceNote),
+  varianceApprovedBy: row.varianceApprovedBy == null ? null : String(row.varianceApprovedBy),
+  cashAdjustmentId: row.cashAdjustmentId == null ? null : String(row.cashAdjustmentId),
   revision: Number(row.revision ?? 0),
   orderCount: Array.isArray(row.orders) ? row.orders.length : 0,
 })
@@ -263,6 +357,11 @@ const shiftFor = async (ctx: ServeContext, url: URL, req: Req, id: string, ident
   if (!row || String(row.configId) !== String(identity.posConfigId)) return null
   if (row.deviceId && String(row.deviceId) !== String(identity.deviceId)) return null
   return row
+}
+
+const managerShiftFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
+  const row = (await ctx.call('pos.getSession', { id }, url, req)) as Row | null
+  return row && String(row.configId) === String(identity.posConfigId) ? row : null
 }
 
 const shiftResult = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
@@ -339,7 +438,7 @@ export const operationRoutes = routesOf(
           (row) =>
             String(row.configId) === String(identity.posConfigId) &&
             (!row.deviceId || String(row.deviceId) === String(identity.deviceId)) &&
-            row.state !== 'closed',
+            ['opening_control', 'opened', 'closing_control'].includes(String(row.state)),
         )
         .sort((left, right) => String(right.startAt ?? '').localeCompare(String(left.startAt ?? '')))[0]
       if (!active) return { data: null }
@@ -395,16 +494,127 @@ export const operationRoutes = routesOf(
   defineChannelRoute({
     profile: 'pos',
     method: 'POST',
+    path: 'shifts/{id}/cash-movements',
+    operationId: 'pos.shifts.cashMovements.create',
+    summary: 'Record an immutable cash-in or cash-out movement in an open shift.',
+    auth: 'required',
+    capability: { key: 'pos.shifts', action: 'cash_movement' },
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          expectedRevision: integer,
+          direction: string,
+          amount: string,
+          reason: string,
+          note: string,
+        },
+        required: ['expectedRevision', 'direction', 'amount', 'reason'],
+      },
+    },
+    responses: {
+      '200': envelope(shift),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.recordCashMovement',
+        {
+          id: channelCommandId('cash-movement', identity, `${params.id}\n${key}`),
+          sessionId: params.id,
+          expectedRevision: request.body.expectedRevision,
+          direction: request.body.direction,
+          amount: request.body.amount,
+          reason: request.body.reason,
+          note: request.body.note,
+          actorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'shift.cash-movement.create', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return shiftResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'shifts/{id}/cash-movements/{movementId}/reverse',
+    operationId: 'pos.shifts.cashMovements.reverse',
+    summary: 'Correct a cash movement by appending one linked opposite movement.',
+    auth: 'required',
+    capability: { key: 'pos.shifts', action: 'cash_movement' },
+    request: {
+      params: movementParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { expectedRevision: integer, reason: string, note: string },
+        required: ['expectedRevision', 'reason'],
+      },
+    },
+    responses: {
+      '200': envelope(shift),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.reverseCashMovement',
+        {
+          id: channelCommandId('cash-movement-reversal', identity, `${params.id}\n${key}`),
+          sessionId: params.id,
+          movementId: params.movementId,
+          expectedRevision: request.body.expectedRevision,
+          reason: request.body.reason,
+          note: request.body.note,
+          actorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'shift.cash-movement.reverse', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return shiftResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
     path: 'shifts/{id}/close',
     operationId: 'pos.shifts.close',
-    summary: 'Close a shift whose counted cash is within the configured tolerance.',
+    summary: 'Close a balanced shift or seal a variance for manager review.',
     auth: 'required',
     request: {
       params: idParams,
       body: {
         type: 'object',
         additionalProperties: false,
-        properties: { expectedRevision: integer, countedCash: string, closingNotes: string },
+        properties: {
+          expectedRevision: integer,
+          countedCash: string,
+          closingNotes: string,
+          varianceReason: string,
+          varianceNote: string,
+        },
         required: ['expectedRevision', 'countedCash'],
       },
     },
@@ -427,6 +637,8 @@ export const operationRoutes = routesOf(
           expectedRevision: request.body.expectedRevision,
           closingCash: request.body.countedCash,
           closingNotes: request.body.closingNotes,
+          varianceReason: request.body.varianceReason,
+          varianceNote: request.body.varianceNote,
         },
         url,
         req,
@@ -434,6 +646,99 @@ export const operationRoutes = routesOf(
       )) as Row
       if (result.ok !== true) return failure(ctx, url, req, result)
       return shiftResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'shifts/{id}/variance/recount',
+    operationId: 'pos.shifts.variance.recount',
+    summary: 'Record a manager recount and close the shift when the corrected count is within tolerance.',
+    auth: 'required',
+    capability: { key: 'pos.shifts', action: 'approve_variance' },
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { expectedRevision: integer, countedCash: string, note: string },
+        required: ['expectedRevision', 'countedCash'],
+      },
+    },
+    responses: {
+      '200': envelope(shift),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      if (!(await managerShiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.recountSession',
+        {
+          id: params.id,
+          expectedRevision: request.body.expectedRevision,
+          countedCash: request.body.countedCash,
+          reviewedBy: identity.operatorId,
+          note: request.body.note,
+        },
+        url,
+        req,
+        commandOptions(identity, 'shift.variance.recount', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      const row = (await ctx.call('pos.getSession', { id: params.id }, url, req)) as Row
+      return { data: projectShift(row), headers: { etag: `"pos-shift-${Number(row.revision ?? 0)}"` } }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'shifts/{id}/variance/approve',
+    operationId: 'pos.shifts.variance.approve',
+    summary: 'Approve a sealed real variance and post a separate cash over/short adjustment.',
+    auth: 'required',
+    capability: { key: 'pos.shifts', action: 'approve_variance' },
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { expectedRevision: integer, note: string },
+        required: ['expectedRevision'],
+      },
+    },
+    responses: {
+      '200': envelope(shift),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      if (!(await managerShiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.approveSessionVariance',
+        {
+          id: params.id,
+          expectedRevision: request.body.expectedRevision,
+          approvedBy: identity.operatorId,
+          note: request.body.note,
+        },
+        url,
+        req,
+        commandOptions(identity, 'shift.variance.approve', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      const row = (await ctx.call('pos.getSession', { id: params.id }, url, req)) as Row
+      return { data: projectShift(row), headers: { etag: `"pos-shift-${Number(row.revision ?? 0)}"` } }
     },
   }),
   defineChannelRoute({
@@ -565,9 +870,6 @@ export const operationRoutes = routesOf(
           productId: string,
           uomId: string,
           quantity: string,
-          unitPrice: string,
-          discount: string,
-          taxIds: { type: 'array', items: string },
           quoteRevision: string,
         },
         required: ['expectedRevision', 'productId', 'uomId', 'quantity', 'quoteRevision'],
@@ -584,7 +886,19 @@ export const operationRoutes = routesOf(
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
       const identity = request.identity!
-      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const held = await orderFor(ctx, url, req, params.id, identity)
+      if (!held) return notFound(ctx, url, req)
+      const current = (await ctx.call(
+        'pos_channel.priceBook',
+        { posConfigId: identity.posConfigId, limit: 1 },
+        url,
+        req,
+      )) as Row
+      if (
+        String(held.priceBookRevision ?? '') !== String(request.body.quoteRevision) ||
+        String(current.revision ?? '') !== String(request.body.quoteRevision)
+      )
+        return failure(ctx, url, req, invalid('quoteRevision', 'the price book changed; reload it'))
       const result = (await ctx.call(
         'pos.addLine',
         {
@@ -593,9 +907,6 @@ export const operationRoutes = routesOf(
           productId: request.body.productId,
           productUomId: request.body.uomId,
           qty: request.body.quantity,
-          priceUnit: request.body.unitPrice,
-          discount: request.body.discount,
-          taxIds: request.body.taxIds,
           quoteRevision: request.body.quoteRevision,
           expectedRevision: request.body.expectedRevision,
         },
@@ -622,9 +933,6 @@ export const operationRoutes = routesOf(
         properties: {
           expectedRevision: integer,
           quantity: string,
-          unitPrice: string,
-          discount: string,
-          taxIds: { type: 'array', items: string },
           quoteRevision: string,
           sequence: integer,
         },
@@ -650,9 +958,6 @@ export const operationRoutes = routesOf(
           orderId: params.id,
           expectedRevision: request.body.expectedRevision,
           qty: request.body.quantity,
-          priceUnit: request.body.unitPrice,
-          discount: request.body.discount,
-          taxIds: request.body.taxIds,
           quoteRevision: request.body.quoteRevision,
           sequence: request.body.sequence,
         },
@@ -664,6 +969,77 @@ export const operationRoutes = routesOf(
       return orderResult(ctx, url, req, params.id, identity)
     },
   }),
+  ...(['discount', 'price-override'] as const).map((action) =>
+    defineChannelRoute({
+      profile: 'pos',
+      method: 'POST',
+      path: `orders/{id}/lines/{lineId}/${action}`,
+      operationId: `pos.orders.lines.${action === 'discount' ? 'discount' : 'priceOverride'}`,
+      summary:
+        action === 'discount'
+          ? 'Apply a staff-authorized line discount.'
+          : 'Apply a manager-authorized manual unit price with an audit reason.',
+      auth: 'required',
+      capability: {
+        key: 'pos.orders',
+        action: action === 'discount' ? 'discount' : 'override_price',
+      },
+      request: {
+        params: lineParams,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            expectedRevision: integer,
+            ...(action === 'discount' ? { discount: string } : { unitPrice: string, reason: string }),
+          },
+          required:
+            action === 'discount'
+              ? ['expectedRevision', 'discount']
+              : ['expectedRevision', 'unitPrice', 'reason'],
+        },
+      },
+      responses: {
+        '200': envelope(order),
+        '404': envelope(object),
+        '409': envelope(object),
+        '422': envelope(object),
+      },
+      idempotent: true,
+      handler: async (ctx, url, req, params, request) => {
+        const key = keyOf(ctx, url, req)
+        if (typeof key !== 'string') return key
+        const identity = request.identity!
+        const held = await orderFor(ctx, url, req, params.id, identity)
+        if (!held) return notFound(ctx, url, req)
+        const line = (Array.isArray(held.lines) ? (held.lines as Row[]) : []).find(
+          (candidate) => String(candidate.id) === params.lineId,
+        )
+        if (!line) return notFound(ctx, url, req)
+        const result = (await ctx.call(
+          'pos.updateLine',
+          {
+            id: params.lineId,
+            orderId: params.id,
+            expectedRevision: request.body.expectedRevision,
+            qty: line.qty,
+            ...(action === 'discount'
+              ? { discount: request.body.discount }
+              : {
+                  priceUnit: request.body.unitPrice,
+                  overrideReason: request.body.reason,
+                }),
+            overrideBy: identity.operatorId,
+          },
+          url,
+          req,
+          commandOptions(identity, `order.line.${action}`, key),
+        )) as Row
+        if (result.ok !== true) return failure(ctx, url, req, result)
+        return orderResult(ctx, url, req, params.id, identity)
+      },
+    }),
+  ),
   defineChannelRoute({
     profile: 'pos',
     method: 'DELETE',
@@ -729,6 +1105,135 @@ export const operationRoutes = routesOf(
         url,
         req,
         commandOptions(identity, 'order.line.reorder', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/tenders',
+    operationId: 'pos.orders.tenders.add',
+    summary: 'Capture one cash or manual non-cash tender under the order revision.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          expectedRevision: integer,
+          paymentMethodId: string,
+          tenderedAmount: string,
+          reference: string,
+        },
+        required: ['expectedRevision', 'paymentMethodId', 'tenderedAmount'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.addPayment',
+        {
+          id: channelCommandId('tender', identity, `${params.id}\n${key}`),
+          orderId: params.id,
+          expectedRevision: request.body.expectedRevision,
+          paymentMethodId: request.body.paymentMethodId,
+          tenderedAmount: request.body.tenderedAmount,
+          reference: request.body.reference,
+          operatorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.tender.add', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/tenders/{tenderId}/void',
+    operationId: 'pos.orders.tenders.void',
+    summary: 'Void one captured tender before finalization.',
+    auth: 'required',
+    request: {
+      params: tenderParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { expectedRevision: integer, reason: string },
+        required: ['expectedRevision', 'reason'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.voidPayment',
+        {
+          id: params.tenderId,
+          orderId: params.id,
+          expectedRevision: request.body.expectedRevision,
+          reason: request.body.reason,
+          operatorId: identity.operatorId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.tender.void', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/finalize',
+    operationId: 'pos.orders.finalize',
+    summary: 'Finalize one fully covered order into stock, invoice and reconciled accounting.',
+    auth: 'required',
+    request: { params: idParams, body: expectedBody },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.validateOrder',
+        { id: params.id, expectedRevision: request.body.expectedRevision },
+        url,
+        req,
+        commandOptions(identity, 'order.finalize', key),
       )) as Row
       if (result.ok !== true) return failure(ctx, url, req, result)
       return orderResult(ctx, url, req, params.id, identity)

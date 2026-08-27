@@ -116,11 +116,20 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     ['/shifts', 'post', 'pos.shifts.create'],
     ['/shifts/{id}', 'get', 'pos.shifts.get'],
     ['/shifts/{id}/open', 'post', 'pos.shifts.open'],
+    ['/shifts/{id}/cash-movements', 'post', 'pos.shifts.cashMovements.create'],
+    ['/shifts/{id}/cash-movements/{movementId}/reverse', 'post', 'pos.shifts.cashMovements.reverse'],
+    ['/shifts/{id}/variance/recount', 'post', 'pos.shifts.variance.recount'],
+    ['/shifts/{id}/variance/approve', 'post', 'pos.shifts.variance.approve'],
     ['/orders', 'post', 'pos.orders.create'],
     ['/orders/{id}/detail', 'get', 'pos.orders.get'],
     ['/orders/{id}/lines', 'post', 'pos.orders.lines.add'],
     ['/orders/{id}/lines/{lineId}/update', 'patch', 'pos.orders.lines.update'],
+    ['/orders/{id}/lines/{lineId}/discount', 'post', 'pos.orders.lines.discount'],
+    ['/orders/{id}/lines/{lineId}/price-override', 'post', 'pos.orders.lines.priceOverride'],
     ['/orders/{id}/lines/{lineId}/remove', 'delete', 'pos.orders.lines.remove'],
+    ['/orders/{id}/tenders', 'post', 'pos.orders.tenders.add'],
+    ['/orders/{id}/tenders/{tenderId}/void', 'post', 'pos.orders.tenders.void'],
+    ['/orders/{id}/finalize', 'post', 'pos.orders.finalize'],
   ] as const
   for (const [path, method, operationId] of expected) {
     const operation = document.paths[path]?.[method] as Record<string, unknown> | undefined

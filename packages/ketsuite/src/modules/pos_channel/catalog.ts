@@ -88,6 +88,7 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
     }))
     .sort((a, b) => a.id.localeCompare(b.id))
   const currency = String(pricelist?.currency ?? ledger.currency)
+  const cashRoundingStep = Number(config.cashRoundingIncrement ?? 0)
 
   // Hash source rows instead of calculated prices. Pagination can then calculate only the variants
   // on the requested page while a cursor still detects any catalog or price-input change.
@@ -134,9 +135,19 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
     paymentMethods,
     currency,
     scale: ledger.scale,
-    cashRoundingStep: null,
+    cashRoundingStep: cashRoundingStep > 0 ? cashRoundingStep : null,
   })
-  return { config, currency, scale: ledger.scale, variants, breakpoints, pricelist, paymentMethods, revision }
+  return {
+    config,
+    currency,
+    scale: ledger.scale,
+    variants,
+    breakpoints,
+    pricelist,
+    paymentMethods,
+    cashRoundingStep,
+    revision,
+  }
 }
 
 async function pageOf(
@@ -300,7 +311,7 @@ export const catalogRoutes = routesOf(
             scale: held.scale,
             products: held.products,
             paymentMethods: held.paymentMethods,
-            rounding: null,
+            rounding: held.cashRoundingStep > 0 ? { rounding: held.cashRoundingStep } : null,
           },
         },
         nextCursor: held.done ? null : cursorOf({ revision: held.revision, offset: held.nextOffset }),
