@@ -139,7 +139,7 @@ type Envelope = {
     retryable: boolean
     fieldErrors: Record<string, { code: string; messageKey: string }>
   } | null
-  meta: { requestId: string; nextCursor: string | null }
+  meta: { requestId: string; serverTime: string; contractVersion: string; nextCursor: string | null }
 }
 
 const read = async (response: Response): Promise<Envelope> => (await response.json()) as Envelope
@@ -149,6 +149,8 @@ test('channel facade: a declared auth is enforced before the handler runs', asyn
   const denied = await e2e.client.get('/api/customer/v1/probe/whoami')
   assert.equal(denied.status, 401)
   const body = await read(denied)
+  assert.equal(body.meta.contractVersion, '1.0.0')
+  assert.equal(Number.isNaN(Date.parse(body.meta.serverTime)), false)
   assert.equal(body.error?.code, 'channel_api.unauthenticated')
   assert.equal(body.error?.message, 'Sign in to continue.')
   assert.deepEqual(reached, [])
