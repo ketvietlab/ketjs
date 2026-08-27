@@ -32,6 +32,15 @@ export const roomTypesScreen = (
       translator={_}
       title={_('hospitality_core.screen.roomTypes.title')}
       frame={frame}
+      actions={
+        properties.length
+          ? linkButton({
+              label: _('hospitality_core.roomType.action.create'),
+              href: `/admin/hospitality/room-types/new?lang=${encodeURIComponent(locale)}${propertyQuery}`,
+              variant: 'primary',
+            })
+          : undefined
+      }
       body={stack([
         <RecordForm
           action="/admin/hospitality/room-types"
@@ -50,13 +59,7 @@ export const roomTypesScreen = (
           submit={_('hospitality_core.action.apply')}
           submitVariant="secondary"
         />,
-        properties.length ? (
-          linkButton({
-            label: _('hospitality_core.roomType.action.create'),
-            href: `/admin/hospitality/room-types/new?lang=${encodeURIComponent(locale)}${propertyQuery}`,
-            variant: 'primary',
-          })
-        ) : (
+        properties.length ? null : (
           <Notice
             title={_('hospitality_core.roomType.empty.noProperty')}
             message={_('hospitality_core.roomType.empty.noPropertyHint')}

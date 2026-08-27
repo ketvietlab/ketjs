@@ -24,12 +24,12 @@ export const propertiesScreen = (
     translator={_}
     title={_('hospitality_core.screen.properties.title')}
     frame={frame}
+    actions={linkButton({
+      label: _('hospitality_core.property.action.create'),
+      href: `/admin/hospitality/properties/new?lang=${encodeURIComponent(locale)}`,
+      variant: 'primary',
+    })}
     body={stack([
-      linkButton({
-        label: _('hospitality_core.property.action.create'),
-        href: `/admin/hospitality/properties/new?lang=${encodeURIComponent(locale)}`,
-        variant: 'primary',
-      }),
       <CardGrid
         items={[
           { id: 'properties', label: _('hospitality_core.metric.properties'), value: rows.length },

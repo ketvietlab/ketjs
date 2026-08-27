@@ -52,6 +52,15 @@ export const roomsScreen = (
       translator={_}
       title={_('hospitality_core.screen.rooms.title')}
       frame={frame}
+      actions={
+        canCreateRoom
+          ? linkButton({
+              label: _('hospitality_core.room.action.create'),
+              href: `/admin/hospitality/rooms/new?${query.toString()}`,
+              variant: 'primary',
+            })
+          : undefined
+      }
       body={stack([
         roomFeedback(_, status, errors),
         <RecordForm
@@ -71,13 +80,7 @@ export const roomsScreen = (
           submit={_('hospitality_core.action.apply')}
           submitVariant="secondary"
         />,
-        canCreateRoom ? (
-          linkButton({
-            label: _('hospitality_core.room.action.create'),
-            href: `/admin/hospitality/rooms/new?${query.toString()}`,
-            variant: 'primary',
-          })
-        ) : (
+        canCreateRoom ? null : (
           <Notice
             title={_('hospitality_core.room.empty.prerequisite')}
             message={_('hospitality_core.room.empty.prerequisiteHint')}
