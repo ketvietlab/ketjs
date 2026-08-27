@@ -59,17 +59,14 @@ test('channel api: OpenAPI is generated from composed route contracts', () => {
   })
 })
 
-test('channel api: the staff document names the credential staff routes accept', () => {
+test('channel api: the staff document names both credential presentations', () => {
   const document = openApiDocument(compose(ketsuite.modules, { headless: true }), 'staff')
-  // Staff callers arrive with the verified session cookie and nothing else. A
-  // profile whose security block is empty generates a client that sends no
-  // credential at all, which is the one way a published document can be wrong
-  // and still look complete.
   assert.deepEqual(document.components.securitySchemes, {
+    staffBearer: { type: 'http', scheme: 'bearer' },
     staffCookie: { type: 'apiKey', in: 'cookie', name: 'ket_session' },
   })
   const orders = document.paths['/sales/orders']?.get as Record<string, unknown>
-  assert.deepEqual(orders.security, [{ staffCookie: [] }])
+  assert.deepEqual(orders.security, [{ staffBearer: [] }, { staffCookie: [] }])
   assert.deepEqual(orders['x-ket-capability'], { key: 'sales.orders', action: 'read' })
   for (const [path, entry] of Object.entries(document.paths))
     for (const [method, operation] of Object.entries(entry as Record<string, { security?: unknown[] }>))

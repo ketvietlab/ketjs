@@ -287,6 +287,7 @@ test('channel api: every facade message key is translated in both locales', () =
     'error.methodNotAllowed',
     'error.internal',
     'error.unauthenticated',
+    'error.credentialConflict',
     'error.forbidden',
     'error.idempotencyRequired',
     'error.idempotencyConflict',

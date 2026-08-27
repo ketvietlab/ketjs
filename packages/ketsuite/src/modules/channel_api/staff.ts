@@ -8,12 +8,12 @@
 // rather than whenever a credential happens to expire, and a caller cannot name
 // a company they were not already granted.
 
-import type { Route, ServeContext } from '@ketvietlab/ketjs'
+import { SESSION_COOKIE, type Route, type ServeContext } from '@ketvietlab/ketjs'
 import {
   channelError,
   csrfTokenFor,
   defineChannelRoute,
-  registerChannelIdentity,
+  registerChannelIdentityPresentation,
   routesOf,
   stableHash,
 } from './core.ts'
@@ -40,7 +40,14 @@ export const staffIdentity = async (ctx: ServeContext, url: URL, req: Req): Prom
   }
 }
 
-registerChannelIdentity('staff', staffIdentity)
+registerChannelIdentityPresentation('staff', {
+  presentation: 'cookie',
+  presented: (req) =>
+    String(req.headers.cookie ?? '')
+      .split(';')
+      .some((part) => part.trim().split('=', 1)[0] === SESSION_COOKIE),
+  resolve: staffIdentity,
+})
 
 export const staffRoutes = routesOf(
   defineChannelRoute({
@@ -82,7 +89,7 @@ export const staffRoutes = routesOf(
            * about this channel — so bootstrap is where it is handed over, and a
            * client that has not bootstrapped cannot mutate.
            */
-          csrfToken: csrfTokenFor(identity.sessionId),
+          csrfToken: identity.presentation === 'cookie' ? csrfTokenFor(identity.sessionId) : null,
           // The scope the session settled on, so a client can label what it is
           // looking at. It is reported, never accepted.
           scope: {
