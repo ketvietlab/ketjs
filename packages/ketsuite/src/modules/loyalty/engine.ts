@@ -272,6 +272,11 @@ export const evaluate = async (
   const walletRows = snapshot.partnerId
     ? await ctx.db.select('loyalty.Wallet', { partnerId: snapshot.partnerId })
     : []
+  const orderReservations = await ctx.db.select('loyalty.Reservation', {
+    orderType: snapshot.orderType,
+    orderId: snapshot.orderId,
+    state: 'reserved',
+  })
   for (const code of new Set(snapshot.codes ?? []))
     for (const wallet of await ctx.db.select('loyalty.Wallet', { normalizedCode: code }))
       if (!walletRows.some((held) => held.id === wallet.id)) walletRows.push(wallet)
@@ -397,7 +402,16 @@ export const evaluate = async (
       }
     }
     if (!codeMatched && !wallet) continue
-    const available = n(wallet?.balance) - n(wallet?.reserved) + (program.appliesOn === 'future' ? 0 : earned)
+    const ownReservation = wallet
+      ? orderReservations
+          .filter((reservation) => reservation.walletId === wallet.id)
+          .reduce((sum, reservation) => sum + n(reservation.amount), 0)
+      : 0
+    const available =
+      n(wallet?.balance) -
+      n(wallet?.reserved) +
+      ownReservation +
+      (program.appliesOn === 'future' ? 0 : earned)
     const rewards: RewardQuote[] = []
     for (const reward of rewardsByProgram.get(String(program.id)) ?? []) {
       const quote = await rewardQuote(

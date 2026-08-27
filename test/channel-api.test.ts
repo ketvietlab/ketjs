@@ -184,6 +184,10 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     ['/orders/{id}/lines/{lineId}/remove', 'delete', 'pos.orders.lines.remove'],
     ['/orders/{id}/tenders', 'post', 'pos.orders.tenders.add'],
     ['/orders/{id}/tenders/{tenderId}/void', 'post', 'pos.orders.tenders.void'],
+    ['/orders/{id}/loyalty', 'get', 'pos.orders.loyalty.evaluate'],
+    ['/orders/{id}/loyalty/codes', 'post', 'pos.orders.loyalty.codes.apply'],
+    ['/orders/{id}/loyalty/rewards', 'post', 'pos.orders.loyalty.rewards.apply'],
+    ['/orders/{id}/loyalty/rewards/{programId}', 'delete', 'pos.orders.loyalty.rewards.remove'],
     ['/orders/{id}/finalize', 'post', 'pos.orders.finalize'],
   ] as const
   for (const [path, method, operationId] of expected) {
@@ -202,6 +206,20 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     'quantity',
     'quoteRevision',
   ])
+  const loyalty = document.paths['/orders/{id}/loyalty']?.get
+  assert.ok(loyalty)
+  assert.deepEqual((loyalty as Record<string, unknown>)['x-ket-capability'], {
+    key: 'pos.loyalty',
+    action: 'read',
+  })
+  const withoutAdapter = openApiDocument(
+    compose(
+      ketsuite.modules.filter((module) => !['loyalty_pos', 'loyalty_backend'].includes(module.name)),
+      { headless: true },
+    ),
+    'pos',
+  )
+  assert.equal(withoutAdapter.paths['/orders/{id}/loyalty'], undefined)
 })
 
 test('channel api: a POS enrollment route can publish the upstream operator credential', () => {

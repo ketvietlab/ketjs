@@ -562,6 +562,29 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
   const beforePayment = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
   assert.equal(Number(beforePayment.amountTotal), 80)
   assert.equal(Number(beforePayment.amountPaid), 80)
+  const staleRemove = await call<Row>('loyalty_pos.removeReward', {
+    orderId: 'pos-loyalty',
+    programId: 'pos-program',
+    expectedRevision: Number(beforePayment.revision) - 1,
+  })
+  assert.equal(staleRemove.ok, false)
+  assert.equal(
+    ((await call<Row>('pos.getOrder', { id: 'pos-loyalty' })).lines as Row[]).some(
+      (line) => line.lineKind === 'reward',
+    ),
+    true,
+  )
+  await call<Row>('loyalty.reward.archive', { id: 'pos-reward', active: false })
+  const stale = await call<Row>('loyalty_pos.validateOrder', {
+    id: 'pos-loyalty',
+    expectedRevision: beforePayment.revision,
+  })
+  assert.equal(stale.ok, false)
+  const unchanged = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
+  assert.equal(unchanged.state, 'draft')
+  assert.equal(unchanged.pickingId, null)
+  assert.equal(unchanged.accountMoveId, null)
+  await call<Row>('loyalty.reward.archive', { id: 'pos-reward', active: true })
   const validated = await call<Row>('loyalty_pos.validateOrder', { id: 'pos-loyalty' })
   assert.equal(validated.ok, true, JSON.stringify(validated))
   await e2e.client.form('/admin/pos/orders/pos-loyalty', { action: 'validate' })
