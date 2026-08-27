@@ -494,8 +494,8 @@ try {
     },
     {
       name: 'accounting-journal-entries',
-      path: '/admin/accounting/entries?lang=vi',
-      ready: `document.querySelector('#journal-entry-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      path: '/admin/accounting/entries?lang=vi&create=1',
+      ready: `document.querySelector('[data-ui="list-page"]') && document.querySelector('#journal-entry-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
     },
     {
       name: 'accounting-payments',
@@ -3253,7 +3253,8 @@ try {
         await evaluate(
           cdp,
           `({
-        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        list: Boolean(document.querySelector('[data-ui="list-page"]')),
+        modal: Boolean(document.querySelector('[data-ui="modal-layer"]')),
         form: Boolean(document.querySelector('#journal-entry-create-form')),
         entry: document.querySelector('[data-ui="table"]')?.textContent.includes('journal-entry-collab'),
         chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
@@ -3261,11 +3262,19 @@ try {
         overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
       })`,
         ),
-        { workspace: true, form: true, entry: true, chatter: false, rowsAtLeast28: true, overflow: false },
+        {
+          list: true,
+          modal: true,
+          form: true,
+          entry: true,
+          chatter: false,
+          rowsAtLeast28: true,
+          overflow: false,
+        },
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(journalEntriesEvidenceDir, 'journal-entries-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/entries?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/entries?lang=en&create=1`)
       await waitFor(
         cdp,
         `document.querySelector('#journal-entry-create-form') && document.documentElement.lang === 'en'`,
@@ -3286,7 +3295,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/entries?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/entries?lang=${lang}&create=1`)
         await waitFor(
           cdp,
           `document.querySelector('#journal-entry-create-form') && document.documentElement.lang === '${lang}'`,

@@ -175,8 +175,9 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/entries') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="journal-entry-create-form"/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.match(html, /href="\/admin\/accounting\/entries\?create=1"/)
+      assert.doesNotMatch(html, /id="journal-entry-create-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/payments') {

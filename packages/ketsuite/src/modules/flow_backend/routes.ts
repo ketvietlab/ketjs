@@ -788,10 +788,14 @@ export const routes: Record<string, RouteEntry> = {
       // Tagged with the action that produced them, so the screen can put each
       // message under the form it belongs to rather than all of them on top.
       let errors: { action: string; messages: string[] } | undefined
+      let submitted: Record<string, string> = {}
+      let renderedIdempotencyKey: string = randomUUID()
       if (req.method === 'POST') {
         const form = await readForm(req)
+        submitted = form
         const action = form.action ?? ''
-        const idempotencyKey = form.idempotencyKey || randomUUID()
+        renderedIdempotencyKey = form.idempotencyKey || renderedIdempotencyKey
+        const idempotencyKey = renderedIdempotencyKey
         let result: AnyRow | null = null
         if (action === 'save') {
           const existing = (await readable(ctx, url, req, issueId)) as Row | null
@@ -1012,6 +1016,13 @@ export const routes: Record<string, RouteEntry> = {
             fieldDefs,
             editor,
             errors,
+            submitted,
+            locale: localeQuery(url),
+            dialog:
+              url.searchParams.get('dialog') === 'move' || url.searchParams.get('dialog') === 'assignSprint'
+                ? (url.searchParams.get('dialog') as 'move' | 'assignSprint')
+                : undefined,
+            idempotencyKey: renderedIdempotencyKey,
           }),
       })
     },

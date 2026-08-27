@@ -9,6 +9,7 @@ import { partnerRelationControl } from '../partner_backend/relation-control.ts'
 import {
   ACCOUNT_TYPES,
   JOURNAL_TYPES,
+  MOVE_STATES,
   PARTNER_TYPES,
   PAYMENT_TERM_DELAY_TYPES,
   PAYMENT_TERM_VALUES,
@@ -21,6 +22,8 @@ import {
   accountFormModal,
   accountingOverviewScreen,
   accountsListScreen,
+  journalEntriesListScreen,
+  journalEntryCreateModal,
   journalFormModal,
   journalsListScreen,
   labelOf,
@@ -35,7 +38,6 @@ import {
 import { customerInvoicesScreen } from './customer-invoices-screen.tsx'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
-import { journalEntriesScreen } from './journal-entries-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
 import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
@@ -160,6 +162,19 @@ const paymentTermLineModalPath = (url: URL, edit?: unknown): string => {
   const target = new URL(paymentTermListPath(url), 'http://ket.local')
   if (edit !== undefined && edit !== null && String(edit)) target.searchParams.set('editLine', String(edit))
   else target.searchParams.set('line', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const journalEntryListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/entries'
+  for (const key of ['create', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const journalEntryModalPath = (url: URL): string => {
+  const target = new URL(journalEntryListPath(url), 'http://ket.local')
+  target.searchParams.set('create', '1')
   return `${target.pathname}${target.search}`
 }
 
@@ -605,6 +620,7 @@ const moveFields = async (
   _: Translator,
   data: Awaited<ReturnType<typeof common>>,
   types: readonly string[],
+  partnerValue?: string,
 ): Promise<FormField[]> => [
   {
     name: 'journalId',
@@ -638,6 +654,7 @@ const moveFields = async (
       fieldLabel: _('account_backend.field.partnerId'),
       title: _('account_backend.relation.partners'),
       allowEmpty: true,
+      value: partnerValue,
     }),
   },
 ]
@@ -2066,10 +2083,12 @@ export default defineModule({
       async (url, req) => {
         const data = await common(ctx, url, req)
         let rejected: Rejection | undefined
+        let idempotencyKey = ''
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
-          const id = randomUUID()
+          const id = form.id || randomUUID()
+          idempotencyKey = id
           const result = await ctx.call(
             'account.createMove',
             {
@@ -2089,24 +2108,91 @@ export default defineModule({
             return seeOther(`/admin/accounting/entries/${encodeURIComponent(id)}${localeQuery(url)}`)
           rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const state = url.searchParams.get('state')
-        const rows = (await ctx.call(
+        const all = (await ctx.call(
           'account.listMoves',
-          { moveType: 'entry', ...(state ? { state } : {}), limit: LIST_PAGE },
+          { moveType: 'entry', limit: LIST_PAGE },
           url,
           req,
         )) as AnyRow[]
+        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
+          ? url.searchParams.get('state')
+          : null
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          if (state && row.state !== state) return false
+          return (
+            !needle ||
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${String(row.partnerId ?? '')}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const returnTo = journalEntryListPath(url)
+        const modalOpen = req.method === 'POST' || url.searchParams.get('create') === '1'
+        if (modalOpen && !idempotencyKey) idempotencyKey = randomUUID()
         return adminPage(ctx, url, req, {
           title: 'account_backend.entries.title',
-          body: async (_, frame) =>
-            journalEntriesScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/entries${localeQuery(url)}`,
-              fields: restore(await moveFields(ctx, url, req, _, data, ['entry']), rejected),
+          body: async (_, frame) => {
+            const workspace = journalEntriesListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.entries.title'),
+                    keep: {
+                      ...(state ? { state } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: state
+                      ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
+                      : [],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: MOVE_STATES.map((value) => ({
+                          id: `state:${value}`,
+                          label: labelOf(_, 'moveState', value),
+                          path: withParam(url, 'state', state === value ? null : value),
+                          active: state === value,
+                        })),
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, rows.length, matching.length),
+                },
+              },
               rows,
-              locale: localeQuery(url),
-              errors: rejected?.messages,
-            }),
+              createHref: journalEntryModalPath(url),
+              rowHref: (row) =>
+                `/admin/accounting/entries/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
+              summary: {
+                total: all.length,
+                draft: all.filter((row) => row.state === 'draft').length,
+                posted: all.filter((row) => row.state === 'posted').length,
+              },
+            })
+            if (!modalOpen) return workspace
+            return modalWorkspace(
+              workspace,
+              journalEntryCreateModal(_, {
+                frame,
+                action: journalEntryModalPath(url),
+                cancelHref: returnTo,
+                idempotencyKey,
+                fields: restore(
+                  await moveFields(ctx, url, req, _, data, ['entry'], rejected?.values.partnerId),
+                  rejected,
+                ),
+                errors: rejected?.messages,
+              }),
+            )
+          },
         })
       },
     '/admin/accounting/customer-invoices':

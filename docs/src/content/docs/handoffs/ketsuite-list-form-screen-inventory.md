@@ -70,7 +70,7 @@ assigned renderer into `screens/` and finish with a barrel. `account_partner_bac
 | ACC-04 | done | Taxes | `/admin/accounting/taxes`, `/admin/accounting/taxes/new` | `screens/taxes-list.tsx`, `screens/tax-form.tsx` | Split | no | Curie |
 | ACC-05 | done | Payment terms | `/admin/accounting/terms` | `screens/payment-terms-list.tsx`, `screens/payment-term-form.tsx` | Split | no | Curie |
 | ACC-06 | done | Accounting defaults | `/admin/accounting/defaults` | `screens/account-defaults.tsx::accountDefaultsScreen` | FormPage | no | Curie |
-| ACC-07 | ready | Journal entries | `/admin/accounting/entries` | `journalEntriesScreen` | Split | list/new: no | — |
+| ACC-07 | done | Journal entries | `/admin/accounting/entries` | `screens/journal-entries-list.tsx`, `screens/journal-entry-create.tsx` | Split | list/new: no | Curie |
 | ACC-08 | ready | Customer invoices | `/admin/accounting/customer-invoices` | `customerInvoicesScreen` | Split | list/new: no | — |
 | ACC-09 | ready | Vendor bills | `/admin/accounting/vendor-bills` | `vendorBillsScreen` | Split | list/new: no | — |
 | ACC-10 | ready | Shared accounting document detail | `/admin/accounting/entries/{id}`, `/customer-invoices/{id}`, `/vendor-bills/{id}` | `moveDetailScreen` | FormPage | `account_mail_backend` | — |
@@ -176,7 +176,7 @@ leaf files; generated Live Doc endpoints belong to the detail renderer that cons
 | FLOW-02 | keep | Project board | `/admin/flow/projects/{id}/board` | `screens/board.tsx::boardScreen` | Specialized | Huygens |
 | FLOW-03 | done | My/all cross-project issues | `/admin/flow/mine`, `/admin/flow/issues` | `screens/my-work.tsx::crossProjectScreen` | ListPage | Huygens |
 | FLOW-04 | done | Project issues | `/admin/flow/projects/{id}/issues` | `screens/issues.tsx::issuesScreen` | Split | Huygens |
-| FLOW-05 | ready | Issue detail | `/admin/flow/issues/{id}` | `screens/issue-detail.tsx::issueDetailScreen` | FormPage/Specialized | — |
+| FLOW-05 | done | Issue detail | `/admin/flow/issues/{id}` | `screens/issue-detail.tsx::issueDetailScreen` | FormPage/Specialized | Huygens |
 | FLOW-06 | ready | Project page tree | `/admin/flow/projects/{id}/pages` | `screens/pages.tsx::pagesScreen` | Specialized | — |
 | FLOW-07 | ready | All pages | `/admin/flow/pages` | `screens/pages.tsx::allPagesScreen` | ListPage | — |
 | FLOW-08 | ready | Page live editor | `/admin/flow/pages/{id}` | `screens/pages.tsx::pageDetailScreen` | Specialized | — |
@@ -202,12 +202,13 @@ the barrel owns public exports, and the empty root `screens.tsx` no longer exist
 
 ### HR and attendance lanes
 
-Structure debt: both modules still use monolithic `screens.tsx`; each lane creates its own `screens/`
-folder and moves one renderer per assignment.
+Structure debt: `hr_backend/screens.tsx` now contains only roster and leave renderers after Employees moved
+to `hr_backend/screens/`; continue the incremental split. `attendance_backend` still starts from monolithic
+`screens.tsx` and creates its own folder one assignment at a time.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
-| HR-01 | hr | ready | Employees | `/admin/hr` | `employeesScreen` | Split | — |
+| HR-01 | hr | done | Employees | `/admin/hr` | `screens/employees-list.tsx`, `screens/employee-form.tsx` | Split | Kant |
 | HR-02 | hr | ready | Weekly roster | `/admin/hr/roster` | `rosterScreen` | Specialized | — |
 | HR-03 | hr | ready | Leave approvals | `/admin/hr/leaves` | `leavesScreen` | ListPage | — |
 | ATT-01 | attendance | ready | My work | `/my/work` | `myWorkScreen` | Specialized | — |
@@ -941,6 +942,25 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   91/91 and Manufacturing 19/19. Build and diff validation pass. Browser QA is pending a user-side reload of
   the in-app tab because its prior localhost navigation failed while the development watcher was restarting;
   the Browser security policy correctly refused an automated return from the generated network-error page.
+
+### Wave 17 — ACC-07, FLOW-05 and HR-01
+
+- Accounting Journal Entries is now a `ListPage` with state/search/paging controls and lifecycle summaries.
+  Its five-field create workflow opens in a URL-owned large sheet and then redirects straight to the new detail
+  so lines can be added. Locale, CSRF, safe list state, rejected native/relation values, legacy collection POST
+  and stable retry IDs remain; the former root renderer moved into two leaves under `account_backend/screens/`.
+- Flow Issue Detail now uses `FormPage` for issue identity, primary save and attribute rail while keeping Live
+  Doc, attachments, subtasks, dependencies, comments and relation controls as specialized sections. The existing
+  one-field status and sprint actions are URL-owned dialogs; locale, optimistic version, permission checks,
+  attachment endpoints, rejected choices and stable retry keys remain.
+- HR Employees is now a `ListPage` with URL-owned large create/edit dialogs plus inline archive/restore. Partner-
+  backed employee identity, employee role, user/branch/department/job relations, active state, locale, CSRF,
+  rejected values, manager permissions, legacy collection POST and retry-stable create IDs remain. Employee-only
+  renderers moved from `hr_backend/screens.tsx` into `hr_backend/screens/`; roster and leave stay for later waves.
+- Integrated focused validation passes 12/12 tests. The affected CI groups pass Accounting 82/82,
+  Collaboration 94/94 and Identity 103 passed with the existing PostgreSQL-only test skipped locally. Browser
+  screenshots remain deferred with Wave 16 until the in-app tab is manually returned from its generated
+  network-error page to localhost.
 
 ### Modal consolidation through Wave 14 — PR 253
 
