@@ -91,7 +91,24 @@ const sourceReference = {
   },
   required: ['type', 'id', 'displayName', 'version'],
 }
-const summary = {
+export const claimSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    pickingId: string,
+    state: { type: 'string', enum: ['active', 'released'] },
+    claimant: named,
+    ownedByCurrentActor: { type: 'boolean' },
+    claimReason: string,
+    claimedAt: string,
+    releasedBy: named,
+    releaseReason: string,
+    releasedAt: string,
+  },
+  required: ['id', 'pickingId', 'state', 'claimant', 'ownedByCurrentActor', 'claimReason', 'claimedAt'],
+}
+export const summarySchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -109,6 +126,7 @@ const summary = {
     sourceReference,
     version: string,
     scheduledAt: string,
+    claim: claimSchema,
   },
   required: [
     'id',
@@ -164,15 +182,15 @@ const line = {
     'lots',
   ],
 }
-const detail = {
-  ...summary,
-  properties: { ...summary.properties, lines: { type: 'array', items: line } },
-  required: [...summary.required, 'lines'],
+export const detailSchema = {
+  ...summarySchema,
+  properties: { ...summarySchema.properties, lines: { type: 'array', items: line } },
+  required: [...summarySchema.required, 'lines'],
 }
 const page = {
   type: 'object',
   additionalProperties: false,
-  properties: { items: { type: 'array', items: summary }, nextCursor: nullableString },
+  properties: { items: { type: 'array', items: summarySchema }, nextCursor: nullableString },
   required: ['items', 'nextCursor'],
 }
 const envelope = (data: unknown) => ({
@@ -221,27 +239,54 @@ type References = {
   company: Row
   products: Map<string, Row>
   units: Map<string, Row>
+  claims: Map<string, Row>
+  users: Map<string, Row>
+  currentUserId: string
 }
 
-const referencesFor = async (
+export const referencesFor = async (
   ctx: ServeContext,
   url: URL,
   req: Req,
   rows: Row[],
   companyId: string,
+  currentUserId: string,
 ): Promise<References> => {
   const moves = rows.flatMap((row) => (Array.isArray(row.moves) ? (row.moves as Row[]) : []))
   const productIds = [...new Set(moves.map((move) => String(move.productId)))]
   const unitIds = [...new Set(moves.map((move) => String(move.productUomId)))]
-  const [company, products, units] = (await Promise.all([
+  const claims = (await ctx.call(
+    'stock_staff_channel.listActiveClaims',
+    { pickingIds: rows.map((row) => String(row.id)) },
+    url,
+    req,
+  )) as Row[]
+  const userIds = [
+    ...new Set(
+      claims
+        .flatMap((claim) => [claim.actorUserId, claim.releasedByUserId])
+        .filter(Boolean)
+        .map(String),
+    ),
+  ]
+  const [company, products, units, users] = (await Promise.all([
     ctx.call('company.getCompany', { id: companyId }, url, req),
     ctx.call('product.listVariants', { ids: productIds, limit: Math.max(productIds.length, 1) }, url, req),
     ctx.call('uom.listUnits', { ids: unitIds, limit: Math.max(unitIds.length, 1) }, url, req),
-  ])) as [Row, Row[], Row[]]
+    ctx.call(
+      'user.listUsers',
+      { ids: userIds, includeArchived: true, limit: Math.max(userIds.length, 1) },
+      url,
+      req,
+    ),
+  ])) as [Row, Row[], Row[], Row[]]
   return {
     company,
     products: new Map(products.map((row) => [String(row.id), row])),
     units: new Map(units.map((row) => [String(row.id), row])),
+    claims: new Map(claims.map((row) => [String(row.pickingId), row])),
+    users: new Map(users.map((row) => [String(row.id), row])),
+    currentUserId,
   }
 }
 
@@ -290,13 +335,35 @@ const lineOf = (move: Row, refs: References) => {
   }
 }
 
-const project = (row: Row, refs: References, includeLines: boolean): Row => {
+const claimOf = (row: Row, refs: References): Row | null => {
+  const claim = refs.claims.get(String(row.id))
+  if (!claim) return null
+  const claimant = refs.users.get(String(claim.actorUserId)) ?? { id: claim.actorUserId }
+  const releasedBy = claim.releasedByUserId ? refs.users.get(String(claim.releasedByUserId)) : null
+  return {
+    id: String(claim.id),
+    pickingId: String(claim.pickingId),
+    state: String(claim.state),
+    claimant: { id: String(claim.actorUserId), name: String(claimant.name ?? claim.actorUserId) },
+    ownedByCurrentActor: String(claim.actorUserId) === refs.currentUserId,
+    claimReason: String(claim.claimReason),
+    claimedAt: String(claim.claimedAt),
+    ...(releasedBy
+      ? { releasedBy: { id: String(releasedBy.id), name: String(releasedBy.name ?? releasedBy.id) } }
+      : {}),
+    ...(claim.releaseReason ? { releaseReason: String(claim.releaseReason) } : {}),
+    ...(claim.releasedAt ? { releasedAt: String(claim.releasedAt) } : {}),
+  }
+}
+
+export const projectPicking = (row: Row, refs: References, includeLines: boolean): Row => {
   const moves = Array.isArray(row.moves) ? (row.moves as Row[]) : []
   const lines = moves.map((move) => lineOf(move, refs))
   const pickingType = (row.pickingType ?? {}) as Row
   const code = PICKING_TYPE_CODES.includes(pickingType.code as never) ? String(pickingType.code) : 'internal'
   const origins = [...new Set(moves.map((move) => String(move.origin ?? '').trim()).filter(Boolean))]
   const tracked = lines.filter((entry) => entry.tracking !== 'none')
+  const claim = claimOf(row, refs)
   const content: Row = {
     id: String(row.id),
     title: String(row.name),
@@ -318,12 +385,17 @@ const project = (row: Row, refs: References, includeLines: boolean): Row => {
       allRequirementsSatisfied: tracked.every((entry) => entry.trackingRequirement === 'satisfied'),
     },
     quality: { status: 'unavailable', requirements: [] },
-    nextAction: {
-      code: 'review_in_ketsuite',
-      label: 'Continue in KetSuite',
-      supported: false,
-      reason: 'MOBILE_WAREHOUSE_READ_ONLY',
-    },
+    ...(claim ? { claim } : {}),
+    nextAction: claim?.ownedByCurrentActor
+      ? { code: 'execute', label: 'Continue warehouse execution', supported: true }
+      : claim
+        ? {
+            code: 'wait_for_claim',
+            label: 'Transfer is being processed',
+            supported: false,
+            reason: 'CLAIMED',
+          }
+        : { code: 'claim', label: 'Claim transfer', supported: true },
     ...(row.scheduledDate ? { scheduledAt: String(row.scheduledDate) } : {}),
     // Lines carry the resolved labels, so they belong to the hashed content even
     // on the list, where they are not returned: a picking must not report two
@@ -375,11 +447,18 @@ export const channelRoutes = routesOf(
       const limit = positive(url.searchParams.get('limit'), 20, 100)
       const offset = offsetOf(url.searchParams.get('cursor'))
       const rows = (await ctx.call('stock.listPickingViews', { limit: limit + 1, offset }, url, req)) as Row[]
-      const refs = await referencesFor(ctx, url, req, rows, String(request.identity!.companyId))
+      const refs = await referencesFor(
+        ctx,
+        url,
+        req,
+        rows,
+        String(request.identity!.companyId),
+        request.identity!.userId,
+      )
       const hasMore = rows.length > limit
       return {
         data: {
-          items: rows.slice(0, limit).map((row) => project(row, refs, false)),
+          items: rows.slice(0, limit).map((row) => projectPicking(row, refs, false)),
           nextCursor: hasMore ? cursorOf(offset + limit) : null,
         },
       }
@@ -401,12 +480,19 @@ export const channelRoutes = routesOf(
         required: ['id'],
       },
     },
-    responses: { '200': envelope(detail), '404': envelope({ type: 'null' }) },
+    responses: { '200': envelope(detailSchema), '404': envelope({ type: 'null' }) },
     handler: async (ctx, url, req, params, request) => {
       const row = (await ctx.call('stock.getPickingView', { id: params.id }, url, req)) as Row | null
       if (!row) return notFound(ctx, url, req)
-      const refs = await referencesFor(ctx, url, req, [row], String(request.identity!.companyId))
-      const data = project(row, refs, true)
+      const refs = await referencesFor(
+        ctx,
+        url,
+        req,
+        [row],
+        String(request.identity!.companyId),
+        request.identity!.userId,
+      )
+      const data = projectPicking(row, refs, true)
       return { data, headers: { etag: `"${String(data.version)}"` } }
     },
   }),

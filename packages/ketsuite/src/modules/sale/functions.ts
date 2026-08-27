@@ -325,6 +325,12 @@ export const functions: Record<string, FnSpec> = {
       states: 'json?',
       partnerId: 'id?',
       search: 'text?',
+      // A caller reporting on a window wants that window, not the history in
+      // front of it. Without these it had to page until the table ran out and
+      // discard the rest in memory, which is the cost this list was bounded to
+      // avoid in the first place.
+      dateFrom: 'datetime?',
+      dateTo: 'datetime?',
       limit: 'int?',
       offset: 'int?',
     },
@@ -344,6 +350,8 @@ export const functions: Record<string, FnSpec> = {
             ...(args.state ? [eq(O.state, String(args.state))] : []),
             ...(states.length ? [inArray(O.state, states)] : []),
             ...(args.partnerId ? [eq(O.partnerId, String(args.partnerId))] : []),
+            ...(args.dateFrom ? [gte(O.dateOrder, String(args.dateFrom))] : []),
+            ...(args.dateTo ? [lt(O.dateOrder, String(args.dateTo))] : []),
             ...(args.search
               ? [
                   or(
