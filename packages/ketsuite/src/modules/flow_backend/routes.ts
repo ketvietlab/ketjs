@@ -1536,23 +1536,50 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const pages = (await ctx.call(
-        'flow.page.list',
-        { search: url.searchParams.get('q') ?? '' },
-        url,
-        req,
-      )) as AnyRow[]
+      const search = url.searchParams.get('q') ?? ''
+      const pages = (await ctx.call('flow.page.list', { search, limit: 500 }, url, req)) as AnyRow[]
       // The project each page belongs to, batched — there is no JOIN, so the
       // names come back in one `inArray` read rather than one call per row.
       const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
       const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
-      const rows = pages.map((page) => ({
+      const namedPages = pages.map((page) => ({
         ...page,
         projectName: named.get(String(page.projectId)) ?? '',
       }))
+      const currentPage = Math.max(1, Number(url.searchParams.get('page') ?? 1) || 1)
+      const cursor = (currentPage - 1) * LIST_PAGE_SIZE
+      const rows = namedPages.slice(cursor, cursor + LIST_PAGE_SIZE)
+      const pageHref = (page: number): string => {
+        const target = new URL(url)
+        if (page <= 1) target.searchParams.delete('page')
+        else target.searchParams.set('page', String(page))
+        return `${target.pathname}${target.search}`
+      }
       return adminPage(ctx, url, req, {
         title: 'flow_backend.pages.allTitle',
-        body: (t, frame) => allPagesScreen(t, frame, t('flow_backend.pages.allTitle'), rows),
+        body: (t, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: search,
+              placeholder: t('flow_backend.pages.search'),
+              keep: keepForListSearch(url),
+            },
+            pager: {
+              from: rows.length ? cursor + 1 : 0,
+              to: Math.min(cursor + rows.length, namedPages.length),
+              total: namedPages.length,
+              prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
+              next: cursor + rows.length < namedPages.length ? pageHref(currentPage + 1) : null,
+            },
+          }
+          return allPagesScreen(t, frame, {
+            title: t('flow_backend.pages.allTitle'),
+            pages: rows,
+            total: namedPages.length,
+            locale: localeQuery(url),
+          })
+        },
       })
     },
 

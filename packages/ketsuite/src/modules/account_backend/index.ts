@@ -37,13 +37,14 @@ import {
   paymentTermsListScreen,
   taxFormScreen,
   taxesListScreen,
+  vendorBillFormScreen,
+  vendorBillsListScreen,
 } from './screens/index.ts'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
 import { moveDetailScreen } from './move-detail-screen.tsx'
 import { paymentsScreen } from './payments-screen.tsx'
 import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
-import { vendorBillsScreen } from './vendor-bills-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { overviewCharts, periodOf, yearsOf } from './overview.ts'
@@ -202,6 +203,34 @@ const safeCustomerInvoiceReturnTo = (url: URL): string => {
 
 const customerInvoiceFormPath = (url: URL, returnTo: string): string => {
   const target = new URL('/admin/accounting/customer-invoices/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+
+const VENDOR_BILL_TYPES = ['in_invoice', 'in_refund', 'in_receipt'] as const
+
+const vendorBillListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/vendor-bills'
+  for (const key of ['create', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safeVendorBillReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/vendor-bills${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/vendor-bills'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const vendorBillFormPath = (url: URL, returnTo: string): string => {
+  const target = new URL('/admin/accounting/vendor-bills/new', url)
   target.search = ''
   const lang = url.searchParams.get('lang')
   if (lang) target.searchParams.set('lang', lang)
@@ -2401,31 +2430,165 @@ export default defineModule({
     '/admin/accounting/vendor-bills':
       (ctx): Route =>
       async (url, req) => {
-        const data = await common(ctx, url, req)
         let rejected: Rejection | undefined
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const outcome = await createInvoice(ctx, url, req)
           if ('done' in outcome) return outcome.done
           rejected = outcome.rejected
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call(
+        const data = await common(ctx, url, req)
+        if (rejected)
+          return adminPage(ctx, url, req, {
+            title: 'account_backend.vendorBill.create.title',
+            body: async (_, frame) =>
+              vendorBillFormScreen(_, {
+                frame,
+                action: vendorBillListPath(url),
+                cancelHref: vendorBillListPath(url),
+                idempotencyKey: rejected.values.id ?? randomUUID(),
+                fields: restore(
+                  await invoiceFields(ctx, url, req, _, data, VENDOR_BILL_TYPES, rejected.values),
+                  rejected,
+                ),
+                errors: rejected.messages,
+              }),
+          })
+        const all = (await ctx.call(
           'account.listMoves',
-          { moveTypes: ['in_invoice', 'in_refund', 'in_receipt'], limit: LIST_PAGE },
+          { moveTypes: VENDOR_BILL_TYPES, limit: LIST_PAGE },
           url,
           req,
         )) as AnyRow[]
+        const state = MOVE_STATES.includes(String(url.searchParams.get('state')) as never)
+          ? url.searchParams.get('state')
+          : null
+        const payment = PAYMENT_STATES.includes(String(url.searchParams.get('payment')) as never)
+          ? url.searchParams.get('payment')
+          : null
+        const type = VENDOR_BILL_TYPES.includes(String(url.searchParams.get('type')) as never)
+          ? url.searchParams.get('type')
+          : null
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const partnerLabels = new Map(
+          data.partners.map((partner) => [String(partner.id), String(partner.name)]),
+        )
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          if (state && row.state !== state) return false
+          if (payment && row.paymentState !== payment) return false
+          if (type && row.moveType !== type) return false
+          return (
+            !needle ||
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const returnTo = vendorBillListPath(url)
         return adminPage(ctx, url, req, {
           title: 'account_backend.vendorBills.title',
+          body: (_, frame) =>
+            vendorBillsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.vendorBills.title'),
+                    keep: {
+                      ...(state ? { state } : {}),
+                      ...(payment ? { payment } : {}),
+                      ...(type ? { type } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(state
+                        ? [{ label: labelOf(_, 'moveState', state), without: withParam(url, 'state', null) }]
+                        : []),
+                      ...(payment
+                        ? [
+                            {
+                              label: labelOf(_, 'paymentState', payment),
+                              without: withParam(url, 'payment', null),
+                            },
+                          ]
+                        : []),
+                      ...(type
+                        ? [{ label: labelOf(_, 'moveType', type), without: withParam(url, 'type', null) }]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          ...MOVE_STATES.map((value) => ({
+                            id: `state:${value}`,
+                            label: labelOf(_, 'moveState', value),
+                            path: withParam(url, 'state', state === value ? null : value),
+                            active: state === value,
+                          })),
+                          ...PAYMENT_STATES.map((value) => ({
+                            id: `payment:${value}`,
+                            label: labelOf(_, 'paymentState', value),
+                            path: withParam(url, 'payment', payment === value ? null : value),
+                            active: payment === value,
+                          })),
+                          ...VENDOR_BILL_TYPES.map((value) => ({
+                            id: `type:${value}`,
+                            label: labelOf(_, 'moveType', value),
+                            path: withParam(url, 'type', type === value ? null : value),
+                            active: type === value,
+                          })),
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, rows.length, matching.length),
+                },
+              },
+              rows,
+              createHref: vendorBillFormPath(url, returnTo),
+              rowHref: (row) =>
+                `/admin/accounting/vendor-bills/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
+              partnerLabel: (row) => partnerLabels.get(String(row.partnerId)) ?? '—',
+              summary: {
+                total: all.length,
+                draft: all.filter((row) => row.state === 'draft').length,
+                posted: all.filter((row) => row.state === 'posted').length,
+                unpaid: all.filter((row) => row.paymentState === 'not_paid').length,
+              },
+            }),
+        })
+      },
+    '/admin/accounting/vendor-bills/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const outcome = await createInvoice(ctx, url, req)
+          if ('done' in outcome) return outcome.done
+          rejected = outcome.rejected
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        const returnTo = safeVendorBillReturnTo(url)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.vendorBill.create.title',
           body: async (_, frame) =>
-            vendorBillsScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/vendor-bills${localeQuery(url)}`,
+            vendorBillFormScreen(_, {
+              frame,
+              action: vendorBillFormPath(url, returnTo),
+              cancelHref: returnTo,
+              idempotencyKey: rejected?.values.id ?? randomUUID(),
               fields: restore(
-                await invoiceFields(ctx, url, req, _, data, ['in_invoice', 'in_refund', 'in_receipt']),
+                await invoiceFields(ctx, url, req, _, data, VENDOR_BILL_TYPES, rejected?.values),
                 rejected,
               ),
-              rows,
-              locale: localeQuery(url),
               errors: rejected?.messages,
             }),
         })

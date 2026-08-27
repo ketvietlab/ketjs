@@ -3,11 +3,11 @@ import type { Route, RouteEntry, ServeContext, Translator } from '@ketvietlab/ke
 import { modalWorkspace } from '../../ui/index.ts'
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
-import { employeeFormModal, employeesListScreen, rosterScreen } from './screens/index.ts'
+import { employeeFormModal, employeesListScreen, leavesListScreen, rosterScreen } from './screens/index.ts'
 import type { EmployeeFormValues } from './screens/index.ts'
-import { leavesScreen } from './screens.tsx'
 
 const errors = (result: unknown, _: Translator) => resultErrors(result, _, 'hr_backend.error.invalid')
 
@@ -59,6 +59,20 @@ const rosterWorkflowPath = (url: URL, roster: AnyRow, branchId: string, weekStar
     url,
     `/admin/hr/roster?id=${encodeURIComponent(String(roster.id))}&version=${encodeURIComponent(String(roster.version))}&branch=${encodeURIComponent(branchId)}&week=${encodeURIComponent(weekStart)}`,
   )
+
+const leaveStates = ['requested', 'approved', 'rejected', 'cancelled'] as const
+
+const leaveListUrl = (url: URL): URL => {
+  const next = new URL(url.href)
+  next.pathname = '/admin/hr/leaves'
+  next.searchParams.delete('id')
+  return next
+}
+
+const leaveListPath = (url: URL): string => {
+  const next = leaveListUrl(url)
+  return next.pathname + next.search
+}
 
 const branchesOf = async (ctx: ServeContext, url: URL, req: Req): Promise<Array<AnyRow>> => {
   const scope = await ctx.scopeOf(url, req)
@@ -295,21 +309,114 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hr/leaves':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      let result: unknown = { ok: true }
       if (req.method === 'POST') {
         const form = await readForm(req)
-        await ctx.call(
+        result = await ctx.call(
           'hr.leave.manageDecision',
           { id: url.searchParams.get('id'), decision: form.action },
           url,
           req,
         )
-        return seeOther('/admin/hr/leaves')
-      }
-      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const rows = (await ctx.call('hr.leave.manageList', {}, url, req)) as AnyRow[]
+        if ((result as { ok?: boolean }).ok) return seeOther(leaveListPath(url))
+      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+
+      const viewUrl = leaveListUrl(url)
+      const askedState = viewUrl.searchParams.get('state') ?? ''
+      const state = leaveStates.includes(askedState as (typeof leaveStates)[number]) ? askedState : ''
+      const search = searchOf(viewUrl) ?? ''
+      const page = pageOf(viewUrl)
+      const [requests, employees] = await Promise.all([
+        ctx.call('hr.leave.manageList', state ? { state } : {}, url, req) as Promise<AnyRow[]>,
+        ctx.call('hr.employee.manageList', { includeArchived: true }, url, req) as Promise<AnyRow[]>,
+      ])
+      const employeeNames = new Map(
+        employees.map((row) => [
+          String(row.id),
+          row.name ? `${String(row.code)} · ${String(row.name)}` : String(row.code ?? row.id),
+        ]),
+      )
+      const needle = search.toLocaleLowerCase(ctx.localeOf(url, req))
+      const matching = requests
+        .map(
+          (row): AnyRow => ({
+            ...row,
+            employee: employeeNames.get(String(row.employeeId)) ?? String(row.employeeId),
+          }),
+        )
+        .filter((row) =>
+          needle
+            ? [
+                row.id,
+                row.employee,
+                row.employeeId,
+                row.leaveTypeId,
+                row.dateFrom,
+                row.dateTo,
+                row.reason,
+                row.state,
+              ].some((value) =>
+                String(value ?? '')
+                  .toLocaleLowerCase(ctx.localeOf(url, req))
+                  .includes(needle),
+              )
+            : true,
+        )
+      const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
       return adminPage(ctx, url, req, {
         title: 'hr_backend.leaves.title',
-        body: (_, frame) => leavesScreen(_, frame, rows),
+        active: '/admin/hr/leaves',
+        body: (_, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: search,
+              placeholder: _('hr_backend.search.leaves'),
+              keep: {
+                ...(state ? { state } : {}),
+                ...(viewUrl.searchParams.get('lang') ? { lang: viewUrl.searchParams.get('lang')! } : {}),
+              },
+              facets: state
+                ? [
+                    {
+                      label: _(`hr_backend.state.${state}`),
+                      without: withParam(viewUrl, 'state', null),
+                    },
+                  ]
+                : [],
+              menus: [
+                {
+                  id: 'state',
+                  label: _('backend.chrome.filters'),
+                  items: leaveStates.map((value) => ({
+                    id: `state:${value}`,
+                    label: _(`hr_backend.state.${value}`),
+                    path: withParam(viewUrl, 'state', state === value ? null : value),
+                    active: state === value,
+                  })),
+                },
+              ],
+            },
+            pager: pager(viewUrl, page, rows.length, matching.length),
+          }
+          return leavesListScreen(_, frame, {
+            errors: errors(result, _),
+            rows: rows.map((row) => ({
+              id: String(row.id),
+              employee: String(row.employee),
+              leaveType: String(row.leaveTypeId),
+              dateFrom: String(row.dateFrom),
+              dateTo: String(row.dateTo),
+              requestedDays: String(row.requestedDays),
+              reason: row.reason == null ? undefined : String(row.reason),
+              state: String(row.state),
+              action: withParam(viewUrl, 'id', String(row.id), false),
+            })),
+            total: matching.length,
+          })
+        },
       })
     },
 }

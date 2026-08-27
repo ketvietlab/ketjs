@@ -15,48 +15,6 @@ import type { AnyRow } from './shared.tsx'
 import { empty } from './shared.tsx'
 
 /**
- * Every document the reader can see, across projects.
- *
- * Flat, not a tree: pages from different projects have no shared root, so the
- * hierarchy that makes sense inside one project is noise across all of them.
- * The project's name is the summary, which is the thing you actually need to
- * tell two similarly-titled docs apart.
- */
-export const allPagesScreen = (
-  _: Translator,
-  frame: Frame,
-  title: string,
-  pages: readonly AnyRow[],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={title}
-    frame={frame}
-    body={stack([
-      pages.length ? (
-        <Section
-          title={_('flow_backend.pages.title')}
-          body={
-            <RecordList
-              rows={pages}
-              id={(page) => String(page.id)}
-              title={(page) => String(page.title ?? '')}
-              href={(page) => `/admin/flow/pages/${String(page.id)}`}
-              summary={(page) =>
-                String(page.previewText ?? '').slice(0, 140) || _('flow_backend.pages.emptyDocument')
-              }
-              value={(page) => String(page.projectName ?? '')}
-            />
-          }
-        />
-      ) : (
-        empty(_)
-      ),
-    ])}
-  />
-)
-
-/**
  * One page: where it sits, its title, its document, and what hangs off it.
  *
  * The editor is placed through a joint rather than written here, the same way

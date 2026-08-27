@@ -489,8 +489,8 @@ try {
     },
     {
       name: 'accounting-vendor-bills',
-      path: '/admin/accounting/vendor-bills?lang=vi',
-      ready: `document.querySelector('#vendor-bill-create-form') && document.querySelectorAll('[data-ui="table"] [data-ui="row"]').length >= 1`,
+      path: '/admin/accounting/vendor-bills/new?lang=vi',
+      ready: `document.querySelector('[data-ui="form-page"]') && document.querySelector('#vendor-bill-create-form')`,
     },
     {
       name: 'accounting-journal-entries',
@@ -3136,19 +3136,18 @@ try {
         await evaluate(
           cdp,
           `({
-        workspace: Boolean(document.querySelector('[data-ui="record-workspace"]')),
+        formPage: Boolean(document.querySelector('[data-ui="form-page"]')),
         form: Boolean(document.querySelector('#vendor-bill-create-form')),
-        bill: document.querySelector('[data-ui="table"]')?.textContent.includes('vendor-bill-collab'),
         chatter: Boolean(document.querySelector('ket-island[data-island="mail.chatter"]')),
         rowsAtLeast28: Array.from(document.querySelectorAll('#vendor-bill-create-form [data-ui="form-field"]')).every((field) => field.getBoundingClientRect().height >= 28),
         overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
       })`,
         ),
-        { workspace: true, form: true, bill: true, chatter: false, rowsAtLeast28: true, overflow: false },
+        { formPage: true, form: true, chatter: false, rowsAtLeast28: true, overflow: false },
       )
       await evaluate(cdp, `scrollTo(0, 0)`)
       if (!noArtifacts) await capture(cdp, join(vendorBillsEvidenceDir, 'vendor-bills-vi-desktop.png'))
-      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/vendor-bills?lang=en`)
+      await navigate(cdp, `${e2e.baseUrl}/admin/accounting/vendor-bills/new?lang=en`)
       await waitFor(
         cdp,
         `document.querySelector('#vendor-bill-create-form') && document.documentElement.lang === 'en'`,
@@ -3169,7 +3168,7 @@ try {
         mobile: true,
       })
       for (const lang of ['vi', 'en']) {
-        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/vendor-bills?lang=${lang}`)
+        await navigate(cdp, `${e2e.baseUrl}/admin/accounting/vendor-bills/new?lang=${lang}`)
         await waitFor(
           cdp,
           `document.querySelector('#vendor-bill-create-form') && document.documentElement.lang === '${lang}'`,
