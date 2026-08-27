@@ -5204,7 +5204,70 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object"
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "defaultPropertyId": {
+                          "type": ["string", "null"]
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "timezone": {
+                                "type": "string"
+                              },
+                              "defaultCheckIn": {
+                                "type": "string"
+                              },
+                              "defaultCheckOut": {
+                                "type": "string"
+                              },
+                              "roomCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name",
+                              "timezone",
+                              "defaultCheckIn",
+                              "defaultCheckOut",
+                              "roomCount"
+                            ]
+                          }
+                        },
+                        "permissions": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "canManage": {
+                              "type": "boolean"
+                            },
+                            "canManageFinancials": {
+                              "type": "boolean"
+                            },
+                            "canRefund": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": ["canManage", "canManageFinancials", "canRefund"]
+                        }
+                      },
+                      "required": ["defaultPropertyId", "properties", "permissions"]
                     },
                     "error": {},
                     "meta": {
@@ -5255,7 +5318,363 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object"
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "property": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "timezone": {
+                              "type": "string"
+                            },
+                            "defaultCheckIn": {
+                              "type": "string"
+                            },
+                            "defaultCheckOut": {
+                              "type": "string"
+                            },
+                            "roomCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "code",
+                            "name",
+                            "timezone",
+                            "defaultCheckIn",
+                            "defaultCheckOut",
+                            "roomCount"
+                          ]
+                        },
+                        "businessDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "counts": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "arrivals": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "inHouse": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "departures": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": ["arrivals", "inHouse", "departures"]
+                        },
+                        "arrivals": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "draft",
+                                  "confirmed",
+                                  "checked_in",
+                                  "checked_out",
+                                  "no_show",
+                                  "cancelled"
+                                ]
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "bookingType": {
+                                "type": "string",
+                                "enum": ["nightly", "hourly", "weekly", "monthly"]
+                              },
+                              "guest": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "roomType": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "schedule": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "checkIn": {
+                                    "type": "string"
+                                  },
+                                  "checkOut": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["checkIn", "checkOut"]
+                              },
+                              "party": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "adults": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "children": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  }
+                                },
+                                "required": ["adults", "children"]
+                              },
+                              "version": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "source",
+                              "bookingType",
+                              "guest",
+                              "roomType",
+                              "schedule",
+                              "party",
+                              "version"
+                            ]
+                          }
+                        },
+                        "inHouse": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "bookingType": {
+                                "type": "string",
+                                "enum": ["nightly", "hourly", "weekly", "monthly"]
+                              },
+                              "guest": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "roomType": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "room": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "schedule": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "checkIn": {
+                                    "type": "string"
+                                  },
+                                  "checkOut": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["checkIn", "checkOut"]
+                              },
+                              "version": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "bookingType",
+                              "guest",
+                              "roomType",
+                              "room",
+                              "schedule",
+                              "version"
+                            ]
+                          }
+                        },
+                        "departures": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "bookingType": {
+                                "type": "string",
+                                "enum": ["nightly", "hourly", "weekly", "monthly"]
+                              },
+                              "guest": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "roomType": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "room": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "schedule": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "checkIn": {
+                                    "type": "string"
+                                  },
+                                  "checkOut": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["checkIn", "checkOut"]
+                              },
+                              "version": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "bookingType",
+                              "guest",
+                              "roomType",
+                              "room",
+                              "schedule",
+                              "version"
+                            ]
+                          }
+                        }
+                      },
+                      "required": ["property", "businessDate", "counts", "arrivals", "inHouse", "departures"]
                     },
                     "error": {},
                     "meta": {
@@ -5539,7 +5958,275 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object"
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": ["draft", "confirmed", "checked_in", "checked_out", "no_show", "cancelled"]
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "bookingType": {
+                          "type": "string",
+                          "enum": ["nightly", "hourly", "weekly", "monthly"]
+                        },
+                        "guest": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "roomType": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "schedule": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "checkIn": {
+                              "type": "string"
+                            },
+                            "checkOut": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["checkIn", "checkOut"]
+                        },
+                        "party": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "adults": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "children": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": ["adults", "children"]
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "property": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "timezone": {
+                                  "type": "string"
+                                },
+                                "defaultCheckIn": {
+                                  "type": "string"
+                                },
+                                "defaultCheckOut": {
+                                  "type": "string"
+                                },
+                                "roomCount": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code",
+                                "name",
+                                "timezone",
+                                "defaultCheckIn",
+                                "defaultCheckOut",
+                                "roomCount"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        },
+                        "stay": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "reference": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string"
+                                },
+                                "bookingType": {
+                                  "type": "string",
+                                  "enum": ["nightly", "hourly", "weekly", "monthly"]
+                                },
+                                "guest": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "roomType": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "room": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": ["id", "name"]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "schedule": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "checkIn": {
+                                      "type": "string"
+                                    },
+                                    "checkOut": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["checkIn", "checkOut"]
+                                },
+                                "version": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "reference",
+                                "state",
+                                "bookingType",
+                                "guest",
+                                "roomType",
+                                "room",
+                                "schedule",
+                                "version"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "folio": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "reference": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string"
+                                },
+                                "amountTotal": {
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "reference", "state", "amountTotal", "version"]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "source",
+                        "bookingType",
+                        "guest",
+                        "roomType",
+                        "schedule",
+                        "party",
+                        "version",
+                        "property",
+                        "readOnly",
+                        "stay",
+                        "folio"
+                      ]
                     },
                     "error": {},
                     "meta": {
@@ -5617,7 +6304,191 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object"
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "bookingType": {
+                          "type": "string",
+                          "enum": ["nightly", "hourly", "weekly", "monthly"]
+                        },
+                        "guest": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "roomType": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "room": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "schedule": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "checkIn": {
+                              "type": "string"
+                            },
+                            "checkOut": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["checkIn", "checkOut"]
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "property": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "timezone": {
+                                  "type": "string"
+                                },
+                                "defaultCheckIn": {
+                                  "type": "string"
+                                },
+                                "defaultCheckOut": {
+                                  "type": "string"
+                                },
+                                "roomCount": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code",
+                                "name",
+                                "timezone",
+                                "defaultCheckIn",
+                                "defaultCheckOut",
+                                "roomCount"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "folio": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "reference": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string"
+                                },
+                                "amountTotal": {
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "reference", "state", "amountTotal", "version"]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "guests": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "isPrimary": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["id", "name", "isPrimary"]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "bookingType",
+                        "guest",
+                        "roomType",
+                        "room",
+                        "schedule",
+                        "version",
+                        "property",
+                        "folio",
+                        "guests"
+                      ]
                     },
                     "error": {},
                     "meta": {
@@ -5695,7 +6566,131 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object"
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "amountTotal": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "guest": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["id", "name"]
+                        },
+                        "charges": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "chargeType": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "string"
+                              },
+                              "unitPrice": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "string"
+                              },
+                              "occurredAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "state": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "description",
+                              "chargeType",
+                              "quantity",
+                              "unitPrice",
+                              "amount",
+                              "occurredAt",
+                              "state"
+                            ]
+                          }
+                        },
+                        "invoice": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "reference": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string"
+                                },
+                                "paymentStatus": {
+                                  "type": "string"
+                                },
+                                "amountTotal": {
+                                  "type": "string"
+                                },
+                                "amountDue": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "reference",
+                                "state",
+                                "paymentStatus",
+                                "amountTotal",
+                                "amountDue"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "state",
+                        "amountTotal",
+                        "version",
+                        "guest",
+                        "charges",
+                        "invoice"
+                      ]
                     },
                     "error": {},
                     "meta": {
@@ -5946,7 +6941,362 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object"
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "property": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "timezone": {
+                              "type": "string"
+                            },
+                            "defaultCheckIn": {
+                              "type": "string"
+                            },
+                            "defaultCheckOut": {
+                              "type": "string"
+                            },
+                            "roomCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "code",
+                            "name",
+                            "timezone",
+                            "defaultCheckIn",
+                            "defaultCheckOut",
+                            "roomCount"
+                          ]
+                        },
+                        "roomTypes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "name"]
+                          }
+                        },
+                        "rooms": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "roomType": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "state": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "name", "roomType", "state"]
+                          }
+                        },
+                        "stays": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "bookingType": {
+                                "type": "string",
+                                "enum": ["nightly", "hourly", "weekly", "monthly"]
+                              },
+                              "guest": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "roomType": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              },
+                              "room": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "schedule": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "checkIn": {
+                                    "type": "string"
+                                  },
+                                  "checkOut": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["checkIn", "checkOut"]
+                              },
+                              "version": {
+                                "type": "string"
+                              },
+                              "property": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "code": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "timezone": {
+                                        "type": "string"
+                                      },
+                                      "defaultCheckIn": {
+                                        "type": "string"
+                                      },
+                                      "defaultCheckOut": {
+                                        "type": "string"
+                                      },
+                                      "roomCount": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "code",
+                                      "name",
+                                      "timezone",
+                                      "defaultCheckIn",
+                                      "defaultCheckOut",
+                                      "roomCount"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "folio": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "reference": {
+                                        "type": "string"
+                                      },
+                                      "state": {
+                                        "type": "string"
+                                      },
+                                      "amountTotal": {
+                                        "type": "string"
+                                      },
+                                      "version": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "reference", "state", "amountTotal", "version"]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "guests": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "isPrimary": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": ["id", "name", "isPrimary"]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "reference",
+                              "state",
+                              "bookingType",
+                              "guest",
+                              "roomType",
+                              "room",
+                              "schedule",
+                              "version",
+                              "property",
+                              "folio",
+                              "guests"
+                            ]
+                          }
+                        },
+                        "folios": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "reference": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "amountTotal": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "reference", "state", "amountTotal", "version"]
+                          }
+                        },
+                        "housekeepingAssignees": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "name"]
+                          }
+                        },
+                        "paymentJournals": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": ["bank", "cash"]
+                              }
+                            },
+                            "required": ["id", "name", "type"]
+                          }
+                        },
+                        "supportedOperations": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "property",
+                        "roomTypes",
+                        "rooms",
+                        "stays",
+                        "folios",
+                        "housekeepingAssignees",
+                        "paymentJournals",
+                        "supportedOperations"
+                      ]
                     },
                     "error": {},
                     "meta": {
@@ -16826,7 +18176,462 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object"
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "picking": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["waiting", "ready", "in_progress", "blocked", "done", "cancelled"]
+                            },
+                            "context": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "company": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "warehouse": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "sourceLocation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "destinationLocation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "operation": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "code": {
+                                      "type": "string",
+                                      "enum": ["incoming", "outgoing", "internal"]
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["code", "name"]
+                                },
+                                "sourceDocument": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": ["other", "none"]
+                                    },
+                                    "reference": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["type"]
+                                }
+                              },
+                              "required": [
+                                "company",
+                                "sourceLocation",
+                                "destinationLocation",
+                                "operation",
+                                "sourceDocument"
+                              ]
+                            },
+                            "progress": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "lineCount": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "completedLineCount": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              },
+                              "required": ["lineCount", "completedLineCount"]
+                            },
+                            "tracking": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "lotOrSerialRequired": {
+                                  "type": "boolean"
+                                },
+                                "allRequirementsSatisfied": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": ["lotOrSerialRequired", "allRequirementsSatisfied"]
+                            },
+                            "quality": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "status": {
+                                  "type": "string",
+                                  "enum": ["not_required", "pending", "passed", "failed", "unavailable"]
+                                },
+                                "requirements": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": ["status", "requirements"]
+                            },
+                            "nextAction": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "supported": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["code", "label", "supported"]
+                            },
+                            "sourceReference": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "stock_picking"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "displayName": {
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["type", "id", "displayName", "version"]
+                            },
+                            "version": {
+                              "type": "string"
+                            },
+                            "scheduledAt": {
+                              "type": "string"
+                            },
+                            "claim": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "pickingId": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": ["active", "released"]
+                                },
+                                "claimant": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "ownedByCurrentActor": {
+                                  "type": "boolean"
+                                },
+                                "claimReason": {
+                                  "type": "string"
+                                },
+                                "claimedAt": {
+                                  "type": "string"
+                                },
+                                "releasedBy": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "releaseReason": {
+                                  "type": "string"
+                                },
+                                "releasedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "pickingId",
+                                "state",
+                                "claimant",
+                                "ownedByCurrentActor",
+                                "claimReason",
+                                "claimedAt"
+                              ]
+                            },
+                            "lines": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "product": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "uom": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": ["id", "name"]
+                                  },
+                                  "expectedQuantity": {
+                                    "type": "string"
+                                  },
+                                  "doneQuantity": {
+                                    "type": "string"
+                                  },
+                                  "remainingQuantity": {
+                                    "type": "string"
+                                  },
+                                  "tracking": {
+                                    "type": "string",
+                                    "enum": ["none", "lot", "serial"]
+                                  },
+                                  "trackingRequirement": {
+                                    "type": "string",
+                                    "enum": ["not_required", "required", "satisfied"]
+                                  },
+                                  "lots": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "quantity": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": ["name", "quantity"]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "product",
+                                  "uom",
+                                  "expectedQuantity",
+                                  "doneQuantity",
+                                  "remainingQuantity",
+                                  "tracking",
+                                  "trackingRequirement",
+                                  "lots"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "title",
+                            "state",
+                            "context",
+                            "progress",
+                            "tracking",
+                            "quality",
+                            "nextAction",
+                            "sourceReference",
+                            "version",
+                            "lines"
+                          ]
+                        },
+                        "claim": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "pickingId": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": ["active", "released"]
+                            },
+                            "claimant": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "ownedByCurrentActor": {
+                              "type": "boolean"
+                            },
+                            "claimReason": {
+                              "type": "string"
+                            },
+                            "claimedAt": {
+                              "type": "string"
+                            },
+                            "releasedBy": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "releaseReason": {
+                              "type": "string"
+                            },
+                            "releasedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "pickingId",
+                            "state",
+                            "claimant",
+                            "ownedByCurrentActor",
+                            "claimReason",
+                            "claimedAt"
+                          ]
+                        },
+                        "transition": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "const": "done"
+                            },
+                            "confirmedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "lineCount": {
+                              "type": "integer",
+                              "minimum": 1
+                            }
+                          },
+                          "required": ["state", "confirmedAt", "lineCount"]
+                        }
+                      },
+                      "required": ["picking", "claim", "transition"]
                     },
                     "error": {},
                     "meta": {

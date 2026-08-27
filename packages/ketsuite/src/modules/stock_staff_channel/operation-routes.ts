@@ -36,6 +36,25 @@ const claimResult = {
   properties: { picking: detailSchema, claim: claimSchema },
   required: ['picking', 'claim'],
 }
+const completionResult = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    picking: detailSchema,
+    claim: claimSchema,
+    transition: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        state: { type: 'string', const: 'done' },
+        confirmedAt: { type: 'string', format: 'date-time' },
+        lineCount: { type: 'integer', minimum: 1 },
+      },
+      required: ['state', 'confirmedAt', 'lineCount'],
+    },
+  },
+  required: ['picking', 'claim', 'transition'],
+}
 const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: Row) => {
   const errors = Array.isArray(result.errors) ? (result.errors as Row[]) : []
   const conflict = errors.some((error) => String(error.code).includes('versionConflict'))
@@ -842,7 +861,7 @@ export const operationRoutes = routesOf(
         ['lines', 'reason'],
       ),
     },
-    responses: mutationResponses,
+    responses: { ...mutationResponses, '200': envelope(completionResult) },
     idempotent: true,
     rateLimit: { action: 'staff.warehouse.pickings.complete', limit: 60, windowMs: 60_000 },
     handler: async (ctx, url, req, routeParams, request) => {

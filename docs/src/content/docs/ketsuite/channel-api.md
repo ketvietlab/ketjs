@@ -105,6 +105,11 @@ revision. Attendance types clock state, timestamped punch results, and shift his
 nullable corrections and stop times. Native generators can therefore reject an empty or free-form business data
 schema instead of falling back to an untyped map.
 
+The same client-readiness rule applies to the warehouse completion result and hospitality operations. A completed
+picking types the refreshed picking, released claim, and terminal transition. Hospitality types property context,
+the property-local front-desk board, reservation/stay/folio aggregates, and the bounded references accepted by
+operations. These schemas describe the existing projections and do not expose new domain state.
+
 Which identity a profile hands its routes is declared once, in `ChannelIdentities`:
 
 ```ts
