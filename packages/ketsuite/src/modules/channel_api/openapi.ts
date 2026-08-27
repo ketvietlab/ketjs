@@ -14,13 +14,29 @@ const SCHEMES: Record<ChannelProfile, Record<string, unknown>> = {
     customerCookie: { type: 'apiKey', in: 'cookie', name: 'ket_customer_session' },
   },
   staff: { staffCookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE } },
-  pos: {},
+  pos: {
+    posBearer: { type: 'http', scheme: 'bearer' },
+    operatorBearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+  },
   integration: {},
 }
 
-const securityFor = (profile: ChannelProfile, auth: ChannelAuth): unknown[] => {
+const PROFILE_SCHEMES: Record<ChannelProfile, string[]> = {
+  customer: ['bearer', 'customerCookie'],
+  staff: ['staffCookie'],
+  pos: ['posBearer'],
+  integration: [],
+}
+
+const securityFor = (profile: ChannelProfile, auth: ChannelAuth, credentials?: string[]): unknown[] => {
+  if (credentials?.length) {
+    for (const name of credentials)
+      if (!(name in SCHEMES[profile]))
+        throw new Error(`channel profile "${profile}" does not define credential scheme "${name}"`)
+    return credentials.map((name) => ({ [name]: [] }))
+  }
   if (!resolves(auth)) return []
-  const offered = Object.keys(SCHEMES[profile]).map((name) => ({ [name]: [] }))
+  const offered = PROFILE_SCHEMES[profile].map((name) => ({ [name]: [] }))
   return demands(auth) ? offered : [{}, ...offered]
 }
 
@@ -44,7 +60,7 @@ export const openApiDocument = (manifest: Manifest, profile: ChannelProfile) => 
       [contract.method.toLowerCase()]: {
         operationId: contract.operationId,
         ...(contract.summary ? { summary: contract.summary } : {}),
-        security: securityFor(profile, (contract.auth ?? 'public') as ChannelAuth),
+        security: securityFor(profile, (contract.auth ?? 'public') as ChannelAuth, contract.credentials),
         ...(parameters.length ? { parameters } : {}),
         ...(contract.request?.body
           ? {

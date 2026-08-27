@@ -81,16 +81,34 @@ export type StaffIdentity = {
 }
 
 /**
+ * Who a POS command is acting as.
+ *
+ * Every field is resolved from the live device grant and POS session. Routes
+ * must not copy company or configuration scope from request input: a terminal
+ * can only act inside the scope the server placed on this identity.
+ */
+export type PosIdentity = {
+  operatorId: string
+  deviceId: string
+  companyId: string
+  posConfigId: string
+  grantId: string
+  sessionId: string
+  securityVersion: number
+  presentation: 'bearer'
+}
+
+/**
  * Which identity a profile hands its routes.
  *
- * `pos` and `integration` are `never` on purpose: their prefixes are reserved
- * and their identity is not designed, so writing a route for one is a type
- * error rather than a route that silently trusts a customer session.
+ * `integration` remains `never` on purpose: its prefix is reserved but its
+ * identity is not designed, so writing a route for one is a type error rather
+ * than a route that silently trusts another profile's session.
  */
 export interface ChannelIdentities {
   customer: CustomerIdentity
   staff: StaffIdentity
-  pos: never
+  pos: PosIdentity
   integration: never
 }
 
@@ -132,6 +150,8 @@ export type ChannelRouteSpec<P extends ChannelProfile = 'customer'> = {
   operationId: string
   summary?: string
   auth?: ChannelAuth
+  /** OpenAPI schemes for credentials verified by the handler's upstream identity boundary. */
+  credentials?: string[]
   capability?: { key: string; action: string }
   request?: HttpRouteContract['request']
   responses: Record<string, JsonSchema>
@@ -211,11 +231,11 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
  * from: the secret only the real caller holds, who they are, and which tenant
  * they are in. Everything else is the profile's own business.
  */
-type AnyIdentity = CustomerIdentity | StaffIdentity
+type AnyIdentity = CustomerIdentity | StaffIdentity | PosIdentity
 const secretOf = (identity: AnyIdentity): string =>
   'token' in identity ? identity.token : identity.sessionId
 const subjectOf = (identity: AnyIdentity): string =>
-  'accountId' in identity ? identity.accountId : identity.userId
+  'accountId' in identity ? identity.accountId : 'deviceId' in identity ? identity.deviceId : identity.userId
 const tenantOf = (identity: AnyIdentity): string | null =>
   'realmId' in identity ? identity.realmId : identity.companyId
 
@@ -289,9 +309,17 @@ export const bearerOf = (req: Req): string | null => {
  */
 export const channelCommandId = (
   prefix: string,
-  identity: Pick<ChannelIdentity, 'realmId' | 'accountId'>,
+  identity:
+    | Pick<CustomerIdentity, 'realmId' | 'accountId'>
+    | Pick<PosIdentity, 'companyId' | 'posConfigId' | 'deviceId'>,
   key: string,
-): string => `${prefix}_${sha256(`${identity.realmId}\n${identity.accountId}\n${key}`).slice(0, 32)}`
+): string => {
+  const scope =
+    'accountId' in identity
+      ? `${identity.realmId}\n${identity.accountId}`
+      : `${identity.companyId}\n${identity.posConfigId}\n${identity.deviceId}`
+  return `${prefix}_${sha256(`${scope}\n${key}`).slice(0, 32)}`
+}
 
 export const stableHash = (value: unknown): string => {
   const canonical = (held: unknown): string => {
@@ -524,6 +552,7 @@ export const defineChannelRoute = <P extends ChannelProfile>(
     operationId: spec.operationId,
     ...(spec.summary ? { summary: spec.summary } : {}),
     auth,
+    ...(spec.credentials?.length ? { credentials: [...spec.credentials] } : {}),
     ...(spec.capability ? { capability: spec.capability } : {}),
     ...(spec.request ? { request: spec.request } : {}),
     responses: spec.responses,
