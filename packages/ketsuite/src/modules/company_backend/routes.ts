@@ -5,9 +5,9 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { adminPage, inLocale, localeQuery, localized } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
-import { companiesListScreen, companyFormScreen } from './screens/index.ts'
-import type { BranchRow, CompanyFormValues, CompanyRow } from './screens/index.ts'
-import { branchFormScreen, contextScreen, hierarchyScreen } from './screens.tsx'
+import { branchFormScreen, companiesListScreen, companyFormScreen } from './screens/index.ts'
+import type { BranchFormValues, BranchRow, CompanyFormValues, CompanyRow } from './screens/index.ts'
+import { contextScreen, hierarchyScreen } from './screens.tsx'
 
 const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate']>): string[] =>
   ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
@@ -188,37 +188,66 @@ const saveCompany = (ctx: ServeContext, url: URL, req: Req, id: string, form: Re
     req,
   )
 
-const branchOf = async (ctx: ServeContext, url: URL, req: Req, id: string) => {
-  const companies = (await ctx.call(
-    'company.listCompanies',
-    { includeArchived: true },
-    url,
-    req,
-  )) as CompanyRow[]
-  for (const company of companies) {
-    const detail = await companyOf(ctx, url, req, company.id)
-    if (!detail) continue
-    const branch = detail.branches.find((item) => item.id === id)
-    if (branch) return { company: detail, branch }
-  }
-  return null
+const branchOf = async (ctx: ServeContext, url: URL, req: Req, companyId: string, id: string) => {
+  const company = await companyOf(ctx, url, req, companyId)
+  if (!company) return null
+  const branch = company.branches.find((item) => item.id === id)
+  return branch ? { company, branch } : null
 }
 
-const renderBranch = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
+const branchDetailPath = (url: URL, companyId: string, id: string): string =>
+  inLocale(
+    url,
+    `/admin/companies/${encodeURIComponent(companyId)}/branches/${encodeURIComponent(id)}`,
+  )
+
+const branchValues = (form: Record<string, string>, id: string): BranchFormValues => ({
+  id,
+  code: form.code ?? '',
+  name: form.name ?? '',
+  parentId: form.parentId || null,
+})
+
+const renderBranch = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  companyId: string,
+  id: string,
+  state: { errors?: string[]; values?: BranchFormValues } = {},
+) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
-  const held = await branchOf(ctx, url, req, id)
+  const held = await branchOf(ctx, url, req, companyId, id)
   if (!held) return text(_('company_backend.error.branchNotFound'), { status: 404 })
   const parents = held.company.branches
     .filter((branch) => branch.id !== id && branch.active)
     .map((branch) => ({ value: branch.id, label: branch.name }))
+  const values = { ...held.branch, ...state.values, id: held.branch.id }
   return adminPage(ctx, url, req, {
     title: held.branch.name,
     translate: false,
+    active: '/admin/companies',
     body: (_, frame) =>
-      branchFormScreen(_, held.company, held.branch, parents, frame, {
-        errors,
-        locale: localeQuery(url),
-      }),
+      branchFormScreen(
+        _,
+        held.company,
+        values,
+        {
+          mode: 'detail',
+          action: branchDetailPath(url, held.company.id, held.branch.id),
+          archiveAction: localized(
+            `/admin/companies/${encodeURIComponent(held.company.id)}/branches/${encodeURIComponent(held.branch.id)}/archive`,
+            localeQuery(url),
+          ),
+          cancelHref: localized(
+            `/admin/companies/${encodeURIComponent(held.company.id)}`,
+            localeQuery(url),
+          ),
+          parents,
+          errors: state.errors,
+        },
+        frame,
+      ),
   })
 }
 
@@ -401,8 +430,8 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
-        if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
-        const id = randomUUID()
+        if (form.action !== 'save') return text('invalid action', { status: 400 })
+        const id = validCreateId(form.id) ? form.id : randomUUID()
         const result = await ctx.call(
           'company.saveBranch',
           {
@@ -416,29 +445,55 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         if ((result as { ok?: boolean }).ok)
-          return seeOther(inLocale(url, `/admin/companies/${params.id}/branches/${id}`))
+          return seeOther(branchDetailPath(url, company.id, id))
         return adminPage(ctx, url, req, {
           title: 'company_backend.branch.createTitle',
+          active: '/admin/companies',
           body: (_, frame) =>
-            branchFormScreen(_, company, form as never, parents, frame, {
-              errors: translatedErrors(result, _),
-              locale: localeQuery(url),
-            }),
+            branchFormScreen(
+              _,
+              company,
+              branchValues(form, id),
+              {
+                mode: 'create',
+                action: localized(
+                  `/admin/companies/${encodeURIComponent(company.id)}/branches/new`,
+                  localeQuery(url),
+                ),
+                cancelHref: localized(
+                  `/admin/companies/${encodeURIComponent(company.id)}`,
+                  localeQuery(url),
+                ),
+                parents,
+                errors: translatedErrors(result, _),
+              },
+              frame,
+            ),
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const id = randomUUID()
       return adminPage(ctx, url, req, {
         title: 'company_backend.branch.createTitle',
+        active: '/admin/companies',
         body: (_, frame) =>
           branchFormScreen(
             _,
             company,
-            { parentId: company.branches.find((branch) => branch.isRoot)?.id },
-            parents,
-            frame,
+            { id, parentId: company.branches.find((branch) => branch.isRoot)?.id },
             {
-              locale: localeQuery(url),
+              mode: 'create',
+              action: localized(
+                `/admin/companies/${encodeURIComponent(company.id)}/branches/new`,
+                localeQuery(url),
+              ),
+              cancelHref: localized(
+                `/admin/companies/${encodeURIComponent(company.id)}`,
+                localeQuery(url),
+              ),
+              parents,
             },
+            frame,
           ),
       })
     },
@@ -446,10 +501,10 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/companies/{companyId}/branches/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method === 'GET') return renderBranch(ctx, url, req, params.id)
+      if (req.method === 'GET') return renderBranch(ctx, url, req, params.companyId, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       if (crossSite(req)) return text('Forbidden', { status: 403 })
-      const held = await branchOf(ctx, url, req, params.id)
+      const held = await branchOf(ctx, url, req, params.companyId, params.id)
       if (!held) return text('Not found', { status: 404 })
       const form = await readForm(req)
       if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
@@ -466,13 +521,17 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       if ((result as { ok?: boolean }).ok)
-        return seeOther(inLocale(url, `/admin/companies/${params.companyId}/branches/${params.id}`))
+        return seeOther(branchDetailPath(url, held.company.id, held.branch.id))
       return renderBranch(
         ctx,
         url,
         req,
+        params.companyId,
         params.id,
-        translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+        {
+          errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+          values: branchValues(form, params.id),
+        },
       )
     },
 
@@ -484,6 +543,8 @@ export const routes: Record<string, RouteEntry> = {
       const form = await readForm(req)
       if (form.action !== 'archive' && form.action !== 'restore')
         return text('invalid action', { status: 400 })
+      const held = await branchOf(ctx, url, req, params.companyId, params.id)
+      if (!held) return text('Not found', { status: 404 })
       const result = await ctx.call(
         'user.archiveBranch',
         { id: params.id, active: form.action === 'restore' },
@@ -491,13 +552,14 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       if ((result as { ok?: boolean }).ok)
-        return seeOther(inLocale(url, `/admin/companies/${params.companyId}/branches/${params.id}`))
+        return seeOther(branchDetailPath(url, held.company.id, held.branch.id))
       return renderBranch(
         ctx,
         url,
         req,
+        params.companyId,
         params.id,
-        translatedErrors(result, ctx.translate(ctx.localeOf(url, req))),
+        { errors: translatedErrors(result, ctx.translate(ctx.localeOf(url, req))) },
       )
     },
 

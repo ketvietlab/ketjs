@@ -14,20 +14,16 @@ Snapshot: 2026-08-26. Re-run the completeness checks at the end of this document
 
 ## Shared-branch operating rules
 
-All sub-agents work in the same checkout and on the same feature branch.
+Starting with Wave 25, one primary Codex agent owns the shared checkout and feature branch; the earlier
+sub-agent mechanism is retired. Historical `Owner` values remain as delivery evidence for completed rows.
 
-1. The coordinator creates and switches the shared branch. Sub-agents must not run `git checkout`,
-   `git switch`, `git worktree`, `git rebase`, `git reset`, `git clean`, `git stash`, or branch commands.
-2. One row is one agent assignment. A shared renderer serving several route aliases remains one row so two
-   agents never redesign the same component independently.
+1. The primary agent alone edits, stages, commits, rebases and pushes the shared branch.
+2. A shared renderer serving several route aliases remains one row so its behavior is reviewed as one unit.
 3. Only one row per lane may be `in-progress` at a time. A lane is normally one backend module because its
-   screens share a route registry, translations, fixtures, and browser evidence.
-4. Before editing, the agent writes its name in `Owner`, changes `Status` to `in-progress`, and treats the
-   listed renderer, route registry, module translations, focused tests, and evidence fixture as its lock.
-5. Sub-agents edit but do not stage or commit. The coordinator reviews the shared worktree and creates the
-   commits. This prevents concurrent writes to the Git index.
-6. Shared design-system files are coordinator-owned. A screen agent proposes a contract change in its row;
-   the coordinator lands the shared primitive first, then unblocks dependent rows.
+   screens share a route registry, translations and fixtures.
+4. Before editing, the agent changes `Status` to `in-progress` and treats the listed renderer, route registry,
+   module translations and focused tests as one locked work item.
+5. Shared design-system changes land before dependent screen changes in the same wave.
 7. A module that still has a monolithic `screens.tsx` is migrated incrementally to a `screens/` folder.
    The first screen agent creates `screens/index.ts` and, only when necessary, `screens/shared.tsx`; every
    agent moves exactly its assigned renderer to `screens/<screen-name>.tsx`. The final agent removes the
@@ -171,9 +167,9 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 
 ### Flow lane
 
-`flow_backend/screens/` exists. Waves 18–23 moved the project tree, all-pages list, page detail, project epics,
-all-epics list and epic detail to their own leaves; the former `pages.tsx` and `epics.tsx` no longer exist. Generated Live Doc endpoints
-belong to the detail renderer that consumes them.
+`flow_backend/screens/` exists. Waves 18–25 moved the project tree, pages, epics and Gantt surfaces to focused
+leaves; the former `pages.tsx` and `epics.tsx` no longer exist. Generated Live Doc endpoints belong to the
+detail renderer that consumes them.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
@@ -189,7 +185,7 @@ belong to the detail renderer that consumes them.
 | FLOW-10 | done | All epics | `/admin/flow/epics` | `screens/all-epics.tsx::allEpicsScreen` | ListPage | Huygens |
 | FLOW-11 | done | Epic detail | `/admin/flow/epics/{id}` | `screens/epic-detail.tsx::epicDetailScreen` | FormPage/Specialized | Huygens |
 | FLOW-12 | done | Epic dependency map | `/admin/flow/projects/{id}/epics/{epicId}/map` | `screens/map.tsx::mapScreen` | Specialized | Huygens |
-| FLOW-13 | ready | Project Gantt | `/admin/flow/projects/{id}/gantt` | `screens/gantt.tsx::ganttScreen` | Specialized | — |
+| FLOW-13 | done | Project Gantt | `/admin/flow/projects/{id}/gantt` | `screens/gantt.tsx::ganttScreen` | Specialized | Codex |
 | FLOW-14 | ready | Project sprints | `/admin/flow/projects/{id}/sprints` | `screens/sprints.tsx::sprintsScreen` | Split/Specialized | — |
 | FLOW-15 | ready | Project settings | `/admin/flow/projects/{id}/settings` | `screens/settings.tsx::settingsScreen` | Specialized | — |
 
@@ -223,26 +219,27 @@ Attendance Period and Credential Issuance; only the intentional public kiosk rem
 
 ### Company lane
 
-Structure debt: Waves 23–24 created `company_backend/screens/`, shared company/branch types, the companies-list
-leaf and the company-form leaf. The root `screens.tsx` retains branch form, hierarchy and context.
+Structure debt: Waves 23–25 created `company_backend/screens/`, shared company/branch types, list and form
+leaves. The root `screens.tsx` now retains only hierarchy and context.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
 | COMPANY-01 | done | Companies | `/admin/companies` | `screens/companies-list.tsx::companiesScreen` | ListPage | Kant |
 | COMPANY-02 | done | Company create/detail | `/admin/companies/new`, `/admin/companies/{id}` | `screens/company-form.tsx::companyFormScreen` | FormPage | Kant |
-| COMPANY-03 | ready | Branch create/detail | `/admin/companies/{id}/branches/new`, `/admin/companies/{companyId}/branches/{id}` | `branchFormScreen` | FormPage | — |
+| COMPANY-03 | done | Branch create/detail | `/admin/companies/{id}/branches/new`, `/admin/companies/{companyId}/branches/{id}` | `screens/branch-form.tsx::branchFormScreen` | FormPage | Codex |
 | COMPANY-04 | ready | Company hierarchy | `/admin/companies/hierarchy` | `hierarchyScreen` | Specialized | — |
 | COMPANY-05 | ready | Active company/branch context | `/admin/context` | `contextScreen` | FormPage/Specialized | — |
 
 ### User and authentication lanes
 
-Structure debt: split `user_backend/screens.tsx` into `screens/`. The shared session table moves once to
-`screens/shared.tsx` and remains owned by USER-02/USER-06. The public login renderer is a separate user
-module surface and is intentionally not forced into FormPage.
+Structure debt: Wave 25 started `user_backend/screens/` with shared types and the users-list leaf. Move the
+remaining root renderers incrementally; the shared session table moves once to `screens/shared.tsx` and remains
+owned by USER-02/USER-06. The public login renderer is a separate user module surface and is intentionally not
+forced into FormPage.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
-| USER-01 | user-backend | ready | Users | `/admin/users` | `usersScreen` | ListPage | — |
+| USER-01 | user-backend | done | Users | `/admin/users` | `screens/users-list.tsx::usersScreen` | ListPage | Codex |
 | USER-02 | user-backend | ready | User create/detail/access | `/admin/users/new`, `/admin/users/{id}` | `userFormScreen`, `sessionsScreen` | FormPage | — |
 | USER-03 | user-backend | ready | Roles | `/admin/roles` | `rolesScreen` | ListPage | — |
 | USER-04 | user-backend | ready | Role create/detail | `/admin/roles/new`, `/admin/roles/{id}` | `roleScreen` | FormPage | — |
@@ -1119,9 +1116,26 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   identity, safe return state, rejected relation values and locale PRG are preserved. Company version/CAS prevents
   stale save/archive writes while compatible no-op replay remains safe; the renderer moved to
   `screens/company-form.tsx`.
-- Wave 24 contains source and focused test changes only. No local test, build, typecheck, lint, diff check or
-  browser QA was run. Validation evidence is attached after the commit is pushed and the PR matrix completes;
-  CI failures, if any, are diagnosed and fixed in a follow-up push.
+- Wave 24 initially contained source and focused test changes only. CI then exposed formatting and two build
+  type errors; after fixing them, the exception path ran a local build and 25 focused tests without opening a
+  browser, all passing. Final PR run 33046685448 passed quality contracts and all 20 SQLite/Postgres jobs.
+
+### Wave 25 — FLOW-13, COMPANY-03 and USER-01
+
+- Project Gantt remains Specialized. It now reads every project issue in bounded batches, sorts the complete
+  result and presents 200-row URL-owned pages instead of silently truncating the chart. Pager totals are exact;
+  issue destinations, locale and project navigation are encoded and preserved.
+- Branch create/detail now uses a full-route `FormPage`. Stable create IDs survive rejected POSTs, rejected
+  parents remain selectable, command allowlists and Origin CSRF remain explicit, and branch lookup is scoped by
+  both company and branch IDs rather than scanning every company or accepting a mismatched URL. The renderer
+  moved to `screens/branch-form.tsx`; branch pages intentionally have no Chatter rail.
+- Users is now a public `ListPage` with URL-owned search, exact 30-row paging, archive inclusion and encoded row
+  navigation. Search covers name, login, email and access kind before paging; stable locale-aware ordering keeps
+  page boundaries deterministic. Wave 25 starts the incremental `user_backend/screens/` split with shared types
+  and `screens/users-list.tsx`.
+- Wave 25 contains source and focused test changes only. No local test, build, typecheck, lint, formatter, diff
+  check or browser QA is run before the first push. The PR matrix is the first validation gate; if it fails, the
+  fix is verified with only the relevant local tests and no browser before a follow-up push.
 
 ### Modal consolidation through Wave 14 — PR 253
 

@@ -157,6 +157,68 @@ test('company detail preserves rejected values and missing relations beside bran
   assert.match(rejectedHtml, /Parent company does not exist/i)
 })
 
+test('branch create/detail uses FormPage, stable retry identity and company-scoped lookup', async (t) => {
+  const app = await bootCompanies(t)
+  const path = '/admin/companies/beta/branches/new?lang=en'
+  const create = await app.client.get(path)
+  const createHtml = await create.text()
+  assert.equal(create.status, 200)
+  assert.match(createHtml, /data-ui="form-page" data-scope="branch-form-page"/)
+  assert.doesNotMatch(createHtml, /data-ui="modal-layer"|mail\.chatter/)
+  const id = hidden(createHtml, 'id')
+  assert.match(id, /^[0-9a-f-]{36}$/i)
+
+  const rejected = await app.client.post(
+    path,
+    new URLSearchParams({
+      action: 'save',
+      id,
+      code: 'DRAFT',
+      name: 'Draft branch',
+      parentId: 'missing-parent',
+    }),
+    post,
+  )
+  const rejectedHtml = await rejected.text()
+  assert.equal(rejected.status, 200)
+  assert.equal(hidden(rejectedHtml, 'id'), id)
+  assert.match(rejectedHtml, /<option value="missing-parent" selected="true">/)
+
+  const saved = await app.client.post(
+    path,
+    new URLSearchParams({
+      action: 'save',
+      id,
+      code: 'SOUTH',
+      name: 'Beta South',
+      parentId: 'root:beta',
+    }),
+    post,
+  )
+  assert.equal(saved.status, 303)
+  assert.equal(saved.headers.get('location'), `/admin/companies/beta/branches/${id}?lang=en`)
+
+  const detail = await (await app.client.get(saved.headers.get('location')!)).text()
+  assert.match(detail, /data-ui="form-page" data-scope="branch-form-page"/)
+  assert.match(detail, /name="action" value="archive"/)
+  assert.match(detail, /href="\/admin\/companies\/beta\?lang=en"/)
+
+  assert.equal(
+    (await app.client.get('/admin/companies/acme/branches/beta%3Anorth?lang=en')).status,
+    404,
+  )
+  assert.equal(
+    (
+      await app.client.post(
+        path,
+        new URLSearchParams({ id, code: 'IGNORED', name: 'Ignored', parentId: 'root:beta' }),
+        post,
+      )
+    ).status,
+    400,
+  )
+})
+
 test('company mutations enforce same-origin and command allowlists while detail keeps legacy save', async (t) => {
   const app = await bootCompanies(t)
   const crossSiteOptions = {

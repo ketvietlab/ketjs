@@ -28,6 +28,7 @@ export default defineModule({
       'action.create': 'Tạo công ty',
       'action.hierarchy': 'Xem cây pháp nhân',
       'action.actions': 'Thao tác công ty',
+      'action.branchActions': 'Thao tác chi nhánh',
       'action.more': 'Thêm',
       'action.save': 'Lưu',
       'action.manageAddress': 'Quản lý địa chỉ pháp lý',
@@ -62,6 +63,7 @@ export default defineModule({
       'branch.operational': 'Vận hành',
       'branch.createTitle': 'Tạo chi nhánh',
       'branch.detail': 'Thông tin chi nhánh',
+      'branch.detailHint': 'Mã, tên và chi nhánh cha xác định vị trí vận hành trong công ty.',
       'hierarchy.title': 'Cây pháp nhân',
       'context.title': 'Ngữ cảnh làm việc',
       'context.writeTitle': 'Công ty và chi nhánh đang ghi',
@@ -92,6 +94,7 @@ export default defineModule({
       'action.create': 'Create company',
       'action.hierarchy': 'View legal-entity tree',
       'action.actions': 'Company actions',
+      'action.branchActions': 'Branch actions',
       'action.more': 'More',
       'action.save': 'Save',
       'action.manageAddress': 'Manage legal address',
@@ -127,6 +130,7 @@ export default defineModule({
       'branch.operational': 'Operational',
       'branch.createTitle': 'Create branch',
       'branch.detail': 'Branch information',
+      'branch.detailHint': 'Code, name and parent locate this operating branch within the company.',
       'hierarchy.title': 'Legal-entity tree',
       'context.title': 'Working context',
       'context.writeTitle': 'Active write company and branch',
@@ -146,6 +150,10 @@ export default defineModule({
 
 export { routes } from './routes.ts'
 export {
+  branchFields,
+  branchFormScreen,
+  type BranchFormScreenOptions,
+  type BranchFormValues,
   companiesListScreen,
   companyListColumns,
   type CompaniesListScreenOptions,
@@ -156,8 +164,4 @@ export {
   type CompanyFormValues,
 } from './screens/index.ts'
 export type { BranchRow, CompanyRow } from './screens/index.ts'
-export {
-  branchFormScreen,
-  hierarchyScreen,
-  contextScreen,
-} from './screens.tsx'
+export { hierarchyScreen, contextScreen } from './screens.tsx'

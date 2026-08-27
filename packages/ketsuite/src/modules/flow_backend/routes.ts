@@ -23,6 +23,7 @@ import {
   listMenus,
   loadListGroups,
 } from '../backend/list-search.ts'
+import { pageOf } from '../backend/paging.ts'
 import {
   boardScreen,
   epicsScreen,
@@ -216,6 +217,36 @@ const issueFields = (
  * beginning of the project rather than an arbitrary page of it.
  */
 const GANTT_ROWS = 200
+
+const allGanttIssues = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  projectId: string,
+): Promise<AnyRow[]> => {
+  const rows: AnyRow[] = []
+  let total = Number.POSITIVE_INFINITY
+  while (rows.length < total) {
+    const found = (await ctx.call(
+      'flow.issue.list',
+      { projectId, cursor: String(rows.length), limit: GANTT_ROWS },
+      url,
+      req,
+    )) as AnyRow
+    const batch = (found.rows as AnyRow[]) ?? []
+    total = Number(found.total ?? rows.length + batch.length)
+    rows.push(...batch)
+    if (batch.length === 0) break
+  }
+  return rows
+}
+
+const ganttPageHref = (url: URL, page: number): string => {
+  const target = new URL(url)
+  if (page <= 1) target.searchParams.delete('page')
+  else target.searchParams.set('page', String(page))
+  return `${target.pathname}${target.search}`
+}
 
 /**
  * The two things every mutating route here has to establish before it reads a
@@ -2067,26 +2098,44 @@ export const routes: Record<string, RouteEntry> = {
       const projectId = String(params.id)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
-      const found = (await ctx.call('flow.issue.list', { projectId, limit: GANTT_ROWS }, url, req)) as AnyRow
-      const rows = ((found.rows as AnyRow[]) ?? []).slice().sort((a, b) => {
+      const allRows = await allGanttIssues(ctx, url, req, projectId)
+      allRows.sort((a, b) => {
         const left = String(a.startsOn ?? '')
         const right = String(b.startsOn ?? '')
         return left.localeCompare(right) || String(a.title).localeCompare(String(b.title))
       })
+      const currentPage = pageOf(url)
+      const offset = (currentPage - 1) * GANTT_ROWS
+      const rows = allRows.slice(offset, offset + GANTT_ROWS).map((row) => ({
+        ...row,
+        detailHref: inLocale(url, `/admin/flow/issues/${encodeURIComponent(String(row.id))}`),
+      }))
       const locale = ctx.localeOf(url, req)
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
-        active: `/admin/flow/projects/${projectId}/issues`,
-        body: (_, frame) =>
-          ganttScreen(
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
+        body: (_, frame) => {
+          const from = rows.length ? offset + 1 : 0
+          const to = Math.min(offset + rows.length, allRows.length)
+          frame.chrome = {
+            pager: {
+              from,
+              to,
+              total: allRows.length,
+              prev: currentPage > 1 ? ganttPageHref(url, currentPage - 1) : null,
+              next: to < allRows.length ? ganttPageHref(url, currentPage + 1) : null,
+            },
+          }
+          return ganttScreen(
             _,
             frame,
             String(project.name),
             rows,
             new Date().toISOString().slice(0, 10),
             locale.startsWith('en') ? 'en-GB' : 'vi-VN',
-          ),
+          )
+        },
       })
     },
 

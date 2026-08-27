@@ -8,106 +8,16 @@ import {
   Framed,
   inline,
   linkButton,
-  RecordActions,
   RecordForm,
   Section,
   stack,
   Surface,
 } from '../../ui/index.ts'
-import type { FormOption, Frame } from '../../ui/index.ts'
+import type { Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
-import type { BranchRow, CompanyRow } from './screens/index.ts'
+import type { CompanyRow } from './screens/index.ts'
 
 export type { BranchRow, CompanyRow } from './screens/index.ts'
-
-export const branchFormScreen = (
-  _: Translator,
-  company: CompanyRow,
-  row: Partial<BranchRow> & { id?: string },
-  parents: FormOption[],
-  frame: Frame,
-  options: { errors?: string[]; locale?: string } = {},
-): TemplateResult => {
-  const existing = !!row.id
-  const locale = options.locale ?? ''
-  return (
-    <Framed
-      translator={_}
-      title={existing ? String(row.name) : _('company_backend.branch.createTitle')}
-      frame={frame}
-      body={stack([
-        ...(existing
-          ? [
-              <Section
-                title={_('company_backend.state.title')}
-                body={
-                  <Surface
-                    body={
-                      <RecordActions
-                        action={localized(
-                          `/admin/companies/${company.id}/branches/${row.id}/archive`,
-                          locale,
-                        )}
-                        actions={[
-                          row.active
-                            ? {
-                                value: 'archive',
-                                label: _('company_backend.action.archiveBranch'),
-                                variant: 'destructive' as const,
-                              }
-                            : {
-                                value: 'restore',
-                                label: _('company_backend.action.restoreBranch'),
-                                variant: 'secondary' as const,
-                              },
-                        ]}
-                      />
-                    }
-                  />
-                }
-              />,
-            ]
-          : []),
-        <Section
-          eyebrow={company.name}
-          title={_('company_backend.branch.detail')}
-          body={
-            <Surface
-              body={
-                <RecordForm
-                  action={localized(
-                    existing
-                      ? `/admin/companies/${company.id}/branches/${row.id}`
-                      : `/admin/companies/${company.id}/branches/new`,
-                    locale,
-                  )}
-                  fields={[
-                    { name: 'name', label: _('company_backend.field.name'), value: row.name, required: true },
-                    { name: 'code', label: _('company_backend.field.code'), value: row.code, required: true },
-                    {
-                      name: 'parentId',
-                      label: _('company_backend.field.branchParent'),
-                      type: 'select',
-                      value: row.parentId,
-                      options: parents,
-                      required: true,
-                    },
-                  ]}
-                  hidden={{ companyId: company.id }}
-                  submit={_('company_backend.action.save')}
-                  submitVariant="primary"
-                  errors={options.errors}
-                  cancelHref={localized(`/admin/companies/${company.id}`, locale)}
-                  cancelLabel={_('company_backend.action.cancel')}
-                />
-              }
-            />
-          }
-        />,
-      ])}
-    />
-  )
-}
 
 export const hierarchyScreen = (
   _: Translator,

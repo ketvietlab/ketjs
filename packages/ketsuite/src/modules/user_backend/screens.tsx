@@ -20,25 +20,9 @@ import {
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
 
-export type UserRow = {
-  id: string
-  login: string
-  name: string
-  email?: string | null
-  timezone?: string | null
-  partnerId?: string | null
-  defaultCompanyId?: string | null
-  defaultBranchId?: string | null
-  accessKind: string
-  securityVersion: number
-  lastLoginAt?: string | null
-  passwordReady: boolean
-  active: boolean
-  superuser: boolean
-  memberships?: Array<{ companyId: string }>
-  branchMemberships?: Array<{ branchId: string }>
-  assignments?: Array<{ roleId: string }>
-}
+import type { UserRow } from './screens/index.ts'
+
+export type { UserRow } from './screens/index.ts'
 
 export type SessionRow = {
   id: string
@@ -57,84 +41,6 @@ export type PermissionRow = {
   label: string
   checked: boolean
 }
-
-export const usersScreen = (
-  _: Translator,
-  rows: UserRow[],
-  frame: Frame,
-  locale = '',
-  includeArchived = false,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('user_backend.users.title')}
-    frame={frame}
-    body={stack([
-      inline([
-        linkButton({
-          label: _('user_backend.action.createUser'),
-          href: localized('/admin/users/new', locale),
-          variant: 'primary',
-        }),
-        linkButton({
-          label: includeArchived
-            ? _('user_backend.filter.activeOnly')
-            : _('user_backend.filter.includeArchived'),
-          href: localized(includeArchived ? '/admin/users' : '/admin/users?archived=1', locale),
-          variant: 'tertiary',
-        }),
-      ]),
-      rows.length === 0
-        ? emptyState(_('user_backend.users.empty'), _('user_backend.users.emptyHint'))
-        : dataTable(_, {
-            rows,
-            id: (row) => row.id,
-            columns: [
-              {
-                key: 'name',
-                label: _('user_backend.field.name'),
-                priority: 'primary',
-                cell: (row) =>
-                  linkButton({
-                    label: row.name,
-                    href: localized(`/admin/users/${row.id}`, locale),
-                    variant: 'tertiary',
-                  }),
-              },
-              { key: 'login', label: _('user_backend.field.login'), cell: (row) => code(row.login) },
-              {
-                key: 'access',
-                label: _('user_backend.field.accessKind'),
-                kind: 'status',
-                cell: (row) => badge(_(`user_backend.access.${row.accessKind}`), 'info'),
-              },
-              {
-                key: 'credential',
-                label: _('user_backend.field.credential'),
-                kind: 'status',
-                cell: (row) =>
-                  badge(
-                    row.passwordReady
-                      ? _('user_backend.state.passwordReady')
-                      : _('user_backend.state.invitationPending'),
-                    row.passwordReady ? 'positive' : 'warning',
-                  ),
-              },
-              {
-                key: 'state',
-                label: _('user_backend.field.state'),
-                kind: 'status',
-                cell: (row) =>
-                  badge(
-                    row.active ? _('user_backend.state.active') : _('user_backend.state.archived'),
-                    row.active ? 'positive' : 'neutral',
-                  ),
-              },
-            ],
-          }),
-    ])}
-  />
-)
 
 const identityFields = (_: Translator, row: Partial<UserRow>, create: boolean) => [
   { name: 'name', label: _('user_backend.field.name'), value: row.name, required: true },

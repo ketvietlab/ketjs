@@ -8,11 +8,13 @@ import {
   roleScreen,
   rolesScreen,
   userFormScreen,
-  usersScreen,
 } from './screens.tsx'
-import type { PermissionRow, RoleRow, SessionRow, UserRow } from './screens.tsx'
-import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
+import type { PermissionRow, RoleRow, SessionRow } from './screens.tsx'
+import { usersScreen } from './screens/index.ts'
+import type { UserRow } from './screens/index.ts'
+import { adminPage, inLocale, localeQuery, localized } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -182,10 +184,53 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const includeArchived = url.searchParams.get('archived') === '1'
-      const rows = (await ctx.call('user.listUsers', { includeArchived }, url, req)) as UserRow[]
+      const search = searchOf(url) ?? ''
+      const currentPage = pageOf(url)
+      const locale = ctx.localeOf(url, req)
+      const needle = search.toLocaleLowerCase(locale)
+      const allRows = (await ctx.call('user.listUsers', { includeArchived }, url, req)) as UserRow[]
+      const matching = (needle
+        ? allRows.filter((row) =>
+            [row.name, row.login, row.email, row.accessKind].some((value) =>
+              String(value ?? '')
+                .toLocaleLowerCase(locale)
+                .includes(needle),
+            ),
+          )
+        : allRows
+      ).sort(
+        (left, right) =>
+          left.name.localeCompare(right.name, locale) || left.login.localeCompare(right.login, locale),
+      )
+      const rows = matching.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
       return adminPage(ctx, url, req, {
         title: 'user_backend.users.title',
-        body: (_, frame) => usersScreen(_, rows, frame, localeQuery(url), includeArchived),
+        active: '/admin/users',
+        body: (_, frame) => {
+          frame.chrome = {
+            search: {
+              name: 'q',
+              value: search,
+              placeholder: _('user_backend.search.users'),
+              keep: {
+                ...(includeArchived ? { archived: '1' } : {}),
+                ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+              },
+            },
+            pager: pager(url, currentPage, rows.length, matching.length),
+          }
+          const lang = localeQuery(url)
+          return usersScreen(_, frame, {
+            rows: rows.map((row) => ({
+              ...row,
+              detailHref: localized(`/admin/users/${encodeURIComponent(row.id)}`, lang),
+            })),
+            total: matching.length,
+            createHref: localized('/admin/users/new', lang),
+            toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
+            includeArchived,
+          })
+        },
       })
     },
 

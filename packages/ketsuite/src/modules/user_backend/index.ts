@@ -26,5 +26,5 @@ export {
   roleScreen,
   rolesScreen,
   userFormScreen,
-  usersScreen,
 } from './screens.tsx'
+export { usersScreen } from './screens/index.ts'
