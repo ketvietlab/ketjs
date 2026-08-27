@@ -27,6 +27,7 @@ export default defineModule({
       'filter.activeOnly': 'Chỉ đang hoạt động',
       'action.create': 'Tạo công ty',
       'action.hierarchy': 'Xem cây pháp nhân',
+      'action.backCompanies': 'Quay lại công ty',
       'action.actions': 'Thao tác công ty',
       'action.branchActions': 'Thao tác chi nhánh',
       'action.more': 'Thêm',
@@ -93,6 +94,7 @@ export default defineModule({
       'filter.activeOnly': 'Active only',
       'action.create': 'Create company',
       'action.hierarchy': 'View legal-entity tree',
+      'action.backCompanies': 'Back to companies',
       'action.actions': 'Company actions',
       'action.branchActions': 'Branch actions',
       'action.more': 'More',
@@ -162,6 +164,9 @@ export {
   companyFormScreen,
   type CompanyFormScreenOptions,
   type CompanyFormValues,
+  hierarchyScreen,
+  type CompanyHierarchyRow,
+  type HierarchyScreenOptions,
 } from './screens/index.ts'
 export type { BranchRow, CompanyRow } from './screens/index.ts'
-export { hierarchyScreen, contextScreen } from './screens.tsx'
+export { contextScreen } from './screens.tsx'

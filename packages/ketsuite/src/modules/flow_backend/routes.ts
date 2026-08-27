@@ -2149,7 +2149,13 @@ export const routes: Record<string, RouteEntry> = {
       if (!project) return text('not found', { status: 404 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       let errors: string[] = []
-      const endpoint = `/admin/flow/projects/${projectId}/sprints`
+      let createErrors: string[] = []
+      let createValues: Record<string, string> = {}
+      let recordId = randomUUID()
+      let idempotencyKey = randomUUID()
+      const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/sprints`
+      const action = inLocale(url, endpoint)
+      const createOpen = url.searchParams.get('dialog') === 'create'
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'start' || form.action === 'close') {
@@ -2158,48 +2164,53 @@ export const routes: Record<string, RouteEntry> = {
           // and dropping the result reported those refusals as a success.
           const changed = (await ctx.call(
             form.action === 'start' ? 'flow.sprint.start' : 'flow.sprint.close',
-            { id: form.id ?? '', idempotencyKey: randomUUID() },
+            { id: form.id ?? '', idempotencyKey: form.idempotencyKey || randomUUID() },
             url,
             req,
           )) as AnyRow
           if (changed.ok) return seeOther(inLocale(url, endpoint))
           errors = errorsOf(changed, _)
-        } else {
+        } else if (form.action === 'save') {
+          recordId = form.id || recordId
+          idempotencyKey = form.idempotencyKey || idempotencyKey
+          createValues = form
           const result = (await ctx.call(
             'flow.sprint.save',
             {
-              id: randomUUID(),
+              id: recordId,
               projectId,
               name: form.name ?? '',
               startDate: form.startDate || undefined,
               endDate: form.endDate || undefined,
-              idempotencyKey: randomUUID(),
+              idempotencyKey,
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
-        }
+          createErrors = errorsOf(result, _)
+        } else return text('invalid action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const sprints = (await ctx.call('flow.sprint.list', { projectId }, url, req)) as AnyRow[]
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
         body: (_, frame) =>
-          sprintsScreen(
-            _,
-            frame,
-            String(project.name),
-            endpoint,
+          sprintsScreen(_, frame, {
+            projectName: String(project.name),
             sprints,
-            [
-              { name: 'name', label: _('flow_backend.field.name'), required: true },
-              { name: 'startDate', label: _('flow_backend.field.startDate'), type: 'date' },
-              { name: 'endDate', label: _('flow_backend.field.endDate'), type: 'date' },
-            ],
+            action,
+            createHref: inLocale(url, `${endpoint}?dialog=create`),
+            closeHref: inLocale(url, endpoint),
+            createOpen: createOpen || createErrors.length > 0,
+            createValues,
+            createErrors,
             errors,
-          ),
+            recordId,
+            idempotencyKey,
+            transitionKey: (sprint) => `sprint:${String(sprint.id)}:${String(sprint.state)}`,
+          }),
       })
     },
 

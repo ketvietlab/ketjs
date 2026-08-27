@@ -5,9 +5,15 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { adminPage, inLocale, localeQuery, localized } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
-import { branchFormScreen, companiesListScreen, companyFormScreen } from './screens/index.ts'
-import type { BranchFormValues, BranchRow, CompanyFormValues, CompanyRow } from './screens/index.ts'
-import { contextScreen, hierarchyScreen } from './screens.tsx'
+import { branchFormScreen, companiesListScreen, companyFormScreen, hierarchyScreen } from './screens/index.ts'
+import type {
+  BranchFormValues,
+  BranchRow,
+  CompanyFormValues,
+  CompanyHierarchyRow,
+  CompanyRow,
+} from './screens/index.ts'
+import { contextScreen } from './screens.tsx'
 
 const translatedErrors = (result: unknown, _: ReturnType<ServeContext['translate']>): string[] =>
   ((result as { errors?: Array<{ field?: string; code?: string }> } | null)?.errors ?? []).map(
@@ -352,17 +358,35 @@ export const routes: Record<string, RouteEntry> = {
         byParent.set(parent, [...(byParent.get(parent) ?? []), company])
       }
       const names = new Map(companies.map((company) => [company.id, company.name]))
-      const rows: Array<CompanyRow & { depth: number; parentName?: string | null }> = []
+      const rows: CompanyHierarchyRow[] = []
+      const visited = new Set<string>()
       const walk = (parent: string, depth: number) => {
         for (const company of byParent.get(parent) ?? []) {
-          rows.push({ ...company, depth, parentName: company.parentId ? names.get(company.parentId) : null })
+          if (visited.has(company.id)) continue
+          visited.add(company.id)
+          rows.push({
+            ...company,
+            depth,
+            parentName: company.parentId ? names.get(company.parentId) : null,
+            detailHref: localized(
+              `/admin/companies/${encodeURIComponent(company.id)}`,
+              localeQuery(url),
+            ),
+          })
           walk(company.id, depth + 1)
         }
       }
       walk('', 0)
+      for (const company of companies) if (!visited.has(company.id)) walk(company.parentId ?? '', 0)
       return adminPage(ctx, url, req, {
         title: 'company_backend.hierarchy.title',
-        body: (_, frame) => hierarchyScreen(_, rows, frame, localeQuery(url)),
+        active: '/admin/companies',
+        body: (_, frame) =>
+          hierarchyScreen(_, frame, {
+            rows,
+            companiesHref: localized('/admin/companies', localeQuery(url)),
+            createHref: localized('/admin/companies/new', localeQuery(url)),
+          }),
       })
     },
 

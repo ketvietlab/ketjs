@@ -17,3 +17,12 @@ export type UserRow = {
   branchMemberships?: Array<{ branchId: string }>
   assignments?: Array<{ roleId: string }>
 }
+
+export type SessionRow = {
+  id: string
+  current: boolean
+  company: string | null
+  branch: string | null
+  createdAt: number
+  expiresAt: number
+}

@@ -315,6 +315,7 @@ export const functions: Record<string, FnSpec> = {
     // that can mint itself one.
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
+      const existing = await ctx.db.one(from(U).where(eq(U.id, a.id)))
       const login = normalizeLogin(a.login)
       const password = String(a.password ?? '')
       const accessKind = String(a.accessKind ?? 'internal')
@@ -326,11 +327,27 @@ export const functions: Record<string, FnSpec> = {
       if (a.timezone && !isTimezone(String(a.timezone))) errors.push(issue('timezone', 'user.error.timezone'))
       if (password && password.length < 8) errors.push(issue('password', 'user.error.passwordLength'))
       if (password && ctx.actor) errors.push(issue('password', 'user.error.adminPassword'))
-      if (await ctx.db.one(from(U).where(eq(U.login, login))))
+      const loginOwner = await ctx.db.one(from(U).where(eq(U.login, login)))
+      if (loginOwner && loginOwner.id !== a.id)
         errors.push(issue('login', 'user.error.loginUnique'))
       if (a.superuser === true && ctx.actor && !(await superuser(ctx, ctx.actor)))
         errors.push(issue('superuser', 'user.error.superuserRequired'))
       if (errors.length) return invalid(errors)
+      if (existing) {
+        const samePassword = password
+          ? !!existing.passwordHash && (await verifyPassword(password, String(existing.passwordHash)))
+          : !existing.passwordHash
+        const same =
+          existing.login === login &&
+          existing.name === String(a.name).trim() &&
+          (existing.email ?? null) === (a.email || null) &&
+          (existing.timezone ?? null) === (a.timezone || null) &&
+          (existing.partnerId ?? null) === (a.partnerId || null) &&
+          existing.accessKind === accessKind &&
+          existing.superuser === (a.superuser === true) &&
+          samePassword
+        return same ? { ok: true, id: a.id } : invalid([issue('id', 'user.error.idConflict')])
+      }
       const inserted = await ctx.db.insertIfAbsent('user.User', {
         id: a.id,
         login,

@@ -4,14 +4,12 @@ import {
   badge,
   code,
   dataTable,
-  DefinitionList,
   emptyState,
   Framed,
   inline,
   linkButton,
   Notice,
   person,
-  RecordActions,
   RecordForm,
   Section,
   stack,
@@ -20,18 +18,10 @@ import {
 import type { FormOption, Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
 
-import type { UserRow } from './screens/index.ts'
+import { sessionsScreen } from './screens/index.ts'
+import type { SessionRow, UserRow } from './screens/index.ts'
 
-export type { UserRow } from './screens/index.ts'
-
-export type SessionRow = {
-  id: string
-  current: boolean
-  company: string | null
-  branch: string | null
-  createdAt: number
-  expiresAt: number
-}
+export type { SessionRow, UserRow } from './screens/index.ts'
 
 export type PermissionRow = {
   key: string
@@ -41,225 +31,6 @@ export type PermissionRow = {
   label: string
   checked: boolean
 }
-
-const identityFields = (_: Translator, row: Partial<UserRow>, create: boolean) => [
-  { name: 'name', label: _('user_backend.field.name'), value: row.name, required: true },
-  { name: 'login', label: _('user_backend.field.login'), value: row.login, required: true },
-  { name: 'email', label: _('user_backend.field.email'), value: row.email },
-  { name: 'partnerId', label: _('user_backend.field.partnerId'), value: row.partnerId },
-  {
-    name: 'accessKind',
-    label: _('user_backend.field.accessKind'),
-    type: 'select' as const,
-    value: row.accessKind ?? 'internal',
-    options: ['internal', 'portal', 'public'].map((value) => ({
-      value,
-      label: _(`user_backend.access.${value}`),
-    })),
-  },
-  {
-    name: 'superuser',
-    label: _('user_backend.field.superuser'),
-    type: 'checkbox' as const,
-    value: row.superuser,
-  },
-  ...(!create
-    ? [
-        {
-          name: 'active',
-          label: _('user_backend.state.active'),
-          type: 'checkbox' as const,
-          value: row.active,
-        },
-      ]
-    : []),
-]
-
-export const userFormScreen = (
-  _: Translator,
-  row: Partial<UserRow>,
-  options: {
-    companies: FormOption[]
-    branches: Array<FormOption & { companyId: string }>
-    roles: FormOption[]
-    sessions?: SessionRow[]
-    errors?: string[]
-    oneTimeLink?: string | null
-    integration?: JSXChild
-  },
-  frame: Frame,
-  locale = '',
-): TemplateResult => {
-  const create = !row.id
-  const id = row.id ?? ''
-  const companies = new Set(row.memberships?.map((item) => item.companyId) ?? [])
-  const branches = new Set(row.branchMemberships?.map((item) => item.branchId) ?? [])
-  const roles = new Set(row.assignments?.map((item) => item.roleId) ?? [])
-  return (
-    <Framed
-      translator={_}
-      title={create ? _('user_backend.users.create') : (row.name ?? '')}
-      frame={frame}
-      body={stack([
-        ...(options.oneTimeLink
-          ? [
-              <Notice
-                tone="warning"
-                title={_('user_backend.token.onceTitle')}
-                message={_('user_backend.token.onceHint')}
-              />,
-              <DefinitionList
-                title={_('user_backend.token.link')}
-                items={[{ key: 'link', term: _('user_backend.token.copyNow'), value: options.oneTimeLink }]}
-              />,
-            ]
-          : []),
-        ...(options.integration ? [options.integration] : []),
-        <Section
-          title={_('user_backend.identity.title')}
-          description={create ? _('user_backend.identity.createHint') : undefined}
-          body={
-            <Surface
-              body={
-                <RecordForm
-                  action={localized(create ? '/admin/users/new' : `/admin/users/${id}`, locale)}
-                  submit={_('user_backend.action.save')}
-                  submitVariant="primary"
-                  cancelHref={localized('/admin/users', locale)}
-                  cancelLabel={_('user_backend.action.cancel')}
-                  errors={options.errors}
-                  fields={identityFields(_, row, create)}
-                />
-              }
-            />
-          }
-        />,
-        ...(!create
-          ? [
-              <Section
-                title={_('user_backend.access.title')}
-                description={_('user_backend.access.hint')}
-                body={stack([
-                  <Surface
-                    body={
-                      <RecordForm
-                        action={localized(`/admin/users/${id}/companies`, locale)}
-                        submit={_('user_backend.action.saveCompanies')}
-                        submitVariant="secondary"
-                        fields={options.companies.map((company) => ({
-                          name: `company.${company.value}`,
-                          label: company.label,
-                          type: 'checkbox' as const,
-                          value: companies.has(company.value),
-                        }))}
-                      />
-                    }
-                  />,
-                  <Surface
-                    body={
-                      <RecordForm
-                        action={localized(`/admin/users/${id}/branches`, locale)}
-                        submit={_('user_backend.action.saveBranches')}
-                        submitVariant="secondary"
-                        fields={options.branches.map((branch) => ({
-                          name: `branch.${branch.value}`,
-                          label: branch.label,
-                          help: options.companies.find((company) => company.value === branch.companyId)
-                            ?.label,
-                          type: 'checkbox' as const,
-                          value: branches.has(branch.value),
-                        }))}
-                      />
-                    }
-                  />,
-                  <Surface
-                    body={
-                      <RecordForm
-                        action={localized(`/admin/users/${id}/roles`, locale)}
-                        submit={_('user_backend.action.saveRoles')}
-                        submitVariant="secondary"
-                        fields={options.roles.map((role) => ({
-                          name: `role.${role.value}`,
-                          label: role.label,
-                          type: 'checkbox' as const,
-                          value: roles.has(role.value),
-                        }))}
-                      />
-                    }
-                  />,
-                ])}
-              />,
-              <Section
-                title={_('user_backend.security.title')}
-                description={_('user_backend.security.hint')}
-                body={
-                  <Surface
-                    body={
-                      <RecordActions
-                        action={localized(`/admin/users/${id}/token`, locale)}
-                        actions={[
-                          {
-                            value: 'invitation',
-                            label: _('user_backend.action.invitation'),
-                            variant: 'secondary',
-                          },
-                          { value: 'reset', label: _('user_backend.action.reset'), variant: 'destructive' },
-                        ]}
-                      />
-                    }
-                  />
-                }
-              />,
-              <Section
-                title={_('user_backend.sessions.title')}
-                body={sessionsScreen(_, options.sessions ?? [], id, locale)}
-              />,
-            ]
-          : []),
-      ])}
-    />
-  )
-}
-
-export const sessionsScreen = (
-  _: Translator,
-  rows: SessionRow[],
-  userId: string,
-  locale = '',
-): TemplateResult =>
-  rows.length === 0
-    ? emptyState(_('user_backend.sessions.empty'), _('user_backend.sessions.emptyHint'))
-    : dataTable(_, {
-        rows,
-        id: (row) => row.id,
-        columns: [
-          {
-            key: 'created',
-            label: _('user_backend.sessions.created'),
-            cell: (row) => new Date(row.createdAt).toLocaleString(),
-          },
-          {
-            key: 'context',
-            label: _('user_backend.sessions.context'),
-            cell: (row) => `${row.company ?? '—'} · ${row.branch ?? '—'}`,
-          },
-          {
-            key: 'state',
-            label: _('user_backend.field.state'),
-            cell: (row) =>
-              row.current ? (
-                badge(_('user_backend.sessions.current'), 'positive')
-              ) : (
-                <RecordActions
-                  action={localized(`/admin/users/${userId}/sessions/${encodeURIComponent(row.id)}`, locale)}
-                  actions={[
-                    { value: 'revoke', label: _('user_backend.sessions.revoke'), variant: 'destructive' },
-                  ]}
-                />
-              ),
-          },
-        ],
-      })
 
 export type RoleRow = {
   id: string
@@ -526,7 +297,15 @@ export const profileScreen = (
           />
         }
       />,
-      <Section title={_('user_backend.sessions.title')} body={sessionsScreen(_, sessions, row.id, locale)} />,
+      <Section
+        title={_('user_backend.sessions.title')}
+        body={sessionsScreen(
+          _,
+          sessions,
+          (session) =>
+            localized(`/admin/users/${row.id}/sessions/${encodeURIComponent(session.id)}`, locale),
+        )}
+      />,
     ])}
   />
 )

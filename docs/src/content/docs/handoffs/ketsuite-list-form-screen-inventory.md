@@ -186,7 +186,7 @@ detail renderer that consumes them.
 | FLOW-11 | done | Epic detail | `/admin/flow/epics/{id}` | `screens/epic-detail.tsx::epicDetailScreen` | FormPage/Specialized | Huygens |
 | FLOW-12 | done | Epic dependency map | `/admin/flow/projects/{id}/epics/{epicId}/map` | `screens/map.tsx::mapScreen` | Specialized | Huygens |
 | FLOW-13 | done | Project Gantt | `/admin/flow/projects/{id}/gantt` | `screens/gantt.tsx::ganttScreen` | Specialized | Codex |
-| FLOW-14 | ready | Project sprints | `/admin/flow/projects/{id}/sprints` | `screens/sprints.tsx::sprintsScreen` | Split/Specialized | — |
+| FLOW-14 | done | Project sprints | `/admin/flow/projects/{id}/sprints` | `screens/sprints.tsx::sprintsScreen` | Split/Specialized | Codex |
 | FLOW-15 | ready | Project settings | `/admin/flow/projects/{id}/settings` | `screens/settings.tsx::settingsScreen` | Specialized | — |
 
 ### Manufacturing lane
@@ -219,28 +219,27 @@ Attendance Period and Credential Issuance; only the intentional public kiosk rem
 
 ### Company lane
 
-Structure debt: Waves 23–25 created `company_backend/screens/`, shared company/branch types, list and form
-leaves. The root `screens.tsx` now retains only hierarchy and context.
+Structure debt: Waves 23–26 created `company_backend/screens/`, shared company/branch types, list, form and
+hierarchy leaves. The root `screens.tsx` now retains only active-context configuration.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
 | COMPANY-01 | done | Companies | `/admin/companies` | `screens/companies-list.tsx::companiesScreen` | ListPage | Kant |
 | COMPANY-02 | done | Company create/detail | `/admin/companies/new`, `/admin/companies/{id}` | `screens/company-form.tsx::companyFormScreen` | FormPage | Kant |
 | COMPANY-03 | done | Branch create/detail | `/admin/companies/{id}/branches/new`, `/admin/companies/{companyId}/branches/{id}` | `screens/branch-form.tsx::branchFormScreen` | FormPage | Codex |
-| COMPANY-04 | ready | Company hierarchy | `/admin/companies/hierarchy` | `hierarchyScreen` | Specialized | — |
+| COMPANY-04 | done | Company hierarchy | `/admin/companies/hierarchy` | `screens/hierarchy.tsx::hierarchyScreen` | Specialized | Codex |
 | COMPANY-05 | ready | Active company/branch context | `/admin/context` | `contextScreen` | FormPage/Specialized | — |
 
 ### User and authentication lanes
 
-Structure debt: Wave 25 started `user_backend/screens/` with shared types and the users-list leaf. Move the
-remaining root renderers incrementally; the shared session table moves once to `screens/shared.tsx` and remains
-owned by USER-02/USER-06. The public login renderer is a separate user module surface and is intentionally not
-forced into FormPage.
+Structure debt: Waves 25–26 created `user_backend/screens/` with shared types, users list, user form and shared
+session leaves. Move roles, presets and profile incrementally; USER-06 reuses `screens/sessions.tsx`. The public
+login renderer is a separate user module surface and is intentionally not forced into FormPage.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
 | USER-01 | user-backend | done | Users | `/admin/users` | `screens/users-list.tsx::usersScreen` | ListPage | Codex |
-| USER-02 | user-backend | ready | User create/detail/access | `/admin/users/new`, `/admin/users/{id}` | `userFormScreen`, `sessionsScreen` | FormPage | — |
+| USER-02 | user-backend | done | User create/detail/access | `/admin/users/new`, `/admin/users/{id}` | `screens/user-form.tsx::userFormScreen`, `screens/sessions.tsx::sessionsScreen` | FormPage | Codex |
 | USER-03 | user-backend | ready | Roles | `/admin/roles` | `rolesScreen` | ListPage | — |
 | USER-04 | user-backend | ready | Role create/detail | `/admin/roles/new`, `/admin/roles/{id}` | `roleScreen` | FormPage | — |
 | USER-05 | user-backend | ready | Permission presets | `/admin/permission-presets` | `presetsScreen` | FormPage/Specialized | — |
@@ -1137,6 +1136,23 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   check or browser QA was run before the first push. The first PR run exposed formatting only; the exception
   path applied the formatter, built successfully and passed all 12 Wave 25 tests without opening a browser
   before the follow-up push.
+
+### Wave 26 — FLOW-14, COMPANY-04 and USER-02
+
+- Project Sprints remains a Specialized lifecycle collection while its three-field create workflow moves into
+  a URL-addressable modal over the collection. Rejected creation preserves the record ID, idempotency key and
+  submitted values; start/close transitions carry stable keys, unknown commands are rejected, locale survives
+  PRG and the collection stays mounted behind the dialog.
+- Company Hierarchy remains Specialized. Its renderer moved to `screens/hierarchy.tsx` with encoded row
+  navigation, lifecycle state, count and collection/create actions. Route traversal now guards revisits and
+  includes disconnected legacy nodes instead of recursing forever or silently omitting them.
+- User create/detail/access now uses `FormPage`. The main identity form and access controls occupy the body;
+  security integrations and sessions use the one-third detail rail, while create has no empty aside. Stable
+  create IDs, safe list return state, rejected values, locale PRG and explicit command allowlists cover identity,
+  membership, role, token and session actions. Same-ID create replay is idempotent; conflicting reuse is refused.
+  The renderer and shared session table moved to `screens/user-form.tsx` and `screens/sessions.tsx`.
+- Wave 26 follows the CI-first rule: source and focused tests are committed without local execution or browser
+  QA. A CI failure activates the exception path—fix, build and relevant tests without a browser—before repush.
 
 ### Modal consolidation through Wave 14 — PR 253
 

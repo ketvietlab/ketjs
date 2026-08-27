@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { presetsScreen, profileScreen, roleScreen, rolesScreen, userFormScreen } from './screens.tsx'
+import { presetsScreen, profileScreen, roleScreen, rolesScreen } from './screens.tsx'
 import type { PermissionRow, RoleRow, SessionRow } from './screens.tsx'
-import { usersScreen } from './screens/index.ts'
-import type { UserRow } from './screens/index.ts'
-import { adminPage, inLocale, localeQuery, localized } from '../backend/screen.ts'
+import { userFormScreen, usersScreen } from './screens/index.ts'
+import type { UserFormValues, UserRow } from './screens/index.ts'
+import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 
@@ -19,6 +19,33 @@ const crossSite = (req: Req): boolean => {
     return true
   }
 }
+
+const validCreateId = (value?: string): value is string =>
+  typeof value === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+
+const safeUserReturnTo = (url: URL, submitted?: string | null): string => {
+  const fallback = inLocale(url, '/admin/users')
+  if (!submitted?.startsWith('/')) return fallback
+  const target = new URL(submitted, 'http://ket.local')
+  if (target.origin !== 'http://ket.local' || target.pathname !== '/admin/users') return fallback
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  else target.searchParams.delete('lang')
+  return `${target.pathname}${target.search}`
+}
+
+const withUserReturnTo = (url: URL, path: string, returnTo: string): string => {
+  const target = new URL(inLocale(url, path), 'http://ket.local')
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+
+const userDetailPath = (url: URL, id: string, returnTo: string): string =>
+  withUserReturnTo(url, `/admin/users/${encodeURIComponent(id)}`, returnTo)
+
+const userActionPath = (url: URL, id: string, action: string, returnTo: string): string =>
+  withUserReturnTo(url, `/admin/users/${encodeURIComponent(id)}/${action}`, returnTo)
 
 const translatedErrors = (ctx: ServeContext, url: URL, req: Req, result: unknown): string[] => {
   const _ = ctx.translate(ctx.localeOf(url, req))
@@ -85,6 +112,8 @@ const renderUser = async (
     errors?: string[]
     oneTimeLink?: string | null
     integration?: Parameters<typeof userFormScreen>[2]['integration']
+    values?: UserFormValues
+    returnTo?: string
   } = {},
 ) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
@@ -94,24 +123,41 @@ const renderUser = async (
     sessionRows(ctx, url, req, id),
   ])
   if (!row) return text(_('user_backend.error.notFound'), { status: 404 })
+  const returnTo = safeUserReturnTo(url, state.returnTo ?? url.searchParams.get('returnTo'))
+  const values: UserFormValues = { ...row, ...state.values, id: row.id }
   const externalIdentities = await ctx.joint(url, req, 'user_backend:user.external-identities', {
     userId: id,
   })
   return adminPage(ctx, url, req, {
     title: row.name,
     translate: false,
+    active: '/admin/users',
     body: (_, frame) =>
       userFormScreen(
         _,
-        row,
+        values,
         {
+          mode: 'detail',
+          action: userDetailPath(url, row.id, returnTo),
+          cancelHref: returnTo,
           ...options,
           sessions,
-          ...state,
+          errors: state.errors,
+          oneTimeLink: state.oneTimeLink,
+          companiesAction: userActionPath(url, row.id, 'companies', returnTo),
+          branchesAction: userActionPath(url, row.id, 'branches', returnTo),
+          rolesAction: userActionPath(url, row.id, 'roles', returnTo),
+          tokenAction: userActionPath(url, row.id, 'token', returnTo),
+          sessionAction: (session) =>
+            userActionPath(
+              url,
+              row.id,
+              `sessions/${encodeURIComponent(session.id)}`,
+              returnTo,
+            ),
           integration: state.integration ? [externalIdentities, state.integration] : externalIdentities,
         },
         frame,
-        localeQuery(url),
       ),
   })
 }
@@ -214,14 +260,14 @@ export const routes: Record<string, RouteEntry> = {
             },
             pager: pager(url, currentPage, rows.length, matching.length),
           }
-          const lang = localeQuery(url)
+          const returnTo = safeUserReturnTo(url, `${url.pathname}${url.search}`)
           return usersScreen(_, frame, {
             rows: rows.map((row) => ({
               ...row,
-              detailHref: localized(`/admin/users/${encodeURIComponent(row.id)}`, lang),
+              detailHref: userDetailPath(url, row.id, returnTo),
             })),
             total: matching.length,
-            createHref: localized('/admin/users/new', lang),
+            createHref: withUserReturnTo(url, '/admin/users/new', returnTo),
             toggleHref: withParam(url, 'archived', includeArchived ? null : '1'),
             includeArchived,
           })
@@ -233,11 +279,14 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+      const returnTo = safeUserReturnTo(url, url.searchParams.get('returnTo'))
       const options = await accessOptions(ctx, url, req)
       if (req.method === 'POST') {
-        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
-        const id = randomUUID()
+        if (form.action !== 'save') return text('invalid action', { status: 400 })
+        const id = validCreateId(form.id) ? form.id : randomUUID()
         const result = await ctx.call(
           'user.createUser',
           {
@@ -252,23 +301,41 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/users/${id}`))
+        if ((result as { ok?: boolean }).ok) return seeOther(userDetailPath(url, id, returnTo))
         return adminPage(ctx, url, req, {
           title: 'user_backend.users.create',
+          active: '/admin/users',
           body: (_, frame) =>
             userFormScreen(
               _,
-              form as Partial<UserRow>,
-              { ...options, errors: translatedErrors(ctx, url, req, result) },
+              { ...(form as UserFormValues), id },
+              {
+                mode: 'create',
+                action: withUserReturnTo(url, '/admin/users/new', returnTo),
+                cancelHref: returnTo,
+                ...options,
+                errors: translatedErrors(ctx, url, req, result),
+              },
               frame,
-              localeQuery(url),
             ),
         })
       }
-      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const id = randomUUID()
       return adminPage(ctx, url, req, {
         title: 'user_backend.users.create',
-        body: (_, frame) => userFormScreen(_, {}, options, frame, localeQuery(url)),
+        active: '/admin/users',
+        body: (_, frame) =>
+          userFormScreen(
+            _,
+            { id },
+            {
+              mode: 'create',
+              action: withUserReturnTo(url, '/admin/users/new', returnTo),
+              cancelHref: returnTo,
+              ...options,
+            },
+            frame,
+          ),
       })
     },
 
@@ -281,6 +348,8 @@ export const routes: Record<string, RouteEntry> = {
       const before = await userOf(ctx, url, req, params.id)
       if (!before) return text('Not found', { status: 404 })
       const form = await readForm(req)
+      if (form.action && form.action !== 'save') return text('invalid action', { status: 400 })
+      const returnTo = safeUserReturnTo(url, url.searchParams.get('returnTo'))
       const result = (await ctx.call(
         'user.saveUser',
         {
@@ -297,12 +366,16 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as { ok?: boolean; securityVersion?: number }
       if (!result.ok)
-        return renderUser(ctx, url, req, params.id, { errors: translatedErrors(ctx, url, req, result) })
+        return renderUser(ctx, url, req, params.id, {
+          errors: translatedErrors(ctx, url, req, result),
+          values: form as UserFormValues,
+          returnTo,
+        })
       if (Number(result.securityVersion) !== Number(before.securityVersion)) {
         const sessions = await ctx.sessionsOf(url, req)
         await sessions?.endUser(params.id)
       }
-      return seeOther(inLocale(url, `/admin/users/${params.id}`))
+      return seeOther(userDetailPath(url, params.id, returnTo))
     },
 
   '/admin/users/{id}/companies':
@@ -313,7 +386,9 @@ export const routes: Record<string, RouteEntry> = {
       const row = await userOf(ctx, url, req, params.id)
       if (!row)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.notFound'), { status: 404 })
-      const selected = desired(await readForm(req), 'company')
+      const form = await readForm(req)
+      if (form.action !== 'save') return text('invalid action', { status: 400 })
+      const selected = desired(form, 'company')
       if (!selected.length)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.companyRequired'), {
           status: 400,
@@ -353,7 +428,9 @@ export const routes: Record<string, RouteEntry> = {
           )
           if (!(result as { ok?: boolean }).ok) return failure(ctx, url, req, result)
         }
-      return seeOther(inLocale(url, `/admin/users/${params.id}`))
+      return seeOther(
+        userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
+      )
     },
 
   '/admin/users/{id}/branches':
@@ -364,7 +441,9 @@ export const routes: Record<string, RouteEntry> = {
       const row = await userOf(ctx, url, req, params.id)
       if (!row)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.notFound'), { status: 404 })
-      const selected = desired(await readForm(req), 'branch')
+      const form = await readForm(req)
+      if (form.action !== 'save') return text('invalid action', { status: 400 })
+      const selected = desired(form, 'branch')
       for (const branchId of selected) {
         const result = await ctx.call(
           'user.grantBranch',
@@ -401,7 +480,9 @@ export const routes: Record<string, RouteEntry> = {
           )
           if (!(result as { ok?: boolean }).ok) return failure(ctx, url, req, result)
         }
-      return seeOther(inLocale(url, `/admin/users/${params.id}`))
+      return seeOther(
+        userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
+      )
     },
 
   '/admin/users/{id}/roles':
@@ -412,7 +493,9 @@ export const routes: Record<string, RouteEntry> = {
       const row = await userOf(ctx, url, req, params.id)
       if (!row)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.notFound'), { status: 404 })
-      const selected = desired(await readForm(req), 'role')
+      const form = await readForm(req)
+      if (form.action !== 'save') return text('invalid action', { status: 400 })
+      const selected = desired(form, 'role')
       for (const roleId of selected) {
         const result = await ctx.call(
           'user.assignRole',
@@ -425,7 +508,9 @@ export const routes: Record<string, RouteEntry> = {
       for (const assignment of row.assignments ?? [])
         if (!selected.includes(assignment.roleId))
           await ctx.call('user.unassignRole', { userId: params.id, roleId: assignment.roleId }, url, req)
-      return seeOther(inLocale(url, `/admin/users/${params.id}`))
+      return seeOther(
+        userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
+      )
     },
 
   '/admin/users/{id}/token':
@@ -435,6 +520,7 @@ export const routes: Record<string, RouteEntry> = {
       if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       const kind = form.action ?? ''
+      if (kind !== 'invitation' && kind !== 'reset') return text('invalid action', { status: 400 })
       const result = (await ctx.call(
         'user.issueAuthToken',
         { userId: params.id, kind, realm: 'backend' },
@@ -442,7 +528,10 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as { ok?: boolean; token?: string; expiresAt?: string }
       if (!result.ok || !result.token)
-        return renderUser(ctx, url, req, params.id, { errors: translatedErrors(ctx, url, req, result) })
+        return renderUser(ctx, url, req, params.id, {
+          errors: translatedErrors(ctx, url, req, result),
+          returnTo: safeUserReturnTo(url, url.searchParams.get('returnTo')),
+        })
       if (kind === 'reset') await (await ctx.sessionsOf(url, req))?.endUser(params.id)
       await ctx.call(
         'user.recordSecurityEvent',
@@ -464,6 +553,7 @@ export const routes: Record<string, RouteEntry> = {
       return renderUser(ctx, url, req, params.id, {
         oneTimeLink: mailConnected ? null : path,
         integration,
+        returnTo: safeUserReturnTo(url, url.searchParams.get('returnTo')),
       })
     },
 
@@ -472,6 +562,8 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       if (crossSite(req)) return text('Forbidden', { status: 403 })
+      const form = await readForm(req)
+      if (form.action !== 'revoke') return text('invalid action', { status: 400 })
       const sessions = await ctx.sessionsOf(url, req)
       if (!sessions)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.sessionsUnavailable'), {
@@ -488,7 +580,13 @@ export const routes: Record<string, RouteEntry> = {
       if (held) await sessions.store.destroy(held.id)
       await ctx.call('user.recordSecurityEvent', { event: 'session.revoke', userId: params.id }, url, req)
       return seeOther(
-        inLocale(url, params.id === current?.userId ? '/admin/profile' : `/admin/users/${params.id}`),
+        params.id === current?.userId
+          ? inLocale(url, '/admin/profile')
+          : userDetailPath(
+              url,
+              params.id,
+              safeUserReturnTo(url, url.searchParams.get('returnTo')),
+            ),
       )
     },
 

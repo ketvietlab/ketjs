@@ -47,7 +47,10 @@ test('users HTTP list searches before exact paging and preserves locale/archive 
 
   const archived = await (await app.client.get('/admin/users?archived=1&page=2&lang=en')).text()
   assert.match(archived, /31-32 \/ 32/)
-  assert.match(archived, /data-row-href="\/admin\/users\/user-31\?lang=en"/)
+  assert.match(
+    archived,
+    /data-row-href="\/admin\/users\/user-31\?lang=en&amp;returnTo=%2Fadmin%2Fusers%3Farchived%3D1%26page%3D2%26lang%3Den"/,
+  )
 
   const byName = await (await app.client.get('/admin/users?q=needle&lang=en')).text()
   assert.match(byName, /Search Needle/)

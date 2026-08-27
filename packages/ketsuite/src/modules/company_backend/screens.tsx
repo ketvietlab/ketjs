@@ -1,13 +1,7 @@
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import {
-  badge,
-  code,
-  dataTable,
-  emptyState,
   Framed,
-  inline,
-  linkButton,
   RecordForm,
   Section,
   stack,
@@ -15,52 +9,8 @@ import {
 } from '../../ui/index.ts'
 import type { Frame } from '../../ui/index.ts'
 import { localized } from '../backend/screen.ts'
-import type { CompanyRow } from './screens/index.ts'
 
 export type { BranchRow, CompanyRow } from './screens/index.ts'
-
-export const hierarchyScreen = (
-  _: Translator,
-  rows: Array<CompanyRow & { depth: number; parentName?: string | null }>,
-  frame: Frame,
-  locale = '',
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('company_backend.hierarchy.title')}
-    frame={frame}
-    body={
-      rows.length === 0
-        ? emptyState(_('company_backend.screen.empty'), _('company_backend.screen.emptyHint'))
-        : dataTable(_, {
-            rows,
-            id: (row) => row.id,
-            columns: [
-              {
-                key: 'name',
-                label: _('company_backend.field.name'),
-                priority: 'primary',
-                cell: (row) =>
-                  inline([
-                    '— '.repeat(row.depth),
-                    linkButton({
-                      label: row.name,
-                      href: localized(`/admin/companies/${row.id}`, locale),
-                      variant: 'tertiary',
-                    }),
-                  ]),
-              },
-              { key: 'code', label: _('company_backend.field.code'), cell: (row) => code(row.code) },
-              {
-                key: 'parent',
-                label: _('company_backend.field.parent'),
-                cell: (row) => row.parentName ?? '—',
-              },
-            ],
-          })
-    }
-  />
-)
 
 export const contextScreen = (
   _: Translator,
