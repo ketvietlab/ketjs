@@ -1329,7 +1329,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(releasedHtml, /Đã cập nhật trạng thái phòng/)
   assert.match(releasedHtml, /Chưa vệ sinh/)
   const preselectedQueue = await e2e.client.get(
-    '/admin/hospitality/housekeeping?lang=vi&property=hotel&room=103',
+    '/admin/hospitality/housekeeping?lang=vi&property=hotel&room=103&create=1',
   )
   assert.match(await preselectedQueue.text(), /<option(?=[^>]*value="103")(?=[^>]*selected)[^>]*>/)
 

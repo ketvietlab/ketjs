@@ -358,7 +358,9 @@ const modalErrors = (url: URL, _: Translator): readonly string[] | undefined =>
   url.searchParams.get('status') === 'invalid' ? [_('hospitality_core.feedback.invalid')] : undefined
 
 const modalValues = (url: URL, keys: readonly string[]): Record<string, string> =>
-  Object.fromEntries(keys.flatMap((key) => (url.searchParams.has(key) ? [[key, url.searchParams.get(key)!]] : [])))
+  Object.fromEntries(
+    keys.flatMap((key) => (url.searchParams.has(key) ? [[key, url.searchParams.get(key)!]] : [])),
+  )
 
 const modalResultRedirect = (
   url: URL,
@@ -1989,56 +1991,47 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.ratePlans.title',
         body: (_, frame) =>
-          ratePlansScreen(
-            _,
-            rows,
-            properties,
-            roomTypes,
-            propertyId,
-            frame,
-            url.searchParams.get('status'),
-            {
-              open: url.searchParams.get('create') === '1',
-              createHref: modalHref(url, true, [
-                'roomTypeId',
-                'code',
-                'name',
-                'rateType',
-                'amount',
-                'mealPlan',
-                'minStay',
-                'maxStay',
-                'isDefault',
-                'active',
-              ]),
-              closeHref: modalHref(url, false, [
-                'roomTypeId',
-                'code',
-                'name',
-                'rateType',
-                'amount',
-                'mealPlan',
-                'minStay',
-                'maxStay',
-                'isDefault',
-                'active',
-              ]),
-              action: modalAction(url),
-              errors: modalErrors(url, _),
-              values: modalValues(url, [
-                'roomTypeId',
-                'code',
-                'name',
-                'rateType',
-                'amount',
-                'mealPlan',
-                'minStay',
-                'maxStay',
-                'isDefault',
-                'active',
-              ]),
-            },
-          ),
+          ratePlansScreen(_, rows, properties, roomTypes, propertyId, frame, url.searchParams.get('status'), {
+            open: url.searchParams.get('create') === '1',
+            createHref: modalHref(url, true, [
+              'roomTypeId',
+              'code',
+              'name',
+              'rateType',
+              'amount',
+              'mealPlan',
+              'minStay',
+              'maxStay',
+              'isDefault',
+              'active',
+            ]),
+            closeHref: modalHref(url, false, [
+              'roomTypeId',
+              'code',
+              'name',
+              'rateType',
+              'amount',
+              'mealPlan',
+              'minStay',
+              'maxStay',
+              'isDefault',
+              'active',
+            ]),
+            action: modalAction(url),
+            errors: modalErrors(url, _),
+            values: modalValues(url, [
+              'roomTypeId',
+              'code',
+              'name',
+              'rateType',
+              'amount',
+              'mealPlan',
+              'minStay',
+              'maxStay',
+              'isDefault',
+              'active',
+            ]),
+          }),
       })
     },
 

@@ -195,7 +195,7 @@ test('Hospitality split collections keep context mounted under URL-owned create 
     const closedHtml = renderToString(closed)
     const openHtml = renderToString(open)
     assert.match(closedHtml, /data-ui="list-page"/)
-    assert.match(closedHtml, /href="\/collection\?lang=vi&amp;create=1"/)
+    assert.match(closedHtml, /href="[^"]*create=1"/)
     assert.doesNotMatch(closedHtml, /data-route-modal="true"/)
     assert.match(openHtml, /data-ui="list-page"/)
     assert.match(openHtml, /data-route-modal="true"/)

@@ -52,46 +52,46 @@ export const ratePlansScreen = (
       }
       body={stack([
         feedback(_, state),
-      <RecordForm
-        action="/admin/hospitality/rate-plans"
-        method="get"
-        layout="inline"
-        submit={_('hospitality_core.action.select')}
-        submitVariant="secondary"
-        fields={[
-          {
-            name: 'property',
-            label: _('hospitality_core.menu.properties'),
-            type: 'select',
-            value: propertyId,
-            options: choices(properties),
-            required: true,
-          },
-        ]}
-      />,
-      roomTypes.length
-        ? null
-        : emptyState(
-            _('hospitality_core.screen.ratePlans.noRoomTypes'),
-            _('hospitality_core.screen.ratePlans.noRoomTypesHint'),
+        <RecordForm
+          action="/admin/hospitality/rate-plans"
+          method="get"
+          layout="inline"
+          submit={_('hospitality_core.action.select')}
+          submitVariant="secondary"
+          fields={[
             {
-              actions: setupAction(
-                _('hospitality_core.roomType.action.create'),
-                '/admin/hospitality/room-types/new',
-              ),
+              name: 'property',
+              label: _('hospitality_core.menu.properties'),
+              type: 'select',
+              value: propertyId,
+              options: choices(properties),
+              required: true,
             },
-          ),
-      <Section
-        title={_('hospitality_core.screen.ratePlans.list')}
-        body={
-          rows.length
-            ? dataTable(_, { columns: ratePlanColumns(_), rows, id: (row) => row.id })
-            : emptyState(
-                _('hospitality_core.screen.ratePlans.empty'),
-                _('hospitality_core.screen.ratePlans.emptyHint'),
-              )
-        }
-      />,
+          ]}
+        />,
+        roomTypes.length
+          ? null
+          : emptyState(
+              _('hospitality_core.screen.ratePlans.noRoomTypes'),
+              _('hospitality_core.screen.ratePlans.noRoomTypesHint'),
+              {
+                actions: setupAction(
+                  _('hospitality_core.roomType.action.create'),
+                  '/admin/hospitality/room-types/new',
+                ),
+              },
+            ),
+        <Section
+          title={_('hospitality_core.screen.ratePlans.list')}
+          body={
+            rows.length
+              ? dataTable(_, { columns: ratePlanColumns(_), rows, id: (row) => row.id })
+              : emptyState(
+                  _('hospitality_core.screen.ratePlans.empty'),
+                  _('hospitality_core.screen.ratePlans.emptyHint'),
+                )
+          }
+        />,
       ])}
     />
   )
