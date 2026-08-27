@@ -50,6 +50,7 @@ export default defineModule({
       'my.clock': 'Trạng thái chấm công',
       'my.clockSince': 'Bắt đầu từ',
       'admin.title': 'Bảng công tháng',
+      'admin.subtitle': 'Rà soát ngày công và khóa kỳ theo múi giờ của chính sách chấm công.',
       'kiosk.title': 'Kiosk chấm công',
       'kiosk.hint': 'Nhập mã nhân viên và PIN, hoặc quét QR vào ô QR.',
       'credentials.title': 'Kiosk và mã chấm công',
@@ -58,6 +59,8 @@ export default defineModule({
       'credentials.qr': 'Cấp lại QR',
       'credentials.once': 'Secret chỉ hiển thị một lần',
       'period.state': 'Trạng thái kỳ',
+      'period.entries': 'Ngày công',
+      'period.entryCount': 'Số dòng',
       'period.reopenReason': 'Điều chỉnh kỳ công đã khóa',
       'result.title': 'Kết quả',
       'result.success': 'Thành công',
@@ -95,6 +98,7 @@ export default defineModule({
       'action.cancel': 'Hủy',
       'action.requestLeave': 'Gửi yêu cầu',
       'action.openPeriod': 'Mở kỳ',
+      'action.export': 'Xuất CSV',
       'action.close': 'Chốt kỳ',
       'action.reopen': 'Mở lại',
       'action.issue': 'Cấp kiosk',
@@ -138,6 +142,7 @@ export default defineModule({
       'my.clock': 'Clock status',
       'my.clockSince': 'Since',
       'admin.title': 'Monthly attendance',
+      'admin.subtitle': 'Review work entries and lock the period in the attendance policy timezone.',
       'kiosk.title': 'Attendance kiosk',
       'kiosk.hint': 'Enter employee code and PIN, or scan a QR token.',
       'credentials.title': 'Kiosks and credentials',
@@ -146,6 +151,8 @@ export default defineModule({
       'credentials.qr': 'Reissue QR',
       'credentials.once': 'Secret shown once',
       'period.state': 'Period status',
+      'period.entries': 'Work entries',
+      'period.entryCount': 'Rows',
       'period.reopenReason': 'Adjust a locked attendance period',
       'result.title': 'Result',
       'result.success': 'Success',
@@ -183,6 +190,7 @@ export default defineModule({
       'action.cancel': 'Cancel',
       'action.requestLeave': 'Request leave',
       'action.openPeriod': 'Open period',
+      'action.export': 'Export CSV',
       'action.close': 'Close period',
       'action.reopen': 'Reopen',
       'action.issue': 'Issue kiosk',
@@ -212,10 +220,11 @@ export default defineModule({
   },
 })
 
-export { leaveRequestModal, myWorkScreen } from './screens/index.ts'
+export { leaveRequestModal, myWorkScreen, periodScreen } from './screens/index.ts'
 export type {
   LeaveRequestModalOptions,
   LeaveRequestValues,
   MyWorkScreenOptions,
+  PeriodScreenOptions,
 } from './screens/index.ts'
-export { credentialScreen, kioskScreen, periodScreen } from './screens.tsx'
+export { credentialScreen, kioskScreen } from './screens.tsx'

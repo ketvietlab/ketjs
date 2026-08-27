@@ -21,6 +21,11 @@ export { allPagesScreen } from './all-pages.tsx'
 export type { AllPagesScreenOptions } from './all-pages.tsx'
 export { pageDetailScreen } from './page-detail.tsx'
 export type { PageDetailAction, PageDetailScreenOptions } from './page-detail.tsx'
-export { epicsScreen, epicDetailScreen, allEpicsScreen } from './epics.tsx'
+export { epicsScreen, projectEpicCreateFields } from './project-epics.tsx'
+export type {
+  ProjectEpicCreateValues,
+  ProjectEpicsScreenOptions,
+} from './project-epics.tsx'
+export { epicDetailScreen, allEpicsScreen } from './epics.tsx'
 export { sprintsScreen } from './sprints.tsx'
 export { settingsScreen } from './settings.tsx'

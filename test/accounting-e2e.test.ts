@@ -142,7 +142,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     // Every field that names an account reaches the whole chart — over two hundred
     // rows once the TT99 pack is installed — so each is a picker with a search
     // dialog rather than a select the reader scrolls.
-    if (['/admin/accounting/payments', '/admin/accounting/general-ledger'].includes(path)) {
+    if (path === '/admin/accounting/general-ledger') {
       assert.match(html, /data-island="backend\.relation-select"/, path)
       assert.match(html, /&quot;listFunction&quot;:&quot;account\.listAccounts&quot;/, path)
     }
@@ -176,8 +176,9 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/payments') {
-      assert.match(html, /data-ui="record-workspace"/)
-      assert.match(html, /id="payment-register-form"/)
+      assert.match(html, /data-ui="list-page"/)
+      assert.match(html, /href="\/admin\/accounting\/payments\/new\?returnTo=/)
+      assert.doesNotMatch(html, /id="payment-register-form"/)
       assert.doesNotMatch(html, /data-island="mail\.chatter"/)
     }
     if (path === '/admin/accounting/accounts') {
@@ -712,7 +713,7 @@ test('e2e accounting: a refused form says which rule it broke and keeps what was
 test('e2e accounting: a payment can only be pointed at an account it could settle', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   const accounts = (await call<Row[]>('account.listAccounts')).value
-  const response = await e2e.client.get('/admin/accounting/payments?lang=vi', {
+  const response = await e2e.client.get('/admin/accounting/payments/new?lang=vi', {
     headers: { accept: 'text/html' },
   })
   const html = await response.text()

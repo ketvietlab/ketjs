@@ -664,7 +664,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'period.report': defineFn({
-    input: { month: 'text' },
+    input: { month: 'text?' },
     output: { id: 'id', month: 'text', timezone: 'text', state: 'text', version: 'int', entries: 'json?' },
     effects: [
       'read:attendance.Policy',
@@ -680,10 +680,11 @@ export const functions: Record<string, FnSpec> = {
     ],
     agent: true,
     handler: async (ctx: Ctx, a) => {
-      const month = String(a.month)
       let policy: Row
+      let month: string
       try {
         policy = await policyFor(ctx)
+        month = clean(a.month) || currentMonth(String(policy.timezone))
         monthBounds(month, String(policy.timezone))
       } catch {
         return null
@@ -713,7 +714,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'period.manageClose': defineFn({
-    input: { month: 'text' },
+    input: { month: 'text', expectedVersion: 'int?' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
     effects: [
       'read:attendance.Policy',
@@ -756,6 +757,8 @@ export const functions: Record<string, FnSpec> = {
         period = (await ctx.db.select('attendance.Period', { month }))[0]
       }
       if (period.state === 'locked') return { ok: true, id: period.id, version: period.version }
+      if (a.expectedVersion != null && Number(period.version) !== Number(a.expectedVersion))
+        return invalid(issue('version', 'attendance.error.invalid'))
       const open = (await ctx.db.select('attendance.Session', {})).some(
         (row) => row.state === 'open' && String(row.startAt) >= bounds[0] && String(row.startAt) < bounds[1],
       )
@@ -780,17 +783,23 @@ export const functions: Record<string, FnSpec> = {
       if (pendingCorrections || pendingOvertime)
         return invalid(issue('month', 'attendance.error.periodPending'))
       const version = Number(period.version) + 1
-      await ctx.db.update(
+      const changed = await ctx.db.compareAndSet(
         'attendance.Period',
         { id: period.id },
+        {
+          state: 'open',
+          ...(a.expectedVersion == null ? {} : { version: Number(a.expectedVersion) }),
+        },
         { state: 'locked', version, lockedAt: now(), lockedBy: ctx.actor ?? null },
       )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid(issue('version', 'attendance.error.invalid'))
       return { ok: true, id: period.id, version }
     },
   }),
 
   'period.manageReopen': defineFn({
-    input: { month: 'text', reason: 'text' },
+    input: { month: 'text', reason: 'text', expectedVersion: 'int?' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
     effects: ['read:attendance.Period', 'write:attendance.Period'],
     idempotent: true,
@@ -800,10 +809,16 @@ export const functions: Record<string, FnSpec> = {
       const period = (await ctx.db.select('attendance.Period', { month: a.month }))[0]
       if (!period) return invalid(issue('month', 'attendance.error.missing'))
       if (period.state === 'open') return { ok: true, id: period.id, version: period.version }
+      if (a.expectedVersion != null && Number(period.version) !== Number(a.expectedVersion))
+        return invalid(issue('version', 'attendance.error.invalid'))
       const version = Number(period.version) + 1
-      await ctx.db.update(
+      const changed = await ctx.db.compareAndSet(
         'attendance.Period',
         { id: period.id },
+        {
+          state: 'locked',
+          ...(a.expectedVersion == null ? {} : { version: Number(a.expectedVersion) }),
+        },
         {
           state: 'open',
           version,
@@ -812,6 +827,8 @@ export const functions: Record<string, FnSpec> = {
           reopenReason: clean(a.reason),
         },
       )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid(issue('version', 'attendance.error.invalid'))
       return { ok: true, id: period.id, version }
     },
   }),

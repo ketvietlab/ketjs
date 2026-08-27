@@ -33,6 +33,8 @@ import {
   moveDetailScreen,
   moveTitle,
   optionsOf,
+  paymentFormScreen,
+  paymentsListScreen,
   paymentTermFormModal,
   paymentTermLineFormModal,
   paymentTermsListScreen,
@@ -42,7 +44,6 @@ import {
   vendorBillsListScreen,
 } from './screens/index.ts'
 import { generalLedgerScreen } from './general-ledger-screen.tsx'
-import { paymentsScreen } from './payments-screen.tsx'
 import { partnerLedgerScreen } from './partner-ledger-screen.tsx'
 import { trialBalanceScreen } from './trial-balance-screen.tsx'
 import { adminPage, choices, localeQuery, optional, printGroup, selectionLabel } from '../backend/screen.ts'
@@ -231,6 +232,32 @@ const safeVendorBillReturnTo = (url: URL): string => {
 
 const vendorBillFormPath = (url: URL, returnTo: string): string => {
   const target = new URL('/admin/accounting/vendor-bills/new', url)
+  target.search = ''
+  const lang = url.searchParams.get('lang')
+  if (lang) target.searchParams.set('lang', lang)
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+
+const paymentListPath = (url: URL): string => {
+  const target = new URL(url)
+  target.pathname = '/admin/accounting/payments'
+  for (const key of ['create', 'invalid', 'returnTo']) target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const safePaymentReturnTo = (url: URL): string => {
+  const fallback = `/admin/accounting/payments${localeQuery(url)}`
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/accounting/payments'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+
+const paymentFormPath = (url: URL, returnTo: string): string => {
+  const target = new URL('/admin/accounting/payments/new', url)
   target.search = ''
   const lang = url.searchParams.get('lang')
   if (lang) target.searchParams.set('lang', lang)
@@ -673,6 +700,121 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
   }
 }
 
+const paymentFields = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  _: Translator,
+  data: Awaited<ReturnType<typeof common>>,
+  openItems: AnyRow[],
+  rejected?: Rejection,
+): Promise<FormField[]> => {
+  const values = rejected?.values ?? {}
+  const keepRow = (rows: AnyRow[], id: string, fallback: AnyRow): AnyRow[] =>
+    id && !rows.some((row) => String(row.id) === id) ? [fallback, ...rows] : rows
+  const partners = keepRow(data.partners, values.partnerId ?? '', {
+    id: values.partnerId,
+    name: values.partnerId,
+  })
+  const liquidityJournals = keepRow(
+    data.journals.filter((journal) => ['bank', 'cash'].includes(String(journal.type))),
+    values.journalId ?? '',
+    { id: values.journalId, name: values.journalId },
+  )
+  const settleable = controlAccounts(data.accounts)
+  const selectedAccount = data.accounts.find(
+    (account) => String(account.id) === String(values.destinationAccountId ?? ''),
+  )
+  const destinationAccounts = keepRow(settleable, values.destinationAccountId ?? '', {
+    id: values.destinationAccountId,
+    code: values.destinationAccountId,
+    name: selectedAccount ? accountName(_, selectedAccount) : values.destinationAccountId,
+    accountType: selectedAccount?.accountType ?? '',
+  })
+  const reconciliationItems = keepRow(openItems, values.reconcileLineId ?? '', {
+    id: values.reconcileLineId,
+  })
+  const fields: FormField[] = [
+    { name: 'name', label: _('account_backend.field.name'), required: true },
+    {
+      name: 'paymentType',
+      label: _('account_backend.field.paymentType'),
+      type: 'select',
+      options: optionsOf(_, 'paymentType', PAYMENT_TYPES),
+    },
+    {
+      name: 'partnerType',
+      label: _('account_backend.field.partnerType'),
+      type: 'select',
+      options: optionsOf(_, 'partnerType', PARTNER_TYPES),
+    },
+    {
+      name: 'partnerId',
+      label: _('account_backend.field.partnerId'),
+      type: 'select',
+      options: choices(partners, true),
+      control: await partnerRelationControl(ctx, url, req, _, {
+        id: 'payment-partner',
+        partners: partners as Array<{ id: string; name: string; ref?: string | null }>,
+        fieldLabel: _('account_backend.field.partnerId'),
+        title: _('account_backend.relation.partners'),
+        allowEmpty: true,
+        value: values.partnerId,
+      }),
+    },
+    {
+      name: 'journalId',
+      label: _('account_backend.field.journalId'),
+      type: 'select',
+      options: choices(liquidityJournals),
+      required: true,
+    },
+    {
+      name: 'destinationAccountId',
+      label: _('account_backend.field.destinationAccountId'),
+      type: 'select',
+      options: accountChoices(_, destinationAccounts),
+      required: true,
+      help: _('account_backend.field.destinationAccountIdHint'),
+      control: await accountRelationControl(ctx, url, req, _, {
+        id: 'payment-destination-account',
+        name: 'destinationAccountId',
+        label: _('account_backend.field.destinationAccountId'),
+        value: values.destinationAccountId,
+        accounts: accountOptions(destinationAccounts),
+        accountTypes: CONTROL_TYPES,
+        required: true,
+      }),
+    },
+    {
+      name: 'amount',
+      label: _('account_backend.field.paymentAmount'),
+      type: 'decimal',
+      value: 0,
+      required: true,
+    },
+    { name: 'date', label: _('account_backend.field.date'), type: 'date' },
+    { name: 'memo', label: _('account_backend.field.memo') },
+    { name: 'paymentReference', label: _('account_backend.field.paymentReference') },
+    {
+      name: 'reconcileLineId',
+      label: _('account_backend.field.reconcileLineId'),
+      type: 'select',
+      options: [
+        { value: '', label: '—' },
+        ...reconciliationItems.map((line) => ({
+          value: String(line.id),
+          label:
+            line.accountId == null
+              ? String((line.move as AnyRow | undefined)?.name ?? line.moveId ?? line.id)
+              : `${String((line.move as AnyRow | undefined)?.name ?? line.moveId)} · ${accountLabel(_, data.accounts, line.accountId)} · ${formatMoney(_, line.amountResidual, (line.move as AnyRow | undefined)?.currency)}`,
+        })),
+      ],
+    },
+  ]
+  return restore(fields, rejected)
+}
+
 const moveFields = async (
   ctx: ServeContext,
   url: URL,
@@ -922,6 +1064,42 @@ const createInvoice = async (
         ? `/admin/accounting/customer-invoices/${opened}`
         : `/admin/accounting/vendor-bills/${opened}`,
     ),
+  }
+}
+
+const submitPayment = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+): Promise<{ done: ReturnType<typeof seeOther> | ReturnType<typeof text> } | { rejected: Rejection }> => {
+  const form = await readForm(req)
+  // The action marker belongs to the new form. Missing remains the legacy
+  // collection POST; a named foreign action must never register money.
+  if (form.action && form.action !== 'register')
+    return { done: text('invalid payment action', { status: 400 }) }
+  const id = form.id || randomUUID()
+  const result = await ctx.call(
+    'account.registerPayment',
+    {
+      id,
+      name: form.name ?? '',
+      paymentType: form.paymentType ?? 'inbound',
+      partnerType: form.partnerType ?? 'customer',
+      ...optional(form, 'partnerId'),
+      journalId: form.journalId ?? '',
+      destinationAccountId: form.destinationAccountId ?? '',
+      amount: form.amount || '0',
+      ...optional(form, 'date'),
+      ...optional(form, 'memo'),
+      ...optional(form, 'paymentReference'),
+      ...optional(form, 'reconcileLineId'),
+    },
+    url,
+    req,
+  )
+  if (succeeded(result)) return { done: seeOther(safePaymentReturnTo(url)) }
+  return {
+    rejected: rejection(result, ctx.translate(ctx.localeOf(url, req)), { ...form, id }),
   }
 }
 
@@ -2649,123 +2827,183 @@ export default defineModule({
     '/admin/accounting/payments':
       (ctx): Route =>
       async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const outcome = await submitPayment(ctx, url, req)
+          if ('done' in outcome) return outcome.done
+          rejected = outcome.rejected
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const [data, openItems] = await Promise.all([
           common(ctx, url, req),
           ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
         ])
+        // Legacy collection POSTs still render the new full form when refused.
+        if (rejected)
+          return adminPage(ctx, url, req, {
+            title: 'account_backend.payment.create.title',
+            body: async (_, frame) =>
+              paymentFormScreen(_, {
+                frame,
+                action: paymentListPath(url),
+                cancelHref: paymentListPath(url),
+                paymentId: rejected.values.id ?? randomUUID(),
+                fields: await paymentFields(ctx, url, req, _, data, openItems, rejected),
+                errors: rejected.messages,
+              }),
+          })
+        const all = (await ctx.call('account.listPayments', { limit: LIST_PAGE }, url, req)) as AnyRow[]
+        const paymentType = PAYMENT_TYPES.includes(String(url.searchParams.get('type')) as never)
+          ? url.searchParams.get('type')
+          : null
+        const partnerType = PARTNER_TYPES.includes(String(url.searchParams.get('partnerType')) as never)
+          ? url.searchParams.get('partnerType')
+          : null
+        const state = PAYMENT_STATES.includes(String(url.searchParams.get('state')) as never)
+          ? url.searchParams.get('state')
+          : null
+        const partnerId = url.searchParams.get('partnerId') || null
+        const page = pageOf(url)
+        const search = searchOf(url)
+        const partnerLabels = new Map(
+          data.partners.map((partner) => [String(partner.id), String(partner.name)]),
+        )
+        const needle = search?.toLocaleLowerCase()
+        const matching = all.filter((row) => {
+          if (paymentType && row.paymentType !== paymentType) return false
+          if (partnerType && row.partnerType !== partnerType) return false
+          if (state && row.state !== state) return false
+          if (partnerId && String(row.partnerId ?? '') !== partnerId) return false
+          return (
+            !needle ||
+            `${String(row.name ?? '')} ${String(row.date ?? '')} ${String(row.memo ?? '')} ${String(row.paymentReference ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+              .toLocaleLowerCase()
+              .includes(needle)
+          )
+        })
+        const rows = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+        const returnTo = paymentListPath(url)
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.payments.title',
+          body: (_, frame) =>
+            paymentsListScreen(_, {
+              frame: {
+                ...frame,
+                chrome: {
+                  search: {
+                    name: 'q',
+                    value: search ?? '',
+                    placeholder: _('account_backend.payments.title'),
+                    keep: {
+                      ...(paymentType ? { type: paymentType } : {}),
+                      ...(partnerType ? { partnerType } : {}),
+                      ...(state ? { state } : {}),
+                      ...(partnerId ? { partnerId } : {}),
+                      ...(url.searchParams.get('lang') ? { lang: String(url.searchParams.get('lang')) } : {}),
+                    },
+                    facets: [
+                      ...(paymentType
+                        ? [
+                            {
+                              label: labelOf(_, 'paymentType', paymentType),
+                              without: withParam(url, 'type', null),
+                            },
+                          ]
+                        : []),
+                      ...(partnerType
+                        ? [
+                            {
+                              label: labelOf(_, 'partnerType', partnerType),
+                              without: withParam(url, 'partnerType', null),
+                            },
+                          ]
+                        : []),
+                      ...(state
+                        ? [
+                            {
+                              label: labelOf(_, 'paymentStatus', state),
+                              without: withParam(url, 'state', null),
+                            },
+                          ]
+                        : []),
+                      ...(partnerId
+                        ? [
+                            {
+                              label: partnerLabels.get(partnerId) ?? partnerId,
+                              without: withParam(url, 'partnerId', null),
+                            },
+                          ]
+                        : []),
+                    ],
+                    menus: [
+                      {
+                        id: 'filters',
+                        label: _('backend.chrome.filters'),
+                        items: [
+                          ...PAYMENT_TYPES.map((value) => ({
+                            id: `type:${value}`,
+                            label: labelOf(_, 'paymentType', value),
+                            path: withParam(url, 'type', paymentType === value ? null : value),
+                            active: paymentType === value,
+                          })),
+                          ...PARTNER_TYPES.map((value) => ({
+                            id: `partnerType:${value}`,
+                            label: labelOf(_, 'partnerType', value),
+                            path: withParam(url, 'partnerType', partnerType === value ? null : value),
+                            active: partnerType === value,
+                          })),
+                          ...PAYMENT_STATES.map((value) => ({
+                            id: `state:${value}`,
+                            label: labelOf(_, 'paymentStatus', value),
+                            path: withParam(url, 'state', state === value ? null : value),
+                            active: state === value,
+                          })),
+                        ],
+                      },
+                    ],
+                  },
+                  pager: pager(url, page, rows.length, matching.length),
+                },
+              },
+              rows,
+              createHref: paymentFormPath(url, returnTo),
+              rowHref: (row) =>
+                `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
+              partnerLabel: (row) => partnerLabels.get(String(row.partnerId)) ?? '—',
+              summary: {
+                total: all.length,
+                inbound: all.filter((row) => row.paymentType === 'inbound').length,
+                outbound: all.filter((row) => row.paymentType === 'outbound').length,
+                open: openItems.length,
+              },
+            }),
+        })
+      },
+    '/admin/accounting/payments/new':
+      (ctx): Route =>
+      async (url, req) => {
         let rejected: Rejection | undefined
         if (req.method === 'POST') {
           if (crossSite(req)) return text('Forbidden', { status: 403 })
-          const form = await readForm(req)
-          const result = await ctx.call(
-            'account.registerPayment',
-            {
-              id: randomUUID(),
-              name: form.name ?? '',
-              paymentType: form.paymentType ?? 'inbound',
-              partnerType: form.partnerType ?? 'customer',
-              ...optional(form, 'partnerId'),
-              journalId: form.journalId ?? '',
-              destinationAccountId: form.destinationAccountId ?? '',
-              amount: form.amount || '0',
-              ...optional(form, 'date'),
-              ...optional(form, 'memo'),
-              ...optional(form, 'paymentReference'),
-              ...optional(form, 'reconcileLineId'),
-            },
-            url,
-            req,
-          )
-          if (succeeded(result)) return seeOther(`/admin/accounting/payments${localeQuery(url)}`)
-          rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+          const outcome = await submitPayment(ctx, url, req)
+          if ('done' in outcome) return outcome.done
+          rejected = outcome.rejected
         } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('account.listPayments', { limit: LIST_PAGE }, url, req)) as AnyRow[]
-        const settleable = controlAccounts(data.accounts)
+        const [data, openItems] = await Promise.all([
+          common(ctx, url, req),
+          ctx.call('account.listOpenItems', { limit: LIST_PAGE }, url, req) as Promise<AnyRow[]>,
+        ])
+        const returnTo = safePaymentReturnTo(url)
         return adminPage(ctx, url, req, {
-          title: 'account_backend.payments.title',
+          title: 'account_backend.payment.create.title',
           body: async (_, frame) =>
-            paymentsScreen(_, {
-              frame: frame,
-              action: `/admin/accounting/payments${localeQuery(url)}`,
-              rows,
-              openItems: openItems.length,
-              entryHref: (row) =>
-                `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
+            paymentFormScreen(_, {
+              frame,
+              action: paymentFormPath(url, returnTo),
+              cancelHref: returnTo,
+              paymentId: rejected?.values.id ?? randomUUID(),
+              fields: await paymentFields(ctx, url, req, _, data, openItems, rejected),
               errors: rejected?.messages,
-              fields: restore(
-                [
-                  { name: 'name', label: _('account_backend.field.name'), required: true },
-                  {
-                    name: 'paymentType',
-                    label: _('account_backend.field.paymentType'),
-                    type: 'select',
-                    options: optionsOf(_, 'paymentType', PAYMENT_TYPES),
-                  },
-                  {
-                    name: 'partnerType',
-                    label: _('account_backend.field.partnerType'),
-                    type: 'select',
-                    options: optionsOf(_, 'partnerType', PARTNER_TYPES),
-                  },
-                  {
-                    name: 'partnerId',
-                    label: _('account_backend.field.partnerId'),
-                    type: 'select',
-                    options: choices(data.partners, true),
-                  },
-                  {
-                    name: 'journalId',
-                    label: _('account_backend.field.journalId'),
-                    type: 'select',
-                    options: choices(
-                      data.journals.filter((journal) => ['bank', 'cash'].includes(String(journal.type))),
-                    ),
-                    required: true,
-                  },
-                  {
-                    name: 'destinationAccountId',
-                    label: _('account_backend.field.destinationAccountId'),
-                    type: 'select',
-                    // Only a control account can be settled, and which one depends on
-                    // the partner type chosen alongside it. Offering the whole chart
-                    // made the default selection a guaranteed refusal.
-                    options: accountChoices(_, settleable),
-                    required: true,
-                    help: _('account_backend.field.destinationAccountIdHint'),
-                    control: await accountRelationControl(ctx, url, req, _, {
-                      id: 'payment-destination-account',
-                      name: 'destinationAccountId',
-                      label: _('account_backend.field.destinationAccountId'),
-                      accounts: accountOptions(settleable),
-                      accountTypes: CONTROL_TYPES,
-                      required: true,
-                    }),
-                  },
-                  {
-                    name: 'amount',
-                    label: _('account_backend.field.paymentAmount'),
-                    type: 'decimal',
-                    value: 0,
-                    required: true,
-                  },
-                  { name: 'date', label: _('account_backend.field.date'), type: 'date' },
-                  { name: 'memo', label: _('account_backend.field.memo') },
-                  { name: 'paymentReference', label: _('account_backend.field.paymentReference') },
-                  {
-                    name: 'reconcileLineId',
-                    label: _('account_backend.field.reconcileLineId'),
-                    type: 'select',
-                    options: [
-                      { value: '', label: '—' },
-                      ...openItems.map((line) => ({
-                        value: String(line.id),
-                        label: `${String((line.move as AnyRow)?.name ?? line.moveId)} · ${accountLabel(_, data.accounts, line.accountId)} · ${formatMoney(_, line.amountResidual, (line.move as AnyRow)?.currency)}`,
-                      })),
-                    ],
-                  },
-                ],
-                rejected,
-              ),
             }),
         })
       },

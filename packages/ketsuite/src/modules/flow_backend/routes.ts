@@ -36,6 +36,7 @@ import {
   crossProjectScreen,
   pagesScreen,
   projectPageCreateFields,
+  projectEpicCreateFields,
   pageDetailScreen,
   allPagesScreen,
   projectCreateModal,
@@ -658,6 +659,51 @@ const projectPageCreateFailureHref = (
     if (value) target.searchParams.set(name, value)
   }
   for (const error of errors) target.searchParams.append('error', error)
+  return `${target.pathname}${target.search}`
+}
+
+const projectEpicsCollection = (url: URL, projectId: string): string => {
+  const target = new URL(url)
+  target.pathname = `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`
+  for (const key of [
+    'create',
+    'invalid',
+    'createError',
+    'archiveError',
+    'id',
+    'idempotencyKey',
+    'title',
+    'color',
+  ])
+    target.searchParams.delete(key)
+  return `${target.pathname}${target.search}`
+}
+
+const projectEpicCreateHref = (url: URL, projectId: string): string => {
+  const target = new URL(projectEpicsCollection(url, projectId), url)
+  target.searchParams.set('create', '1')
+  return `${target.pathname}${target.search}`
+}
+
+const projectEpicCreateFailureHref = (
+  url: URL,
+  projectId: string,
+  values: Record<string, string>,
+  errors: readonly string[],
+): string => {
+  const target = new URL(projectEpicCreateHref(url, projectId), url)
+  if (errors.length) target.searchParams.set('invalid', '1')
+  for (const name of ['id', 'idempotencyKey', 'title', 'color']) {
+    const value = values[name]
+    if (value) target.searchParams.set(name, value)
+  }
+  for (const error of errors) target.searchParams.append('createError', error)
+  return `${target.pathname}${target.search}`
+}
+
+const projectEpicArchiveFailureHref = (url: URL, projectId: string, errors: readonly string[]): string => {
+  const target = new URL(projectEpicsCollection(url, projectId), url)
+  for (const error of errors) target.searchParams.append('archiveError', error)
   return `${target.pathname}${target.search}`
 }
 
@@ -1742,32 +1788,54 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       const refused = refusePost(req)
       if (refused) return refused
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const projectId = String(params.id)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let errors: string[] = []
-      const endpoint = `/admin/flow/projects/${projectId}/epics`
+      const endpoint = projectEpicsCollection(url, projectId)
       if (req.method === 'POST') {
         const form = await readForm(req)
         if (form.action === 'archive') {
-          const archived = (await ctx.call('flow.epic.archive', { id: form.id ?? '' }, url, req)) as AnyRow
+          const held = form.id
+            ? ((await ctx.call('flow.epic.get', { id: form.id }, url, req)) as {
+                value: AnyRow | null
+              })
+            : { value: null }
+          const archived =
+            held.value && String(held.value.projectId) === projectId
+              ? ((await ctx.call('flow.epic.archive', { id: form.id ?? '' }, url, req)) as AnyRow)
+              : {
+                  ok: false,
+                  errors: [{ field: 'id', code: 'flow.error.notFound' }],
+                }
           if (archived.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(archived, _)
-        } else {
+          return seeOther(projectEpicArchiveFailureHref(url, projectId, errorsOf(archived, _)))
+        } else if (!form.action || form.action === 'save') {
+          const values = {
+            id: form.id || randomUUID(),
+            idempotencyKey: form.idempotencyKey || randomUUID(),
+            title: form.title ?? '',
+            color: form.color ?? '',
+          }
           const result = (await ctx.call(
             'flow.epic.save',
             {
-              values: { id: randomUUID(), projectId, title: form.title ?? '', color: form.color || null },
-              idempotencyKey: randomUUID(),
+              values: {
+                id: values.id,
+                projectId,
+                title: values.title,
+                color: values.color || null,
+              },
+              idempotencyKey: values.idempotencyKey,
             },
             url,
             req,
           )) as AnyRow
           if (result.ok) return seeOther(inLocale(url, endpoint))
-          errors = errorsOf(result, _)
-        }
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+          return seeOther(projectEpicCreateFailureHref(url, projectId, values, errorsOf(result, _)))
+        } else return text('invalid action', { status: 400 })
+      }
       const epics = (await ctx.call('flow.epic.list', { projectId }, url, req)) as AnyRow[]
       const withCounts = await Promise.all(
         epics.map(async (epic) => {
@@ -1790,19 +1858,32 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
-        body: (_, frame) =>
-          epicsScreen(
-            _,
-            frame,
-            String(project.name),
-            endpoint,
-            withCounts,
-            [
-              { name: 'title', label: _('flow_backend.field.title'), required: true },
-              { name: 'color', label: _('flow_backend.field.color'), type: 'color' },
-            ],
-            errors,
-          ),
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/epics`,
+        body: (t, frame) => {
+          const createErrors = url.searchParams.getAll('createError')
+          return epicsScreen(t, frame, {
+            projectName: String(project.name),
+            epics: withCounts,
+            action: endpoint,
+            closeHref: endpoint,
+            createAction: projectEpicCreateHref(url, projectId),
+            createHref: projectEpicCreateHref(url, projectId),
+            createOpen: url.searchParams.get('create') === '1',
+            createFields: projectEpicCreateFields(t, {
+              title: url.searchParams.get('title') ?? '',
+              color: url.searchParams.get('color') ?? '',
+            }),
+            createErrors: createErrors.length
+              ? createErrors
+              : url.searchParams.get('invalid') === '1'
+                ? [t('flow_backend.error.invalid')]
+                : undefined,
+            recordId: url.searchParams.get('id') || randomUUID(),
+            idempotencyKey: url.searchParams.get('idempotencyKey') || randomUUID(),
+            locale: localeQuery(url),
+            errors: url.searchParams.getAll('archiveError'),
+          })
+        },
       })
     },
 

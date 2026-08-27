@@ -36,11 +36,13 @@ All sub-agents work in the same checkout and on the same feature branch.
    their screen; only genuinely reused, domain-neutral helpers enter `screens/shared.tsx`.
 9. Every migrated screen preserves locale, permissions, POST semantics, named joints, partial-save
    controllers, validation, empty/error states, responsive behavior, and existing Chatter/Activity islands.
-10. Completion requires a focused render/HTTP test and desktop/mobile browser evidence. A visual change
-   without behavioral coverage remains `review`.
-11. Validation follows CI's affected-group planner. Module changes run their focused tests and owning group
-   (`stock_backend` is `catalog`); shared UI, framework, build, tooling, workflow, or otherwise unclassified
-   code expands to all groups. Do not rerun unrelated domain groups inside every wave.
+10. Completion requires a focused render/HTTP test, an owner self-check, and desktop/mobile browser evidence.
+    A visual change without behavioral coverage remains `review`; cross-review is requested only for a concrete
+    cross-module, security, concurrency, or shared-contract risk instead of being a mandatory all-agent cycle.
+11. Validation follows CI's affected-group planner. Screen agents run only focused source tests and targeted
+    static checks; the coordinator builds once and runs each owning group once after integration
+    (`stock_backend` is `catalog`). Shared UI, framework, build, tooling, workflow, or otherwise unclassified
+    code expands to all groups. Do not rerun unrelated domain groups inside every wave.
 
 Statuses: `ready`, `in-progress`, `blocked`, `review`, `done`, `keep` (intentional specialized layout).
 
@@ -59,8 +61,8 @@ The current snapshot contains **173 stable work-item IDs** with no duplicates.
 
 ### Accounting lane
 
-Structure debt: the customer-invoice, vendor-bill and shared document-detail renderers moved into
-`account_backend/screens/` in Waves 18–20; payments and report renderers remain to be split.
+Structure debt: the customer-invoice, vendor-bill, shared document-detail and payment renderers moved into
+`account_backend/screens/` in Waves 18–21; only the report renderers remain to be split.
 `account_partner_backend` follows the same rule.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Chatter | Owner |
@@ -75,7 +77,7 @@ Structure debt: the customer-invoice, vendor-bill and shared document-detail ren
 | ACC-08 | done | Customer invoices | `/admin/accounting/customer-invoices`, `/admin/accounting/customer-invoices/new` | `screens/customer-invoices-list.tsx`, `screens/customer-invoice-form.tsx` | Split | list/new: no | Curie |
 | ACC-09 | done | Vendor bills | `/admin/accounting/vendor-bills`, `/admin/accounting/vendor-bills/new` | `screens/vendor-bills-list.tsx`, `screens/vendor-bill-form.tsx` | Split | list/new: no | Curie |
 | ACC-10 | done | Shared accounting document detail | `/admin/accounting/entries/{id}`, `/customer-invoices/{id}`, `/vendor-bills/{id}` | `screens/move-detail.tsx::moveDetailScreen` | FormPage | `account_mail_backend` | Curie |
-| ACC-11 | ready | Payments | `/admin/accounting/payments` | `paymentsScreen` | Split | no | — |
+| ACC-11 | done | Payments | `/admin/accounting/payments`, `/admin/accounting/payments/new` | `screens/payments-list.tsx`, `screens/payment-form.tsx` | Split | no | Curie |
 | ACC-12 | ready | Trial balance | `/admin/accounting/trial-balance` | `trialBalanceScreen` | Specialized | no | — |
 | ACC-13 | ready | General ledger | `/admin/accounting/general-ledger` | `generalLedgerScreen` | Specialized | no | — |
 | ACC-14 | ready | Partner statement | `/admin/accounting/partner-statement` | `partnerLedgerScreen` | Specialized | no | — |
@@ -168,8 +170,8 @@ case detail and stays with CRM-03; configuration tabs stay together until their 
 
 ### Flow lane
 
-`flow_backend/screens/` exists. Waves 18–20 moved the project tree, all-pages list and page detail to their own
-leaves, removing the former `pages.tsx`; split `epics.tsx` one assignment at a time. Generated Live Doc endpoints
+`flow_backend/screens/` exists. Waves 18–21 moved the project tree, all-pages list, page detail and project epics
+to their own leaves, removing the former `pages.tsx`; split the remaining `epics.tsx` one assignment at a time. Generated Live Doc endpoints
 belong to the detail renderer that consumes them.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
@@ -182,7 +184,7 @@ belong to the detail renderer that consumes them.
 | FLOW-06 | done | Project page tree | `/admin/flow/projects/{id}/pages` | `screens/project-pages.tsx::pagesScreen` | Specialized | Huygens |
 | FLOW-07 | done | All pages | `/admin/flow/pages` | `screens/all-pages.tsx::allPagesScreen` | ListPage | Huygens |
 | FLOW-08 | done | Page live editor | `/admin/flow/pages/{id}` | `screens/page-detail.tsx::pageDetailScreen` | FormPage/Specialized | Huygens |
-| FLOW-09 | ready | Project epics | `/admin/flow/projects/{id}/epics` | `screens/epics.tsx::epicsScreen` | Specialized | — |
+| FLOW-09 | done | Project epics | `/admin/flow/projects/{id}/epics` | `screens/project-epics.tsx::epicsScreen` | Specialized | Huygens |
 | FLOW-10 | ready | All epics | `/admin/flow/epics` | `screens/epics.tsx::allEpicsScreen` | ListPage | — |
 | FLOW-11 | ready | Epic detail | `/admin/flow/epics/{id}` | `screens/epics.tsx::epicDetailScreen` | FormPage/Specialized | — |
 | FLOW-12 | ready | Epic dependency map | `/admin/flow/projects/{id}/epics/{epicId}/map` | `screens/map.tsx::mapScreen` | Specialized | — |
@@ -205,8 +207,8 @@ the barrel owns public exports, and the empty root `screens.tsx` no longer exist
 ### HR and attendance lanes
 
 Structure debt resolved in Wave 19: every HR backend renderer now lives in `hr_backend/screens/`, and the
-legacy root `screens.tsx` no longer exists. Wave 20 created `attendance_backend/screens/` for My Work;
-kiosk, period and credential issuance remain in the root `screens.tsx` until their assignments.
+legacy root `screens.tsx` no longer exists. Waves 20–21 created `attendance_backend/screens/` leaves for My Work
+and Attendance Period; kiosk and credential issuance remain in the root `screens.tsx` until their assignments.
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
@@ -215,7 +217,7 @@ kiosk, period and credential issuance remain in the root `screens.tsx` until the
 | HR-03 | hr | done | Leave approvals | `/admin/hr/leaves` | `screens/leaves-list.tsx::leavesListScreen` | ListPage | Kant |
 | ATT-01 | attendance | done | My work | `/my/work` | `screens/my-work.tsx::myWorkScreen` | Specialized | Kant |
 | ATT-02 | attendance | keep | Attendance kiosk | `/attendance/kiosk/{secret}` | `kioskScreen` | Specialized public kiosk | — |
-| ATT-03 | attendance | ready | Attendance period | `/admin/attendance` | `periodScreen` | Specialized | — |
+| ATT-03 | attendance | done | Attendance period | `/admin/attendance` | `screens/period.tsx::periodScreen` | Specialized | Kant |
 | ATT-04 | attendance | ready | Credential issuance | `/admin/attendance/credentials` | `credentialScreen` | FormPage/Specialized | — |
 
 ### Company lane
@@ -1023,6 +1025,31 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   104/104 and Identity 116 passed with one existing PostgreSQL-only test skipped locally. Browser QA covers the
   populated Flow Live Doc, add-child dialog, Accounting detail with one-third Chatter/activity rail, its 900 px
   wrapped layout and Attendance leave dialog at desktop and 390 px; regular mobile fields stack label over input.
+
+### Wave 21 — ACC-11, FLOW-09 and ATT-03
+
+- Payments is now a public `ListPage` with search, type, partner type, state, partner and paging controls plus
+  receipt, disbursement and open-item summaries. Its 11-control accounting and reconciliation workflow remains a
+  stable full `/new` `FormPage`: it is too large and consequential for a modal. Locale, CSRF, safe returns,
+  rejected relation values, legacy collection POST, stable retry identity and journal-entry destinations remain.
+  The former root renderer was split into `screens/payments-list.tsx` and `screens/payment-form.tsx`.
+- Project Epics remains a Specialized project card grid because epic briefs, backlog counts and dependency-map
+  destinations are its useful operating context. The two-field create action is now a URL-owned modal over the
+  grid; archive remains a compact card action. Locale, CSRF, explicit action dispatch, rejected title/color,
+  project scoping and retry-safe create/archive behavior remain. Its renderer moved to
+  `screens/project-epics.tsx`, leaving all-epics and epic detail for their own assignments.
+- Attendance Period remains a Specialized monthly review workspace: timezone-aware month selection, lifecycle,
+  status, export and attendance rows belong together. Month defaults now follow the attendance policy timezone;
+  close/reopen use optimistic versions and explicit action dispatch. Locale, CSRF, PRG and CSV export remain,
+  while the renderer moved to `screens/period.tsx`.
+- Wave 21 applies the faster quality gate: agents run focused source tests and targeted static checks, the
+  coordinator performs one integration build and one pass of each affected CI group, and browser QA follows that
+  gate. Mandatory three-way cross-review is replaced by owner self-check plus targeted escalation for concrete
+  shared-contract, security or concurrency risk.
+- Integrated focused validation passes 12/12 tests. The affected groups pass Accounting 98/98, Collaboration
+  108/108 and Identity 120 passed with one existing PostgreSQL-only test skipped locally. Typecheck, UI audit,
+  Biome, docs and diff validation pass. Desktop and 390 px browser QA covers the Payments list/full form, Project
+  Epic create modal and Attendance Period workspace; regular mobile controls stack and no wrap collision appears.
 
 ### Modal consolidation through Wave 14 — PR 253
 

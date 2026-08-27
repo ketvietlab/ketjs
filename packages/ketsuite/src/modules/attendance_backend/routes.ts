@@ -4,9 +4,9 @@ import { modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { adminPage, inLocale, resultErrors } from '../backend/screen.ts'
 import type { Req } from '../backend/screen.ts'
-import { leaveRequestModal, myWorkScreen } from './screens/index.ts'
+import { leaveRequestModal, myWorkScreen, periodScreen } from './screens/index.ts'
 import type { LeaveRequestValues } from './screens/index.ts'
-import { credentialScreen, kioskScreen, periodScreen } from './screens.tsx'
+import { credentialScreen, kioskScreen } from './screens.tsx'
 
 /**
  * The kiosk is the one screen here that is not the backend: it is answered
@@ -56,6 +56,8 @@ const myWorkPath = (url: URL): string => inLocale(url, '/my/work')
 const myWorkLeavePath = (url: URL): string => inLocale(url, '/my/work?leave=1')
 const myWorkResultPath = (url: URL, result: string): string =>
   inLocale(url, `/my/work?result=${encodeURIComponent(result)}`)
+const attendancePeriodPath = (url: URL, month?: string): string =>
+  inLocale(url, month ? `/admin/attendance?month=${encodeURIComponent(month)}` : '/admin/attendance')
 
 export const routes: Record<string, RouteEntry> = {
   '/my/work':
@@ -182,26 +184,64 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
-      let month = url.searchParams.get('month') ?? currentMonth()
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+      let month = url.searchParams.get('month') ?? ''
+      let result: unknown = { ok: true }
       if (req.method === 'POST') {
         const form = await readForm(req)
         month = form.month || month
-        if (form.action === 'close') await ctx.call('attendance.period.manageClose', { month }, url, req)
-        else if (form.action === 'reopen')
-          await ctx.call(
-            'attendance.period.manageReopen',
-            { month, reason: _('attendance_backend.period.reopenReason') },
+        const expectedVersion = /^\d+$/.test(form.expectedVersion ?? '')
+          ? Number(form.expectedVersion)
+          : undefined
+        if (!form.action) return seeOther(attendancePeriodPath(url, month))
+        if (form.action === 'close')
+          result = await ctx.call(
+            'attendance.period.manageClose',
+            { month, ...(expectedVersion === undefined ? {} : { expectedVersion }) },
             url,
             req,
           )
-        else return seeOther(`/admin/attendance?month=${encodeURIComponent(month)}`)
-        return seeOther(`/admin/attendance?month=${encodeURIComponent(month)}`)
+        else if (form.action === 'reopen')
+          result = await ctx.call(
+            'attendance.period.manageReopen',
+            {
+              month,
+              reason: _('attendance_backend.period.reopenReason'),
+              ...(expectedVersion === undefined ? {} : { expectedVersion }),
+            },
+            url,
+            req,
+          )
+        else return text('invalid action', { status: 400 })
+        if ((result as { ok?: boolean }).ok) return seeOther(attendancePeriodPath(url, month))
       }
-      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const period = await ctx.call('attendance.period.report', { month }, url, req)
+      const period = (await ctx.call('attendance.period.report', month ? { month } : {}, url, req)) as Record<
+        string,
+        unknown
+      > | null
+      if (period) month = String(period.month)
+      const errors = resultErrors(result, _, 'attendance_backend.result.failed')
+      if (!period && month && !errors.length) errors.push(_('attendance.error.periodMonth'))
       return adminPage(ctx, url, req, {
         title: 'attendance_backend.admin.title',
-        body: (_, frame) => periodScreen(_, frame, month, period as never),
+        active: '/admin/attendance',
+        body: (_, frame) =>
+          periodScreen(
+            _,
+            {
+              action: attendancePeriodPath(url),
+              errors,
+              exportHref: period
+                ? inLocale(url, `/admin/attendance/export/${encodeURIComponent(month)}`)
+                : undefined,
+              lang: url.searchParams.get('lang') ?? undefined,
+              month,
+              period,
+              workflowAction: attendancePeriodPath(url, month),
+            },
+            frame,
+          ),
       })
     },
   '/admin/attendance/credentials':
