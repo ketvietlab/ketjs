@@ -67,7 +67,9 @@ Customer identity is separate from KetSuite staff identity. Accounts belong to a
 can be selected from the website host or explicitly with `X-Channel-Realm` for native clients.
 
 - Browser clients use an HTTP-only, same-site cookie plus a CSRF token for mutations.
-- Headless and mobile clients use short-lived Bearer access tokens and rotating refresh tokens.
+- Headless customer clients and POS use short-lived Bearer access tokens and rotating refresh tokens. Native
+  staff will use the same presentation boundary once D68's staff resolver seam lands; current staff routes
+  remain cookie-only.
 - Refresh grants are stored as digests, can be revoked, and are invalidated after password changes.
 - A customer credential cannot be used against the generic `/_ket/fn` staff transport.
 
