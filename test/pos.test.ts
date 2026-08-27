@@ -548,6 +548,22 @@ test('pos: split tender requires manual reference and voided tender stops coveri
       )
     ).value as Row
     assert.equal(bank.revision, 3)
+    const conflictingReplay = (
+      await call(
+        'pos.addPayment',
+        {
+          id: 'split-sale:bank',
+          orderId: 'split-sale',
+          paymentMethodId: 'manual-bank',
+          tenderedAmount: '59',
+          reference: 'BANK-002',
+          expectedRevision: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(conflictingReplay.ok, false)
+    assert.equal((conflictingReplay.errors as Row[])[0]?.field, 'id')
     await call(
       'pos.voidPayment',
       {

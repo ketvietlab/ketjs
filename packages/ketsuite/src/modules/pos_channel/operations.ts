@@ -524,12 +524,12 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.recordCashMovement',
         {
-          id: commandId('cash-movement', params.id, key),
+          id: channelCommandId('cash-movement', identity, `${params.id}\n${key}`),
           sessionId: params.id,
           expectedRevision: request.body.expectedRevision,
           direction: request.body.direction,
@@ -574,12 +574,12 @@ export const operationRoutes = routesOf(
     handler: async (ctx, url, req, params, request) => {
       const key = keyOf(ctx, url, req)
       if (typeof key !== 'string') return key
-      const identity = request.identity! as unknown as Row
+      const identity = request.identity!
       if (!(await shiftFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
         'pos.reverseCashMovement',
         {
-          id: commandId('cash-movement-reversal', params.id, key),
+          id: channelCommandId('cash-movement-reversal', identity, `${params.id}\n${key}`),
           sessionId: params.id,
           movementId: params.movementId,
           expectedRevision: request.body.expectedRevision,

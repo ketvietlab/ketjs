@@ -1450,7 +1450,8 @@ export const functions: Record<string, FnSpec> = {
         const same =
           existing.orderId === args.orderId &&
           existing.paymentMethodId === args.paymentMethodId &&
-          n(existing.tenderedAmount ?? existing.amount) === tendered
+          n(existing.tenderedAmount ?? existing.amount) === tendered &&
+          String(existing.reference ?? '') === String(args.reference ?? '')
         return same
           ? {
               ok: true,
