@@ -23,6 +23,7 @@ export default defineModule({
       'app.category': 'Năng suất',
       'menu.app': 'Thông báo',
       'inbox.title': 'Hộp thư thông báo',
+      'inbox.subtitle': 'Theo dõi và xử lý thông báo chưa đọc từ các bản ghi bạn đang quan tâm.',
       'inbox.empty': 'Không có thông báo chưa đọc.',
       'inbox.emptyHint': 'Tin nhắn mới từ các bản ghi bạn theo dõi sẽ xuất hiện tại đây.',
       'inbox.message': 'Tin nhắn',
@@ -34,6 +35,7 @@ export default defineModule({
       'app.category': 'Productivity',
       'menu.app': 'Notifications',
       'inbox.title': 'Notification inbox',
+      'inbox.subtitle': 'Review unread notifications from the records you follow.',
       'inbox.empty': 'No unread notifications.',
       'inbox.emptyHint': 'New messages from records you follow will appear here.',
       'inbox.message': 'Message',
@@ -43,4 +45,4 @@ export default defineModule({
 })
 
 export { islands } from './islands.ts'
-export { inboxScreen } from './screens.tsx'
+export { inboxScreen } from './screens/index.ts'

@@ -389,9 +389,9 @@ Each module has one root `screens.tsx`; its agent replaces it with `screens/inde
 
 | ID | Lane | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|---|
-| MAIL-01 | mail | ready | Inbox | `/admin/inbox` | `inboxScreen` | ListPage | — |
-| MAIL-02 | inbound-mail | ready | Inbound email events | `/admin/inbound-email` | `inboundScreen` | ListPage | — |
-| MAIL-03 | mail-transport | ready | Outbox deliveries | `/admin/outbox` | `outboxScreen` | ListPage | — |
+| MAIL-01 | mail | done | Inbox | `/admin/inbox` | `screens/inbox-list.tsx::inboxScreen` | ListPage | Codex |
+| MAIL-02 | inbound-mail | done | Inbound email events | `/admin/inbound-email` | `screens/inbound-list.tsx::inboundScreen` | ListPage | Codex |
+| MAIL-03 | mail-transport | done | Outbox deliveries | `/admin/outbox` | `screens/outbox-list.tsx::outboxScreen` | ListPage | Codex |
 
 ### OAuth lane
 
@@ -399,11 +399,11 @@ Structure debt: split `oauth_backend/screens.tsx` into `screens/`.
 
 | ID | Status | Screen | Route(s) | Current renderer | Target | Owner |
 |---|---|---|---|---|---|---|
-| OAUTH-01 | ready | OAuth providers | `/admin/oauth/providers` | `providersScreen` | ListPage | — |
-| OAUTH-02 | ready | Provider create/detail | `/admin/oauth/providers/new`, `/providers/{id}` | `providerFormScreen` | FormPage | — |
-| OAUTH-03 | ready | Linked identities | `/admin/oauth/identities` | `identitiesScreen` | ListPage | — |
-| OAUTH-04 | ready | Identity create | `/admin/oauth/identities/new` | `identityFormScreen` | FormPage | — |
-| OAUTH-05 | ready | Provider linking chooser | `/admin/oauth/link` | `linkProviderScreen` | FormPage/Specialized | — |
+| OAUTH-01 | done | OAuth providers | `/admin/oauth/providers` | `screens/index.tsx::providersScreen` | ListPage | Codex |
+| OAUTH-02 | done | Provider create/detail | `/admin/oauth/providers/new`, `/providers/{id}` | `screens/index.tsx::providerFormScreen` | FormPage | Codex |
+| OAUTH-03 | done | Linked identities | `/admin/oauth/identities` | `screens/index.tsx::identitiesScreen` | ListPage | Codex |
+| OAUTH-04 | done | Identity create | `/admin/oauth/identities/new` | `screens/index.tsx::identityFormScreen` | FormPage | Codex |
+| OAUTH-05 | done | Provider linking chooser | `/admin/oauth/link` | `screens/index.tsx::linkProviderScreen` | FormPage/Specialized | Codex |
 
 ### Report lane
 
@@ -1213,6 +1213,25 @@ route, public storefronts, channel APIs, print/download responses, and fragment-
   Stable rule IDs, rejected settings/rule values, command allowlists, encoded navigation and locale-safe PRG are
   preserved. Focused leaves remove the Pricing Backend root `screens.tsx`.
 - Wave 30 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 31 — MAIL-01, MAIL-02 and MAIL-03
+
+- Inbox, inbound-email diagnostics and outbox now use `ListPage` while retaining their operational card
+  presentation, empty states, delivery badges and message context. Each module's former root `screens.tsx` is
+  replaced by a focused `screens/` folder.
+- Inbox and outbox forms receive route-owned locale-safe actions and explicit commands. Their mutations reject
+  cross-site browser posts, preserve legacy mark-read submissions and redirect back with the active locale.
+- Wave 31 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
+  browser QA. Only a CI failure activates the targeted no-browser exception path.
+
+### Wave 32 — OAUTH-01 through OAUTH-05
+
+- Provider and linked-identity collections now use `ListPage`; provider configuration, manual identity linking
+  and the self-service provider chooser use `FormPage` while preserving archive, unlink and OAuth start flows.
+- All OAuth routes declare their active navigation context. The former root `screens.tsx` now lives under the
+  module's `screens/` folder, removing its outstanding structure debt.
+- Wave 32 follows the CI-first rule: source and focused tests are pushed without local execution, formatter or
   browser QA. Only a CI failure activates the targeted no-browser exception path.
 
 ### Modal consolidation through Wave 14 — PR 253

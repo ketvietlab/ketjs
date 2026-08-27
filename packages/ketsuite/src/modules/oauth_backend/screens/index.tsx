@@ -8,18 +8,20 @@ import {
   dataTable,
   DefinitionList,
   emptyState,
-  Framed,
+  FormPage,
   inline,
   linkButton,
+  ListPage,
   Notice,
   RecordActions,
   RecordForm,
   Section,
+  shell,
   stack,
   Surface,
-} from '../../ui/index.ts'
-import type { FormOption, Frame } from '../../ui/index.ts'
-import { localized } from '../backend/screen.ts'
+} from '../../../ui/index.ts'
+import type { FormOption, Frame } from '../../../ui/index.ts'
+import { localized } from '../../backend/screen.ts'
 
 export type ProviderRow = {
   id: string
@@ -64,13 +66,14 @@ export const providersScreen = (
   frame: Frame,
   locale = '',
   includeArchived = false,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('oauth_backend.providers.title')}
-    frame={frame}
-    body={stack([
-      inline([
+): TemplateResult =>
+  shell(
+    _,
+    _('oauth_backend.providers.title'),
+    <ListPage
+      title={_('oauth_backend.providers.title')}
+      description={_('oauth_backend.providers.subtitle')}
+      actions={inline([
         linkButton({
           label: _('oauth_backend.action.create'),
           href: localized('/admin/oauth/providers/new', locale),
@@ -90,51 +93,57 @@ export const providersScreen = (
           ),
           variant: 'tertiary',
         }),
-      ]),
-      rows.length === 0
-        ? emptyState(_('oauth_backend.providers.empty'), _('oauth_backend.providers.emptyHint'))
-        : dataTable(_, {
-            rows,
-            id: (row) => row.id,
-            columns: [
-              {
-                key: 'name',
-                label: _('oauth_backend.field.name'),
-                priority: 'primary',
-                cell: (row) =>
-                  linkButton({
-                    label: row.name,
-                    href: localized(`/admin/oauth/providers/${row.id}`, locale),
-                    variant: 'tertiary',
-                  }),
-              },
-              { key: 'code', label: _('oauth_backend.field.code'), cell: (row) => code(row.code) },
-              { key: 'issuer', label: _('oauth_backend.field.issuer'), cell: (row) => code(row.issuer) },
-              {
-                key: 'provision',
-                label: _('oauth_backend.field.autoProvision'),
-                kind: 'status',
-                cell: (row) =>
-                  badge(
-                    row.autoProvision ? _('oauth_backend.state.enabled') : _('oauth_backend.state.disabled'),
-                    row.autoProvision ? 'info' : 'neutral',
-                  ),
-              },
-              {
-                key: 'state',
-                label: _('oauth_backend.field.state'),
-                kind: 'status',
-                cell: (row) =>
-                  badge(
-                    row.active ? _('oauth_backend.state.active') : _('oauth_backend.state.archived'),
-                    row.active ? 'positive' : 'neutral',
-                  ),
-              },
-            ],
-          }),
-    ])}
-  />
-)
+        frame.extras?.['topbar.end'] ?? '',
+      ])}
+      status={`${_('oauth_backend.providers.title')}: ${String(rows.length)}`}
+      body={
+        rows.length === 0
+          ? emptyState(_('oauth_backend.providers.empty'), _('oauth_backend.providers.emptyHint'))
+          : dataTable(_, {
+              rows,
+              id: (row) => row.id,
+              columns: [
+                {
+                  key: 'name',
+                  label: _('oauth_backend.field.name'),
+                  priority: 'primary',
+                  cell: (row) =>
+                    linkButton({
+                      label: row.name,
+                      href: localized(`/admin/oauth/providers/${row.id}`, locale),
+                      variant: 'tertiary',
+                    }),
+                },
+                { key: 'code', label: _('oauth_backend.field.code'), cell: (row) => code(row.code) },
+                { key: 'issuer', label: _('oauth_backend.field.issuer'), cell: (row) => code(row.issuer) },
+                {
+                  key: 'provision',
+                  label: _('oauth_backend.field.autoProvision'),
+                  kind: 'status',
+                  cell: (row) =>
+                    badge(
+                      row.autoProvision
+                        ? _('oauth_backend.state.enabled')
+                        : _('oauth_backend.state.disabled'),
+                      row.autoProvision ? 'info' : 'neutral',
+                    ),
+                },
+                {
+                  key: 'state',
+                  label: _('oauth_backend.field.state'),
+                  kind: 'status',
+                  cell: (row) =>
+                    badge(
+                      row.active ? _('oauth_backend.state.active') : _('oauth_backend.state.archived'),
+                      row.active ? 'positive' : 'neutral',
+                    ),
+                },
+              ],
+            })
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
 
 type ProviderOptions = {
   companies: FormOption[]
@@ -254,11 +263,23 @@ export const providerFormScreen = (
   locale = '',
 ): TemplateResult => {
   const existing = Boolean(row.id)
-  return (
-    <Framed
-      translator={_}
-      title={existing ? String(row.name) : _('oauth_backend.providers.create')}
-      frame={frame}
+  const title = existing ? String(row.name) : _('oauth_backend.providers.create')
+  return shell(
+    _,
+    title,
+    <FormPage
+      scope="oauth-provider-form"
+      title={title}
+      description={_('oauth_backend.configuration.hint')}
+      status={
+        existing
+          ? badge(
+              row.active ? _('oauth_backend.state.active') : _('oauth_backend.state.archived'),
+              row.active ? 'positive' : 'neutral',
+            )
+          : undefined
+      }
+      actions={frame.extras?.['topbar.end']}
       body={stack([
         ...(existing
           ? [
@@ -342,7 +363,8 @@ export const providerFormScreen = (
             ]
           : []),
       ])}
-    />
+    />,
+    { ...frame, chrome: null, topbar: false },
   )
 }
 
@@ -352,16 +374,14 @@ export const identitiesScreen = (
   frame: Frame,
   locale = '',
   errors: string[] = [],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('oauth_backend.identities.title')}
-    frame={frame}
-    body={stack([
-      ...(errors.length
-        ? [<Notice tone="danger" title={_('oauth_backend.error.title')} message={errors.join(' ')} />]
-        : []),
-      inline([
+): TemplateResult =>
+  shell(
+    _,
+    _('oauth_backend.identities.title'),
+    <ListPage
+      title={_('oauth_backend.identities.title')}
+      description={_('oauth_backend.identities.subtitle')}
+      actions={inline([
         linkButton({
           label: _('oauth_backend.action.linkIdentity'),
           href: localized('/admin/oauth/identities/new', locale),
@@ -371,53 +391,60 @@ export const identitiesScreen = (
           label: _('oauth_backend.action.providers'),
           href: localized('/admin/oauth/providers', locale),
         }),
-      ]),
-      rows.length === 0
-        ? emptyState(_('oauth_backend.identities.empty'), _('oauth_backend.identities.emptyHint'))
-        : dataTable(_, {
-            rows,
-            id: (row) => row.id,
-            columns: [
-              {
-                key: 'user',
-                label: _('oauth_backend.field.user'),
-                priority: 'primary',
-                cell: (row) => row.user?.name || row.user?.login || row.userId,
-              },
-              {
-                key: 'provider',
-                label: _('oauth_backend.field.provider'),
-                cell: (row) => row.provider?.name || row.provider?.code || row.providerId,
-              },
-              { key: 'subject', label: _('oauth_backend.field.subject'), cell: (row) => code(row.subject) },
-              { key: 'email', label: _('oauth_backend.field.email'), cell: (row) => row.email || '—' },
-              {
-                key: 'lastLogin',
-                label: _('oauth_backend.field.lastLogin'),
-                cell: (row) => row.lastLoginAt || _('oauth_backend.state.never'),
-              },
-              {
-                key: 'actions',
-                label: _('oauth_backend.field.actions'),
-                kind: 'status',
-                cell: (row) => (
-                  <RecordActions
-                    action={localized(`/admin/oauth/identities/${row.id}/unlink`, locale)}
-                    actions={[
-                      {
-                        value: 'unlink',
-                        label: _('oauth_backend.action.unlink'),
-                        variant: 'destructive',
-                      },
-                    ]}
-                  />
-                ),
-              },
-            ],
-          }),
-    ])}
-  />
-)
+        frame.extras?.['topbar.end'] ?? '',
+      ])}
+      status={`${_('oauth_backend.identities.title')}: ${String(rows.length)}`}
+      body={stack([
+        ...(errors.length
+          ? [<Notice tone="danger" title={_('oauth_backend.error.title')} message={errors.join(' ')} />]
+          : []),
+        rows.length === 0
+          ? emptyState(_('oauth_backend.identities.empty'), _('oauth_backend.identities.emptyHint'))
+          : dataTable(_, {
+              rows,
+              id: (row) => row.id,
+              columns: [
+                {
+                  key: 'user',
+                  label: _('oauth_backend.field.user'),
+                  priority: 'primary',
+                  cell: (row) => row.user?.name || row.user?.login || row.userId,
+                },
+                {
+                  key: 'provider',
+                  label: _('oauth_backend.field.provider'),
+                  cell: (row) => row.provider?.name || row.provider?.code || row.providerId,
+                },
+                { key: 'subject', label: _('oauth_backend.field.subject'), cell: (row) => code(row.subject) },
+                { key: 'email', label: _('oauth_backend.field.email'), cell: (row) => row.email || '—' },
+                {
+                  key: 'lastLogin',
+                  label: _('oauth_backend.field.lastLogin'),
+                  cell: (row) => row.lastLoginAt || _('oauth_backend.state.never'),
+                },
+                {
+                  key: 'actions',
+                  label: _('oauth_backend.field.actions'),
+                  kind: 'status',
+                  cell: (row) => (
+                    <RecordActions
+                      action={localized(`/admin/oauth/identities/${row.id}/unlink`, locale)}
+                      actions={[
+                        {
+                          value: 'unlink',
+                          label: _('oauth_backend.action.unlink'),
+                          variant: 'destructive',
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ],
+            }),
+      ])}
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
 
 export const identityFormScreen = (
   _: Translator,
@@ -425,68 +452,73 @@ export const identityFormScreen = (
   options: { providers: FormOption[]; users: FormOption[]; errors?: string[] },
   frame: Frame,
   locale = '',
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('oauth_backend.identities.link')}
-    frame={frame}
-    body={
-      <Section
-        title={_('oauth_backend.identities.verifiedSubject')}
-        description={_('oauth_backend.identities.linkHint')}
-        body={
-          <Surface
-            body={
-              <RecordForm
-                action={localized('/admin/oauth/identities/new', locale)}
-                fields={[
-                  {
-                    name: 'providerId',
-                    label: _('oauth_backend.field.provider'),
-                    type: 'select',
-                    value: row.providerId,
-                    options: options.providers,
-                    required: true,
-                  },
-                  {
-                    name: 'userId',
-                    label: _('oauth_backend.field.user'),
-                    type: 'select',
-                    value: row.userId,
-                    options: options.users,
-                    required: true,
-                  },
-                  {
-                    name: 'subject',
-                    label: _('oauth_backend.field.subject'),
-                    value: row.subject,
-                    required: true,
-                  },
-                  { name: 'email', label: _('oauth_backend.field.email'), value: row.email },
-                  {
-                    name: 'displayName',
-                    label: _('oauth_backend.field.displayName'),
-                    value: row.displayName,
-                  },
-                  {
-                    name: 'preferredUsername',
-                    label: _('oauth_backend.field.preferredUsername'),
-                    value: row.preferredUsername,
-                  },
-                ]}
-                submit={_('oauth_backend.action.link')}
-                submitVariant="primary"
-                errors={options.errors}
-                cancelHref={localized('/admin/oauth/identities', locale)}
-                cancelLabel={_('oauth_backend.action.cancel')}
-              />
-            }
-          />
-        }
-      />
-    }
-  />
-)
+): TemplateResult =>
+  shell(
+    _,
+    _('oauth_backend.identities.link'),
+    <FormPage
+      scope="oauth-identity-form"
+      title={_('oauth_backend.identities.link')}
+      description={_('oauth_backend.identities.linkHint')}
+      actions={frame.extras?.['topbar.end']}
+      body={
+        <Section
+          title={_('oauth_backend.identities.verifiedSubject')}
+          description={_('oauth_backend.identities.linkHint')}
+          body={
+            <Surface
+              body={
+                <RecordForm
+                  action={localized('/admin/oauth/identities/new', locale)}
+                  fields={[
+                    {
+                      name: 'providerId',
+                      label: _('oauth_backend.field.provider'),
+                      type: 'select',
+                      value: row.providerId,
+                      options: options.providers,
+                      required: true,
+                    },
+                    {
+                      name: 'userId',
+                      label: _('oauth_backend.field.user'),
+                      type: 'select',
+                      value: row.userId,
+                      options: options.users,
+                      required: true,
+                    },
+                    {
+                      name: 'subject',
+                      label: _('oauth_backend.field.subject'),
+                      value: row.subject,
+                      required: true,
+                    },
+                    { name: 'email', label: _('oauth_backend.field.email'), value: row.email },
+                    {
+                      name: 'displayName',
+                      label: _('oauth_backend.field.displayName'),
+                      value: row.displayName,
+                    },
+                    {
+                      name: 'preferredUsername',
+                      label: _('oauth_backend.field.preferredUsername'),
+                      value: row.preferredUsername,
+                    },
+                  ]}
+                  submit={_('oauth_backend.action.link')}
+                  submitVariant="primary"
+                  errors={options.errors}
+                  cancelHref={localized('/admin/oauth/identities', locale)}
+                  cancelLabel={_('oauth_backend.action.cancel')}
+                />
+              }
+            />
+          }
+        />
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
 
 export const linkProviderScreen = (
   _: Translator,
@@ -496,11 +528,14 @@ export const linkProviderScreen = (
   locale = '',
 ): TemplateResult => {
   const linked = new Set(identities.map((identity) => identity.providerId))
-  return (
-    <Framed
-      translator={_}
+  return shell(
+    _,
+    _('oauth_backend.link.title'),
+    <FormPage
+      scope="oauth-link-provider"
       title={_('oauth_backend.link.title')}
-      frame={frame}
+      description={_('oauth_backend.link.hint')}
+      actions={frame.extras?.['topbar.end']}
       body={
         <Section
           title={_('oauth_backend.link.choose')}
@@ -538,6 +573,7 @@ export const linkProviderScreen = (
           }
         />
       }
-    />
+    />,
+    { ...frame, chrome: null, topbar: false },
   )
 }
