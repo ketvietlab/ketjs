@@ -11,9 +11,8 @@ export const islands: Record<string, IslandDefinition> = {
     props: { lang: 'text?', data: 'text?' },
     client: 'flow-board.mjs',
     export: 'board',
-    // No bundling needed here (unlike the editor island above) — this is
-    // hand-written vanilla JS with no npm dependency, same as
-    // mail_backend's mail.mjs/mail-view.mjs pair.
+    // No bundling needed here (unlike the editor and mail islands) — this is
+    // hand-written vanilla JS with no npm dependency.
     view: (props: IslandProps) => createFlowBoardView(boardRuntime, props),
   },
   /**

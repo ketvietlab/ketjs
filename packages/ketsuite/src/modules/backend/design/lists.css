@@ -40,6 +40,23 @@
     gap: var(--admin-gap-sm);
   }
 
+  /* A ListPage command bar keeps query controls bounded on the left while the
+     pager and view controls remain anchored to the far edge. */
+  [data-ui="list-chrome"][data-layout="command"] [data-ui="list-chrome-row"] {
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-search"] {
+    inline-size: auto;
+    max-inline-size: 50rem;
+    margin-inline: 0;
+    flex: 1 1 24rem;
+  }
+
+  [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-tail"] {
+    margin-inline-start: auto;
+  }
+
   [data-ui="topbar"]:has([data-ui="list-chrome"][data-layout="catalogue"]) {
     display: block;
     padding: var(--admin-gap-lg);

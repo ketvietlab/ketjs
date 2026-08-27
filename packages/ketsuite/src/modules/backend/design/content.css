@@ -65,6 +65,16 @@
     border-radius: var(--admin-radius);
     background: var(--admin-card);
   }
+  /* A metric that is a link is the same card; only the whole of it is the target,
+     since there is nothing else inside one to click. */
+  a[data-ui="metric"] {
+    color: inherit;
+    text-decoration: none;
+  }
+  a[data-ui="metric"]:hover {
+    border-color: var(--admin-line);
+    background: var(--admin-card-hover);
+  }
   [data-ui="card-grid"]:has(> [data-ui="metric"]) {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
   }

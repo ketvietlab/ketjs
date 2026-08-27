@@ -1,6 +1,18 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import { Framed, icon, MediaPanel, RecordForm, RecordWorkspace, Section, Tabs } from '../../../ui/index.ts'
+import {
+  badge,
+  button,
+  FormCluster,
+  FormPage,
+  MediaPanel,
+  RecordForm,
+  Section,
+  shell,
+  stack,
+  Surface,
+  Tabs,
+} from '../../../ui/index.ts'
 import type { FormOption, Frame, MediaPanelProps } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import { selectionLabel as resolveSelection } from '../../backend/screen.ts'
@@ -44,7 +56,6 @@ export const variantScreen = (
   uomControl?: JSXChild,
 ): TemplateResult => {
   const images = media.images ?? []
-  const primaryImage = images.find((image) => image.primary) ?? images[0]
   const productUom = Array.isArray(row.uoms)
     ? (row.uoms[0] as Record<string, unknown> | undefined)
     : undefined
@@ -71,6 +82,7 @@ export const variantScreen = (
       action={tabHref('general')}
       submit={_('product_backend.action.save')}
       submitVariant="primary"
+      submitPlacement="external"
       scope="product-variant"
       errors={errors}
       fields={[
@@ -121,27 +133,35 @@ export const variantScreen = (
       body={<MediaPanel {...media} labels={mediaLabels(_)} />}
     />
   )
-
-  const workspace = (
-    <RecordWorkspace
-      kicker={_('product_backend.variant.kicker')}
+  const generalTab = stack([
+    <Section title={_('product_backend.tabs.general')} body={<Surface body={general} />} />,
+  ])
+  const archived = row.active === false
+  const page = (
+    <FormPage
+      scope="product-variant-form-page"
       title={title}
-      subtitle={subtitle}
-      image={primaryImage ? { src: primaryImage.src, alt: primaryImage.alt } : null}
-      imageFallback={icon('package')}
-      summary={[
-        {
-          id: 'media',
-          label: _('product_backend.summary.images'),
-          value: images.length,
-          href: tabHref('media'),
-        },
-        {
-          id: 'state',
-          label: _('product_backend.col.state'),
-          value: selectionLabel(_, 'state', row.active === false ? 'archived' : 'active'),
-        },
-      ]}
+      description={subtitle}
+      status={badge(
+        selectionLabel(_, 'state', archived ? 'archived' : 'active'),
+        archived ? 'neutral' : 'positive',
+        archived ? 'archived' : 'active',
+      )}
+      actions={
+        activeTab === 'general' ? (
+          <FormCluster
+            label={_('product_backend.action.actions')}
+            forms={[
+              button({
+                label: _('product_backend.action.save'),
+                type: 'submit',
+                form: 'product-variant-form',
+                variant: 'primary',
+              }),
+            ]}
+          />
+        ) : undefined
+      }
       navigation={
         <Tabs
           label={_('product_backend.variant.tabs.label')}
@@ -163,7 +183,7 @@ export const variantScreen = (
         />
       }
       controller={editor}
-      body={activeTab === 'media' ? mediaTab : general}
+      body={activeTab === 'media' ? mediaTab : generalTab}
       aside={collaboration}
       asideLabel={_('product_backend.variant.collaboration.label')}
       slots={{
@@ -173,5 +193,5 @@ export const variantScreen = (
       }}
     />
   )
-  return partial ? workspace : <Framed translator={_} title={title} frame={frame} body={workspace} />
+  return partial ? page : shell(_, title, page, { ...frame, topbar: false, titled: false })
 }

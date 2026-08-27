@@ -175,6 +175,13 @@ export const framedPage = (options: {
    */
   aside?: JSXChild
   asideLabel?: string | null
+  /**
+   * What this screen offers beside its title — the one thing you came here to
+   * start. It shares the row with a list's chrome rather than replacing it, so a
+   * screen can both filter and offer an action; a screen with neither leaves the
+   * row out entirely.
+   */
+  actions?: JSXChild
 }): TemplateResult => {
   const activeRoot = activeMenuRoot(options.frame.menu ?? [])
   const glyph = options.icon ?? activeRoot?.icon ?? 'layout-grid'
@@ -192,12 +199,16 @@ export const framedPage = (options: {
       // nothing to add says nothing; the title already named it.
       subtitle: options.subtitle ?? null,
       imageFallback: icon(glyph),
-      controller: options.frame.chrome ? (
-        <>
-          {listChrome(options.translator, options.title, options.frame.chrome, false)}
-          {options.frame.extras?.['topbar.end'] ?? ''}
-        </>
-      ) : undefined,
+      controller:
+        options.frame.chrome || options.actions !== undefined ? (
+          <>
+            {options.frame.chrome
+              ? listChrome(options.translator, options.title, options.frame.chrome, false)
+              : ''}
+            {options.frame.extras?.['topbar.end'] ?? ''}
+            {options.actions ?? ''}
+          </>
+        ) : undefined,
       body: options.body,
       aside: options.aside,
       asideLabel: options.asideLabel ?? null,

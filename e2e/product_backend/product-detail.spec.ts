@@ -36,19 +36,12 @@ for (const viewport of [
         await expect(page.locator('[data-ui="chatter-loading"], [data-ui="activity-loading"]')).toHaveCount(0)
 
         if (tab === 'general') {
-          const breadcrumbs = page.locator(
-            '[data-ket-slot="product.record-header"] > [data-ui="breadcrumbs"]',
-          )
-          const save = page.locator(
-            '[data-ui="record-controller"] button[form="product-detail-form"]:not([data-record-save-options])',
-          )
-          await expect(breadcrumbs).toContainText(locale === 'vi' ? 'Mẫu sản phẩm' : 'Templates')
-          await expect(save).toHaveText(locale === 'vi' ? 'Lưu & đóng' : 'Save & close')
+          const save = page.locator('[data-ui="form-page-actions"] button[form="product-detail-form"]')
+          await expect(page.locator('[data-ui="breadcrumbs"]')).toHaveCount(0)
+          await expect(save).toHaveText(locale === 'vi' ? 'Lưu' : 'Save')
           await expect(page.locator('#product-detail-form > [data-ui="form-actions"]')).toHaveCount(0)
-          await expect(page.locator('[data-ui="record-navigation"] [data-ui="tab"]')).toHaveCount(3)
-          const futureFields = page.locator(
-            '[data-ui="record-workspace"][data-page-frame="false"] > [data-ui="record-sheet"] > [data-ui="record-body"] [data-future-field="true"]',
-          )
+          await expect(page.locator('[data-ui="form-page-navigation"] [data-ui="tab"]')).toHaveCount(3)
+          const futureFields = page.locator('[data-ui="form-page-body"] [data-future-field="true"]')
           await expect(futureFields).toHaveCount(0)
           await expect(page.locator('input[name="defaultCode"]:not([type="hidden"])')).toBeDisabled()
           await expect(page.locator('input[name="barcode"]:not([type="hidden"])')).toBeDisabled()
@@ -58,37 +51,21 @@ for (const viewport of [
           await expect(page.locator('[data-ui="form-help"]').first()).toContainText(
             locale === 'vi' ? 'Sản phẩm đã có biến thể' : 'This product has variants',
           )
-          await expect(page.locator('[data-ui="record-thumbnail"] img')).toHaveAttribute(
-            'alt',
-            'Áo khoác vận hành màu xanh',
-          )
+          await expect(
+            page.locator('[data-ui="record-thumbnail"], [data-ui="record-kicker"], [data-ui="record-facts"]'),
+          ).toHaveCount(0)
           await expect(page.locator('[data-record-field="archive-reason"]')).toHaveCount(0)
 
           const placement = await page.evaluate(() => {
             const rect = (selector: string) =>
               document.querySelector<HTMLElement>(selector)!.getBoundingClientRect()
-            const workspace = document.querySelector<HTMLElement>(
-              '[data-ui="record-workspace"][data-page-frame="false"]',
-            )!
-            const breadcrumbRect = rect('[data-ket-slot="product.record-header"] > [data-ui="breadcrumbs"]')
-            const identityRect = rect('[data-ket-slot="product.record-header"] > [data-ui="record-identity"]')
-            const actionRect = rect(
-              '[data-ui="record-controller"] button[form="product-detail-form"]:not([data-record-save-options])',
-            )
-            const topRect = workspace
-              .querySelector<HTMLElement>(':scope > [data-ui="record-sheet"] > [data-ui="record-top"]')!
-              .getBoundingClientRect()
-            const navigationRect = workspace
-              .querySelector<HTMLElement>(
-                ':scope > [data-ui="record-sheet"] > [data-ui="record-navigation"]',
-              )!
-              .getBoundingClientRect()
-            const bodyRect = workspace
-              .querySelector<HTMLElement>(':scope > [data-ui="record-sheet"] > [data-ui="record-body"]')!
-              .getBoundingClientRect()
-            const asideRect = workspace
-              .querySelector<HTMLElement>(':scope > [data-ui="record-aside"]')!
-              .getBoundingClientRect()
+            const layoutRect = rect('[data-ui="form-page-layout"]')
+            const headerRect = rect('[data-ui="form-page-header"]')
+            const titleRowRect = rect('[data-ui="form-page-title-row"]')
+            const actionRect = rect('[data-ui="form-page-actions"] button[form="product-detail-form"]')
+            const navigationRect = rect('[data-ui="form-page-navigation"]')
+            const bodyRect = rect('[data-ui="form-page-body"]')
+            const asideRect = rect('[data-ui="form-page-aside"]')
             const generalSection = document.querySelector<HTMLElement>(
               '[data-ui="section"]:has(#product-detail-form)',
             )!
@@ -107,7 +84,7 @@ for (const viewport of [
               const controlRect = control.getBoundingClientRect()
               return {
                 inline: labelRect.right <= controlRect.left,
-                stacked: labelRect.bottom <= controlRect.top,
+                controlWider: controlRect.width > labelRect.width,
               }
             })
             const fieldRect = (name: string) =>
@@ -118,38 +95,41 @@ for (const viewport of [
                 .getBoundingClientRect()
             const typeField = fieldRect('type')
             const nameField = fieldRect('name')
-            const categoryField = fieldRect('categoryId')
+            const businessUse = document.querySelector<HTMLElement>(
+              '#product-detail-form [data-ui="form-field"]',
+            )!
             return {
-              breadcrumbsBeforeIdentity: breadcrumbRect.bottom <= identityRect.top,
-              actionAfterIdentity: actionRect.top >= identityRect.bottom,
-              actionAtIdentityRight:
-                actionRect.left > identityRect.left && actionRect.top < identityRect.bottom,
-              headerSpansWorkspace: Math.abs(topRect.width - workspace.getBoundingClientRect().width) < 1,
+              actionInTitleRow:
+                actionRect.top >= titleRowRect.top && actionRect.bottom <= titleRowRect.bottom,
+              headerSpansWorkspace: Math.abs(headerRect.width - layoutRect.width) < 1,
               railStartsWithBody: Math.abs(asideRect.top - bodyRect.top) < 1,
               railFollowsBody: asideRect.top >= bodyRect.bottom,
+              railOneThird:
+                innerWidth <= 1023 || Math.abs(asideRect.width / layoutRect.width - 1 / 3) <= 0.01,
               navigationBeforeBody: navigationRect.bottom <= bodyRect.top,
               singleSectionFrame:
-                getComputedStyle(generalSection).borderTopWidth === '1px' &&
+                getComputedStyle(generalSection).borderTopWidth === '0px' &&
                 getComputedStyle(nestedSurface).borderTopWidth === '0px' &&
                 getComputedStyle(nestedSurface).paddingTop === '0px',
               actionHeight: actionRect.height,
               labelsInline: fieldLabelPlacement.every((field) => field.inline),
-              labelsStacked: fieldLabelPlacement.every((field) => field.stacked),
+              controlsWider: fieldLabelPlacement.every((field) => field.controlWider),
               nameBelowType: typeField.bottom <= nameField.top,
-              nameMatchesCategoryWidth: Math.abs(nameField.width - categoryField.width) < 1,
+              businessUseFirst:
+                businessUse.getAttribute('data-kind') === 'checkbox-group' &&
+                businessUse.querySelectorAll('input[type="checkbox"]').length === 3,
             }
           })
-          expect(placement.breadcrumbsBeforeIdentity).toBe(true)
           expect(placement.headerSpansWorkspace).toBe(true)
           expect(placement.navigationBeforeBody).toBe(true)
           expect(placement.singleSectionFrame).toBe(true)
-          expect(placement.actionHeight).toBe(40)
-          expect(viewport.name === 'desktop' ? placement.labelsInline : placement.labelsStacked).toBe(true)
+          expect(placement.actionHeight).toBe(34)
+          expect(placement.labelsInline).toBe(true)
+          expect(placement.controlsWider).toBe(true)
           expect(placement.nameBelowType).toBe(true)
-          expect(placement.nameMatchesCategoryWidth).toBe(true)
-          expect(
-            viewport.name === 'desktop' ? placement.actionAtIdentityRight : placement.actionAfterIdentity,
-          ).toBe(true)
+          expect(placement.businessUseFirst).toBe(true)
+          expect(placement.actionInTitleRow).toBe(true)
+          expect(placement.railOneThird).toBe(true)
           expect(viewport.name === 'desktop' ? placement.railStartsWithBody : placement.railFollowsBody).toBe(
             true,
           )
@@ -184,15 +164,10 @@ for (const viewport of [
           )
 
           const placement = await page.evaluate(() => {
-            const workspace = document.querySelector<HTMLElement>(
-              '[data-ui="record-workspace"][data-page-frame="false"]',
-            )!
             const attributes = document.querySelector<HTMLElement>('[data-product-panel="attributes"]')!
             const variants = document.querySelector<HTMLElement>('[data-product-panel="variants"]')!
-            const body = workspace.querySelector<HTMLElement>(
-              ':scope > [data-ui="record-sheet"] > [data-ui="record-body"]',
-            )!
-            const aside = workspace.querySelector<HTMLElement>(':scope > [data-ui="record-aside"]')!
+            const body = document.querySelector<HTMLElement>('[data-ui="form-page-body"]')!
+            const aside = document.querySelector<HTMLElement>('[data-ui="form-page-aside"]')!
             const variantTable = document.querySelector<HTMLElement>('[data-product-table="variants"]')!
             return {
               attributesBeforeVariants:
@@ -234,9 +209,7 @@ for (const viewport of [
           await expect(page.locator('[data-product-media-table="variants"] [data-ui="row"]')).toHaveCount(25)
           await expect(page.locator('[data-product-media-thumbnail]')).not.toHaveCount(0)
           await expect(page.locator('[data-ui="record-badges"]')).toHaveCount(0)
-          await expect(
-            page.getByRole('link', { name: locale === 'vi' ? 'Lưu & đóng' : 'Save & close' }),
-          ).toBeVisible()
+          await expect(page.locator('[data-ui="form-page-actions"]')).toBeVisible()
           const mediaPagination = page.locator('[data-product-media-pagination="true"]')
           await expect(mediaPagination.locator('select')).toHaveValue('25')
           await expect(mediaPagination).toContainText(
@@ -258,19 +231,14 @@ for (const viewport of [
             .toBe(true)
 
           const placement = await page.evaluate(() => {
-            const workspace = document.querySelector<HTMLElement>(
-              '[data-ui="record-workspace"][data-page-frame="false"]',
-            )!
             const upload = document.querySelector<HTMLElement>(
               '[data-scope="product-media"] [data-ui="media-actions"]',
             )!
             const gallery = document.querySelector<HTMLElement>(
               '[data-scope="product-media"] [data-ui="media-gallery"]',
             )!
-            const body = workspace.querySelector<HTMLElement>(
-              ':scope > [data-ui="record-sheet"] > [data-ui="record-body"]',
-            )!
-            const aside = workspace.querySelector<HTMLElement>(':scope > [data-ui="record-aside"]')!
+            const body = document.querySelector<HTMLElement>('[data-ui="form-page-body"]')!
+            const aside = document.querySelector<HTMLElement>('[data-ui="form-page-aside"]')!
             return {
               uploadBesideGallery:
                 Math.abs(upload.getBoundingClientRect().top - gallery.getBoundingClientRect().top) < 1 &&
@@ -298,7 +266,7 @@ for (const viewport of [
           // reader actually sees and clicks is its trigger button.
           visibleControls: [
             ...document.querySelectorAll<HTMLElement>(
-              '[data-ui="record-body"] input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="file"]), [data-ui="record-body"] select:not([data-ui="relation-native"]), [data-ui="record-body"] [data-ui="relation-trigger"]',
+              '[data-ui="form-page-body"] input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([type="file"]), [data-ui="form-page-body"] select:not([data-ui="relation-native"]), [data-ui="form-page-body"] [data-ui="relation-trigger"]',
             ),
           ]
             .filter((control) => control.getBoundingClientRect().height > 0)
@@ -357,11 +325,11 @@ test('uses the semantic dark shell, rail and control surfaces', async ({ page })
     return {
       sidebar: background('[data-ui="sidebar"]'),
       shell: background('[data-ui="shell"]'),
-      sheet: background('[data-ui="record-sheet"]'),
-      rail: background('[data-ui="record-aside"]'),
+      sheet: background('[data-ui="form-page-body"]'),
+      rail: background('[data-ui="form-page-aside"]'),
       control: background('[data-ui="form-control"]'),
-      railRadius: radius('[data-ui="record-aside"]'),
-      chatterRadius: radius('[data-ui="record-aside"] [data-ui="chatter"]'),
+      railRadius: radius('[data-ui="form-page-aside"]'),
+      chatterRadius: radius('[data-ui="form-page-aside"] [data-ui="chatter"]'),
     }
   })
   expect(colors).toEqual({
@@ -419,7 +387,7 @@ test('saves the redesigned general form while preserving hidden business flags',
   await page.getByLabel('Mô tả').fill('Mô tả được lưu từ layout mới.')
   await page.getByLabel('Xuất xứ').fill('Việt Nam · Cập nhật')
   const tax = await page.getByLabel('Thuế suất').inputValue()
-  await page.getByRole('button', { name: 'Lưu & đóng', exact: true }).click()
+  await page.getByRole('button', { name: 'Lưu', exact: true }).click()
 
   await expect(page).toHaveURL(/\/admin\/product\/templates\/tpl-review/)
   await expect(page.getByLabel('Giá bán')).toHaveValue('1349000')
@@ -440,7 +408,7 @@ test('saves atomically and manages variants and template media', async ({ page }
   await page.locator('input[name="name"]').fill('Tên không được lưu dở dang')
   await page.getByLabel('Theo dõi tồn kho').uncheck()
   await page.getByLabel('Truy xuất').selectOption('serial')
-  await page.getByRole('button', { name: 'Lưu & đóng', exact: true }).click()
+  await page.getByRole('button', { name: 'Lưu', exact: true }).click()
   await expect(page.locator('[data-ui="notice"][role="alert"]')).toContainText('Dữ liệu chưa hợp lệ')
   await page.reload()
   await expect(page.locator('input[name="name"]')).toHaveValue('Áo khoác vận hành KETSUITE')
@@ -448,7 +416,7 @@ test('saves atomically and manages variants and template media', async ({ page }
   await page.getByLabel('Giá bán').fill('1399000')
   await page.getByLabel('Theo dõi tồn kho').check()
   await page.getByLabel('Truy xuất').selectOption('lot')
-  await page.getByRole('button', { name: 'Lưu & đóng', exact: true }).click()
+  await page.getByRole('button', { name: 'Lưu', exact: true }).click()
   await expect(page.getByLabel('Giá bán')).toHaveValue('1399000')
 
   await page.goto('/admin/product/templates/tpl-review?tab=variants&lang=vi')

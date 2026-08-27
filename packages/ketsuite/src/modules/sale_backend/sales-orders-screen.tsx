@@ -29,10 +29,15 @@ export type SalesOrdersScreenOptions = {
 const invoiceTone = (status: unknown) =>
   status === 'to invoice' ? 'warning' : status === 'invoiced' ? 'positive' : 'neutral'
 
-const columns = (
+/**
+ * What a sales order is worth reading at a glance. Exported because the overview
+ * shows the last few of them and a second, nearly-identical column set is how the
+ * two screens start disagreeing about what a sales order is.
+ */
+export const salesOrderColumns = (
   _: Translator,
   detailSuffix: string,
-  printReport: { id: string; title: string } | undefined,
+  printReport?: { id: string; title: string } | undefined,
 ): Array<Column<SalesOrderRow>> => [
   {
     key: 'name',
@@ -106,7 +111,7 @@ export const salesOrdersScreen = (_: Translator, options: SalesOrdersScreenOptio
   const locked = options.rows.filter((row) => row.locked).length
   const table = options.rows.length ? (
     dataTable(_, {
-      columns: columns(_, options.detailSuffix, options.printReport),
+      columns: salesOrderColumns(_, options.detailSuffix, options.printReport),
       rows: options.rows,
       id: (row) => String(row.id),
     })

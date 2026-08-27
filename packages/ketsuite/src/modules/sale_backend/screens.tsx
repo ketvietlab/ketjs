@@ -8,7 +8,6 @@ import {
   emptyState,
   formatMoney,
   Framed,
-  inline,
   linkButton,
   Metric,
   RecordActions,
@@ -18,7 +17,7 @@ import {
   Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
-import { localized, selectionLabel } from '../backend/screen.ts'
+import { selectionLabel } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 /** A stable sale code in the reader's language; the code itself survives as data. */
@@ -29,67 +28,6 @@ const pathOf = (order: AnyRow) =>
     ? `/admin/sales/quotations/${String(order.id)}`
     : `/admin/sales/orders/${String(order.id)}`
 const empty = (_: Translator) => emptyState(_('sale_backend.empty'), _('sale_backend.emptyHint'))
-
-export const dashboard = (
-  _: Translator,
-  // Counted in the database rather than loaded and counted here: at import
-  // scale the dashboard was materialising the whole order table for four
-  // numbers, and once the list is bounded, counting a page would be wrong.
-  counts: { draft: number; sent: number; sale: number; toInvoice: number },
-  frame: Frame,
-  locale = '',
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('sale_backend.dashboard.title')}
-    frame={frame}
-    body={stack([
-      inline([
-        linkButton({
-          label: _('sale_backend.action.create'),
-          href: `${localized('/admin/sales/quotations', locale)}#quotation-create-form`,
-          variant: 'primary',
-        }),
-      ]),
-      <CardGrid
-        items={[
-          {
-            id: 'draft',
-            title: _('sale_backend.dashboard.draft'),
-            value: counts.draft,
-            href: localized('/admin/sales/quotations?state=draft', locale),
-          },
-          {
-            id: 'sent',
-            title: _('sale_backend.dashboard.sent'),
-            value: counts.sent,
-            href: localized('/admin/sales/quotations?state=sent', locale),
-          },
-          {
-            id: 'orders',
-            title: _('sale_backend.menu.orders'),
-            value: counts.sale,
-            href: localized('/admin/sales/orders', locale),
-          },
-          {
-            id: 'invoice',
-            title: _('sale_backend.dashboard.toInvoice'),
-            value: counts.toInvoice,
-            href: localized('/admin/sales/orders', locale),
-          },
-        ]}
-        id={(item) => item.id}
-        card={(item) => (
-          <ContentCard
-            title={item.title}
-            href={item.href}
-            body={<Metric label={_('sale_backend.dashboard.records')} value={String(item.value)} />}
-          />
-        )}
-      />,
-    ])}
-  />
-)
 
 export const ordersScreen = (
   _: Translator,

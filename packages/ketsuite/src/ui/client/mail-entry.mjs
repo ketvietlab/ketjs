@@ -1,5 +1,4 @@
-// @ts-expect-error Browser import served by the KetJS runtime.
-import { each, html, signal } from '/_ket/view/index.js'
+import { each, html, signal } from '@ketvietlab/ketjs-view'
 import { createChatterView, createInboxIndicatorView } from './mail-view.mjs'
 
 const runtime = { each, html, signal }
