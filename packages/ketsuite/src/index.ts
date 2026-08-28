@@ -102,6 +102,16 @@ export { default as businessReportStaffChannel } from './modules/business_report
 export { default as saleBackend } from './modules/sale_backend/index.ts'
 export { default as pos } from './modules/pos/index.ts'
 export { default as posChannel } from './modules/pos_channel/index.ts'
+export {
+  posOfflineCommandDigest,
+  registerPosOfflineLeaseProvider,
+} from './modules/pos_channel/index.ts'
+export type {
+  PosOfflineCommandEvidence,
+  PosOfflineLease,
+  PosOfflineLeaseClaims,
+  PosOfflineLeaseProvider,
+} from './modules/pos_channel/index.ts'
 export { default as posBackend } from './modules/pos_backend/index.ts'
 export { default as loyalty } from './modules/loyalty/index.ts'
 export { default as loyaltySale } from './modules/loyalty_sale/index.ts'
