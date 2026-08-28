@@ -3544,6 +3544,7 @@ export default defineModule({
               entryHref: batch.moveId
                 ? `/admin/accounting/entries/${encodeURIComponent(String(batch.moveId))}${localeQuery(url)}`
                 : undefined,
+              errors,
             }),
         })
       },
@@ -3576,6 +3577,7 @@ export default defineModule({
               frame,
               rows,
               action: `${url.pathname}${localeQuery(url)}`,
+              errors,
               fields: [
                 {
                   name: 'periodKey',

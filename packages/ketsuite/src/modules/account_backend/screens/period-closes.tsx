@@ -34,7 +34,14 @@ const closeBadge = (_: Translator, state: unknown) => {
 
 export const periodClosesListScreen = (
   _: Translator,
-  options: { frame: Frame; rows: Row[]; action: string; fields: FormField[]; rowHref: (row: Row) => string },
+  options: {
+    frame: Frame
+    rows: Row[]
+    action: string
+    fields: FormField[]
+    rowHref: (row: Row) => string
+    errors?: string[]
+  },
 ): TemplateResult =>
   shell(
     _,
@@ -58,6 +65,7 @@ export const periodClosesListScreen = (
                     submit={_('account_backend.close.create')}
                     submitVariant="secondary"
                     fields={options.fields}
+                    errors={options.errors}
                   />
                 }
               />
