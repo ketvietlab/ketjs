@@ -25,6 +25,8 @@ export type PosOfflineLeaseClaims = {
   grantId: string
   operatorId: string
   sessionId: string
+  deviceSecurityVersion: number
+  grantSecurityVersion: number
   shiftId: string
   priceBookRevision: string
   issuedAt: string

@@ -128,6 +128,8 @@ const leaseClaimsSchema = {
     grantId: string,
     operatorId: string,
     sessionId: string,
+    deviceSecurityVersion: integer,
+    grantSecurityVersion: integer,
     shiftId: string,
     priceBookRevision: string,
     issuedAt: string,
@@ -145,6 +147,8 @@ const leaseClaimsSchema = {
     'grantId',
     'operatorId',
     'sessionId',
+    'deviceSecurityVersion',
+    'grantSecurityVersion',
     'shiftId',
     'priceBookRevision',
     'issuedAt',
@@ -1117,6 +1121,7 @@ export const syncRoutes = routesOf(
         lease.grantId !== identity.grantId ||
         lease.operatorId !== identity.operatorId ||
         lease.sessionId !== identity.sessionId ||
+        lease.deviceSecurityVersion + lease.grantSecurityVersion !== identity.securityVersion ||
         !Number.isFinite(issuedAt) ||
         !Number.isFinite(expiresAt) ||
         issuedAt > Date.now() + FUTURE_SKEW_MS ||

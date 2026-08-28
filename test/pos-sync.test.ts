@@ -180,6 +180,8 @@ registerPosOfflineLeaseProvider({
         grantId: input.identity.grantId,
         operatorId: input.identity.operatorId,
         sessionId: input.identity.sessionId,
+        deviceSecurityVersion: 1,
+        grantSecurityVersion: 0,
         shiftId: input.shiftId,
         priceBookRevision: input.priceBookRevision,
         issuedAt: new Date(Date.now() - 1_000).toISOString(),
