@@ -28,6 +28,8 @@ export const models: Record<string, ModelDef> = {
       /** A subsidiary keeps its own books; consolidation reads across (D32). */
       parentId: 'ref:company.Company?',
       currency: 'text',
+      /** Civil-date timezone used by Accounting; locked with the book currency after setup. */
+      accountingTimezone: 'text?',
       /**
        * Accounting owns the point after which the legal entity's book currency
        * becomes immutable. Optional so existing company-only installations gain

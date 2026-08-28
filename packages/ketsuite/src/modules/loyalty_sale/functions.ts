@@ -1,5 +1,14 @@
 import { deleteFrom, defineFn, eq } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { quoteTaxLine } from '../account/functions.ts'
+import {
+  absDecimalText,
+  canonicalDecimalText,
+  minorText,
+  moneyMinor,
+  negateDecimalText,
+  scaleOf,
+} from '../account/money.ts'
 import { invalid, issue, n } from '../loyalty/engine.ts'
 import { orderFunctions } from '../loyalty/order-functions.ts'
 import { functions as saleFunctions } from '../sale/functions.ts'
@@ -9,21 +18,19 @@ const effectsOf = (...specs: Array<FnSpec | undefined>): string[] => [
   ...new Set(specs.flatMap((spec) => spec?.effects ?? [])),
 ]
 
-const money = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
-const decimal = (value: number): string => String(money(value))
+const decimal = (value: number): string => String(value)
 
-const lineTotal = async (ctx: Ctx, line: Row): Promise<number> => {
-  if (line.priceSubtotalIncl != null) return n(line.priceSubtotalIncl)
-  if (!line.taxId) return n(line.priceSubtotal)
-  const tax = (await ctx.db.select('account.Tax', { id: line.taxId }))[0]
-  if (!tax) return n(line.priceSubtotal)
-  const gross = money(n(line.productUomQty) * n(line.priceUnit) * (1 - n(line.discount) / 100))
-  const amount = n(tax.amount)
-  const rate = amount / 100
-  if (tax.amountType === 'fixed')
-    return tax.priceInclude ? gross : money(gross + amount * n(line.productUomQty))
-  if (tax.amountType === 'division') return tax.priceInclude ? gross : money(gross / (1 - rate))
-  return tax.priceInclude ? gross : money(gross * (1 + rate))
+const lineTotal = async (ctx: Ctx, line: Row): Promise<string> => {
+  if (line.priceSubtotalIncl != null) return canonicalDecimalText(String(line.priceSubtotalIncl))
+  const quote = await quoteTaxLine(ctx, {
+    productId: line.productId,
+    taxIds: Array.isArray(line.taxIds) ? line.taxIds : line.taxId ? [line.taxId] : [],
+    quantity: String(line.productUomQty ?? '1'),
+    priceUnit: String(line.priceUnit ?? '0'),
+    discount: String(line.discount ?? '0'),
+    taxUse: 'sale',
+  })
+  return quote.ok === true ? quote.amountTotal : canonicalDecimalText(String(line.priceSubtotal ?? '0'))
 }
 
 export const saleSnapshot = async (ctx: Ctx, orderId: string) => {
@@ -42,7 +49,7 @@ export const saleSnapshot = async (ctx: Ctx, orderId: string) => {
         id: String(line.id),
         productId: String(line.productId),
         quantity: n(line.productUomQty),
-        untaxed: n(line.priceSubtotal),
+        untaxed: canonicalDecimalText(String(line.priceSubtotal ?? '0')),
         total: await lineTotal(ctx, line),
         lineKind: String(line.lineKind ?? 'product'),
       })),
@@ -51,19 +58,25 @@ export const saleSnapshot = async (ctx: Ctx, orderId: string) => {
 }
 
 const recompute = async (ctx: Ctx, orderId: string) => {
+  const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
+  if (!order) return
+  const scale = scaleOf(order.currency)
   const lines = await ours(ctx, 'sale.OrderLine', { orderId })
-  const untaxed = money(lines.reduce((sum, line) => sum + n(line.priceSubtotal), 0))
-  const totals = await Promise.all(lines.map((line) => lineTotal(ctx, line)))
-  const total = money(totals.reduce((sum, amount) => sum + amount, 0))
+  let untaxed = 0n
+  let total = 0n
+  for (const line of lines) {
+    untaxed += moneyMinor(String(line.priceSubtotal ?? '0'), scale)
+    total += moneyMinor(await lineTotal(ctx, line), scale)
+  }
   await ctx.db.update(
     'sale.Order',
     {
       id: orderId,
     },
     {
-      amountUntaxed: decimal(untaxed),
-      amountTax: decimal(total - untaxed),
-      amountTotal: decimal(total),
+      amountUntaxed: minorText(untaxed, scale),
+      amountTax: minorText(total - untaxed, scale),
+      amountTotal: minorText(total, scale),
     },
   )
 }
@@ -96,7 +109,10 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
   if (!product || !uomId) return invalid(issue('rewardId', 'loyalty.error.rewardProduct'))
   const productReward = payload.rewardType === 'product'
   const quantity = productReward ? n(payload.productQuantity ?? 1) : 1
-  const priceUnit = productReward ? 0 : -Math.abs(n(payload.discountAmount))
+  const priceUnit = productReward
+    ? '0'
+    : negateDecimalText(absDecimalText(String(payload.discountAmount ?? '0')))
+  const subtotal = productReward ? '0' : priceUnit
   await ctx.db.insert('sale.OrderLine', {
     id: `loyalty:${orderId}:${programId}`,
     orderId,
@@ -104,7 +120,7 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
     name: reward.description,
     productUomQty: decimal(quantity),
     productUomId: uomId,
-    priceUnit: decimal(priceUnit),
+    priceUnit,
     discount: '0',
     taxId: null,
     taxIds: [],
@@ -112,8 +128,8 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
     quoteRevision: null,
     qtyDelivered: '0',
     qtyInvoiced: '0',
-    priceSubtotal: decimal(quantity * priceUnit),
-    priceSubtotalIncl: decimal(quantity * priceUnit),
+    priceSubtotal: subtotal,
+    priceSubtotalIncl: subtotal,
     sequence: 9000,
     lineKind: 'reward',
     loyaltyApplicationId: `sale:${orderId}:${programId}`,
@@ -124,7 +140,12 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
   return { ok: true }
 }
 
-const snapshotEffects = ['read:sale.Order', 'read:sale.OrderLine', 'read:account.Tax'] as const
+const snapshotEffects = [
+  'read:sale.Order',
+  'read:sale.OrderLine',
+  'read:account.Tax',
+  'read:company.Company',
+] as const
 
 const materializeEffects = [
   ...snapshotEffects,

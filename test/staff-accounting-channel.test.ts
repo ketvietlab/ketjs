@@ -259,6 +259,37 @@ test('staff accounting channel returns versioned actionable invoice totals', asy
   assert.equal((await e2e.client.get('/api/staff/v1/accounting/invoices/missing')).status, 404)
 })
 
+test('staff accounting channel keeps large residual eligibility exact', async (t) => {
+  const e2e = await boot(t)
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    e2e.fixture.call<Row>(name, input, { scope: { company: 'acme', branches: null } })
+  await fixture('account.createInvoice', {
+    id: 'invoice-large',
+    journalId: 'sales-journal',
+    moveType: 'out_invoice',
+    partnerId: 'customer-a',
+    invoiceDate: '2026-08-25T00:00:00.000Z',
+    description: 'Giá trị lớn',
+    quantity: '1',
+    priceUnit: '9007199254740993',
+    lineAccountId: 'revenue',
+    counterpartAccountId: 'receivable',
+  })
+  await fixture('account.postMove', { id: 'invoice-large' })
+  await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })
+
+  const detail = await e2e.client.json<Envelope<Row>>('/api/staff/v1/accounting/invoices/invoice-large')
+  assert.deepEqual(detail.data.amountDue, { currency: 'VND', amount: '9007199254740993' })
+  assert.deepEqual(detail.data.availableActions, ['collect_payment'])
+
+  const eligibility = await e2e.client.json<Envelope<Row>>(
+    '/api/staff/v1/accounting/invoices/invoice-large/payment-eligibility?today=2026-08-25',
+  )
+  assert.equal(eligibility.data.eligible, true)
+  assert.equal(eligibility.data.reason, 'available')
+  assert.deepEqual(eligibility.data.amount, { currency: 'VND', amount: '9007199254740993' })
+})
+
 test('staff accounting channel reviews exact full-payment eligibility without mutating', async (t) => {
   const e2e = await boot(t)
   await e2e.client.login({ login: 'accounting-user', password: 'correct horse battery' })

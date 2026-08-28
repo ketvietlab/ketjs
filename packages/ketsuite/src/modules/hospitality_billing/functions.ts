@@ -17,6 +17,14 @@
 import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as accountFunctions } from '../account/functions.ts'
+import {
+  canonicalDecimalText,
+  decimalSign,
+  moneyMinor,
+  multiplyToMinor,
+  negateDecimalText,
+  scaleOf,
+} from '../account/money.ts'
 import { CHARGE_TYPES } from '../hospitality_core/types.ts'
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
@@ -29,7 +37,6 @@ const issue = (field: string, code: string, params?: Record<string, unknown>): I
 })
 
 const failure = (...errors: Issue[]) => ({ ok: false, errors })
-const n = (value: unknown): number => Number(value ?? 0)
 const now = (): string => new Date().toISOString()
 
 const one = async (ctx: Ctx, model: string, id: unknown): Promise<Row | null> =>
@@ -58,7 +65,7 @@ const billIdFor = (folioId: unknown): string => `folio-bill:${String(folioId)}`
 const billableCharges = async (ctx: Ctx, folioId: unknown): Promise<Row[]> => {
   const C = ctx.table('hospitality_core.Charge')
   const rows = await ctx.db.all(from(C).where(eq(C.folioId, folioId)).orderBy(asc(C.occurredAt), asc(C.id)))
-  return rows.filter((row) => String(row.state) === 'active' && n(row.amount) !== 0)
+  return rows.filter((row) => String(row.state) === 'active' && decimalSign(String(row.amount)) !== 0)
 }
 
 /**
@@ -70,17 +77,21 @@ const billableCharges = async (ctx: Ctx, folioId: unknown): Promise<Row[]> => {
  * when the two disagree, the amount wins, because that is the figure the folio
  * totalled.
  */
-const lineFor = (charge: Row, rule: Row): Record<string, unknown> => {
-  const amount = n(charge.amount)
-  const quantity = n(charge.quantity)
-  const unitPrice = n(charge.unitPrice)
-  const consistent = quantity !== 0 && Math.abs(quantity * unitPrice - Math.abs(amount)) < 0.005
+const lineFor = (charge: Row, rule: Row, scale: number): Record<string, unknown> => {
+  const amount = canonicalDecimalText(String(charge.amount))
+  const quantity = canonicalDecimalText(String(charge.quantity))
+  const unitPrice = canonicalDecimalText(String(charge.unitPrice))
+  const sign = decimalSign(amount)
+  const amountMinor = moneyMinor(amount, scale)
+  const consistent =
+    decimalSign(quantity) !== 0 &&
+    multiplyToMinor([quantity, unitPrice], scale) === (amountMinor < 0n ? -amountMinor : amountMinor)
   return {
     description: String(charge.description),
     productId: charge.productId ?? null,
     productUomId: charge.uomId ?? null,
-    quantity: consistent ? String(quantity) : '1',
-    priceUnit: consistent ? String(Math.sign(amount) * unitPrice) : String(amount),
+    quantity: consistent ? quantity : '1',
+    priceUnit: consistent ? (sign < 0 ? negateDecimalText(unitPrice) : unitPrice) : amount,
     lineAccountId: rule.incomeAccountId ?? null,
     taxId: rule.taxId ?? null,
     taxAccountId: rule.taxAccountId ?? null,
@@ -217,11 +228,11 @@ export const functions: Record<string, FnSpec> = {
       // What is owed comes from the receivable line, not from the folio total:
       // once an invoice exists the ledger is the record, and a payment is only
       // visible there.
-      let due: number | null = null
+      let due: string | null = null
       if (move) {
         const L = ctx.table('account.MoveLine')
         const counterpart = await ctx.db.one(from(L).where(eq(L.id, `${String(move.id)}:counterpart`)))
-        due = counterpart ? n(counterpart.amountResidual) : null
+        due = counterpart ? canonicalDecimalText(String(counterpart.amountResidual)) : null
       }
 
       return {
@@ -236,7 +247,7 @@ export const functions: Record<string, FnSpec> = {
         moveName: move ? String(move.name) : null,
         moveState: move ? String(move.state) : null,
         amountTotal: move ? String(move.amountTotal) : null,
-        amountDue: due === null ? null : String(due),
+        amountDue: due,
         paymentState: move ? String(move.paymentState) : null,
       }
     },
@@ -289,6 +300,9 @@ export const functions: Record<string, FnSpec> = {
       const rules = new Map(
         (await ctx.db.select('hospitality_billing.ChargeRule')).map((row) => [String(row.chargeType), row]),
       )
+      const company = await one(ctx, 'company.Company', ctx.scope.company)
+      if (!company) return failure(issue('folioId', 'company_missing'))
+      const scale = scaleOf(company.currency)
       const lines: Record<string, unknown>[] = []
       for (const charge of charges) {
         const rule = rules.get(String(charge.type))
@@ -296,7 +310,7 @@ export const functions: Record<string, FnSpec> = {
         // tax on it tells the authority the sale is not subject to VAT, which is
         // a claim — not a gap — and it would be made silently for every folio.
         if (!rule) return failure(issue('chargeType', 'charge_rule_missing', { type: charge.type }))
-        lines.push(lineFor(charge, rule))
+        lines.push(lineFor(charge, rule, scale))
       }
 
       let journalId = args.journalId

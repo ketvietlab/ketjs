@@ -20,7 +20,6 @@ import {
   BarChart,
   CardGrid,
   columns,
-  changeOf,
   Chart,
   dataTable,
   DatePicker,
@@ -37,6 +36,7 @@ import {
   Tabs,
 } from '../../../ui/index.ts'
 import type { ChartBar, ChartKey, DatePickerField, Frame, Tab } from '../../../ui/index.ts'
+import { moneyMinor, roundedQuotient, scaleOf } from '../../account/money.ts'
 import { PERIOD_PRESETS } from '../overview.ts'
 
 type Row = Record<string, unknown>
@@ -94,8 +94,26 @@ const percent = (_: Translator, ratio: number | null): string =>
     ? _('account_backend.overview.noComparison')
     : `${ratio > 0 ? '+' : ''}${(ratio * 100).toFixed(1)}% ${_('account_backend.overview.versusPrevious')}`
 
-const trend = (_: Translator, current: unknown, previous: unknown, better: 'higher' | 'lower'): JSXChild => {
-  const change = changeOf(n(current), n(previous), better)
+const trend = (
+  _: Translator,
+  current: unknown,
+  previous: unknown,
+  better: 'higher' | 'lower',
+  currency: unknown,
+): JSXChild => {
+  const scale = scaleOf(currency)
+  const currentMinor = moneyMinor(current, scale)
+  const previousMinor = moneyMinor(previous, scale)
+  const moved = currentMinor - previousMinor
+  const direction = moved > 0n ? 'up' : moved < 0n ? 'down' : 'flat'
+  const sentiment =
+    direction === 'flat' ? 'neutral' : (direction === 'up') === (better === 'higher') ? 'good' : 'bad'
+  const previousMagnitude = previousMinor < 0n ? -previousMinor : previousMinor
+  const ratio =
+    previousMagnitude === 0n
+      ? null
+      : Number(roundedQuotient(moved * 1_000_000n, previousMagnitude)) / 1_000_000
+  const change = { ratio, direction, sentiment } as const
   return <Delta label={percent(_, change.ratio)} direction={change.direction} sentiment={change.sentiment} />
 }
 
@@ -185,7 +203,7 @@ const kpis = (_: Translator, o: AccountingOverviewOptions): TemplateResult => {
         <Metric
           label={card.label}
           value={formatMoney(_, card.value, o.currency)}
-          trend={trend(_, card.value, card.was, card.better)}
+          trend={trend(_, card.value, card.was, card.better, o.currency)}
           tone="money"
         />
       )}
@@ -195,6 +213,7 @@ const kpis = (_: Translator, o: AccountingOverviewOptions): TemplateResult => {
 
 const expenses = (_: Translator, o: AccountingOverviewOptions): TemplateResult => {
   const rows = (o.current.expenseByAccount as Row[] | undefined) ?? []
+  const amountById = new Map(rows.map((row) => [String(row.accountId), row.amount]))
   const bars: ChartBar[] = rows.map((row) => ({
     id: String(row.accountId),
     label: `${row.code} · ${row.name}`,
@@ -204,7 +223,7 @@ const expenses = (_: Translator, o: AccountingOverviewOptions): TemplateResult =
   return (
     <BarChart
       bars={bars}
-      value={(bar) => formatMoney(_, bar.value, o.currency)}
+      value={(bar) => formatMoney(_, amountById.get(bar.id) ?? bar.value, o.currency)}
       empty={_('account_backend.overview.noExpense')}
     />
   )

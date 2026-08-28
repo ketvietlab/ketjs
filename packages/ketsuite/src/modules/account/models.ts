@@ -9,6 +9,8 @@ export const models: Record<string, ModelDef> = {
       standard: 'text',
       legalBasis: 'text',
       sourceChecksum: 'text',
+      accountingTimezone: 'text?',
+      moneyPolicyVersion: 'text?',
       installedAt: 'datetime',
     },
     indexes: { company: { fields: ['companyId'], unique: true } },
@@ -138,6 +140,10 @@ export const models: Record<string, ModelDef> = {
       name: 'text',
       ref: 'text?',
       date: 'datetime',
+      /** Civil day that owns the sequence, period and report cutoff. */
+      accountingDate: 'date?',
+      /** Civil date printed on or received with the source document. */
+      documentDate: 'date?',
       moveType: 'text',
       state: 'text',
       journalId: 'ref:account.Journal',
@@ -150,7 +156,15 @@ export const models: Record<string, ModelDef> = {
       amountUntaxed: 'decimal',
       amountTax: 'decimal',
       amountTotal: 'decimal',
+      /** Exact-money policy frozen with the move for reproducible reporting. */
+      moneyPolicyVersion: 'text?',
       postedAt: 'datetime?',
+      /** Source move for a correction entry; immutable once the reversal is reserved. */
+      reversalOfId: 'ref:account.Move?',
+      /** The one correction reserved for this move, including an in-progress retry. */
+      reversedById: 'ref:account.Move?',
+      /** Durable reversal progress: creating, posted, reconciling or completed. */
+      reversalStatus: 'text?',
       /** Optimistic token for commands that must claim an invoice before writing. */
       revision: 'int?',
     },
@@ -203,11 +217,16 @@ export const models: Record<string, ModelDef> = {
       destinationAccountId: 'ref:account.Account',
       amount: 'decimal',
       date: 'datetime',
+      accountingDate: 'date?',
+      documentDate: 'date?',
       memo: 'text?',
       paymentReference: 'text?',
       state: 'text',
       currency: 'text',
+      moneyPolicyVersion: 'text?',
       moveId: 'ref:account.Move?',
+      /** Open item selected by the original command; immutable idempotency evidence. */
+      reconcileLineId: 'ref:account.MoveLine?',
       /** The invoice this payment was collected for, when it was registered as an aggregate. */
       invoiceId: 'ref:account.Move?',
     },

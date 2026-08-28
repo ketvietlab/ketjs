@@ -1,12 +1,132 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import {
+  callFn,
+  compose,
+  defineFn,
+  defineModule,
+  migrateOne,
+  registerFunctions,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
-import { account, company, MOVE_TYPES, partner, product, TAX_AMOUNT_TYPES, uom } from '@ketvietlab/ketsuite'
+import {
+  account,
+  accountingFilterDateText,
+  addCivilDays,
+  canonicalDecimalText,
+  civilDateAt,
+  company,
+  currencyScale,
+  DraftMoveBoundaryError,
+  fiscalYearKey,
+  insertDraftMove,
+  MONEY_MAX_DIGITS,
+  MONEY_POLICY_VERSION,
+  MOVE_TYPES,
+  partner,
+  periodKey,
+  product,
+  quarterKey,
+  quantizeMoneyText,
+  TAX_AMOUNT_TYPES,
+  uom,
+} from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 import { roundMoney } from '../packages/ketsuite/src/modules/account/money.ts'
 
-const modules = [address, partner, company, uom, product, account]
+const boundaryProbe = defineModule({
+  name: 'account_boundary_probe',
+  depends: ['account'],
+  functions: {
+    mutateDraftLine: defineFn({
+      input: { id: 'id', balance: 'decimal?', amountResidual: 'decimal?' },
+      effects: ['write:account.MoveLine'],
+      handler: async (ctx, args) => {
+        await ctx.db.update(
+          'account.MoveLine',
+          { id: args.id },
+          {
+            ...(args.balance === undefined ? {} : { balance: args.balance }),
+            ...(args.amountResidual === undefined ? {} : { amountResidual: args.amountResidual }),
+          },
+        )
+        return { ok: true }
+      },
+    }),
+    insertDraft: defineFn({
+      input: { id: 'id', creditAccountId: 'id', badBalance: 'bool?' },
+      effects: [
+        'read:company.Company',
+        'read:account.Journal',
+        'read:account.Account',
+        'read:account.Move',
+        'read:account.MoveLine',
+        'write:account.Move',
+        'write:account.MoveLine',
+      ],
+      handler: (ctx, args) =>
+        ctx.tx((tx) =>
+          insertDraftMove(tx, {
+            move: {
+              id: args.id,
+              name: args.id,
+              ref: null,
+              date: '2026-08-20T00:00:00.000Z',
+              moveType: 'entry',
+              state: 'draft',
+              journalId: 'sales',
+              partnerId: null,
+              invoiceDate: null,
+              invoiceDateDue: null,
+              paymentTermId: null,
+              paymentState: 'paid',
+              currency: 'VND',
+              amountUntaxed: '10',
+              amountTax: '0',
+              amountTotal: '10',
+              postedAt: null,
+            },
+            lines: [
+              {
+                id: `${String(args.id)}:debit`,
+                moveId: args.id,
+                name: 'Debit',
+                accountId: 'bank',
+                quantity: '1',
+                priceUnit: '10',
+                discount: '0',
+                debit: '10',
+                credit: '0',
+                balance: '10',
+                reconciled: false,
+                amountResidual: '0',
+                sequence: 10,
+              },
+              {
+                id: `${String(args.id)}:credit`,
+                moveId: args.id,
+                name: 'Credit',
+                accountId: args.creditAccountId,
+                quantity: '1',
+                priceUnit: '10',
+                discount: '0',
+                debit: '0',
+                credit: '10',
+                balance: args.badBalance ? '-9' : '-10',
+                reconciled: false,
+                amountResidual: '0',
+                sequence: 20,
+              },
+            ],
+          }),
+        ),
+    }),
+  },
+})
+
+const modules = [address, partner, company, uom, product, account, boundaryProbe]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
 
@@ -16,6 +136,42 @@ const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
 test('accounting: half-up rounding survives binary representation at currency scale', () => {
   assert.equal(roundMoney(1.005, 2), 1.01)
   assert.equal(roundMoney(-1.005, 2), -1.01)
+})
+
+test('accounting: public money policy quantizes exact decimal text without Number', () => {
+  assert.equal(MONEY_MAX_DIGITS, 38)
+  assert.equal(MONEY_POLICY_VERSION, 'iso4217-half-away-v1')
+  for (const [currency, input, output] of [
+    ['VND', '1234567.5', '1234568'],
+    ['VND', '-1234567.5', '-1234568'],
+    ['VND', '9007199254740993.5', '9007199254740994'],
+    ['USD', '1.005', '1.01'],
+    ['USD', '-1.005', '-1.01'],
+    ['USD', '-0.004', '0.00'],
+    ['KWD', '1.2345', '1.235'],
+  ] as const)
+    assert.equal(quantizeMoneyText(input, currencyScale(currency)), output)
+
+  assert.equal(canonicalDecimalText('+001.2300'), '1.23')
+  assert.throws(() => currencyScale('XXX'), /unsupported currency/u)
+  assert.throws(() => quantizeMoneyText('NaN', 2), /invalid canonical decimal/u)
+  assert.throws(() => quantizeMoneyText('Infinity', 2), /invalid canonical decimal/u)
+  assert.throws(() => quantizeMoneyText('1e3', 2), /invalid canonical decimal/u)
+  assert.throws(() => quantizeMoneyText(1.005, 2), /canonical decimal string/u)
+  assert.throws(() => quantizeMoneyText('123456789012345678901234567890123456789', 2), /38-digit/u)
+})
+
+test('accounting: civil dates are stable at Vietnam period boundaries', () => {
+  assert.equal(civilDateAt('2026-07-31T16:59:59.999Z', 'Asia/Ho_Chi_Minh'), '2026-07-31')
+  assert.equal(civilDateAt('2026-07-31T17:00:00.000Z', 'Asia/Ho_Chi_Minh'), '2026-08-01')
+  assert.equal(civilDateAt('2026-12-31T17:00:00.000Z', 'Asia/Ho_Chi_Minh'), '2027-01-01')
+  assert.equal(periodKey('2026-08-01'), '2026-08')
+  assert.equal(quarterKey('2026-10-01'), '2026-Q4')
+  assert.equal(fiscalYearKey('2027-01-01'), '2027')
+  assert.equal(addCivilDays('2024-02-28', 1), '2024-02-29')
+  assert.equal(accountingFilterDateText('2026-06-30T23:59:59.999Z'), '2026-06-30')
+  assert.throws(() => civilDateAt('2026-02-30', 'Asia/Ho_Chi_Minh'), /invalid accounting date source/u)
+  assert.throws(() => civilDateAt('2026-01-01T00:00:00.000Z', 'Mars/Olympus'), /invalid IANA/u)
 })
 
 async function boot() {
@@ -66,6 +222,261 @@ async function boot() {
   )
   return adapter
 }
+
+test('accounting: amounts beyond JavaScript safe integers stay exact through posting and reports', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.createMove',
+      { id: 'large-entry', journalId: 'sales', moveType: 'entry', date: '2026-08-20T00:00:00.000Z' },
+      adapter,
+    )
+    await call(
+      'account.addMoveLine',
+      {
+        id: 'large-entry:debit',
+        moveId: 'large-entry',
+        name: 'Exact debit',
+        accountId: 'bank',
+        debit: '9007199254740994',
+      },
+      adapter,
+    )
+    await call(
+      'account.addMoveLine',
+      {
+        id: 'large-entry:credit',
+        moveId: 'large-entry',
+        name: 'Exact credit',
+        accountId: 'revenue',
+        credit: '9007199254740994',
+      },
+      adapter,
+    )
+    assert.equal(((await call('account.postMove', { id: 'large-entry' }, adapter)).value as Row).ok, true)
+    const move = (await call('account.getMove', { id: 'large-entry' }, adapter)).value as Row
+    assert.equal(move.amountTotal, '9007199254740994')
+    const trial = (await call('account.trialBalance', {}, adapter)).value as Row[]
+    assert.equal(trial.find((row) => row.accountId === 'bank')?.debit, '9007199254740994')
+    assert.equal(trial.find((row) => row.accountId === 'revenue')?.credit, '9007199254740994')
+
+    const rejected = (
+      await call(
+        'account.createInvoice',
+        {
+          id: 'unsafe-number',
+          journalId: 'sales',
+          moveType: 'out_invoice',
+          partnerId: 'customer',
+          description: 'Must use exact text',
+          quantity: '1',
+          priceUnit: 1.005,
+          lineAccountId: 'revenue',
+          counterpartAccountId: 'receivable',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(rejected.ok, false)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: posting freezes company-civil dates, policy and sequence year', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.initializeCompany', {}, adapter)
+    const configured = (await call('company.getCompany', { id: 'acme' }, adapter)).value as Row
+    assert.equal(configured.accountingTimezone, 'Asia/Ho_Chi_Minh')
+    const timezoneChange = (
+      await call(
+        'company.saveCompany',
+        {
+          id: 'acme',
+          partnerId: 'acme-party',
+          currency: 'VND',
+          accountingTimezone: 'UTC',
+          expectedVersion: configured.version,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(timezoneChange.ok, false)
+    assert.match(JSON.stringify(timezoneChange.errors), /accountingTimezoneLocked/u)
+
+    const entry = async (id: string, date: string, amount: string, documentDate?: string) => {
+      const created = (
+        await call(
+          'account.createMove',
+          {
+            id,
+            journalId: 'sales',
+            moveType: 'entry',
+            date,
+            ...(documentDate ? { documentDate } : {}),
+          },
+          adapter,
+        )
+      ).value as Row
+      assert.equal(created.ok, true)
+      await call(
+        'account.addMoveLine',
+        { id: `${id}:debit`, moveId: id, name: id, accountId: 'bank', debit: amount },
+        adapter,
+      )
+      await call(
+        'account.addMoveLine',
+        { id: `${id}:credit`, moveId: id, name: id, accountId: 'revenue', credit: amount },
+        adapter,
+      )
+      return (await call('account.postMove', { id }, adapter)).value as Row
+    }
+
+    await entry('before-midnight', '2026-07-31T16:59:59.999Z', '10', '2026-07-30')
+    await entry('at-midnight', '2026-07-31T17:00:00.000Z', '20')
+    const nextYear = await entry('next-civil-year', '2026-12-31T17:00:00.000Z', '30')
+    assert.match(String(nextYear.name), /^SAL\/2027\//u)
+
+    const before = (await call('account.getMove', { id: 'before-midnight' }, adapter)).value as Row
+    const after = (await call('account.getMove', { id: 'at-midnight' }, adapter)).value as Row
+    const year = (await call('account.getMove', { id: 'next-civil-year' }, adapter)).value as Row
+    assert.equal(before.accountingDate, '2026-07-31')
+    assert.equal(before.documentDate, '2026-07-30')
+    assert.equal(after.accountingDate, '2026-08-01')
+    assert.equal(year.accountingDate, '2027-01-01')
+    assert.equal(year.moneyPolicyVersion, MONEY_POLICY_VERSION)
+
+    const july = (
+      await call('account.trialBalance', { dateFrom: '2026-07-31', dateTo: '2026-07-31' }, adapter)
+    ).value as Row[]
+    const august = (
+      await call('account.trialBalance', { dateFrom: '2026-08-01', dateTo: '2026-08-01' }, adapter)
+    ).value as Row[]
+    assert.equal(july.find((row) => row.accountId === 'bank')?.debit, '10')
+    assert.equal(august.find((row) => row.accountId === 'bank')?.debit, '20')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: the shared draft boundary rejects malformed and cross-company ledger writes', async () => {
+  const adapter = await boot()
+  try {
+    await assert.rejects(
+      () =>
+        call(
+          'account_boundary_probe.insertDraft',
+          { id: 'bad-balance', creditAccountId: 'revenue', badBalance: true },
+          adapter,
+        ),
+      (error: unknown) => error instanceof DraftMoveBoundaryError && error.field === 'lines.balance',
+    )
+    assert.equal(
+      (await adapter.all('SELECT COUNT(*) AS n FROM account_move WHERE id = ?', ['bad-balance']))[0]!.n,
+      0,
+    )
+
+    const betaScope = { company: 'beta', branches: null }
+    const betaCall = (name: string, args: Record<string, unknown>) =>
+      callFn(name, args, { adapter, manifest, scope: betaScope })
+    await betaCall('partner.savePartner', { id: 'beta-party', kind: 'company', name: 'Beta' })
+    await betaCall('company.saveCompany', { id: 'beta', partnerId: 'beta-party', currency: 'VND' })
+    await betaCall('account.saveAccount', {
+      id: 'beta-revenue',
+      code: '511',
+      name: 'Beta revenue',
+      accountType: 'income',
+    })
+    await assert.rejects(
+      () =>
+        call(
+          'account_boundary_probe.insertDraft',
+          { id: 'cross-company', creditAccountId: 'beta-revenue' },
+          adapter,
+        ),
+      (error: unknown) => error instanceof DraftMoveBoundaryError && error.field === 'lines.accountId',
+    )
+    assert.equal(
+      (await adapter.all('SELECT COUNT(*) AS n FROM account_move WHERE id = ?', ['cross-company']))[0]!.n,
+      0,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: domain modules cannot bypass the shared draft boundary', async () => {
+  for (const module of ['sale', 'purchase', 'pos']) {
+    const source = await readFile(`packages/ketsuite/src/modules/${module}/functions.ts`, 'utf8')
+    assert.doesNotMatch(source, /\.insert(?:IfAbsent)?\('account\.(?:Move|MoveLine)'/u, module)
+    assert.match(source, /insertDraftMove/u, module)
+  }
+})
+
+test('accounting: posting revalidates line, residual, account, and journal invariants', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.createMove', { id: 'post-guard', journalId: 'sales', moveType: 'entry' }, adapter)
+    await call(
+      'account.addMoveLine',
+      { id: 'post-guard:debit', moveId: 'post-guard', name: 'Debit', accountId: 'bank', debit: '10' },
+      adapter,
+    )
+    await call(
+      'account.addMoveLine',
+      { id: 'post-guard:credit', moveId: 'post-guard', name: 'Credit', accountId: 'revenue', credit: '10' },
+      adapter,
+    )
+
+    await call('account_boundary_probe.mutateDraftLine', { id: 'post-guard:debit', balance: '9' }, adapter)
+    let refused = (await call('account.postMove', { id: 'post-guard' }, adapter)).value as Row
+    assert.equal((refused.errors as Row[])[0]?.code, 'account.error.lineBalanceInvalid')
+
+    await call(
+      'account_boundary_probe.mutateDraftLine',
+      { id: 'post-guard:debit', balance: '10', amountResidual: '1' },
+      adapter,
+    )
+    refused = (await call('account.postMove', { id: 'post-guard' }, adapter)).value as Row
+    assert.equal((refused.errors as Row[])[0]?.code, 'account.error.lineResidualInvalid')
+
+    await call(
+      'account_boundary_probe.mutateDraftLine',
+      { id: 'post-guard:debit', amountResidual: '0' },
+      adapter,
+    )
+    await call(
+      'account.saveAccount',
+      { id: 'bank', code: '1121', name: 'Bank', accountType: 'asset_cash', active: false },
+      adapter,
+    )
+    refused = (await call('account.postMove', { id: 'post-guard' }, adapter)).value as Row
+    assert.equal((refused.errors as Row[])[0]?.code, 'account.error.accountInactive')
+
+    await call(
+      'account.saveAccount',
+      { id: 'bank', code: '1121', name: 'Bank', accountType: 'asset_cash', active: true },
+      adapter,
+    )
+    await call(
+      'account.saveJournal',
+      { id: 'sales', name: 'Sales', code: 'SAL', type: 'sale', active: false },
+      adapter,
+    )
+    refused = (await call('account.postMove', { id: 'post-guard' }, adapter)).value as Row
+    assert.equal((refused.errors as Row[])[0]?.code, 'account.error.journalInactive')
+
+    await call(
+      'account.saveJournal',
+      { id: 'sales', name: 'Sales', code: 'SAL', type: 'sale', active: true },
+      adapter,
+    )
+    assert.equal(((await call('account.postMove', { id: 'post-guard' }, adapter)).value as Row).ok, true)
+  } finally {
+    await adapter.close()
+  }
+})
 
 test('accounting: customer invoice computes tax, due date, and balanced posting', async () => {
   const adapter = await boot()
@@ -225,8 +636,10 @@ test('accounting: partial payments reconcile residuals and update invoice paymen
         amount,
         reconcileLineId: receivable.id,
       }
-      await call('account.registerPayment', payment, adapter)
-      assert.equal(((await call('account.registerPayment', payment, adapter)).value as Row).ok, true)
+      const first = (await call('account.registerPayment', payment, adapter)).value as Row
+      assert.equal(first.ok, true, JSON.stringify(first))
+      const retry = (await call('account.registerPayment', payment, adapter)).value as Row
+      assert.equal(retry.ok, true, JSON.stringify(retry))
       assert.equal(
         ((await call('account.getMove', { id: 'invoice-1' }, adapter)).value as Row).paymentState,
         state,
@@ -489,6 +902,9 @@ test('accounting: a posted entry is corrected by its reversal, not by editing', 
       lines: Row[]
     }
     assert.equal(reversal.state, 'posted')
+    assert.equal(reversal.reversalOfId, original.id)
+    assert.equal(original.reversedById, reversal.id)
+    assert.equal(reversal.reversalStatus, 'completed')
     // The mirror image: every debit met by a credit of the same amount.
     assert.equal(
       reversal.lines.reduce((sum, line) => sum + Number(line.debit), 0),
@@ -519,6 +935,12 @@ test('accounting: a posted entry is corrected by its reversal, not by editing', 
       true,
     )
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_move'))[0]!.n, 2)
+    const secondReversal = (
+      await call('account.reverseMove', { id: 'invoice-1', reversalId: 'reversal-2' }, adapter)
+    ).value as Row
+    assert.equal(secondReversal.ok, false)
+    assert.equal((secondReversal.errors as Row[])[0]?.message, 'the entry already has a different reversal')
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_move'))[0]!.n, 2)
   } finally {
     await adapter.close()
   }
@@ -542,47 +964,45 @@ test('accounting: reversing resumes after the mirror was posted but settlement d
     }
     await call('account.createInvoice', invoiceArgs, adapter)
     await call('account.postMove', { id: invoiceArgs.id }, adapter)
-    const original = (await call('account.getMove', { id: invoiceArgs.id }, adapter)).value as Row & {
-      lines: Row[]
-    }
-
     const reversalId = 'reversal-resume'
     const reversalDate = '2026-08-21T00:00:00.000Z'
-    await call(
-      'account.createMove',
-      {
-        id: reversalId,
-        journalId: 'misc',
-        moveType: 'entry',
-        date: reversalDate,
-        ref: 'Correction batch',
-        partnerId: original.partnerId,
+    let interrupted = false
+    const failureAfterPost: Adapter = {
+      ...adapter,
+      async run(sql, params) {
+        if (
+          !interrupted &&
+          sql.startsWith('UPDATE') &&
+          sql.includes('account_move') &&
+          sql.includes('"reversalStatus"') &&
+          params?.includes('posted')
+        ) {
+          interrupted = true
+          throw new Error('injected reversal interruption after post')
+        }
+        return adapter.run(sql, params)
       },
-      adapter,
+    }
+    await assert.rejects(
+      () =>
+        call(
+          'account.reverseMove',
+          {
+            id: invoiceArgs.id,
+            reversalId,
+            journalId: 'misc',
+            date: reversalDate,
+            ref: 'Correction batch',
+          },
+          failureAfterPost,
+        ),
+      /injected reversal interruption after post/u,
     )
-    for (const line of original.lines)
-      await call(
-        'account.addMoveLine',
-        {
-          id: `${reversalId}:${String(line.id)}`,
-          moveId: reversalId,
-          name: line.name,
-          accountId: line.accountId,
-          ...(line.partnerId ? { partnerId: line.partnerId } : {}),
-          ...(line.productId ? { productId: line.productId } : {}),
-          ...(line.productUomId ? { productUomId: line.productUomId } : {}),
-          quantity: line.quantity,
-          priceUnit: line.priceUnit,
-          discount: line.discount,
-          ...(line.taxId ? { taxId: line.taxId } : {}),
-          debit: line.credit,
-          credit: line.debit,
-          ...(line.displayType ? { displayType: line.displayType } : {}),
-          sequence: line.sequence,
-        },
-        adapter,
-      )
-    await call('account.postMove', { id: reversalId }, adapter)
+    assert.equal(interrupted, true)
+    const interruptedReversal = (await call('account.getMove', { id: reversalId }, adapter)).value as Row
+    assert.equal(interruptedReversal.state, 'posted')
+    assert.equal(interruptedReversal.reversalOfId, invoiceArgs.id)
+    assert.equal(interruptedReversal.reversalStatus, 'creating')
     assert.equal(
       ((await call('account.getMove', { id: invoiceArgs.id }, adapter)).value as Row).paymentState,
       'not_paid',
@@ -598,6 +1018,13 @@ test('accounting: reversing resumes after the mirror was posted but settlement d
       lines: Row[]
     }
     assert.equal(settled.paymentState, 'reversed')
+    const completedReversal = (await call('account.getMove', { id: reversalId }, adapter)).value as Row
+    assert.equal(settled.reversedById, reversalId)
+    assert.equal(completedReversal.reversalOfId, invoiceArgs.id)
+    assert.equal(completedReversal.reversalStatus, 'completed')
+    assert.equal(completedReversal.journalId, 'misc')
+    assert.equal(completedReversal.ref, 'Correction batch')
+    assert.equal(completedReversal.date, reversalDate)
     assert.equal(
       settled.lines.reduce((sum, line) => sum + Number(line.amountResidual), 0),
       0,
@@ -1015,6 +1442,26 @@ test('accounting: a payment id cannot be quietly reused for a different amount',
     const different = (await register('250')).value as Row
     assert.equal(different.ok, false)
     assert.equal((different.errors as Row[])[0]?.code, 'account.error.paymentIdReused')
+
+    const retargeted = (
+      await call(
+        'account.registerPayment',
+        {
+          id: 'pay-dup',
+          name: 'Receipt',
+          paymentType: 'inbound',
+          partnerType: 'customer',
+          partnerId: 'customer',
+          journalId: 'bank-journal',
+          destinationAccountId: 'receivable',
+          amount: '1000',
+          reconcileLineId: 'another-open-item',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(retargeted.ok, false)
+    assert.equal((retargeted.errors as Row[])[0]?.code, 'account.error.paymentIdReused')
     assert.equal(
       ((await call('account.listPayments', {}, adapter)).value as Row[]).filter((row) => row.id === 'pay-dup')
         .length,

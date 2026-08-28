@@ -24,6 +24,8 @@ const messages: Record<string, string> = {
   'company_backend.detail.identity': 'Thông tin pháp nhân',
   'company_backend.detail.identityHint': 'Thông tin pháp nhân và đối tác đại diện.',
   'company_backend.field.code': 'Mã',
+  'company_backend.field.accountingTimezone': 'Múi giờ hạch toán',
+  'company_backend.field.accountingTimezoneHint': 'Múi giờ dùng để xác định ngày hạch toán.',
   'company_backend.field.currency': 'Tiền tệ',
   'company_backend.field.kind': 'Loại',
   'company_backend.field.name': 'Tên',
@@ -61,8 +63,11 @@ test('company create is a full FormPage with stable identity and no premature ch
   assert.match(html, /name="action" value="save"/)
   assert.match(html, /name="id" value="2e71eaf2-8404-4c31-83f6-78f300611250"/)
   assert.match(html, /name="returnTo" value="\/admin\/companies\?q=KET&amp;lang=vi"/)
-  assert.equal(html.match(/data-ui="form-field"/g)?.length, 4)
-  assert.match(html, /name="partnerId"[\s\S]*?name="code"[\s\S]*?name="currency"[\s\S]*?name="parentId"/)
+  assert.equal(html.match(/data-ui="form-field"/g)?.length, 5)
+  assert.match(
+    html,
+    /name="partnerId"[\s\S]*?name="code"[\s\S]*?name="currency"[\s\S]*?name="accountingTimezone"[\s\S]*?name="parentId"/,
+  )
   assert.doesNotMatch(html, /data-ui="modal-layer"|data-ui="form-page-aside"|mail\.chatter/)
 })
 

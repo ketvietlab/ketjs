@@ -19,9 +19,9 @@ import type { FormField, Frame } from '../../../ui/index.ts'
 export type PartnerStatementRow = Record<string, unknown>
 
 export type PartnerStatementSummary = {
-  debit: number
-  credit: number
-  residual: number
+  debit: unknown
+  credit: unknown
+  residual: unknown
 }
 
 export type PartnerStatementScreenOptions = {
@@ -53,7 +53,12 @@ export const partnerLedgerScreen = (
           key: 'date',
           label: _('account_backend.field.date'),
           priority: 'primary',
-          cell: (row) => String((row.move as PartnerStatementRow)?.date ?? '').slice(0, 10),
+          cell: (row) =>
+            String(
+              (row.move as PartnerStatementRow)?.accountingDate ??
+                (row.move as PartnerStatementRow)?.date ??
+                '',
+            ).slice(0, 10),
         },
         {
           key: 'entry',

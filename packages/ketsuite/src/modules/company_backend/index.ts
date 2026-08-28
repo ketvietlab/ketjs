@@ -4,7 +4,8 @@ import { routes } from './routes.ts'
 
 export default defineModule({
   name: 'company_backend',
-  version: '0.1.0',
+  // 0.2.0 exposes the company civil-date timezone used and locked by Accounting.
+  version: '0.2.0',
   depends: ['company', 'user', 'partner_backend', 'backend'],
   title: 'Công ty và chi nhánh',
   summary: 'Quản lý pháp nhân, cây chi nhánh và ngữ cảnh làm việc.',
@@ -48,6 +49,10 @@ export default defineModule({
       'field.partner': 'Đối tác đại diện',
       'field.parent': 'Công ty mẹ',
       'field.currency': 'Tiền tệ',
+      'field.accountingTimezone': 'Múi giờ hạch toán',
+      'field.accountingTimezoneHint': 'Dùng tên múi giờ IANA, ví dụ Asia/Ho_Chi_Minh.',
+      'field.accountingTimezoneLockedHint':
+        'Múi giờ này đã được khóa cùng tiền tệ sau khi thiết lập Kế toán.',
       'field.state': 'Trạng thái',
       'field.kind': 'Loại',
       'field.branchParent': 'Chi nhánh cha',
@@ -115,6 +120,10 @@ export default defineModule({
       'field.partner': 'Representative partner',
       'field.parent': 'Parent company',
       'field.currency': 'Currency',
+      'field.accountingTimezone': 'Accounting timezone',
+      'field.accountingTimezoneHint': 'Use an IANA timezone name, for example Asia/Ho_Chi_Minh.',
+      'field.accountingTimezoneLockedHint':
+        'This timezone is locked with the currency after Accounting setup.',
       'field.state': 'Status',
       'field.kind': 'Type',
       'field.branchParent': 'Parent branch',
