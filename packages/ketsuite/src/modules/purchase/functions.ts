@@ -1110,7 +1110,7 @@ export const functions: Record<string, FnSpec> = {
       const collect = async (scoped: Ctx): Promise<Billable[] | ReturnType<typeof invalid>> => {
         const billable: Billable[] = []
         for (const line of await scoped.db.select('purchase.OrderLine', { orderId: args.orderId })) {
-          const context = await productContext(ctx, line.productId)
+          const context = await productContext(scoped, line.productId)
           const method = String(
             context?.template.purchaseMethod ??
               (context?.template.type === 'service' ? 'purchase' : 'receive'),
@@ -1122,7 +1122,7 @@ export const functions: Record<string, FnSpec> = {
           if (quantity <= 0) continue
           const gross = money(quantity * n(line.priceUnit) * (1 - n(line.discount) / 100))
           const tax = line.taxId
-            ? ((await ctx.db.select('account.Tax', { id: line.taxId }))[0] ?? null)
+            ? ((await scoped.db.select('account.Tax', { id: line.taxId }))[0] ?? null)
             : null
           if (tax && !['purchase', 'none'].includes(String(tax.typeTaxUse)))
             return invalid('taxId', 'tax use does not match a vendor bill')
@@ -1134,7 +1134,7 @@ export const functions: Record<string, FnSpec> = {
           }
           if (
             amounts.tax &&
-            (!args.taxAccountId || !(await ctx.db.select('account.Account', { id: args.taxAccountId }))[0])
+            (!args.taxAccountId || !(await scoped.db.select('account.Account', { id: args.taxAccountId }))[0])
           )
             return invalid('taxAccountId', 'a valid tax account is required')
           billable.push({ line, quantity, subtotal: amounts.untaxed, tax, taxAmount: amounts.tax })

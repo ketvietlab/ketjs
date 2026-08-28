@@ -39,6 +39,35 @@ const operations = planMigration(previous, next, {
 Without this flag, removing a table or column raises `DestructiveMigrationError` with code
 `E_DESTRUCTIVE_MIGRATION`. Review the provenance and data migration before enabling destructive SQL.
 
+Some changes cannot be derived safely from a manifest alone. Adding a required column to an existing
+table needs a backfill, changing nullability needs inspection of existing rows, and changing a type needs
+an explicit conversion. KetJS rejects these with `ManualMigrationRequiredError` and code
+`E_MANUAL_MIGRATION_REQUIRED`; it never records the target schema for an operation it could not enforce.
+
+Do not edit `ket_migration` directly after applying the SQL. Finish the DDL and backfill in one
+application-owned transaction, then call `confirmManualMigration()` on that transaction's adapter. This
+PostgreSQL example adds and backfills a required field:
+
+```ts
+// File: scripts/migrate-required-status.ts
+import { confirmManualMigration } from '@ketvietlab/ketjs'
+
+await adapter.tx(async (tx) => {
+  await tx.exec('ALTER TABLE "orders_order" ADD COLUMN "status" TEXT')
+  await tx.run('UPDATE "orders_order" SET "status" = $1 WHERE "status" IS NULL', ['draft'])
+  await tx.exec('ALTER TABLE "orders_order" ALTER COLUMN "status" SET NOT NULL')
+  await confirmManualMigration(tx, manifest)
+})
+```
+
+Confirmation is not an escape hatch for the planner. It requires an existing marker and at least one
+pending manual operation, then reads the physical database catalog. Every modelled table, column type,
+nullability, primary key, and named index must match the target manifest. A mismatch raises
+`ManualMigrationConfirmationError` (`E_MANUAL_MIGRATION_CONFIRMATION`). When it propagates from the shared
+transaction shown above, the DDL rolls back and the marker remains unchanged. SQLite and PostgreSQL
+catalogs are supported; a custom adapter is refused unless KetJS can verify it safely. A subsequent
+`migrateOne(adapter, manifest)` returns no operations after a successful confirmation.
+
 Installing or removing a module at runtime is not a destructive migration. Disabled module data stays
 in place for a later reinstall.
 
@@ -134,6 +163,7 @@ Custom adapters implement the public `Adapter` interface:
 // File: src/modules/example/models.ts
 type Adapter = {
   name: string
+  readonly transaction?: boolean
   open(): Promise<void>
   close(): Promise<void>
   exec(sql: string): Promise<void>
@@ -148,8 +178,9 @@ type Adapter = {
 ```
 
 Call `assertAdapter()` during construction to catch missing methods. A transaction callback must
-receive an adapter bound to the transaction's connection. Optional notifications must never be the
-only job-delivery guarantee.
+receive an adapter bound to the transaction's connection and mark it with `transaction: true`; this
+lets framework operations join that transaction instead of trying to nest another one. Optional
+notifications must never be the only job-delivery guarantee.
 
 ## Tenant fleets
 
@@ -157,14 +188,16 @@ Apps with `serve.tenants` expose a database list and an opener. Migrate every te
 
 ```bash
 # Run from: /path/to/ketjs
-ket migrate --all --workspace dist/ket.workspace.js
-ket migrate --all --dry-run --workspace dist/ket.workspace.js
-ket migrate --all --allow-destructive --workspace dist/ket.workspace.js
+ket migrate --deployment erp --all --workspace dist/ket.workspace.js
+ket migrate --deployment erp --all --dry-run --workspace dist/ket.workspace.js
+ket migrate --deployment erp --all --allow-destructive --workspace dist/ket.workspace.js
 ```
 
-The fleet runner uses a bounded adapter pool, continues after an individual tenant failure, and
-reports every result. A partial fleet is visible and retryable instead of being hidden behind the first
-exception.
+When a workspace has more than one tenant-fleet deployment, `--deployment` is required rather than
+guessing which product to migrate. The fleet runner uses a bounded adapter pool, continues after an
+individual tenant failure, and reports every result. Each tenant's DDL and applied-schema marker commit in
+one transaction, so a partial fleet is visible and retryable instead of being hidden behind the first
+exception. `--dry-run` reads the marker and plan without creating framework or application tables.
 
 Programmatic tooling can use `createAdapterPool()`, `migrateFleet()`, and `formatFleet()`.
 

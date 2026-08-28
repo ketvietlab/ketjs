@@ -71,9 +71,16 @@ test('config: every knob is settable, and DATABASE_URL is what switches the engi
 })
 
 test("config: a deployment's defaults lose to the environment, and win over the framework's", () => {
-  const c = readConfig({ KET_LOCALE: 'fr' }, { defaultLocale: 'vi', port: 4100 })
+  const c = readConfig({ KET_LOCALE: 'fr' }, { defaultLocale: 'vi', port: 4100, migrateOnBoot: false })
   assert.equal(c.defaultLocale, 'fr', 'the operator has the last word')
   assert.equal(c.port, 4100, 'but a deployment may move its own default')
+  assert.equal(c.migrateOnBoot, false, 'a deployment may disable migrate-on-boot by default')
+
+  assert.equal(
+    readConfig({ KET_MIGRATE: '1' }, { migrateOnBoot: false }).migrateOnBoot,
+    true,
+    'an explicit environment value still overrides the deployment default',
+  )
 })
 
 // ── the boot sequence itself ─────────────────────────────────────────────────
@@ -140,6 +147,37 @@ test('boot: one declaration produces a running server, framework routes included
   assert.match(banner, /notesapp is running/)
   assert.match(banner, /health/)
   await booted.close()
+})
+
+test('boot: an absent development branch header keeps branch reads unrestricted', async () => {
+  const branchNotes = defineModule({
+    name: 'branch_notes',
+    models: { Note: { scope: 'company+branch', fields: { id: 'id', title: 'text' } } },
+    functions: {
+      list: {
+        effects: ['read:branch_notes.Note'],
+        handler: (ctx: Ctx) => ctx.db.all(from(ctx.table('branch_notes.Note'))),
+      },
+    },
+  })
+  const app = defineDeployment({ name: 'branches', modules: [branchNotes], headless: true })
+  const booted = await bootDeployment(app, { env: memory, port: 0 })
+  try {
+    await booted.adapter!.run(
+      'INSERT INTO branch_notes_note (id, title, "companyId", "branchId") VALUES (?, ?, ?, ?), (?, ?, ?, ?)',
+      ['hanoi', 'Hà Nội', 'acme', 'hanoi', 'saigon', 'Sài Gòn', 'acme', 'saigon'],
+    )
+    const response = await fetch(`http://127.0.0.1:${booted.port}/_ket/fn/branch_notes.list`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-ket-company': 'acme' },
+      body: '{}',
+    })
+    assert.equal(response.status, 200)
+    const result = (await response.json()) as { value: Array<{ id: string }> }
+    assert.deepEqual(result.value.map((row) => row.id).sort(), ['hanoi', 'saigon'])
+  } finally {
+    await booted.close()
+  }
 })
 
 test('boot: a page resolver naming a function nobody declares is refused at boot, not at the first request', async () => {

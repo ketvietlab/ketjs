@@ -138,6 +138,37 @@ test('postgres: a failing transaction rolls back and still releases', async () =
   await adapter.close()
 })
 
+test('postgres: a transaction-scoped adapter expires after commit and rollback', async () => {
+  const { adapter, calls } = await pg()
+  let committed!: Adapter
+  await adapter.tx(async (tx) => {
+    committed = tx
+  })
+  const afterCommit = calls.length
+  await assert.rejects(
+    () => committed.run('UPDATE after_commit'),
+    /transaction-scoped adapter used after its transaction ended/,
+  )
+  assert.equal(calls.length, afterCommit, 'an expired adapter must not reach the released connection')
+
+  let rolledBack!: Adapter
+  await assert.rejects(
+    () =>
+      adapter.tx(async (tx) => {
+        rolledBack = tx
+        throw new Error('rollback body')
+      }),
+    /rollback body/,
+  )
+  const afterRollback = calls.length
+  await assert.rejects(
+    () => rolledBack.all('SELECT after_rollback'),
+    /transaction-scoped adapter used after its transaction ended/,
+  )
+  assert.equal(calls.length, afterRollback, 'rollback also expires the scoped adapter before release')
+  await adapter.close()
+})
+
 test('postgres: notifications publish on the transaction connection and LISTEN can unsubscribe', async () => {
   const driver = fakeDriver()
   const adapter = postgresAdapter('postgres://x/y', { connect: driver.connect })

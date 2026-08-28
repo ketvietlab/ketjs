@@ -131,10 +131,10 @@ export function documentRoutes(owner: DocumentOwner, base: string): Record<strin
 
     /**
      * The framework's own `/_ket/stream/:id` (packages/ketjs/src/server/http.ts)
-     * has no auth check at all — fine for the short-lived generation logs it
-     * was built for, wrong for a live document edit stream. This wraps the
-     * same `streams.tail` primitive behind a real permission check instead of
-     * reaching that public route directly.
+     * is closed unless the deployment supplies an authorization/topic resolver.
+     * This module still owns a dedicated route because its permission is
+     * record-aware and its accepted topic must match the document's current
+     * generation; both checks belong beside the record lookup below.
      *
      * There is no server-side disconnect hook here on purpose: a client abort
      * does not reliably reach the route layer (verified against this same

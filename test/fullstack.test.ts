@@ -119,6 +119,36 @@ test('agent safety: dry-run reports intended writes and commits nothing', async 
   await adapter.close()
 })
 
+test('agent safety: a dry-run cannot consume the idempotency key of the real command', async () => {
+  const { adapter, manifest } = await boot()
+  const args = { id: 'previewed', title: 'Previewed', priceCents: 1000, slug: 'previewed' }
+  const preview = await callFn('catalog.createProduct', args, {
+    adapter,
+    manifest,
+    dryRun: true,
+    idempotencyKey: 'preview-then-commit',
+  })
+  assert.equal(preview.dryRun, true)
+  assert.equal((await adapter.all('SELECT * FROM catalog_product WHERE id = ?', [args.id])).length, 0)
+
+  const committed = await callFn('catalog.createProduct', args, {
+    adapter,
+    manifest,
+    idempotencyKey: 'preview-then-commit',
+  })
+  assert.equal(committed.replayed, undefined)
+  assert.equal(committed.dryRun, false)
+  assert.equal((await adapter.all('SELECT * FROM catalog_product WHERE id = ?', [args.id])).length, 1)
+
+  const retried = await callFn('catalog.createProduct', args, {
+    adapter,
+    manifest,
+    idempotencyKey: 'preview-then-commit',
+  })
+  assert.equal(retried.replayed, true, 'the first real command, not its preview, owns the durable key')
+  await adapter.close()
+})
+
 test('agent safety: an idempotency key makes a retry replay instead of double-apply', async () => {
   const { adapter, manifest } = await boot()
   const args = { id: 'o1', productId: 'p1', qty: 2 }

@@ -67,8 +67,10 @@ flowchart LR
   analytics --> separate["Separate schema"]
 ```
 
-Deployments sharing a datastore must agree about every common model and column. KetJS reports
-`E_DATASTORE_MODEL_CLASH` or `E_DATASTORE_COLUMN_CLASH` during composition.
+Deployments sharing a datastore must agree about every common model and column, including nullability and
+reference targets. Indexes contributed by only one deployment join the union schema; indexes with the same
+name must agree about fields, uniqueness, and provenance. KetJS reports `E_DATASTORE_MODEL_CLASH`,
+`E_DATASTORE_COLUMN_CLASH`, or `E_DATASTORE_INDEX_CLASH` during composition.
 
 ## HTTP and worker roles
 

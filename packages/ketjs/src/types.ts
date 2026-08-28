@@ -505,7 +505,7 @@ export type Scope = {
   /** The branch a new company+branch row is stamped with. */
   branch?: string | null
 
-  /** Branches this request may read. Null means every branch of its companies. */
+  /** Branches this request may read. Null means every branch; an empty array means none. */
   branches?: string[] | null
 }
 

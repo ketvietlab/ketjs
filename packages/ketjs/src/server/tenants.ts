@@ -4,7 +4,7 @@
 
 import { KetError } from '../kernel/errors.ts'
 import type { AdapterPool } from '../data/pool.ts'
-import type { Adapter, Manifest } from '../types.ts'
+import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
 import type { Sessions } from './session.ts'
 import type { Joints } from '../theme/joints.ts'
@@ -18,7 +18,10 @@ export type TenantSpec = {
    * tenant is how one customer's request quietly reads another's data.
    */
   resolve: (url: URL, req: IncomingMessage) => string | null
-  /** Open the datastore for one tenant. The deployment owns its driver choice. */
+  /**
+   * Create a fresh adapter for one tenant. The pool owns open/close; do not hand
+   * back an adapter object that a prior pool entry already closed.
+   */
   open: (key: string, config: RuntimeConfig) => Adapter | Promise<Adapter>
   /**
    * Every tenant this deployment serves. Needed to migrate the fleet, and to fail
@@ -49,11 +52,11 @@ export type Tenant = {
   /**
    * Whose logins these are.
    *
-   * Per tenant when the tenant is known before the cookie is read — which it is
-   * when tenants arrive by subdomain, because the Host says so. A deployment on one
-   * domain for every tenant cannot do that (reading the session needs the
-   * database, knowing the database needs the session), and supplies one shared
-   * store instead. Both are expressible; neither is assumed.
+   * Per tenant when the tenant is known before the cookie is read — for example
+   * from a subdomain, a trusted gateway assertion, or an explicit path/header.
+   * Deployments whose tenants share one domain may supply a shared identity store,
+   * but each record remains tenant-bound; a session is never allowed to select a
+   * different datastore by itself.
    */
   sessions: Sessions | null
 }
@@ -90,17 +93,30 @@ export function createTenants(o: {
    */
   theme?: (live: Manifest) => ThemeRuntime
   joints: (live: Manifest, locale: string) => Joints
-  /** Built once per tenant, against that tenant's own datastore. */
-  sessions?: (adapter: Adapter) => Promise<Sessions>
+  /** Built against the current adapter; the returned facade reacquires a lease per operation. */
+  sessions?: (adapter: Adapter, key: string) => Promise<Sessions>
 }): Tenants {
-  const prepared = new Map<string, Promise<void>>()
+  // Adapter-owned work must not keep a closed pool entry alive. WeakMap has the
+  // ephemeron semantics needed here even though the promise itself closes over
+  // the adapter while preparation is running.
+  const prepared = new WeakMap<Adapter, Promise<void>>()
   const prepare = (key: string, adapter: Adapter): Promise<void> => {
-    let pending = prepared.get(key)
-    if (!pending) {
-      pending = o.prepare?.(key, adapter) ?? Promise.resolve()
-      prepared.set(key, pending)
-    }
-    return pending
+    const cached = prepared.get(adapter)
+    if (cached) return cached
+
+    // A key may be evicted and later reopened as a different adapter. Preparation
+    // belongs to that concrete connection/datastore instance, not to the key for
+    // the lifetime of the process (notably for SQLite :memory: databases).
+    const promise = Promise.resolve().then(async () => {
+      await o.prepare?.(key, adapter)
+    })
+    prepared.set(adapter, promise)
+    void promise.catch(() => {
+      // A failed migration/init is retryable. Do not let an older rejected promise
+      // delete a newer attempt on the same adapter.
+      if (prepared.get(adapter) === promise) prepared.delete(adapter)
+    })
+    return promise
   }
 
   const keyOf = (url: URL, req: IncomingMessage): string => {
@@ -121,15 +137,96 @@ export function createTenants(o: {
    */
   const themes = new Map<string, ThemeRuntime>()
   const jointsBy = new Map<string, Joints>()
-  const sessions = new Map<string, Promise<Sessions>>()
+  const sessionManagers = new WeakMap<Adapter, Promise<Sessions>>()
+  const sessionFacades = new Map<string, Promise<Sessions>>()
+  const managerFor = (key: string, adapter: Adapter): Promise<Sessions> => {
+    const cached = sessionManagers.get(adapter)
+    if (cached) return cached
+    const value = (o.sessions as NonNullable<typeof o.sessions>)(adapter, key)
+    sessionManagers.set(adapter, value)
+    void value.catch(() => {
+      if (sessionManagers.get(adapter) === value) sessionManagers.delete(adapter)
+    })
+    return value
+  }
+  const copyScope = (scope: Scope | null): Scope | null =>
+    scope
+      ? {
+          company: scope.company,
+          ...(scope.companies === undefined
+            ? {}
+            : { companies: scope.companies === null ? null : [...scope.companies] }),
+          ...(scope.branch === undefined ? {} : { branch: scope.branch }),
+          ...(scope.branches === undefined
+            ? {}
+            : { branches: scope.branches === null ? null : [...scope.branches] }),
+        }
+      : null
   const sessionsFor = (key: string, adapter: Adapter): Promise<Sessions> | null => {
     if (!o.sessions) return null
-    let s = sessions.get(key)
-    if (!s) {
-      s = o.sessions(adapter)
-      sessions.set(key, s)
-    }
-    return s
+    const cached = sessionFacades.get(key)
+    if (cached) return cached
+
+    const withManager = <T>(body: (sessions: Sessions) => Promise<T>): Promise<T> =>
+      o.pool.with(key, async (current) => {
+        await prepare(key, current)
+        return body(await managerFor(key, current))
+      })
+    let made!: Promise<Sessions>
+    made = managerFor(key, adapter)
+      .then((seed) => {
+        // Snapshot only adapter-free values. In particular, do not close over the
+        // first Sessions/SessionStore: it owns the adapter that eviction just closed.
+        const storeName = seed.store.name
+        const ephemeralSecret = seed.ephemeralSecret
+        const tenant = seed.tenant
+        const clearCookie = seed.clearCookie()
+        const anonymous = copyScope(seed.scopeOf(null))
+        return {
+          ...(tenant === undefined ? {} : { tenant }),
+          store: {
+            name: storeName,
+            init: () => withManager((sessions) => sessions.store.init()),
+            create: (record) => withManager((sessions) => sessions.store.create(record)),
+            read: (id) => withManager((sessions) => sessions.store.read(id)),
+            touch: (id, expiresAt) => withManager((sessions) => sessions.store.touch(id, expiresAt)),
+            updateContext: (id, expectedRevision, context) =>
+              withManager((sessions) => sessions.store.updateContext(id, expectedRevision, context)),
+            destroy: (id) => withManager((sessions) => sessions.store.destroy(id)),
+            listUser: (userId) => withManager((sessions) => sessions.store.listUser(userId)),
+            destroyUser: (userId) => withManager((sessions) => sessions.store.destroyUser(userId)),
+            destroyUserExcept: (userId, keepId) =>
+              withManager((sessions) => sessions.store.destroyUserExcept(userId, keepId)),
+            sweep: (at) => withManager((sessions) => sessions.store.sweep(at)),
+          },
+          ephemeralSecret,
+          start: (options) => withManager((sessions) => sessions.start(options)),
+          of: (req) => withManager((sessions) => sessions.of(req)),
+          end: (req) => withManager((sessions) => sessions.end(req)),
+          endUser: (userId) => withManager((sessions) => sessions.endUser(userId)),
+          endUserExcept: (userId, keepId) =>
+            withManager((sessions) => sessions.endUserExcept(userId, keepId)),
+          update: (record, context) => withManager((sessions) => sessions.update(record, context)),
+          clearCookie: () => clearCookie,
+          scopeOf: (record) => {
+            if (!record || (tenant !== undefined && (record.tenant ?? null) !== tenant))
+              return copyScope(anonymous)
+            return {
+              company: record.company,
+              companies: [...record.companies],
+              branch: record.branch,
+              branches: record.branches ? [...record.branches] : null,
+            }
+          },
+          sweep: () => withManager((sessions) => sessions.sweep()),
+        }
+      })
+      .catch((error) => {
+        if (sessionFacades.get(key) === made) sessionFacades.delete(key)
+        throw error
+      })
+    sessionFacades.set(key, made)
+    return made
   }
   const themeFor = (key: string): ThemeRuntime | null => {
     if (!o.theme) return null

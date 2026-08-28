@@ -1,16 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   bootDeployment,
+  createSessions,
   defineDeployment,
   defineModule,
+  createAdapterPool,
   json,
   migrateOne,
   compose,
   sqliteAdapter,
   memorySessionStore,
 } from '@ketvietlab/ketjs'
-import type { Adapter, ServeContext, Route } from '@ketvietlab/ketjs'
+import type { Adapter, ServeContext, Route, Sessions } from '@ketvietlab/ketjs'
+import { createTenants } from '../packages/ketjs/src/server/tenants.ts'
 
 /**
  * One deployment, many databases. Every tenant runs the deployment's immutable
@@ -159,6 +165,201 @@ test('tenants: migrations run per tenant, on first touch', async () => {
   await b.close()
 })
 
+test('tenants: an evicted key prepares its replacement adapter before reuse', async () => {
+  const opened: string[] = []
+  const prepared: string[] = []
+  const manifest = compose([core])
+  const pool = createAdapterPool({
+    max: 1,
+    create: (key) => {
+      opened.push(key)
+      return sqliteAdapter()
+    },
+  })
+  const tenants = createTenants({
+    spec: {
+      resolve: () => null,
+      open: () => sqliteAdapter(),
+      list: async () => ['t1', 't2'],
+      max: 1,
+    },
+    pool,
+    manifest,
+    prepare: async (key, adapter) => {
+      prepared.push(key)
+      await migrateOne(adapter, manifest)
+    },
+    joints: () => ({}) as never,
+  })
+
+  try {
+    let first!: Adapter
+    await tenants.with('t1', async (tenant) => {
+      first = tenant.adapter
+      await tenant.adapter.run('INSERT INTO "core_note" ("id", "memo", "companyId") VALUES (?, ?, ?)', [
+        'before-eviction',
+        'one',
+        'c1',
+      ])
+    })
+    await tenants.with('t2', async (tenant) => {
+      assert.ok((await tenant.adapter.introspect()).core_note)
+    })
+    assert.deepEqual(pool.open, ['t2'], 'opening tenant two evicts tenant one')
+
+    await tenants.with('t1', async (tenant) => {
+      assert.notEqual(tenant.adapter, first, 'the in-memory datastore is a new adapter instance')
+      assert.ok((await tenant.adapter.introspect()).core_note, 'the replacement was migrated before use')
+      await tenant.adapter.run('INSERT INTO "core_note" ("id", "memo", "companyId") VALUES (?, ?, ?)', [
+        'after-eviction',
+        'still alive',
+        'c1',
+      ])
+      const rows = await tenant.adapter.all('SELECT "id" FROM "core_note"')
+      assert.deepEqual(
+        rows.map((row) => row.id),
+        ['after-eviction'],
+      )
+    })
+
+    assert.deepEqual(opened, ['t1', 't2', 't1'])
+    assert.deepEqual(prepared, ['t1', 't2', 't1'], 'preparation follows adapter identity, not key alone')
+  } finally {
+    await tenants.close()
+  }
+})
+
+test('tenants: a rejected preparation is removed from the cache and can retry', async () => {
+  const manifest = compose([core])
+  const pool = createAdapterPool({ create: () => sqliteAdapter(), max: 1 })
+  let attempts = 0
+  const tenants = createTenants({
+    spec: {
+      resolve: () => null,
+      open: () => sqliteAdapter(),
+      list: async () => ['t1'],
+    },
+    pool,
+    manifest,
+    prepare: async (_key, adapter) => {
+      attempts++
+      if (attempts === 1) throw new Error('temporary migration failure')
+      await migrateOne(adapter, manifest)
+    },
+    joints: () => ({}) as never,
+  })
+
+  try {
+    await assert.rejects(() => tenants.with('t1', async () => undefined), /temporary migration failure/)
+    await tenants.with('t1', async (tenant) => {
+      assert.ok((await tenant.adapter.introspect()).core_note)
+    })
+    assert.equal(attempts, 2)
+  } finally {
+    await tenants.close()
+  }
+})
+
+test('tenants: a session facade retains no manager from an evicted adapter', async () => {
+  const manifest = compose([core])
+  const closed = new WeakSet<Adapter>()
+  const managers: string[] = []
+  const pool = createAdapterPool({
+    max: 1,
+    create: () => {
+      const base = sqliteAdapter()
+      const adapter: Adapter = {
+        ...base,
+        async close() {
+          closed.add(adapter)
+          await base.close()
+        },
+      }
+      return adapter
+    },
+  })
+  const tenants = createTenants({
+    spec: {
+      resolve: () => null,
+      open: () => sqliteAdapter(),
+      list: async () => ['t1', 't2'],
+      max: 1,
+    },
+    pool,
+    manifest,
+    joints: () => ({}) as never,
+    sessions: async (adapter, key) => {
+      managers.push(key)
+      const sessions = await createSessions({ tenant: key, secret: 'stable', secure: false })
+      const needLive = () => {
+        if (closed.has(adapter)) throw new Error(`session manager retained closed adapter for ${key}`)
+      }
+      return {
+        ...sessions,
+        clearCookie() {
+          needLive()
+          return sessions.clearCookie()
+        },
+        scopeOf(record) {
+          needLive()
+          return sessions.scopeOf(record)
+        },
+      }
+    },
+  })
+
+  try {
+    let firstAdapter!: Adapter
+    let facade!: Sessions
+    await tenants.with('t1', async (tenant) => {
+      firstAdapter = tenant.adapter
+      facade = tenant.sessions as Sessions
+    })
+    const first = await facade.start({ userId: 'u1', companies: ['c1'] })
+
+    await tenants.with('t2', async () => undefined)
+    assert.ok(closed.has(firstAdapter), 'the first tenant adapter was actually evicted')
+    assert.match(facade.clearCookie(), /Max-Age=0/)
+    assert.equal(facade.scopeOf(first.record)?.company, 'c1')
+    assert.equal(facade.scopeOf({ ...first.record, tenant: 't2' }), null, 'the snapshot remains tenant-bound')
+
+    const reopened = await facade.start({ userId: 'u2', companies: ['c2'] })
+    assert.equal(reopened.record.tenant, 't1')
+    assert.deepEqual(managers, ['t1', 't2', 't1'], 'I/O uses a new manager for the replacement adapter')
+  } finally {
+    await tenants.close()
+  }
+})
+
+test('tenants: an async datastore opener is awaited before the adapter is opened', async () => {
+  let opened = 0
+  const asyncApp = defineDeployment({
+    name: 'async_tenants',
+    modules: [core],
+    headless: true,
+    serve: {
+      tenants: {
+        resolve: () => 't1',
+        open: async () => {
+          await Promise.resolve()
+          opened++
+          return sqliteAdapter()
+        },
+        list: async () => ['t1'],
+      },
+    },
+  })
+  const b = await bootDeployment(asyncApp, { port: 0 })
+  const response = await fetch(`http://127.0.0.1:${b.port}/_ket/fn/core.list`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-ket-company': 'c1' },
+    body: '{}',
+  })
+  assert.equal(response.status, 200)
+  assert.equal(opened, 1)
+  await b.close()
+})
+
 test('tenants: with several databases there is no single adapter, and the type says so', async () => {
   dbs.clear()
   const b = await bootDeployment(app, { port: 0 })
@@ -264,7 +465,7 @@ test('sessions: the cookie carries no Domain, so the browser scopes it to one su
   await b.close()
 })
 
-test('sessions: a shared store is the escape hatch for one domain serving every tenant', async () => {
+test('sessions: a shared store binds each session to the tenant that issued it', async () => {
   dbs.clear()
   const control = memorySessionStore()
   const oneDomain = defineDeployment({
@@ -290,14 +491,58 @@ test('sessions: a shared store is the escape hatch for one domain serving every 
     },
   })
   const b = await bootDeployment(oneDomain, { env: { KET_SECRET: 'x' }, port: 0 })
-  const { cookie } = await b.tenants.with('t1', async (t) =>
+  const { cookie, record } = await b.tenants.with('t1', async (t) =>
     t.sessions!.start({ userId: 'u1', companies: ['c1'] }),
   )
   const req = { headers: { cookie: cookie.split(';')[0]! } } as never
-  // One store, so every tenant sees the same session — which is the point, and
-  // also why such a deployment has to record the tenant on the session itself.
+  assert.equal(record.tenant, 't1')
   assert.equal((await b.tenants.with('t1', async (t) => t.sessions!.of(req)))?.userId, 'u1')
-  assert.equal((await b.tenants.with('t2', async (t) => t.sessions!.of(req)))?.userId, 'u1')
+  assert.equal(
+    await b.tenants.with('t2', async (t) => t.sessions!.of(req)),
+    null,
+    'a valid shared-store cookie is still not valid for another tenant',
+  )
+  assert.equal(await b.tenants.with('t2', async (t) => t.sessions!.scopeOf(record)), null)
+  assert.equal(await b.tenants.with('t2', async (t) => t.sessions!.endUser('u1')), 0)
+  assert.equal(
+    (await b.tenants.with('t1', async (t) => t.sessions!.of(req)))?.userId,
+    'u1',
+    'tenant-scoped administration cannot revoke another tenant session',
+  )
+  await b.close()
+})
+
+test('sessions: a manager reacquires the tenant after its adapter is evicted', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ketjs-session-pool-'))
+  t.after(() => rmSync(directory, { recursive: true, force: true }))
+  const pooled = defineDeployment({
+    name: 'pooled_sessions',
+    modules: [core],
+    headless: true,
+    serve: {
+      sessions: {},
+      tenants: {
+        resolve: (_url, req) => String(req.headers['x-tenant'] ?? 't1'),
+        open: async (key) => sqliteAdapter(join(directory, `${key}.sqlite`)),
+        list: async () => ['t1', 't2'],
+        max: 1,
+      },
+    },
+  })
+  const b = await bootDeployment(pooled, { port: 0 })
+  const sessions = await b.tenants.with('t1', async (tenant) => tenant.sessions!)
+  const { cookie } = await sessions.start({ userId: 'u1', companies: ['c1'] })
+  assert.equal(sessions.ephemeralSecret, true)
+
+  await b.tenants.with('t2', async () => undefined)
+  assert.deepEqual(b.tenants.pool?.open, ['t2'], 'tenant one was evicted after its lease ended')
+
+  const req = { headers: { cookie: cookie.split(';')[0]! } } as never
+  assert.equal(
+    (await sessions.of(req))?.userId,
+    'u1',
+    'the facade opens the current adapter instead of retaining the closed one',
+  )
   await b.close()
 })
 

@@ -13,7 +13,7 @@
 import { compose } from './compose.ts'
 import { Diagnostics } from './errors.ts'
 import { schemaFromManifest } from '../data/migrate.ts'
-import type { Schema } from '../data/migrate.ts'
+import type { Column, Index, Schema } from '../data/migrate.ts'
 import type { KetModule, Manifest } from '../types.ts'
 import type { ServeSpec } from '../server/boot.ts'
 
@@ -70,6 +70,12 @@ export type Workspace = {
   shared: string[]
   soloed: Record<string, string[]>
 }
+
+const columnContract = (column: Column): string =>
+  `${column.base === 'ref' ? `ref:${column.target ?? '(missing target)'}` : column.base}${column.optional ? '?' : ''}`
+
+const indexContract = (index: Index): string =>
+  `${index.unique ? 'unique ' : ''}(${index.fields.join(', ')}) from ${index.by}`
 
 export function defineDeployment(spec: DeploymentSpec): DeploymentSpec
 export function defineDeployment(spec: DeploymentDeclaration): DeploymentDeclaration
@@ -183,12 +189,36 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
           existing.columns[cname] = { ...col }
           continue
         }
-        if (before.base !== col.base || before.by !== col.by) {
+        if (
+          before.base !== col.base ||
+          before.optional !== col.optional ||
+          before.target !== col.target ||
+          before.by !== col.by
+        ) {
           diag.add({
             code: 'E_DATASTORE_COLUMN_CLASH',
             module: deployment.name,
-            message: `datastore "${store}": column "${tname}.${cname}" is ${before.base} (from ${before.by}) elsewhere but ${col.base} (from ${col.by}) in "${deployment.name}"`,
+            message: `datastore "${store}": column "${tname}.${cname}" is ${columnContract(before)} (from ${before.by}) elsewhere but ${columnContract(col)} (from ${col.by}) in "${deployment.name}"`,
             hint: 'both deployments must install the same version of the contributing module',
+          })
+        }
+      }
+      for (const [name, index] of Object.entries(table.indexes)) {
+        const before = existing.indexes[name]
+        if (!before) {
+          existing.indexes[name] = { ...index, fields: [...index.fields] }
+          continue
+        }
+        if (
+          before.unique !== index.unique ||
+          before.by !== index.by ||
+          before.fields.join('\0') !== index.fields.join('\0')
+        ) {
+          diag.add({
+            code: 'E_DATASTORE_INDEX_CLASH',
+            module: deployment.name,
+            message: `datastore "${store}": index "${tname}.${name}" is ${indexContract(before)} elsewhere but ${indexContract(index)} in "${deployment.name}"`,
+            hint: 'rename one index, or make both deployments declare the same fields and uniqueness',
           })
         }
       }

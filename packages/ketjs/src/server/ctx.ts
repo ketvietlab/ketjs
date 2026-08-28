@@ -9,7 +9,13 @@ import { tableNameFor } from '../data/migrate.ts'
 import { table, type Query } from '../data/query.ts'
 import { eq, inArray } from '../data/expr.ts'
 import { from } from '../data/query.ts'
-import { type Changeset, changeset, decimalText } from '../data/changeset.ts'
+import {
+  canonicalDecimal,
+  type Changeset,
+  changeset,
+  DECIMAL_MAX_CHARS,
+  parseDecimal,
+} from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
@@ -88,7 +94,9 @@ export function createContext(o: {
   // place that can guarantee it.
   //
   // Branch is not a security boundary. Reading every branch of one company is
-  // ordinary, so an empty branch list means "all of them" rather than "none".
+  // ordinary, so null means unrestricted. An explicit empty set still means
+  // "none": treating it like null would turn a caller with no readable branches
+  // into one that can read every branch.
   // Writing somewhere you cannot read back is silent corruption: the row lands,
   // every later query filters it out, and nothing anywhere says why. So the two
   // halves of the scope have to agree before the first query runs.
@@ -151,6 +159,19 @@ export function createContext(o: {
       .filter(([, f]) => f.base === 'decimal')
       .map(([n]) => n)
 
+  const normalizeDecimal = (model: string, field: string, value: unknown): string => {
+    const parsed = parseDecimal(value)
+    if (parsed.ok) return parsed.value
+    throw new KetError({
+      code: parsed.reason === 'size' ? 'E_DECIMAL_TOO_LONG' : 'E_INVALID_DECIMAL',
+      module: operation.by,
+      message:
+        parsed.reason === 'size'
+          ? `${model}.${field} exceeds the ${DECIMAL_MAX_CHARS}-character decimal limit`
+          : `${model}.${field} requires a finite number or plain decimal string`,
+    })
+  }
+
   const booleansOf = (model: string): string[] =>
     Object.entries(manifest.models[model]?.fields ?? {})
       .filter(([, f]) => f.base === 'bool')
@@ -171,9 +192,9 @@ export function createContext(o: {
     const stamps = datetimesOf(model)
     if (!cols.length && !stamps.length) return row
     const out: Row = { ...row }
-    // decimalText, not String: a raw db.update never passes through a changeset, so
-    // this is the only place that can keep "1e-7" out of a decimal column.
-    for (const c of cols) if (out[c] != null) out[c] = decimalText(out[c] as number | string)
+    // A raw db.insert/update never passes through a changeset. Validate as well as
+    // render here so it cannot store exponent syntax or bypass the public budget.
+    for (const c of cols) if (out[c] != null) out[c] = normalizeDecimal(model, c, out[c])
     /**
      * One instant, one spelling.
      *
@@ -190,6 +211,10 @@ export function createContext(o: {
       if (!Number.isNaN(at.getTime())) out[c] = at.toISOString()
     }
     return out
+  }
+
+  const validateDecimalRow = (model: string, row: Row): void => {
+    for (const field of decimalsOf(model)) if (row[field] != null) normalizeDecimal(model, field, row[field])
   }
 
   const decodeRows = (model: string, rows: Row[]): Row[] => {
@@ -241,10 +266,10 @@ export function createContext(o: {
     if (operation.crossCompany) return q // declared, and visible in the manifest
 
     const cs = readCompanies(q.model)
-    const col = { model: q.model, name: 'companyId' }
+    const col = { model: q.model, name: 'companyId', base: 'text' as const }
     let out = q.where(cs.length === 1 ? eq(col, cs[0] as string) : inArray(col, cs))
-    if (kind === 'company+branch' && scope.branches && scope.branches.length > 0) {
-      out = out.where(inArray({ model: q.model, name: 'branchId' }, scope.branches))
+    if (kind === 'company+branch' && scope.branches != null) {
+      out = out.where(inArray({ model: q.model, name: 'branchId', base: 'text' }, scope.branches))
     }
     return out
   }
@@ -307,6 +332,14 @@ export function createContext(o: {
   const fresh = () => {
     n = 0
   }
+  const equalPredicate = (model: string, field: string, value: unknown): string => {
+    const column = adapter.quoteIdent(field)
+    if (value === null) return `${column} IS NULL`
+    const placeholder = ph()
+    return dialect === 'sqlite' && manifest.models[model]?.fields[field]?.base === 'decimal'
+      ? `ket_decimal_cmp(${column}, ${placeholder}) = 0`
+      : `${column} = ${placeholder}`
+  }
 
   /**
    * Fill in what a query asked to preload: one extra query per relation, never one
@@ -322,9 +355,16 @@ export function createContext(o: {
     }
     const loadChunks = async (model: string, field: string, values: unknown[]): Promise<Row[]> => {
       const loaded: Row[] = []
+      const base = manifest.models[model]?.fields[field]?.base
+      if (!base)
+        throw new KetError({
+          code: 'E_UNKNOWN_FIELD',
+          module: operation.by,
+          message: `${model} has no field "${field}"`,
+        })
       for (const batch of chunks(values)) {
         loaded.push(
-          ...(await db.all(from(table(manifest, model)).where(inArray({ model, name: field }, batch)))),
+          ...(await db.all(from(table(manifest, model)).where(inArray({ model, name: field, base }, batch)))),
         )
       }
       return loaded
@@ -390,9 +430,22 @@ export function createContext(o: {
       const rows = await adapter.all(text, params)
       return rows.map((row) => {
         const aggregates: Record<string, unknown> = {}
-        for (const aggregate of grouped.aggregates) aggregates[aggregate.as] = row[aggregate.as]
+        for (const aggregate of grouped.aggregates) {
+          const value = row[aggregate.as]
+          const computedDecimal =
+            aggregate.col?.base === 'decimal' && aggregate.fn !== 'count' && aggregate.fn !== 'countDistinct'
+          aggregates[aggregate.as] =
+            value == null || !computedDecimal
+              ? value
+              : (canonicalDecimal(value) ?? normalizeDecimal(grouped.model, aggregate.col!.name, value))
+        }
         return {
-          key: grouped.groups.map((_, index) => row[`__group${index}`]),
+          key: grouped.groups.map((group, index) => {
+            const value = row[`__group${index}`]
+            return value == null || group.interval || group.col.base !== 'decimal'
+              ? value
+              : (canonicalDecimal(value) ?? normalizeDecimal(grouped.model, group.col.name, value))
+          }),
           count: Number(row.__count),
           aggregates,
         }
@@ -438,17 +491,32 @@ export function createContext(o: {
     async select(model, where = {}) {
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
-      const open = scopeOf(model) === 'shared' || operation.crossCompany
+      const kind = scopeOf(model)
+      const open = kind === 'shared' || operation.crossCompany
       const keys = Object.keys(where)
       fresh()
-      const conds = keys.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`)
-      const params: unknown[] = keys.map((k) => where[k])
+      const conds = keys.map((k) => equalPredicate(model, k, where[k]))
+      const params: unknown[] = keys
+        .filter((k) => where[k] !== null)
+        .map((k) =>
+          manifest.models[model]?.fields[k]?.base === 'decimal'
+            ? normalizeDecimal(model, k, where[k])
+            : where[k],
+        )
       if (!open) {
         // A set, not a value: this is the one place the convenience path has to
         // part company with a plain `column = ?` map.
         const cs = readCompanies(model)
         conds.push(`${adapter.quoteIdent('companyId')} IN (${cs.map(() => ph()).join(', ')})`)
         params.push(...cs)
+        if (kind === 'company+branch' && scope.branches != null) {
+          if (scope.branches.length) {
+            conds.push(`${adapter.quoteIdent('branchId')} IN (${scope.branches.map(() => ph()).join(', ')})`)
+            params.push(...scope.branches)
+          } else {
+            conds.push('1 = 0')
+          }
+        }
       }
       const sql = `SELECT * FROM ${t}` + (conds.length ? ` WHERE ${conds.join(' AND ')}` : '')
       return decodeRows(model, await adapter.all(sql, params))
@@ -510,28 +578,38 @@ export function createContext(o: {
         })
       }
       if (!Object.keys(patch).length) return { changes: 0 }
+      // Dry-run returns before SQL encoding, but it is still a public write path and
+      // must reject values a real call could not store.
+      validateDecimalRow(model, where)
+      validateDecimalRow(model, patch)
       writes.push({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
-      const where3 = encodeRow(
-        model,
-        scopeOf(model) === 'shared' || operation.crossCompany
-          ? where
-          : { ...where, companyId: requireCompany(model) },
-      )
+      const kind = scopeOf(model)
+      const open = kind === 'shared' || operation.crossCompany
+      const where3 = encodeRow(model, open ? where : { ...where, companyId: requireCompany(model) })
       const patch2 = encodeRow(model, timestamped(model, patch, 'update'))
       const pk = Object.keys(patch2),
         wk = Object.keys(where3)
       fresh()
       const sets = pk.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`).join(', ')
       const boundWhere = wk.filter((k) => where3[k] !== null)
-      const conds = wk
-        .map((k) =>
-          where3[k] === null ? `${adapter.quoteIdent(k)} IS NULL` : `${adapter.quoteIdent(k)} = ${ph()}`,
-        )
-        .join(' AND ')
+      const conds = wk.map((k) => equalPredicate(model, k, where3[k]))
+      const branchParams = !open && kind === 'company+branch' ? scope.branches : null
+      if (branchParams != null) {
+        if (branchParams.length) {
+          conds.push(`${adapter.quoteIdent('branchId')} IN (${branchParams.map(() => ph()).join(', ')})`)
+        } else {
+          conds.push('1 = 0')
+        }
+      }
       const sql =
-        `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
-      return adapter.run(sql, [...pk.map((k) => patch2[k]), ...boundWhere.map((k) => where3[k])])
+        `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` +
+        (conds.length ? ` WHERE ${conds.join(' AND ')}` : '')
+      return adapter.run(sql, [
+        ...pk.map((k) => patch2[k]),
+        ...boundWhere.map((k) => where3[k]),
+        ...(branchParams ?? []),
+      ])
     },
     async compareAndSet(model, where, expected, patch) {
       const result = await db.update(model, { ...expected, ...where }, patch)

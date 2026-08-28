@@ -8,7 +8,8 @@
 import type { Adapter } from '../types.ts'
 
 export type PoolOptions = {
-  create(key: string): Adapter
+  /** Create a fresh adapter for this pool entry; the pool owns its open/close lifecycle. */
+  create(key: string): Adapter | Promise<Adapter>
   /** How many databases may stay open at once. */
   max?: number
   /** Close an idle database after this long. */
@@ -16,7 +17,7 @@ export type PoolOptions = {
   now?: () => number
 }
 
-type Entry = { adapter: Adapter; leases: number; lastUsed: number; opening: Promise<void> | null }
+type Entry = { adapter: Adapter | null; leases: number; lastUsed: number; opening: Promise<void> | null }
 
 export type AdapterPool = {
   acquire(key: string): Promise<Adapter>
@@ -33,36 +34,80 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
   const idleMs = o.idleMs ?? 5 * 60_000
   const now = o.now ?? (() => Date.now())
   const entries = new Map<string, Entry>()
+  const closing = new Set<Entry>()
+  // Admission is separate from leasing an existing entry. Opening another
+  // datastore may have to close an idle one first, and that closing connection
+  // still consumes capacity until close() settles. Serializing this small path
+  // keeps a later acquire from slipping into the temporarily empty Map slot.
+  let admissionTail: Promise<void> = Promise.resolve()
+  const withAdmission = async <T>(fn: () => Promise<T>): Promise<T> => {
+    const previous = admissionTail
+    let release!: () => void
+    admissionTail = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await previous
+    try {
+      return await fn()
+    } finally {
+      release()
+    }
+  }
 
   const evictOne = async (): Promise<boolean> => {
     let oldest: [string, Entry] | null = null
     for (const [k, e] of entries) {
-      if (e.leases > 0 || e.opening) continue
+      if (e.leases > 0 || e.opening || closing.has(e)) continue
       if (!oldest || e.lastUsed < oldest[1].lastUsed) oldest = [k, e]
     }
     if (!oldest) return false
-    entries.delete(oldest[0])
-    await oldest[1].adapter.close()
+    const [key, entry] = oldest
+    closing.add(entry)
+    try {
+      await entry.adapter?.close()
+    } finally {
+      // Keep the tombstone visible to size/open until close has settled. The
+      // admission lock keeps another datastore from claiming it meanwhile.
+      if (entries.get(key) === entry) entries.delete(key)
+      closing.delete(entry)
+    }
     return true
   }
 
   const acquire = async (key: string): Promise<Adapter> => {
     let e = entries.get(key)
+    if (e && closing.has(e)) e = undefined
     if (!e) {
-      // Make room before opening, never after: the cap is on connections actually held.
-      while (entries.size >= max) {
-        if (!(await evictOne())) {
-          throw new Error(`adapter pool is full (${entries.size}/${max}) and every database is in use`)
+      e = await withAdmission(async () => {
+        // Another acquire for this key may have won admission while we waited.
+        const admitted = entries.get(key)
+        if (admitted) return admitted
+
+        // Make room before opening, never after: the cap is on connections
+        // actually held, including a victim whose close() is still in flight.
+        while (entries.size >= max) {
+          if (!(await evictOne())) {
+            throw new Error(`adapter pool is full (${entries.size}/${max}) and every database is in use`)
+          }
         }
-      }
-      const adapter = o.create(key)
-      e = { adapter, leases: 0, lastUsed: now(), opening: null }
-      entries.set(key, e)
-      const entry = e
-      entry.opening = adapter.open().catch(async (error) => {
-        if (entries.get(key) === entry) entries.delete(key)
-        await adapter.close().catch(() => {})
-        throw error
+
+        const entry: Entry = { adapter: null, leases: 0, lastUsed: now(), opening: null }
+        entries.set(key, entry)
+        entry.opening = (async () => {
+          const adapter = await o.create(key)
+          entry.adapter = adapter
+          try {
+            await adapter.open()
+          } catch (error) {
+            await adapter.close().catch(() => {})
+            entry.adapter = null
+            throw error
+          }
+        })().catch((error) => {
+          if (entries.get(key) === entry) entries.delete(key)
+          throw error
+        })
+        return entry
       })
     }
     e.leases++
@@ -77,6 +122,7 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
       if (e.opening === opening) e.opening = null
     }
     e.lastUsed = now()
+    if (!e.adapter) throw new Error(`adapter pool failed to open "${key}"`)
     return e.adapter
   }
 
@@ -98,19 +144,29 @@ export function createAdapterPool(o: PoolOptions): AdapterPool {
         release(key)
       }
     },
-    async evictIdle() {
-      const cutoff = now() - idleMs
-      let n = 0
-      for (const [k, e] of [...entries]) {
-        if (e.leases > 0 || e.opening || e.lastUsed > cutoff) continue
-        entries.delete(k)
-        await e.adapter.close()
-        n++
-      }
-      return n
+    evictIdle() {
+      return withAdmission(async () => {
+        const cutoff = now() - idleMs
+        let n = 0
+        for (const [k, e] of [...entries]) {
+          if (e.leases > 0 || e.opening || closing.has(e) || e.lastUsed > cutoff) continue
+          closing.add(e)
+          try {
+            await e.adapter?.close()
+            n++
+          } finally {
+            if (entries.get(k) === e) entries.delete(k)
+            closing.delete(e)
+          }
+        }
+        return n
+      })
     },
     async close() {
-      for (const [, e] of entries) await e.adapter.close()
+      for (const [, e] of entries) {
+        if (e.opening) await e.opening.catch(() => {})
+        await e.adapter?.close()
+      }
       entries.clear()
     },
     get open() {

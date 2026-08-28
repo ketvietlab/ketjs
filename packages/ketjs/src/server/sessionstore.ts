@@ -16,6 +16,8 @@ import type { Adapter } from '../types.ts'
 /** What a session carries. Everything a request needs to know who it is. */
 export type SessionRecord = {
   id: string
+  /** Tenant binding for a shared session store. Null/absent means unbound. */
+  tenant?: string | null
   userId: string
   /** Companies this session may read — becomes scope.companies (D32). */
   companies: string[]
@@ -141,6 +143,7 @@ export function memorySessionStore(o: { now?: () => number } = {}): SessionStore
 const DDL = `
 CREATE TABLE IF NOT EXISTS ket_session (
   id          TEXT PRIMARY KEY,
+  tenant      TEXT,
   user_id     TEXT NOT NULL,
   companies   TEXT NOT NULL,
   company     TEXT,
@@ -170,6 +173,7 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
   const p = (n: number) => (pg ? `$${n}` : '?')
   const decode = (row: Record<string, unknown>): SessionRecord => ({
     id: String(row.id),
+    tenant: row.tenant === null || row.tenant === undefined ? null : String(row.tenant),
     userId: String(row.user_id),
     companies: JSON.parse(String(row.companies)) as string[],
     company: row.company === null || row.company === undefined ? null : String(row.company),
@@ -190,6 +194,7 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
       await adapter.exec(DDL)
       const columns = (await adapter.introspect()).ket_session ?? {}
       for (const [name, sql] of [
+        ['tenant', 'TEXT'],
         ['branch', 'TEXT'],
         ['security_version', 'INTEGER NOT NULL DEFAULT 0'],
         ['revision', 'INTEGER NOT NULL DEFAULT 0'],
@@ -201,10 +206,11 @@ export function dbSessionStore(adapter: Adapter, o: { now?: () => number } = {})
     async create(r) {
       await adapter.run(
         `INSERT INTO ket_session
-           (id, user_id, companies, company, branch, branches, security_version, revision, created_at, expires_at)
-         VALUES (${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)})`,
+           (id, tenant, user_id, companies, company, branch, branches, security_version, revision, created_at, expires_at)
+         VALUES (${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)}, ${p(11)})`,
         [
           r.id,
+          r.tenant ?? null,
           r.userId,
           JSON.stringify(r.companies),
           r.company,

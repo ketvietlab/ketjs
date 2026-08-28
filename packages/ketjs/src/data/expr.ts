@@ -6,8 +6,9 @@
 
 import { assertGroupInterval } from './time.ts'
 import type { GroupInterval } from './time.ts'
+import type { FieldBase } from '../types.ts'
 
-export type Col = { readonly model: string; readonly name: string }
+export type Col = { readonly model: string; readonly name: string; readonly base: FieldBase }
 
 export type Expr =
   | { readonly op: 'and'; readonly parts: Expr[] }
@@ -37,14 +38,35 @@ export type Expr =
       readonly value: string
     }
 
-const isCol = (c: unknown): c is Col =>
-  !!c && typeof c === 'object' && typeof (c as Col).model === 'string' && typeof (c as Col).name === 'string'
+const FIELD_BASES = new Set<FieldBase>([
+  'id',
+  'text',
+  'int',
+  'float',
+  'decimal',
+  'bool',
+  'json',
+  'date',
+  'datetime',
+  'ref',
+])
 
-const col = (c: Col): Col => {
-  if (!isCol(c))
-    throw new Error(`expected a column from table(), got ${JSON.stringify(c)} — did you use a plain string?`)
-  return c
+export const assertCol = (candidate: unknown): Col => {
+  const c = candidate as Partial<Col> | null
+  if (
+    !c ||
+    typeof c !== 'object' ||
+    typeof c.model !== 'string' ||
+    typeof c.name !== 'string' ||
+    !FIELD_BASES.has(c.base as FieldBase)
+  )
+    throw new Error(
+      `expected a column from table(), got ${JSON.stringify(candidate)} — typed column metadata must include model, name, and base`,
+    )
+  return c as Col
 }
+
+const col = assertCol
 
 export const eq = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '=', value })
 export const ne = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '<>', value })
