@@ -189,6 +189,7 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     ['/shifts/{id}/variance/approve', 'post', 'pos.shifts.variance.approve'],
     ['/orders', 'post', 'pos.orders.create'],
     ['/orders/{id}/detail', 'get', 'pos.orders.get'],
+    ['/orders/{id}/receipt', 'get', 'pos.orders.receipt.get'],
     ['/orders/{id}/return-eligibility', 'get', 'pos.orders.returnEligibility'],
     ['/orders/{id}/returns', 'post', 'pos.orders.returns.create'],
     ['/orders/{id}/exchanges', 'post', 'pos.orders.exchanges.create'],
@@ -222,6 +223,36 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     'uomId',
     'quantity',
     'quoteRevision',
+  ])
+  const getReceipt = document.paths['/orders/{id}/receipt']?.get as Row
+  const receiptResponses = getReceipt.responses as Row
+  const receiptContent = (receiptResponses['200'] as Row).content as Row
+  const receiptEnvelope = (receiptContent['application/json'] as Row).schema as Row
+  const receiptSchema = ((receiptEnvelope.properties as Row).data as Row).properties as Row
+  assert.deepEqual(Object.keys(receiptSchema).sort(), [
+    'contentHash',
+    'document',
+    'id',
+    'issuedAt',
+    'orderId',
+    'templateVersion',
+    'version',
+  ])
+  const receiptDocument = (receiptSchema.document as Row).properties as Row
+  assert.deepEqual(Object.keys(receiptDocument).sort(), [
+    'cashier',
+    'company',
+    'config',
+    'currency',
+    'customer',
+    'invoice',
+    'issuedAt',
+    'lines',
+    'order',
+    'schema',
+    'shift',
+    'tenders',
+    'totals',
   ])
   const selectLots = document.paths['/orders/{id}/lines/{lineId}/lot-selections']?.put as Row
   const selectLotsBody = (selectLots.requestBody as Row).content as Row
