@@ -74,14 +74,8 @@ test('account TT99: canonical manifest owns the statutory catalog and posting ma
   assert.equal(catalog.accounts.length, 216)
   assert.equal(catalog.taxes.length, 17)
   assert.match(TT99_CATALOG_CHECKSUM, /^[0-9a-f]{64}$/)
-  assert.equal(
-    TT99_CATALOG_CHECKSUM,
-    'c2ee5de7daf9b4f9e98f587875d1c374a4c249cd0cfce1262f13457f472cb805',
-  )
-  assert.equal(
-    TT99_ACCOUNT_CHECKSUM,
-    '62e0ccee163b4b4b336a7c9c6e28823a97f9ef16462e2b378e8133ca856c6b71',
-  )
+  assert.equal(TT99_CATALOG_CHECKSUM, 'c2ee5de7daf9b4f9e98f587875d1c374a4c249cd0cfce1262f13457f472cb805')
+  assert.equal(TT99_ACCOUNT_CHECKSUM, '62e0ccee163b4b4b336a7c9c6e28823a97f9ef16462e2b378e8133ca856c6b71')
   assert.equal(checksumTT99Catalog(), TT99_CATALOG_CHECKSUM)
   assert.doesNotThrow(() => assertTT99Catalog(catalog))
 
@@ -96,10 +90,7 @@ test('account TT99: canonical manifest owns the statutory catalog and posting ma
   assert.equal(new Set(catalog.accounts.map((item) => item.code)).size, catalog.accounts.length)
   assert.ok(catalog.accounts.every((item) => item.name.trim() && item.nameEn.trim()))
   assert.equal(new Set(catalog.taxes.map((item) => item.key)).size, catalog.taxes.length)
-  assert.equal(
-    new Set(catalog.taxes.map((item) => `${item.use}:${item.name}`)).size,
-    catalog.taxes.length,
-  )
+  assert.equal(new Set(catalog.taxes.map((item) => `${item.use}:${item.name}`)).size, catalog.taxes.length)
 
   const accounts = new Map(catalog.accounts.map((item) => [item.code, item]))
   assert.deepEqual(catalog.defaults, TT99_DEFAULT_ACCOUNTS)

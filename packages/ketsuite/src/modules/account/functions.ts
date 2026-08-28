@@ -1589,8 +1589,7 @@ export const functions: Record<string, FnSpec> = {
             throw new Refusal('moveConcurrent')
 
           const inserted = await tx.db.insertIfAbsent('account.MoveLine', row)
-          if ('dryRun' in inserted || inserted.inserted)
-            return { ok: true, id: args.id, existing: false }
+          if ('dryRun' in inserted || inserted.inserted) return { ok: true, id: args.id, existing: false }
           const held = (await tx.db.select('account.MoveLine', { id: args.id }))[0]
           if (!sameLine(held)) throw new Refusal('lineIdTaken')
           return { ok: true, id: args.id, existing: true }
