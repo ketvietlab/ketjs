@@ -366,7 +366,14 @@ export const assetCostingFunctions: Record<string, FnSpec> = {
         activatedAt: args.action === 'activate' ? now() : asset.activatedAt,
         revision: Number(asset.revision ?? 0) + 1,
       }
-      await ctx.db.update('account.Asset', { id: asset.id }, values)
+      const changed = await ctx.db.compareAndSet(
+        'account.Asset',
+        { id: asset.id },
+        { state: asset.state, revision: asset.revision ?? null },
+        values,
+      )
+      if (!('dryRun' in changed) && !changed.matched)
+        return failure('expectedRevision', 'assetConcurrent', 'asset changed concurrently')
       if (args.action === 'activate') {
         const scheduled = await scheduleAsset(ctx, { ...asset, ...values })
         if (scheduled.ok !== true) return scheduled
@@ -519,28 +526,54 @@ export const assetCostingFunctions: Record<string, FnSpec> = {
       const line = (await ctx.db.select('account.AssetScheduleLine', { id: args.id }))[0]
       if (!line?.moveId) return failure('id', 'assetScheduleMissing', 'draft schedule line does not exist')
       if (line.state === 'posted') return { ok: true, id: line.id, existing: true }
+      if (line.state !== 'draft')
+        return failure('id', 'assetScheduleStateInvalid', 'only a draft schedule line can be posted')
       const posted = await callCore('postMove', ctx, {
         id: line.moveId,
         expectedRevision: args.expectedMoveRevision,
       })
       if (posted.ok !== true) return posted
-      const asset = (await ctx.db.select('account.Asset', { id: line.assetId }))[0]
-      if (!asset) return failure('assetId', 'assetMissing', 'asset does not exist')
-      const { scale } = await ledgerOf(ctx)
-      const accumulated = moneyMinor(asset.accumulatedAmount, scale) + moneyMinor(line.amount, scale)
-      const carrying = moneyMinor(asset.originalCost, scale) - accumulated
-      const before = snapshotOf(asset)
-      const values = {
-        accumulatedAmount: minorText(accumulated, scale),
-        carryingValue: minorText(carrying, scale),
-        revision: Number(asset.revision ?? 0) + 1,
+      const concurrent = new Error('asset schedule changed concurrently')
+      try {
+        return await ctx.tx(async (tx) => {
+          const current = (await tx.db.select('account.AssetScheduleLine', { id: line.id }))[0]
+          if (current?.state === 'posted') return { ok: true, id: line.id, existing: true }
+          if (current?.state !== 'draft' || current.moveId !== line.moveId) throw concurrent
+          const asset = (await tx.db.select('account.Asset', { id: current.assetId }))[0]
+          if (!asset) return failure('assetId', 'assetMissing', 'asset does not exist')
+          const { scale } = await ledgerOf(tx)
+          const accumulated = moneyMinor(asset.accumulatedAmount, scale) + moneyMinor(current.amount, scale)
+          const carrying = moneyMinor(asset.originalCost, scale) - accumulated
+          const before = snapshotOf(asset)
+          const values = {
+            accumulatedAmount: minorText(accumulated, scale),
+            carryingValue: minorText(carrying, scale),
+            revision: Number(asset.revision ?? 0) + 1,
+          }
+          const lineChanged = await tx.db.compareAndSet(
+            'account.AssetScheduleLine',
+            { id: current.id },
+            { state: 'draft', moveId: current.moveId },
+            { state: 'posted' },
+          )
+          if (!('dryRun' in lineChanged) && !lineChanged.matched) throw concurrent
+          const assetChanged = await tx.db.compareAndSet(
+            'account.Asset',
+            { id: asset.id },
+            { revision: asset.revision ?? null },
+            values,
+          )
+          if (!('dryRun' in assetChanged) && !assetChanged.matched) throw concurrent
+          await auditAsset(tx, asset, 'schedule_posted', before, snapshotOf({ ...asset, ...values }), {
+            relatedId: current.moveId,
+          })
+          return { ok: true, id: current.id, moveId: current.moveId }
+        })
+      } catch (error) {
+        if (error === concurrent)
+          return failure('id', 'assetConcurrent', 'asset schedule changed concurrently')
+        throw error
       }
-      await ctx.db.update('account.AssetScheduleLine', { id: line.id }, { state: 'posted' })
-      await ctx.db.update('account.Asset', { id: asset.id }, values)
-      await auditAsset(ctx, asset, 'schedule_posted', before, snapshotOf({ ...asset, ...values }), {
-        relatedId: line.moveId,
-      })
-      return { ok: true, id: line.id, moveId: line.moveId }
     },
   }),
   proposeAssetChange: defineFn({
