@@ -29,6 +29,22 @@ export const models: Record<string, ModelDef> = {
     fields: { id: 'id', configId: 'ref:pos.Config', paymentMethodId: 'ref:pos.PaymentMethod' },
     indexes: { config_method: { fields: ['companyId', 'configId', 'paymentMethodId'], unique: true } },
   },
+  ProviderPaymentLock: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      orderId: 'ref:pos.Order',
+      paymentMethodId: 'ref:pos.PaymentMethod',
+      amount: 'decimal',
+      currency: 'text',
+      state: 'text',
+      settledPaymentId: 'ref:pos.Payment?',
+      reversalPaymentId: 'ref:pos.Payment?',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: { order_state: { fields: ['companyId', 'orderId', 'state'] } },
+  },
   Session: {
     scope: 'company',
     fields: {
@@ -93,6 +109,9 @@ export const models: Record<string, ModelDef> = {
       returnComplete: 'bool?',
       exchangeId: 'ref:pos.Exchange?',
       exchangeRole: 'text?',
+      paymentLockId: 'text?',
+      paymentLockMethodId: 'ref:pos.PaymentMethod?',
+      paymentLockAmount: 'decimal?',
       dateOrder: 'datetime',
       currency: 'text',
       amountUntaxed: 'decimal',
@@ -115,6 +134,7 @@ export const models: Record<string, ModelDef> = {
       company_uuid: { fields: ['companyId', 'uuid'], unique: true },
       session_sequence: { fields: ['companyId', 'sessionId', 'sequenceNumber'], unique: true },
       exchange_role: { fields: ['companyId', 'exchangeId', 'exchangeRole'], unique: true },
+      payment_lock: { fields: ['companyId', 'paymentLockId'], unique: true },
     },
   },
   OrderLine: {
@@ -155,9 +175,15 @@ export const models: Record<string, ModelDef> = {
       state: 'text',
       kind: 'text',
       reference: 'text?',
+      providerAttemptId: 'text?',
+      reversalOfId: 'ref:pos.Payment?',
       operatorId: 'text?',
       deviceId: 'text?',
       paymentDate: 'datetime',
+    },
+    indexes: {
+      provider_attempt: { fields: ['companyId', 'providerAttemptId'], unique: true },
+      provider_reversal: { fields: ['companyId', 'reversalOfId'], unique: true },
     },
   },
   CashAdjustment: {

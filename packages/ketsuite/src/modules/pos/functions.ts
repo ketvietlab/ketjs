@@ -23,6 +23,10 @@ const decimal = (value: number) => String(money(value))
 const now = () => new Date().toISOString()
 
 type RevisionClaim = { ok: true; order: Row; revision: number } | ReturnType<typeof invalid>
+type ProviderFinalizationClaim =
+  | { ok: true; order: Row; revision: number; leaseToken: string }
+  | ReturnType<typeof invalid>
+const PROVIDER_FINALIZATION_LEASE_MS = 5 * 60_000
 
 class AtomicFailure extends Error {
   readonly result: Row
@@ -81,6 +85,122 @@ export async function claimDraftRevision(
   if (!('dryRun' in changed) && !changed.matched)
     return invalid('expectedRevision', 'the order changed; reload it before continuing')
   return { ok: true, order, revision: current + 1 }
+}
+
+async function providerSettlementReplay(ctx: Ctx, args: Row): Promise<Row | null> {
+  const attemptId = String(args.providerAttemptId ?? '').trim()
+  const [byId, byAttempt, order, reservation] = await Promise.all([
+    ctx.db.select('pos.Payment', { id: args.id }),
+    ctx.db.select('pos.Payment', { providerAttemptId: attemptId }),
+    ctx.db.select('pos.Order', { id: args.orderId }),
+    ctx.db.select('pos.ProviderPaymentLock', { id: attemptId }),
+  ])
+  if (byId[0] && byAttempt[0] && byId[0].id !== byAttempt[0].id)
+    return invalid('providerAttemptId', 'provider attempt is already linked to another tender')
+  const existing = byId[0] ?? byAttempt[0]
+  if (!existing) return null
+  const currentOrder = order[0]
+  const lock = reservation[0]
+  const same =
+    Boolean(currentOrder) &&
+    existing.id === args.id &&
+    existing.orderId === args.orderId &&
+    existing.paymentMethodId === args.paymentMethodId &&
+    existing.kind === 'provider' &&
+    (existing.state ?? 'captured') === 'captured' &&
+    existing.reversalOfId == null &&
+    n(existing.appliedAmount ?? existing.amount) === n(args.amount) &&
+    String(existing.providerAttemptId ?? '') === attemptId &&
+    String(existing.reference ?? '') === String(args.providerReference ?? '').trim() &&
+    currentOrder.currency === String(args.currency) &&
+    String(currentOrder.paymentLockId ?? '') === attemptId &&
+    lock?.orderId === args.orderId &&
+    lock.paymentMethodId === args.paymentMethodId &&
+    n(lock.amount) === n(args.amount) &&
+    lock.currency === String(args.currency) &&
+    ['settled', 'finalizing', 'finalized'].includes(String(lock.state)) &&
+    lock.settledPaymentId === existing.id
+  return same
+    ? {
+        ok: true,
+        id: existing.id,
+        revision: n(currentOrder!.revision),
+        appliedAmount: existing.appliedAmount ?? existing.amount,
+        providerAttemptId: attemptId,
+      }
+    : invalid('id', 'provider tender id is already used by a different settlement')
+}
+
+async function claimProviderFinalization(
+  ctx: Ctx,
+  id: unknown,
+  providerAttemptId: string,
+  expectedRevision?: unknown,
+): Promise<ProviderFinalizationClaim> {
+  return (await atomic(ctx, async (tx) => {
+    const order = (await tx.db.select('pos.Order', { id }))[0]
+    if (!order) return invalid('orderId', 'order does not exist')
+    if (order.state !== 'draft') return invalid('state', 'only a draft order can be finalized')
+    const current = n(order.revision)
+    const reservation = (await tx.db.select('pos.ProviderPaymentLock', { id: providerAttemptId }))[0]
+    const payment = (await tx.db.select('pos.Payment', { providerAttemptId }))[0]
+    if (
+      String(order.paymentLockId ?? '') !== providerAttemptId ||
+      !reservation ||
+      !['settled', 'finalizing'].includes(String(reservation.state)) ||
+      reservation.orderId !== order.id ||
+      reservation.paymentMethodId !== order.paymentLockMethodId ||
+      n(reservation.amount) !== n(order.paymentLockAmount) ||
+      reservation.currency !== order.currency ||
+      reservation.settledPaymentId !== payment?.id ||
+      payment?.orderId !== order.id ||
+      payment.paymentMethodId !== reservation.paymentMethodId ||
+      payment.kind !== 'provider' ||
+      payment.state !== 'captured' ||
+      payment.reversalOfId != null
+    )
+      return invalid('paymentLockId', 'external payment is still pending reconciliation')
+    if (reservation.state === 'finalizing') {
+      const leaseAge = Date.now() - Date.parse(String(reservation.updatedAt ?? ''))
+      if (!Number.isFinite(leaseAge) || leaseAge < PROVIDER_FINALIZATION_LEASE_MS)
+        return invalid('paymentLockId', 'external payment finalization is already in progress')
+      if (
+        expectedRevision !== undefined &&
+        ![current, Math.max(0, current - 1)].includes(n(expectedRevision))
+      )
+        return invalid('expectedRevision', 'the order changed; reload it before continuing')
+      const leaseToken = now()
+      const resumed = await tx.db.compareAndSet(
+        'pos.ProviderPaymentLock',
+        { id: providerAttemptId },
+        { state: 'finalizing', updatedAt: reservation.updatedAt },
+        { updatedAt: leaseToken },
+      )
+      if (!('dryRun' in resumed) && !resumed.matched)
+        return invalid('paymentLockId', 'external payment finalization recovery was already claimed')
+      return { ok: true, order, revision: current, leaseToken }
+    }
+    if (expectedRevision !== undefined && n(expectedRevision) !== current)
+      return invalid('expectedRevision', 'the order changed; reload it before continuing')
+    const leaseToken = now()
+    const lockChanged = await tx.db.compareAndSet(
+      'pos.ProviderPaymentLock',
+      { id: providerAttemptId },
+      { state: 'settled' },
+      { state: 'finalizing', updatedAt: leaseToken },
+    )
+    if (!('dryRun' in lockChanged) && !lockChanged.matched)
+      return invalid('paymentLockId', 'external payment reconciliation changed before finalization')
+    const orderChanged = await tx.db.compareAndSet(
+      'pos.Order',
+      { id: order.id },
+      { revision: order.revision ?? null },
+      { revision: current + 1 },
+    )
+    if (!('dryRun' in orderChanged) && !orderChanged.matched)
+      return invalid('expectedRevision', 'the order changed; reload it before continuing')
+    return { ok: true, order, revision: current + 1, leaseToken }
+  })) as ProviderFinalizationClaim
 }
 
 async function claimOrderRevision(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<RevisionClaim> {
@@ -1307,6 +1427,7 @@ export const functions: Record<string, FnSpec> = {
         return invalid('lineId', 'line does not belong to this order')
       if (order.state !== 'draft' || order.isRefund)
         return invalid('orderId', 'lot/serial selection is only editable on a new sale')
+      if (order.paymentLockId) return invalid('orderId', 'order is locked by an external payment attempt')
       if (!Array.isArray(args.selections)) return invalid('selections', 'selections must be an array')
       const availability = await trackingAvailability(ctx, order, line)
       const tracking = String(availability.tracking)
@@ -1471,6 +1592,7 @@ export const functions: Record<string, FnSpec> = {
       const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
       if (order?.state !== 'draft' || order.isRefund)
         return invalid('orderId', 'products can only be added to a new non-refund order')
+      if (order.paymentLockId) return invalid('orderId', 'order is locked by an external payment attempt')
       if (!(n(args.qty) > 0)) return invalid('qty', 'quantity must be positive')
       const sellable = await sellableProduct(ctx, args.productId, args.productUomId)
       if (!sellable.ok)
@@ -1557,6 +1679,7 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('pos.Order', { id: args.id }))[0]
+      if (order?.paymentLockId) return invalid('id', 'order is locked by an external payment attempt')
       if (order?.isRefund && (args.partnerId || args.clearPartner))
         return invalid('partnerId', 'a return must keep the original invoice customer')
       if (args.partnerId && !(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
@@ -1617,6 +1740,7 @@ export const functions: Record<string, FnSpec> = {
       if (!line || line.orderId !== args.orderId) return invalid('id', 'line does not belong to this order')
       if (order?.state !== 'draft' || order.isRefund)
         return invalid('orderId', 'only a new non-refund order can be changed')
+      if (order.paymentLockId) return invalid('orderId', 'order is locked by an external payment attempt')
       if (!(n(args.qty) > 0)) return invalid('qty', 'quantity must be positive')
       const sellable = await sellableProduct(ctx, line.productId, line.productUomId)
       if (!sellable.ok) return invalid(sellable.field, sellable.message)
@@ -1692,6 +1816,7 @@ export const functions: Record<string, FnSpec> = {
       if (line.orderId !== args.orderId) return invalid('id', 'line does not belong to this order')
       const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
       if (order?.isRefund) return invalid('orderId', 'return lines are immutable')
+      if (order?.paymentLockId) return invalid('orderId', 'order is locked by an external payment attempt')
       const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
       if (claim.ok !== true) return claim
       const L = ctx.table('pos.OrderLine')
@@ -1710,6 +1835,7 @@ export const functions: Record<string, FnSpec> = {
       if (!Array.isArray(args.lineIds)) return invalid('lineIds', 'lineIds must be an array')
       const order = (await ctx.db.select('pos.Order', { id: args.id }))[0]
       if (order?.isRefund) return invalid('id', 'return lines are immutable')
+      if (order?.paymentLockId) return invalid('id', 'order is locked by an external payment attempt')
       const lines = await ctx.db.select('pos.OrderLine', { orderId: args.id })
       const wanted = args.lineIds.map(String)
       if (
@@ -1759,6 +1885,7 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
       if (order?.state !== 'draft') return invalid('orderId', 'payments can only be added to a new order')
+      if (order.paymentLockId) return invalid('orderId', 'order is locked by an external payment attempt')
       const tendered = n(args.tenderedAmount ?? args.amount)
       if ((order.isRefund && tendered >= 0) || (!order.isRefund && tendered <= 0))
         return invalid(
@@ -1822,6 +1949,7 @@ export const functions: Record<string, FnSpec> = {
         state: 'captured',
         kind: method.isCash ? 'cash' : 'manual',
         reference: args.reference ?? null,
+        providerAttemptId: null,
         operatorId: args.operatorId ?? null,
         deviceId: args.deviceId ?? null,
         paymentDate: now(),
@@ -1835,6 +1963,530 @@ export const functions: Record<string, FnSpec> = {
         change: decimal(tendered - applied),
       }
     },
+  }),
+  lockProviderPayment: defineFn({
+    exposure: 'internal',
+    input: {
+      orderId: 'id',
+      paymentMethodId: 'id',
+      amount: 'decimal',
+      providerAttemptId: 'text',
+      expectedRevision: 'int',
+    },
+    output: {
+      ok: 'bool',
+      orderId: 'id?',
+      revision: 'int?',
+      amount: 'decimal?',
+      currency: 'text?',
+      configId: 'id?',
+      errors: 'json?',
+    },
+    effects: [
+      'read:pos.Order',
+      'write:pos.Order',
+      'read:pos.ProviderPaymentLock',
+      'write:pos.ProviderPaymentLock',
+      'read:pos.ConfigPaymentMethod',
+      'read:pos.PaymentMethod',
+      'read:pos.Payment',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      atomic(ctx, async (tx) => {
+        const attemptId = String(args.providerAttemptId ?? '').trim()
+        if (!attemptId) return invalid('providerAttemptId', 'provider attempt id is required')
+        const order = (await tx.db.select('pos.Order', { id: args.orderId }))[0]
+        if (!order) return invalid('orderId', 'order does not exist')
+        const amount = n(args.amount)
+        if ((order.isRefund && amount >= 0) || (!order.isRefund && amount <= 0))
+          return invalid(
+            'amount',
+            order.isRefund ? 'refund amount must be negative' : 'amount must be positive',
+          )
+        const reservation = (await tx.db.select('pos.ProviderPaymentLock', { id: attemptId }))[0]
+        if (reservation) {
+          const same =
+            reservation.orderId === args.orderId &&
+            reservation.paymentMethodId === args.paymentMethodId &&
+            n(reservation.amount) === amount &&
+            reservation.currency === order.currency
+          if (!same)
+            return invalid('providerAttemptId', 'provider attempt is bound to another payment intent')
+          if (!['locked', 'settled', 'finalizing', 'finalized'].includes(String(reservation.state)))
+            return invalid('providerAttemptId', 'provider attempt can no longer lock this order')
+          if (String(order.paymentLockId ?? '') !== attemptId)
+            return invalid('providerAttemptId', 'provider attempt lock membership is inconsistent')
+          return {
+            ok: true,
+            orderId: order.id,
+            revision: n(order.revision),
+            amount: decimal(amount),
+            currency: order.currency,
+            configId: order.configId,
+          }
+        }
+        if (order.state !== 'draft') return invalid('orderId', 'only a draft order can be locked')
+        if (order.paymentLockId) {
+          return invalid('providerAttemptId', 'order is already locked by another payment attempt')
+        }
+        const linked = (
+          await tx.db.select('pos.ConfigPaymentMethod', {
+            configId: order.configId,
+            paymentMethodId: args.paymentMethodId,
+          })
+        )[0]
+        const method = (await tx.db.select('pos.PaymentMethod', { id: args.paymentMethodId }))[0]
+        if (!linked || !method || method.isCash || method.active === false)
+          return invalid('paymentMethodId', 'provider payment requires a configured non-cash method')
+        const captured = (await tx.db.select('pos.Payment', { orderId: args.orderId })).filter(
+          (payment) => (payment.state ?? 'captured') === 'captured',
+        )
+        const remaining = Math.max(
+          0,
+          Math.abs(n(order.amountTotal)) -
+            captured.reduce((sum, payment) => sum + Math.abs(n(payment.appliedAmount ?? payment.amount)), 0),
+        )
+        if (remaining <= 0.000001 || Math.abs(Math.abs(amount) - remaining) > 0.000001)
+          return invalid('amount', 'provider attempt must cover the exact remaining payable')
+        const createdAt = now()
+        const inserted = await tx.db.insertIfAbsent('pos.ProviderPaymentLock', {
+          id: attemptId,
+          orderId: args.orderId,
+          paymentMethodId: args.paymentMethodId,
+          amount: decimal(amount),
+          currency: order.currency,
+          state: 'locked',
+          settledPaymentId: null,
+          reversalPaymentId: null,
+          createdAt,
+          updatedAt: createdAt,
+        })
+        if (!('dryRun' in inserted) && !inserted.inserted) {
+          const winner = (await tx.db.select('pos.ProviderPaymentLock', { id: attemptId }))[0]
+          const currentOrder = (await tx.db.select('pos.Order', { id: args.orderId }))[0]
+          const same =
+            winner?.orderId === args.orderId &&
+            winner.paymentMethodId === args.paymentMethodId &&
+            n(winner.amount) === amount &&
+            winner.currency === order.currency &&
+            ['locked', 'settled', 'finalizing', 'finalized'].includes(String(winner.state)) &&
+            String(currentOrder?.paymentLockId ?? '') === attemptId
+          return same
+            ? {
+                ok: true,
+                orderId: currentOrder!.id,
+                revision: n(currentOrder!.revision),
+                amount: decimal(amount),
+                currency: order.currency,
+                configId: currentOrder!.configId,
+              }
+            : invalid('providerAttemptId', 'provider attempt is bound to another payment intent')
+        }
+        const claim = await claimDraftRevision(tx, args.orderId, args.expectedRevision)
+        if (claim.ok !== true) return claim
+        await tx.db.update(
+          'pos.Order',
+          { id: args.orderId },
+          {
+            paymentLockId: attemptId,
+            paymentLockMethodId: args.paymentMethodId,
+            paymentLockAmount: decimal(amount),
+          },
+        )
+        return {
+          ok: true,
+          orderId: order.id,
+          revision: claim.revision,
+          amount: decimal(amount),
+          currency: order.currency,
+          configId: order.configId,
+        }
+      }),
+  }),
+  unlockProviderPayment: defineFn({
+    exposure: 'internal',
+    input: { orderId: 'id', providerAttemptId: 'text', expectedRevision: 'int' },
+    output: { ok: 'bool', orderId: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:pos.Order',
+      'write:pos.Order',
+      'read:pos.ProviderPaymentLock',
+      'write:pos.ProviderPaymentLock',
+      'read:pos.Payment',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      atomic(ctx, async (tx) => {
+        const attemptId = String(args.providerAttemptId ?? '').trim()
+        if (!attemptId) return invalid('providerAttemptId', 'provider attempt id is required')
+        const order = (await tx.db.select('pos.Order', { id: args.orderId }))[0]
+        if (!order) return invalid('orderId', 'order does not exist')
+        const reservation = (await tx.db.select('pos.ProviderPaymentLock', { id: attemptId }))[0]
+        if (!order.paymentLockId) {
+          return reservation?.orderId === args.orderId && reservation.state === 'released'
+            ? { ok: true, orderId: order.id, revision: n(order.revision) }
+            : invalid('providerAttemptId', 'payment attempt does not own an active order lock')
+        }
+        if (String(order.paymentLockId) !== attemptId)
+          return invalid('providerAttemptId', 'payment attempt does not own the order lock')
+        if (
+          !reservation ||
+          reservation.orderId !== args.orderId ||
+          reservation.state !== 'locked' ||
+          reservation.paymentMethodId !== order.paymentLockMethodId ||
+          n(reservation.amount) !== n(order.paymentLockAmount) ||
+          reservation.currency !== order.currency
+        )
+          return invalid('providerAttemptId', 'provider attempt lock membership is inconsistent')
+        if ((await tx.db.select('pos.Payment', { providerAttemptId: attemptId }))[0])
+          return invalid('providerAttemptId', 'a settled provider payment cannot be unlocked')
+        const claim = await claimDraftRevision(tx, args.orderId, args.expectedRevision)
+        if (claim.ok !== true) return claim
+        await tx.db.update(
+          'pos.Order',
+          { id: args.orderId },
+          { paymentLockId: null, paymentLockMethodId: null, paymentLockAmount: null },
+        )
+        await tx.db.update(
+          'pos.ProviderPaymentLock',
+          { id: attemptId },
+          { state: 'released', updatedAt: now() },
+        )
+        return { ok: true, orderId: order.id, revision: claim.revision }
+      }),
+  }),
+  settleProviderPayment: defineFn({
+    exposure: 'internal',
+    input: {
+      id: 'id',
+      orderId: 'id',
+      paymentMethodId: 'id',
+      amount: 'decimal',
+      currency: 'text',
+      providerAttemptId: 'text',
+      providerReference: 'text',
+      operatorId: 'text?',
+      deviceId: 'text?',
+      expectedRevision: 'int',
+    },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      revision: 'int?',
+      appliedAmount: 'decimal?',
+      providerAttemptId: 'text?',
+      errors: 'json?',
+    },
+    effects: [
+      'read:pos.Order',
+      'read:pos.ConfigPaymentMethod',
+      'read:pos.PaymentMethod',
+      'read:pos.Payment',
+      'write:pos.Payment',
+      'read:pos.ProviderPaymentLock',
+      'write:pos.ProviderPaymentLock',
+      'read:pos.OrderLine',
+      'write:pos.Order',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      atomic(ctx, async (tx) => {
+        const attemptId = String(args.providerAttemptId ?? '').trim()
+        const reference = String(args.providerReference ?? '').trim()
+        if (!attemptId) return invalid('providerAttemptId', 'provider attempt id is required')
+        if (!reference) return invalid('providerReference', 'provider settlement reference is required')
+        const order = (await tx.db.select('pos.Order', { id: args.orderId }))[0]
+        if (!order) return invalid('orderId', 'order does not exist')
+        if (String(args.currency) !== String(order.currency))
+          return invalid('currency', 'provider settlement currency does not match the locked order')
+        const amount = n(args.amount)
+        if ((order.isRefund && amount >= 0) || (!order.isRefund && amount <= 0))
+          return invalid(
+            'amount',
+            order.isRefund ? 'provider refunds must be negative' : 'provider payments must be positive',
+          )
+        const replay = await providerSettlementReplay(tx, args)
+        if (replay) return replay
+        if (order.state !== 'draft') return invalid('orderId', 'payments can only settle a new order')
+        const linked = (
+          await tx.db.select('pos.ConfigPaymentMethod', {
+            configId: order.configId,
+            paymentMethodId: args.paymentMethodId,
+          })
+        )[0]
+        const method = (await tx.db.select('pos.PaymentMethod', { id: args.paymentMethodId }))[0]
+        if (!linked || !method || method.isCash || method.active === false)
+          return invalid('paymentMethodId', 'provider settlement requires a configured non-cash method')
+        const reservation = (await tx.db.select('pos.ProviderPaymentLock', { id: attemptId }))[0]
+        if (
+          String(order.paymentLockId ?? '') !== attemptId ||
+          String(order.paymentLockMethodId ?? '') !== String(args.paymentMethodId) ||
+          n(order.paymentLockAmount) !== amount ||
+          !reservation ||
+          reservation.orderId !== args.orderId ||
+          reservation.paymentMethodId !== args.paymentMethodId ||
+          n(reservation.amount) !== amount ||
+          reservation.currency !== args.currency ||
+          reservation.state !== 'locked'
+        )
+          return invalid('providerAttemptId', 'provider attempt does not own the current order lock')
+        const captured = (await tx.db.select('pos.Payment', { orderId: args.orderId })).filter(
+          (payment) => (payment.state ?? 'captured') === 'captured',
+        )
+        const remaining = Math.max(
+          0,
+          Math.abs(n(order.amountTotal)) -
+            captured.reduce((sum, payment) => sum + Math.abs(n(payment.appliedAmount ?? payment.amount)), 0),
+        )
+        if (remaining <= 0.000001) return invalid('amount', 'the order is already fully covered')
+        if (Math.abs(Math.abs(amount) - remaining) > 0.000001)
+          return invalid('amount', 'provider settlement must equal the locked remaining payable')
+        const claim = await claimDraftRevision(tx, args.orderId, args.expectedRevision)
+        if (claim.ok !== true) {
+          const converged = await providerSettlementReplay(tx, args)
+          return converged?.ok === true ? converged : claim
+        }
+        await tx.db.insert('pos.Payment', {
+          id: args.id,
+          orderId: args.orderId,
+          paymentMethodId: args.paymentMethodId,
+          amount: decimal(amount),
+          tenderedAmount: decimal(amount),
+          appliedAmount: decimal(amount),
+          state: 'captured',
+          kind: 'provider',
+          reference,
+          providerAttemptId: attemptId,
+          reversalOfId: null,
+          operatorId: args.operatorId ?? null,
+          deviceId: args.deviceId ?? null,
+          paymentDate: now(),
+        })
+        await recompute(tx, args.orderId)
+        await tx.db.update(
+          'pos.ProviderPaymentLock',
+          { id: attemptId },
+          { state: 'settled', settledPaymentId: args.id, updatedAt: now() },
+        )
+        return {
+          ok: true,
+          id: args.id,
+          revision: claim.revision,
+          appliedAmount: decimal(amount),
+          providerAttemptId: attemptId,
+        }
+      }),
+  }),
+  reviewProviderPayment: defineFn({
+    exposure: 'internal',
+    input: {
+      orderId: 'id',
+      providerAttemptId: 'text',
+      state: 'text',
+      expectedRevision: 'int',
+    },
+    output: { ok: 'bool', orderId: 'id?', revision: 'int?', state: 'text?', errors: 'json?' },
+    effects: [
+      'read:pos.Order',
+      'write:pos.Order',
+      'read:pos.Payment',
+      'read:pos.ProviderPaymentLock',
+      'write:pos.ProviderPaymentLock',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      atomic(ctx, async (tx) => {
+        const attemptId = String(args.providerAttemptId ?? '').trim()
+        const targetState = String(args.state ?? '').trim()
+        if (!attemptId) return invalid('providerAttemptId', 'provider attempt id is required')
+        if (!['needs_review', 'reversing'].includes(targetState))
+          return invalid('state', 'provider review state must be needs_review or reversing')
+        const order = (await tx.db.select('pos.Order', { id: args.orderId }))[0]
+        if (!order) return invalid('orderId', 'order does not exist')
+        const reservation = (await tx.db.select('pos.ProviderPaymentLock', { id: attemptId }))[0]
+        const payment = (await tx.db.select('pos.Payment', { providerAttemptId: attemptId }))[0]
+        if (
+          order.state !== 'draft' ||
+          String(order.paymentLockId ?? '') !== attemptId ||
+          !reservation ||
+          reservation.orderId !== order.id ||
+          reservation.paymentMethodId !== order.paymentLockMethodId ||
+          n(reservation.amount) !== n(order.paymentLockAmount) ||
+          reservation.currency !== order.currency ||
+          reservation.settledPaymentId !== payment?.id ||
+          payment?.orderId !== order.id ||
+          payment.paymentMethodId !== reservation.paymentMethodId ||
+          payment.kind !== 'provider' ||
+          payment.state !== 'captured' ||
+          payment.reversalOfId != null
+        )
+          return invalid('providerAttemptId', 'captured provider settlement is not reviewable')
+        if (reservation.state === targetState)
+          return {
+            ok: true,
+            orderId: order.id,
+            revision: n(order.revision),
+            state: targetState,
+          }
+        const allowed =
+          (targetState === 'needs_review' && reservation.state === 'settled') ||
+          (targetState === 'reversing' && reservation.state === 'needs_review')
+        if (!allowed)
+          return invalid('state', 'provider payment review state cannot move backwards or be reopened')
+        const claim = await claimDraftRevision(tx, order.id, args.expectedRevision)
+        if (claim.ok !== true) return claim
+        const changed = await tx.db.compareAndSet(
+          'pos.ProviderPaymentLock',
+          { id: attemptId },
+          { state: reservation.state },
+          { state: targetState, updatedAt: now() },
+        )
+        if (!('dryRun' in changed) && !changed.matched)
+          return invalid('state', 'provider payment reconciliation changed; reload it before continuing')
+        return { ok: true, orderId: order.id, revision: claim.revision, state: targetState }
+      }),
+  }),
+  reverseProviderPayment: defineFn({
+    exposure: 'internal',
+    input: {
+      id: 'id',
+      orderId: 'id',
+      providerAttemptId: 'text',
+      providerReversalId: 'text',
+      amount: 'decimal',
+      currency: 'text',
+      reversalReference: 'text',
+      expectedRevision: 'int',
+      operatorId: 'text?',
+    },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      revision: 'int?',
+      reversedPaymentId: 'id?',
+      appliedAmount: 'decimal?',
+      errors: 'json?',
+    },
+    effects: [
+      'read:pos.Order',
+      'write:pos.Order',
+      'read:pos.Payment',
+      'write:pos.Payment',
+      'read:pos.ProviderPaymentLock',
+      'write:pos.ProviderPaymentLock',
+      'read:pos.OrderLine',
+    ],
+    idempotent: true,
+    handler: (ctx, args) =>
+      atomic(ctx, async (tx) => {
+        const attemptId = String(args.providerAttemptId ?? '').trim()
+        const reversalId = String(args.providerReversalId ?? '').trim()
+        const reference = String(args.reversalReference ?? '').trim()
+        if (!attemptId) return invalid('providerAttemptId', 'provider attempt id is required')
+        if (!reversalId || reversalId === attemptId)
+          return invalid('providerReversalId', 'provider reversal id must be distinct and non-empty')
+        if (!reference) return invalid('reversalReference', 'provider reversal reference is required')
+        const order = (await tx.db.select('pos.Order', { id: args.orderId }))[0]
+        if (!order) return invalid('orderId', 'order does not exist')
+        if (String(args.currency) !== String(order.currency))
+          return invalid('currency', 'provider reversal currency does not match the order')
+        const original = (await tx.db.select('pos.Payment', { providerAttemptId: attemptId }))[0]
+        if (
+          !original ||
+          original.orderId !== args.orderId ||
+          original.kind !== 'provider' ||
+          original.reversalOfId != null
+        )
+          return invalid('providerAttemptId', 'captured provider tender does not belong to this order')
+        const amount = n(args.amount)
+        if (amount === 0 || n(original.appliedAmount ?? original.amount) !== amount)
+          return invalid('amount', 'provider reversal must exactly match the captured tender')
+        const byId = (await tx.db.select('pos.Payment', { id: args.id }))[0]
+        const byOriginal = (await tx.db.select('pos.Payment', { reversalOfId: original.id }))[0]
+        if (byId && byOriginal && byId.id !== byOriginal.id)
+          return invalid('id', 'provider tender is already linked to another reversal')
+        const existing = byId ?? byOriginal
+        const reservation = (await tx.db.select('pos.ProviderPaymentLock', { id: attemptId }))[0]
+        if (existing) {
+          const same =
+            existing.id === args.id &&
+            existing.orderId === args.orderId &&
+            existing.paymentMethodId === original.paymentMethodId &&
+            existing.kind === 'provider_reversal' &&
+            existing.state === 'reversed' &&
+            n(existing.appliedAmount ?? existing.amount) === -amount &&
+            existing.providerAttemptId === reversalId &&
+            existing.reference === reference &&
+            existing.reversalOfId === original.id &&
+            original.state === 'reversed' &&
+            reservation?.state === 'reversed' &&
+            reservation.reversalPaymentId === existing.id &&
+            order.paymentLockId == null
+          return same
+            ? {
+                ok: true,
+                id: existing.id,
+                revision: n(order.revision),
+                reversedPaymentId: original.id,
+                appliedAmount: existing.appliedAmount ?? existing.amount,
+              }
+            : invalid('id', 'provider reversal id is already used by another command')
+        }
+        if (order.state !== 'draft')
+          return invalid('orderId', 'only a captured tender on a draft order can be compensated')
+        if (
+          original.state !== 'captured' ||
+          String(order.paymentLockId ?? '') !== attemptId ||
+          reservation?.orderId !== args.orderId ||
+          reservation.paymentMethodId !== original.paymentMethodId ||
+          n(reservation.amount) !== amount ||
+          reservation.currency !== args.currency ||
+          reservation.state !== 'reversing' ||
+          reservation.settledPaymentId !== original.id
+        )
+          return invalid('providerAttemptId', 'provider settlement is not eligible for compensation')
+        const collision = (await tx.db.select('pos.Payment', { providerAttemptId: reversalId }))[0]
+        if (collision) return invalid('providerReversalId', 'provider reversal id is already in use')
+        const claim = await claimDraftRevision(tx, args.orderId, args.expectedRevision)
+        if (claim.ok !== true) return claim
+        const reversedAmount = decimal(-amount)
+        await tx.db.insert('pos.Payment', {
+          id: args.id,
+          orderId: args.orderId,
+          paymentMethodId: original.paymentMethodId,
+          amount: reversedAmount,
+          tenderedAmount: reversedAmount,
+          appliedAmount: reversedAmount,
+          state: 'reversed',
+          kind: 'provider_reversal',
+          reference,
+          providerAttemptId: reversalId,
+          reversalOfId: original.id,
+          operatorId: args.operatorId ?? null,
+          deviceId: original.deviceId ?? null,
+          paymentDate: now(),
+        })
+        await tx.db.update('pos.Payment', { id: original.id }, { state: 'reversed' })
+        await tx.db.update(
+          'pos.Order',
+          { id: args.orderId },
+          { paymentLockId: null, paymentLockMethodId: null, paymentLockAmount: null },
+        )
+        await tx.db.update(
+          'pos.ProviderPaymentLock',
+          { id: attemptId },
+          { state: 'reversed', reversalPaymentId: args.id, updatedAt: now() },
+        )
+        await recompute(tx, args.orderId)
+        return {
+          ok: true,
+          id: args.id,
+          revision: claim.revision,
+          reversedPaymentId: original.id,
+          appliedAmount: reversedAmount,
+        }
+      }),
   }),
   voidPayment: defineFn({
     input: { id: 'id', orderId: 'id', expectedRevision: 'int', reason: 'text', operatorId: 'text?' },
@@ -1853,10 +2505,14 @@ export const functions: Record<string, FnSpec> = {
       const payment = (await ctx.db.select('pos.Payment', { id: args.id }))[0]
       if (!payment || payment.orderId !== args.orderId)
         return invalid('id', 'tender does not belong to this order')
+      if (String(payment.kind).startsWith('provider'))
+        return invalid('id', 'provider tenders must be reversed through their payment rail')
+      const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
       if (payment.state === 'voided') {
-        const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
         return { ok: true, id: args.id, revision: n(order?.revision) }
       }
+      if (order?.paymentLockId)
+        return invalid('orderId', 'manual tenders cannot change while an external payment is pending')
       const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
       if (claim.ok !== true) return claim
       await ctx.db.update('pos.Payment', { id: args.id }, { state: 'voided' })
@@ -1883,6 +2539,8 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.Config',
       'read:pos.OrderLine',
       'read:pos.Payment',
+      'read:pos.ProviderPaymentLock',
+      'write:pos.ProviderPaymentLock',
       'read:pos.PaymentMethod',
       'read:product.Product',
       'read:product.Template',
@@ -1912,6 +2570,30 @@ export const functions: Record<string, FnSpec> = {
           revision: n(order.revision),
         }
       if (order.state !== 'draft') return invalid('state', 'only a new order can be paid')
+      const providerAttemptId = order.paymentLockId ? String(order.paymentLockId) : null
+      if (providerAttemptId) {
+        const settled = (
+          await ctx.db.select('pos.Payment', {
+            providerAttemptId: order.paymentLockId,
+          })
+        )[0]
+        const reservation = (await ctx.db.select('pos.ProviderPaymentLock', { id: order.paymentLockId }))[0]
+        if (
+          settled?.kind !== 'provider' ||
+          settled.state !== 'captured' ||
+          settled.reversalOfId != null ||
+          settled.orderId !== order.id ||
+          settled.paymentMethodId !== order.paymentLockMethodId ||
+          n(settled.appliedAmount ?? settled.amount) !== n(order.paymentLockAmount) ||
+          reservation?.orderId !== order.id ||
+          reservation.paymentMethodId !== order.paymentLockMethodId ||
+          n(reservation.amount) !== n(order.paymentLockAmount) ||
+          reservation.currency !== order.currency ||
+          !['settled', 'finalizing'].includes(String(reservation.state)) ||
+          reservation.settledPaymentId !== settled.id
+        )
+          return invalid('paymentLockId', 'external payment is still pending reconciliation')
+      }
       if (order.exchangeRole === 'replacement') {
         const exchange = order.exchangeId
           ? (await ctx.db.select('pos.Exchange', { id: order.exchangeId }))[0]
@@ -1999,112 +2681,140 @@ export const functions: Record<string, FnSpec> = {
           goods.push({ ...line, tracking })
         }
       }
-      const claim = await claimDraftRevision(ctx, args.id, args.expectedRevision)
+      const claim = providerAttemptId
+        ? await claimProviderFinalization(ctx, args.id, providerAttemptId, args.expectedRevision)
+        : await claimDraftRevision(ctx, args.id, args.expectedRevision)
       if (claim.ok !== true) return claim
-      const partner = order.partnerId
-        ? (await ctx.db.select('partner.Partner', { id: order.partnerId }))[0]
-        : await consumerPartner(ctx)
-      if (!partner) return invalid('partnerId', 'invoice customer does not exist')
-      const effectiveOrder = { ...order, partnerId: partner.id, toInvoice: true }
-      await ctx.db.update('pos.Order', { id: args.id }, { partnerId: partner.id, toInvoice: true })
-      let pickingId: string | null = null
-      if (goods.length) {
-        pickingId = `${String(order.id)}:picking`
-        const suffix = order.isRefund ? 'incoming' : 'outgoing'
-        const created = (await stockFunctions.createPicking!.handler(ctx, {
-          id: pickingId,
-          name: `${order.isRefund ? 'Refund' : 'POS'} ${String(order.posReference)}`,
-          pickingTypeId: `${String(config.warehouseId)}:${suffix}`,
-          scheduledDate: order.dateOrder,
-        })) as Row
-        if (created.ok !== true) return created
-        for (const line of goods) {
-          const moveId = `${String(line.id)}:move`,
-            quantity = Math.abs(n(line.qty))
-          const moved = (await stockFunctions.addMove!.handler(ctx, {
-            id: moveId,
-            name: line.name,
-            pickingId,
-            productId: line.productId,
-            productUomId: line.productUomId,
-            productUomQty: decimal(quantity),
-            origin: order.posReference,
+      const providerLeaseToken = 'leaseToken' in claim ? claim.leaseToken : null
+      let finalizationCommitted = false
+      try {
+        const partner = order.partnerId
+          ? (await ctx.db.select('partner.Partner', { id: order.partnerId }))[0]
+          : await consumerPartner(ctx)
+        if (!partner) return invalid('partnerId', 'invoice customer does not exist')
+        const effectiveOrder = { ...order, partnerId: partner.id, toInvoice: true }
+        await ctx.db.update('pos.Order', { id: args.id }, { partnerId: partner.id, toInvoice: true })
+        let pickingId: string | null = null
+        if (goods.length) {
+          pickingId = `${String(order.id)}:picking`
+          const suffix = order.isRefund ? 'incoming' : 'outgoing'
+          const created = (await stockFunctions.createPicking!.handler(ctx, {
+            id: pickingId,
+            name: `${order.isRefund ? 'Refund' : 'POS'} ${String(order.posReference)}`,
+            pickingTypeId: `${String(config.warehouseId)}:${suffix}`,
+            scheduledDate: order.dateOrder,
           })) as Row
-          if (moved.ok !== true) return moved
-          await ctx.db.update('stock.Move', { id: moveId }, { posLineId: line.id })
-        }
-        const confirmed = (await stockFunctions.confirmPicking!.handler(ctx, { id: pickingId })) as Row
-        if (confirmed.ok !== true) return confirmed
-        if (order.isRefund) {
+          if (created.ok !== true) return created
           for (const line of goods) {
-            const moveId = `${String(line.id)}:move`
-            const picking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]!
-            const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
-            if (!based) return invalid('productUomId', 'line unit is incompatible with the product unit')
-            const selections =
-              String(line.tracking) === 'none'
-                ? [{ lotId: null, quantity: based.quantity }]
-                : (line.lotSelections as Row[])
-            for (const [index, selection] of selections.entries()) {
-              const saved = (await stockFunctions.saveMoveLine!.handler(ctx, {
-                id: `${moveId}:line:${String(index + 1)}`,
-                moveId,
-                productUomId: line.productUomId,
-                quantity: decimal(n(selection.quantity)),
-                locationId: picking.locationId,
-                locationDestId: picking.locationDestId,
-                ...(selection.lotId ? { lotId: selection.lotId } : {}),
-                picked: true,
-              })) as Row
-              if (saved.ok !== true) return saved
+            const moveId = `${String(line.id)}:move`,
+              quantity = Math.abs(n(line.qty))
+            const moved = (await stockFunctions.addMove!.handler(ctx, {
+              id: moveId,
+              name: line.name,
+              pickingId,
+              productId: line.productId,
+              productUomId: line.productUomId,
+              productUomQty: decimal(quantity),
+              origin: order.posReference,
+            })) as Row
+            if (moved.ok !== true) return moved
+            await ctx.db.update('stock.Move', { id: moveId }, { posLineId: line.id })
+          }
+          const confirmed = (await stockFunctions.confirmPicking!.handler(ctx, { id: pickingId })) as Row
+          if (confirmed.ok !== true) return confirmed
+          if (order.isRefund) {
+            for (const line of goods) {
+              const moveId = `${String(line.id)}:move`
+              const picking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]!
+              const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
+              if (!based) return invalid('productUomId', 'line unit is incompatible with the product unit')
+              const selections =
+                String(line.tracking) === 'none'
+                  ? [{ lotId: null, quantity: based.quantity }]
+                  : (line.lotSelections as Row[])
+              for (const [index, selection] of selections.entries()) {
+                const saved = (await stockFunctions.saveMoveLine!.handler(ctx, {
+                  id: `${moveId}:line:${String(index + 1)}`,
+                  moveId,
+                  productUomId: line.productUomId,
+                  quantity: decimal(n(selection.quantity)),
+                  locationId: picking.locationId,
+                  locationDestId: picking.locationDestId,
+                  ...(selection.lotId ? { lotId: selection.lotId } : {}),
+                  picked: true,
+                })) as Row
+                if (saved.ok !== true) return saved
+              }
+            }
+          } else {
+            const reserved = (await stockFunctions.reserveMoves!.handler(ctx, {
+              requireFull: true,
+              moves: goods.map((line) => ({
+                id: `${String(line.id)}:move`,
+                ...(String(line.tracking) === 'none' ? {} : { selections: line.lotSelections }),
+              })),
+            })) as Row
+            if (reserved.ok !== true) return reserved
+            const results = Array.isArray(reserved.results) ? (reserved.results as Row[]) : []
+            for (const line of goods) {
+              const result = results.find((entry) => String(entry.id) === `${String(line.id)}:move`)
+              const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
+              if (!based || !result || n(result.reserved) + 0.000001 < based.quantity)
+                return invalid('stock', `insufficient stock for ${String(line.name)}`)
             }
           }
-        } else {
-          const reserved = (await stockFunctions.reserveMoves!.handler(ctx, {
-            requireFull: true,
-            moves: goods.map((line) => ({
-              id: `${String(line.id)}:move`,
-              ...(String(line.tracking) === 'none' ? {} : { selections: line.lotSelections }),
-            })),
+          const completed = (await stockFunctions.completePicking!.handler(ctx, {
+            id: pickingId,
+            createBackorder: false,
           })) as Row
-          if (reserved.ok !== true) return reserved
-          const results = Array.isArray(reserved.results) ? (reserved.results as Row[]) : []
-          for (const line of goods) {
-            const result = results.find((entry) => String(entry.id) === `${String(line.id)}:move`)
-            const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
-            if (!based || !result || n(result.reserved) + 0.000001 < based.quantity)
-              return invalid('stock', `insufficient stock for ${String(line.name)}`)
-          }
+          if (completed.ok !== true) return completed
         }
-        const completed = (await stockFunctions.completePicking!.handler(ctx, {
-          id: pickingId,
-          createBackorder: false,
-        })) as Row
-        if (completed.ok !== true) return completed
-      }
-      let accountMoveId: string
-      try {
-        accountMoveId = await createAccounting(ctx, effectiveOrder, config, lines, payments)
-      } catch (error) {
-        return invalid('accounting', (error as Error).message)
-      }
-      await ctx.db.update(
-        'pos.Order',
-        { id: args.id },
-        {
+        let accountMoveId: string
+        try {
+          accountMoveId = await createAccounting(ctx, effectiveOrder, config, lines, payments)
+        } catch (error) {
+          return invalid('accounting', (error as Error).message)
+        }
+        await ctx.tx(async (tx) => {
+          if (providerAttemptId) {
+            const finalized = await tx.db.compareAndSet(
+              'pos.ProviderPaymentLock',
+              { id: providerAttemptId },
+              { state: 'finalizing', updatedAt: providerLeaseToken },
+              { state: 'finalized', updatedAt: now() },
+            )
+            if (!('dryRun' in finalized) && !finalized.matched)
+              throw new Error('external payment finalization claim was lost')
+          }
+          await tx.db.update(
+            'pos.Order',
+            { id: args.id },
+            {
+              state: 'paid',
+              invoiceStatus: 'invoiced',
+              pickingId,
+              accountMoveId,
+            },
+          )
+        })
+        finalizationCommitted = true
+        return {
+          ok: true,
+          id: args.id,
           state: 'paid',
-          invoiceStatus: 'invoiced',
-          pickingId,
+          revision: claim.revision,
+          ...(pickingId ? { pickingId } : {}),
           accountMoveId,
-        },
-      )
-      return {
-        ok: true,
-        id: args.id,
-        state: 'paid',
-        revision: claim.revision,
-        ...(pickingId ? { pickingId } : {}),
-        accountMoveId,
+        }
+      } finally {
+        if (providerAttemptId && !finalizationCommitted) {
+          await ctx.db.compareAndSet(
+            'pos.ProviderPaymentLock',
+            { id: providerAttemptId },
+            { state: 'finalizing', updatedAt: providerLeaseToken },
+            { state: 'needs_review', updatedAt: now() },
+          )
+        }
       }
     },
   }),
@@ -2599,7 +3309,7 @@ export const functions: Record<string, FnSpec> = {
   cancelOrder: defineFn({
     input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
-    effects: ['read:pos.Order', 'write:pos.Order'],
+    effects: ['read:pos.Order', 'write:pos.Order', 'read:pos.Payment'],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -2608,6 +3318,12 @@ export const functions: Record<string, FnSpec> = {
         if (!order) return invalid('id', 'order does not exist')
         if (order.state === 'cancel') return { ok: true, id: args.id, revision: n(order.revision) }
         if (order.state !== 'draft') return invalid('state', 'paid orders must be refunded, not cancelled')
+        if (order.paymentLockId)
+          return invalid('paymentLockId', 'external payment must be reconciled before cancellation')
+        const providerPayment = (await tx.db.select('pos.Payment', { orderId: args.id })).find(
+          (payment) => payment.kind === 'provider' && (payment.state ?? 'captured') === 'captured',
+        )
+        if (providerPayment) return invalid('state', 'provider tenders must be reversed before cancellation')
         const claim = await claimDraftRevision(tx, args.id, args.expectedRevision)
         if (claim.ok !== true) return claim
         if (order.isRefund && order.refundedOrderId) {

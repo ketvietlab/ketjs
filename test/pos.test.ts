@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  bootDeployment,
   callFn,
   compose,
+  defineDeployment,
   migrateOne,
   registerFunctions,
   schemaFromManifest,
@@ -46,6 +48,38 @@ const manifest = compose(modules, { headless: true }),
   scope = { company: 'acme', branches: null }
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
   callFn(name, args, { adapter, manifest, scope })
+
+test('pos: provider payment primitives stay behind an internal integration seam', async () => {
+  const names = [
+    'pos.lockProviderPayment',
+    'pos.unlockProviderPayment',
+    'pos.settleProviderPayment',
+    'pos.reviewProviderPayment',
+    'pos.reverseProviderPayment',
+  ]
+  for (const name of names) assert.equal(manifest.functions[name]?.exposure, 'internal', name)
+
+  const deployment = defineDeployment({
+    name: 'pos_payment_internal_test',
+    modules,
+    headless: true,
+    serve: {},
+  })
+  const booted = await bootDeployment(deployment, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  try {
+    for (const name of names) {
+      const response = await fetch(`http://127.0.0.1:${booted.port}/_ket/fn/${name}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+      assert.equal(response.status, 400, name)
+      assert.equal(((await response.json()) as { code: string }).code, 'E_FUNCTION_INTERNAL', name)
+    }
+  } finally {
+    await booted.close()
+  }
+})
 
 test('pos: stock moves are indexed by their originating order line', () => {
   const indexes = Object.values(schemaFromManifest(manifest).tables.stock_move!.indexes)
@@ -592,6 +626,657 @@ test('pos: split tender requires manual reference and voided tender stops coveri
     const incomplete = (await call('pos.validateOrder', { id: 'split-sale', expectedRevision: 4 }, adapter))
       .value as Row
     assert.equal(incomplete.ok, false)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: a provider settlement becomes exactly one revisioned non-cash tender', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.saveAccount',
+      { id: 'provider-bank', code: '1122', name: 'Provider bank', accountType: 'asset_cash' },
+      adapter,
+    )
+    await call(
+      'account.saveJournal',
+      {
+        id: 'provider-journal',
+        name: 'Provider',
+        code: 'PAY',
+        type: 'bank',
+        defaultAccountId: 'provider-bank',
+      },
+      adapter,
+    )
+    await call(
+      'pos.savePaymentMethod',
+      { id: 'provider-method', name: 'Provider rail', journalId: 'provider-journal', isCash: false },
+      adapter,
+    )
+    await call(
+      'pos.linkPaymentMethod',
+      { id: 'shop:provider', configId: 'shop', paymentMethodId: 'provider-method' },
+      adapter,
+    )
+    await call('pos.createSession', { id: 'provider-shift', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'provider-shift', expectedRevision: 0 }, adapter)
+    await call('pos.createOrder', { id: 'provider-unlock-sale', sessionId: 'provider-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'provider-unlock-sale:line',
+        orderId: 'provider-unlock-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    const pendingLock = (
+      await call(
+        'pos.lockProviderPayment',
+        {
+          orderId: 'provider-unlock-sale',
+          paymentMethodId: 'provider-method',
+          amount: '99',
+          providerAttemptId: 'attempt-expired',
+          expectedRevision: 1,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(pendingLock.ok, true, JSON.stringify(pendingLock))
+    const released = (
+      await call(
+        'pos.unlockProviderPayment',
+        {
+          orderId: 'provider-unlock-sale',
+          providerAttemptId: 'attempt-expired',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(released.ok, true, JSON.stringify(released))
+    assert.equal(released.revision, 3)
+    const editedAfterRelease = (
+      await call(
+        'pos.updateLine',
+        {
+          id: 'provider-unlock-sale:line',
+          orderId: 'provider-unlock-sale',
+          qty: '2',
+          expectedRevision: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(editedAfterRelease.ok, true, JSON.stringify(editedAfterRelease))
+    const replacementLock = (
+      await call(
+        'pos.lockProviderPayment',
+        {
+          orderId: 'provider-unlock-sale',
+          paymentMethodId: 'provider-method',
+          amount: '198',
+          providerAttemptId: 'attempt-new',
+          expectedRevision: 4,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(replacementLock.ok, true, JSON.stringify(replacementLock))
+    const lateSuccess = (
+      await call(
+        'pos.settleProviderPayment',
+        {
+          id: 'provider-unlock-sale:late-payment',
+          orderId: 'provider-unlock-sale',
+          paymentMethodId: 'provider-method',
+          amount: '99',
+          currency: 'VND',
+          providerAttemptId: 'attempt-expired',
+          providerReference: 'late-provider-success',
+          expectedRevision: 5,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(lateSuccess.ok, false)
+    const replacementReleased = (
+      await call(
+        'pos.unlockProviderPayment',
+        {
+          orderId: 'provider-unlock-sale',
+          providerAttemptId: 'attempt-new',
+          expectedRevision: 5,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(replacementReleased.ok, true, JSON.stringify(replacementReleased))
+    await call('pos.createOrder', { id: 'provider-sale', sessionId: 'provider-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'provider-sale:line',
+        orderId: 'provider-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    const reusedAttempt = (
+      await call(
+        'pos.lockProviderPayment',
+        {
+          orderId: 'provider-sale',
+          paymentMethodId: 'provider-method',
+          amount: '99',
+          providerAttemptId: 'attempt-expired',
+          expectedRevision: 1,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(reusedAttempt.ok, false)
+    const locked = (
+      await call(
+        'pos.lockProviderPayment',
+        {
+          orderId: 'provider-sale',
+          paymentMethodId: 'provider-method',
+          amount: '99',
+          providerAttemptId: 'attempt-1',
+          expectedRevision: 1,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(locked.ok, true, JSON.stringify(locked))
+    assert.equal(locked.revision, 2)
+    const lockedEdit = (
+      await call(
+        'pos.updateLine',
+        {
+          id: 'provider-sale:line',
+          orderId: 'provider-sale',
+          qty: '2',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(lockedEdit.ok, false)
+    const settlementCommand = {
+      id: 'provider-sale:payment',
+      orderId: 'provider-sale',
+      paymentMethodId: 'provider-method',
+      amount: '99',
+      currency: 'VND',
+      providerAttemptId: 'attempt-1',
+      providerReference: 'sandbox-settlement-1',
+      expectedRevision: 2,
+    }
+    const [settledResult, concurrentReplayResult] = await Promise.all([
+      call('pos.settleProviderPayment', settlementCommand, adapter),
+      call('pos.settleProviderPayment', settlementCommand, adapter),
+    ])
+    const settled = settledResult.value as Row
+    assert.equal(settled.ok, true, JSON.stringify(settled))
+    assert.equal(settled.revision, 3)
+    const concurrentReplay = concurrentReplayResult.value as Row
+    assert.equal(concurrentReplay.ok, true, JSON.stringify(concurrentReplay))
+    assert.equal(concurrentReplay.revision, 3)
+    const duplicate = (
+      await call(
+        'pos.settleProviderPayment',
+        {
+          id: 'provider-sale:other-payment',
+          orderId: 'provider-sale',
+          paymentMethodId: 'provider-method',
+          amount: '99',
+          currency: 'VND',
+          providerAttemptId: 'attempt-1',
+          providerReference: 'sandbox-settlement-1',
+          expectedRevision: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(duplicate.ok, false)
+    const changedReplay = (
+      await call(
+        'pos.settleProviderPayment',
+        { ...settlementCommand, providerReference: 'different-settlement-reference', expectedRevision: 3 },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(changedReplay.ok, false)
+    const unlocked = (
+      await call(
+        'pos.unlockProviderPayment',
+        { orderId: 'provider-sale', providerAttemptId: 'attempt-1', expectedRevision: 3 },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(unlocked.ok, false)
+    const voided = (
+      await call(
+        'pos.voidPayment',
+        {
+          id: 'provider-sale:payment',
+          orderId: 'provider-sale',
+          expectedRevision: 3,
+          reason: 'must not bypass rail',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(voided.ok, false)
+    const cancelled = (await call('pos.cancelOrder', { id: 'provider-sale', expectedRevision: 3 }, adapter))
+      .value as Row
+    assert.equal(cancelled.ok, false)
+    const order = (await call('pos.getOrder', { id: 'provider-sale' }, adapter)).value as Row
+    assert.equal((order.payments as Row[]).length, 1)
+    assert.equal((order.payments as Row[])[0]?.kind, 'provider')
+    assert.equal((order.payments as Row[])[0]?.providerAttemptId, 'attempt-1')
+    const finalized = (await call('pos.validateOrder', { id: 'provider-sale', expectedRevision: 3 }, adapter))
+      .value as Row
+    assert.equal(finalized.ok, true, JSON.stringify(finalized))
+    const reviewAfterFinalize = (
+      await call(
+        'pos.reviewProviderPayment',
+        {
+          orderId: 'provider-sale',
+          providerAttemptId: 'attempt-1',
+          state: 'needs_review',
+          expectedRevision: 4,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(reviewAfterFinalize.ok, false)
+    const lockReplayAfterFinalize = (
+      await call(
+        'pos.lockProviderPayment',
+        {
+          orderId: 'provider-sale',
+          paymentMethodId: 'provider-method',
+          amount: '99',
+          providerAttemptId: 'attempt-1',
+          expectedRevision: 4,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(lockReplayAfterFinalize.ok, true, JSON.stringify(lockReplayAfterFinalize))
+    const settlementReplayAfterFinalize = (
+      await call('pos.settleProviderPayment', { ...settlementCommand, expectedRevision: 4 }, adapter)
+    ).value as Row
+    assert.equal(settlementReplayAfterFinalize.ok, true, JSON.stringify(settlementReplayAfterFinalize))
+    assert.equal(settlementReplayAfterFinalize.revision, 4)
+
+    await call('pos.createOrder', { id: 'provider-race-sale', sessionId: 'provider-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'provider-race-sale:line',
+        orderId: 'provider-race-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    await call(
+      'pos.lockProviderPayment',
+      {
+        orderId: 'provider-race-sale',
+        paymentMethodId: 'provider-method',
+        amount: '99',
+        providerAttemptId: 'attempt-race',
+        expectedRevision: 1,
+      },
+      adapter,
+    )
+    await call(
+      'pos.settleProviderPayment',
+      {
+        id: 'provider-race-sale:payment',
+        orderId: 'provider-race-sale',
+        paymentMethodId: 'provider-method',
+        amount: '99',
+        currency: 'VND',
+        providerAttemptId: 'attempt-race',
+        providerReference: 'sandbox-race',
+        expectedRevision: 2,
+      },
+      adapter,
+    )
+    const [raceFinalizeResult, raceReviewResult] = await Promise.all([
+      call('pos.validateOrder', { id: 'provider-race-sale' }, adapter),
+      call(
+        'pos.reviewProviderPayment',
+        {
+          orderId: 'provider-race-sale',
+          providerAttemptId: 'attempt-race',
+          state: 'needs_review',
+          expectedRevision: 3,
+        },
+        adapter,
+      ),
+    ])
+    const raceFinalize = raceFinalizeResult.value as Row
+    const raceReview = raceReviewResult.value as Row
+    assert.equal(Number(raceFinalize.ok === true) + Number(raceReview.ok === true), 1)
+    const racedOrder = (await call('pos.getOrder', { id: 'provider-race-sale' }, adapter)).value as Row
+    assert.equal(racedOrder.state, raceFinalize.ok === true ? 'paid' : 'draft')
+
+    await call('pos.createOrder', { id: 'provider-resume-sale', sessionId: 'provider-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'provider-resume-sale:line',
+        orderId: 'provider-resume-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    await call(
+      'pos.lockProviderPayment',
+      {
+        orderId: 'provider-resume-sale',
+        paymentMethodId: 'provider-method',
+        amount: '99',
+        providerAttemptId: 'attempt-resume',
+        expectedRevision: 1,
+      },
+      adapter,
+    )
+    await call(
+      'pos.settleProviderPayment',
+      {
+        id: 'provider-resume-sale:payment',
+        orderId: 'provider-resume-sale',
+        paymentMethodId: 'provider-method',
+        amount: '99',
+        currency: 'VND',
+        providerAttemptId: 'attempt-resume',
+        providerReference: 'sandbox-resume',
+        expectedRevision: 2,
+      },
+      adapter,
+    )
+    await adapter.tx(async (tx) => {
+      await tx.run('UPDATE pos_provider_payment_lock SET state = ? WHERE id = ?', [
+        'finalizing',
+        'attempt-resume',
+      ])
+      await tx.run('UPDATE pos_order SET revision = ? WHERE id = ?', [4, 'provider-resume-sale'])
+    })
+    const concurrentResume = (
+      await call('pos.validateOrder', { id: 'provider-resume-sale', expectedRevision: 3 }, adapter)
+    ).value as Row
+    assert.equal(concurrentResume.ok, false)
+    await adapter.run('UPDATE pos_provider_payment_lock SET "updatedAt" = ? WHERE id = ?', [
+      '2000-01-01T00:00:00.000Z',
+      'attempt-resume',
+    ])
+    const resumedFinalize = (
+      await call('pos.validateOrder', { id: 'provider-resume-sale', expectedRevision: 3 }, adapter)
+    ).value as Row
+    assert.equal(resumedFinalize.ok, true, JSON.stringify(resumedFinalize))
+    assert.equal(resumedFinalize.revision, 4)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: provider locks preserve split tenders and compensation is append-only', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.saveAccount',
+      { id: 'rail-bank', code: '1123', name: 'Rail bank', accountType: 'asset_cash' },
+      adapter,
+    )
+    await call(
+      'account.saveJournal',
+      {
+        id: 'rail-journal',
+        name: 'Rail',
+        code: 'RAIL',
+        type: 'bank',
+        defaultAccountId: 'rail-bank',
+      },
+      adapter,
+    )
+    await call(
+      'pos.savePaymentMethod',
+      { id: 'rail-method', name: 'Payment rail', journalId: 'rail-journal', isCash: false },
+      adapter,
+    )
+    await call(
+      'pos.linkPaymentMethod',
+      { id: 'shop:rail', configId: 'shop', paymentMethodId: 'rail-method' },
+      adapter,
+    )
+    await call('pos.createSession', { id: 'rail-shift', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'rail-shift', expectedRevision: 0 }, adapter)
+
+    await call('pos.createOrder', { id: 'rail-split-sale', sessionId: 'rail-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'rail-split-sale:line',
+        orderId: 'rail-split-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    await call(
+      'pos.addPayment',
+      {
+        id: 'rail-split-sale:manual',
+        orderId: 'rail-split-sale',
+        paymentMethodId: 'rail-method',
+        amount: '40',
+        reference: 'manual-40',
+        expectedRevision: 1,
+      },
+      adapter,
+    )
+    const splitLock = (
+      await call(
+        'pos.lockProviderPayment',
+        {
+          orderId: 'rail-split-sale',
+          paymentMethodId: 'rail-method',
+          amount: '59',
+          providerAttemptId: 'split-attempt',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(splitLock.ok, true, JSON.stringify(splitLock))
+    const blockedVoid = (
+      await call(
+        'pos.voidPayment',
+        {
+          id: 'rail-split-sale:manual',
+          orderId: 'rail-split-sale',
+          expectedRevision: 3,
+          reason: 'must remain frozen',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(blockedVoid.ok, false)
+    const splitReleased = (
+      await call(
+        'pos.unlockProviderPayment',
+        { orderId: 'rail-split-sale', providerAttemptId: 'split-attempt', expectedRevision: 3 },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(splitReleased.ok, true, JSON.stringify(splitReleased))
+    const voidAfterRelease = (
+      await call(
+        'pos.voidPayment',
+        {
+          id: 'rail-split-sale:manual',
+          orderId: 'rail-split-sale',
+          expectedRevision: 4,
+          reason: 'operator correction after provider decline',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(voidAfterRelease.ok, true, JSON.stringify(voidAfterRelease))
+
+    await call('pos.createOrder', { id: 'rail-repair-sale', sessionId: 'rail-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'rail-repair-sale:line',
+        orderId: 'rail-repair-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    await call(
+      'pos.lockProviderPayment',
+      {
+        orderId: 'rail-repair-sale',
+        paymentMethodId: 'rail-method',
+        amount: '99',
+        providerAttemptId: 'repair-attempt',
+        expectedRevision: 1,
+      },
+      adapter,
+    )
+    const captured = (
+      await call(
+        'pos.settleProviderPayment',
+        {
+          id: 'rail-repair-sale:payment',
+          orderId: 'rail-repair-sale',
+          paymentMethodId: 'rail-method',
+          amount: '99',
+          currency: 'VND',
+          providerAttemptId: 'repair-attempt',
+          providerReference: 'capture-reference',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(captured.ok, true, JSON.stringify(captured))
+    const reversalCommand = {
+      id: 'rail-repair-sale:reversal',
+      orderId: 'rail-repair-sale',
+      providerAttemptId: 'repair-attempt',
+      providerReversalId: 'repair-attempt:reversal',
+      amount: '99',
+      currency: 'VND',
+      reversalReference: 'reversal-reference',
+      expectedRevision: 5,
+    }
+    const prematureReversal = (
+      await call('pos.reverseProviderPayment', { ...reversalCommand, expectedRevision: 3 }, adapter)
+    ).value as Row
+    assert.equal(prematureReversal.ok, false)
+    const skippedReview = (
+      await call(
+        'pos.reviewProviderPayment',
+        {
+          orderId: 'rail-repair-sale',
+          providerAttemptId: 'repair-attempt',
+          state: 'reversing',
+          expectedRevision: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(skippedReview.ok, false)
+    const needsReview = (
+      await call(
+        'pos.reviewProviderPayment',
+        {
+          orderId: 'rail-repair-sale',
+          providerAttemptId: 'repair-attempt',
+          state: 'needs_review',
+          expectedRevision: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(needsReview.ok, true, JSON.stringify(needsReview))
+    assert.equal(needsReview.revision, 4)
+    const reviewReplay = (
+      await call(
+        'pos.reviewProviderPayment',
+        {
+          orderId: 'rail-repair-sale',
+          providerAttemptId: 'repair-attempt',
+          state: 'needs_review',
+          expectedRevision: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(reviewReplay.ok, true, JSON.stringify(reviewReplay))
+    assert.equal(reviewReplay.revision, 4)
+    const finalizedDuringReview = (
+      await call('pos.validateOrder', { id: 'rail-repair-sale', expectedRevision: 4 }, adapter)
+    ).value as Row
+    assert.equal(finalizedDuringReview.ok, false)
+    const reversing = (
+      await call(
+        'pos.reviewProviderPayment',
+        {
+          orderId: 'rail-repair-sale',
+          providerAttemptId: 'repair-attempt',
+          state: 'reversing',
+          expectedRevision: 4,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(reversing.ok, true, JSON.stringify(reversing))
+    assert.equal(reversing.revision, 5)
+    const reversed = (await call('pos.reverseProviderPayment', reversalCommand, adapter)).value as Row
+    assert.equal(reversed.ok, true, JSON.stringify(reversed))
+    assert.equal(reversed.revision, 6)
+    const reversalReplay = (await call('pos.reverseProviderPayment', reversalCommand, adapter)).value as Row
+    assert.equal(reversalReplay.ok, true, JSON.stringify(reversalReplay))
+    const repairedOrder = (await call('pos.getOrder', { id: 'rail-repair-sale' }, adapter)).value as Row
+    assert.equal(repairedOrder.amountPaid, '0')
+    assert.equal(repairedOrder.paymentLockId, null)
+    const repairedPayments = repairedOrder.payments as Row[]
+    assert.equal(repairedPayments.length, 2)
+    assert.deepEqual(repairedPayments.map((payment) => payment.state).sort(), ['reversed', 'reversed'])
+    const cancelled = (
+      await call('pos.cancelOrder', { id: 'rail-repair-sale', expectedRevision: 6 }, adapter)
+    ).value as Row
+    assert.equal(cancelled.ok, true, JSON.stringify(cancelled))
   } finally {
     await adapter.close()
   }
