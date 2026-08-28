@@ -21,6 +21,26 @@ level-one account families in Circular 99. Distinguishing changes include accoun
 215 for biological assets, account 82112 for global minimum tax, the renamed account
 242 for expenses awaiting allocation, and removal of former accounts 161 and 461.
 
+## Catalog identity
+
+The catalog manifest records schema version 1, catalog version 1.0.0, issuing authority,
+the [official Ministry of Finance source](https://www.mof.gov.vn/tin-tuc-tai-chinh/tin-chinh-sach-tai-chinh/quy-dinh-moi-ve-che-do-ke-toan-doanh-nghiep),
+legal basis, issue date, effective date, open-ended expiry, the four default accounts,
+all 216 bilingual accounts and all 17 taxes with their posting mappings. Its approval
+status is `provisional` until the accounting owner signs it off; that workflow state is
+separate from the circular's legal effective date. Canonical JSON uses locale-independent
+lexical ordering and normalized optional fields, so the same statutory content produces
+the same bytes on every supported Node environment.
+
+The published SHA-256 for this full manifest is
+`c2ee5de7daf9b4f9e98f587875d1c374a4c249cd0cfce1262f13457f472cb805`. Module loading
+recomputes the value and fails when it differs. A statutory edit therefore requires an
+explicit version/checksum approval instead of silently changing every company's setup
+marker. The former account-only checksum
+`62e0ccee163b4b4b336a7c9c6e28823a97f9ef16462e2b378e8133ca856c6b71` remains fixed as
+the historical upgrade marker for installations created before taxes joined the
+catalog identity.
+
 ## Company initialization
 
 The first Accounting read initializes the active company in one transaction. The
@@ -32,6 +52,15 @@ operation is idempotent and safe when several requests arrive concurrently. It c
 - immediate and net-30 payment terms;
 - an `account.Setup` audit row containing the country, standard, legal basis,
   source checksum and installation timestamp.
+
+The same transaction also sets `company.Company.currencyLocked` and advances the
+company version. The company module therefore remains usable on its own, with an
+editable currency before Accounting exists, while a TT99 company cannot change its
+book currency after setup. The shared version token closes the race between first
+setup and a concurrent company edit: only one can win, and setup retries against the
+new company state before writing any accounting defaults. Existing databases whose
+current `account.Setup` predates the optional lock field backfill it once on the next
+Accounting initialization; repeated initialization does not advance the version again.
 
 Initialization never overwrites an existing account with the same company and code.
 Default journals resolve the retained account by code, so a company may prepare its

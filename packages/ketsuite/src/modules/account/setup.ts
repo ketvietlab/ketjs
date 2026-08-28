@@ -20,6 +20,7 @@ export const ACCOUNT_SETUP_EFFECTS = [
   'read:account.PaymentTerm',
   'read:account.PaymentTermLine',
   'read:account.Defaults',
+  'write:company.Company',
   'write:account.Setup',
   'write:account.Account',
   'write:account.Tax',
@@ -50,23 +51,52 @@ const put = async (ctx: Ctx, model: string, values: Row): Promise<void> => {
   await ctx.db.insertIfAbsent(model, values)
 }
 
-async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
+const COMPANY_CHANGED_DURING_SETUP = 'account.error.companyConcurrent'
+const COMPANY_LOCK_ATTEMPTS = 4
+
+/**
+ * Freeze the book currency with the same optimistic token used by company.saveCompany.
+ *
+ * Merely updating the flag would leave a gap: a save that read the old company just
+ * before this transaction could still change its currency afterward. Advancing the
+ * version makes exactly one of setup and that save win; the loser rereads and either
+ * retries setup or returns the permanent currency-lock refusal.
+ */
+const lockCompanyCurrency = async (ctx: Ctx, company: Row): Promise<void> => {
+  if (company.currencyLocked === true) return
+  const currentVersion = Number(company.version ?? 0)
+  const changed = await ctx.db.compareAndSet(
+    'company.Company',
+    { id: company.id },
+    { version: company.version ?? null },
+    { currencyLocked: true, version: currentVersion + 1 },
+  )
+  if (!('dryRun' in changed) && !changed.matched) throw new Error(COMPANY_CHANGED_DURING_SETUP)
+}
+
+async function installCompanyAccountingOnce(ctx: Ctx): Promise<Row> {
   const companyId = String(ctx.scope.company ?? '')
   if (!companyId) throw new Error('account.error.companyRequired')
-  const S = ctx.table('account.Setup')
-  const current = await ctx.db.one(from(S).where(eq(S.companyId, companyId)))
-  if (current?.sourceChecksum === TT99_CATALOG_CHECKSUM) return current
-
-  const company = (await ctx.db.select('company.Company', { id: companyId }))[0]
-  if (!company) throw new Error('account.error.companyMissing')
-  const countryCode = await countryFor(ctx, company)
-  if (countryCode !== TT99_COUNTRY) throw new Error('account.error.countryUnsupported')
 
   return ctx.tx(async (tx) => {
     const existingSetup = await tx.db.one(
       from(tx.table('account.Setup')).where(eq(tx.table('account.Setup').companyId, companyId)),
     )
-    if (existingSetup?.sourceChecksum === TT99_CATALOG_CHECKSUM) return existingSetup
+    const company = (await tx.db.select('company.Company', { id: companyId }))[0]
+    if (!company) throw new Error('account.error.companyMissing')
+
+    // Older databases may already have the current setup row but no lock column
+    // value. Backfill the guard without rewriting the currency they currently hold;
+    // historical data cannot tell us which value an operator intended before this
+    // invariant existed.
+    if (existingSetup?.sourceChecksum === TT99_CATALOG_CHECKSUM) {
+      await lockCompanyCurrency(tx, company)
+      return existingSetup
+    }
+
+    const countryCode = await countryFor(tx, company)
+    if (countryCode !== TT99_COUNTRY) throw new Error('account.error.countryUnsupported')
+    await lockCompanyCurrency(tx, company)
 
     const existingAccounts = await tx.db.select('account.Account')
     const byCode = new Map(existingAccounts.map((row) => [String(row.code), row]))
@@ -202,8 +232,22 @@ async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
         sourceChecksum: TT99_CATALOG_CHECKSUM,
         installedAt: new Date().toISOString(),
       })
-    return (await tx.db.select('account.Setup', { id: setupId(companyId) }))[0]!
+    const installedId = String(existingSetup?.id ?? setupId(companyId))
+    return (await tx.db.select('account.Setup', { id: installedId }))[0]!
   })
+}
+
+async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
+  let lastConflict: Error | null = null
+  for (let attempt = 0; attempt < COMPANY_LOCK_ATTEMPTS; attempt += 1) {
+    try {
+      return await installCompanyAccountingOnce(ctx)
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== COMPANY_CHANGED_DURING_SETUP) throw error
+      lastConflict = error
+    }
+  }
+  throw lastConflict ?? new Error(COMPANY_CHANGED_DURING_SETUP)
 }
 
 /**
@@ -263,8 +307,11 @@ export async function ensureCompanyAccounting(ctx: Ctx): Promise<Row> {
   if (!companyId) throw new Error('account.error.companyRequired')
   const current = (await ctx.db.select('account.Setup'))[0]
   if (current?.sourceChecksum === TT99_CATALOG_CHECKSUM) {
-    await ensureCompanyDefaults(ctx, companyId)
-    return current
+    const company = (await ctx.db.select('company.Company', { id: companyId }))[0]
+    if (company?.currencyLocked === true) {
+      await ensureCompanyDefaults(ctx, companyId)
+      return current
+    }
   }
 
   await installCompanyAccounting(ctx)

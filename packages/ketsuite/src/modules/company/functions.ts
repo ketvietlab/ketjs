@@ -60,6 +60,7 @@ export const functions: Record<string, FnSpec> = {
       partnerId: 'id',
       parentId: 'id?',
       currency: 'text',
+      currencyLocked: 'bool',
       rootBranchId: 'id?',
       active: 'bool',
       version: 'int',
@@ -79,6 +80,7 @@ export const functions: Record<string, FnSpec> = {
       return rows.map((row) => ({
         ...row,
         name: String((row.partner as Row | null)?.name ?? row.code),
+        currencyLocked: row.currencyLocked === true,
         rootBranchId: rootByCompany.get(String(row.id)) ?? null,
         // Rows created before optimistic concurrency was introduced have no
         // stored version. Expose that legacy baseline as zero so the first edit
@@ -97,6 +99,7 @@ export const functions: Record<string, FnSpec> = {
       partnerId: 'id',
       parentId: 'id?',
       currency: 'text',
+      currencyLocked: 'bool',
       active: 'bool',
       version: 'int',
       branches: 'json?',
@@ -112,6 +115,7 @@ export const functions: Record<string, FnSpec> = {
       return {
         ...row,
         name: String((row.partner as Row | null)?.name ?? row.code),
+        currencyLocked: row.currencyLocked === true,
         version: Number(row.version ?? 0),
         branches: branches.map((branch) => ({ ...branch, isRoot: branch.rootKey === row.id })),
       }
@@ -147,6 +151,8 @@ export const functions: Record<string, FnSpec> = {
       const errors: Issue[] = []
       if (!code) errors.push(issue('code', 'company.error.required'))
       if (!currency) errors.push(issue('currency', 'company.error.required'))
+      if (existing?.currencyLocked === true && existing.currency !== currency)
+        errors.push(issue('currency', 'company.error.currencyLocked'))
 
       const P = ctx.table('partner.Partner')
       const party = await ctx.db.one(from(P).where(eq(P.id, a.partnerId)))
@@ -197,8 +203,16 @@ export const functions: Record<string, FnSpec> = {
             { version: existing.version ?? null },
             { ...cs.changes, version },
           )
-          if (!('dryRun' in changed) && !changed.matched)
+          if (!('dryRun' in changed) && !changed.matched) {
+            // Accounting locks the currency with the same version token. If it
+            // won after this command read the company, report the durable rule
+            // instead of asking the caller to retry a change that can never land.
+            const CurrentCompany = tx.table('company.Company')
+            const held = await tx.db.one(from(CurrentCompany).where(eq(CurrentCompany.id, id)))
+            if (held?.currencyLocked === true && held.currency !== desired.currency)
+              return invalid([issue('currency', 'company.error.currencyLocked')])
             return invalid([issue('expectedVersion', 'company.error.versionConflict')])
+          }
           const root = await rootFor(tx, id)
           if (root) await tx.db.update('company.Branch', { id: root.id }, { code, name: String(party!.name) })
           return { ok: true, id, rootBranchId: String(root?.id ?? rootId), version }
@@ -210,6 +224,7 @@ export const functions: Record<string, FnSpec> = {
           partnerId: a.partnerId,
           parentId: a.parentId ?? null,
           currency,
+          currencyLocked: false,
           active: true,
           version: 1,
         })

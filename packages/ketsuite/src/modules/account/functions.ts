@@ -89,11 +89,13 @@ const REFUSALS = {
   movePostedOnly: 'only a posted entry can be reversed',
   moveNotCancellable: 'a posted entry is corrected with account.reverseMove, not cancelled',
   moveConcurrent: 'the invoice changed concurrently; review it and retry',
+  moveIdReused: 'a different journal entry already uses this id',
   moveTypeUnsupported: 'unsupported move type',
   linesTooFew: 'a journal entry needs at least two lines',
   lineSideBoth: 'each line must have a non-negative debit or credit, never both',
   entryUnbalanced: 'entry is not balanced: debit {debit}, credit {credit}',
   reversalNoLines: 'the entry has no journal items to reverse',
+  reversalIdReused: 'a different reversal already uses this id',
   lineDraftOnly: 'lines can only be added to a draft entry',
   lineIdTaken: 'a different journal item already uses this id',
 
@@ -133,6 +135,7 @@ const REFUSALS = {
   termPercentRange: 'percentage must be between 0 and 100',
 
   invoiceTypeRequired: 'createInvoice requires an invoice, refund, or receipt type',
+  invoiceIdReused: 'a different invoice already uses this id',
   invoiceAccountsMissing: 'invoice accounts do not exist',
   invoiceLinesAndSingle: 'give either lines or a single description, not both',
   invoiceLinesEmpty: 'an invoice needs at least one line',
@@ -199,6 +202,97 @@ const refused = (field: string, error: unknown) =>
     : { ok: false as const, errors: [{ field, message: (error as Error).message }] }
 
 const n = (value: unknown): number => Number(value ?? 0)
+
+/** Exact numeric identity without routing ledger values through JavaScript Number. */
+const decimalIdentity = (value: unknown): string => {
+  let source = String(value).trim().replace(/^\+/, '')
+  const exponent = /^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/i.exec(source)
+  if (exponent) {
+    const sign = exponent[1] ?? ''
+    const whole = exponent[2] ?? '0'
+    const fraction = exponent[3] ?? ''
+    const digits = whole + fraction
+    const shift = Number(exponent[4])
+    if (Number.isSafeInteger(shift) && Math.abs(shift) <= 4096) {
+      const point = whole.length + shift
+      source =
+        point <= 0
+          ? `${sign}0.${'0'.repeat(-point)}${digits}`
+          : point >= digits.length
+            ? `${sign}${digits}${'0'.repeat(point - digits.length)}`
+            : `${sign}${digits.slice(0, point)}.${digits.slice(point)}`
+    }
+  }
+  const parsed = /^(-?)(?:(\d+)(?:\.(\d*))?|\.(\d+))$/.exec(source)
+  if (!parsed) return source
+  const negative = parsed[1] === '-'
+  const whole = (parsed[2] ?? '0').replace(/^0+(?=\d)/, '')
+  const fraction = (parsed[3] ?? parsed[4] ?? '').replace(/0+$/, '')
+  if (!/[1-9]/.test(`${whole}${fraction}`)) return '0'
+  return `${negative ? '-' : ''}${whole}${fraction ? `.${fraction}` : ''}`
+}
+
+const DECIMAL_CREATE_FIELDS = new Set([
+  'quantity',
+  'priceUnit',
+  'discount',
+  'debit',
+  'credit',
+  'balance',
+  'amountUntaxed',
+  'amountTax',
+  'amountTotal',
+])
+
+/** Compare the values a command owns without being confused by adapter scalar types. */
+const sameStored = (field: string, held: unknown, wanted: unknown): boolean => {
+  if (held == null || wanted == null) return (held ?? null) === (wanted ?? null)
+  if (DECIMAL_CREATE_FIELDS.has(field)) return decimalIdentity(held) === decimalIdentity(wanted)
+  return String(held) === String(wanted)
+}
+
+/**
+ * Idempotency means equal normalized financial semantics, not byte-identical JSON:
+ * immutable fields and line structure must match, while mutable posting state does not.
+ */
+const rowMatches = (held: Row, wanted: Row, fields: readonly string[]): boolean =>
+  fields.every((field) => sameStored(field, held[field], wanted[field]))
+
+/** Datetimes have one persisted spelling on both SQLite and PostgreSQL. */
+const instantText = (value: unknown): string => {
+  const at = value instanceof Date ? value : new Date(String(value))
+  return Number.isNaN(at.getTime()) ? String(value) : at.toISOString()
+}
+
+const MOVE_CREATE_FIELDS = [
+  'journalId',
+  'moveType',
+  'ref',
+  'partnerId',
+  'invoiceDate',
+  'invoiceDateDue',
+  'paymentTermId',
+  'currency',
+] as const
+
+const MOVE_LINE_CREATE_FIELDS = [
+  'moveId',
+  'name',
+  'accountId',
+  'partnerId',
+  'productId',
+  'productUomId',
+  'quantity',
+  'priceUnit',
+  'discount',
+  'taxId',
+  'debit',
+  'credit',
+  'balance',
+  'dateMaturity',
+  'displayType',
+  'sequence',
+] as const
 
 const claimMoveRevision = async (ctx: Ctx, move: Row, expectedRevision?: unknown): Promise<boolean> => {
   const revision = n(move.revision)
@@ -665,12 +759,23 @@ async function post(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<
       if (!current) throw new Refusal('moveMissing')
       if (current.state === 'posted') return String(current.name)
       if (current.state !== 'draft') throw new Refusal('moveDraftOnly')
-      if (!(await claimMoveRevision(tx, current, expectedRevision))) throw new Refusal('moveConcurrent')
+      // The validated line snapshot belongs to the revision read above. Claim that
+      // exact revision even when the caller did not supply a token: if a line was
+      // added after validation, posting must retry and validate the new set.
+      const validatedRevision = expectedRevision ?? move.revision ?? null
+      if (!(await claimMoveRevision(tx, current, validatedRevision))) throw new Refusal('moveConcurrent')
       const name = await nextMoveName(tx, journal, new Date(String(current.date)))
       await tx.db.update('account.Move', { id }, { name, state: 'posted', postedAt, ...totals })
       return name
     })
   } catch (error) {
+    // Two replicas may both validate the same draft and one may lose the CAS only
+    // because the other already posted it. That retry has reached its requested
+    // state and is therefore an idempotent success, not a conflict.
+    if (error instanceof Refusal && error.code === 'moveConcurrent') {
+      const settled = (await ctx.db.select('account.Move', { id }))[0]
+      if (settled?.state === 'posted') return { ok: true, id: settled.id, name: settled.name }
+    }
     return refused('expectedRevision', error)
   }
   return { ok: true, id: move.id, name: assigned }
@@ -1363,11 +1468,16 @@ export const functions: Record<string, FnSpec> = {
         return invalid('partnerId', 'partnerMissing')
       if (args.paymentTermId && !(await ctx.db.select('account.PaymentTerm', { id: args.paymentTermId }))[0])
         return invalid('paymentTermId', 'paymentTermMissing')
-      const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
-      if (existing) return { ok: true, id: args.id }
       const { currency, scale } = await ledgerOf(ctx)
-      const date = String(args.date ?? today())
-      await ctx.db.insert('account.Move', {
+      const date = instantText(args.date ?? today())
+      const invoiceDate = args.invoiceDate == null ? null : instantText(args.invoiceDate)
+      const invoiceDateDue =
+        args.invoiceDateDue != null
+          ? instantText(args.invoiceDateDue)
+          : invoiceDate
+            ? await dueDate(ctx, args.paymentTermId, new Date(invoiceDate))
+            : null
+      const row: Row = {
         id: args.id,
         name: String(args.id),
         ref: args.ref ?? null,
@@ -1376,12 +1486,8 @@ export const functions: Record<string, FnSpec> = {
         state: 'draft',
         journalId: args.journalId,
         partnerId: args.partnerId ?? null,
-        invoiceDate: args.invoiceDate ?? null,
-        invoiceDateDue:
-          args.invoiceDateDue ??
-          (args.invoiceDate
-            ? await dueDate(ctx, args.paymentTermId, new Date(String(args.invoiceDate)))
-            : null),
+        invoiceDate,
+        invoiceDateDue,
         paymentTermId: args.paymentTermId ?? null,
         paymentState: moveType === 'entry' ? 'paid' : 'not_paid',
         currency,
@@ -1390,7 +1496,13 @@ export const functions: Record<string, FnSpec> = {
         amountTotal: moneyText(0, scale),
         postedAt: null,
         revision: 0,
-      })
+      }
+      const inserted = await ctx.db.insertIfAbsent('account.Move', row)
+      if ('dryRun' in inserted || inserted.inserted) return { ok: true, id: args.id }
+
+      const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
+      const fields = args.date == null ? MOVE_CREATE_FIELDS : (['date', ...MOVE_CREATE_FIELDS] as const)
+      if (!existing || !rowMatches(existing, row, fields)) return invalid('id', 'moveIdReused')
       return { ok: true, id: args.id }
     },
   }),
@@ -1412,6 +1524,7 @@ export const functions: Record<string, FnSpec> = {
       dateMaturity: 'datetime?',
       displayType: 'text?',
       sequence: 'int?',
+      expectedRevision: 'int?',
     },
     output: { ok: 'bool', id: 'id?', existing: 'bool?', errors: 'json?' },
     effects: [
@@ -1419,13 +1532,14 @@ export const functions: Record<string, FnSpec> = {
       'read:account.MoveLine',
       'read:account.Account',
       'read:account.Tax',
+      'write:account.Move',
       'write:account.MoveLine',
     ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const move = (await ctx.db.select('account.Move', { id: args.moveId }))[0]
-      if (move?.state !== 'draft') return invalid('moveId', 'lineDraftOnly')
+      if (!move) return invalid('moveId', 'lineDraftOnly')
       const account = await accountOf(ctx, args.accountId)
       if (!account) return invalid('accountId', 'accountMissing')
       if (args.taxId && !(await ctx.db.select('account.Tax', { id: args.taxId }))[0])
@@ -1434,7 +1548,7 @@ export const functions: Record<string, FnSpec> = {
       const debit = roundMoney(n(args.debit), scale),
         credit = roundMoney(n(args.credit), scale)
       if (debit < 0 || credit < 0 || (debit > 0 && credit > 0)) return invalid('debit', 'lineSideBoth')
-      const row = {
+      const row: Row = {
         id: args.id,
         moveId: args.moveId,
         name: args.name,
@@ -1449,26 +1563,53 @@ export const functions: Record<string, FnSpec> = {
         debit: moneyText(debit, scale),
         credit: moneyText(credit, scale),
         balance: moneyText(debit - credit, scale),
-        dateMaturity: args.dateMaturity ?? null,
+        dateMaturity: args.dateMaturity == null ? null : instantText(args.dateMaturity),
         displayType: args.displayType ?? null,
         reconciled: false,
         amountResidual: account.reconcile ? moneyText(Math.abs(debit - credit), scale) : moneyText(0, scale),
         sequence: args.sequence ?? 10,
       }
-      const inserted = await ctx.db.insertIfAbsent('account.MoveLine', row)
-      if ('dryRun' in inserted) return { ok: true, id: args.id, existing: false }
-      if (inserted.inserted) return { ok: true, id: args.id, existing: false }
-      // A retry of the same call is a success. A different line under an id that is
-      // already taken is not, and reporting it as one loses a write silently.
-      const held = (await ctx.db.select('account.MoveLine', { id: args.id }))[0]
-      const differs =
-        held &&
-        (String(held.moveId) !== String(row.moveId) ||
-          String(held.accountId) !== String(row.accountId) ||
-          n(held.debit) !== debit ||
-          n(held.credit) !== credit)
-      if (differs) return invalid('id', 'lineIdTaken')
-      return { ok: true, id: args.id, existing: true }
+      const sameLine = (held: Row | undefined): boolean =>
+        Boolean(held && rowMatches(held, row, MOVE_LINE_CREATE_FIELDS))
+
+      try {
+        return await ctx.tx(async (tx) => {
+          const current = (await tx.db.select('account.Move', { id: args.moveId }))[0]
+          if (!current) throw new Refusal('lineDraftOnly')
+
+          // A retry remains successful after the move was posted. Only a genuinely
+          // new line is subject to the draft-state gate.
+          const existing = (await tx.db.select('account.MoveLine', { id: args.id }))[0]
+          if (existing) {
+            if (!sameLine(existing)) throw new Refusal('lineIdTaken')
+            return { ok: true, id: args.id, existing: true }
+          }
+          if (current.state !== 'draft') throw new Refusal('lineDraftOnly')
+          if (!(await claimMoveRevision(tx, current, args.expectedRevision)))
+            throw new Refusal('moveConcurrent')
+
+          const inserted = await tx.db.insertIfAbsent('account.MoveLine', row)
+          if ('dryRun' in inserted || inserted.inserted)
+            return { ok: true, id: args.id, existing: false }
+          const held = (await tx.db.select('account.MoveLine', { id: args.id }))[0]
+          if (!sameLine(held)) throw new Refusal('lineIdTaken')
+          return { ok: true, id: args.id, existing: true }
+        })
+      } catch (error) {
+        if (error instanceof Refusal && error.code === 'moveConcurrent') {
+          const held = (await ctx.db.select('account.MoveLine', { id: args.id }))[0]
+          if (sameLine(held)) return { ok: true, id: args.id, existing: true }
+          const settled = (await ctx.db.select('account.Move', { id: args.moveId }))[0]
+          if (settled?.state !== 'draft') return invalid('moveId', 'lineDraftOnly')
+        }
+        const field =
+          error instanceof Refusal && error.code === 'lineIdTaken'
+            ? 'id'
+            : error instanceof Refusal && error.code === 'lineDraftOnly'
+              ? 'moveId'
+              : 'expectedRevision'
+        return refused(field, error)
+      }
     },
   }),
   /**
@@ -1522,6 +1663,7 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Journal',
       'read:account.Tax',
       'read:account.Move',
+      'read:account.MoveLine',
       'read:account.PaymentTermLine',
       'read:company.Company',
       ...ACCOUNT_RESOLUTION_EFFECTS,
@@ -1654,106 +1796,144 @@ export const functions: Record<string, FnSpec> = {
       const total = roundMoney(untaxed + tax, scale)
       const posting = [...shares.values()]
 
-      const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
-      if (existing) return { ok: true, id: args.id, amountTotal: existing.amountTotal }
-      const invoiceDate = String(args.invoiceDate ?? today())
+      const invoiceDate = instantText(args.invoiceDate ?? today())
+      const due = await dueDate(ctx, args.paymentTermId, new Date(invoiceDate))
       const mainDebit = ['in_invoice', 'in_receipt', 'out_refund'].includes(String(args.moveType))
-      await ctx.tx(async (tx) => {
-        const due = await dueDate(tx, args.paymentTermId, new Date(invoiceDate))
-        await tx.db.insert('account.Move', {
-          id: args.id,
-          name: String(args.id),
-          ref: args.ref ?? null,
-          date: invoiceDate,
-          moveType: args.moveType,
-          state: 'draft',
-          journalId: args.journalId,
+      const moveRow: Row = {
+        id: args.id,
+        name: String(args.id),
+        ref: args.ref ?? null,
+        date: invoiceDate,
+        moveType: args.moveType,
+        state: 'draft',
+        journalId: args.journalId,
+        partnerId: args.partnerId,
+        invoiceDate,
+        invoiceDateDue: due,
+        paymentTermId: args.paymentTermId ?? null,
+        paymentState: 'not_paid',
+        currency,
+        amountUntaxed: moneyText(untaxed, scale),
+        amountTax: moneyText(tax, scale),
+        amountTotal: moneyText(total, scale),
+        postedAt: null,
+        revision: 0,
+      }
+      const lineRows: Row[] = []
+      const line = (
+        id: string,
+        accountId: unknown,
+        amount: number,
+        debitSide: boolean,
+        name: string,
+        reconcilable: boolean,
+        extra: Row = {},
+      ): void => {
+        lineRows.push({
+          id,
+          moveId: args.id,
+          name,
+          accountId,
           partnerId: args.partnerId,
-          invoiceDate,
-          invoiceDateDue: due,
-          paymentTermId: args.paymentTermId ?? null,
-          paymentState: 'not_paid',
-          currency,
-          amountUntaxed: moneyText(untaxed, scale),
-          amountTax: moneyText(tax, scale),
-          amountTotal: moneyText(total, scale),
-          postedAt: null,
-          revision: 0,
+          productId: null,
+          productUomId: null,
+          quantity: '1',
+          priceUnit: moneyText(amount, scale),
+          discount: '0',
+          taxId: null,
+          debit: debitSide ? moneyText(amount, scale) : moneyText(0, scale),
+          credit: debitSide ? moneyText(0, scale) : moneyText(amount, scale),
+          balance: moneyText(debitSide ? amount : -amount, scale),
+          dateMaturity: null,
+          displayType: null,
+          reconciled: false,
+          amountResidual: moneyText(reconcilable ? amount : 0, scale),
+          sequence: 10,
+          ...extra,
         })
-        const line = async (
-          id: string,
-          accountId: unknown,
-          amount: number,
-          debitSide: boolean,
-          name: string,
-          reconcilable: boolean,
-          extra: Row = {},
-        ) =>
-          tx.db.insert('account.MoveLine', {
-            id,
-            moveId: args.id,
-            name,
-            accountId,
-            partnerId: args.partnerId,
-            productId: null,
-            productUomId: null,
-            quantity: '1',
-            priceUnit: moneyText(amount, scale),
-            discount: '0',
-            taxId: null,
-            debit: debitSide ? moneyText(amount, scale) : moneyText(0, scale),
-            credit: debitSide ? moneyText(0, scale) : moneyText(amount, scale),
-            balance: moneyText(debitSide ? amount : -amount, scale),
-            dateMaturity: null,
-            displayType: null,
-            reconciled: false,
-            amountResidual: moneyText(reconcilable ? amount : 0, scale),
-            sequence: 10,
-            ...extra,
-          })
-        for (const [at, held] of priced.entries())
-          await line(
-            // The first line keeps the historical id, so a single-line document
-            // written through either shape lands on exactly the same row.
-            at === 0 ? `${String(args.id)}:base` : `${String(args.id)}:base:${at}`,
-            held.accountId,
-            held.amounts.untaxed,
-            mainDebit,
-            String(held.spec.description),
-            false,
-            {
-              productId: held.spec.productId ?? null,
-              productUomId: held.spec.productUomId ?? null,
-              quantity: String(held.spec.quantity ?? 0),
-              priceUnit: String(held.spec.priceUnit ?? 0),
-              discount: String(held.spec.discount ?? 0),
-              taxId: held.firstTaxId,
-              sequence: 10 + at,
-            },
-          )
-        for (const [at, held] of posting.entries())
-          await line(
-            // The first tax line keeps the historical id so an existing document
-            // reprocessed by id lands on the same rows.
-            at === 0 ? `${String(args.id)}:tax` : `${String(args.id)}:tax:${String(held.taxId)}`,
-            held.accountId,
-            held.amount,
-            mainDebit,
-            held.name,
-            false,
-            { taxId: held.taxId, sequence: 10 + priced.length + at },
-          )
-        await line(
-          `${String(args.id)}:counterpart`,
-          resolvedCounterpart.counterpartAccountId,
-          total,
-          !mainDebit,
-          String(args.ref ?? priced[0]?.spec.description ?? args.id),
-          true,
-          { dateMaturity: due, sequence: 10 + priced.length + posting.length },
+      }
+      for (const [at, held] of priced.entries())
+        line(
+          // The first line keeps the historical id, so a single-line document
+          // written through either shape lands on exactly the same row.
+          at === 0 ? `${String(args.id)}:base` : `${String(args.id)}:base:${at}`,
+          held.accountId,
+          held.amounts.untaxed,
+          mainDebit,
+          String(held.spec.description),
+          false,
+          {
+            productId: held.spec.productId ?? null,
+            productUomId: held.spec.productUomId ?? null,
+            quantity: String(held.spec.quantity ?? 0),
+            priceUnit: String(held.spec.priceUnit ?? 0),
+            discount: String(held.spec.discount ?? 0),
+            taxId: held.firstTaxId,
+            sequence: 10 + at,
+          },
         )
-      })
-      return { ok: true, id: args.id, amountTotal: moneyText(total, scale) }
+      for (const [at, held] of posting.entries())
+        line(
+          // The first tax line keeps the historical id so an existing document
+          // reprocessed by id lands on the same rows.
+          at === 0 ? `${String(args.id)}:tax` : `${String(args.id)}:tax:${String(held.taxId)}`,
+          held.accountId,
+          held.amount,
+          mainDebit,
+          held.name,
+          false,
+          { taxId: held.taxId, sequence: 10 + priced.length + at },
+        )
+      line(
+        `${String(args.id)}:counterpart`,
+        resolvedCounterpart.counterpartAccountId,
+        total,
+        !mainDebit,
+        String(args.ref ?? priced[0]?.spec.description ?? args.id),
+        true,
+        { dateMaturity: due, sequence: 10 + priced.length + posting.length },
+      )
+
+      try {
+        const amountTotal = await ctx.tx(async (tx) => {
+          const inserted = await tx.db.insertIfAbsent('account.Move', moveRow)
+          if (!('dryRun' in inserted) && !inserted.inserted) {
+            const existing = (await tx.db.select('account.Move', { id: args.id }))[0]
+            const moveFields = [
+              'journalId',
+              'moveType',
+              'ref',
+              'partnerId',
+              'paymentTermId',
+              'currency',
+              'amountUntaxed',
+              'amountTax',
+              'amountTotal',
+              ...(args.invoiceDate == null ? [] : ['date', 'invoiceDate', 'invoiceDateDue']),
+            ]
+            const storedLines = await tx.db.select('account.MoveLine', { moveId: args.id })
+            const lineFields =
+              args.invoiceDate == null
+                ? MOVE_LINE_CREATE_FIELDS.filter((field) => field !== 'dateMaturity')
+                : MOVE_LINE_CREATE_FIELDS
+            const byLineId = new Map(storedLines.map((held) => [String(held.id), held]))
+            const sameLines =
+              storedLines.length === lineRows.length &&
+              lineRows.every((wanted) => {
+                const held = byLineId.get(String(wanted.id))
+                return Boolean(held && rowMatches(held, wanted, lineFields))
+              })
+            if (!existing || !rowMatches(existing, moveRow, moveFields) || !sameLines)
+              throw new Refusal('invoiceIdReused')
+            return String(existing.amountTotal)
+          }
+          for (const row of lineRows) await tx.db.insert('account.MoveLine', row)
+          return moneyText(total, scale)
+        })
+        return { ok: true, id: args.id, amountTotal }
+      } catch (error) {
+        return refused('id', error)
+      }
     },
   }),
   postMove: defineFn({
@@ -1830,72 +2010,107 @@ export const functions: Record<string, FnSpec> = {
       if (move.state !== 'posted') return invalid('state', 'movePostedOnly')
 
       const already = (await ctx.db.select('account.Move', { id: args.reversalId }))[0]
-      if (already) return { ok: true, id: args.id, reversalId: args.reversalId, name: already.name }
-
       const lines = (await ctx.db.select('account.MoveLine', { moveId: args.id })).sort(
         (a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)),
       )
       if (!lines.length) return invalid('lines', 'reversalNoLines')
-      const journalId = args.journalId ?? move.journalId
+      const journalId = args.journalId ?? already?.journalId ?? move.journalId
       if (!(await ctx.db.select('account.Journal', { id: journalId }))[0])
         return invalid('journalId', 'journalMissing')
 
       const scale = scaleOf(move.currency)
       const byId = await accountsById(ctx)
-      const date = String(args.date ?? today())
+      let date = instantText(args.date ?? already?.date ?? today())
       const reversalId = String(args.reversalId)
-
-      await ctx.tx(async (tx) => {
-        await tx.db.insert('account.Move', {
-          id: reversalId,
-          name: reversalId,
-          // The reference is the document being corrected, not a sentence about it:
-          // this module has no translator, and a ledger read in Vietnamese must not
-          // grow English prose.
-          ref: args.ref ?? move.name,
-          date,
-          moveType: 'entry',
-          state: 'draft',
-          journalId,
-          partnerId: move.partnerId ?? null,
-          invoiceDate: null,
-          invoiceDateDue: null,
-          paymentTermId: null,
-          paymentState: 'paid',
-          currency: move.currency,
-          amountUntaxed: move.amountUntaxed,
-          amountTax: move.amountTax,
-          amountTotal: move.amountTotal,
-          postedAt: null,
-          revision: 0,
-        })
-        for (const line of lines) {
-          const debit = n(line.credit)
-          const credit = n(line.debit)
-          const reconcilable = byId.get(String(line.accountId))?.reconcile === true
-          await tx.db.insert('account.MoveLine', {
-            id: `${reversalId}:${String(line.id)}`,
-            moveId: reversalId,
-            name: line.name,
-            accountId: line.accountId,
-            partnerId: line.partnerId ?? null,
-            productId: line.productId ?? null,
-            productUomId: line.productUomId ?? null,
-            quantity: line.quantity,
-            priceUnit: line.priceUnit,
-            discount: line.discount,
-            taxId: line.taxId ?? null,
-            debit: moneyText(debit, scale),
-            credit: moneyText(credit, scale),
-            balance: moneyText(debit - credit, scale),
-            dateMaturity: null,
-            displayType: line.displayType ?? null,
-            reconciled: false,
-            amountResidual: moneyText(reconcilable ? Math.abs(debit - credit) : 0, scale),
-            sequence: line.sequence,
-          })
+      const reversalRow: Row = {
+        id: reversalId,
+        name: reversalId,
+        // The reference is the document being corrected, not a sentence about it:
+        // this module has no translator, and a ledger read in Vietnamese must not
+        // grow English prose.
+        ref: args.ref ?? already?.ref ?? move.name,
+        date,
+        moveType: 'entry',
+        state: 'draft',
+        journalId,
+        partnerId: move.partnerId ?? null,
+        invoiceDate: null,
+        invoiceDateDue: null,
+        paymentTermId: null,
+        paymentState: 'paid',
+        currency: move.currency,
+        amountUntaxed: move.amountUntaxed,
+        amountTax: move.amountTax,
+        amountTotal: move.amountTotal,
+        postedAt: null,
+        revision: 0,
+      }
+      const mirrorRows = lines.map((line): Row => {
+        const debit = n(line.credit)
+        const credit = n(line.debit)
+        const reconcilable = byId.get(String(line.accountId))?.reconcile === true
+        return {
+          id: `${reversalId}:${String(line.id)}`,
+          moveId: reversalId,
+          name: line.name,
+          accountId: line.accountId,
+          partnerId: line.partnerId ?? null,
+          productId: line.productId ?? null,
+          productUomId: line.productUomId ?? null,
+          quantity: line.quantity,
+          priceUnit: line.priceUnit,
+          discount: line.discount,
+          taxId: line.taxId ?? null,
+          debit: moneyText(debit, scale),
+          credit: moneyText(credit, scale),
+          balance: moneyText(debit - credit, scale),
+          dateMaturity: null,
+          displayType: line.displayType ?? null,
+          reconciled: false,
+          amountResidual: moneyText(reconcilable ? Math.abs(debit - credit) : 0, scale),
+          sequence: line.sequence,
         }
       })
+
+      try {
+        const settled = await ctx.tx(async (tx) => {
+          const inserted = await tx.db.insertIfAbsent('account.Move', reversalRow)
+          if (!('dryRun' in inserted) && !inserted.inserted) {
+            const existing = (await tx.db.select('account.Move', { id: reversalId }))[0]
+            const moveFields = [
+              'ref',
+              'moveType',
+              'journalId',
+              'partnerId',
+              'invoiceDate',
+              'paymentTermId',
+              'currency',
+              ...(args.date == null ? [] : ['date']),
+            ]
+            const storedLines = await tx.db.select('account.MoveLine', { moveId: reversalId })
+            const byLineId = new Map(storedLines.map((held) => [String(held.id), held]))
+            const sameLines =
+              storedLines.length === mirrorRows.length &&
+              mirrorRows.every((wanted) => {
+                const held = byLineId.get(String(wanted.id))
+                return Boolean(held && rowMatches(held, wanted, MOVE_LINE_CREATE_FIELDS))
+              })
+            if (
+              !existing ||
+              !['draft', 'posted'].includes(String(existing.state)) ||
+              !rowMatches(existing, reversalRow, moveFields) ||
+              !sameLines
+            )
+              throw new Refusal('reversalIdReused')
+            return existing
+          }
+          for (const row of mirrorRows) await tx.db.insert('account.MoveLine', row)
+          return reversalRow
+        })
+        date = String(settled.date)
+      } catch (error) {
+        return refused('reversalId', error)
+      }
 
       const posted = await post(ctx, reversalId)
       if (posted.ok !== true) return posted

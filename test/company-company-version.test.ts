@@ -36,7 +36,7 @@ const createCompany = async (runtime: { adapter: Adapter; manifest: Manifest }, 
   })
 }
 
-test('company save uses optional CAS while exact command retries remain no-op successes', async () => {
+test('company save keeps currency editable before Accounting and makes exact retries no-op successes', async () => {
   const runtime = await boot()
   const created = await createCompany(runtime, 'alpha', 'ALPHA')
   assert.equal(created.version, 1)
@@ -63,9 +63,12 @@ test('company save uses optional CAS while exact command retries remain no-op su
   })
   assert.equal(stale.ok, false)
   assert.match(JSON.stringify(stale.errors), /company\.error\.versionConflict/)
-  const row = (await runtime.adapter.all('SELECT code, currency, version FROM company_company'))[0]
+  const row = (
+    await runtime.adapter.all('SELECT code, currency, "currencyLocked", version FROM company_company')
+  )[0]
   assert.equal(row?.code, 'ALPHA-NEW')
   assert.equal(row?.currency, 'USD')
+  assert.equal(row?.currencyLocked, 0)
   assert.equal(row?.version, 2)
   await runtime.adapter.close()
 })
