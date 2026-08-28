@@ -4,13 +4,12 @@ import {
   badge,
   dataTable,
   emptyState,
-  Framed,
+  ListPage,
   linkButton,
   modalForm,
   modalWorkspace,
   RecordForm,
-  Section,
-  stack,
+  shell,
   Tabs,
 } from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
@@ -59,12 +58,17 @@ export const configurationScreen = (
   const editHref = options.editing
     ? `${endpoint}&edit=${encodeURIComponent(String(options.editing.id))}`
     : createHref
-  const workspace = (
-    <Framed
-      translator={_}
+  const workspace = shell(
+    _,
+    _('crm_backend.configuration.title'),
+    <ListPage
       title={_('crm_backend.configuration.title')}
-      frame={frame}
-      body={stack([
+      actions={linkButton({
+        href: createHref,
+        label: _('crm_backend.configuration.create'),
+        variant: 'primary',
+      })}
+      controls={
         <Tabs
           label={_('crm_backend.configuration.title')}
           items={CONFIGURATION_TABS.map((id) => ({
@@ -73,82 +77,76 @@ export const configurationScreen = (
             href: localized(`/admin/crm/configuration?tab=${id}`, options.locale ?? ''),
             active: options.tab === id,
           }))}
-        />,
-        <Section
-          title={_(`crm_backend.configuration.${options.tab}`)}
-          actions={linkButton({
-            href: createHref,
-            label: _('crm_backend.configuration.create'),
-            variant: 'primary',
-          })}
-          body={
-            options.rows.length
-              ? dataTable(_, {
-                  rows: options.rows,
-                  id: (row) => String(row.id),
-                  columns: [
-                    {
-                      key: 'name',
-                      label: _('crm_backend.field.name'),
-                      priority: 'primary',
-                      cell: (row) =>
-                        linkButton({
-                          href: localized(
-                            `/admin/crm/configuration?tab=${options.tab}&edit=${encodeURIComponent(String(row.id))}`,
-                            options.locale ?? '',
-                          ),
-                          label: label(row),
-                          variant: 'tertiary',
-                          size: 'compact',
-                        }),
-                    },
-                    ...(options.detail
-                      ? [
-                          {
-                            key: 'detail',
-                            label: _('crm_backend.configuration.detail'),
-                            cell: (row: AnyRow) => options.detail!(row),
-                          },
-                        ]
-                      : []),
-                    {
-                      key: 'active',
-                      label: _('crm_backend.field.active'),
-                      cell: (row) =>
-                        row.active === false
-                          ? badge(_('crm_backend.state.archived'), 'neutral', 'archived')
-                          : badge(_('crm_backend.state.active'), 'positive', 'active'),
-                    },
-                    {
-                      key: 'toggle',
-                      label: _('crm_backend.field.actions'),
-                      cell: (row: AnyRow) => (
-                        <RecordForm
-                          action={endpoint}
-                          layout="inline"
-                          hidden={{
-                            action: row.active === false ? 'restore' : 'archive',
-                            id: String(row.id),
-                            ...(row.version != null ? { expectedVersion: String(row.version) } : {}),
-                          }}
-                          fields={[]}
-                          submit={
-                            row.active === false
-                              ? _('crm_backend.action.restore')
-                              : _('crm_backend.action.archive')
-                          }
-                          submitVariant={row.active === false ? 'secondary' : 'tertiary'}
-                          submitSize="compact"
-                        />
+        />
+      }
+      status={`${_(`crm_backend.configuration.${options.tab}`)} · ${options.rows.length}`}
+      body={
+        options.rows.length
+          ? dataTable(_, {
+              rows: options.rows,
+              id: (row) => String(row.id),
+              columns: [
+                {
+                  key: 'name',
+                  label: _('crm_backend.field.name'),
+                  priority: 'primary',
+                  cell: (row) =>
+                    linkButton({
+                      href: localized(
+                        `/admin/crm/configuration?tab=${options.tab}&edit=${encodeURIComponent(String(row.id))}`,
+                        options.locale ?? '',
                       ),
-                    },
-                  ],
-                })
-              : empty(_)
-          }
-        />,
-      ])}
-    />
+                      label: label(row),
+                      variant: 'tertiary',
+                      size: 'compact',
+                    }),
+                },
+                ...(options.detail
+                  ? [
+                      {
+                        key: 'detail',
+                        label: _('crm_backend.configuration.detail'),
+                        cell: (row: AnyRow) => options.detail!(row),
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'active',
+                  label: _('crm_backend.field.active'),
+                  cell: (row) =>
+                    row.active === false
+                      ? badge(_('crm_backend.state.archived'), 'neutral', 'archived')
+                      : badge(_('crm_backend.state.active'), 'positive', 'active'),
+                },
+                {
+                  key: 'toggle',
+                  label: _('crm_backend.field.actions'),
+                  cell: (row: AnyRow) => (
+                    <RecordForm
+                      action={endpoint}
+                      layout="inline"
+                      hidden={{
+                        action: row.active === false ? 'restore' : 'archive',
+                        id: String(row.id),
+                        ...(row.version != null ? { expectedVersion: String(row.version) } : {}),
+                      }}
+                      fields={[]}
+                      submit={
+                        row.active === false
+                          ? _('crm_backend.action.restore')
+                          : _('crm_backend.action.archive')
+                      }
+                      submitVariant={row.active === false ? 'secondary' : 'tertiary'}
+                      submitSize="compact"
+                    />
+                  ),
+                },
+              ],
+            })
+          : empty(_)
+      }
+    />,
+    { ...frame, chrome: null, topbar: false },
   )
   if (!options.editing && !options.creating) return workspace
   return modalWorkspace(

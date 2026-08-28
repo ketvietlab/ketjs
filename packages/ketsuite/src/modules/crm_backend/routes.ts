@@ -1027,9 +1027,12 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       const _ = ctx.translate(ctx.localeOf(url, req))
       let errors: string[] = []
+      let values: Record<string, string> = {}
+      let failedAction: string | undefined
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
+        values = form
         const call = (name: string, input: Record<string, unknown>) =>
           ctx.call(name, input, url, req) as Promise<AnyRow>
         let result: AnyRow
@@ -1065,7 +1068,12 @@ export const routes: Record<string, RouteEntry> = {
           })
         else return text('unknown action', { status: 400 })
         if (result.ok || result.activity || Array.isArray(result.activities))
-          return seeOther(inLocale(url, `${url.pathname}${url.search}`))
+          return seeOther(
+            form.action === 'schedule'
+              ? withParam(url, 'schedule', null, false)
+              : `${url.pathname}${url.search}`,
+          )
+        failedAction = form.action
         errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const tab = ['mine', 'plans', 'calendar'].includes(url.searchParams.get('tab') ?? '')
@@ -1108,6 +1116,9 @@ export const routes: Record<string, RouteEntry> = {
             activityTypes,
             controls,
             errors,
+            failedAction,
+            scheduling: url.searchParams.get('schedule') === '1',
+            values,
             locale: localeQuery(url),
           }),
       })

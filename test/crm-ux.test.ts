@@ -275,12 +275,16 @@ test('crm backend: an activity can be completed from the case and from the plann
 
   const planner = await app.client.get('/admin/crm/activities?tab=mine&lang=en')
   const plannerHtml = await planner.text()
-  assert.match(plannerHtml, /data-ui="record-workspace"/)
-  assert.doesNotMatch(plannerHtml, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(plannerHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(plannerHtml, /name="action" value="schedule"/)
   assert.match(plannerHtml, /name="action" value="complete"/)
   assert.match(plannerHtml, /action="\/admin\/crm\/activities\?tab=mine&amp;lang=en"/)
   assert.match(plannerHtml, /href="\/admin\/crm\/activities\?tab=calendar&amp;lang=en"/)
   assert.match(plannerHtml, /href="\/admin\/crm\/cases\/follow-up\?lang=en"/)
+  const schedule = await app.client.get('/admin/crm/activities?tab=mine&schedule=1&lang=en')
+  const scheduleHtml = await schedule.text()
+  assert.match(scheduleHtml, /data-ui="modal-workspace"/)
+  assert.match(scheduleHtml, /name="action" value="schedule"/)
 
   const completed = await app.client.post(
     '/admin/crm/cases/follow-up?tab=activities&lang=en',
@@ -304,6 +308,7 @@ test('crm backend: configuration records can be edited and archived, not only cr
   )
   const invalidHtml = await invalid.text()
   assert.equal(invalid.status, 200)
+  assert.match(invalidHtml, /data-ui="list-page"/)
   assert.match(invalidHtml, /data-ui="form-errors"/)
   assert.match(invalidHtml, /action="\/admin\/crm\/configuration\?tab=tags&amp;lang=en&amp;create=1"/)
   assert.match(invalidHtml, /href="\/admin\/crm\/configuration\?tab=members&amp;lang=en"/)
