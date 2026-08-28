@@ -60,6 +60,8 @@ export type { SellableProduct, SellableProductResult, SellableUom } from './modu
 export { default as productMedia } from './modules/product_media/index.ts'
 export { default as productBackend } from './modules/product_backend/index.ts'
 export { default as pricing } from './modules/pricing/index.ts'
+/** Stable extension boundary for private modules that compose Pricing queries in one transaction. */
+export { functions as pricingFunctionSpecs } from './modules/pricing/functions.ts'
 export { default as stock } from './modules/stock/index.ts'
 export { stockFunctionSpecs } from './modules/stock/index.ts'
 export { default as stockBackend } from './modules/stock_backend/index.ts'
@@ -78,6 +80,8 @@ export type {
 } from './modules/manufacturing/index.ts'
 export { default as pricingBackend } from './modules/pricing_backend/index.ts'
 export { default as account } from './modules/account/index.ts'
+/** Stable extension boundary for private modules that compose Account quotes in one transaction. */
+export { functions as accountFunctionSpecs } from './modules/account/functions.ts'
 export { default as accountStaffChannel } from './modules/account_staff_channel/index.ts'
 export { default as hospitalityStaffChannel } from './modules/hospitality_staff_channel/index.ts'
 export { default as report } from './modules/report/index.ts'
