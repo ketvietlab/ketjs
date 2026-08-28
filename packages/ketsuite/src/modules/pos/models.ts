@@ -45,6 +45,19 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { order_state: { fields: ['companyId', 'orderId', 'state'] } },
   },
+  ReceiptDocument: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      orderId: 'ref:pos.Order',
+      version: 'int',
+      templateVersion: 'text',
+      contentHash: 'text',
+      document: 'json',
+      issuedAt: 'datetime',
+    },
+    indexes: { order: { fields: ['companyId', 'orderId'], unique: true } },
+  },
   Session: {
     scope: 'company',
     fields: {
@@ -124,6 +137,7 @@ export const models: Record<string, ModelDef> = {
       toInvoice: 'bool',
       accountMoveId: 'ref:account.Move?',
       pickingId: 'ref:stock.Picking?',
+      receiptId: 'ref:pos.ReceiptDocument?',
       note: 'text?',
       revision: 'int?',
       operatorId: 'text?',

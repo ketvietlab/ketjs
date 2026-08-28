@@ -25,6 +25,10 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     payments: { hasMany: 'pos.Payment', by: 'orderId' },
     customer: { belongsTo: 'partner.Partner', by: 'partnerId' },
     exchange: { belongsTo: 'pos.Exchange', by: 'exchangeId' },
+    receipt: { belongsTo: 'pos.ReceiptDocument', by: 'receiptId' },
+  },
+  'pos.ReceiptDocument': {
+    order: { belongsTo: 'pos.Order', by: 'orderId' },
   },
   'pos.Exchange': {
     originalOrder: { belongsTo: 'pos.Order', by: 'originalOrderId' },

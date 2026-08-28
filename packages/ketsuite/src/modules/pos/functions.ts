@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as accountFunctions, quoteTaxLine } from '../account/functions.ts'
@@ -27,6 +28,112 @@ type ProviderFinalizationClaim =
   | { ok: true; order: Row; revision: number; leaseToken: string }
   | ReturnType<typeof invalid>
 const PROVIDER_FINALIZATION_LEASE_MS = 5 * 60_000
+
+const stableJson = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object')
+    return `{${Object.entries(value as Row)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, held]) => `${JSON.stringify(key)}:${stableJson(held)}`)
+      .join(',')}}`
+  return JSON.stringify(value) ?? 'null'
+}
+
+const receiptHash = (document: Row): string => createHash('sha256').update(stableJson(document)).digest('hex')
+
+const receiptDocumentFor = async (
+  ctx: Ctx,
+  order: Row,
+  config: Row,
+  session: Row,
+  customer: Row,
+  lines: Row[],
+  payments: Row[],
+  accountMoveId: string,
+  issuedAt: string,
+): Promise<Row> => {
+  const methodIds = [...new Set(payments.map((payment) => String(payment.paymentMethodId)))]
+  const methods = new Map(
+    (
+      await Promise.all(
+        methodIds.map(async (id) => (await ctx.db.select('pos.PaymentMethod', { id }))[0] ?? null),
+      )
+    )
+      .filter(Boolean)
+      .map((method) => [String(method!.id), method!] as const),
+  )
+  return {
+    schema: 'ketviet.pos.receipt.v1',
+    company: { id: String(ctx.scope.company ?? '') },
+    config: { id: String(config.id), name: String(config.name) },
+    shift: { id: String(session.id), name: String(session.name) },
+    cashier: { id: String(order.operatorId ?? session.userId) },
+    customer: { id: String(customer.id), name: String(customer.name) },
+    order: {
+      id: String(order.id),
+      name: String(order.name),
+      reference: String(order.posReference),
+      orderedAt: String(order.dateOrder),
+      isReturn: order.isRefund === true,
+      originalOrderId: order.refundedOrderId == null ? null : String(order.refundedOrderId),
+    },
+    currency: String(order.currency),
+    lines: [...lines]
+      .sort(
+        (left, right) =>
+          n(left.sequence) - n(right.sequence) || String(left.id).localeCompare(String(right.id)),
+      )
+      .map((line) => {
+        const evidence =
+          line.taxEvidence && typeof line.taxEvidence === 'object' ? (line.taxEvidence as Row) : null
+        return {
+          id: String(line.id),
+          productId: String(line.productId),
+          uomId: String(line.productUomId),
+          name: String(line.name),
+          quantity: String(line.qty),
+          unitPrice: String(line.priceUnit),
+          discount: String(line.discount),
+          amountUntaxed: String(line.priceSubtotal),
+          amountTax: decimal(n(line.priceSubtotalIncl) - n(line.priceSubtotal)),
+          amountTotal: String(line.priceSubtotalIncl),
+          taxes: (Array.isArray(evidence?.taxes) ? (evidence!.taxes as Row[]) : []).map((tax) => ({
+            id: String(tax.taxId ?? ''),
+            name: String(tax.name ?? tax.taxId ?? ''),
+            amount: String(tax.share ?? '0'),
+          })),
+        }
+      }),
+    tenders: payments
+      .filter((payment) => (payment.state ?? 'captured') === 'captured')
+      .sort(
+        (left, right) =>
+          String(left.paymentDate).localeCompare(String(right.paymentDate)) ||
+          String(left.id).localeCompare(String(right.id)),
+      )
+      .map((payment) => ({
+        paymentMethodId: String(payment.paymentMethodId),
+        paymentMethodName: String(methods.get(String(payment.paymentMethodId))?.name ?? ''),
+        tenderedAmount: String(payment.tenderedAmount ?? payment.amount),
+        appliedAmount: String(payment.appliedAmount ?? payment.amount),
+        change: decimal(
+          n(payment.tenderedAmount ?? payment.amount) - n(payment.appliedAmount ?? payment.amount),
+        ),
+        paidAt: String(payment.paymentDate),
+      })),
+    totals: {
+      untaxed: String(order.amountUntaxed),
+      tax: String(order.amountTax),
+      exact: String(order.amountExact),
+      rounding: String(order.amountRounding),
+      total: String(order.amountTotal),
+      paid: String(order.amountPaid),
+      change: String(order.amountReturn),
+    },
+    invoice: { id: accountMoveId },
+    issuedAt,
+  }
+}
 
 class AtomicFailure extends Error {
   readonly result: Row
@@ -1390,6 +1497,17 @@ export const functions: Record<string, FnSpec> = {
         : null
     },
   }),
+  getReceipt: defineFn({
+    input: { orderId: 'id' },
+    effects: ['read:pos.Order', 'read:pos.ReceiptDocument'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
+      if (!order || !['paid', 'done'].includes(String(order.state)) || !order.receiptId) return null
+      const receipt = (await ctx.db.select('pos.ReceiptDocument', { id: order.receiptId }))[0]
+      return receipt?.orderId === order.id ? receipt : null
+    },
+  }),
   getLineTrackingAvailability: defineFn({
     input: { orderId: 'id', lineId: 'id' },
     effects: [
@@ -2528,6 +2646,7 @@ export const functions: Record<string, FnSpec> = {
       state: 'text?',
       pickingId: 'id?',
       accountMoveId: 'id?',
+      receiptId: 'id?',
       revision: 'int?',
       errors: 'json?',
     },
@@ -2542,6 +2661,8 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.ProviderPaymentLock',
       'write:pos.ProviderPaymentLock',
       'read:pos.PaymentMethod',
+      'read:pos.ReceiptDocument',
+      'write:pos.ReceiptDocument',
       'read:product.Product',
       'read:product.Template',
       'read:uom.Unit',
@@ -2567,6 +2688,7 @@ export const functions: Record<string, FnSpec> = {
           state: order.state,
           pickingId: order.pickingId,
           accountMoveId: order.accountMoveId,
+          receiptId: order.receiptId,
           revision: n(order.revision),
         }
       if (order.state !== 'draft') return invalid('state', 'only a new order can be paid')
@@ -2775,7 +2897,40 @@ export const functions: Record<string, FnSpec> = {
         } catch (error) {
           return invalid('accounting', (error as Error).message)
         }
+        const receiptId = `${String(order.id)}:receipt:v1`
+        const issuedAt = now()
+        const receiptDocument = await receiptDocumentFor(
+          ctx,
+          effectiveOrder,
+          config,
+          session,
+          partner,
+          lines,
+          payments,
+          accountMoveId,
+          issuedAt,
+        )
+        const contentHash = receiptHash(receiptDocument)
         await ctx.tx(async (tx) => {
+          const inserted = await tx.db.insertIfAbsent('pos.ReceiptDocument', {
+            id: receiptId,
+            orderId: args.id,
+            version: 1,
+            templateVersion: 'pos-receipt-v1',
+            contentHash,
+            document: receiptDocument,
+            issuedAt,
+          })
+          if (!('dryRun' in inserted) && !inserted.inserted) {
+            const existing = (await tx.db.select('pos.ReceiptDocument', { id: receiptId }))[0]
+            if (
+              existing?.orderId !== args.id ||
+              n(existing.version) !== 1 ||
+              existing.templateVersion !== 'pos-receipt-v1' ||
+              existing.contentHash !== contentHash
+            )
+              throw new Error('receipt identity is already bound to different content')
+          }
           if (providerAttemptId) {
             const finalized = await tx.db.compareAndSet(
               'pos.ProviderPaymentLock',
@@ -2794,6 +2949,7 @@ export const functions: Record<string, FnSpec> = {
               invoiceStatus: 'invoiced',
               pickingId,
               accountMoveId,
+              receiptId,
             },
           )
         })
@@ -2805,6 +2961,7 @@ export const functions: Record<string, FnSpec> = {
           revision: claim.revision,
           ...(pickingId ? { pickingId } : {}),
           accountMoveId,
+          receiptId,
         }
       } finally {
         if (providerAttemptId && !finalizationCommitted) {
