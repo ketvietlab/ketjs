@@ -1,9 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { connect } from 'node:net'
 import {
   _resetIdempotency,
   bytes,
   compose,
+  createAdapterPool,
   createKetServer,
   createTheme,
   KetError,
@@ -19,6 +21,19 @@ import { catalog, checkout, defaultTheme as theme, inventory } from '@ketvietlab
 
 const mods = [catalog, inventory, checkout, theme]
 
+const rawHttp = (port: number, request: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const socket = connect({ host: '127.0.0.1', port })
+    let response = ''
+    socket.setEncoding('utf8')
+    socket.once('connect', () => socket.end(request))
+    socket.on('data', (chunk) => {
+      response += chunk
+    })
+    socket.once('end', () => resolve(response))
+    socket.once('error', reject)
+  })
+
 async function boot() {
   const manifest = compose(mods)
   const adapter = sqliteAdapter()
@@ -31,6 +46,8 @@ async function boot() {
   const app = await createKetServer({
     manifest,
     adapter,
+    resolveStream: (id, _url, req) =>
+      req.headers.authorization === 'Bearer e2e-stream' ? `tenant:e2e:${id}` : null,
     theme: rt,
     pageScope: () => ({
       site: { title: 'Cửa hàng Ket', tagline: null },
@@ -146,16 +163,121 @@ test('e2e: dry-run over HTTP reports writes and commits nothing', async () => {
   await adapter.close()
 })
 
+test('e2e: the generic JSON limit runs before authentication resolvers', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  let authCalls = 0
+  const app = await createKetServer({
+    manifest: compose(mods),
+    adapter,
+    maxJsonBodyBytes: 32,
+    resolveAllow: async () => {
+      authCalls++
+      return null
+    },
+  })
+  const port = await app.listen(0)
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/_ket/fn/catalog.createProduct`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'x'.repeat(64) }),
+    })
+    assert.equal(response.status, 413)
+    assert.equal(((await response.json()) as { code: string }).code, 'E_PAYLOAD_TOO_LARGE')
+
+    const encoded = new TextEncoder().encode(JSON.stringify({ title: 'y'.repeat(64) }))
+    const chunkedBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoded.slice(0, 16))
+        controller.enqueue(encoded.slice(16))
+        controller.close()
+      },
+    })
+    const chunked = await fetch(`http://127.0.0.1:${port}/_ket/fn/catalog.createProduct`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: chunkedBody,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' })
+    assert.equal(chunked.status, 413, 'chunked requests are counted even without Content-Length')
+    assert.equal(authCalls, 0, 'oversized input must be refused before auth/session work starts')
+  } finally {
+    await app.close()
+    await adapter.close()
+  }
+})
+
+test('e2e: malformed HTTP inputs stay inside the client-error boundary', async () => {
+  let datastoreResolutions = 0
+  const pool = createAdapterPool({ create: () => sqliteAdapter(), max: 1 })
+  const app = await createKetServer({
+    manifest: compose([], { headless: true }),
+    pool,
+    resolveDatastore: (url) => {
+      datastoreResolutions++
+      return url.hostname
+    },
+  })
+  const port = await app.listen(0)
+  const base = `http://127.0.0.1:${port}`
+  try {
+    const post = (target: string, host: string) =>
+      `POST ${target} HTTP/1.1\r\nHost: ${host}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}`
+    for (const [name, request] of [
+      ['encoded host', post('/_ket/fn/missing', '%')],
+      ['userinfo host', post('/_ket/fn/missing', 'tenant@evil.example')],
+      ['path-like host', post('/_ket/fn/missing', 'tenant/evil.example')],
+      ['absolute target', post('http://victim.example/_ket/fn/missing', 'attacker.example')],
+      ['scheme-relative target', post('//victim.example/_ket/fn/missing', 'attacker.example')],
+    ]) {
+      const response = await rawHttp(port, request)
+      assert.match(response, /^HTTP\/1\.1 400 /, name)
+      assert.match(response, /E_INVALID_REQUEST_URL/, name)
+    }
+    assert.equal(datastoreResolutions, 0, 'invalid authorities never reach tenant resolution')
+
+    const invalidEncoding = await rawHttp(
+      port,
+      'POST /_ket/fn/% HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}',
+    )
+    assert.match(invalidEncoding, /^HTTP\/1\.1 400 /)
+    assert.match(invalidEncoding, /E_ROUTE_ENCODING/)
+
+    for (const body of ['{', '[]', 'null']) {
+      const response = await fetch(`${base}/_ket/fn/missing`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      })
+      assert.equal(response.status, 400)
+      assert.equal(((await response.json()) as { code: string }).code, 'E_INVALID_JSON_BODY')
+    }
+
+    assert.equal(datastoreResolutions, 0, 'malformed paths and bodies also stop before tenant resolution')
+    assert.equal((await fetch(`${base}/_ket/manifest`)).status, 200, 'the server remains available')
+  } finally {
+    await app.close()
+    await pool.close()
+  }
+})
+
 test('e2e: SSE stream resumes from a cursor after a reload', async () => {
   const { app, adapter, base } = await boot()
-  const w = await app.streams.open('gen1')
+  const w = await app.streams.open('tenant:e2e:gen1')
   w.write('Xin')
   w.write(' chào')
   await w.flush()
 
+  const refused = await fetch(`${base}/_ket/stream/gen1?from=0`)
+  assert.equal(refused.status, 404, 'the endpoint is closed until its resolver authorizes the request')
+
   // first client reads what exists, then "reloads" (aborts)
   const ac = new AbortController()
-  const res1 = await fetch(`${base}/_ket/stream/gen1?from=0`, { signal: ac.signal })
+  const res1 = await fetch(`${base}/_ket/stream/gen1?from=0`, {
+    headers: { authorization: 'Bearer e2e-stream' },
+    signal: ac.signal,
+  })
   const reader = res1.body!.getReader()
   let seen = ''
   while (!seen.includes('chào')) {
@@ -169,7 +291,9 @@ test('e2e: SSE stream resumes from a cursor after a reload', async () => {
   w.write(' bạn')
   await w.end()
 
-  const res2 = await fetch(`${base}/_ket/stream/gen1?from=${lastId + 1}`)
+  const res2 = await fetch(`${base}/_ket/stream/gen1?from=${lastId + 1}`, {
+    headers: { authorization: 'Bearer e2e-stream' },
+  })
   const text = await res2.text()
   assert.match(text, /bạn/)
   assert.ok(!text.includes('Xin'), 'a resumed stream must not replay chunks the client already had')

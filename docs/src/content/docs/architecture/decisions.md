@@ -324,17 +324,20 @@ With subdomains the Host says which tenant before any cookie is read, so each ke
 its own sessions in its own database — and that *is* the isolation: a session id
 from one tenant is not a row in another's table, even though the signature is
 valid, because it is the same secret. An app serving every tenant from one domain
-cannot resolve a tenant that way at all — reading the session needs the database,
-knowing the database needs the session — so it passes one shared store and records
-the tenant on the session. Both are expressible; neither is assumed.
+must resolve the tenant before the cookie, from a trusted gateway assertion, path,
+or another explicit request key. It may use one shared identity store, but every
+record is tenant-bound and a session never selects a datastore. Both storage forms
+are expressible; neither is assumed.
 
 **The cookie carries no `Domain`,** which is what makes the subdomain case safe:
 `Domain=.example.com` would hand `acme.example.com` the cookie set for
 `globex.example.com`. It was already absent; it is now deliberate and tested.
 
 **Also still single:** the stream store falls back to memory when there is no
-single adapter, so resumable streams are not yet per tenant. Named here rather than
-discovered later.
+single adapter, so resumable streams are not yet durably stored per tenant. The HTTP
+endpoint now requires an explicit resolver that authorizes a public id and maps it
+to a tenant-namespaced topic; that closes cross-tenant exposure, but it does not
+decide which tenant database should own the durable log.
 
 **What a deployment that never wants tenants pays.** Nothing to declare — `tenants`
 is absent by default, `ket new` does not mention it, and KetSuite itself has no
@@ -853,18 +856,26 @@ and that comparisons go through `compareQty` and `isZero` — never `===`.
 **Product depends on uom**, as in the domain contract: a template counts in a unit, optional so a
 service needs none and so existing rows survive the module arriving.
 
-**`decimal` is a separate type from `float`, and the difference is storage only.**
+**`decimal` is a separate type from `float`, with an exact storage and query contract.**
 the domain contract splits these and the split is right: a quantity or a price is stored as exact
 decimal and computed as a binary float, with the rounding helpers standing between.
 The first version here copied the arithmetic and missed the storage — quantities
 went into `DOUBLE PRECISION`, where 0.1 comes back as 0.1000000000000000055 and
 every trip through the database puts back the error the rounding just took out.
 
-- Postgres: `NUMERIC`, unbounded, as the domain contract uses.
+- Postgres: `NUMERIC`; KetJS applies the same 4096-character public value budget as SQLite.
 - SQLite: `TEXT`. SQLite has no exact decimal at all — `NUMERIC` affinity silently
   becomes `REAL` — so text is the only storage that returns what it was given.
-- Both adapters hand it back as a string; `ctx` converts, because it is the one
-  place that knows the model and the row. Arithmetic stays on numbers, as in the domain contract.
+- Both adapters hand ordinary selected values back as exact strings. Arithmetic stays an
+  explicit caller choice, as in the domain contract.
+- SQLite predicates and ordering compare normalized decimal parts exactly rather
+  than casting through `REAL`. Grouping and `countDistinct` use canonical numeric
+  equivalence; `sum`, `min`, and `max` use string/`BigInt` aggregates. Decimal `avg`
+  fails explicitly because a rational result may not have a finite decimal spelling;
+  its rounding rule stays a domain concern or uses PostgreSQL.
+- Computed decimal keys and aggregates are canonicalized after either adapter, while
+  ordinary selected fields retain their stored spelling. Every order explicitly follows
+  PostgreSQL's null convention: ascending last, descending first.
 
 Tested both ways: awkward values round-trip unchanged through SQLite and through a
 live Postgres, and the raw column is confirmed to hold `"0.1"` rather than a binary

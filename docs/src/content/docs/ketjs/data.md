@@ -101,6 +101,25 @@ Each result has `key`, `count`, and `aggregates`. Supported aggregates are `coun
 scope checks as ordinary reads. Date buckets accept `day`, ISO `week`, `month`, `quarter`, and `year`;
 SQLite and PostgreSQL produce the same stable local-calendar keys.
 
+`{ fn: 'count', as: 'rows' }` renders `COUNT(*)`. Add `col` to count only non-null values, for example
+`{ fn: 'count', col: Orders.total, as: 'priced' }`. Row and group ordering is explicit and portable:
+ascending puts nulls last, while descending puts nulls first on both adapters.
+
+For decimal fields, SQLite predicates and ordering compare exact normalized parts instead of coercing
+through `REAL`. Group keys and `countDistinct` use numeric equivalence, so `1.0` and `1.00` belong to
+one canonical `1` group. Decimal `sum`, `min`, and `max` use exact string/`BigInt` aggregates. KetJS
+canonicalizes computed decimal group keys and aggregates on both adapters; ordinary selected fields
+still decode byte for byte as stored.
+
+Decimal `avg` on SQLite fails with `E_DECIMAL_AVG_SQLITE`: an exact average can be a non-terminating
+rational, so KetJS will not silently choose a scale or binary float. Request `sum` and `count` over the
+same nullable decimal column, then divide with the domain's explicit rounding rule, or use PostgreSQL.
+These guarantees apply to KetJS queries; raw SQLite SQL keeps SQLite's native type/coercion rules.
+
+Column handles from `table()`/`ctx.table()` carry required runtime `base` metadata, which selects exact
+decimal SQL. Legacy `{ model, name }` objects without that metadata are rejected rather than falling
+back to SQLite coercion.
+
 ## Declarative list search
 
 `defineListSearch()` declares explicit allowlists for searchable, filterable, groupable, and sortable

@@ -92,7 +92,7 @@ async function tenantSource(
 
   const tenantSpec = serve.tenants
   const pool = createAdapterPool({
-    create: (key) => tenantSpec.open(key, config) as Adapter,
+    create: (key) => tenantSpec.open(key, config),
     ...(tenantSpec.max === undefined ? {} : { max: tenantSpec.max }),
     ...(tenantSpec.idleMs === undefined ? {} : { idleMs: tenantSpec.idleMs }),
   })

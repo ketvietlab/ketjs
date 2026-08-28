@@ -77,9 +77,18 @@ Append `?` to make a field optional.
 | `datetime` | `string` | Instant as ISO-8601 UTC text; normalised on write, identical on SQLite and Postgres. |
 | `ref:module.Model` | `string` | Identifier referencing another model contract. |
 
+One decimal value is limited to 4096 characters, including its sign and decimal point. Function input,
+changesets, direct context writes and filters enforce the same boundary; SQLite UDFs repeat it before
+regex or `BigInt` work as defense against rows written outside KetJS. Exponent-form strings are not part
+of the public decimal syntax, though finite JavaScript numbers are expanded to plain text on write.
+
 SQLite stores decimals as text because numeric affinity cannot preserve arbitrary decimal text.
-PostgreSQL uses `NUMERIC`. KetJS decodes both adapters to numbers for application arithmetic while
-ensuring the persisted representation does not reintroduce binary float error.
+PostgreSQL uses `NUMERIC`. KetJS decodes both adapters to exact strings; SQLite predicates, ordering,
+group equivalence, `countDistinct`, `sum`, `min`, and `max` operate on normalized decimal text without
+coercing through `REAL`. Computed group and aggregate values use canonical spellings on both adapters.
+Ascending order puts nulls last and descending order puts them first. SQLite decimal
+`avg` is refused until the caller chooses a rounding rule. Application arithmetic remains an explicit
+caller choice.
 
 `date` rejects impossible dates such as `2025-02-30`. Use `datetime` when an instant and timezone are
 part of the domain value.
@@ -105,12 +114,14 @@ type Scope = {
   company: string | null       // exactly one company receives new rows
   companies?: string[] | null // companies visible to reads
   branch?: string | null      // exactly one branch receives branch-scoped rows
-  branches?: string[] | null  // branches visible to reads; null means all readable branches
+  branches?: string[] | null  // branches visible to reads; null means all, [] means none
 }
 ```
 
 If `companies` is absent, reads default to `company`. Writes are refused when the write company or
-branch is outside the corresponding readable set. Scope columns are stamped on insert and immutable
+branch is outside the corresponding readable set. For branch-scoped models, `branches: null` (or an
+absent `branches`) allows every branch of the readable companies, while `branches: []` allows none.
+Scope columns are stamped on insert and immutable
 afterward: `ctx.db.update()` rejects patches containing `companyId`, or `branchId` on a
 `company+branch` model.
 

@@ -67,8 +67,10 @@ ket migrate --deployment erp --all --dry-run
 ```
 
 For one datastore, the command plans against `.ket/schema.<app>.json`, prints SQL, and updates that local
-snapshot; it does not prove that an external database was migrated. For tenant databases, `--all` uses the
-deployment's tenant catalogue and applies each plan unless `--dry-run` is set. Destructive changes always require
+snapshot; it does not prove that an external database was migrated. `--dry-run` prints the plan without
+creating `.ket` state or updating that snapshot. For tenant databases, `--all` uses the deployment's tenant
+catalogue and applies each plan unless `--dry-run` is set. A workspace with multiple tenant-fleet deployments
+must pass `--deployment`; the CLI never chooses a product implicitly. Destructive changes always require
 `--allow-destructive`. See [Migrations and adapters](/ketjs/migrations/).
 
 ## Runtime commands

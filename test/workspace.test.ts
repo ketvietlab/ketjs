@@ -50,6 +50,78 @@ test('umbrella: two deployments disagreeing about the same table is a build erro
   assert.throws(() => composeWorkspace([a, b]), /E_DATASTORE_COLUMN_CLASH|is int .* but text/)
 })
 
+test('umbrella: shared columns must agree on nullability and reference target', () => {
+  const deployment = (name: string, value: string, owner: string) =>
+    defineDeployment({
+      name,
+      datastore: 'main',
+      headless: true,
+      modules: [
+        defineModule({
+          name: 'shared_contract',
+          models: {
+            OwnerA: { scope: 'shared', fields: { id: 'id' } },
+            OwnerB: { scope: 'shared', fields: { id: 'id' } },
+            Entry: { scope: 'shared', fields: { id: 'id', value, owner } },
+          },
+        }),
+      ],
+    })
+
+  assert.throws(
+    () =>
+      composeWorkspace([
+        deployment('required', 'text', 'ref:shared_contract.OwnerA'),
+        deployment('optional', 'text?', 'ref:shared_contract.OwnerA'),
+      ]),
+    /E_DATASTORE_COLUMN_CLASH|text.*text\?/,
+  )
+  assert.throws(
+    () =>
+      composeWorkspace([
+        deployment('owner_a', 'text', 'ref:shared_contract.OwnerA'),
+        deployment('owner_b', 'text', 'ref:shared_contract.OwnerB'),
+      ]),
+    /E_DATASTORE_COLUMN_CLASH|OwnerA.*OwnerB/,
+  )
+})
+
+test('umbrella: shared datastore indexes are unioned and same-name conflicts are rejected', () => {
+  const deployment = (name: string, indexes: Record<string, { fields: string[]; unique?: boolean }>) =>
+    defineDeployment({
+      name,
+      datastore: 'main',
+      headless: true,
+      modules: [
+        defineModule({
+          name: 'indexed',
+          models: {
+            Entry: { scope: 'shared', fields: { id: 'id', code: 'text', label: 'text' }, indexes },
+          },
+        }),
+      ],
+    })
+
+  const union = composeWorkspace([
+    deployment('without_index', {}),
+    deployment('with_index', { code_unique: { fields: ['code'], unique: true } }),
+  ])
+  assert.deepEqual(union.datastores.main?.schema.tables.indexed_entry?.indexes.code_unique, {
+    fields: ['code'],
+    unique: true,
+    by: 'indexed',
+  })
+
+  assert.throws(
+    () =>
+      composeWorkspace([
+        deployment('code_index', { lookup: { fields: ['code'], unique: true } }),
+        deployment('label_index', { lookup: { fields: ['label'] } }),
+      ]),
+    /E_DATASTORE_INDEX_CLASH|index "indexed_entry.lookup"/,
+  )
+})
+
 test('umbrella: separate datastores keep separate schemas', () => {
   const ws = composeWorkspace([
     defineDeployment({ name: 'one', modules: [catalog, inventory], theme, datastore: 'shop' }),

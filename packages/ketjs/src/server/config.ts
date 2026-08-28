@@ -78,7 +78,7 @@ export function readConfig(
     host: env.HOST ?? defaults.host ?? '127.0.0.1',
     databaseUrl: env.DATABASE_URL ?? defaults.databaseUrl ?? null,
     sqliteFile: env.KET_SQLITE ?? defaults.sqliteFile ?? '.ket/deployment.db',
-    migrateOnBoot: env.KET_MIGRATE !== '0',
+    migrateOnBoot: env.KET_MIGRATE === undefined ? (defaults.migrateOnBoot ?? true) : env.KET_MIGRATE !== '0',
     defaultLocale: env.KET_LOCALE ?? defaults.defaultLocale ?? 'en',
     fallbackLocale: env.KET_FALLBACK_LOCALE ?? defaults.fallbackLocale ?? defaults.defaultLocale ?? 'en',
     defaultTimezone,

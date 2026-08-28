@@ -42,6 +42,8 @@ import type { Translator } from '../kernel/i18n.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
 import type { RouteParams } from '../kernel/routes.ts'
+import { randomBytes } from 'node:crypto'
+import type { Streams, StreamStore } from './stream.ts'
 
 export type { Html, RouteResult } from './respond.ts'
 export {
@@ -206,6 +208,20 @@ export type ServeSpec = {
   openTransport?: OpenTransport
   /** Version and maintenance policy published by profile bootstrap routes. */
   clientCompatibility?: ClientCompatibilityPolicy
+  /** Backing store for the built-in resumable stream transport. */
+  streamStore?: StreamStore
+  /**
+   * Authorize a public stream id and map it to the exact tenant-namespaced topic
+   * used by `BootedDeployment.streams`. Absent or null keeps the endpoint closed.
+   */
+  resolveStream?: (
+    ctx: ServeContext,
+    id: string,
+    url: URL,
+    req: IncomingMessage,
+  ) => string | null | Promise<string | null>
+  /** Maximum buffered body accepted by the generic JSON function transport. */
+  maxJsonBodyBytes?: number
   /**
    * Turn on sessions. Present means the X-Ket-Company shim is gone and identity
    * comes from a signed cookie; absent means the shim stays and the banner says so.
@@ -254,6 +270,8 @@ export type BootedDeployment = {
   /** Per-tenant access, and the only form that works in both modes. */
   tenants: Tenants
   config: RuntimeConfig
+  /** Writers for the same store served by the authorized stream endpoint. */
+  streams: Streams
   port: number
   banner: () => Promise<string>
   close: () => Promise<void>
@@ -312,26 +330,35 @@ export async function bootDeployment(
    * also the isolation you want: a session id from one tenant simply is not in
    * another's table.
    *
-   * A deployment serving every tenant from one domain cannot do that, because reading
-   * the session needs the database and knowing the database needs the session. It
-   * passes `sessions.store` instead — one shared store, with the tenant recorded
-   * on the session. Both work; the framework assumes neither.
+   * A deployment serving every tenant from one domain must still resolve the tenant
+   * before reading the cookie — for example from a trusted gateway assertion, path,
+   * or explicit header. It may pass `sessions.store` as one shared identity store;
+   * every record is then tenant-bound, and a session never selects a datastore.
    */
   const sharedStore = serve.sessions?.store ?? null
+  const configuredSessionSecret = serve.sessions?.secret || config.secret
+  const generatedTenantSecret =
+    serve.sessions && serve.tenants && !configuredSessionSecret ? randomBytes(32).toString('base64url') : null
   const sessionOpts = serve.sessions
     ? {
-        ...(config.secret ? { secret: config.secret } : {}),
         secure: config.host !== '127.0.0.1' && config.host !== 'localhost',
         ...serve.sessions,
+        ...(configuredSessionSecret ? { secret: configuredSessionSecret } : {}),
+        ...(generatedTenantSecret ? { secret: generatedTenantSecret, ephemeralSecret: true } : {}),
       }
     : null
   const makeSessions = sessionOpts
-    ? (a: Adapter) => createSessions({ ...sessionOpts, store: sharedStore ?? dbSessionStore(a) })
+    ? (a: Adapter, tenant?: string) =>
+        createSessions({
+          ...sessionOpts,
+          ...(sharedStore && tenant !== undefined ? { tenant } : {}),
+          store: sharedStore ?? dbSessionStore(a),
+        })
     : null
 
-  // Single datastore: one Sessions, built now. Tenants: one per tenant, built on
-  // first touch — unless a shared store was supplied, in which case it is one
-  // again and every tenant hands back the same instance.
+  // Single datastore: one Sessions, built now. Tenant deployments expose one
+  // lease-safe facade per tenant. Facades may share a backing store, but remain
+  // distinct so every record and administrative operation stays tenant-bound.
   const sessions: Sessions | null = makeSessions && adapter ? await makeSessions(adapter) : null
 
   const islandRegistry = (): IslandRegistry => {
@@ -365,11 +392,7 @@ export async function bootDeployment(
     ? createTenants({
         spec: serve.tenants,
         pool: createAdapterPool({
-          create: (key) => {
-            const made = (serve.tenants as TenantSpec).open(key, config)
-            // The pool wants an Adapter now; opening is the adapter's own job.
-            return made as Adapter
-          },
+          create: (key) => (serve.tenants as TenantSpec).open(key, config),
           ...(serve.tenants.max !== undefined ? { max: serve.tenants.max } : {}),
           ...(serve.tenants.idleMs !== undefined ? { idleMs: serve.tenants.idleMs } : {}),
         }),
@@ -493,11 +516,15 @@ export async function bootDeployment(
           .filter(Boolean)
       const company = (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany
       const companies = list('x-ket-companies')
+      const branches = list('x-ket-branch')
       return {
         company,
         companies: companies.length ? [...new Set([company, ...companies])] : null,
         branch: (req.headers['x-ket-current-branch'] as string | undefined) ?? null,
-        branches: list('x-ket-branch') || null,
+        // An absent development header means unrestricted, matching Scope's
+        // null/undefined contract. `[]` is reserved for callers that explicitly
+        // construct a scope with no readable branches.
+        branches: branches.length ? branches : null,
       }
     }
     const record = await sessionRecordOf(url, req)
@@ -794,6 +821,11 @@ export async function bootDeployment(
   const server = await createKetServer({
     manifest,
     adapter,
+    ...(serve.streamStore ? { streamStore: serve.streamStore } : {}),
+    ...(serve.resolveStream
+      ? { resolveStream: (id, url, req) => serve.resolveStream!(ctx, id, url, req) }
+      : {}),
+    ...(serve.maxJsonBodyBytes !== undefined ? { maxJsonBodyBytes: serve.maxJsonBodyBytes } : {}),
     /**
      * The HTTP layer gets a pool whose leases go through the tenant runtime, not
      * the raw one.
@@ -955,7 +987,7 @@ export async function bootDeployment(
     ]
     const w = Math.max(...rows.map((r) => (r[0] as string).length))
     const note = makeSessions
-      ? (sessions?.ephemeralSecret ?? !config.secret)
+      ? (sessions?.ephemeralSecret ?? !configuredSessionSecret)
         ? `\n  KET_SECRET is not set, so a signing key was generated for this process.` +
           `\n  Sessions will not survive a restart and will not work across pods.`
         : ''
@@ -973,7 +1005,7 @@ export async function bootDeployment(
     if (adapter) await adapter.close()
     await tenants.close()
   }
-  return { name: spec.name, manifest, adapter, tenants, config, port, banner, close }
+  return { name: spec.name, manifest, adapter, tenants, config, streams: server.streams, port, banner, close }
 }
 
 /** bootDeployment, plus the banner and the signal handling a long-running process wants. */

@@ -1,18 +1,25 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  asc,
   callFn,
+  changeset,
   compose,
+  desc,
   defineModule,
+  from,
+  generateDts,
+  gte,
   migrateOne,
   registerFunctions,
   sqliteAdapter,
+  table,
 } from '@ketvietlab/ketjs'
-import type { Row } from '@ketvietlab/ketjs'
+import type { Adapter, Row } from '@ketvietlab/ketjs'
 
 const ledger = defineModule({
   name: 'ledger',
-  models: { Entry: { scope: 'shared', fields: { id: 'id', amount: 'decimal', note: 'text' } } },
+  models: { Entry: { scope: 'shared', fields: { id: 'id', amount: 'decimal?', note: 'text' } } },
   functions: {
     put: {
       input: { id: 'id', amount: 'decimal', note: 'text' },
@@ -22,6 +29,28 @@ const ledger = defineModule({
         await ctx.db.insert('ledger.Entry', args)
         return args
       },
+    },
+    putNullable: {
+      input: { id: 'id', amount: 'decimal?', note: 'text' },
+      effects: ['write:ledger.Entry'],
+      handler: (ctx, args) => ctx.db.insert('ledger.Entry', args),
+    },
+    putRaw: {
+      input: { id: 'id', raw: 'text', note: 'text' },
+      effects: ['write:ledger.Entry'],
+      handler: (ctx, args) =>
+        ctx.db.insert('ledger.Entry', { id: args.id, amount: args.raw, note: args.note }),
+    },
+    updateRaw: {
+      input: { id: 'id', raw: 'text' },
+      effects: ['write:ledger.Entry'],
+      dryRun: true,
+      handler: (ctx, args) => ctx.db.update('ledger.Entry', { id: args.id }, { amount: args.raw }),
+    },
+    findRaw: {
+      input: { raw: 'text' },
+      effects: ['read:ledger.Entry'],
+      handler: (ctx, args) => ctx.db.select('ledger.Entry', { amount: args.raw }),
     },
     read: {
       input: { id: 'id' },
@@ -38,6 +67,43 @@ const ledger = defineModule({
         const row = (await ctx.db.select('ledger.Entry', { id: args.id }))[0]!
         await ctx.db.update('ledger.Entry', { id: args.id }, { ...row, note: args.note })
         return { ok: true }
+      },
+    },
+    rank: {
+      input: { min: 'decimal?', descending: 'bool?' },
+      effects: ['read:ledger.Entry'],
+      handler: (ctx, args) => {
+        const Entry = ctx.table('ledger.Entry')
+        const query = args.min === undefined ? from(Entry) : from(Entry).where(gte(Entry.amount!, args.min))
+        return ctx.db.all(query.orderBy(args.descending ? desc(Entry.amount!) : asc(Entry.amount!)))
+      },
+    },
+    summarize: {
+      effects: ['read:ledger.Entry'],
+      handler: (ctx) => {
+        const Entry = ctx.table('ledger.Entry')
+        return ctx.db.group(
+          from(Entry)
+            .groupBy({ col: Entry.note! })
+            .aggregate(
+              { fn: 'count', as: 'rows' },
+              { fn: 'count', col: Entry.amount!, as: 'presentAmounts' },
+              { fn: 'countDistinct', col: Entry.amount!, as: 'distinctAmounts' },
+              { fn: 'sum', col: Entry.amount!, as: 'total' },
+              { fn: 'min', col: Entry.amount!, as: 'minimum' },
+              { fn: 'max', col: Entry.amount!, as: 'maximum' },
+            )
+            .orderGroupsBy({ by: 'total', dir: 'asc' }),
+        )
+      },
+    },
+    groupAmounts: {
+      effects: ['read:ledger.Entry'],
+      handler: (ctx) => {
+        const Entry = ctx.table('ledger.Entry')
+        return ctx.db.group(
+          from(Entry).groupBy({ col: Entry.amount! }).orderGroupsBy({ by: 'key', dir: 'asc' }),
+        )
       },
     },
   },
@@ -85,4 +151,295 @@ test('decimal: a computed write still renders a number', async (t) => {
   await callFn('ledger.put', { id: 'computed', amount: 0.1 + 0.2, note: 'a' }, { adapter, manifest })
   const row = (await callFn('ledger.read', { id: 'computed' }, { adapter, manifest })).value as Row
   assert.equal(row.amount, '0.30000000000000004')
+})
+
+test('decimal: SQLite compares and sorts exact text numerically without changing its decode', async (t) => {
+  const { adapter, manifest } = await boot()
+  t.after(() => adapter.close())
+  const amounts = [
+    '-9007199254740993.2',
+    '-10',
+    '-2',
+    '0',
+    '0.01',
+    '2',
+    '10',
+    '9007199254740992.1',
+    '9007199254740992.2',
+    '9007199254740993.1',
+  ]
+  for (const [index, amount] of amounts.entries())
+    await callFn('ledger.put', { id: `rank-${index}`, amount, note: 'rank' }, { adapter, manifest })
+
+  const ascending = (await callFn('ledger.rank', {}, { adapter, manifest })).value as Row[]
+  assert.deepEqual(
+    ascending.map((row) => row.amount),
+    amounts,
+  )
+  assert.ok(ascending.every((row) => typeof row.amount === 'string'))
+
+  const descending = (await callFn('ledger.rank', { descending: true }, { adapter, manifest })).value as Row[]
+  assert.deepEqual(
+    descending.map((row) => row.amount),
+    [...amounts].reverse(),
+  )
+
+  const aboveUnsafeInteger = (
+    await callFn('ledger.rank', { min: '9007199254740992.15' }, { adapter, manifest })
+  ).value as Row[]
+  assert.deepEqual(
+    aboveUnsafeInteger.map((row) => row.amount),
+    ['9007199254740992.2', '9007199254740993.1'],
+    'comparison must distinguish decimals that collapse to the same JavaScript number',
+  )
+})
+
+test('decimal: SQLite groups equivalent spellings and aggregates without binary floats', async (t) => {
+  const { adapter, manifest } = await boot()
+  t.after(() => adapter.close())
+  const amounts = [
+    '-9007199254740990.3',
+    '9007199254740992.1',
+    '0.2',
+    '1.0',
+    '1.00',
+    '-0.0',
+    '0.000',
+    '-2.00',
+    '10',
+    '2.0',
+  ]
+  for (const [index, amount] of amounts.entries())
+    await callFn('ledger.put', { id: `aggregate-${index}`, amount, note: 'all' }, { adapter, manifest })
+
+  const summarized = (await callFn('ledger.summarize', {}, { adapter, manifest })).value as Array<{
+    key: unknown[]
+    count: number
+    aggregates: Record<string, unknown>
+  }>
+  assert.deepEqual(summarized, [
+    {
+      key: ['all'],
+      count: 10,
+      aggregates: {
+        rows: 10,
+        presentAmounts: 10,
+        distinctAmounts: 8,
+        total: '14',
+        minimum: '-9007199254740990.3',
+        maximum: '9007199254740992.1',
+      },
+    },
+  ])
+
+  const grouped = (await callFn('ledger.groupAmounts', {}, { adapter, manifest })).value as Array<{
+    key: unknown[]
+    count: number
+  }>
+  assert.deepEqual(grouped, [
+    { key: ['-9007199254740990.3'], count: 1, aggregates: {} },
+    { key: ['-2'], count: 1, aggregates: {} },
+    { key: ['0'], count: 2, aggregates: {} },
+    { key: ['0.2'], count: 1, aggregates: {} },
+    { key: ['1'], count: 2, aggregates: {} },
+    { key: ['2'], count: 1, aggregates: {} },
+    { key: ['10'], count: 1, aggregates: {} },
+    { key: ['9007199254740992.1'], count: 1, aggregates: {} },
+  ])
+})
+
+test('decimal: nullable aggregates count values and every portable order puts nulls explicitly', async (t) => {
+  const { adapter, manifest } = await boot()
+  t.after(() => adapter.close())
+  for (const [id, amount] of [
+    ['two', '2.00'],
+    ['ten', '10'],
+    ['missing', null],
+  ])
+    await callFn('ledger.putNullable', { id, amount, note: 'nullable' }, { adapter, manifest })
+
+  const ascending = (await callFn('ledger.rank', {}, { adapter, manifest })).value as Row[]
+  assert.deepEqual(
+    ascending.map((row) => row.amount),
+    ['2.00', '10', null],
+    'ASC follows PostgreSQL and places NULL last',
+  )
+  const descending = (await callFn('ledger.rank', { descending: true }, { adapter, manifest })).value as Row[]
+  assert.deepEqual(
+    descending.map((row) => row.amount),
+    [null, '10', '2.00'],
+    'DESC follows PostgreSQL and places NULL first',
+  )
+
+  const summary = ((await callFn('ledger.summarize', {}, { adapter, manifest })).value as Row[])[0]!
+  assert.deepEqual(summary, {
+    key: ['nullable'],
+    count: 3,
+    aggregates: {
+      rows: 3,
+      presentAmounts: 2,
+      distinctAmounts: 2,
+      total: '12',
+      minimum: '2',
+      maximum: '10',
+    },
+  })
+  const groups = (await callFn('ledger.groupAmounts', {}, { adapter, manifest })).value as Row[]
+  assert.deepEqual(
+    groups.map((row) => (row.key as unknown[])[0]),
+    ['2', '10', null],
+    'decimal group aliases use the same explicit NULL order',
+  )
+})
+
+test('decimal: every public write, filter, and UDF boundary enforces 4096 characters', async (t) => {
+  const { adapter, manifest } = await boot()
+  t.after(() => adapter.close())
+  const boundary = '1'.repeat(4096)
+  const oversized = boundary + '1'
+
+  await callFn('ledger.put', { id: 'boundary', amount: boundary, note: 'budget' }, { adapter, manifest })
+  assert.equal(
+    ((await callFn('ledger.read', { id: 'boundary' }, { adapter, manifest })).value as Row).amount,
+    boundary,
+  )
+
+  await assert.rejects(
+    callFn('ledger.put', { id: 'fn', amount: oversized, note: 'budget' }, { adapter, manifest }),
+    (error: unknown) => (error as { code?: string }).code === 'E_INVALID_INPUT',
+  )
+  const cast = changeset(manifest, 'ledger.Entry', { amount: oversized }).cast(['amount'])
+  assert.equal(cast.valid, false)
+  assert.match(cast.errors[0]!.message, /4096/)
+  await assert.rejects(
+    callFn('ledger.putRaw', { id: 'raw', raw: oversized, note: 'budget' }, { adapter, manifest }),
+    (error: unknown) => (error as { code?: string }).code === 'E_DECIMAL_TOO_LONG',
+  )
+  await assert.rejects(
+    callFn('ledger.updateRaw', { id: 'boundary', raw: oversized }, { adapter, manifest, dryRun: true }),
+    (error: unknown) => (error as { code?: string }).code === 'E_DECIMAL_TOO_LONG',
+  )
+  await assert.rejects(
+    callFn('ledger.findRaw', { raw: oversized }, { adapter, manifest }),
+    (error: unknown) => (error as { code?: string }).code === 'E_DECIMAL_TOO_LONG',
+  )
+
+  const Entry = table(manifest, 'ledger.Entry')
+  assert.throws(
+    () => from(Entry).where(gte(Entry.amount!, oversized)).toSQL('sqlite'),
+    (error: unknown) => (error as { code?: string }).code === 'E_DECIMAL_TOO_LONG',
+  )
+  const guarded = (await adapter.all('SELECT ket_decimal_cmp(?, ?) AS compared', [oversized, '1']))[0]!
+  assert.equal(guarded.compared, null, 'the UDF rejects over-budget raw SQLite values before parsing')
+})
+
+test('decimal: legacy columns without base metadata fail instead of falling back to SQLite coercion', () => {
+  const Entry = table(compose([ledger]), 'ledger.Entry')
+  const legacy = { model: 'ledger.Entry', name: 'amount' }
+  assert.throws(() => gte(legacy as never, '1'), /metadata must include model, name, and base/)
+  assert.throws(
+    () =>
+      from(Entry)
+        .groupBy({ col: Entry.note! })
+        .aggregate({ fn: 'avg', col: legacy as never, as: 'average' }),
+    /metadata must include model, name, and base/,
+  )
+})
+
+test('decimal: SQLite average fails before execution unless the caller chooses a rounding rule', () => {
+  const Entry = table(compose([ledger]), 'ledger.Entry')
+  const average = from(Entry)
+    .groupBy({ col: Entry.note! })
+    .aggregate({ fn: 'avg', col: Entry.amount!, as: 'average' })
+  assert.throws(
+    () => average.toSQL('sqlite'),
+    (error: unknown) => {
+      const held = error as { code?: string; hint?: string }
+      return held.code === 'E_DECIMAL_AVG_SQLITE' && Boolean(held.hint?.includes('same decimal column'))
+    },
+  )
+  assert.match(average.toSQL('postgres').text, /AVG\(.*"amount"\) AS "average"/)
+})
+
+test('decimal: SQLite orders exact aggregate aliases numerically', async (t) => {
+  const { adapter, manifest } = await boot()
+  t.after(() => adapter.close())
+  for (const [note, amount] of [
+    ['negative', '-2'],
+    ['large', '10'],
+    ['small', '2'],
+  ])
+    await callFn('ledger.put', { id: note, amount, note }, { adapter, manifest })
+
+  const summarized = (await callFn('ledger.summarize', {}, { adapter, manifest })).value as Array<{
+    key: string[]
+  }>
+  assert.deepEqual(
+    summarized.map((row) => row.key[0]),
+    ['negative', 'small', 'large'],
+  )
+})
+
+test('decimal: context canonicalizes PostgreSQL-shaped computed values without a live server', async () => {
+  const manifest = compose([ledger])
+  registerFunctions([ledger])
+  const seen: string[] = []
+  const adapter: Adapter = {
+    name: 'postgres',
+    async open() {},
+    async close() {},
+    async exec() {},
+    async all(sql) {
+      seen.push(sql)
+      if (sql.includes('AS "total"'))
+        return [
+          {
+            __group0: 'all',
+            __count: 3,
+            rows: 3,
+            presentAmounts: 2,
+            distinctAmounts: 2,
+            total: '3.00',
+            minimum: '1.00',
+            maximum: '2.000',
+          },
+        ]
+      return [{ __group0: '1.00', __count: 2 }]
+    },
+    async run() {
+      return { changes: 0 }
+    },
+    async tx(fn) {
+      return fn(this)
+    },
+    quoteIdent(name) {
+      return `"${name.replace(/"/g, '""')}"`
+    },
+    columnSql() {
+      return 'NUMERIC'
+    },
+    async introspect() {
+      return {}
+    },
+  }
+
+  const summary = ((await callFn('ledger.summarize', {}, { adapter, manifest })).value as Row[])[0]!
+  assert.deepEqual(summary.aggregates, {
+    rows: 3,
+    presentAmounts: 2,
+    distinctAmounts: 2,
+    total: '3',
+    minimum: '1',
+    maximum: '2',
+  })
+  const grouped = ((await callFn('ledger.groupAmounts', {}, { adapter, manifest })).value as Row[])[0]!
+  assert.deepEqual(grouped.key, ['1'])
+  assert.match(seen[0]!, /COUNT\("ledger_entry"\."amount"\) AS "presentAmounts"/)
+  assert.match(seen[0]!, /ORDER BY "total" ASC NULLS LAST/)
+})
+
+test('decimal: generated function declarations use exact strings', () => {
+  const generated = generateDts(compose([ledger]))
+  assert.match(generated, /amount: string/)
+  assert.match(generated, /"ledger\.put": \{ input: \{ id: string; amount: string; note: string \}/)
 })

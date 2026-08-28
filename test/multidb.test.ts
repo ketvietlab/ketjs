@@ -1,8 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  type Adapter,
   callFn,
   compose,
+  confirmManualMigration,
   createAdapterPool,
   createIdempotency,
   createKetServer,
@@ -11,7 +13,9 @@ import {
   formatFleet,
   migrateFleet,
   migrateOne,
+  planMigration,
   registerFunctions,
+  schemaFromManifest,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
 import { catalog, checkout, defaultTheme as theme, inventory } from '@ketvietlab/ketsuite'
@@ -90,6 +94,113 @@ test('pool: an adapter still opening cannot be evicted by a concurrent acquire',
   await pool.close()
 })
 
+test('pool: an adapter being evicted holds its slot until close completes', async () => {
+  let finishClose!: () => void
+  let closeStarted!: () => void
+  const closeGate = new Promise<void>((resolve) => {
+    finishClose = resolve
+  })
+  const started = new Promise<void>((resolve) => {
+    closeStarted = resolve
+  })
+  let live = 0
+  let peak = 0
+  const events: string[] = []
+  const pool = createAdapterPool({
+    max: 1,
+    create: (key) => ({
+      ...sqliteAdapter(),
+      async open() {
+        live++
+        peak = Math.max(peak, live)
+        events.push(`open:${key}`)
+      },
+      async close() {
+        events.push(`close:start:${key}`)
+        if (key === 'first') {
+          closeStarted()
+          await closeGate
+        }
+        live--
+        events.push(`close:end:${key}`)
+      },
+    }),
+  })
+
+  await pool.with('first', async () => {})
+  const next = pool.acquire('next')
+  await started
+  const overtaker = pool.acquire('overtaker').then(
+    (adapter) => ({ adapter }),
+    (error: unknown) => ({ error }),
+  )
+  await Promise.resolve()
+
+  assert.equal(live, 1, 'a closing adapter still consumes the only physical slot')
+  assert.equal(pool.size, 1)
+  assert.deepEqual(pool.open, ['first'])
+  assert.equal(peak, 1)
+  assert.deepEqual(events, ['open:first', 'close:start:first'])
+
+  finishClose()
+  await next
+  const overtaken = await overtaker
+  assert.match(String('error' in overtaken ? overtaken.error : ''), /pool is full/)
+  assert.equal(peak, 1, 'a later acquire cannot open while eviction is closing')
+  pool.release('next')
+  await pool.close()
+})
+
+test('pool: idle eviction holds capacity until every close completes', async () => {
+  let clock = 0
+  let finishClose!: () => void
+  let closeStarted!: () => void
+  const closeGate = new Promise<void>((resolve) => {
+    finishClose = resolve
+  })
+  const started = new Promise<void>((resolve) => {
+    closeStarted = resolve
+  })
+  let live = 0
+  let peak = 0
+  const pool = createAdapterPool({
+    max: 1,
+    idleMs: 100,
+    now: () => clock,
+    create: (key) => ({
+      ...sqliteAdapter(),
+      async open() {
+        live++
+        peak = Math.max(peak, live)
+      },
+      async close() {
+        if (key === 'idle') {
+          closeStarted()
+          await closeGate
+        }
+        live--
+      },
+    }),
+  })
+
+  await pool.with('idle', async () => {})
+  clock = 500
+  const eviction = pool.evictIdle()
+  await started
+  const acquire = pool.acquire('replacement')
+  await Promise.resolve()
+  assert.equal(live, 1, 'admission waits behind an in-flight idle close')
+  assert.equal(pool.size, 1)
+  assert.deepEqual(pool.open, ['idle'])
+
+  finishClose()
+  assert.equal(await eviction, 1)
+  await acquire
+  assert.equal(peak, 1)
+  pool.release('replacement')
+  await pool.close()
+})
+
 test('pool: idle databases are closed, busy ones are not', async () => {
   let clock = 0
   const pool = createAdapterPool({ create, idleMs: 100, now: () => clock })
@@ -128,7 +239,12 @@ test('fleet: a tenant created later catches up to the same shape', async () => {
   const pool = createAdapterPool({ create })
   const older = defineModule({
     name: 'catalog',
-    models: { Product: { scope: 'shared', fields: { id: 'id', title: 'text' } } },
+    models: {
+      Product: {
+        scope: 'shared',
+        fields: { id: 'id', title: 'text', priceCents: 'int', slug: 'text', active: 'bool' },
+      },
+    },
   })
   const v1 = compose([older], { headless: true })
 
@@ -147,6 +263,341 @@ test('fleet: a tenant created later catches up to the same shape', async () => {
     Object.keys(lateCols['catalog_product']!).sort(),
   )
   await pool.close()
+})
+
+test('migration: dry-run plans without creating framework or application tables', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  try {
+    const ops = await migrateOne(adapter, manifest, { dryRun: true })
+    assert.ok(ops.length > 0)
+    assert.deepEqual(await adapter.introspect(), {}, 'dry-run must be read-only')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('migration: DDL and the applied-schema marker roll back together', async () => {
+  const atomicManifest = compose(
+    [
+      defineModule({
+        name: 'atomic',
+        models: {
+          Entry: {
+            scope: 'shared',
+            fields: { id: 'id', value: 'text' },
+            indexes: { value: { fields: ['value'], unique: true } },
+          },
+        },
+      }),
+    ],
+    { headless: true },
+  )
+  const base = sqliteAdapter()
+  let injectFailure = true
+  const adapter: Adapter = {
+    ...base,
+    tx: (fn) =>
+      base.tx((tx) =>
+        fn({
+          ...tx,
+          exec: async (sql) => {
+            if (injectFailure && sql.startsWith('CREATE UNIQUE INDEX'))
+              throw new Error('injected DDL failure')
+            await tx.exec(sql)
+          },
+        }),
+      ),
+  }
+  await adapter.open()
+  try {
+    await assert.rejects(() => migrateOne(adapter, atomicManifest), /injected DDL failure/)
+    assert.deepEqual(await adapter.introspect(), {}, 'a failed operation must leave no partial schema')
+
+    injectFailure = false
+    await migrateOne(adapter, atomicManifest)
+    assert.ok('atomic_entry' in (await adapter.introspect()), 'the same migration is retryable')
+    assert.deepEqual(await migrateOne(adapter, atomicManifest), [])
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('migration: type, required-column and nullability changes require a hand-written migration', async () => {
+  const version = (field: string | null) =>
+    compose(
+      [
+        defineModule({
+          name: 'manual',
+          models: {
+            Entry: {
+              scope: 'shared',
+              fields: { id: 'id', ...(field === null ? {} : { value: field }) },
+            },
+          },
+        }),
+      ],
+      { headless: true },
+    )
+
+  const optional = version('text?')
+  const required = version('text')
+  const changedType = version('int?')
+  const withoutValue = version(null)
+
+  assert.throws(
+    () => planMigration(schemaFromManifest(optional), schemaFromManifest(required)),
+    (error: unknown) =>
+      (error as { code?: string }).code === 'E_MANUAL_MIGRATION_REQUIRED' &&
+      /changes from optional to required/.test((error as Error).message),
+  )
+  assert.throws(
+    () => planMigration(schemaFromManifest(required), schemaFromManifest(optional)),
+    (error: unknown) =>
+      (error as { code?: string }).code === 'E_MANUAL_MIGRATION_REQUIRED' &&
+      /changes from required to optional/.test((error as Error).message),
+  )
+  assert.throws(
+    () => planMigration(schemaFromManifest(withoutValue), schemaFromManifest(required)),
+    /required column and existing rows need a backfill/,
+  )
+
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  try {
+    await migrateOne(adapter, optional)
+    await assert.rejects(
+      () => migrateOne(adapter, changedType, { allowDestructive: true }),
+      (error: unknown) => (error as { code?: string }).code === 'E_MANUAL_MIGRATION_REQUIRED',
+    )
+    const applied = await adapter.all('SELECT schema FROM ket_migration WHERE id = 1')
+    const recorded = JSON.parse(String(applied[0]?.schema)) as {
+      tables: Record<string, { columns: Record<string, { base: string; optional: boolean }> }>
+    }
+    assert.deepEqual(recorded.tables.manual_entry?.columns.value, {
+      sql: 'TEXT',
+      base: 'text',
+      optional: true,
+      by: 'manual',
+      target: null,
+    })
+    assert.equal((await adapter.introspect()).manual_entry?.value, 'TEXT')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('migration: a manual schema is confirmed only after the physical database matches', async () => {
+  const version = (value: string | null) =>
+    compose(
+      [
+        defineModule({
+          name: 'adopted',
+          models: {
+            Entry: {
+              scope: 'shared',
+              fields: { id: 'id', ...(value === null ? {} : { value }) },
+            },
+          },
+        }),
+      ],
+      { headless: true },
+    )
+  const before = version(null)
+  const automatic = version('int?')
+  const target = version('int')
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  try {
+    await migrateOne(adapter, before)
+    await adapter.run('INSERT INTO "adopted_entry" ("id") VALUES (?)', ['existing'])
+    await assert.rejects(
+      () => confirmManualMigration(adapter, before),
+      (error: unknown) =>
+        (error as { code?: string }).code === 'E_MANUAL_MIGRATION_CONFIRMATION' &&
+        /already matches the target manifest/.test((error as Error).message),
+    )
+    await assert.rejects(
+      () => confirmManualMigration(adapter, automatic),
+      (error: unknown) =>
+        (error as { code?: string }).code === 'E_MANUAL_MIGRATION_CONFIRMATION' &&
+        /contains no operation that requires a manual migration/.test((error as Error).message),
+    )
+
+    await assert.rejects(
+      () =>
+        adapter.tx(async (tx) => {
+          await tx.exec('ALTER TABLE "adopted_entry" ADD COLUMN "value" TEXT')
+          await confirmManualMigration(tx, target)
+        }),
+      (error: unknown) =>
+        (error as { code?: string }).code === 'E_MANUAL_MIGRATION_CONFIRMATION' &&
+        /has type text; expected integer/.test((error as Error).message) &&
+        /is nullable; expected NOT NULL/.test((error as Error).message),
+    )
+    assert.equal(
+      (await adapter.introspect()).adopted_entry?.value,
+      undefined,
+      'failed confirmation rolls the incorrect DDL back',
+    )
+    const stale = await adapter.all('SELECT schema FROM ket_migration WHERE id = 1')
+    assert.equal(
+      JSON.parse(String(stale[0]?.schema)).tables.adopted_entry.columns.value,
+      undefined,
+      'failed confirmation does not advance the marker',
+    )
+
+    const confirmed = await adapter.tx(async (tx) => {
+      await tx.exec(`CREATE TABLE "adopted_entry_next" (
+        "id" TEXT PRIMARY KEY,
+        "value" INTEGER NOT NULL
+      )`)
+      await tx.exec('INSERT INTO "adopted_entry_next" ("id", "value") SELECT "id", 0 FROM "adopted_entry"')
+      await tx.exec('DROP TABLE "adopted_entry"')
+      await tx.exec('ALTER TABLE "adopted_entry_next" RENAME TO "adopted_entry"')
+      return confirmManualMigration(tx, target)
+    })
+    assert.deepEqual(
+      confirmed.map((op) => op.op),
+      ['ADD_COLUMN'],
+    )
+    assert.deepEqual(await migrateOne(adapter, target), [], 'the database now converges normally')
+    assert.deepEqual(
+      (await adapter.all('SELECT "id", "value" FROM "adopted_entry"')).map((row) => ({ ...row })),
+      [{ id: 'existing', value: 0 }],
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('migration: a partial index cannot satisfy manual confirmation', async () => {
+  const version = (withValue: boolean) =>
+    compose(
+      [
+        defineModule({
+          name: 'partial_guard',
+          models: {
+            Entry: {
+              scope: 'shared',
+              fields: { id: 'id', ...(withValue ? { value: 'text' } : {}) },
+              ...(withValue ? { indexes: { value: { fields: ['value'], unique: true } } } : {}),
+            },
+          },
+        }),
+      ],
+      { headless: true },
+    )
+  const before = version(false)
+  const target = version(true)
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  try {
+    await migrateOne(adapter, before)
+    await adapter.exec('ALTER TABLE "partial_guard_entry" ADD COLUMN "value" TEXT NOT NULL DEFAULT \'seed\'')
+    await adapter.exec(
+      'CREATE UNIQUE INDEX "partial_guard_entry__value" ON "partial_guard_entry" ("value") WHERE 0',
+    )
+
+    await assert.rejects(
+      () => confirmManualMigration(adapter, target),
+      (error: unknown) =>
+        (error as { code?: string }).code === 'E_MANUAL_MIGRATION_CONFIRMATION' &&
+        /index partial_guard_entry__value is partial/.test((error as Error).message),
+    )
+
+    await adapter.run('INSERT INTO "partial_guard_entry" ("id", "value") VALUES (?, ?)', [
+      'first',
+      'duplicate',
+    ])
+    await adapter.run('INSERT INTO "partial_guard_entry" ("id", "value") VALUES (?, ?)', [
+      'second',
+      'duplicate',
+    ])
+    assert.equal(
+      Number(
+        (
+          await adapter.all('SELECT COUNT(*) AS count FROM "partial_guard_entry" WHERE "value" = ?', [
+            'duplicate',
+          ])
+        )[0]?.count,
+      ),
+      2,
+      'the rejected partial index does not enforce the target uniqueness contract',
+    )
+    await assert.rejects(
+      () => migrateOne(adapter, target),
+      (error: unknown) => (error as { code?: string }).code === 'E_MANUAL_MIGRATION_REQUIRED',
+      'failed confirmation must not advance the schema marker',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('migration: a PostgreSQL expression index cannot masquerade as a model index', async () => {
+  const version = (withValue: boolean) =>
+    compose(
+      [
+        defineModule({
+          name: 'pg_expression',
+          models: {
+            Entry: {
+              scope: 'shared',
+              fields: { id: 'id', ...(withValue ? { value: 'text' } : {}) },
+              ...(withValue ? { indexes: { value: { fields: ['value'], unique: true } } } : {}),
+            },
+          },
+        }),
+      ],
+      { headless: true },
+    )
+  const before = version(false)
+  const target = version(true)
+  const base = sqliteAdapter()
+  const adapter: Adapter = {
+    ...base,
+    name: 'postgres',
+    transaction: true,
+    introspect: async () => ({ ket_migration: { schema: 'TEXT' } }),
+    all: async (sql) => {
+      if (sql.includes('SELECT schema FROM ket_migration'))
+        return [{ schema: JSON.stringify(schemaFromManifest(before)) }]
+      if (sql.includes('information_schema.columns'))
+        return [
+          { column_name: 'id', data_type: 'text', is_nullable: 'NO' },
+          { column_name: 'value', data_type: 'text', is_nullable: 'NO' },
+        ]
+      if (sql.includes('information_schema.table_constraints')) return [{ column_name: 'id' }]
+      if (sql.includes('FROM pg_class table_class')) {
+        assert.match(sql, /LEFT JOIN pg_attribute/)
+        const index = {
+          index_name: 'pg_expression_entry__value',
+          is_unique: true,
+          is_partial: false,
+          is_valid: true,
+          is_ready: true,
+          is_live: true,
+        }
+        return [
+          { ...index, is_expression: false, column_name: 'value', position: 1 },
+          { ...index, is_expression: true, column_name: null, position: 2 },
+        ]
+      }
+      throw new Error(`unexpected PostgreSQL catalog query: ${sql}`)
+    },
+    run: async () => {
+      throw new Error('an expression index must not advance the schema marker')
+    },
+  }
+
+  await assert.rejects(
+    () => confirmManualMigration(adapter, target),
+    (error: unknown) =>
+      (error as { code?: string }).code === 'E_MANUAL_MIGRATION_CONFIRMATION' &&
+      /index pg_expression_entry__value contains expressions/.test((error as Error).message) &&
+      /covers \(value, <expression>\); expected \(value\)/.test((error as Error).message),
+  )
 })
 
 test('fleet: one failing tenant does not stop the others, and says so', async () => {

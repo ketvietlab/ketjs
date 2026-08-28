@@ -216,6 +216,32 @@ recovers its sequence once when opened; a resumed reader receives no gap and no 
 Use `memoryStreamStore()` for one-process ephemeral work and `dbStreamStore(adapter)` when streams must
 survive reloads or be visible across processes.
 
+The framework SSE endpoint, `/_ket/stream/:id`, is closed unless the deployment supplies
+`resolveStream`. The resolver is both the authorization boundary and the mapping from a public id to the
+exact tenant-namespaced topic used by the writer:
+
+```ts
+// File: src/server.ts
+const server = await createKetServer({
+  manifest,
+  adapter,
+  resolveStream: async (id, url, request) => {
+    const identity = await authenticateStream(url, request)
+    return identity ? `${identity.tenant}:generation:${id}` : null
+  },
+})
+
+const writer = await server.streams.open(`${tenant}:generation:${generationId}`)
+```
+
+Returning `null`, or omitting the resolver, returns `404` without reading the stream store. The
+high-level deployment API exposes the same seam as `serve.resolveStream` and returns the matching
+writers as `BootedDeployment.streams`. The writer and resolver must deliberately share one namespace;
+KetJS does not infer it from an actor or from an untrusted header.
+
+This closes HTTP exposure but does not make one deployment-wide stream store durable per tenant. A
+database-per-tenant deployment still needs to choose the backing-store ownership model explicitly.
+
 ## Infrastructure boundaries
 
 - Keep provider credentials in deployment configuration, not module declarations.
