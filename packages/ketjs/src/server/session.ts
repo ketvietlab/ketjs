@@ -93,6 +93,45 @@ export type Sessions = {
   sweep(): Promise<number>
 }
 
+export type SessionScopePolicy = {
+  /** Reject a record issued for a different tenant when session storage is shared. */
+  tenant?: string
+  /** Scope used when there is no accepted session record. */
+  anonymous?: Scope | null
+}
+
+/**
+ * Turn session data into a detached request scope.
+ *
+ * This stays adapter-free so a pooled tenant facade can keep the policy while the
+ * manager and its adapter are evicted. Arrays are copied on both paths: callers
+ * may narrow a request scope without mutating the stored record or deployment's
+ * anonymous policy.
+ */
+export function scopeForSession(record: SessionRecord | null, policy: SessionScopePolicy = {}): Scope | null {
+  const accepted =
+    record !== null && (policy.tenant === undefined || (record.tenant ?? null) === policy.tenant)
+  const scope = accepted
+    ? {
+        company: record.company,
+        companies: record.companies,
+        branch: record.branch,
+        branches: record.branches,
+      }
+    : (policy.anonymous ?? null)
+  if (!scope) return null
+  return {
+    company: scope.company,
+    ...(scope.companies === undefined
+      ? {}
+      : { companies: scope.companies === null ? null : [...scope.companies] }),
+    ...(scope.branch === undefined ? {} : { branch: scope.branch }),
+    ...(scope.branches === undefined
+      ? {}
+      : { branches: scope.branches === null ? null : [...scope.branches] }),
+  }
+}
+
 export async function createSessions(o: SessionOptions = {}): Promise<Sessions> {
   const now = o.now ?? (() => Date.now())
   const backingStore = o.store ?? memorySessionStore({ now })
@@ -267,13 +306,10 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
     },
 
     scopeOf(record) {
-      if (!record || (o.tenant !== undefined && !belongs(record))) return o.anonymous ?? null
-      return {
-        company: record.company,
-        companies: record.companies,
-        branch: record.branch,
-        branches: record.branches,
-      }
+      return scopeForSession(record, {
+        ...(o.tenant === undefined ? {} : { tenant: o.tenant }),
+        ...(o.anonymous === undefined ? {} : { anonymous: o.anonymous }),
+      })
     },
 
     sweep() {

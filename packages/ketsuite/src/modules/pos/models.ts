@@ -29,6 +29,35 @@ export const models: Record<string, ModelDef> = {
     fields: { id: 'id', configId: 'ref:pos.Config', paymentMethodId: 'ref:pos.PaymentMethod' },
     indexes: { config_method: { fields: ['companyId', 'configId', 'paymentMethodId'], unique: true } },
   },
+  ProviderPaymentLock: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      orderId: 'ref:pos.Order',
+      paymentMethodId: 'ref:pos.PaymentMethod',
+      amount: 'decimal',
+      currency: 'text',
+      state: 'text',
+      settledPaymentId: 'ref:pos.Payment?',
+      reversalPaymentId: 'ref:pos.Payment?',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: { order_state: { fields: ['companyId', 'orderId', 'state'] } },
+  },
+  ReceiptDocument: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      orderId: 'ref:pos.Order',
+      version: 'int',
+      templateVersion: 'text',
+      contentHash: 'text',
+      document: 'json',
+      issuedAt: 'datetime',
+    },
+    indexes: { order: { fields: ['companyId', 'orderId'], unique: true } },
+  },
   Session: {
     scope: 'company',
     fields: {
@@ -56,6 +85,24 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { config_state: { fields: ['companyId', 'configId', 'state'] } },
   },
+  Exchange: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      uuid: 'text',
+      originalOrderId: 'ref:pos.Order',
+      returnOrderId: 'ref:pos.Order',
+      replacementOrderId: 'ref:pos.Order',
+      originalRevision: 'int',
+      reason: 'text?',
+      createdAt: 'datetime',
+    },
+    indexes: {
+      company_uuid: { fields: ['companyId', 'uuid'], unique: true },
+      return_order: { fields: ['companyId', 'returnOrderId'], unique: true },
+      replacement_order: { fields: ['companyId', 'replacementOrderId'], unique: true },
+    },
+  },
   Order: {
     scope: 'company',
     fields: {
@@ -71,6 +118,13 @@ export const models: Record<string, ModelDef> = {
       invoiceStatus: 'text',
       isRefund: 'bool',
       refundedOrderId: 'ref:pos.Order?',
+      returnPortion: 'decimal?',
+      returnComplete: 'bool?',
+      exchangeId: 'ref:pos.Exchange?',
+      exchangeRole: 'text?',
+      paymentLockId: 'text?',
+      paymentLockMethodId: 'ref:pos.PaymentMethod?',
+      paymentLockAmount: 'decimal?',
       dateOrder: 'datetime',
       currency: 'text',
       amountUntaxed: 'decimal',
@@ -83,6 +137,7 @@ export const models: Record<string, ModelDef> = {
       toInvoice: 'bool',
       accountMoveId: 'ref:account.Move?',
       pickingId: 'ref:stock.Picking?',
+      receiptId: 'ref:pos.ReceiptDocument?',
       note: 'text?',
       revision: 'int?',
       operatorId: 'text?',
@@ -92,6 +147,8 @@ export const models: Record<string, ModelDef> = {
     indexes: {
       company_uuid: { fields: ['companyId', 'uuid'], unique: true },
       session_sequence: { fields: ['companyId', 'sessionId', 'sequenceNumber'], unique: true },
+      exchange_role: { fields: ['companyId', 'exchangeId', 'exchangeRole'], unique: true },
+      payment_lock: { fields: ['companyId', 'paymentLockId'], unique: true },
     },
   },
   OrderLine: {
@@ -132,9 +189,15 @@ export const models: Record<string, ModelDef> = {
       state: 'text',
       kind: 'text',
       reference: 'text?',
+      providerAttemptId: 'text?',
+      reversalOfId: 'ref:pos.Payment?',
       operatorId: 'text?',
       deviceId: 'text?',
       paymentDate: 'datetime',
+    },
+    indexes: {
+      provider_attempt: { fields: ['companyId', 'providerAttemptId'], unique: true },
+      provider_reversal: { fields: ['companyId', 'reversalOfId'], unique: true },
     },
   },
   CashAdjustment: {

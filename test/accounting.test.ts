@@ -489,7 +489,7 @@ test('accounting: opening batches dry-run, balance, retry, drill down and revers
     )
     const retried = (await call('account.prepareOpeningBatch', input, adapter)).value as Row
     assert.equal(retried.ok, true)
-    assert.equal((await call('account.listOpeningBatches', {}, adapter)).value instanceof Array, true)
+    assert.equal(Array.isArray((await call('account.listOpeningBatches', {}, adapter)).value), true)
 
     const posted = (await call('account.postOpeningBatch', { id: input.id }, adapter)).value as Row
     assert.equal(posted.ok, true)

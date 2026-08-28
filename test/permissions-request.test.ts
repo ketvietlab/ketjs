@@ -4,6 +4,7 @@ import {
   bootDeployment,
   defineDeployment,
   defineModule,
+  json,
   memorySessionStore,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
@@ -151,4 +152,55 @@ test('permissions: granting in one tenant does not leak into the other', async (
   const other = await post(booted.port, 't1', 'core.open', cookie.t1)
   assert.equal(other.status, 400)
   assert.equal(((await other.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
+})
+
+test('permissions: a custom audience receives only its deployment-scoped function grants', async (t) => {
+  const channel = defineModule({
+    name: 'channel',
+    depends: ['core'],
+    routes: {
+      '/api/pos/v1/probe': (ctx) => async (url, req) => json(await ctx.call('core.open', {}, url, req)),
+    },
+  })
+  const app = defineDeployment({
+    name: 'custom_audience_permissions',
+    modules: [core, channel],
+    headless: true,
+    serve: {
+      resolveAudience: async (_url, req) =>
+        req.headers.authorization === 'Bearer pos-token' ? 'pos' : 'anonymous',
+      resolveIdentity: async ({ req }) =>
+        req.headers.authorization === 'Bearer pos-token'
+          ? {
+              userId: 'cashier',
+              companies: ['c1'],
+              company: 'c1',
+              securityVersion: 1,
+            }
+          : null,
+      permissions: async (_ctx, _userId, url, req) =>
+        req.headers['x-null-grant'] === '1'
+          ? null
+          : url.pathname.startsWith('/api/pos/v1/')
+            ? ['core.open']
+            : [],
+    },
+  })
+  const booted = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0, log: () => {} })
+  t.after(() => booted.close())
+  const headers = { authorization: 'Bearer pos-token', 'content-type': 'application/json' }
+  const allowed = await fetch(`http://127.0.0.1:${booted.port}/api/pos/v1/probe`, { headers })
+  assert.equal(allowed.status, 200)
+  const nullGrant = await fetch(`http://127.0.0.1:${booted.port}/api/pos/v1/probe`, {
+    headers: { ...headers, 'x-null-grant': '1' },
+  })
+  assert.equal(nullGrant.status, 400)
+  assert.equal(((await nullGrant.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
+  const bypass = await fetch(`http://127.0.0.1:${booted.port}/_ket/fn/core.open`, {
+    method: 'POST',
+    headers,
+    body: '{}',
+  })
+  assert.equal(bypass.status, 400)
+  assert.equal(((await bypass.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
 })

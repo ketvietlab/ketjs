@@ -96,3 +96,16 @@ When a new feature crosses domains, prefer this decision sequence:
 
 This keeps composition graphs meaningful and makes accidental circular dependencies visible at
 composition time.
+
+## Durable Sale lifecycle events
+
+The `sale` domain appends one `sale.OrderLifecycleEvent` when an order first reaches `confirmed`,
+`shipped`, `delivered`, or `cancelled`. The event is written by the same domain command that changes
+the order whenever that command already owns a transaction. Its company, order, and phase key is
+unique, so retrying `sale.confirmOrder`, `sale.syncDeliveries`, or `sale.cancelOrder` cannot publish a
+duplicate fact.
+
+This table is a domain outbox, not a customer-care implementation. Optional bridge and private modules
+may read it and maintain their own consumption receipts. They must not update or delete Sale's event
+rows, and Sale must not depend on those consumers. A consumer should keep a slower reconciliation path
+for legacy rows and for failures between an external stock mutation and `sale.syncDeliveries`.

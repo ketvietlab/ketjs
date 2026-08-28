@@ -248,7 +248,7 @@ export const cashReceivableFunctions: Record<string, FnSpec> = {
         )
       const accounts = new Map((await ctx.db.select('account.Account')).map((row) => [String(row.id), row]))
       const liquidity = accounts.get(String(args.liquidityAccountId))
-      if (!liquidity || liquidity.accountType !== 'asset_cash')
+      if (liquidity?.accountType !== 'asset_cash')
         return failure('liquidityAccountId', 'bankLiquidityInvalid', 'liquidity account must be cash or bank')
       if (!accounts.has(String(args.clearingAccountId)) || !accounts.has(String(args.suspenseAccountId)))
         return failure(
@@ -470,7 +470,7 @@ export const cashReceivableFunctions: Record<string, FnSpec> = {
       const tx = (await ctx.db.select('account.BankTransaction', { id: args.transactionId }))[0]
       const rule = (await ctx.db.select('account.MatchRule', { id: args.ruleId }))[0]
       if (!tx) return failure('transactionId', 'bankTransactionMissing', 'bank transaction does not exist')
-      if (!rule || rule.active !== true)
+      if (rule?.active !== true)
         return failure('ruleId', 'matchRuleMissing', 'active matching rule does not exist')
       const { scale } = await ledgerOf(ctx)
       const weights = rule.weights as Record<string, number>
@@ -570,7 +570,7 @@ export const cashReceivableFunctions: Record<string, FnSpec> = {
       const held = (await ctx.db.select('account.BankReconciliation', { id: args.id }))[0]
       if (held?.state === 'posted') return { ok: true, id: held.id, moveId: held.moveId, duplicate: true }
       const tx = (await ctx.db.select('account.BankTransaction', { id: args.transactionId }))[0]
-      if (!tx || tx.providerState !== 'posted')
+      if (tx?.providerState !== 'posted')
         return failure(
           'transactionId',
           'bankTransactionNotPosted',
@@ -585,8 +585,17 @@ export const cashReceivableFunctions: Record<string, FnSpec> = {
       let allocated = 0n
       const openById = new Map((await activeOpenLines(ctx)).map((line) => [String(line.id), line]))
       const prepared: Array<{ line: Row; amount: bigint }> = []
+      const allocatedLineIds = new Set<string>()
       for (const allocation of allocations) {
-        const line = openById.get(String(allocation.moveLineId))
+        const moveLineId = String(allocation.moveLineId)
+        if (allocatedLineIds.has(moveLineId))
+          return failure(
+            'allocations',
+            'reconcileAllocationDuplicate',
+            'an open item can only appear once in a reconciliation',
+          )
+        allocatedLineIds.add(moveLineId)
+        const line = openById.get(moveLineId)
         if (!line) return failure('allocations', 'openItemMissing', 'an allocated open item does not exist')
         const amount = moneyMinor(String(allocation.amount ?? '0'), scale)
         if (amount <= 0n || amount > moneyMinor(line.amountResidual, scale))
@@ -902,7 +911,7 @@ export const cashReceivableFunctions: Record<string, FnSpec> = {
         : null
       const moveId = args.moveId ?? payment?.moveId
       const move = moveId ? (await ctx.db.select('account.Move', { id: moveId }))[0] : null
-      if (!move || move.state !== 'posted')
+      if (move?.state !== 'posted')
         return failure('moveId', 'cashDocumentMoveInvalid', 'cash document requires a posted move')
       const snapshot = { payment, move, lines: await ctx.db.select('account.MoveLine', { moveId }) }
       const controlTotal = payment?.amount ?? move.amountTotal
