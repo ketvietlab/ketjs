@@ -161,7 +161,7 @@ test('accounting: public money policy quantizes exact decimal text without Numbe
   assert.throws(() => quantizeMoneyText('123456789012345678901234567890123456789', 2), /38-digit/u)
 })
 
-test('accounting: civil dates are stable at Vietnam period boundaries', () => {
+test('accounting: civil dates are stable at company timezone boundaries', () => {
   assert.equal(civilDateAt('2026-07-31T16:59:59.999Z', 'Asia/Ho_Chi_Minh'), '2026-07-31')
   assert.equal(civilDateAt('2026-07-31T17:00:00.000Z', 'Asia/Ho_Chi_Minh'), '2026-08-01')
   assert.equal(civilDateAt('2026-12-31T17:00:00.000Z', 'Asia/Ho_Chi_Minh'), '2027-01-01')
@@ -355,6 +355,379 @@ test('accounting: posting freezes company-civil dates, policy and sequence year'
     ).value as Row[]
     assert.equal(july.find((row) => row.accountId === 'bank')?.debit, '10')
     assert.equal(august.find((row) => row.accountId === 'bank')?.debit, '20')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: period locks fence posting and retain immutable before/after evidence', async () => {
+  const adapter = await boot()
+  try {
+    const draft = async (id: string, accountingDate: string) => {
+      await call('account.createMove', { id, journalId: 'sales', moveType: 'entry', accountingDate }, adapter)
+      await call(
+        'account.addMoveLine',
+        { id: `${id}:debit`, moveId: id, name: id, accountId: 'bank', debit: '10' },
+        adapter,
+      )
+      await call(
+        'account.addMoveLine',
+        { id: `${id}:credit`, moveId: id, name: id, accountId: 'revenue', credit: '10' },
+        adapter,
+      )
+    }
+
+    await draft('july-entry', '2026-07-31')
+    const locked = (
+      await call(
+        'account.changePeriodLock',
+        {
+          id: 'lock-sales-july',
+          scope: 'sales',
+          through: '2026-07-31',
+          reason: 'Close July sales ledger',
+          expectedRevision: 0,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.deepEqual({ ok: locked.ok, revision: locked.revision }, { ok: true, revision: 1 })
+
+    const rejected = (await call('account.postMove', { id: 'july-entry' }, adapter)).value as Row
+    assert.equal(rejected.ok, false)
+    assert.match(JSON.stringify(rejected.errors), /periodLocked[\s\S]*sales[\s\S]*2026-07-31/u)
+
+    await draft('august-entry', '2026-08-01')
+    assert.equal(((await call('account.postMove', { id: 'august-entry' }, adapter)).value as Row).ok, true)
+
+    const reopened = (
+      await call(
+        'account.changePeriodLock',
+        {
+          id: 'reopen-sales-july',
+          scope: 'sales',
+          reason: 'Approved July adjustment',
+          expectedRevision: 1,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.deepEqual({ ok: reopened.ok, revision: reopened.revision }, { ok: true, revision: 2 })
+    assert.equal(((await call('account.postMove', { id: 'july-entry' }, adapter)).value as Row).ok, true)
+
+    const events = (await call('account.listPeriodLockEvents', { scope: 'sales' }, adapter)).value as Row[]
+    assert.deepEqual(
+      events.map((event) => [event.action, event.beforeThrough, event.afterThrough, event.policyRevision]),
+      [
+        ['reopen', '2026-07-31', null, 2],
+        ['lock', null, '2026-07-31', 1],
+      ],
+    )
+
+    await call(
+      'account.changePeriodLock',
+      { id: 'hard-lock-july', scope: 'hard', through: '2026-07-31', reason: 'Permanent close' },
+      adapter,
+    )
+    const hardReopen = (
+      await call(
+        'account.changePeriodLock',
+        { id: 'hard-reopen-july', scope: 'hard', reason: 'Not permitted' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(hardReopen.ok, false)
+    assert.match(JSON.stringify(hardReopen.errors), /hardLockPermanent/u)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: opening batches dry-run, balance, retry, drill down and reverse without duplicates', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'account.saveJournal',
+      { id: 'opening', name: 'Opening balances', code: 'OPN', type: 'general' },
+      adapter,
+    )
+    const input = {
+      id: 'opening-2026',
+      accountingDate: '2026-01-01',
+      journalId: 'opening',
+      sourceChecksum: 'a'.repeat(64),
+      controlDebit: '9007199254740994',
+      controlCredit: '9007199254740994',
+      lines: [
+        {
+          sourceKey: 'bank',
+          accountId: 'bank',
+          description: 'Opening cash',
+          debit: '9007199254740994',
+          credit: '0',
+        },
+        {
+          sourceKey: 'equity',
+          accountId: 'revenue',
+          description: 'Opening counterpart',
+          debit: '0',
+          credit: '9007199254740994',
+        },
+      ],
+    }
+    const preview = (await call('account.prepareOpeningBatch', { ...input, dryRun: true }, adapter))
+      .value as Row
+    assert.equal(preview.ok, true)
+    assert.equal((preview.preview as Row).lineCount, 2)
+    assert.match(String((preview.preview as Row).contentChecksum), /^[a-f0-9]{64}$/u)
+    assert.deepEqual((await call('account.listOpeningBatches', {}, adapter)).value, [])
+
+    const prepared = (await call('account.prepareOpeningBatch', input, adapter)).value as Row
+    assert.deepEqual(
+      { ok: prepared.ok, id: prepared.id, moveId: prepared.moveId },
+      { ok: true, id: 'opening-2026', moveId: 'opening:opening-2026' },
+    )
+    const retried = (await call('account.prepareOpeningBatch', input, adapter)).value as Row
+    assert.equal(retried.ok, true)
+    assert.equal(Array.isArray((await call('account.listOpeningBatches', {}, adapter)).value), true)
+
+    const posted = (await call('account.postOpeningBatch', { id: input.id }, adapter)).value as Row
+    assert.equal(posted.ok, true)
+    assert.equal(((await call('account.postOpeningBatch', { id: input.id }, adapter)).value as Row).ok, true)
+    const detail = (await call('account.getOpeningBatch', { id: input.id }, adapter)).value as Row
+    assert.equal((detail.batch as Row).state, 'posted')
+    assert.equal((detail.lines as Row[]).length, 2)
+    const trial = (await call('account.trialBalance', { dateTo: '2026-01-01' }, adapter)).value as Row[]
+    assert.equal(trial.find((row) => row.accountId === 'bank')?.debit, '9007199254740994')
+
+    const reversed = (
+      await call(
+        'account.reverseMove',
+        {
+          id: 'opening:opening-2026',
+          reversalId: 'opening:opening-2026:reversal',
+          accountingDate: '2026-01-02',
+          journalId: 'opening',
+          ref: 'Approved opening correction',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(reversed.ok, true)
+    const source = (await call('account.getMove', { id: 'opening:opening-2026' }, adapter)).value as Row
+    assert.equal(source.reversedById, 'opening:opening-2026:reversal')
+    const audit = (
+      await call(
+        'account.listAuditEvents',
+        { subjectType: 'move', subjectId: 'opening:opening-2026' },
+        adapter,
+      )
+    ).value as Row[]
+    assert.deepEqual(
+      audit.map((event) => [event.action, event.relatedId]),
+      [
+        ['posted', null],
+        ['reversed', 'opening:opening-2026:reversal'],
+      ],
+    )
+
+    const rejected = (
+      await call(
+        'account.prepareOpeningBatch',
+        { ...input, id: 'unbalanced', sourceChecksum: 'b'.repeat(64), controlCredit: '1' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(rejected.ok, false)
+    assert.match(JSON.stringify(rejected.errors), /openingControlMismatch/u)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: core close is jurisdiction-neutral and still fences a closed period', async () => {
+  const adapter = await boot()
+  try {
+    const created = (
+      await call(
+        'account.createClosePeriod',
+        { id: 'close:2026-01', periodKey: '2026-01', dateFrom: '2026-01-01', dateTo: '2026-01-31' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(created.ok, true)
+    const refreshed = (await call('account.refreshClosePeriod', { id: 'close:2026-01' }, adapter))
+      .value as Row
+    assert.equal(refreshed.ok, true)
+    assert.equal((refreshed.period as Row).blockerCount, 0)
+    const closed = (
+      await call(
+        'account.closePeriod',
+        {
+          id: 'close:2026-01',
+          mode: 'soft',
+          expectedRevision: (refreshed.period as Row).revision,
+          reason: 'Monthly close',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(closed.ok, true)
+    const policy = (await call('account.getPeriodPolicy', {}, adapter)).value as Row
+    assert.equal(policy.allThrough, '2026-01-31')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: books preserve exact opening, movement, closing and move drill-down', async () => {
+  const adapter = await boot()
+  try {
+    const entry = async (id: string, accountingDate: string, amount: string, bankDebit: boolean) => {
+      await call('account.createMove', { id, journalId: 'sales', moveType: 'entry', accountingDate }, adapter)
+      await call(
+        'account.addMoveLine',
+        {
+          id: `${id}:bank`,
+          moveId: id,
+          name: id,
+          accountId: 'bank',
+          ...(bankDebit ? { debit: amount } : { credit: amount }),
+        },
+        adapter,
+      )
+      await call(
+        'account.addMoveLine',
+        {
+          id: `${id}:other`,
+          moveId: id,
+          name: id,
+          accountId: bankDebit ? 'revenue' : 'expense',
+          ...(bankDebit ? { credit: amount } : { debit: amount }),
+        },
+        adapter,
+      )
+      await call('account.postMove', { id }, adapter)
+    }
+    await entry('book-opening', '2025-12-31', '9007199254740994', true)
+    await entry('book-inflow', '2026-01-10', '20', true)
+    await entry('book-outflow', '2026-01-20', '5', false)
+
+    const book = (
+      await call(
+        'account.accountingBook',
+        {
+          book: 'general_ledger',
+          accountId: 'bank',
+          dateFrom: '2026-01-01',
+          dateTo: '2026-01-31',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.deepEqual(
+      [book.opening, book.debit, book.credit, book.closing],
+      ['9007199254740994', '20', '5', '9007199254741009'],
+    )
+    assert.deepEqual(
+      (book.rows as Row[]).map((row) => [row.moveId, row.accountingDate, row.balance]),
+      [
+        ['book-inflow', '2026-01-10', '20'],
+        ['book-outflow', '2026-01-20', '-5'],
+      ],
+    )
+    const journal = (
+      await call(
+        'account.accountingBook',
+        { book: 'general_journal', dateFrom: '2026-01-01', dateTo: '2026-01-31' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(journal.debit, journal.credit)
+    assert.equal((journal.rows as Row[]).length, 4)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: open-item migration preserves invoices, credits, due dates and exact residuals', async () => {
+  const adapter = await boot()
+  try {
+    const input = {
+      id: 'open-items:2026',
+      accountingDate: '2026-01-01',
+      sourceChecksum: 'c'.repeat(64),
+      controlReceivable: '10',
+      controlPayable: '150',
+      items: [
+        {
+          sourceKey: 'customer-invoice',
+          moveType: 'out_invoice',
+          partnerId: 'customer',
+          journalId: 'sales',
+          counterpartAccountId: 'receivable',
+          offsetAccountId: 'revenue',
+          documentDate: '2025-12-15',
+          dueDate: '2026-01-15',
+          originalAmount: '100',
+          residualAmount: '40',
+        },
+        {
+          sourceKey: 'customer-credit',
+          moveType: 'out_refund',
+          partnerId: 'customer',
+          journalId: 'sales',
+          counterpartAccountId: 'receivable',
+          offsetAccountId: 'revenue',
+          documentDate: '2025-12-20',
+          dueDate: '2026-01-20',
+          originalAmount: '30',
+          residualAmount: '30',
+        },
+        {
+          sourceKey: 'vendor-bill',
+          moveType: 'in_invoice',
+          partnerId: 'customer',
+          journalId: 'purchase',
+          counterpartAccountId: 'payable',
+          offsetAccountId: 'expense',
+          documentDate: '2025-12-10',
+          dueDate: '2026-02-10',
+          originalAmount: '200',
+          residualAmount: '150',
+        },
+      ],
+    }
+    const preview = (await call('account.importOpenItems', { ...input, dryRun: true }, adapter)).value as Row
+    assert.equal(preview.ok, true)
+    assert.deepEqual((await call('account.listOpenItemBatches', {}, adapter)).value, [])
+
+    const imported = (await call('account.importOpenItems', input, adapter)).value as Row
+    assert.equal(imported.ok, true)
+    assert.equal(((await call('account.importOpenItems', input, adapter)).value as Row).ok, true)
+    const batch = (await call('account.getOpenItemBatch', { id: input.id }, adapter)).value as Row
+    assert.equal((batch.batch as Row).state, 'completed')
+    assert.equal((batch.items as Row[]).length, 3)
+
+    const customerInvoice = (
+      await call('account.getMove', { id: 'open-item:open-items:2026:customer-invoice' }, adapter)
+    ).value as Row
+    assert.equal(customerInvoice.paymentState, 'partial')
+    const invoiceLine = (customerInvoice.lines as Row[]).find((line) => line.accountId === 'receivable')!
+    assert.equal(invoiceLine.amountResidual, '40')
+    assert.equal(String(invoiceLine.dateMaturity).slice(0, 10), '2026-01-15')
+
+    const statement = (
+      await call(
+        'account.partnerStatement',
+        { partnerId: 'customer', dateFrom: '2026-01-01', dateTo: '2026-01-01' },
+        adapter,
+      )
+    ).value as Row[]
+    const residualByMove = new Map(statement.map((row) => [String(row.moveId), String(row.amountResidual)]))
+    assert.equal(residualByMove.get('open-item:open-items:2026:customer-invoice'), '40')
+    assert.equal(residualByMove.get('open-item:open-items:2026:customer-credit'), '30')
+    assert.equal(residualByMove.get('open-item:open-items:2026:vendor-bill'), '150')
   } finally {
     await adapter.close()
   }

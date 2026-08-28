@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { seedAccountingTestFixture } from './accounting-test-fixture.ts'
 
 const bootDefaults = async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
@@ -12,6 +13,7 @@ const bootDefaults = async (t: TestContext) => {
 
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
+  await seedAccountingTestFixture(fixture)
   await fixture('user.createUser', {
     id: 'admin',
     login: 'admin',
@@ -79,14 +81,19 @@ test('account defaults HTTP keeps relations, locale, CSRF, rejected values and s
   const idOf = (code: string) => String(accounts.find((row) => row.code === code)?.id)
   const savedDefaults = await app.client.post(
     `${path}?lang=en`,
-    new URLSearchParams({ incomeAccountId: idOf('515'), receivableAccountId: idOf('1311') }),
+    new URLSearchParams({
+      incomeAccountId: idOf('REV.OTHER'),
+      expenseAccountId: String(initialDefaults.expenseAccountId),
+      receivableAccountId: idOf('AR'),
+      payableAccountId: String(initialDefaults.payableAccountId),
+    }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(savedDefaults.status, 303)
   assert.equal(savedDefaults.headers.get('location'), '/admin/accounting/defaults?lang=en')
   const defaults = (await app.client.call<Row>('account.getDefaults', {})).value
-  assert.equal(defaults.incomeAccountId, idOf('515'))
-  assert.equal(defaults.receivableAccountId, idOf('1311'))
+  assert.equal(defaults.incomeAccountId, idOf('REV.OTHER'))
+  assert.equal(defaults.receivableAccountId, idOf('AR'))
   assert.equal(defaults.expenseAccountId, initialDefaults.expenseAccountId)
   assert.equal(defaults.payableAccountId, initialDefaults.payableAccountId)
 
@@ -96,7 +103,7 @@ test('account defaults HTTP keeps relations, locale, CSRF, rejected values and s
       action: 'category',
       categoryId: 'services',
       incomeAccountId: 'missing-category-income',
-      expenseAccountId: idOf('632'),
+      expenseAccountId: idOf('EXP'),
     }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
@@ -105,15 +112,15 @@ test('account defaults HTTP keeps relations, locale, CSRF, rejected values and s
   assert.match(rejectedCategoryHtml, /Đặt tài khoản cho nhóm sản phẩm/)
   assert.match(rejectedCategoryHtml, /name="categoryId"[\s\S]*?value="services"[^>]*selected/)
   assert.match(rejectedCategoryHtml, /&quot;value&quot;:&quot;missing-category-income&quot;/)
-  assert.match(rejectedCategoryHtml, new RegExp(`&quot;value&quot;:&quot;${idOf('632')}&quot;`))
+  assert.match(rejectedCategoryHtml, new RegExp(`&quot;value&quot;:&quot;${idOf('EXP')}&quot;`))
 
   const savedCategory = await app.client.post(
     `${path}?lang=en&editCategory=services`,
     new URLSearchParams({
       action: 'category',
       categoryId: 'services',
-      incomeAccountId: idOf('515'),
-      expenseAccountId: idOf('632'),
+      incomeAccountId: idOf('REV.OTHER'),
+      expenseAccountId: idOf('EXP'),
     }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
@@ -121,12 +128,12 @@ test('account defaults HTTP keeps relations, locale, CSRF, rejected values and s
   assert.equal(savedCategory.headers.get('location'), '/admin/accounting/defaults?lang=en')
   const categoryRows = (await app.client.call<Row[]>('account.listCategoryAccounts', {})).value
   assert.equal(categoryRows[0]?.categoryId, 'services')
-  assert.equal(categoryRows[0]?.incomeAccountId, idOf('515'))
-  assert.equal(categoryRows[0]?.expenseAccountId, idOf('632'))
+  assert.equal(categoryRows[0]?.incomeAccountId, idOf('REV.OTHER'))
+  assert.equal(categoryRows[0]?.expenseAccountId, idOf('EXP'))
 
   const edited = await (await app.client.get(`${path}?lang=en&editCategory=services`)).text()
   assert.match(edited, /Edit a product category/)
   assert.match(edited, /href="\/admin\/accounting\/defaults\?lang=en"/)
-  assert.match(edited, /515 ·/)
-  assert.match(edited, /632 ·/)
+  assert.match(edited, /REV\.OTHER ·/)
+  assert.match(edited, /EXP ·/)
 })

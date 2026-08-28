@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { seedAccountingTestFixture } from './accounting-test-fixture.ts'
 
 const bootMoves = async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
@@ -11,6 +12,7 @@ const bootMoves = async (t: TestContext) => {
   const fixture = (name: string, input: Record<string, unknown>) => app.fixture.call(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
+  await seedAccountingTestFixture(fixture)
   await fixture('user.createUser', {
     id: 'admin',
     login: 'admin',
@@ -121,14 +123,14 @@ test('move detail HTTP preserves CSRF, rejected line values, version checks and 
     id: 'entry-write:debit',
     moveId: 'entry-write',
     name: 'Nợ',
-    accountId: accountId('112'),
+    accountId: accountId('BANK'),
     debit: '100000',
   })
   await app.client.call('account.addMoveLine', {
     id: 'entry-write:credit',
     moveId: 'entry-write',
     name: 'Có',
-    accountId: accountId('511'),
+    accountId: accountId('REV'),
     credit: '100000',
   })
 
@@ -191,7 +193,7 @@ test('move detail HTTP preserves CSRF, rejected line values, version checks and 
         ...(action ? { action } : {}),
         lineId: `unknown-${action || 'missing'}`,
         name: 'Không được thêm',
-        accountId: accountId('112'),
+        accountId: accountId('BANK'),
         debit: '10',
         credit: '0',
       }),
@@ -228,7 +230,7 @@ test('move detail HTTP preserves CSRF, rejected line values, version checks and 
       action: 'add-line',
       lineId: 'stable-line-id',
       name: 'Dòng nhập dở',
-      accountId: accountId('112'),
+      accountId: accountId('BANK'),
       partnerId: 'partner-draft',
       debit: '10',
       credit: '10',
@@ -246,7 +248,7 @@ test('move detail HTTP preserves CSRF, rejected line values, version checks and 
     action: 'add-line',
     lineId: 'stable-line-id',
     name: 'Dòng hoàn chỉnh',
-    accountId: accountId('112'),
+    accountId: accountId('BANK'),
     debit: '10',
     credit: '0',
   })

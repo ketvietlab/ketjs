@@ -90,7 +90,7 @@ smallest stable contract from the package entry point and cover that contract wi
 | CRM behavior | [CRM modules](/ketsuite/crm/) | [Testing KetSuite](/ketsuite/testing/) |
 | Manufacturing behavior | [Manufacturing](/ketsuite/manufacturing/) | [Testing KetSuite](/ketsuite/testing/) |
 | Loyalty behavior | [Loyalty](/ketsuite/loyalty/) | [Loyalty benchmark evidence](/ketsuite/benchmarks/loyalty/) |
-| Vietnam accounting defaults | [Vietnam accounting defaults](/ketsuite/accounting-tt99/) | [Testing KetSuite](/ketsuite/testing/) |
+| Accounting core | [Accounting ledger](/ketsuite/accounting/) | [Testing KetSuite](/ketsuite/testing/) |
 
 ## Framework prerequisites
 

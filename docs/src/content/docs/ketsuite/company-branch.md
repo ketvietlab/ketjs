@@ -99,15 +99,15 @@ flowchart LR
 - `partnerId` — reference unique tới Partner loại `company`;
 - `parentId` — công ty mẹ tùy chọn;
 - `currency` — currency của chính pháp nhân;
-- `currencyLocked` — cờ optional do Accounting đặt khi cài hệ thống tài khoản;
+- `currencyLocked` — cờ optional do Accounting đặt khi khởi tạo sổ cái;
 - `active` — archive/restore không xóa lịch sử.
 
 Service kiểm tra toàn bộ chuỗi `parentId`, không chỉ self-parent, nên cycle nhiều cấp
 được từ chối. Một Partner không thể đại diện cho hai Company ngay cả khi hai request
 tạo đồng thời.
 
-Company vẫn là module độc lập và không đọc model của Accounting. Trước khi cài Accounting,
-`company.saveCompany` cho phép sửa `currency`. Việc cài TT99 đặt `currencyLocked` và tăng
+Company vẫn là module độc lập và không đọc model của Accounting. Trước khi khởi tạo sổ cái,
+`company.saveCompany` cho phép sửa `currency`. Khởi tạo sổ cái đặt `currencyLocked` và tăng
 `version` trong cùng transaction với `account.Setup`; từ đó request đổi currency bị từ chối
 bằng `company.error.currencyLocked`, còn sửa code, Partner hoặc công ty mẹ với cùng currency
 vẫn hoạt động. Retry đúng cùng payload tiếp tục là no-op thành công. Token `version` chung
