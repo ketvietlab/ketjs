@@ -19,7 +19,7 @@ import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
-import { createSessions, dbSessionStore } from './session.ts'
+import { createSessions, dbSessionStore, scopeForSession } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
 import { createJoints } from '../theme/joints.ts'
 import { buildMenu } from '../kernel/menu.ts'
@@ -532,12 +532,7 @@ export async function bootDeployment(
       const s = await sessionsOf(url, req)
       return s?.scopeOf(null) ?? { company: null }
     }
-    return {
-      companies: record.companies,
-      company: record.company,
-      branch: record.branch,
-      branches: record.branches,
-    }
+    return scopeForSession(record) ?? { company: null }
   }
 
   /**
@@ -726,14 +721,17 @@ export async function bootDeployment(
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
     if (!authenticationEnabled) return null // no login exists yet; the shim is the identity
     const audience = await serve.resolveAudience?.(url, req)
-    if (audience && audience !== 'anonymous' && audience !== 'staff') return []
+    const customAudience = Boolean(audience && audience !== 'anonymous' && audience !== 'staff')
     const record = await sessionRecordOf(url, req)
     if (!record) {
       return anonymousFns // a stranger, not an administrator
     }
-    if (!serve.permissions) return null
+    // A custom bearer audience is fail-closed unless the deployment explicitly
+    // maps it to exact functions. This lets Channel routes call their domain
+    // functions without turning a POS/customer token into a staff session.
+    if (!serve.permissions) return customAudience ? [] : null
     const granted = await serve.permissions(ctx, record.userId, url, req)
-    return granted === null ? null : [...new Set([...anonymousFns, ...granted])]
+    return granted === null ? (customAudience ? [] : null) : [...new Set([...anonymousFns, ...granted])]
   }
 
   const pages = serve.pages

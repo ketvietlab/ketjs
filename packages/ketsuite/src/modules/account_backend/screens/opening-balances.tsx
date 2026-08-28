@@ -129,7 +129,15 @@ export const openingBalanceImportScreen = (
 
 export const openingBalanceDetailScreen = (
   _: Translator,
-  options: { frame: Frame; batch: Row; lines: Row[]; action: string; currency: unknown; entryHref?: string },
+  options: {
+    frame: Frame
+    batch: Row
+    lines: Row[]
+    action: string
+    currency: unknown
+    entryHref?: string
+    errors?: string[]
+  },
 ): TemplateResult => (
   <Framed
     translator={_}
@@ -153,6 +161,12 @@ export const openingBalanceDetailScreen = (
         ]}
         body={stack(
           [
+            options.errors?.length ? (
+              <Section
+                title={_('account_backend.opening.post')}
+                body={<Surface padding="compact" body={options.errors.join(' · ')} />}
+              />
+            ) : null,
             <Section
               title={_('account_backend.opening.control')}
               description={_('account_backend.opening.controlHint')}

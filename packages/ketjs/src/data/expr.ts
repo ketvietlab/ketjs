@@ -8,7 +8,30 @@ import { assertGroupInterval } from './time.ts'
 import type { GroupInterval } from './time.ts'
 import type { FieldBase } from '../types.ts'
 
-export type Col = { readonly model: string; readonly name: string; readonly base: FieldBase }
+declare const COLUMN_HANDLE: unique symbol
+const COLUMN_HANDLES = new WeakSet<object>()
+
+/**
+ * A manifest-backed column handle created by `table()`/`ctx.table()`.
+ *
+ * A private type brand and module-owned WeakSet identity are checked. Merely
+ * spelling or spreading `{ model, name, base }` is not enough: a forged `base`
+ * could select SQL semantics that do not match the physical column, most notably
+ * SQLite's exact-decimal path.
+ */
+export type Col = {
+  readonly model: string
+  readonly name: string
+  readonly base: FieldBase
+  readonly [COLUMN_HANDLE]: true
+}
+
+/** Internal constructor; application code obtains columns from `table()`. */
+export const makeCol = (model: string, name: string, base: FieldBase): Col => {
+  const handle = { model, name, base } as Col
+  COLUMN_HANDLES.add(handle)
+  return Object.freeze(handle)
+}
 
 export type Expr =
   | { readonly op: 'and'; readonly parts: Expr[] }
@@ -58,10 +81,11 @@ export const assertCol = (candidate: unknown): Col => {
     typeof c !== 'object' ||
     typeof c.model !== 'string' ||
     typeof c.name !== 'string' ||
-    !FIELD_BASES.has(c.base as FieldBase)
+    !FIELD_BASES.has(c.base as FieldBase) ||
+    !COLUMN_HANDLES.has(c)
   )
     throw new Error(
-      `expected a column from table(), got ${JSON.stringify(candidate)} — typed column metadata must include model, name, and base`,
+      `expected a column from table(), got ${JSON.stringify(candidate)} — model, name, and base metadata cannot be constructed by hand`,
     )
   return c as Col
 }

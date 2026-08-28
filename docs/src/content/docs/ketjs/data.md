@@ -111,14 +111,31 @@ one canonical `1` group. Decimal `sum`, `min`, and `max` use exact string/`BigIn
 canonicalizes computed decimal group keys and aggregates on both adapters; ordinary selected fields
 still decode byte for byte as stored.
 
-Decimal `avg` on SQLite fails with `E_DECIMAL_AVG_SQLITE`: an exact average can be a non-terminating
-rational, so KetJS will not silently choose a scale or binary float. Request `sum` and `count` over the
-same nullable decimal column, then divide with the domain's explicit rounding rule, or use PostgreSQL.
-These guarantees apply to KetJS queries; raw SQLite SQL keeps SQLite's native type/coercion rules.
+An unrounded decimal `avg` fails on both adapters with `E_DECIMAL_AVG_ROUNDING_REQUIRED`: an average can
+be a non-terminating rational, so the database must not silently choose the result scale. Make the
+contract explicit when a finite result is appropriate:
 
-Column handles from `table()`/`ctx.table()` carry required runtime `base` metadata, which selects exact
-decimal SQL. Legacy `{ model, name }` objects without that metadata are rejected rather than falling
-back to SQLite coercion.
+```ts
+// File: src/modules/order/functions.ts
+from(Orders)
+  .groupBy({ col: Orders.currency })
+  .aggregate({
+    fn: 'avg',
+    col: Orders.total,
+    as: 'average',
+    scale: 2,
+    rounding: 'half-away-from-zero',
+  })
+```
+
+KetJS then performs exact decimal arithmetic on SQLite and renders PostgreSQL `NUMERIC` rounding with
+the same tie-breaking rule. Request `sum` and `count` and divide in the domain instead when another
+rounding policy is required. These guarantees apply to KetJS queries; raw SQLite SQL keeps SQLite's
+native type/coercion rules.
+
+Column handles from `table()`/`ctx.table()` are opaque manifest-backed values carrying runtime `base`
+metadata. Hand-built objects are rejected even when they spell `{ model, name, base }`: accepting a
+forged base could select SQL semantics that do not match the physical column.
 
 ## Declarative list search
 

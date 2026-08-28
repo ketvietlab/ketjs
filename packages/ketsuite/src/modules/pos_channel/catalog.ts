@@ -55,7 +55,7 @@ const revisionRows = (rows: Row[]): Row[] =>
     ),
   )
 
-async function snapshot(ctx: Ctx, posConfigId: string) {
+export async function posCatalogSnapshot(ctx: Ctx, posConfigId: string) {
   const config = (await ctx.db.select('pos.Config', { id: posConfigId }))[0]
   if (!config || !active(config.active)) return null
   const pricelist = config.pricelistId
@@ -117,7 +117,7 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
     ctx.db.select('account.Tax'),
     ctx.db.select('company.Company'),
   ])
-  const revision = stableHash({
+  const sources = {
     config: revisionRows([config]),
     variants: revisionRows(variants),
     templates: revisionRows(templates),
@@ -136,7 +136,37 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
     currency,
     scale: ledger.scale,
     cashRoundingStep: cashRoundingStep > 0 ? cashRoundingStep : null,
-  })
+  }
+  const revision = stableHash(sources)
+  const revisions = {
+    config: stableHash({ config: sources.config, companies: sources.companies }),
+    catalog: stableHash({
+      variants: sources.variants,
+      templates: sources.templates,
+      templateUoms: sources.templateUoms,
+      productUoms: sources.productUoms,
+      categories: sources.categories,
+      costs: sources.costs,
+      units: sources.units,
+    }),
+    price: stableHash({
+      costs: sources.costs,
+      pricelists: sources.pricelists,
+      pricelistItems: sources.pricelistItems,
+      currency: sources.currency,
+      scale: sources.scale,
+      cashRoundingStep: sources.cashRoundingStep,
+    }),
+    tax: stableHash({
+      productTaxes: sources.productTaxes,
+      taxes: sources.taxes,
+      companies: sources.companies,
+    }),
+    paymentMethods: stableHash({
+      methodLinks: sources.methodLinks,
+      paymentMethods: sources.paymentMethods,
+    }),
+  }
   return {
     config,
     currency,
@@ -147,12 +177,13 @@ async function snapshot(ctx: Ctx, posConfigId: string) {
     paymentMethods,
     cashRoundingStep,
     revision,
+    revisions,
   }
 }
 
 async function pageOf(
   ctx: Ctx,
-  held: NonNullable<Awaited<ReturnType<typeof snapshot>>>,
+  held: NonNullable<Awaited<ReturnType<typeof posCatalogSnapshot>>>,
   offset: number,
   limit: number,
 ) {
@@ -260,7 +291,7 @@ export const catalogFunctions: Record<string, FnSpec> = {
     ],
     exposure: 'internal',
     handler: async (ctx, args) => {
-      const held = await snapshot(ctx, String(args.posConfigId))
+      const held = await posCatalogSnapshot(ctx, String(args.posConfigId))
       if (!held) return null
       const offset = Math.max(0, Number(args.offset ?? 0))
       if (args.revision && args.revision !== held.revision)
