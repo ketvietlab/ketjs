@@ -189,6 +189,8 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     ['/shifts/{id}/variance/approve', 'post', 'pos.shifts.variance.approve'],
     ['/orders', 'post', 'pos.orders.create'],
     ['/orders/{id}/detail', 'get', 'pos.orders.get'],
+    ['/orders/{id}/return-eligibility', 'get', 'pos.orders.returnEligibility'],
+    ['/orders/{id}/returns', 'post', 'pos.orders.returns.create'],
     ['/orders/{id}/lines', 'post', 'pos.orders.lines.add'],
     ['/orders/{id}/lines/{lineId}/update', 'patch', 'pos.orders.lines.update'],
     ['/orders/{id}/lines/{lineId}/lot-availability', 'get', 'pos.orders.lines.lotAvailability'],
@@ -227,6 +229,11 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
   const selectionItem = (((selectLotsSchema.properties as Row).selections as Row).items as Row)
     .properties as Row
   assert.deepEqual(selectionItem.stockRevision, { type: 'string' })
+  const createReturn = document.paths['/orders/{id}/returns']?.post as Row
+  const createReturnBody = (createReturn.requestBody as Row).content as Row
+  const createReturnSchema = (createReturnBody['application/json'] as Row).schema as Row
+  assert.deepEqual(createReturnSchema.required, ['shiftId', 'expectedRevision', 'lines'])
+  assert.equal(((createReturnSchema.properties as Row).lines as Row).minItems, 1)
   const loyalty = document.paths['/orders/{id}/loyalty']?.get
   assert.ok(loyalty)
   assert.deepEqual((loyalty as Record<string, unknown>)['x-ket-capability'], {

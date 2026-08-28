@@ -322,9 +322,13 @@ export const reconcileOrder = async (ctx: Ctx, orderId: string, attempts = 1): P
     const current = (await ctx.db.select('pos.Order', { id: orderId }))[0]
     if (!current) return invalid(issue('id', 'loyalty.error.order'))
     if (current.isRefund && current.refundedOrderId)
-      loyalty = (await orderFunctions['order.reverse']!.handler(ctx, {
+      loyalty = (await orderFunctions['order.reversePortion']!.handler(ctx, {
         orderType: 'pos',
         orderId: current.refundedOrderId,
+        reversalId: current.id,
+        portion: current.returnPortion ?? '1',
+        complete: Boolean(current.returnComplete),
+        reversedAt: current.dateOrder,
       })) as Row
     else {
       const snapshot = await posSnapshot(ctx, orderId)
@@ -543,7 +547,7 @@ export const functions: Record<string, FnSpec> = {
       ...effectsOf(posFunctions.validateOrder),
       ...snapshotEffects,
       ...effectsOf(orderFunctions['order.finalize']),
-      ...effectsOf(orderFunctions['order.reverse']),
+      ...effectsOf(orderFunctions['order.reversePortion']),
       'write:pos.Order',
       'enqueue:loyalty_pos.reconcileOrder',
     ],
@@ -568,7 +572,16 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   refundOrder: defineFn({
-    input: { id: 'id', uuid: 'text?', originalOrderId: 'id', sessionId: 'id' },
+    input: {
+      id: 'id',
+      uuid: 'text?',
+      originalOrderId: 'id',
+      sessionId: 'id',
+      expectedRevision: 'int?',
+      lines: 'json?',
+      operatorId: 'text?',
+      deviceId: 'text?',
+    },
     effects: effectsOf(posFunctions.refundOrder),
     idempotent: true,
     agent: true,
@@ -602,6 +615,7 @@ export const functions: Record<string, FnSpec> = {
       ...snapshotEffects,
       ...effectsOf(orderFunctions['order.finalize']),
       ...effectsOf(orderFunctions['order.reverse']),
+      ...effectsOf(orderFunctions['order.reversePortion']),
       'write:pos.Order',
     ],
     idempotent: true,
@@ -622,9 +636,13 @@ export const functions: Record<string, FnSpec> = {
       for (const held of orders) {
         let result: Row
         if (held.isRefund && held.refundedOrderId)
-          result = (await orderFunctions['order.reverse']!.handler(ctx, {
+          result = (await orderFunctions['order.reversePortion']!.handler(ctx, {
             orderType: 'pos',
             orderId: held.refundedOrderId,
+            reversalId: held.id,
+            portion: held.returnPortion ?? '1',
+            complete: Boolean(held.returnComplete),
+            reversedAt: held.dateOrder,
           })) as Row
         else {
           const order = await posSnapshot(ctx, String(held.id))
@@ -635,7 +653,11 @@ export const functions: Record<string, FnSpec> = {
         }
         results.push({ id: held.id, ok: result.ok })
         if (result.ok === true)
-          await ctx.db.update('pos.Order', { id: held.id }, { loyaltyState: 'finalized' })
+          await ctx.db.update(
+            'pos.Order',
+            { id: held.id },
+            { loyaltyState: held.isRefund ? 'reversed' : 'finalized' },
+          )
       }
       return {
         ok: results.every((row) => row.ok),
