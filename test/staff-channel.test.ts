@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
-import type { Row } from '@ketvietlab/ketjs'
+import type { ClientCompatibilityPolicy, Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
@@ -10,8 +10,11 @@ type Envelope<T> = {
   meta: { requestId: string }
 }
 
-const boot = async (t: TestContext) => {
-  const e2e = await createTestDeployment(ketsuite, { worker: false })
+const boot = async (t: TestContext, clientCompatibility?: ClientCompatibilityPolicy) => {
+  const deployment = clientCompatibility
+    ? { ...ketsuite, serve: { ...ketsuite.serve!, clientCompatibility } }
+    : ketsuite
+  const e2e = await createTestDeployment(deployment, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branches: null }
   const fixture = (name: string, input: Record<string, unknown>) =>
@@ -67,10 +70,18 @@ test('staff channel: the company comes from the session, never from the request'
   const bootstrap = await staff<{
     user: { id: string }
     scope: { companyId: string; companies: string[] }
+    deployment: string
+    minimumAppVersion: { ios: string; android: string }
+    recommendedAppVersion: { ios: string; android: string }
+    maintenance: { enabled: boolean; message: string | null }
   }>(e2e, 'bootstrap')
   assert.equal(bootstrap.status, 200)
   assert.equal(bootstrap.body.data.user.id, 'operator')
   assert.equal(bootstrap.body.data.scope.companyId, 'acme')
+  assert.equal(bootstrap.body.data.deployment, 'ketsuite')
+  assert.deepEqual(bootstrap.body.data.minimumAppVersion, { ios: '0.0.0', android: '0.0.0' })
+  assert.deepEqual(bootstrap.body.data.recommendedAppVersion, { ios: '0.0.0', android: '0.0.0' })
+  assert.deepEqual(bootstrap.body.data.maintenance, { enabled: false, message: null })
 
   // Every way a caller might try to name a different company. The session is
   // what answers, so all of them come back the same.
@@ -93,6 +104,34 @@ test('staff channel: the profile answers from the operator its session names', a
   assert.equal(me.status, 200)
   assert.deepEqual(me.body.data.user.id, 'operator')
   assert.deepEqual(me.body.data.user.login, 'operator')
+})
+
+test('staff channel: maintenance hides disabled copy and falls back for unsupported locales', async (t) => {
+  const disabled = await boot(t, {
+    minimumVersions: { ios: '1.0.0', android: '1.0.0' },
+    maintenance: { enabled: false, messages: { vi: 'Đang bảo trì.' } },
+  })
+  await disabled.client.login({ login: 'operator', password: 'correct horse battery' })
+  const disabledBootstrap = await staff<{ maintenance: { enabled: boolean; message: string | null } }>(
+    disabled,
+    'bootstrap',
+  )
+  assert.deepEqual(disabledBootstrap.body.data.maintenance, { enabled: false, message: null })
+
+  const enabled = await boot(t, {
+    minimumVersions: { ios: '1.0.0', android: '1.0.0' },
+    maintenance: { enabled: true, messages: { vi: 'Đang bảo trì.' } },
+  })
+  await enabled.client.login({ login: 'operator', password: 'correct horse battery' })
+  const enabledBootstrap = await staff<{ maintenance: { enabled: boolean; message: string | null } }>(
+    enabled,
+    'bootstrap',
+    { headers: { 'accept-language': 'en-US' } },
+  )
+  assert.deepEqual(enabledBootstrap.body.data.maintenance, {
+    enabled: true,
+    message: 'Đang bảo trì.',
+  })
 })
 
 test('staff channel: a customer credential is not a staff credential', async (t) => {

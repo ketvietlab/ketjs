@@ -96,6 +96,48 @@
                         },
                         "capabilityRevision": {
                           "type": "string"
+                        },
+                        "deployment": {
+                          "type": "string"
+                        },
+                        "minimumAppVersion": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "ios": {
+                              "type": "string"
+                            },
+                            "android": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["ios", "android"]
+                        },
+                        "recommendedAppVersion": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "ios": {
+                              "type": "string"
+                            },
+                            "android": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["ios", "android"]
+                        },
+                        "maintenance": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "message": {
+                              "type": ["string", "null"]
+                            }
+                          },
+                          "required": ["enabled", "message"]
                         }
                       },
                       "required": [
@@ -104,7 +146,11 @@
                         "csrfToken",
                         "scope",
                         "capabilities",
-                        "capabilityRevision"
+                        "capabilityRevision",
+                        "deployment",
+                        "minimumAppVersion",
+                        "recommendedAppVersion",
+                        "maintenance"
                       ]
                     },
                     "error": {},
