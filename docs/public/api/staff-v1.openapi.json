@@ -2229,6 +2229,45 @@
             "staffCookie": []
           }
         ],
+        "parameters": [
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -2238,47 +2277,70 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "branchId": {
-                            "type": "string"
-                          },
-                          "startAt": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "stopAt": {
-                            "type": ["string", "null"],
-                            "format": "date-time"
-                          },
-                          "correctedStartAt": {
-                            "type": ["string", "null"],
-                            "format": "date-time"
-                          },
-                          "correctedStopAt": {
-                            "type": ["string", "null"],
-                            "format": "date-time"
-                          },
-                          "state": {
-                            "type": "string"
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "dateFrom": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "dateTo": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "branchId": {
+                                "type": "string"
+                              },
+                              "startAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "stopAt": {
+                                "type": ["string", "null"],
+                                "format": "date-time"
+                              },
+                              "correctedStartAt": {
+                                "type": ["string", "null"],
+                                "format": "date-time"
+                              },
+                              "correctedStopAt": {
+                                "type": ["string", "null"],
+                                "format": "date-time"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "workedHours": {
+                                "type": "string",
+                                "pattern": "^\\d+(?:\\.\\d{2})$"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "branchId",
+                              "startAt",
+                              "stopAt",
+                              "correctedStartAt",
+                              "correctedStopAt",
+                              "state",
+                              "workedHours"
+                            ]
                           }
                         },
-                        "required": [
-                          "id",
-                          "branchId",
-                          "startAt",
-                          "stopAt",
-                          "correctedStartAt",
-                          "correctedStopAt",
-                          "state"
-                        ]
-                      }
+                        "nextCursor": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["dateFrom", "dateTo", "items", "nextCursor"]
                     },
                     "error": {},
                     "meta": {
@@ -2308,6 +2370,18 @@
           },
           {
             "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -2361,7 +2435,7 @@
           "action": "check_in"
         },
         "x-ket-auth": "required",
-        "x-ket-idempotent": false
+        "x-ket-idempotent": true
       }
     },
     "/attendance/check-out": {
@@ -2374,6 +2448,18 @@
           },
           {
             "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -2427,7 +2513,7 @@
           "action": "check_out"
         },
         "x-ket-auth": "required",
-        "x-ket-idempotent": false
+        "x-ket-idempotent": true
       }
     },
     "/reports/business-overview": {

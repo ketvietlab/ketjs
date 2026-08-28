@@ -165,7 +165,7 @@ const inspectTable = (adapter: Adapter, table: string): Promise<PhysicalTable | 
   if (adapter.name === 'sqlite') return inspectSqliteTable(adapter, table)
   if (adapter.name === 'postgres') return inspectPostgresTable(adapter, table)
   throw new Error(
-    `adapter "${adapter.name}" cannot confirm a manual migration safely; physical-schema verification supports sqlite and postgres`,
+    `adapter "${adapter.name}" cannot verify a physical schema safely; catalog verification supports sqlite and postgres`,
   )
 }
 

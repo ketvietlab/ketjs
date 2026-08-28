@@ -331,6 +331,70 @@ test('tenants: a session facade retains no manager from an evicted adapter', asy
   }
 })
 
+test('tenants: a session facade rejects adapter-independent policy drift after eviction', async () => {
+  const manifest = compose([core])
+  const drifts: Array<[string, (sessions: Sessions) => Sessions]> = [
+    ['store.name', (sessions) => ({ ...sessions, store: { ...sessions.store, name: 'replacement-store' } })],
+    ['tenant', (sessions) => ({ ...sessions, tenant: 'other' })],
+    ['ephemeralSecret', (sessions) => ({ ...sessions, ephemeralSecret: true })],
+    ['clearCookie', (sessions) => ({ ...sessions, clearCookie: () => `${sessions.clearCookie()}; Drift=1` })],
+    [
+      'anonymous',
+      (sessions) => ({
+        ...sessions,
+        scopeOf: (record) => (record ? sessions.scopeOf(record) : { company: 'other-public' }),
+      }),
+    ],
+  ]
+
+  for (const [field, drift] of drifts) {
+    const attempts = new Map<string, number>()
+    const pool = createAdapterPool({ create: () => sqliteAdapter(), max: 1 })
+    const tenants = createTenants({
+      spec: {
+        resolve: () => null,
+        open: () => sqliteAdapter(),
+        list: async () => ['t1', 't2'],
+        max: 1,
+      },
+      pool,
+      manifest,
+      joints: () => ({}) as never,
+      sessions: async (_adapter, key) => {
+        const attempt = (attempts.get(key) ?? 0) + 1
+        attempts.set(key, attempt)
+        const sessions = await createSessions({
+          tenant: key,
+          secret: 'stable',
+          secure: false,
+          anonymous: { company: 'public', companies: ['public'] },
+        })
+        return key === 't1' && attempt > 1 ? drift(sessions) : sessions
+      },
+    })
+
+    try {
+      const facade = await tenants.with('t1', async (tenant) => tenant.sessions!)
+      await tenants.with('t2', async () => undefined)
+      await assert.rejects(
+        () => facade.sweep(),
+        (error: unknown) => {
+          const failure = error as { code?: string; message?: string; hint?: string }
+          assert.equal(failure.code, 'E_SESSION_POLICY_DRIFT')
+          assert.equal(
+            failure.message,
+            'session policy for tenant "t1" changed after its adapter was replaced',
+          )
+          assert.ok(failure.hint?.includes(field), `the diagnostic names ${field}`)
+          return true
+        },
+      )
+    } finally {
+      await tenants.close()
+    }
+  }
+})
+
 test('tenants: an async datastore opener is awaited before the adapter is opened', async () => {
   let opened = 0
   const asyncApp = defineDeployment({
