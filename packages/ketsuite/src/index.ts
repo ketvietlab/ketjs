@@ -213,6 +213,7 @@ export {
 export { analyticsFunctions as accountAnalyticsFunctions } from './modules/account/analytics.ts'
 /** Stable extension boundary for private bank, document, and reminder adapters. */
 export { cashReceivableFunctions as accountCashReceivableFunctions } from './modules/account/cash-receivables.ts'
+export { assetCostingFunctions as accountAssetCostingFunctions } from './modules/account/assets-costing.ts'
 export {
   absDecimalText,
   addDecimals,
