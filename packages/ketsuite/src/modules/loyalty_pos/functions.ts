@@ -579,6 +579,7 @@ export const functions: Record<string, FnSpec> = {
       sessionId: 'id',
       expectedRevision: 'int?',
       lines: 'json?',
+      reason: 'text?',
       operatorId: 'text?',
       deviceId: 'text?',
     },
@@ -586,6 +587,26 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: (ctx, args) => posFunctions.refundOrder!.handler(ctx, args),
+  }),
+
+  createExchange: defineFn({
+    input: {
+      id: 'id',
+      uuid: 'text?',
+      originalOrderId: 'id',
+      sessionId: 'id',
+      expectedRevision: 'int',
+      lines: 'json',
+      reason: 'text',
+      replacementPriceBookRevision: 'text',
+      replacementNote: 'text?',
+      operatorId: 'text?',
+      deviceId: 'text?',
+    },
+    effects: effectsOf(posFunctions.createExchange),
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) => posFunctions.createExchange!.handler(ctx, args),
   }),
 
   cancelOrder: defineFn({
