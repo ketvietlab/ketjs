@@ -100,7 +100,10 @@ test('pos sync PostgreSQL: concurrent duplicate claims keep one durable command'
       `SELECT "commandId", state, attempts FROM ${table} WHERE "commandId" = $1`,
       ['sync-command-1'],
     )
-    assert.deepEqual([...commands], [{ commandId: 'sync-command-1', state: 'processing', attempts: 1 }])
+    assert.deepEqual(
+      commands.map((row) => ({ ...row, attempts: Number(row.attempts) })),
+      [{ commandId: 'sync-command-1', state: 'processing', attempts: 1 }],
+    )
   } finally {
     await Promise.all([first.close().catch(() => {}), second.close().catch(() => {})])
     await admin.exec(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`).catch(() => {})
