@@ -102,10 +102,12 @@ adapters and operational tooling, not a requirement for ordinary modules.
 | `DestructiveMigrationError` | Identify a plan requiring explicit destructive permission. |
 | `ManualMigrationRequiredError` | Identify a schema change that needs an explicit backfill or conversion. |
 | `confirmManualMigration`, `ManualMigrationConfirmationError` | Verify physical DDL/backfill before adopting a manual migration. |
+| `verifyPhysicalSchema`, `PhysicalSchemaVerification` | Read-only audit of the physical catalog against its marker and current manifest. |
+| `physicalSchemaIssues` | Compare modelled SQLite/PostgreSQL catalog objects with explicit schema values. |
 | `migrateOne`, `migrateFleet`, `formatFleet` | Apply or report one-database and tenant-fleet migrations. |
 
-The `Adapter`, `Transaction`, `Scope`, `Dialect`, `Sql`, `Table`, `Expr`, `FieldError`, and `Validator`
-types are exported from the same entrypoint.
+The `Adapter`, `Transaction`, `Scope`, `Schema`, `MigrationOp`, `Dialect`, `Sql`, `Table`, `Expr`,
+`FieldError`, and `Validator` types are exported from the same entrypoint.
 
 ### Reports and PDF
 

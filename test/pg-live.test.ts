@@ -5,16 +5,20 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import {
+  asc,
   callFn,
   compose,
   createAdapterPool,
   createQueue,
   createStreams,
   dbStreamStore,
+  defineModule,
+  desc,
   eq,
   formatFleet,
   from,
   gte,
+  lte,
   migrateFleet,
   planMigration,
   migrateOne,
@@ -55,6 +59,70 @@ const URL =
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)
 
+const decimalLive = defineModule({
+  name: 'decimal_live',
+  models: {
+    Entry: {
+      scope: 'shared',
+      fields: { id: 'id', amount: 'decimal?', note: 'text' },
+    },
+  },
+  functions: {
+    summarize: {
+      input: { note: 'text' },
+      effects: ['read:decimal_live.Entry'],
+      handler: (ctx, args) => {
+        const Entry = ctx.table('decimal_live.Entry')
+        return ctx.db.group(
+          from(Entry)
+            .where(eq(Entry.note!, args.note))
+            .groupBy({ col: Entry.note! })
+            .aggregate(
+              { fn: 'count', as: 'rows' },
+              { fn: 'countDistinct', col: Entry.amount!, as: 'distinctAmounts' },
+              { fn: 'sum', col: Entry.amount!, as: 'total' },
+              { fn: 'min', col: Entry.amount!, as: 'minimum' },
+              { fn: 'max', col: Entry.amount!, as: 'maximum' },
+            ),
+        )
+      },
+    },
+    groupAmounts: {
+      input: { note: 'text' },
+      effects: ['read:decimal_live.Entry'],
+      handler: (ctx, args) => {
+        const Entry = ctx.table('decimal_live.Entry')
+        return ctx.db.group(
+          from(Entry)
+            .where(eq(Entry.note!, args.note))
+            .groupBy({ col: Entry.amount! })
+            .orderGroupsBy({ by: 'key', dir: 'asc' }),
+        )
+      },
+    },
+    average: {
+      input: { note: 'text', scale: 'int' },
+      effects: ['read:decimal_live.Entry'],
+      handler: (ctx, args) => {
+        const Entry = ctx.table('decimal_live.Entry')
+        return ctx.db.group(
+          from(Entry)
+            .where(eq(Entry.note!, args.note))
+            .groupBy({ col: Entry.note! })
+            .aggregate({
+              fn: 'avg',
+              col: Entry.amount!,
+              as: 'average',
+              scale: Number(args.scale),
+              rounding: 'half-away-from-zero',
+            }),
+        )
+      },
+    },
+  },
+})
+const decimalManifest = compose([decimalLive], { headless: true })
+
 const reachable = await (async () => {
   const a = postgresAdapter(URL)
   try {
@@ -90,6 +158,7 @@ async function fresh(): Promise<Adapter> {
     'ket_idem',
     'checkout_order',
     'catalog_product',
+    'decimal_live_entry',
   ]) {
     await a.exec(`DROP TABLE IF EXISTS "${t}" CASCADE`)
   }
@@ -466,6 +535,156 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
   } finally {
     await pool.close()
   }
+})
+
+test('live pg: exact decimal queries and aggregates match the portable contract', live, async () => {
+  await withPg(async (a) => {
+    const schema = schemaFromManifest(decimalManifest)
+    for (const sql of renderSql(planMigration(null, schema), a)) await a.exec(sql)
+    registerFunctions([decimalLive])
+
+    const entries = [
+      ['rank-00', '-9007199254740993.2', 'rank'],
+      ['rank-01', '-10', 'rank'],
+      ['rank-02', '-2', 'rank'],
+      ['rank-03', '0', 'rank'],
+      ['rank-04', '0.01', 'rank'],
+      ['rank-05', '2', 'rank'],
+      ['rank-06', '10', 'rank'],
+      ['rank-07', '9007199254740992.1', 'rank'],
+      ['rank-08', '9007199254740992.2', 'rank'],
+      ['rank-09', '9007199254740993.1', 'rank'],
+      ['rank-null', null, 'rank'],
+      ['aggregate-00', '-9007199254740990.3', 'aggregate'],
+      ['aggregate-01', '9007199254740992.1', 'aggregate'],
+      ['aggregate-02', '0.2', 'aggregate'],
+      ['aggregate-03', '1.0', 'aggregate'],
+      ['aggregate-04', '1.00', 'aggregate'],
+      ['aggregate-05', '-0.0', 'aggregate'],
+      ['aggregate-06', '0.000', 'aggregate'],
+      ['aggregate-07', '-2.00', 'aggregate'],
+      ['aggregate-08', '10', 'aggregate'],
+      ['aggregate-09', '2.0', 'aggregate'],
+      ['third-00', '1', 'third'],
+      ['third-01', '0', 'third'],
+      ['third-02', '0', 'third'],
+      ['third-null', null, 'third'],
+      ['negative-00', '-1', 'negative'],
+      ['negative-01', '0', 'negative'],
+    ] as const
+    for (const row of entries)
+      await a.run('INSERT INTO decimal_live_entry (id, amount, note) VALUES ($1, $2, $3)', [...row])
+
+    const Entry = table(decimalManifest, 'decimal_live.Entry')
+    const execute = async (query: ReturnType<typeof from>) => {
+      const { text, params } = query.toSQL('postgres')
+      return { text, rows: await a.all(text, params) }
+    }
+
+    const equivalent = await execute(
+      from(Entry).where(eq(Entry.note!, 'aggregate'), eq(Entry.amount!, '1')).orderBy(asc(Entry.id!)),
+    )
+    assert.deepEqual(
+      equivalent.rows.map((row) => row.id),
+      ['aggregate-03', 'aggregate-04'],
+      'NUMERIC equality treats equivalent decimal spellings as one value',
+    )
+
+    const range = await execute(
+      from(Entry)
+        .where(
+          eq(Entry.note!, 'rank'),
+          gte(Entry.amount!, '9007199254740992.15'),
+          lte(Entry.amount!, '9007199254740993.1'),
+        )
+        .orderBy(asc(Entry.amount!)),
+    )
+    assert.deepEqual(
+      range.rows.map((row) => row.id),
+      ['rank-08', 'rank-09'],
+      'range comparisons stay exact beyond Number.MAX_SAFE_INTEGER',
+    )
+
+    const ascending = await execute(from(Entry).where(eq(Entry.note!, 'rank')).orderBy(asc(Entry.amount!)))
+    assert.match(ascending.text, /"amount" ASC NULLS LAST/)
+    assert.deepEqual(
+      ascending.rows.map((row) => row.id),
+      [...entries.slice(0, 10).map((row) => row[0]), 'rank-null'],
+    )
+
+    const descending = await execute(from(Entry).where(eq(Entry.note!, 'rank')).orderBy(desc(Entry.amount!)))
+    assert.match(descending.text, /"amount" DESC NULLS FIRST/)
+    assert.deepEqual(
+      descending.rows.map((row) => row.id),
+      [
+        'rank-null',
+        ...entries
+          .slice(0, 10)
+          .map((row) => row[0])
+          .reverse(),
+      ],
+    )
+
+    const options = { adapter: a, manifest: decimalManifest, scope: SCOPE }
+    const summary = (
+      (await callFn('decimal_live.summarize', { note: 'aggregate' }, options)).value as Array<{
+        key: unknown[]
+        count: number
+        aggregates: Record<string, unknown>
+      }>
+    )[0]!
+    assert.deepEqual(summary.key, ['aggregate'])
+    assert.equal(summary.count, 10)
+    assert.equal(Number(summary.aggregates.rows), 10)
+    assert.equal(Number(summary.aggregates.distinctAmounts), 8)
+    assert.equal(summary.aggregates.total, '14')
+    assert.equal(summary.aggregates.minimum, '-9007199254740990.3')
+    assert.equal(summary.aggregates.maximum, '9007199254740992.1')
+
+    const grouped = (await callFn('decimal_live.groupAmounts', { note: 'aggregate' }, options))
+      .value as Array<{ key: unknown[]; count: number }>
+    assert.deepEqual(
+      grouped.map((row) => [row.key[0], row.count]),
+      [
+        ['-9007199254740990.3', 1],
+        ['-2', 1],
+        ['0', 2],
+        ['0.2', 1],
+        ['1', 2],
+        ['2', 1],
+        ['10', 1],
+        ['9007199254740992.1', 1],
+      ],
+      'grouping collapses numerically equivalent spellings',
+    )
+
+    const thirds = (
+      (await callFn('decimal_live.average', { note: 'third', scale: 2 }, options)).value as Array<{
+        count: number
+        aggregates: Record<string, unknown>
+      }>
+    )[0]!
+    assert.equal(thirds.count, 4)
+    assert.equal(thirds.aggregates.average, '0.33', 'one third is rounded to the requested finite scale')
+
+    const preciseThird = (
+      (await callFn('decimal_live.average', { note: 'third', scale: 30 }, options)).value as Array<{
+        aggregates: Record<string, unknown>
+      }>
+    )[0]!
+    assert.equal(
+      preciseThird.aggregates.average,
+      `0.${'3'.repeat(30)}`,
+      'exact quotient/remainder arithmetic keeps every requested digit',
+    )
+
+    const negativeTie = (
+      (await callFn('decimal_live.average', { note: 'negative', scale: 0 }, options)).value as Array<{
+        aggregates: Record<string, unknown>
+      }>
+    )[0]!
+    assert.equal(negativeTie.aggregates.average, '-1', 'negative ties round away from zero')
+  })
 })
 
 test('live pg: concurrent partner defaults, roles and terms stay unique', live, async () => {

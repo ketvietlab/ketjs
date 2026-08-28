@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { defineFn, isDateText } from '@ketvietlab/ketjs'
-import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import type { FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions, insertDraftMove, ledgerOf, postMoveById } from './functions.ts'
 import { canonicalDecimalText, compareDecimals, minorText, moneyMinor } from './money.ts'
 

@@ -99,6 +99,26 @@ test('postgres: column types differ from sqlite where the dialects differ', asyn
   await adapter.close()
 })
 
+test('postgres: a json value reaches the driver as an object, not as text', async () => {
+  const { adapter, calls } = await pg()
+  const value = { issuer: 'https://id.example', endpoints: ['authorize', 'token'] }
+  await adapter.run('INSERT INTO t ("v") VALUES ($1)', [value])
+  // The driver encodes a parameter bound to JSONB. Encoding it here as well left
+  // the column holding a JSON string, so reads came back as text and every
+  // `json` field silently changed type between SQLite and Postgres.
+  assert.deepEqual(calls[0]!.params, [value])
+  assert.equal(typeof calls[0]!.params[0], 'object')
+  await adapter.close()
+})
+
+test('postgres: undefined still binds as null, and a Date is left to the driver', async () => {
+  const { adapter, calls } = await pg()
+  const at = new Date('2026-08-28T00:00:00.000Z')
+  await adapter.run('INSERT INTO t ("a", "b") VALUES ($1, $2)', [undefined, at])
+  assert.deepEqual(calls[0]!.params, [null, at])
+  await adapter.close()
+})
+
 test('postgres: one schema, two dialects, from the same manifest', async () => {
   const { adapter } = await pg()
   const ops = planMigration(null, schemaFromManifest(manifest))

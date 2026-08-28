@@ -173,6 +173,7 @@ const app = defineDeployment({
       },
       list: () => tenantCatalogue.listKeys(),
       open: (key, config) => openTenantDatabase(key, config),
+      exists: (key, config) => tenantDatabaseExists(key, config),
       max: 20,
       idleMs: 60_000,
     },
@@ -192,12 +193,20 @@ lease can retry instead of replaying a permanently rejected promise.
 
 `tenants.open()` is an adapter factory: return a fresh adapter object for each pool entry and let the
 pool own `open()`/`close()` rather than caching an object that the pool already closed.
+`tenants.exists()` must inspect the tenant catalogue or storage location without creating or opening the
+datastore. KetJS requires it for `ket schema verify --tenant/--all`, so a read-only audit cannot turn a
+missing SQLite tenant into an empty database.
 
 Per-tenant session handles are lease-safe facades rather than captured database connections. If an
 idle adapter is evicted, the next session operation leases the replacement and rebuilds its database
 store before reading the cookie. Tenant deployments without an explicit signing secret generate one
 stable key for the lifetime of the booted process; the startup banner still warns that those sessions
 cannot survive a restart or span multiple pods.
+
+For one tenant key, every replacement session manager must keep the backing store identity, tenant
+binding, signing-secret provenance, cookie policy, and anonymous scope unchanged. KetJS compares that
+adapter-independent policy on reacquisition and raises `E_SESSION_POLICY_DRIFT` instead of letting an
+eviction silently change authentication or authorization behavior.
 
 ## Per-tenant runtime state
 

@@ -7,7 +7,7 @@
 
 import { tableNameFor } from '../data/migrate.ts'
 import { table, type Query } from '../data/query.ts'
-import { eq, inArray } from '../data/expr.ts'
+import { eq, inArray, makeCol } from '../data/expr.ts'
 import { from } from '../data/query.ts'
 import {
   canonicalDecimal,
@@ -266,10 +266,10 @@ export function createContext(o: {
     if (operation.crossCompany) return q // declared, and visible in the manifest
 
     const cs = readCompanies(q.model)
-    const col = { model: q.model, name: 'companyId', base: 'text' as const }
+    const col = makeCol(q.model, 'companyId', 'text')
     let out = q.where(cs.length === 1 ? eq(col, cs[0] as string) : inArray(col, cs))
     if (kind === 'company+branch' && scope.branches != null) {
-      out = out.where(inArray({ model: q.model, name: 'branchId', base: 'text' }, scope.branches))
+      out = out.where(inArray(makeCol(q.model, 'branchId', 'text'), scope.branches))
     }
     return out
   }
@@ -364,7 +364,7 @@ export function createContext(o: {
         })
       for (const batch of chunks(values)) {
         loaded.push(
-          ...(await db.all(from(table(manifest, model)).where(inArray({ model, name: field, base }, batch)))),
+          ...(await db.all(from(table(manifest, model)).where(inArray(makeCol(model, field, base), batch)))),
         )
       }
       return loaded

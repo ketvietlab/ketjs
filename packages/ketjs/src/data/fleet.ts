@@ -6,6 +6,7 @@
 // everywhere. Each database records the schema it is actually on, so a tenant
 // created last year and one created today converge on the same shape.
 
+import { isDeepStrictEqual } from 'node:util'
 import { ManualMigrationRequiredError, schemaFromManifest, planMigration, renderSql } from './migrate.ts'
 import type { Schema, MigrationOp } from './migrate.ts'
 import { physicalSchemaIssues } from './physical.ts'
@@ -28,6 +29,22 @@ CREATE TABLE IF NOT EXISTS ket_migration (
 `
 
 export type MigrationResult = { datastore: string; ops: MigrationOp[]; applied: boolean; error?: string }
+
+/** Read-only comparison of a database catalog, its applied marker, and the current manifest. */
+export type PhysicalSchemaVerification = {
+  /** True only when the marker and physical catalog both match the current manifest. */
+  ok: boolean
+  /** Schema recorded in `ket_migration`, or null when no marker exists. */
+  applied: Schema | null
+  /** Schema derived from the manifest supplied to {@link verifyPhysicalSchema}. */
+  target: Schema
+  /** Whether the applied marker is structurally equal to the current manifest. */
+  markerMatchesManifest: boolean
+  /** Physical differences from what the applied marker claims is present. */
+  markerIssues: string[]
+  /** Physical differences from the current manifest. */
+  manifestIssues: string[]
+}
 
 /** A manual migration was not eligible to advance the recorded schema. */
 export class ManualMigrationConfirmationError extends Error {
@@ -61,6 +78,37 @@ async function writeApplied(adapter: Adapter, schema: Schema, now: string): Prom
       json,
       now,
     ])
+  }
+}
+
+/**
+ * Verify a physical database without applying DDL or changing its migration marker.
+ *
+ * The two comparisons answer different operational questions. `markerIssues`
+ * detects legacy drift even when code and `ket_migration` agree, while
+ * `manifestIssues` describes what keeps the catalog from satisfying the current
+ * deployment. Callers should require `ok` before declaring a datastore healthy.
+ */
+export async function verifyPhysicalSchema(
+  adapter: Adapter,
+  manifest: Manifest,
+): Promise<PhysicalSchemaVerification> {
+  const target = schemaFromManifest(manifest)
+  const applied = await readApplied(adapter, false)
+  const markerMatchesManifest = applied !== null && isDeepStrictEqual(applied, target)
+  const markerIssues = applied
+    ? await physicalSchemaIssues(adapter, applied, applied)
+    : ['applied-schema marker is missing']
+  const manifestIssues = markerMatchesManifest
+    ? [...markerIssues]
+    : await physicalSchemaIssues(adapter, applied ?? { version: target.version, tables: {} }, target)
+  return {
+    ok: markerMatchesManifest && markerIssues.length === 0 && manifestIssues.length === 0,
+    applied,
+    target,
+    markerMatchesManifest,
+    markerIssues,
+    manifestIssues,
   }
 }
 

@@ -42,13 +42,19 @@ const TEXT_DATES = {
   ketTimestamp: { from: [1114, 1184], parse: (value: string) => new Date(value).toISOString() },
 }
 
-// Postgres has real booleans and real json, so unlike SQLite there is almost
-// nothing to coerce. Objects still go over as JSON text for JSONB to parse.
-const bind = (v: unknown): unknown => {
-  if (v === undefined) return null
-  if (v !== null && typeof v === 'object' && !(v instanceof Date)) return JSON.stringify(v)
-  return v
-}
+/**
+ * Postgres has real booleans and real json, so unlike SQLite there is almost
+ * nothing to coerce.
+ *
+ * An object is handed to the driver as an object. Stringifying it first looks
+ * like the SQLite path — where JSON really is text a column holds — but the
+ * driver already encodes a parameter bound to JSONB, so the string was encoded a
+ * second time and the column ended up holding a JSON *string* rather than the
+ * object: `jsonb_typeof` said `string`, and every `json` field read back as text.
+ * SQLite never showed it, because reads there parse the text back; the Postgres
+ * read path does not, trusting the driver to have handed back an object.
+ */
+const bind = (v: unknown): unknown => (v === undefined ? null : v)
 
 type Sql = {
   unsafe(text: string, params?: unknown[]): Promise<unknown[]> & { count?: number }

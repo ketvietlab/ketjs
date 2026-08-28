@@ -155,11 +155,13 @@ export type { AdapterPool, PoolOptions } from './data/pool.ts'
 export {
   migrateOne,
   confirmManualMigration,
+  verifyPhysicalSchema,
   migrateFleet,
   formatFleet,
   ManualMigrationConfirmationError,
 } from './data/fleet.ts'
-export type { MigrationResult } from './data/fleet.ts'
+export type { MigrationResult, PhysicalSchemaVerification } from './data/fleet.ts'
+export { physicalSchemaIssues } from './data/physical.ts'
 export { from, deleteFrom, table, asc, desc, Query } from './data/query.ts'
 export type {
   Dialect,
@@ -236,6 +238,7 @@ export {
   DestructiveMigrationError,
   ManualMigrationRequiredError,
 } from './data/migrate.ts'
+export type { Schema, MigrationOp } from './data/migrate.ts'
 
 // Re-exported whole; the view layer is its own package and can be installed alone
 // by a client that never touches the server half, but an app that has both should
