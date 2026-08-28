@@ -14,6 +14,7 @@ const string = { type: 'string' }
 const integer = { type: 'integer', minimum: 0 }
 const nullableString = { type: ['string', 'null'] }
 const object = { type: 'object' }
+const boolean = { type: 'boolean' }
 const n = (value: unknown) => Number(value ?? 0)
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 const envelope = (data: unknown) => ({
@@ -78,6 +79,7 @@ const orderLine = {
     quoteRevision: nullableString,
     tracking: string,
     lotSelections: { type: 'array', items: lotSelection },
+    originalLineId: nullableString,
   },
   required: [
     'id',
@@ -94,7 +96,49 @@ const orderLine = {
     'quoteRevision',
     'tracking',
     'lotSelections',
+    'originalLineId',
   ],
+}
+const returnEligibilityLine = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    lineId: string,
+    productId: string,
+    name: string,
+    uomId: string,
+    purchasedQuantity: string,
+    refundedQuantity: string,
+    remainingQuantity: string,
+    unitPrice: string,
+    amountTotal: string,
+    tracking: string,
+  },
+  required: [
+    'lineId',
+    'productId',
+    'name',
+    'uomId',
+    'purchasedQuantity',
+    'refundedQuantity',
+    'remainingQuantity',
+    'unitPrice',
+    'amountTotal',
+    'tracking',
+  ],
+}
+const returnEligibility = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    originalOrderId: string,
+    revision: integer,
+    refundable: boolean,
+    requiresFullReturn: boolean,
+    standaloneAllowed: boolean,
+    lines: { type: 'array', items: returnEligibilityLine },
+  },
+  required: ['originalOrderId', 'revision', 'refundable', 'requiresFullReturn', 'standaloneAllowed', 'lines'],
 }
 const lotAvailability = {
   type: 'object',
@@ -151,6 +195,185 @@ const tender = {
     'paymentDate',
   ],
 }
+const exchangeLink = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    uuid: string,
+    role: { type: 'string', enum: ['return', 'replacement'] },
+    originalOrderId: string,
+    returnOrderId: string,
+    replacementOrderId: string,
+    originalRevision: integer,
+    reason: string,
+    createdAt: string,
+  },
+  required: [
+    'id',
+    'uuid',
+    'role',
+    'originalOrderId',
+    'returnOrderId',
+    'replacementOrderId',
+    'originalRevision',
+    'reason',
+    'createdAt',
+  ],
+}
+const nullableExchangeLink = { ...exchangeLink, type: ['object', 'null'] }
+const receiptTax = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, name: string, amount: string },
+  required: ['id', 'name', 'amount'],
+}
+const receiptLine = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    productId: string,
+    uomId: string,
+    name: string,
+    quantity: string,
+    unitPrice: string,
+    discount: string,
+    amountUntaxed: string,
+    amountTax: string,
+    amountTotal: string,
+    taxes: { type: 'array', items: receiptTax },
+  },
+  required: [
+    'id',
+    'productId',
+    'uomId',
+    'name',
+    'quantity',
+    'unitPrice',
+    'discount',
+    'amountUntaxed',
+    'amountTax',
+    'amountTotal',
+    'taxes',
+  ],
+}
+const receiptTender = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    paymentMethodId: string,
+    paymentMethodName: string,
+    tenderedAmount: string,
+    appliedAmount: string,
+    change: string,
+    paidAt: string,
+  },
+  required: ['paymentMethodId', 'paymentMethodName', 'tenderedAmount', 'appliedAmount', 'change', 'paidAt'],
+}
+const receiptDocument = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    schema: { type: 'string', enum: ['ketviet.pos.receipt.v1'] },
+    company: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string },
+      required: ['id'],
+    },
+    config: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string, name: string },
+      required: ['id', 'name'],
+    },
+    shift: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string, name: string },
+      required: ['id', 'name'],
+    },
+    cashier: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string },
+      required: ['id'],
+    },
+    customer: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string, name: string },
+      required: ['id', 'name'],
+    },
+    order: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        id: string,
+        name: string,
+        reference: string,
+        orderedAt: string,
+        isReturn: boolean,
+        originalOrderId: nullableString,
+      },
+      required: ['id', 'name', 'reference', 'orderedAt', 'isReturn', 'originalOrderId'],
+    },
+    currency: string,
+    lines: { type: 'array', items: receiptLine },
+    tenders: { type: 'array', items: receiptTender },
+    totals: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        untaxed: string,
+        tax: string,
+        exact: string,
+        rounding: string,
+        total: string,
+        paid: string,
+        change: string,
+      },
+      required: ['untaxed', 'tax', 'exact', 'rounding', 'total', 'paid', 'change'],
+    },
+    invoice: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string },
+      required: ['id'],
+    },
+    issuedAt: string,
+  },
+  required: [
+    'schema',
+    'company',
+    'config',
+    'shift',
+    'cashier',
+    'customer',
+    'order',
+    'currency',
+    'lines',
+    'tenders',
+    'totals',
+    'invoice',
+    'issuedAt',
+  ],
+}
+const receipt = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    orderId: string,
+    version: integer,
+    templateVersion: string,
+    contentHash: string,
+    issuedAt: string,
+    document: receiptDocument,
+  },
+  required: ['id', 'orderId', 'version', 'templateVersion', 'contentHash', 'issuedAt', 'document'],
+}
 const order = {
   type: 'object',
   additionalProperties: false,
@@ -172,6 +395,14 @@ const order = {
     amountPaid: string,
     amountReturn: string,
     priceBookRevision: nullableString,
+    isReturn: boolean,
+    originalOrderId: nullableString,
+    returnPortion: nullableString,
+    returnComplete: boolean,
+    accountMoveId: nullableString,
+    pickingId: nullableString,
+    receiptId: nullableString,
+    exchange: nullableExchangeLink,
     revision: integer,
     lines: { type: 'array', items: orderLine },
     tenders: { type: 'array', items: tender },
@@ -195,10 +426,46 @@ const order = {
     'amountPaid',
     'amountReturn',
     'priceBookRevision',
+    'isReturn',
+    'originalOrderId',
+    'returnPortion',
+    'returnComplete',
+    'accountMoveId',
+    'pickingId',
+    'receiptId',
+    'exchange',
     'revision',
     'lines',
     'tenders',
     'allowedActions',
+  ],
+}
+const exchangeDraft = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    uuid: string,
+    originalOrderId: string,
+    returnOrderId: string,
+    replacementOrderId: string,
+    originalRevision: integer,
+    reason: string,
+    createdAt: string,
+    returnOrder: order,
+    replacementOrder: order,
+  },
+  required: [
+    'id',
+    'uuid',
+    'originalOrderId',
+    'returnOrderId',
+    'replacementOrderId',
+    'originalRevision',
+    'reason',
+    'createdAt',
+    'returnOrder',
+    'replacementOrder',
   ],
 }
 const shift = {
@@ -310,6 +577,27 @@ const projectOrder = (row: Row) => ({
   amountPaid: String(row.amountPaid),
   amountReturn: String(row.amountReturn),
   priceBookRevision: row.priceBookRevision == null ? null : String(row.priceBookRevision),
+  isReturn: Boolean(row.isRefund),
+  originalOrderId: row.refundedOrderId == null ? null : String(row.refundedOrderId),
+  returnPortion: row.returnPortion == null ? null : String(row.returnPortion),
+  returnComplete: Boolean(row.returnComplete),
+  accountMoveId: row.accountMoveId == null ? null : String(row.accountMoveId),
+  pickingId: row.pickingId == null ? null : String(row.pickingId),
+  receiptId: row.receiptId == null ? null : String(row.receiptId),
+  exchange:
+    row.exchange && typeof row.exchange === 'object'
+      ? {
+          id: String((row.exchange as Row).id),
+          uuid: String((row.exchange as Row).uuid),
+          role: String(row.exchangeRole),
+          originalOrderId: String((row.exchange as Row).originalOrderId),
+          returnOrderId: String((row.exchange as Row).returnOrderId),
+          replacementOrderId: String((row.exchange as Row).replacementOrderId),
+          originalRevision: Number((row.exchange as Row).originalRevision),
+          reason: String((row.exchange as Row).reason),
+          createdAt: String((row.exchange as Row).createdAt),
+        }
+      : null,
   revision: Number(row.revision ?? 0),
   lines: (Array.isArray(row.lines) ? (row.lines as Row[]) : [])
     .map((line) => ({
@@ -333,6 +621,7 @@ const projectOrder = (row: Row) => ({
           stockRevision: selection.stockRevision == null ? null : String(selection.stockRevision),
         }),
       ),
+      originalLineId: line.refundedOrderlineId == null ? null : String(line.refundedOrderlineId),
     }))
     .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id)),
   tenders: (Array.isArray(row.payments) ? (row.payments as Row[]) : []).map((payment) => ({
@@ -347,19 +636,33 @@ const projectOrder = (row: Row) => ({
     paymentDate: String(payment.paymentDate),
   })),
   allowedActions:
-    row.state === 'draft'
-      ? [
-          'update',
-          'add_line',
-          'update_line',
-          'remove_line',
-          'reorder_lines',
-          'add_tender',
-          'void_tender',
-          'finalize',
-          'cancel',
-        ]
-      : [],
+    row.state === 'draft' && row.isRefund
+      ? ['add_tender', 'void_tender', 'finalize', 'cancel']
+      : row.state === 'draft'
+        ? [
+            'update',
+            'add_line',
+            'update_line',
+            'remove_line',
+            'reorder_lines',
+            'add_tender',
+            'void_tender',
+            'finalize',
+            'cancel',
+          ]
+        : ['paid', 'done'].includes(String(row.state))
+          ? [...(!row.isRefund ? ['create_return', 'create_exchange'] : []), 'read_receipt']
+          : [],
+})
+
+const projectReceipt = (row: Row) => ({
+  id: String(row.id),
+  orderId: String(row.orderId),
+  version: Number(row.version),
+  templateVersion: String(row.templateVersion),
+  contentHash: String(row.contentHash),
+  issuedAt: String(row.issuedAt),
+  document: row.document,
 })
 
 const orderFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
@@ -861,6 +1164,219 @@ export const operationRoutes = routesOf(
     request: { params: idParams },
     responses: { '200': envelope(order), '404': envelope(object) },
     handler: (ctx, url, req, params, request) => orderResult(ctx, url, req, params.id, request.identity!),
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'GET',
+    path: 'orders/{id}/receipt',
+    operationId: 'pos.orders.receipt.get',
+    summary: 'Read the immutable receipt snapshot committed when this order was paid.',
+    auth: 'required',
+    request: { params: idParams },
+    responses: { '200': envelope(receipt), '404': envelope(object) },
+    handler: async (ctx, url, req, params, request) => {
+      const orderRow = await orderFor(ctx, url, req, params.id, request.identity!)
+      if (!orderRow || !['paid', 'done'].includes(String(orderRow.state))) return notFound(ctx, url, req)
+      const row = (await ctx.call('pos.getReceipt', { orderId: params.id }, url, req)) as Row | null
+      return row ? { data: projectReceipt(row) } : notFound(ctx, url, req)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'GET',
+    path: 'orders/{id}/return-eligibility',
+    operationId: 'pos.orders.returnEligibility',
+    summary: 'Read remaining return capacity from the immutable sale and its return history.',
+    auth: 'required',
+    request: { params: idParams },
+    responses: {
+      '200': envelope(returnEligibility),
+      '404': envelope(object),
+      '422': envelope(object),
+    },
+    handler: async (ctx, url, req, params, request) => {
+      const identity = request.identity!
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call('pos.getReturnEligibility', { id: params.id }, url, req)) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      const data = {
+        originalOrderId: String(result.originalOrderId),
+        revision: Number(result.revision),
+        refundable: Boolean(result.refundable),
+        requiresFullReturn: Boolean(result.requiresFullReturn),
+        standaloneAllowed: Boolean(result.standaloneAllowed),
+        lines: Array.isArray(result.lines) ? result.lines : [],
+      }
+      return { data, headers: { etag: `"pos-return-${data.revision}"` } }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/returns',
+    operationId: 'pos.orders.returns.create',
+    summary: 'Create an immutable partial-return draft against remaining sale quantities.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          shiftId: string,
+          expectedRevision: integer,
+          lines: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: { lineId: string, quantity: string },
+              required: ['lineId', 'quantity'],
+            },
+          },
+        },
+        required: ['shiftId', 'expectedRevision', 'lines'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '400': envelope(object),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      const original = await orderFor(ctx, url, req, params.id, identity)
+      const shift = await shiftFor(ctx, url, req, String(request.body.shiftId), identity)
+      if (!original || !shift) return notFound(ctx, url, req)
+      const id = channelCommandId('return', identity, `${params.id}\n${key}`)
+      const functionName = await lifecycleFunction(ctx, req, 'loyalty_pos.refundOrder', 'pos.refundOrder')
+      const result = (await ctx.call(
+        functionName,
+        {
+          id,
+          uuid: id,
+          originalOrderId: params.id,
+          sessionId: request.body.shiftId,
+          expectedRevision: request.body.expectedRevision,
+          lines: request.body.lines,
+          operatorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.return.create', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, String(result.id), identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/exchanges',
+    operationId: 'pos.orders.exchanges.create',
+    summary: 'Create linked return and replacement drafts for one paid sale.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          uuid: string,
+          shiftId: string,
+          expectedRevision: integer,
+          reason: string,
+          lines: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: { lineId: string, quantity: string },
+              required: ['lineId', 'quantity'],
+            },
+          },
+          replacement: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { priceBookRevision: string, note: string },
+            required: ['priceBookRevision'],
+          },
+        },
+        required: ['uuid', 'shiftId', 'expectedRevision', 'reason', 'lines', 'replacement'],
+      },
+    },
+    responses: {
+      '200': envelope(exchangeDraft),
+      '400': envelope(object),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      const original = await orderFor(ctx, url, req, params.id, identity)
+      const shift = await shiftFor(ctx, url, req, String(request.body.shiftId), identity)
+      if (!original || !shift) return notFound(ctx, url, req)
+      const id = channelCommandId('exchange', identity, String(request.body.uuid))
+      const functionName = await lifecycleFunction(
+        ctx,
+        req,
+        'loyalty_pos.createExchange',
+        'pos.createExchange',
+      )
+      const result = (await ctx.call(
+        functionName,
+        {
+          id,
+          uuid: request.body.uuid,
+          originalOrderId: params.id,
+          sessionId: request.body.shiftId,
+          expectedRevision: request.body.expectedRevision,
+          lines: request.body.lines,
+          reason: request.body.reason,
+          replacementPriceBookRevision: (request.body.replacement as Row).priceBookRevision,
+          replacementNote: (request.body.replacement as Row).note,
+          operatorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.exchange.create', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      const returnRow = await orderFor(ctx, url, req, String(result.returnOrderId), identity)
+      const replacementRow = await orderFor(ctx, url, req, String(result.replacementOrderId), identity)
+      if (!returnRow || !replacementRow) return notFound(ctx, url, req)
+      const data = {
+        id: String(result.id),
+        uuid: String(result.uuid),
+        originalOrderId: String(result.originalOrderId),
+        returnOrderId: String(result.returnOrderId),
+        replacementOrderId: String(result.replacementOrderId),
+        originalRevision: Number(result.originalRevision),
+        reason: String(result.reason),
+        createdAt: String(result.createdAt),
+        returnOrder: projectOrder(returnRow),
+        replacementOrder: projectOrder(replacementRow),
+      }
+      return {
+        data,
+        headers: {
+          etag: `"pos-exchange-${data.returnOrder.revision}-${data.replacementOrder.revision}"`,
+        },
+      }
+    },
   }),
   defineChannelRoute({
     profile: 'pos',
@@ -1412,6 +1928,12 @@ export {
   commandOptions,
   failure as posFailure,
   keyOf as posCommandKey,
+  lifecycleFunction as posLifecycleFunction,
   notFound as posNotFound,
   orderFor as posOrderFor,
+  projectOrder as posProjectOrder,
+  projectShift as posProjectShift,
+  order as posOrderSchema,
+  shift as posShiftSchema,
+  shiftFor as posShiftFor,
 }

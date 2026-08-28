@@ -119,6 +119,16 @@ test('sale: quotation pricing, confirmation and delivery integrate with Stock', 
     )
     const confirmed = (await call('sale.confirmOrder', { id: 'so' }, adapter)).value as Row
     assert.equal(confirmed.pickingId, 'so:delivery')
+    await call('sale.confirmOrder', { id: 'so' }, adapter)
+    assert.deepEqual(
+      (
+        await adapter.all('SELECT phase FROM sale_order_lifecycle_event WHERE "orderId" = ? ORDER BY phase', [
+          'so',
+        ])
+      ).map((row) => String(row.phase)),
+      ['confirmed'],
+      'confirm retries publish one durable lifecycle fact',
+    )
     await call('stock.confirmPicking', { id: 'so:delivery' }, adapter)
     await call('stock.reserveMove', { id: 'so:line:delivery' }, adapter)
     const moveLine = (
@@ -134,6 +144,16 @@ test('sale: quotation pricing, confirmation and delivery integrate with Stock', 
       'to invoice',
     )
     assert.equal((await adapter.all('SELECT "qtyDelivered" FROM sale_order_line'))[0]!.qtyDelivered, '3')
+    await call('sale.syncDeliveries', { id: 'so' }, adapter)
+    assert.deepEqual(
+      (
+        await adapter.all('SELECT phase FROM sale_order_lifecycle_event WHERE "orderId" = ? ORDER BY phase', [
+          'so',
+        ])
+      ).map((row) => String(row.phase)),
+      ['confirmed', 'shipped'],
+      'delivery sync retries publish one event for the reached phase',
+    )
   } finally {
     await adapter.close()
   }
@@ -238,6 +258,14 @@ test('sale: delivered quantity creates a balanced multi-line customer invoice', 
     await call('stock.reserveMove', { id: 'so:line:delivery' }, adapter)
     await call('stock.completePicking', { id: 'so:delivery' }, adapter)
     await call('sale.syncDeliveries', { id: 'so' }, adapter)
+    assert.deepEqual(
+      (
+        await adapter.all('SELECT phase FROM sale_order_lifecycle_event WHERE "orderId" = ? ORDER BY phase', [
+          'so',
+        ])
+      ).map((row) => String(row.phase)),
+      ['confirmed', 'delivered'],
+    )
     const invoiced = (
       await call(
         'sale.createInvoice',
@@ -574,7 +602,18 @@ test('sale: a cancelled order can be set back to draft', async () => {
     const early = (await call('sale.resetOrder', { id: 'so' }, adapter)).value as Row
     assert.equal(early.ok, false, 'only a cancelled order comes back')
 
+    await call('sale.confirmOrder', { id: 'so' }, adapter)
     await call('sale.cancelOrder', { id: 'so' }, adapter)
+    await call('sale.cancelOrder', { id: 'so' }, adapter)
+    assert.deepEqual(
+      (
+        await adapter.all('SELECT phase FROM sale_order_lifecycle_event WHERE "orderId" = ? ORDER BY phase', [
+          'so',
+        ])
+      ).map((row) => String(row.phase)),
+      ['cancelled', 'confirmed'],
+      'cancel retries publish one durable lifecycle fact',
+    )
     assert.equal((await call('sale.resetOrder', { id: 'so' }, adapter)).value !== null, true)
     const order = (await adapter.all('SELECT state, locked FROM sale_order'))[0]!
     assert.equal(order.state, 'draft')
