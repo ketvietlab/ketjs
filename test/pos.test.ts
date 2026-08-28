@@ -849,6 +849,21 @@ test('pos: partial returns reserve remaining quantities and post exact credit no
     eligibility = (await call('pos.getReturnEligibility', { id: 'partial-sale' }, adapter)).value as Row
     assert.equal((eligibility.lines as Row[])[0]!.refundedQuantity, '1')
     assert.equal((eligibility.lines as Row[])[0]!.remainingQuantity, '2')
+    const stale = (
+      await call(
+        'pos.refundOrder',
+        {
+          id: 'partial-return-stale',
+          originalOrderId: 'partial-sale',
+          sessionId: 'return-shift',
+          expectedRevision: Number(eligibility.revision) - 1,
+          lines: [{ lineId: 'partial-line', quantity: '2' }],
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(stale.ok, false)
+    assert.equal((stale.errors as Row[])[0]!.field, 'expectedRevision')
     const over = (
       await call(
         'pos.refundOrder',

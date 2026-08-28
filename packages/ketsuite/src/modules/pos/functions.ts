@@ -2215,6 +2215,8 @@ export const functions: Record<string, FnSpec> = {
         const original = (await tx.db.select('pos.Order', { id: args.originalOrderId }))[0]
         if (!original || !['paid', 'done'].includes(String(original.state)) || original.isRefund)
           return invalid('originalOrderId', 'only a paid sale can be returned')
+        if (args.expectedRevision !== undefined && n(args.expectedRevision) !== n(original.revision))
+          return invalid('expectedRevision', 'the order changed; reload it before continuing')
         const session = (await tx.db.select('pos.Session', { id: args.sessionId }))[0]
         if (session?.state !== 'opened') return invalid('sessionId', 'return requires an open session')
         if (String(session.configId) !== String(original.configId))
