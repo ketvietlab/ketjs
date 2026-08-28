@@ -231,11 +231,16 @@ test('staff sales channel returns a narrow read-only order detail', async (t) =>
       name: 'Ghế công thái học',
       quantity: '2',
       uomId: 'unit',
+      uomName: 'Đơn vị',
       unitPrice: '3000000',
       discount: '0',
       subtotal: '6000000',
+      tax: '0',
+      total: '6000000',
     },
   ])
+  assert.deepEqual(response.data.untaxed, { currency: 'VND', amount: '6000000' })
+  assert.deepEqual(response.data.tax, { currency: 'VND', amount: '0' })
 
   assert.equal((await e2e.client.get('/api/staff/v1/sales/orders/missing/detail')).status, 404)
 })
@@ -468,7 +473,6 @@ test('staff sales channel completes the twelve-operation module with one version
   const csrf = bootstrap.data.csrfToken
   const createBody = {
     partnerId: 'customer-a',
-    warehouseId: 'wh',
     customerReference: 'NATIVE-001',
     notes: 'Giao buổi sáng',
     lines: [{ productId: 'chair', quantity: '2', uomId: 'unit' }],
@@ -520,6 +524,16 @@ test('staff sales channel completes the twelve-operation module with one version
     lines: [{ productId: 'chair', quantity: '3', uomId: 'unit' }],
     expectedVersion: created.data.version,
   }
+  const missingVersionHeader = await e2e.client.request(`/api/staff/v1/sales/orders/${id}/update`, {
+    method: 'PUT',
+    headers: mutationHeaders(csrf, 'staff-sales-update-no-version-header'),
+    body: JSON.stringify(updateBody),
+  })
+  assert.equal(missingVersionHeader.status, 409)
+  assert.equal(
+    ((await missingVersionHeader.json()) as Envelope<null>).error?.code,
+    'sale_staff_channel.versionConflict',
+  )
   const update = await e2e.client.request(`/api/staff/v1/sales/orders/${id}/update`, {
     method: 'PUT',
     headers: mutationHeaders(csrf, 'staff-sales-update-1', String(created.data.version)),
