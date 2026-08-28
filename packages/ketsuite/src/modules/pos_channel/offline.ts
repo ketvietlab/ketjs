@@ -68,10 +68,16 @@ export type PosOfflineLeaseProvider = {
 }
 
 let provider: PosOfflineLeaseProvider | null = null
+let providerOwner: string | null = null
 
-export const registerPosOfflineLeaseProvider = (value: PosOfflineLeaseProvider): void => {
-  if (provider && provider !== value) throw new Error('POS offline lease provider already registered')
+export const registerPosOfflineLeaseProvider = (
+  value: PosOfflineLeaseProvider,
+  owner = 'pos_offline_lease_provider',
+): void => {
+  if (provider && providerOwner !== owner)
+    throw new Error(`POS offline lease provider already registered by ${providerOwner}`)
   provider = value
+  providerOwner = owner
 }
 
 export const posOfflineLeaseProvider = (): PosOfflineLeaseProvider | null => provider
