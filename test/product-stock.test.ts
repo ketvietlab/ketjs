@@ -1147,6 +1147,70 @@ const seedWarehouse = async (adapter: Adapter, as = scope, id = 'wh') => {
   }
 }
 
+test('stock: tracked revisions and reservations share the picking type source root', async () => {
+  const adapter = await boot()
+  try {
+    const { warehouseId, stockId, inventoryId, customerId, outgoingId } = await seedWarehouse(adapter)
+    await call('stock.configureProduct', { templateId: 'tpl', isStorable: true, tracking: 'lot' }, adapter)
+    await call(
+      'stock.saveLocation',
+      { id: 'wh:shelf', name: 'Shelf', usage: 'internal', warehouseId, parentId: stockId },
+      adapter,
+    )
+    await call('stock.createLot', { id: 'lot-1', productId: 'p1', name: 'LOT-1' }, adapter)
+    await call(
+      'stock.adjustInventory',
+      {
+        id: 'lot-count',
+        productId: 'p1',
+        lotId: 'lot-1',
+        locationId: 'wh:shelf',
+        inventoryLocationId: inventoryId,
+        countedQuantity: '2',
+        productUomId: 'unit',
+      },
+      adapter,
+    )
+    const availability = (await call('stock.trackedAvailability', { productId: 'p1', warehouseId }, adapter))
+      .value as Row
+    const lot = (availability.lots as Row[])[0]!
+    await call(
+      'stock.createPicking',
+      { id: 'out-source', name: 'OUT/SOURCE', pickingTypeId: outgoingId },
+      adapter,
+    )
+    await call(
+      'stock.addMove',
+      {
+        id: 'move-source',
+        name: 'Tracked source',
+        pickingId: 'out-source',
+        productId: 'p1',
+        productUomId: 'unit',
+        productUomQty: '1',
+        locationId: 'wh:shelf',
+        locationDestId: customerId,
+      },
+      adapter,
+    )
+    await call('stock.confirmPicking', { id: 'out-source' }, adapter)
+    const result = (
+      await call(
+        'stock.reserveMove',
+        {
+          id: 'move-source',
+          selections: [{ lotId: 'lot-1', quantity: '1', stockRevision: lot.stockRevision }],
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(result.ok, false)
+    assert.equal((result.errors as Row[])[0]!.field, 'locationId')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('stock: a picked move line keeps one reservation however often it is saved', async () => {
   const adapter = await boot()
   try {

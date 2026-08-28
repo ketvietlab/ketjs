@@ -179,6 +179,8 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     ['/orders/{id}/detail', 'get', 'pos.orders.get'],
     ['/orders/{id}/lines', 'post', 'pos.orders.lines.add'],
     ['/orders/{id}/lines/{lineId}/update', 'patch', 'pos.orders.lines.update'],
+    ['/orders/{id}/lines/{lineId}/lot-availability', 'get', 'pos.orders.lines.lotAvailability'],
+    ['/orders/{id}/lines/{lineId}/lot-selections', 'put', 'pos.orders.lines.lots.select'],
     ['/orders/{id}/lines/{lineId}/discount', 'post', 'pos.orders.lines.discount'],
     ['/orders/{id}/lines/{lineId}/price-override', 'post', 'pos.orders.lines.priceOverride'],
     ['/orders/{id}/lines/{lineId}/remove', 'delete', 'pos.orders.lines.remove'],
@@ -206,6 +208,13 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     'quantity',
     'quoteRevision',
   ])
+  const selectLots = document.paths['/orders/{id}/lines/{lineId}/lot-selections']?.put as Row
+  const selectLotsBody = (selectLots.requestBody as Row).content as Row
+  const selectLotsSchema = (selectLotsBody['application/json'] as Row).schema as Row
+  assert.deepEqual(selectLotsSchema.required, ['expectedRevision', 'selections'])
+  const selectionItem = (((selectLotsSchema.properties as Row).selections as Row).items as Row)
+    .properties as Row
+  assert.deepEqual(selectionItem.stockRevision, { type: 'string' })
   const loyalty = document.paths['/orders/{id}/loyalty']?.get
   assert.ok(loyalty)
   assert.deepEqual((loyalty as Record<string, unknown>)['x-ket-capability'], {

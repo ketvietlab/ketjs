@@ -611,6 +611,16 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
   let order = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
   assert.equal(order.state, 'paid', JSON.stringify(order))
   assert.equal(order.loyaltyState, 'finalized')
+  assert.equal(
+    (
+      await e2e.adapter!.all('SELECT quantity FROM stock_quant WHERE "productId" = ? AND "locationId" = ?', [
+        'fruit-box',
+        'wh:stock',
+      ])
+    )[0]!.quantity,
+    '19',
+    'discount reward lines must not create an extra stock move',
+  )
 
   await call<Row>('loyalty_pos.refundOrder', {
     id: 'pos-refund',
@@ -629,6 +639,16 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
   assert.equal(refund.state, 'paid')
   assert.equal(refund.loyaltyState, 'reversed')
   assert.equal(order.loyaltyState, 'finalized')
+  assert.equal(
+    (
+      await e2e.adapter!.all('SELECT quantity FROM stock_quant WHERE "productId" = ? AND "locationId" = ?', [
+        'fruit-box',
+        'wh:stock',
+      ])
+    )[0]!.quantity,
+    '20',
+    'refund must return only the stock-relevant product line',
+  )
   const applications = (await call<Row>('loyalty.wallet.get', {
     partnerId: 'customer',
     programId: 'pos-program',

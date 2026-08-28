@@ -224,6 +224,7 @@ async function pageOf(
       templateId: String(template.id),
       name: String(template.name),
       type: String(template.type),
+      tracking: String(template.tracking ?? 'none'),
       categoryId: template.categoryId == null ? null : String(template.categoryId),
       defaultCode: product.defaultCode == null ? null : String(product.defaultCode),
       barcode: product.barcode == null ? null : String(product.barcode),
