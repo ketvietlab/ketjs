@@ -58,4 +58,26 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { order_sequence: { fields: ['companyId', 'orderId', 'sequence'] } },
   },
+  /**
+   * Durable facts emitted by Sale when an order crosses a fulfillment phase.
+   *
+   * Consumers keep their own receipts instead of writing back here. The
+   * company/order/phase key makes command retries harmless and leaves the
+   * record useful to any bridge without coupling Sale to that bridge.
+   */
+  OrderLifecycleEvent: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      orderId: 'ref:sale.Order',
+      phase: 'text',
+      orderRevision: 'int?',
+      occurredAt: 'datetime',
+      createdAt: 'datetime',
+    },
+    indexes: {
+      order_phase: { fields: ['companyId', 'orderId', 'phase'], unique: true },
+      timeline: { fields: ['companyId', 'occurredAt', 'id'] },
+    },
+  },
 }

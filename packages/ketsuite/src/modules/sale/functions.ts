@@ -203,10 +203,39 @@ async function refreshStatus(ctx: Ctx, orderId: unknown) {
   await ctx.db.update('sale.Order', { id: orderId }, { invoiceStatus: await statusOf(ctx, orderId) })
 }
 
+type OrderLifecyclePhase = 'confirmed' | 'shipped' | 'delivered' | 'cancelled'
+
+/**
+ * Append one durable lifecycle fact for an order.
+ *
+ * The deterministic id and unique domain key make this safe to call from both
+ * the mutation path and an idempotent replay. Downstream modules consume the
+ * ledger independently; Sale does not know which bridges are installed.
+ */
+async function recordOrderLifecycle(
+  ctx: Ctx,
+  orderId: unknown,
+  phase: OrderLifecyclePhase,
+  occurredAt = now(),
+) {
+  const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
+  if (!order) return
+  await ctx.db.insertIfAbsent('sale.OrderLifecycleEvent', {
+    id: companyKey(ctx, 'sale-order-lifecycle', String(orderId), phase),
+    orderId,
+    phase,
+    orderRevision: order.revision ?? null,
+    occurredAt,
+    createdAt: now(),
+  })
+}
+
 const confirmEffects = [
   'read:sale.Order',
   'read:sale.OrderLine',
   'write:sale.Order',
+  'read:sale.OrderLifecycleEvent',
+  'write:sale.OrderLifecycleEvent',
   'read:product.Product',
   'read:product.Template',
   'read:uom.Unit',
@@ -247,7 +276,10 @@ async function confirm(ctx: Ctx, id: unknown, expectedRevision?: unknown) {
   if (!order) return invalid('id', 'sales order does not exist')
   if (expectedRevision !== undefined && n(order.revision) !== n(expectedRevision))
     return invalid('expectedRevision', 'sales order changed')
-  if (order.state === 'sale') return { ok: true, id, state: 'sale' }
+  if (order.state === 'sale') {
+    await recordOrderLifecycle(ctx, id, 'confirmed')
+    return { ok: true, id, state: 'sale' }
+  }
   if (!['draft', 'sent'].includes(String(order.state)))
     return invalid('state', 'only a quotation can be confirmed')
   const lines = await ours(ctx, 'sale.OrderLine', { orderId: id })
@@ -296,6 +328,7 @@ async function confirm(ctx: Ctx, id: unknown, expectedRevision?: unknown) {
       // migration day onto every imported historical order the moment it was
       // confirmed, and revenue-by-date was silently wrong from then on.
       await tx.db.update('sale.Order', { id }, { state: 'sale' })
+      await recordOrderLifecycle(tx, id, 'confirmed')
     })
   } catch (error) {
     if (error instanceof SaleRefused) return error.result
@@ -849,6 +882,8 @@ export const functions: Record<string, FnSpec> = {
       'read:sale.OrderLine',
       'write:sale.OrderLine',
       'write:sale.Order',
+      'read:sale.OrderLifecycleEvent',
+      'write:sale.OrderLifecycleEvent',
       'read:stock.Move',
       'read:product.Product',
       'read:product.Template',
@@ -867,6 +902,15 @@ export const functions: Record<string, FnSpec> = {
         )
       }
       await refreshStatus(ctx, args.id)
+      const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
+      if (order?.state === 'sale') {
+        const lines = await ours(ctx, 'sale.OrderLine', { orderId: args.id })
+        const required = lines.reduce((sum, line) => sum + n(line.productUomQty), 0)
+        const delivered = lines.reduce((sum, line) => sum + n(line.qtyDelivered), 0)
+        if (required > 0 && delivered + 0.000001 >= required)
+          await recordOrderLifecycle(ctx, args.id, 'delivered')
+        else if (delivered > 0) await recordOrderLifecycle(ctx, args.id, 'shipped')
+      }
       return { ok: true, id: args.id, invoiceStatus: await statusOf(ctx, args.id) }
     },
   }),
@@ -1134,6 +1178,8 @@ export const functions: Record<string, FnSpec> = {
       'write:stock.Picking',
       'read:account.MoveLine',
       'write:sale.Order',
+      'read:sale.OrderLifecycleEvent',
+      'write:sale.OrderLifecycleEvent',
     ],
     idempotent: true,
     agent: true,
@@ -1159,6 +1205,9 @@ export const functions: Record<string, FnSpec> = {
           for (const pickingId of [...new Set(moves.map((move) => move.pickingId).filter(Boolean))])
             await tx.db.update('stock.Picking', { id: pickingId }, { state: 'cancel' })
           await tx.db.update('sale.Order', { id: args.id }, { state: 'cancel' })
+          // A draft quotation has no fulfillment to cancel. Only an order that
+          // had entered the sale state publishes a cancellation fact.
+          if (current.state === 'sale') await recordOrderLifecycle(tx, args.id, 'cancelled')
         })
       } catch (error) {
         if (error instanceof SaleRefused) return error.result
