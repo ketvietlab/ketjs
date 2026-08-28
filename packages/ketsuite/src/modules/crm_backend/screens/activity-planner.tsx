@@ -4,11 +4,14 @@ import {
   badge,
   dataTable,
   emptyState,
-  Framed,
+  ListPage,
   linkButton,
+  modalForm,
+  modalWorkspace,
+  Notice,
   RecordForm,
+  shell,
   stack,
-  Surface,
   Tabs,
 } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
@@ -33,6 +36,9 @@ export const plannerScreen = (
     activityTypes: AnyRow[]
     controls?: { caseId?: JSXChild; assignee?: JSXChild }
     errors?: string[]
+    scheduling?: boolean
+    failedAction?: string
+    values?: Record<string, string>
     locale?: string
   },
 ): TemplateResult => {
@@ -131,12 +137,22 @@ export const plannerScreen = (
                 : String((item.steps as unknown[] | undefined)?.length ?? '—'),
           },
         ]
-  return (
-    <Framed
-      translator={_}
+  const scheduleHref = `${endpoint}&schedule=1`
+  const workspace = shell(
+    _,
+    _('crm_backend.planner.title'),
+    <ListPage
       title={_('crm_backend.planner.title')}
-      frame={frame}
-      body={stack([
+      actions={
+        options.tab === 'mine'
+          ? linkButton({
+              href: scheduleHref,
+              label: _('crm_backend.activity.schedule'),
+              variant: 'primary',
+            })
+          : undefined
+      }
+      controls={
         <Tabs
           label={_('crm_backend.planner.title')}
           items={['mine', 'plans', 'calendar'].map((id) => ({
@@ -145,48 +161,85 @@ export const plannerScreen = (
             href: localized(`/admin/crm/activities?tab=${id}`, options.locale ?? ''),
             active: options.tab === id,
           }))}
-        />,
-        ...(options.tab === 'mine'
+        />
+      }
+      status={`${rows.length}`}
+      body={stack([
+        ...(options.errors?.length && options.failedAction !== 'schedule'
           ? [
-              <Surface
-                body={
-                  <RecordForm
-                    action={endpoint}
-                    hidden={{ action: 'schedule' }}
-                    fields={[
-                      {
-                        name: 'caseId',
-                        label: _('crm_backend.planner.target'),
-                        required: true,
-                        control: options.controls?.caseId,
-                      },
-                      {
-                        name: 'typeId',
-                        label: _('crm_backend.activity.type'),
-                        type: 'select',
-                        options: options.activityTypes.map((item) => ({
-                          value: String(item.id),
-                          label: String(item.name),
-                        })),
-                      },
-                      {
-                        name: 'assigneeUserId',
-                        label: _('crm_backend.field.assignee'),
-                        control: options.controls?.assignee,
-                      },
-                      { name: 'summary', label: _('crm_backend.field.name'), required: true },
-                      { name: 'dueDate', label: _('crm_backend.field.dueAt'), type: 'date', required: true },
-                    ]}
-                    errors={options.errors}
-                    submit={_('crm_backend.activity.schedule')}
-                    submitVariant="primary"
-                  />
-                }
+              <Notice
+                title={_('crm_backend.error.title')}
+                message={options.errors.join(' · ')}
+                tone="danger"
               />,
             ]
           : []),
         rows.length ? dataTable(_, { rows, id: (item) => String(item.id), columns }) : empty(_),
       ])}
-    />
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
+  if (
+    options.tab !== 'mine' ||
+    (!options.scheduling && !(options.failedAction === 'schedule' && options.errors?.length))
+  )
+    return workspace
+  return modalWorkspace(
+    workspace,
+    modalForm({
+      id: 'crm-activity-schedule',
+      title: _('crm_backend.activity.schedule'),
+      closeHref: endpoint,
+      closeLabel: _('crm_backend.action.cancelEdit'),
+      presentation: 'dialog',
+      form: {
+        scope: 'crm-activity-schedule',
+        action: scheduleHref,
+        hidden: { action: 'schedule' },
+        fields: [
+          {
+            name: 'caseId',
+            label: _('crm_backend.planner.target'),
+            required: true,
+            control: options.controls?.caseId,
+            value: options.values?.caseId,
+          },
+          {
+            name: 'typeId',
+            label: _('crm_backend.activity.type'),
+            type: 'select',
+            value: options.values?.typeId,
+            options: options.activityTypes.map((item) => ({
+              value: String(item.id),
+              label: String(item.name),
+            })),
+          },
+          {
+            name: 'assigneeUserId',
+            label: _('crm_backend.field.assignee'),
+            control: options.controls?.assignee,
+            value: options.values?.assigneeUserId,
+          },
+          {
+            name: 'summary',
+            label: _('crm_backend.field.name'),
+            required: true,
+            value: options.values?.summary,
+          },
+          {
+            name: 'dueDate',
+            label: _('crm_backend.field.dueAt'),
+            type: 'date',
+            required: true,
+            value: options.values?.dueDate,
+          },
+        ],
+        errors: options.errors,
+        submit: _('crm_backend.activity.schedule'),
+        submitVariant: 'primary',
+        cancelHref: endpoint,
+        cancelLabel: _('crm_backend.action.cancelEdit'),
+      },
+    }),
   )
 }

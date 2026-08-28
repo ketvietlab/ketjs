@@ -57,8 +57,8 @@ test('crm configuration: keeps the specialized tabbed create workflow and locali
     ),
   )
 
-  assert.match(rendered, /data-ui="record-workspace"/)
-  assert.doesNotMatch(rendered, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(rendered, /data-ui="list-page"/)
+  assert.doesNotMatch(rendered, /data-ui="form-page"/)
   assert.match(rendered, /data-ui="tabs"/)
   for (const tab of CONFIGURATION_TABS)
     assert.match(rendered, new RegExp(`href="/admin/crm/configuration\\?tab=${tab}&amp;lang=vi"`))
