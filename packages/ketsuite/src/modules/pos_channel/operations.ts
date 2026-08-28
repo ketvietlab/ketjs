@@ -222,6 +222,158 @@ const exchangeLink = {
   ],
 }
 const nullableExchangeLink = { ...exchangeLink, type: ['object', 'null'] }
+const receiptTax = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, name: string, amount: string },
+  required: ['id', 'name', 'amount'],
+}
+const receiptLine = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    productId: string,
+    uomId: string,
+    name: string,
+    quantity: string,
+    unitPrice: string,
+    discount: string,
+    amountUntaxed: string,
+    amountTax: string,
+    amountTotal: string,
+    taxes: { type: 'array', items: receiptTax },
+  },
+  required: [
+    'id',
+    'productId',
+    'uomId',
+    'name',
+    'quantity',
+    'unitPrice',
+    'discount',
+    'amountUntaxed',
+    'amountTax',
+    'amountTotal',
+    'taxes',
+  ],
+}
+const receiptTender = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    paymentMethodId: string,
+    paymentMethodName: string,
+    tenderedAmount: string,
+    appliedAmount: string,
+    change: string,
+    paidAt: string,
+  },
+  required: ['paymentMethodId', 'paymentMethodName', 'tenderedAmount', 'appliedAmount', 'change', 'paidAt'],
+}
+const receiptDocument = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    schema: { type: 'string', enum: ['ketviet.pos.receipt.v1'] },
+    company: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string },
+      required: ['id'],
+    },
+    config: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string, name: string },
+      required: ['id', 'name'],
+    },
+    shift: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string, name: string },
+      required: ['id', 'name'],
+    },
+    cashier: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string },
+      required: ['id'],
+    },
+    customer: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string, name: string },
+      required: ['id', 'name'],
+    },
+    order: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        id: string,
+        name: string,
+        reference: string,
+        orderedAt: string,
+        isReturn: boolean,
+        originalOrderId: nullableString,
+      },
+      required: ['id', 'name', 'reference', 'orderedAt', 'isReturn', 'originalOrderId'],
+    },
+    currency: string,
+    lines: { type: 'array', items: receiptLine },
+    tenders: { type: 'array', items: receiptTender },
+    totals: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        untaxed: string,
+        tax: string,
+        exact: string,
+        rounding: string,
+        total: string,
+        paid: string,
+        change: string,
+      },
+      required: ['untaxed', 'tax', 'exact', 'rounding', 'total', 'paid', 'change'],
+    },
+    invoice: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { id: string },
+      required: ['id'],
+    },
+    issuedAt: string,
+  },
+  required: [
+    'schema',
+    'company',
+    'config',
+    'shift',
+    'cashier',
+    'customer',
+    'order',
+    'currency',
+    'lines',
+    'tenders',
+    'totals',
+    'invoice',
+    'issuedAt',
+  ],
+}
+const receipt = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    orderId: string,
+    version: integer,
+    templateVersion: string,
+    contentHash: string,
+    issuedAt: string,
+    document: receiptDocument,
+  },
+  required: ['id', 'orderId', 'version', 'templateVersion', 'contentHash', 'issuedAt', 'document'],
+}
 const order = {
   type: 'object',
   additionalProperties: false,
@@ -249,6 +401,7 @@ const order = {
     returnComplete: boolean,
     accountMoveId: nullableString,
     pickingId: nullableString,
+    receiptId: nullableString,
     exchange: nullableExchangeLink,
     revision: integer,
     lines: { type: 'array', items: orderLine },
@@ -279,6 +432,7 @@ const order = {
     'returnComplete',
     'accountMoveId',
     'pickingId',
+    'receiptId',
     'exchange',
     'revision',
     'lines',
@@ -429,6 +583,7 @@ const projectOrder = (row: Row) => ({
   returnComplete: Boolean(row.returnComplete),
   accountMoveId: row.accountMoveId == null ? null : String(row.accountMoveId),
   pickingId: row.pickingId == null ? null : String(row.pickingId),
+  receiptId: row.receiptId == null ? null : String(row.receiptId),
   exchange:
     row.exchange && typeof row.exchange === 'object'
       ? {
@@ -495,9 +650,19 @@ const projectOrder = (row: Row) => ({
             'finalize',
             'cancel',
           ]
-        : ['paid', 'done'].includes(String(row.state)) && !row.isRefund
-          ? ['create_return', 'create_exchange']
+        : ['paid', 'done'].includes(String(row.state))
+          ? [...(!row.isRefund ? ['create_return', 'create_exchange'] : []), 'read_receipt']
           : [],
+})
+
+const projectReceipt = (row: Row) => ({
+  id: String(row.id),
+  orderId: String(row.orderId),
+  version: Number(row.version),
+  templateVersion: String(row.templateVersion),
+  contentHash: String(row.contentHash),
+  issuedAt: String(row.issuedAt),
+  document: row.document,
 })
 
 const orderFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
@@ -999,6 +1164,22 @@ export const operationRoutes = routesOf(
     request: { params: idParams },
     responses: { '200': envelope(order), '404': envelope(object) },
     handler: (ctx, url, req, params, request) => orderResult(ctx, url, req, params.id, request.identity!),
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'GET',
+    path: 'orders/{id}/receipt',
+    operationId: 'pos.orders.receipt.get',
+    summary: 'Read the immutable receipt snapshot committed when this order was paid.',
+    auth: 'required',
+    request: { params: idParams },
+    responses: { '200': envelope(receipt), '404': envelope(object) },
+    handler: async (ctx, url, req, params, request) => {
+      const orderRow = await orderFor(ctx, url, req, params.id, request.identity!)
+      if (!orderRow || !['paid', 'done'].includes(String(orderRow.state))) return notFound(ctx, url, req)
+      const row = (await ctx.call('pos.getReceipt', { orderId: params.id }, url, req)) as Row | null
+      return row ? { data: projectReceipt(row) } : notFound(ctx, url, req)
+    },
   }),
   defineChannelRoute({
     profile: 'pos',

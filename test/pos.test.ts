@@ -889,6 +889,34 @@ test('pos: a provider settlement becomes exactly one revisioned non-cash tender'
     const finalized = (await call('pos.validateOrder', { id: 'provider-sale', expectedRevision: 3 }, adapter))
       .value as Row
     assert.equal(finalized.ok, true, JSON.stringify(finalized))
+    assert.equal(finalized.receiptId, 'provider-sale:receipt:v1')
+    const receipt = (await call('pos.getReceipt', { orderId: 'provider-sale' }, adapter)).value as Row
+    assert.equal(receipt.version, 1)
+    assert.equal(receipt.templateVersion, 'pos-receipt-v1')
+    assert.match(String(receipt.contentHash), /^[a-f0-9]{64}$/)
+    const document = receipt.document as Row
+    assert.equal(document.schema, 'ketviet.pos.receipt.v1')
+    assert.equal((document.totals as Row).total, '99')
+    assert.equal((document.lines as Row[])[0]?.name, 'Goods')
+    const serializedReceipt = JSON.stringify(receipt)
+    assert.doesNotMatch(
+      serializedReceipt,
+      /attempt-1|sandbox-settlement-1|providerAttemptId|providerReference/,
+    )
+    assert.doesNotMatch(serializedReceipt, /phone|email|token/i)
+    await adapter.run('UPDATE pos_order_line SET name = ? WHERE id = ?', [
+      'Mutated after payment',
+      'provider-sale:line',
+    ])
+    const immutableReceipt = (await call('pos.getReceipt', { orderId: 'provider-sale' }, adapter))
+      .value as Row
+    assert.equal(immutableReceipt.contentHash, receipt.contentHash)
+    assert.deepEqual(immutableReceipt.document, receipt.document)
+    const finalizeReplay = (
+      await call('pos.validateOrder', { id: 'provider-sale', expectedRevision: 4 }, adapter)
+    ).value as Row
+    assert.equal(finalizeReplay.ok, true, JSON.stringify(finalizeReplay))
+    assert.equal(finalizeReplay.receiptId, finalized.receiptId)
     const reviewAfterFinalize = (
       await call(
         'pos.reviewProviderPayment',
