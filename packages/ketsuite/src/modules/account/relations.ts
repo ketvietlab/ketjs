@@ -48,4 +48,35 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     destinationAccount: { belongsTo: 'account.Account', by: 'destinationAccountId' },
     move: { belongsTo: 'account.Move', by: 'moveId' },
   },
+  'account.AssetCategory': {
+    acquisitionAccount: { belongsTo: 'account.Account', by: 'acquisitionAccountId' },
+    accumulatedAccount: { belongsTo: 'account.Account', by: 'accumulatedAccountId' },
+    expenseAccount: { belongsTo: 'account.Account', by: 'expenseAccountId' },
+    journal: { belongsTo: 'account.Journal', by: 'journalId' },
+    assets: { hasMany: 'account.Asset', by: 'categoryId' },
+  },
+  'account.Asset': {
+    category: { belongsTo: 'account.AssetCategory', by: 'categoryId' },
+    events: { hasMany: 'account.AssetEvent', by: 'assetId' },
+    changes: { hasMany: 'account.AssetChange', by: 'assetId' },
+    schedule: { hasMany: 'account.AssetScheduleLine', by: 'assetId' },
+  },
+  'account.AssetChange': {
+    asset: { belongsTo: 'account.Asset', by: 'assetId' },
+    move: { belongsTo: 'account.Move', by: 'moveId' },
+  },
+  'account.AssetScheduleLine': {
+    asset: { belongsTo: 'account.Asset', by: 'assetId' },
+    move: { belongsTo: 'account.Move', by: 'moveId' },
+  },
+  'account.CostRun': {
+    policy: { belongsTo: 'account.CostPolicy', by: 'policyId' },
+    inputs: { hasMany: 'account.CostInput', by: 'runId' },
+    variances: { hasMany: 'account.CostVariance', by: 'runId' },
+  },
+  'account.CostAdjustmentProposal': {
+    run: { belongsTo: 'account.CostRun', by: 'runId' },
+    variance: { belongsTo: 'account.CostVariance', by: 'varianceId' },
+    move: { belongsTo: 'account.Move', by: 'moveId' },
+  },
 }
