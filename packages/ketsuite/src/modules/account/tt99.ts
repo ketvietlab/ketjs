@@ -1889,9 +1889,10 @@ export const assertTT99Catalog = (manifest: Tt99CatalogManifest): void => {
     const code = manifest.defaults[kind as keyof typeof manifest.defaults]
     const account = accounts.get(code)
     if (!account) catalogError(`default ${kind} account ${code} does not exist`)
-    if (account.accountType !== accountType)
+    const held = account!
+    if (held.accountType !== accountType)
       catalogError(`default ${kind} account ${code} must be ${accountType}`)
-    if (['receivable', 'payable'].includes(kind) && account.reconcile !== true)
+    if (['receivable', 'payable'].includes(kind) && held.reconcile !== true)
       catalogError(`default ${kind} account ${code} must be reconcilable`)
   }
 
