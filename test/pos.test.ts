@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import {
+  callFn,
+  compose,
+  migrateOne,
+  registerFunctions,
+  schemaFromManifest,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import {
   account,
@@ -39,6 +46,12 @@ const manifest = compose(modules, { headless: true }),
   scope = { company: 'acme', branches: null }
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
   callFn(name, args, { adapter, manifest, scope })
+
+test('pos: stock moves are indexed by their originating order line', () => {
+  const indexes = Object.values(schemaFromManifest(manifest).tables.stock_move!.indexes)
+  assert.ok(indexes.some((index) => index.fields.join(',') === 'companyId,posLineId'))
+})
+
 async function boot() {
   const adapter = sqliteAdapter()
   await adapter.open()

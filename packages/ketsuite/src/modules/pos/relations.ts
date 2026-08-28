@@ -30,6 +30,7 @@ export const relations: Record<string, Record<string, RelationDef>> = {
     product: { belongsTo: 'product.Product', by: 'productId' },
     uom: { belongsTo: 'uom.Unit', by: 'productUomId' },
     tax: { belongsTo: 'account.Tax', by: 'taxId' },
+    stockMoves: { hasMany: 'stock.Move', by: 'posLineId' },
   },
   'pos.Payment': {
     order: { belongsTo: 'pos.Order', by: 'orderId' },

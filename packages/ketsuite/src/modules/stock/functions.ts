@@ -304,6 +304,20 @@ const reserveMoveInContext = async (ctx: Ctx, move: Row, requestedSelections?: u
     return invalid('selections', 'lot/serial selection is malformed')
   if (selections) {
     if (tracking === 'none') return invalid('selections', 'untracked product must not select a lot')
+    if (move.pickingId) {
+      const picking = (await ours(ctx, 'stock.Picking', { id: move.pickingId }))[0]
+      const pickingType = picking
+        ? (await ours(ctx, 'stock.PickingType', { id: picking.pickingTypeId }))[0]
+        : null
+      // trackedAvailability hashes quants below the outgoing type's default source.
+      // A selected move must reserve below that exact same root; otherwise every
+      // refreshed revision would be computed from a permanently different set.
+      if (
+        !pickingType?.defaultLocationSrcId ||
+        String(pickingType.defaultLocationSrcId) !== String(move.locationId)
+      )
+        return invalid('locationId', 'tracked selection source does not match its picking type')
+    }
     if (new Set(selections.map((selection) => selection.lotId)).size !== selections.length)
       return invalid('selections', 'a lot/serial can only be selected once per line')
     if (
@@ -329,6 +343,9 @@ const reserveMoveInContext = async (ctx: Ctx, move: Row, requestedSelections?: u
           (selection) => compareQty(held.get(selection.lotId) ?? 0, selection.quantity, 0.000001) === 0,
         )
       if (!same) return invalid('selections', 'move already holds a different lot/serial selection')
+      // This is a completed idempotent replay, not a new stock claim. The original
+      // revisions were consumed when these move lines reserved the quants, so a
+      // later retry intentionally compares the immutable selection instead.
       await ctx.db.update('stock.Move', { id: move.id }, { state: 'assigned', quantity: String(reserved) })
       if (move.pickingId) await updatePickingState(ctx, move.pickingId)
       return { ok: true, reserved: String(reserved), state: 'assigned' }
@@ -436,6 +453,7 @@ const reserveEffects = [
   'write:stock.Move',
   'read:stock.Picking',
   'write:stock.Picking',
+  'read:stock.PickingType',
   'read:stock.MoveLine',
   'write:stock.MoveLine',
   'read:stock.Quant',
