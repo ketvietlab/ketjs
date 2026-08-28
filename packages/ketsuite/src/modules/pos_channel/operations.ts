@@ -195,6 +195,33 @@ const tender = {
     'paymentDate',
   ],
 }
+const exchangeLink = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    uuid: string,
+    role: { type: 'string', enum: ['return', 'replacement'] },
+    originalOrderId: string,
+    returnOrderId: string,
+    replacementOrderId: string,
+    originalRevision: integer,
+    reason: string,
+    createdAt: string,
+  },
+  required: [
+    'id',
+    'uuid',
+    'role',
+    'originalOrderId',
+    'returnOrderId',
+    'replacementOrderId',
+    'originalRevision',
+    'reason',
+    'createdAt',
+  ],
+}
+const nullableExchangeLink = { ...exchangeLink, type: ['object', 'null'] }
 const order = {
   type: 'object',
   additionalProperties: false,
@@ -222,6 +249,7 @@ const order = {
     returnComplete: boolean,
     accountMoveId: nullableString,
     pickingId: nullableString,
+    exchange: nullableExchangeLink,
     revision: integer,
     lines: { type: 'array', items: orderLine },
     tenders: { type: 'array', items: tender },
@@ -251,10 +279,39 @@ const order = {
     'returnComplete',
     'accountMoveId',
     'pickingId',
+    'exchange',
     'revision',
     'lines',
     'tenders',
     'allowedActions',
+  ],
+}
+const exchangeDraft = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    uuid: string,
+    originalOrderId: string,
+    returnOrderId: string,
+    replacementOrderId: string,
+    originalRevision: integer,
+    reason: string,
+    createdAt: string,
+    returnOrder: order,
+    replacementOrder: order,
+  },
+  required: [
+    'id',
+    'uuid',
+    'originalOrderId',
+    'returnOrderId',
+    'replacementOrderId',
+    'originalRevision',
+    'reason',
+    'createdAt',
+    'returnOrder',
+    'replacementOrder',
   ],
 }
 const shift = {
@@ -372,6 +429,20 @@ const projectOrder = (row: Row) => ({
   returnComplete: Boolean(row.returnComplete),
   accountMoveId: row.accountMoveId == null ? null : String(row.accountMoveId),
   pickingId: row.pickingId == null ? null : String(row.pickingId),
+  exchange:
+    row.exchange && typeof row.exchange === 'object'
+      ? {
+          id: String((row.exchange as Row).id),
+          uuid: String((row.exchange as Row).uuid),
+          role: String(row.exchangeRole),
+          originalOrderId: String((row.exchange as Row).originalOrderId),
+          returnOrderId: String((row.exchange as Row).returnOrderId),
+          replacementOrderId: String((row.exchange as Row).replacementOrderId),
+          originalRevision: Number((row.exchange as Row).originalRevision),
+          reason: String((row.exchange as Row).reason),
+          createdAt: String((row.exchange as Row).createdAt),
+        }
+      : null,
   revision: Number(row.revision ?? 0),
   lines: (Array.isArray(row.lines) ? (row.lines as Row[]) : [])
     .map((line) => ({
@@ -425,7 +496,7 @@ const projectOrder = (row: Row) => ({
             'cancel',
           ]
         : ['paid', 'done'].includes(String(row.state)) && !row.isRefund
-          ? ['create_return']
+          ? ['create_return', 'create_exchange']
           : [],
 })
 
@@ -1022,6 +1093,108 @@ export const operationRoutes = routesOf(
       )) as Row
       if (result.ok !== true) return failure(ctx, url, req, result)
       return orderResult(ctx, url, req, String(result.id), identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/exchanges',
+    operationId: 'pos.orders.exchanges.create',
+    summary: 'Create linked return and replacement drafts for one paid sale.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          uuid: string,
+          shiftId: string,
+          expectedRevision: integer,
+          reason: string,
+          lines: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: { lineId: string, quantity: string },
+              required: ['lineId', 'quantity'],
+            },
+          },
+          replacement: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { priceBookRevision: string, note: string },
+            required: ['priceBookRevision'],
+          },
+        },
+        required: ['uuid', 'shiftId', 'expectedRevision', 'reason', 'lines', 'replacement'],
+      },
+    },
+    responses: {
+      '200': envelope(exchangeDraft),
+      '400': envelope(object),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      const original = await orderFor(ctx, url, req, params.id, identity)
+      const shift = await shiftFor(ctx, url, req, String(request.body.shiftId), identity)
+      if (!original || !shift) return notFound(ctx, url, req)
+      const id = channelCommandId('exchange', identity, String(request.body.uuid))
+      const functionName = await lifecycleFunction(
+        ctx,
+        req,
+        'loyalty_pos.createExchange',
+        'pos.createExchange',
+      )
+      const result = (await ctx.call(
+        functionName,
+        {
+          id,
+          uuid: request.body.uuid,
+          originalOrderId: params.id,
+          sessionId: request.body.shiftId,
+          expectedRevision: request.body.expectedRevision,
+          lines: request.body.lines,
+          reason: request.body.reason,
+          replacementPriceBookRevision: (request.body.replacement as Row).priceBookRevision,
+          replacementNote: (request.body.replacement as Row).note,
+          operatorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.exchange.create', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      const returnRow = await orderFor(ctx, url, req, String(result.returnOrderId), identity)
+      const replacementRow = await orderFor(ctx, url, req, String(result.replacementOrderId), identity)
+      if (!returnRow || !replacementRow) return notFound(ctx, url, req)
+      const data = {
+        id: String(result.id),
+        uuid: String(result.uuid),
+        originalOrderId: String(result.originalOrderId),
+        returnOrderId: String(result.returnOrderId),
+        replacementOrderId: String(result.replacementOrderId),
+        originalRevision: Number(result.originalRevision),
+        reason: String(result.reason),
+        createdAt: String(result.createdAt),
+        returnOrder: projectOrder(returnRow),
+        replacementOrder: projectOrder(replacementRow),
+      }
+      return {
+        data,
+        headers: {
+          etag: `"pos-exchange-${data.returnOrder.revision}-${data.replacementOrder.revision}"`,
+        },
+      }
     },
   }),
   defineChannelRoute({

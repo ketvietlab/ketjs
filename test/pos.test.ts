@@ -934,6 +934,159 @@ test('pos: partial returns reserve remaining quantities and post exact credit no
   }
 })
 
+test('pos: an exchange atomically links a negative return to a separate replacement sale', async () => {
+  const adapter = await boot()
+  try {
+    await call('pos.createSession', { id: 'exchange-shift', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'exchange-shift' }, adapter)
+    await call(
+      'pos.createOrder',
+      { id: 'exchange-original', sessionId: 'exchange-shift', partnerId: 'customer' },
+      adapter,
+    )
+    await call(
+      'pos.addLine',
+      {
+        id: 'exchange-original-line',
+        orderId: 'exchange-original',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '2',
+        priceUnit: '100',
+      },
+      adapter,
+    )
+    await call(
+      'pos.addPayment',
+      {
+        id: 'exchange-original-pay',
+        orderId: 'exchange-original',
+        paymentMethodId: 'cash-method',
+        amount: '220',
+      },
+      adapter,
+    )
+    await call('pos.validateOrder', { id: 'exchange-original' }, adapter)
+    const eligibility = (await call('pos.getReturnEligibility', { id: 'exchange-original' }, adapter))
+      .value as Row
+    const command = {
+      id: 'exchange-1',
+      uuid: 'exchange-uuid-1',
+      originalOrderId: 'exchange-original',
+      sessionId: 'exchange-shift',
+      expectedRevision: eligibility.revision,
+      lines: [{ lineId: 'exchange-original-line', quantity: '1' }],
+      reason: 'Customer changed the product',
+      replacementPriceBookRevision: 'price-book-r2',
+      replacementNote: 'Replacement leg',
+    }
+    const created = (await call('pos.createExchange', command, adapter)).value as Row
+    assert.equal(created.ok, true, JSON.stringify(created))
+    assert.equal(created.returnOrderId, 'exchange-1:return')
+    assert.equal(created.replacementOrderId, 'exchange-1:replacement')
+
+    const returned = (await call('pos.getOrder', { id: 'exchange-1:return' }, adapter)).value as Row
+    const replacement = (await call('pos.getOrder', { id: 'exchange-1:replacement' }, adapter)).value as Row
+    assert.equal(returned.isRefund, true)
+    assert.equal(returned.exchangeRole, 'return')
+    assert.equal(Number((returned.lines as Row[])[0]?.qty), -1)
+    assert.equal(Number(returned.amountTotal), -110)
+    assert.equal(replacement.isRefund, false)
+    assert.equal(replacement.exchangeRole, 'replacement')
+    assert.equal((replacement.lines as Row[]).length, 0)
+    assert.equal(replacement.partnerId, 'customer')
+    assert.equal(replacement.priceBookRevision, 'price-book-r2')
+    assert.equal((returned.exchange as Row).replacementOrderId, replacement.id)
+    assert.equal((replacement.exchange as Row).returnOrderId, returned.id)
+
+    const replay = (await call('pos.createExchange', command, adapter)).value as Row
+    assert.equal(replay.ok, true)
+    assert.equal(replay.id, created.id)
+    assert.equal((await adapter.all('SELECT id FROM pos_order WHERE id LIKE ?', ['exchange-1:%'])).length, 2)
+    const changed = (
+      await call(
+        'pos.createExchange',
+        { ...command, lines: [{ lineId: 'exchange-original-line', quantity: '2' }] },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(changed.ok, false)
+
+    await call(
+      'pos.addLine',
+      {
+        id: 'exchange-replacement-line',
+        orderId: replacement.id,
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        priceUnit: '100',
+      },
+      adapter,
+    )
+    await call(
+      'pos.addPayment',
+      {
+        id: 'exchange-replacement-pay',
+        orderId: replacement.id,
+        paymentMethodId: 'cash-method',
+        amount: '110',
+      },
+      adapter,
+    )
+    const premature = (await call('pos.validateOrder', { id: replacement.id }, adapter)).value as Row
+    assert.equal(premature.ok, false)
+    assert.equal((premature.errors as Row[])[0]?.field, 'exchangeId')
+
+    await call(
+      'pos.addPayment',
+      {
+        id: 'exchange-return-pay',
+        orderId: returned.id,
+        paymentMethodId: 'cash-method',
+        amount: '-110',
+      },
+      adapter,
+    )
+    assert.equal(((await call('pos.validateOrder', { id: returned.id }, adapter)).value as Row).ok, true)
+    assert.equal(((await call('pos.validateOrder', { id: replacement.id }, adapter)).value as Row).ok, true)
+    assert.equal(
+      (
+        await adapter.all('SELECT quantity FROM stock_quant WHERE "productId" = ? AND "locationId" = ?', [
+          'goods-1',
+          'wh:stock',
+        ])
+      )[0]?.quantity,
+      '8',
+    )
+    const moves = await adapter.all('SELECT id, "moveType" FROM account_move WHERE id IN (?, ?)', [
+      `${returned.id}:account`,
+      `${replacement.id}:account`,
+    ])
+    assert.deepEqual(new Set(moves.map((move) => move.moveType)), new Set(['out_refund', 'out_invoice']))
+
+    await call('pos.createOrder', { id: 'mixed-sale', sessionId: 'exchange-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'mixed-sale-line',
+        orderId: 'mixed-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        priceUnit: '100',
+      },
+      adapter,
+    )
+    await adapter.run('UPDATE pos_order_line SET qty = ? WHERE id = ?', ['-1', 'mixed-sale-line'])
+    const mixed = (await call('pos.validateOrder', { id: 'mixed-sale' }, adapter)).value as Row
+    assert.equal(mixed.ok, false)
+    assert.equal((mixed.errors as Row[])[0]?.field, 'lines')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('pos: customer invoice is posted and reconciled by the POS payment', async () => {
   const adapter = await boot()
   try {

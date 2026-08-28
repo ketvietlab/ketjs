@@ -175,6 +175,45 @@ test('pos PostgreSQL: concurrent returns cannot reserve the same final quantity'
       'cancel',
     ])
     assert.equal(linked.length, 1)
+
+    const winningReturn = values.find((value) => value.ok)!
+    const cancelled = (await call(first, 'pos.cancelOrder', { id: winningReturn.id })).value as Row
+    assert.equal(cancelled.ok, true, JSON.stringify(cancelled))
+    const exchangeEligibility = (await call(first, 'pos.getReturnEligibility', { id: 'sale' })).value as Row
+    assert.equal(exchangeEligibility.refundable, true)
+    const exchangeCommand = (id: string) => ({
+      id,
+      uuid: id,
+      originalOrderId: 'sale',
+      sessionId: 'shift',
+      expectedRevision: exchangeEligibility.revision,
+      lines: [{ lineId: 'sale-line', quantity: '1' }],
+      reason: 'Customer chose another product',
+      replacementPriceBookRevision: 'price-book-r1',
+    })
+    const exchangeResults = await Promise.all([
+      call(first, 'pos.createExchange', exchangeCommand('exchange-a')),
+      call(second, 'pos.createExchange', exchangeCommand('exchange-b')),
+    ])
+    const exchangeValues = exchangeResults.map((result) => result.value as Row)
+    assert.equal(exchangeValues.filter((value) => value.ok).length, 1)
+    assert.equal(exchangeValues.filter((value) => !value.ok).length, 1)
+    assert.equal(
+      exchangeValues
+        .filter((value) => !value.ok)
+        .flatMap((value) => value.errors as Row[])
+        .some((error) => error.field === 'expectedRevision'),
+      true,
+    )
+    const exchanges = await first.all('SELECT id FROM pos_exchange')
+    assert.equal(exchanges.length, 1)
+    const exchangeChildren = await first.all(
+      'SELECT id FROM pos_order WHERE "exchangeId" IS NOT NULL ORDER BY id',
+    )
+    assert.deepEqual(exchangeChildren, [
+      { id: `${String(exchanges[0]!.id)}:replacement` },
+      { id: `${String(exchanges[0]!.id)}:return` },
+    ])
   } finally {
     await Promise.all([first.close().catch(() => {}), second.close().catch(() => {})])
     await admin.exec(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`).catch(() => {})

@@ -33,12 +33,27 @@ class AtomicFailure extends Error {
   }
 }
 
+const activeAtomicContexts = new WeakSet<Ctx>()
+
 const atomic = async (ctx: Ctx, body: (tx: Ctx) => Promise<Row>): Promise<Row> => {
   try {
-    return await ctx.tx(async (tx) => {
-      const result = await body(tx)
+    // Composite POS commands reuse the transaction-bound context handed to the
+    // outer command. Opening another adapter transaction here would fail on
+    // PostgreSQL and would split one retail intent into partial commits.
+    if (activeAtomicContexts.has(ctx)) {
+      const result = await body(ctx)
       if (result.ok !== true) throw new AtomicFailure(result)
       return result
+    }
+    return await ctx.tx(async (tx) => {
+      activeAtomicContexts.add(tx)
+      try {
+        const result = await body(tx)
+        if (result.ok !== true) throw new AtomicFailure(result)
+        return result
+      } finally {
+        activeAtomicContexts.delete(tx)
+      }
     })
   } catch (error) {
     if (error instanceof AtomicFailure) return error.result
@@ -611,6 +626,36 @@ const accountEffects = [
   ...(accountFunctions.postMove!.effects ?? []),
   ...(accountFunctions.registerPayment!.effects ?? []),
 ]
+const createOrderEffects = [
+  'read:pos.Sequence',
+  'write:pos.Sequence',
+  'read:pos.Session',
+  'read:pos.Config',
+  'read:pos.Order',
+  'write:pos.Order',
+  'read:partner.Partner',
+  'read:company.Company',
+] as const
+const refundOrderEffects = [
+  'read:pos.Order',
+  'read:pos.OrderLine',
+  'write:pos.Order',
+  'write:pos.OrderLine',
+  'read:pos.Payment',
+  'read:pos.Sequence',
+  'write:pos.Sequence',
+  'read:pos.Session',
+  'read:pos.Config',
+  'read:partner.Partner',
+  'read:company.Company',
+  'read:stock.Move',
+  'read:stock.MoveLine',
+  'read:product.Product',
+  'read:product.Template',
+  'read:product.TemplateUom',
+  'read:product.ProductUom',
+  'read:uom.Unit',
+] as const
 
 export const functions: Record<string, FnSpec> = {
   listConfigs: defineFn({
@@ -1209,7 +1254,7 @@ export const functions: Record<string, FnSpec> = {
   }),
   getOrder: defineFn({
     input: { id: 'id' },
-    effects: ['read:pos.Order', 'read:pos.OrderLine', 'read:pos.Payment'],
+    effects: ['read:pos.Order', 'read:pos.OrderLine', 'read:pos.Payment', 'read:pos.Exchange'],
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('pos.Order', { id: args.id }))[0]
@@ -1218,6 +1263,9 @@ export const functions: Record<string, FnSpec> = {
             ...order,
             lines: await ctx.db.select('pos.OrderLine', { orderId: args.id }),
             payments: await ctx.db.select('pos.Payment', { orderId: args.id }),
+            exchange: order.exchangeId
+              ? ((await ctx.db.select('pos.Exchange', { id: order.exchangeId }))[0] ?? null)
+              : null,
           }
         : null
     },
@@ -1316,16 +1364,7 @@ export const functions: Record<string, FnSpec> = {
       priceBookRevision: 'text?',
     },
     output: { ok: 'bool', id: 'id?', name: 'text?', revision: 'int?', errors: 'json?' },
-    effects: [
-      'read:pos.Sequence',
-      'write:pos.Sequence',
-      'read:pos.Session',
-      'read:pos.Config',
-      'read:pos.Order',
-      'write:pos.Order',
-      'read:partner.Partner',
-      'read:company.Company',
-    ],
+    effects: [...createOrderEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -1839,6 +1878,7 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:pos.Order',
       'write:pos.Order',
+      'read:pos.Exchange',
       'read:pos.Session',
       'read:pos.Config',
       'read:pos.OrderLine',
@@ -1872,11 +1912,32 @@ export const functions: Record<string, FnSpec> = {
           revision: n(order.revision),
         }
       if (order.state !== 'draft') return invalid('state', 'only a new order can be paid')
+      if (order.exchangeRole === 'replacement') {
+        const exchange = order.exchangeId
+          ? (await ctx.db.select('pos.Exchange', { id: order.exchangeId }))[0]
+          : null
+        const exchangeReturn = exchange
+          ? (await ctx.db.select('pos.Order', { id: exchange.returnOrderId }))[0]
+          : null
+        if (
+          !exchange ||
+          !exchangeReturn ||
+          exchange.replacementOrderId !== order.id ||
+          exchangeReturn.exchangeRole !== 'return' ||
+          exchangeReturn.exchangeId !== exchange.id ||
+          exchangeReturn.isRefund !== true
+        )
+          return invalid('exchangeId', 'replacement sale is not linked to a valid return')
+        if (!['paid', 'done'].includes(String(exchangeReturn.state)))
+          return invalid('exchangeId', 'exchange return must be completed before its replacement sale')
+      }
       const session = (await ctx.db.select('pos.Session', { id: order.sessionId }))[0]
       if (!session || !['opened', 'closing_control'].includes(String(session.state)))
         return invalid('sessionId', 'session is not open')
       const lines = await ctx.db.select('pos.OrderLine', { orderId: args.id })
       if (!lines.length) return invalid('lines', 'order needs at least one product')
+      if (lines.some((line) => (order.isRefund ? !(n(line.qty) < -0.000001) : !(n(line.qty) > 0.000001))))
+        return invalid('lines', 'sale and return orders cannot mix quantity directions')
       const payments = (await ctx.db.select('pos.Payment', { orderId: args.id })).filter(
         (payment) => (payment.state ?? 'captured') === 'captured',
       )
@@ -2100,6 +2161,7 @@ export const functions: Record<string, FnSpec> = {
       sessionId: 'id',
       expectedRevision: 'int?',
       lines: 'json?',
+      reason: 'text?',
       operatorId: 'text?',
       deviceId: 'text?',
     },
@@ -2111,27 +2173,7 @@ export const functions: Record<string, FnSpec> = {
       originalRevision: 'int?',
       errors: 'json?',
     },
-    effects: [
-      'read:pos.Order',
-      'read:pos.OrderLine',
-      'write:pos.Order',
-      'write:pos.OrderLine',
-      'read:pos.Payment',
-      'write:pos.Order',
-      'read:pos.Sequence',
-      'write:pos.Sequence',
-      'read:pos.Session',
-      'read:pos.Config',
-      'read:partner.Partner',
-      'read:company.Company',
-      'read:stock.Move',
-      'read:stock.MoveLine',
-      'read:product.Product',
-      'read:product.Template',
-      'read:product.TemplateUom',
-      'read:product.ProductUom',
-      'read:uom.Unit',
-    ],
+    effects: [...refundOrderEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -2142,7 +2184,8 @@ export const functions: Record<string, FnSpec> = {
             !existing.isRefund ||
             String(existing.refundedOrderId ?? '') !== String(args.originalOrderId) ||
             String(existing.sessionId) !== String(args.sessionId) ||
-            (args.uuid !== undefined && String(existing.uuid) !== String(args.uuid))
+            (args.uuid !== undefined && String(existing.uuid) !== String(args.uuid)) ||
+            (args.reason !== undefined && String(existing.note ?? '') !== String(args.reason).trim())
           )
             return invalid('id', 'return id is already used by a different command')
           if (Array.isArray(args.lines)) {
@@ -2329,7 +2372,7 @@ export const functions: Record<string, FnSpec> = {
           toInvoice: true,
           accountMoveId: null,
           pickingId: null,
-          note: `Return ${String(original.posReference)}`,
+          note: args.reason ? String(args.reason).trim() : `Return ${String(original.posReference)}`,
           revision: 0,
           operatorId: args.operatorId ?? null,
           deviceId: args.deviceId ?? session.deviceId ?? null,
@@ -2389,6 +2432,165 @@ export const functions: Record<string, FnSpec> = {
           name,
           revision: 0,
           originalRevision: claim.revision,
+        }
+      }),
+  }),
+  createExchange: defineFn({
+    input: {
+      id: 'id',
+      uuid: 'text?',
+      originalOrderId: 'id',
+      sessionId: 'id',
+      expectedRevision: 'int',
+      lines: 'json',
+      reason: 'text',
+      replacementPriceBookRevision: 'text',
+      replacementNote: 'text?',
+      operatorId: 'text?',
+      deviceId: 'text?',
+    },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      uuid: 'text?',
+      originalOrderId: 'id?',
+      returnOrderId: 'id?',
+      replacementOrderId: 'id?',
+      originalRevision: 'int?',
+      returnRevision: 'int?',
+      replacementRevision: 'int?',
+      reason: 'text?',
+      createdAt: 'datetime?',
+      errors: 'json?',
+    },
+    effects: [...refundOrderEffects, ...createOrderEffects, 'read:pos.Exchange', 'write:pos.Exchange'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      atomic(ctx, async (tx) => {
+        const reason = String(args.reason ?? '').trim()
+        if (!reason) return invalid('reason', 'exchange reason is required')
+        const uuid = String(args.uuid ?? args.id)
+        const byId = (await tx.db.select('pos.Exchange', { id: args.id }))[0]
+        const byUuid = (await tx.db.select('pos.Exchange', { uuid }))[0]
+        if (byId && byUuid && byId.id !== byUuid.id)
+          return invalid('uuid', 'exchange uuid is already used by a different command')
+        const existing = byId ?? byUuid
+        if (existing) {
+          const returned = (await tx.db.select('pos.Order', { id: existing.returnOrderId }))[0]
+          const replacement = (await tx.db.select('pos.Order', { id: existing.replacementOrderId }))[0]
+          if (
+            !returned ||
+            !replacement ||
+            String(existing.originalOrderId) !== String(args.originalOrderId) ||
+            String(existing.uuid) !== uuid ||
+            String(existing.reason ?? '') !== reason ||
+            String(returned.sessionId) !== String(args.sessionId) ||
+            String(replacement.sessionId) !== String(args.sessionId) ||
+            returned.exchangeRole !== 'return' ||
+            replacement.exchangeRole !== 'replacement' ||
+            returned.exchangeId !== existing.id ||
+            replacement.exchangeId !== existing.id ||
+            String(replacement.priceBookRevision ?? '') !== String(args.replacementPriceBookRevision) ||
+            (args.replacementNote !== undefined &&
+              String(replacement.note ?? '') !== String(args.replacementNote))
+          )
+            return invalid('id', 'exchange id is already used by a different command')
+          const replayedReturn = (await functions.refundOrder!.handler(tx, {
+            id: returned.id,
+            uuid: returned.uuid,
+            originalOrderId: args.originalOrderId,
+            sessionId: args.sessionId,
+            expectedRevision: args.expectedRevision,
+            lines: args.lines,
+            reason,
+            operatorId: args.operatorId,
+            deviceId: args.deviceId,
+          })) as Row
+          if (replayedReturn.ok !== true) return replayedReturn
+          return {
+            ok: true,
+            id: existing.id,
+            uuid: existing.uuid,
+            originalOrderId: existing.originalOrderId,
+            returnOrderId: existing.returnOrderId,
+            replacementOrderId: existing.replacementOrderId,
+            originalRevision: n(existing.originalRevision),
+            returnRevision: n(returned.revision),
+            replacementRevision: n(replacement.revision),
+            reason: existing.reason,
+            createdAt: existing.createdAt,
+          }
+        }
+
+        const returnOrderId = `${String(args.id)}:return`
+        const replacementOrderId = `${String(args.id)}:replacement`
+        if (
+          (await tx.db.select('pos.Order', { id: returnOrderId }))[0] ||
+          (await tx.db.select('pos.Order', { id: replacementOrderId }))[0]
+        )
+          return invalid('id', 'an exchange child order id is already in use')
+        const original = (await tx.db.select('pos.Order', { id: args.originalOrderId }))[0]
+        if (!original || original.isRefund || !['paid', 'done'].includes(String(original.state)))
+          return invalid('originalOrderId', 'only a paid sale can be exchanged')
+
+        const returned = (await functions.refundOrder!.handler(tx, {
+          id: returnOrderId,
+          uuid: `${uuid}:return`,
+          originalOrderId: args.originalOrderId,
+          sessionId: args.sessionId,
+          expectedRevision: args.expectedRevision,
+          lines: args.lines,
+          reason,
+          operatorId: args.operatorId,
+          deviceId: args.deviceId,
+        })) as Row
+        if (returned.ok !== true) return returned
+        const replacement = (await functions.createOrder!.handler(tx, {
+          id: replacementOrderId,
+          uuid: `${uuid}:replacement`,
+          sessionId: args.sessionId,
+          partnerId: original.partnerId ?? undefined,
+          note: args.replacementNote ?? `Exchange replacement for ${String(original.posReference)}`,
+          operatorId: args.operatorId,
+          deviceId: args.deviceId,
+          priceBookRevision: args.replacementPriceBookRevision,
+        })) as Row
+        if (replacement.ok !== true) return replacement
+
+        const createdAt = now()
+        await tx.db.insert('pos.Exchange', {
+          id: args.id,
+          uuid,
+          originalOrderId: original.id,
+          returnOrderId,
+          replacementOrderId,
+          originalRevision: returned.originalRevision,
+          reason,
+          createdAt,
+        })
+        await tx.db.update(
+          'pos.Order',
+          { id: returnOrderId },
+          { exchangeId: args.id, exchangeRole: 'return' },
+        )
+        await tx.db.update(
+          'pos.Order',
+          { id: replacementOrderId },
+          { exchangeId: args.id, exchangeRole: 'replacement' },
+        )
+        return {
+          ok: true,
+          id: args.id,
+          uuid,
+          originalOrderId: original.id,
+          returnOrderId,
+          replacementOrderId,
+          originalRevision: n(returned.originalRevision),
+          returnRevision: n(returned.revision),
+          replacementRevision: n(replacement.revision),
+          reason,
+          createdAt,
         }
       }),
   }),
