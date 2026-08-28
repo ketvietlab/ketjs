@@ -113,6 +113,12 @@ A bridge may publish new functions or extend an explicit contract. It must not d
 module's private handler. If transactional composition needs a function spec, expose that exact stable
 surface from `@ketvietlab/ketsuite` and test the export.
 
+The package root currently exposes `pricingFunctionSpecs.priceFor` and
+`accountFunctionSpecs.quoteLine` for private verticals that need canonical product pricing and tax
+quotes while preserving one transaction. Consumers must declare every effect from the composed spec
+and treat its input and output as the public contract; internal Pricing and Account helpers remain
+private.
+
 ## Messages and public exports
 
 Ship Vietnamese and English messages together for code paths visible in either locale. Keep message

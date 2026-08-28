@@ -745,15 +745,20 @@ export default defineModule({
               id: params.id,
             })
           else if (form.action === 'refund') {
-            const sessions = (await ctx.call('pos.listSessions', { state: 'opened' }, url, req)) as AnyRow[],
-              session = sessions[0]
-            result = session
-              ? await callIfInstalled(ctx, url, req, 'loyalty_pos.refundOrder', 'pos.refundOrder', {
-                  id: randomUUID(),
-                  originalOrderId: params.id,
-                  sessionId: session.id,
-                })
-              : { ok: false }
+            const [order, sessions] = await Promise.all([
+                ctx.call('pos.getOrder', { id: params.id }, url, req) as Promise<AnyRow | null>,
+                ctx.call('pos.listSessions', { state: 'opened' }, url, req) as Promise<AnyRow[]>,
+              ]),
+              session = sessions.find((candidate) => candidate.configId === order?.configId)
+            result =
+              order && session
+                ? await callIfInstalled(ctx, url, req, 'loyalty_pos.refundOrder', 'pos.refundOrder', {
+                    id: randomUUID(),
+                    originalOrderId: params.id,
+                    sessionId: session.id,
+                    expectedRevision: order.revision,
+                  })
+                : { ok: false }
           } else return text('unknown action', { status: 400 })
           return redirect(result, path)
         }

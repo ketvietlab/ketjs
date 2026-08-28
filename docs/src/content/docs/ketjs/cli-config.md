@@ -64,6 +64,9 @@ state belongs to a datastore, not to a JSON snapshot.
 ket migrate --deployment backoffice --workspace dist/ket.workspace.js
 ket migrate --deployment backoffice --allow-destructive
 ket migrate --deployment erp --all --dry-run
+ket schema verify --deployment backoffice --workspace dist/ket.workspace.js
+ket schema verify --deployment erp --tenant acme
+ket schema verify --deployment erp --all
 ```
 
 For one datastore, the command plans against `.ket/schema.<app>.json`, prints SQL, and updates that local
@@ -72,6 +75,13 @@ creating `.ket` state or updating that snapshot. For tenant databases, `--all` u
 catalogue and applies each plan unless `--dry-run` is set. A workspace with multiple tenant-fleet deployments
 must pass `--deployment`; the CLI never chooses a product implicitly. Destructive changes always require
 `--allow-destructive`. See [Migrations and adapters](/ketjs/migrations/).
+
+`ket schema verify` is a read-only catalog audit. It checks that the physical tables, columns,
+nullability, primary keys, and indexes satisfy both the applied marker and current manifest, and exits
+non-zero on drift. Use `--tenant KEY` for one tenant database or `--all` for the complete tenant fleet.
+The built-in SQLite path must already exist; verification does not create a missing database.
+Tenant verification requires the non-mutating `serve.tenants.exists(key, config)` hook and skips
+`open()` when that check reports a missing datastore.
 
 ## Runtime commands
 
