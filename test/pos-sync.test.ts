@@ -142,6 +142,8 @@ const channel = async <T>(
   return { status: response.status, body: (await response.json()) as Envelope<T> }
 }
 
+let commandCapturedAt: string | null = null
+
 const command = (
   commandId: string,
   sequence: number,
@@ -158,7 +160,7 @@ const command = (
   aggregateId,
   aggregateRevision,
   operation,
-  capturedAt: new Date().toISOString(),
+  capturedAt: commandCapturedAt ?? new Date().toISOString(),
   idempotencyKey: `${commandId}-key`,
   payload,
   signature: `test-signature-${commandId}`.padEnd(48, '0'),
@@ -240,6 +242,17 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
   assert.ok(bootstrap.body.data.policy.onlineOnlyOperationIds.includes('pos.orders.paymentAttempts.create'))
 
   const master = bootstrap.body.data.revisions.master
+  const leaseExpiredAt = Date.now() - 1_000
+  assert.ok(issuedLease)
+  issuedLease = {
+    ...issuedLease,
+    claims: {
+      ...issuedLease.claims,
+      issuedAt: new Date(leaseExpiredAt - 60_000).toISOString(),
+      expiresAt: new Date(leaseExpiredAt).toISOString(),
+    },
+  }
+  commandCapturedAt = new Date(leaseExpiredAt - 500).toISOString()
   const commands = [
     command('create-order-0001', 1, 'pos.orders.create', 'local-order-1', 0, {
       uuid: 'offline-order-1',
@@ -290,7 +303,7 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
     key: 'offline-batch-0001',
     body: JSON.stringify({ batchId: 'offline-batch-0001', leaseToken, commands }),
   })
-  assert.equal(reconciled.status, 200)
+  assert.equal(reconciled.status, 200, JSON.stringify(reconciled.body))
   assert.equal(reconciled.body.data.accepted, 4)
   assert.equal(reconciled.body.data.results[3]?.projection.state, 'paid')
   assert.ok(reconciled.body.meta.nextCursor)
