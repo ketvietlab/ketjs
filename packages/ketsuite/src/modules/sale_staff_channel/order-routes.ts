@@ -51,11 +51,26 @@ const line = {
     name: string,
     quantity: string,
     uomId: string,
+    uomName: string,
     unitPrice: string,
     discount: string,
     subtotal: string,
+    tax: string,
+    total: string,
   },
-  required: ['id', 'productId', 'name', 'quantity', 'uomId', 'unitPrice', 'discount', 'subtotal'],
+  required: [
+    'id',
+    'productId',
+    'name',
+    'quantity',
+    'uomId',
+    'uomName',
+    'unitPrice',
+    'discount',
+    'subtotal',
+    'tax',
+    'total',
+  ],
 }
 const availabilityLine = {
   type: 'object',
@@ -76,6 +91,8 @@ const detail = {
     customerReference: nullableString,
     notes: nullableString,
     lines: { type: 'array', items: line },
+    untaxed: money,
+    tax: money,
     deliveryMoveCount: { type: 'integer', minimum: 0 },
     invoiceCount: { type: 'integer', minimum: 0 },
     version: { type: 'string', pattern: '^sov_[0-9a-f]{64}$' },
@@ -89,6 +106,8 @@ const detail = {
     'customerReference',
     'notes',
     'lines',
+    'untaxed',
+    'tax',
     'deliveryMoveCount',
     'invoiceCount',
     'version',
@@ -220,23 +239,37 @@ const projectSummary = (row: Row, names: Map<string, string>) => ({
   total: { currency: String(row.currency), amount: String(row.amountTotal) },
 })
 
-const projectedLines = (row: Row) =>
+const projectedLines = (row: Row, uomNames = new Map<string, string>()) =>
   (Array.isArray(row.lines) ? (row.lines as Row[]) : [])
     .sort(
       (left, right) =>
         Number(left.sequence ?? 0) - Number(right.sequence ?? 0) ||
         String(left.id).localeCompare(String(right.id)),
     )
-    .map((item) => ({
-      id: String(item.id),
-      productId: String(item.productId),
-      name: String(item.name),
-      quantity: String(item.productUomQty),
-      uomId: String(item.productUomId),
-      unitPrice: String(item.priceUnit),
-      discount: String(item.discount),
-      subtotal: String(item.priceSubtotal),
-    }))
+    .map((item) => {
+      const subtotal = String(item.priceSubtotal)
+      const total = String(item.priceSubtotalIncl ?? item.priceSubtotal)
+      return {
+        id: String(item.id),
+        productId: String(item.productId),
+        name: String(item.name),
+        quantity: String(item.productUomQty),
+        uomId: String(item.productUomId),
+        uomName: uomNames.get(String(item.productUomId)) ?? String(item.productUomId),
+        unitPrice: String(item.priceUnit),
+        discount: String(item.discount),
+        subtotal,
+        tax: String(Number(total) - Number(subtotal)),
+        total,
+      }
+    })
+
+const uomNamesOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
+  const ids = [...new Set(projectedLines(row).map((item) => item.uomId))]
+  if (!ids.length) return new Map<string, string>()
+  const units = (await ctx.call('uom.listUnits', { ids }, url, req)) as Row[]
+  return new Map(units.map((unit) => [String(unit.id), String(unit.name)]))
+}
 
 const availabilityOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
   const requested = new Map<string, number>()
@@ -269,12 +302,15 @@ const availabilityOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) =
 }
 
 const projectDetail = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
+  const currency = String(row.currency)
   const base = {
     ...projectSummary(row, await namesOf(ctx, [row], url, req)),
     warehouseId: String(row.warehouseId),
     customerReference: row.clientOrderRef == null ? null : String(row.clientOrderRef),
     notes: row.notes == null ? null : String(row.notes),
-    lines: projectedLines(row),
+    lines: projectedLines(row, await uomNamesOf(ctx, row, url, req)),
+    untaxed: { currency, amount: String(row.amountUntaxed) },
+    tax: { currency, amount: String(row.amountTax) },
     deliveryMoveCount: Array.isArray(row.moves) ? row.moves.length : 0,
     invoiceCount: Array.isArray(row.invoices) ? row.invoices.length : 0,
   }

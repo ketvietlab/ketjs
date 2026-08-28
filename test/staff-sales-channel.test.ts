@@ -231,11 +231,16 @@ test('staff sales channel returns a narrow read-only order detail', async (t) =>
       name: 'Ghế công thái học',
       quantity: '2',
       uomId: 'unit',
+      uomName: 'Đơn vị',
       unitPrice: '3000000',
       discount: '0',
       subtotal: '6000000',
+      tax: '0',
+      total: '6000000',
     },
   ])
+  assert.deepEqual(response.data.untaxed, { currency: 'VND', amount: '6000000' })
+  assert.deepEqual(response.data.tax, { currency: 'VND', amount: '0' })
 
   assert.equal((await e2e.client.get('/api/staff/v1/sales/orders/missing/detail')).status, 404)
 })
