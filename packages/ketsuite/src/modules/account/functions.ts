@@ -3128,7 +3128,15 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   reconcile: defineFn({
-    input: { id: 'id', debitMoveId: 'id', creditMoveId: 'id', amount: 'decimal', date: 'datetime?' },
+    input: {
+      id: 'id',
+      debitMoveId: 'id',
+      creditMoveId: 'id',
+      amount: 'decimal',
+      date: 'datetime?',
+      actorId: 'text?',
+      reason: 'text?',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:account.Move',
@@ -3183,6 +3191,12 @@ export const functions: Record<string, FnSpec> = {
             creditMoveId: args.creditMoveId,
             amount: minorText(amount, scale),
             date: args.date ?? today(),
+            state: 'active',
+            actorId: args.actorId ?? null,
+            reason: args.reason ?? null,
+            reversedAt: null,
+            reversedBy: null,
+            reversalReason: null,
           })
           if (!('dryRun' in held) && !held.inserted) return [debit.moveId, credit.moveId]
           const debitResidual = debitHeld - amount
