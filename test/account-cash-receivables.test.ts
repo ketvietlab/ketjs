@@ -201,6 +201,29 @@ test('account cash: explainable match, partial reconciliation, aging, and undo k
     assert.ok(Number((suggested.candidates as Row[])[0]?.score) >= 80)
     assert.equal(suggested.ambiguous, false)
 
+    const duplicateAllocation = await call(
+      'account.postBankReconciliation',
+      {
+        id: 'reconcile-duplicate',
+        transactionId: transaction?.id,
+        allocations: [
+          { moveLineId: 'INV-1:counterpart', amount: '60.00' },
+          { moveLineId: 'INV-1:counterpart', amount: '40.00' },
+        ],
+      },
+      adapter,
+    )
+    assert.equal(duplicateAllocation.ok, false)
+    assert.equal((duplicateAllocation.errors as Row[])[0]?.code, 'account.error.reconcileAllocationDuplicate')
+    assert.deepEqual(
+      await call(
+        'account_wave2_probe.rows',
+        { model: 'account.Move', id: 'reconcile-duplicate:move' },
+        adapter,
+      ),
+      [],
+    )
+
     const reconciled = await call(
       'account.postBankReconciliation',
       {
