@@ -3,7 +3,7 @@
 // each without any of them stepping on the others — Ecto's composability with a
 // chainable surface.
 
-import { assertCol, exprTouches, and } from './expr.ts'
+import { assertCol, exprTouches, and, makeCol } from './expr.ts'
 import type { Col, Expr } from './expr.ts'
 import { tableNameFor } from './migrate.ts'
 import { KetError } from '../kernel/errors.ts'
@@ -18,7 +18,16 @@ export type Order = { col: Col; dir: 'asc' | 'desc' }
 export type GroupSpec = { col: Col; interval?: GroupInterval; timezone?: string }
 export type AggregateSpec =
   | { fn: 'count'; col?: Col; as: string }
-  | { fn: 'countDistinct' | 'sum' | 'avg' | 'min' | 'max'; col: Col; as: string }
+  | { fn: 'countDistinct' | 'sum' | 'min' | 'max'; col: Col; as: string }
+  | {
+      fn: 'avg'
+      col: Col
+      as: string
+      /** Required for decimal columns so both adapters return the same finite value. */
+      scale?: number
+      /** Decimal averages currently support PostgreSQL-compatible half-away-from-zero rounding. */
+      rounding?: 'half-away-from-zero'
+    }
 export type GroupOrder = { by: 'key' | 'count' | string; dir: 'asc' | 'desc' }
 export type GroupRow = { key: unknown[]; count: number; aggregates: Record<string, unknown> }
 
@@ -36,8 +45,7 @@ export function table(manifest: Manifest, model: string): Table {
     })
   }
   const t = Object.create(null) as Record<string, unknown>
-  for (const [name, field] of Object.entries(def.fields))
-    t[name] = Object.freeze({ model, name, base: field.base })
+  for (const [name, field] of Object.entries(def.fields)) t[name] = makeCol(model, name, field.base)
   t['$model'] = model
   t['$columns'] = Object.keys(def.fields)
   return Object.freeze(t) as Table
@@ -292,16 +300,44 @@ export class Query {
       const aggregateSql = this.aggregates.map((aggregate) => {
         if (aggregate.fn === 'count')
           return `COUNT(${aggregate.col ? colSql(aggregate.col) : '*'}) AS ${q(aggregate.as)}`
+        if (aggregate.fn === 'avg' && isDecimal(aggregate.col)) {
+          if (aggregate.rounding !== 'half-away-from-zero' || aggregate.scale === undefined)
+            throw new KetError({
+              code: 'E_DECIMAL_AVG_ROUNDING_REQUIRED',
+              message: 'a decimal average requires an explicit finite scale and rounding rule',
+              hint: `add scale and rounding: 'half-away-from-zero', or request sum and count and divide in the domain`,
+            })
+          if (
+            !Number.isSafeInteger(aggregate.scale) ||
+            aggregate.scale < 0 ||
+            aggregate.scale > DECIMAL_MAX_CHARS
+          )
+            throw new KetError({
+              code: 'E_DECIMAL_AVG_SCALE',
+              message: `decimal average scale must be an integer from 0 to ${DECIMAL_MAX_CHARS}`,
+            })
+          const column = colSql(aggregate.col)
+          let average: string
+          if (dialect === 'sqlite') average = `ket_decimal_avg(${column}, ${bind(aggregate.scale)})`
+          else {
+            // PostgreSQL's numeric AVG divides before ROUND and chooses a finite
+            // internal result scale, so high requested scales can no longer
+            // recover the discarded digits. Scale the exact SUM first, then use
+            // integer quotient/remainder arithmetic for half-away-from-zero.
+            const scale = bind(aggregate.scale)
+            const factor = `CAST(('1e' || CAST(${scale} AS TEXT)) AS NUMERIC)`
+            const sum = `SUM(${column})`
+            const count = `COUNT(${column})`
+            const shifted = `ABS(${sum}) * ${factor}`
+            const rounded = `DIV(${shifted}, ${count}) + CASE WHEN MOD(${shifted}, ${count}) * 2 >= ${count} THEN 1 ELSE 0 END`
+            average = `CASE WHEN ${count} = 0 THEN NULL ELSE SIGN(${sum}) * (${rounded}) / ${factor} END`
+          }
+          return `${average} AS ${q(aggregate.as)}`
+        }
         if (isSqliteDecimal(aggregate.col)) {
           const column = colSql(aggregate.col)
           if (aggregate.fn === 'countDistinct')
             return `COUNT(DISTINCT ket_decimal_key(${column})) AS ${q(aggregate.as)}`
-          if (aggregate.fn === 'avg')
-            throw new KetError({
-              code: 'E_DECIMAL_AVG_SQLITE',
-              message: 'SQLite cannot return an exact finite decimal average for every input set',
-              hint: 'request sum and count over the same decimal column, then divide with an explicit domain rounding rule',
-            })
           return `ket_decimal_${aggregate.fn}(${column}) AS ${q(aggregate.as)}`
         }
         const fn = aggregate.fn === 'countDistinct' ? 'COUNT' : aggregate.fn.toUpperCase()

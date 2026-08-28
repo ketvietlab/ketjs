@@ -111,6 +111,56 @@ const addDecimals = (left: unknown, right: unknown): string | null => {
   return renderScaledDecimal({ coefficient, scale })
 }
 
+/** Exact division with PostgreSQL NUMERIC's tie-breaking rule. */
+const averageDecimal = (held: ScaledDecimal, count: bigint, requestedScale: unknown): string | null => {
+  const divisor = count
+  const scale = Number(requestedScale)
+  if (!Number.isSafeInteger(scale) || scale < 0 || scale > DECIMAL_MAX_CHARS)
+    throw new Error(`decimal average scale must be an integer from 0 to ${DECIMAL_MAX_CHARS}`)
+  if (divisor === 0n) return null
+  if (divisor < 0n) throw new Error('decimal average count must not be negative')
+
+  let numerator = held.coefficient
+  let denominator = divisor
+  const shift = scale - held.scale
+  if (shift >= 0) numerator *= 10n ** BigInt(shift)
+  else denominator *= 10n ** BigInt(-shift)
+
+  let rounded = numerator / denominator
+  const remainder = numerator % denominator
+  const magnitude = remainder < 0n ? -remainder : remainder
+  if (magnitude * 2n >= denominator) rounded += numerator < 0n ? -1n : 1n
+  const result = renderScaledDecimal({ coefficient: rounded, scale })
+  if (result.length > DECIMAL_MAX_CHARS)
+    throw new Error('decimal average exceeds the decimal character limit')
+  return result
+}
+
+type DecimalAverageState = {
+  coefficient: bigint
+  sumScale: number
+  count: bigint
+  requestedScale: number | null
+}
+
+const decodeDecimalAverageState = (value: unknown): DecimalAverageState => {
+  const held = String(value ?? '')
+  if (!held) return { coefficient: 0n, sumScale: 0, count: 0n, requestedScale: null }
+  const first = held.indexOf('|')
+  const second = held.indexOf('|', first + 1)
+  const third = held.indexOf('|', second + 1)
+  if (first < 0 || second < 0 || third < 0) throw new Error('invalid decimal average state')
+  return {
+    requestedScale: Number(held.slice(0, first)),
+    count: BigInt(held.slice(first + 1, second)),
+    sumScale: Number(held.slice(second + 1, third)),
+    coefficient: BigInt(held.slice(third + 1)),
+  }
+}
+
+const encodeDecimalAverageState = (state: DecimalAverageState): string =>
+  `${String(state.requestedScale)}|${state.count}|${state.sumScale}|${state.coefficient}`
+
 export function sqliteAdapter(path = ':memory:'): Adapter {
   let db: DatabaseSync | null = null
   // node:sqlite has one synchronous connection. Promise-shaped adapter methods can
@@ -222,6 +272,45 @@ export function sqliteAdapter(path = ':memory:'): Adapter {
         db.function('ket_decimal_sign', (value) => decimalParts(value)?.sign ?? null)
         db.function('ket_decimal_exponent', (value) => decimalParts(value)?.exponent ?? null)
         db.function('ket_decimal_digits', (value) => decimalParts(value)?.digits ?? null)
+        db.aggregate('ket_decimal_avg', {
+          start: '',
+          step: (encoded, value, scale) => {
+            const state = decodeDecimalAverageState(encoded)
+            const requestedScale = Number(scale)
+            if (state.requestedScale !== null && state.requestedScale !== requestedScale)
+              throw new Error('decimal average scale changed within one aggregate')
+            if (value == null) return encodeDecimalAverageState({ ...state, requestedScale })
+            const next = scaledDecimal(value)
+            if (!next) throw new Error('invalid or over-budget decimal value')
+            if (state.count === 0n)
+              return encodeDecimalAverageState({
+                coefficient: next.coefficient,
+                sumScale: next.scale,
+                count: 1n,
+                requestedScale,
+              })
+            const sumScale = Math.max(state.sumScale, next.scale)
+            const coefficient =
+              state.coefficient * 10n ** BigInt(sumScale - state.sumScale) +
+              next.coefficient * 10n ** BigInt(sumScale - next.scale)
+            return encodeDecimalAverageState({
+              coefficient,
+              sumScale,
+              count: state.count + 1n,
+              requestedScale,
+            })
+          },
+          result: (encoded) => {
+            const state = decodeDecimalAverageState(encoded)
+            return state.count === 0n || state.requestedScale === null
+              ? null
+              : averageDecimal(
+                  { coefficient: state.coefficient, scale: state.sumScale },
+                  state.count,
+                  state.requestedScale,
+                )
+          },
+        })
         db.aggregate('ket_decimal_sum', {
           start: '',
           step: (sum, value) => {

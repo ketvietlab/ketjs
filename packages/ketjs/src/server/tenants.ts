@@ -6,6 +6,7 @@ import { KetError } from '../kernel/errors.ts'
 import type { AdapterPool } from '../data/pool.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
+import { scopeForSession } from './session.ts'
 import type { Sessions } from './session.ts'
 import type { Joints } from '../theme/joints.ts'
 import type { IncomingMessage } from 'node:http'
@@ -23,6 +24,11 @@ export type TenantSpec = {
    * back an adapter object that a prior pool entry already closed.
    */
   open: (key: string, config: RuntimeConfig) => Adapter | Promise<Adapter>
+  /**
+   * Check that a tenant datastore already exists without creating or opening it.
+   * Required by read-only fleet inspection commands such as `ket schema verify`.
+   */
+  exists?: (key: string, config: RuntimeConfig) => boolean | Promise<boolean>
   /**
    * Every tenant this deployment serves. Needed to migrate the fleet, and to fail
    * at boot rather than at 3am if one of them cannot be opened.
@@ -75,6 +81,41 @@ export type Tenants = {
   ofRequest: <T>(url: URL, req: IncomingMessage, fn: (t: Tenant) => Promise<T>) => Promise<T>
   keys: () => Promise<string[]>
   close: () => Promise<void>
+}
+
+type SessionFacadePolicy = {
+  storeName: string
+  tenant?: string
+  ephemeralSecret: boolean
+  clearCookie: string
+  anonymous: Scope | null
+}
+
+const sessionFacadePolicy = (sessions: Sessions): SessionFacadePolicy => ({
+  storeName: sessions.store.name,
+  ...(sessions.tenant === undefined ? {} : { tenant: sessions.tenant }),
+  ephemeralSecret: sessions.ephemeralSecret,
+  clearCookie: sessions.clearCookie(),
+  anonymous: scopeForSession(null, { anonymous: sessions.scopeOf(null) }),
+})
+
+const scopePolicyKey = (scope: Scope | null): string => JSON.stringify(scope)
+
+const assertSessionFacadePolicy = (key: string, expected: SessionFacadePolicy, sessions: Sessions): void => {
+  const actual = sessionFacadePolicy(sessions)
+  const changed = [
+    ...(actual.storeName === expected.storeName ? [] : ['store.name']),
+    ...(actual.tenant === expected.tenant ? [] : ['tenant']),
+    ...(actual.ephemeralSecret === expected.ephemeralSecret ? [] : ['ephemeralSecret']),
+    ...(actual.clearCookie === expected.clearCookie ? [] : ['clearCookie']),
+    ...(scopePolicyKey(actual.anonymous) === scopePolicyKey(expected.anonymous) ? [] : ['anonymous']),
+  ]
+  if (!changed.length) return
+  throw new KetError({
+    code: 'E_SESSION_POLICY_DRIFT',
+    message: `session policy for tenant "${key}" changed after its adapter was replaced`,
+    hint: `sessions(adapter, key) must keep adapter-independent policy stable; changed: ${changed.join(', ')}`,
+  })
 }
 
 export function createTenants(o: {
@@ -149,43 +190,28 @@ export function createTenants(o: {
     })
     return value
   }
-  const copyScope = (scope: Scope | null): Scope | null =>
-    scope
-      ? {
-          company: scope.company,
-          ...(scope.companies === undefined
-            ? {}
-            : { companies: scope.companies === null ? null : [...scope.companies] }),
-          ...(scope.branch === undefined ? {} : { branch: scope.branch }),
-          ...(scope.branches === undefined
-            ? {}
-            : { branches: scope.branches === null ? null : [...scope.branches] }),
-        }
-      : null
   const sessionsFor = (key: string, adapter: Adapter): Promise<Sessions> | null => {
     if (!o.sessions) return null
     const cached = sessionFacades.get(key)
     if (cached) return cached
 
-    const withManager = <T>(body: (sessions: Sessions) => Promise<T>): Promise<T> =>
-      o.pool.with(key, async (current) => {
-        await prepare(key, current)
-        return body(await managerFor(key, current))
-      })
     let made!: Promise<Sessions>
     made = managerFor(key, adapter)
       .then((seed) => {
         // Snapshot only adapter-free values. In particular, do not close over the
         // first Sessions/SessionStore: it owns the adapter that eviction just closed.
-        const storeName = seed.store.name
-        const ephemeralSecret = seed.ephemeralSecret
-        const tenant = seed.tenant
-        const clearCookie = seed.clearCookie()
-        const anonymous = copyScope(seed.scopeOf(null))
+        const policy = sessionFacadePolicy(seed)
+        const withManager = <T>(body: (sessions: Sessions) => Promise<T>): Promise<T> =>
+          o.pool.with(key, async (current) => {
+            await prepare(key, current)
+            const sessions = await managerFor(key, current)
+            assertSessionFacadePolicy(key, policy, sessions)
+            return body(sessions)
+          })
         return {
-          ...(tenant === undefined ? {} : { tenant }),
+          ...(policy.tenant === undefined ? {} : { tenant: policy.tenant }),
           store: {
-            name: storeName,
+            name: policy.storeName,
             init: () => withManager((sessions) => sessions.store.init()),
             create: (record) => withManager((sessions) => sessions.store.create(record)),
             read: (id) => withManager((sessions) => sessions.store.read(id)),
@@ -199,7 +225,7 @@ export function createTenants(o: {
               withManager((sessions) => sessions.store.destroyUserExcept(userId, keepId)),
             sweep: (at) => withManager((sessions) => sessions.store.sweep(at)),
           },
-          ephemeralSecret,
+          ephemeralSecret: policy.ephemeralSecret,
           start: (options) => withManager((sessions) => sessions.start(options)),
           of: (req) => withManager((sessions) => sessions.of(req)),
           end: (req) => withManager((sessions) => sessions.end(req)),
@@ -207,17 +233,12 @@ export function createTenants(o: {
           endUserExcept: (userId, keepId) =>
             withManager((sessions) => sessions.endUserExcept(userId, keepId)),
           update: (record, context) => withManager((sessions) => sessions.update(record, context)),
-          clearCookie: () => clearCookie,
-          scopeOf: (record) => {
-            if (!record || (tenant !== undefined && (record.tenant ?? null) !== tenant))
-              return copyScope(anonymous)
-            return {
-              company: record.company,
-              companies: [...record.companies],
-              branch: record.branch,
-              branches: record.branches ? [...record.branches] : null,
-            }
-          },
+          clearCookie: () => policy.clearCookie,
+          scopeOf: (record) =>
+            scopeForSession(record, {
+              ...(policy.tenant === undefined ? {} : { tenant: policy.tenant }),
+              anonymous: policy.anonymous,
+            }),
           sweep: () => withManager((sessions) => sessions.sweep()),
         }
       })
