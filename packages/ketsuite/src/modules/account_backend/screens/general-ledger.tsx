@@ -20,8 +20,8 @@ export type GeneralLedgerRow = Record<string, unknown>
 
 export type GeneralLedgerSummary = {
   lines: number
-  debit: number
-  credit: number
+  debit: unknown
+  credit: unknown
 }
 
 export type GeneralLedgerScreenOptions = {
@@ -48,7 +48,10 @@ export const generalLedgerScreen = (_: Translator, options: GeneralLedgerScreenO
           key: 'date',
           label: _('account_backend.field.date'),
           priority: 'primary',
-          cell: (row) => String((row.move as GeneralLedgerRow)?.date ?? '').slice(0, 10),
+          cell: (row) =>
+            String(
+              (row.move as GeneralLedgerRow)?.accountingDate ?? (row.move as GeneralLedgerRow)?.date ?? '',
+            ).slice(0, 10),
         },
         {
           key: 'entry',

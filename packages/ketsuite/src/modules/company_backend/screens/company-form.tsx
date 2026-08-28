@@ -69,6 +69,15 @@ export const companyFields = (
     required: true,
   },
   {
+    name: 'accountingTimezone',
+    label: _('company_backend.field.accountingTimezone'),
+    value: values.accountingTimezone ?? 'Asia/Ho_Chi_Minh',
+    help: values.currencyLocked
+      ? _('company_backend.field.accountingTimezoneLockedHint')
+      : _('company_backend.field.accountingTimezoneHint'),
+    required: true,
+  },
+  {
     name: 'parentId',
     label: _('company_backend.field.parent'),
     type: 'select',

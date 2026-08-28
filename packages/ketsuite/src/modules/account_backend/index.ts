@@ -18,6 +18,7 @@ import {
   TAX_AMOUNT_TYPES,
   TAX_USES,
 } from '../account/functions.ts'
+import { addDecimals } from '../account/money.ts'
 import {
   accountDefaultsScreen,
   accountFormModal,
@@ -264,12 +265,6 @@ const paymentFormPath = (url: URL, returnTo: string): string => {
   target.searchParams.set('returnTo', returnTo)
   return `${target.pathname}${target.search}`
 }
-
-/** HTML date fields are accounting days; domain report filters compare instants in UTC. */
-const accountingRangeInstant = (value: string, edge: 'start' | 'end'): string =>
-  /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? `${value}T${edge === 'start' ? '00:00:00.000' : '23:59:59.999'}Z`
-    : value
 
 const paymentTermSummary = (rows: AnyRow[]) => ({
   total: rows.length,
@@ -1041,6 +1036,7 @@ const createInvoice = async (
       moveType: form.moveType ?? '',
       partnerId: form.partnerId ?? '',
       ...optional(form, 'invoiceDate'),
+      ...(form.invoiceDate ? { accountingDate: form.invoiceDate, documentDate: form.invoiceDate } : {}),
       ...optional(form, 'paymentTermId'),
       ...optional(form, 'ref'),
       description: form.description ?? '',
@@ -1096,6 +1092,7 @@ const submitPayment = async (
       destinationAccountId: form.destinationAccountId ?? '',
       amount: form.amount || '0',
       ...optional(form, 'date'),
+      ...(form.date ? { accountingDate: form.date, documentDate: form.date } : {}),
       ...optional(form, 'memo'),
       ...optional(form, 'paymentReference'),
       ...optional(form, 'reconcileLineId'),
@@ -1240,10 +1237,12 @@ const MESSAGES: Record<string, Record<string, string>> = { vi: {}, en: {} }
 
 export default defineModule({
   name: 'account_backend',
+  // 0.4.0: accounting screens exchange civil dates with the ledger and keep
+  // visible control totals in exact decimal text.
   // 0.3.0: a refused form says which rule it broke and keeps what was typed;
   // pickers only offer values the ledger accepts; dashboard cards count the lists
   // they open; payment-term milestones are visible and editable.
-  version: '0.3.0',
+  version: '0.4.0',
   depends: ['account', 'backend'],
   joints: {
     'move.collaboration': {
@@ -1359,7 +1358,15 @@ export default defineModule({
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
         await ctx.call('account.initializeCompany', {}, url, req)
-        const period = periodOf(url)
+        const [requestScope, companies] = await Promise.all([
+          ctx.scopeOf(url, req),
+          ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
+        ])
+        const accountingTimezone = String(
+          companies.find((company) => String(company.id) === String(requestScope.company))
+            ?.accountingTimezone ?? 'Asia/Ho_Chi_Minh',
+        )
+        const period = periodOf(url, new Date(), accountingTimezone)
         const read = async (name: string, args: AnyRow): Promise<AnyRow> =>
           (await ctx.call(name, args, url, req)) as AnyRow
         // Nine reads, one round of latency. A balance is as at a date and a
@@ -1367,34 +1374,23 @@ export default defineModule({
         // "dashboard" function: the same split the trial balance and the general
         // ledger already make, and the reason narrowing the filter cannot make
         // total assets shrink.
-        const [
-          current,
-          previous,
-          position,
-          opening,
-          timeline,
-          openItems,
-          cashFlow,
-          setup,
-          companies,
-          oldest,
-        ] = await Promise.all([
-          read('account.performance', { dateFrom: period.from, dateTo: period.to }),
-          read('account.performance', { dateFrom: period.previousFrom, dateTo: period.previousTo }),
-          read('account.position', { asOf: period.to }),
-          read('account.position', { asOf: period.previousTo }),
-          read('account.revenueTimeline', { dateFrom: period.from, dateTo: period.to }),
-          read('account.openItemSummary', { asOf: period.to, partnerLimit: 5 }),
-          read('account.cashFlow', { dateFrom: period.from, dateTo: period.to }),
-          read('account.getSetup', {}),
-          ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
-          // The oldest posted move, and only that one: the year chips offer
-          // the years the ledger actually covers, and asking the database for
-          // the earliest date is cheaper than every year deriving from a scan.
-          ctx.call('account.listMoves', { state: 'posted', order: 'asc', limit: 1 }, url, req) as Promise<
-            AnyRow[]
-          >,
-        ])
+        const [current, previous, position, opening, timeline, openItems, cashFlow, setup, oldest] =
+          await Promise.all([
+            read('account.performance', { dateFrom: period.from, dateTo: period.to }),
+            read('account.performance', { dateFrom: period.previousFrom, dateTo: period.previousTo }),
+            read('account.position', { asOf: period.to }),
+            read('account.position', { asOf: period.previousTo }),
+            read('account.revenueTimeline', { dateFrom: period.from, dateTo: period.to }),
+            read('account.openItemSummary', { asOf: period.to, partnerLimit: 5 }),
+            read('account.cashFlow', { dateFrom: period.from, dateTo: period.to }),
+            read('account.getSetup', {}),
+            // The oldest posted move, and only that one: the year chips offer
+            // the years the ledger actually covers, and asking the database for
+            // the earliest date is cheaper than every year deriving from a scan.
+            ctx.call('account.listMoves', { state: 'posted', order: 'asc', limit: 1 }, url, req) as Promise<
+              AnyRow[]
+            >,
+          ])
         // The comparison line has to be bucketed the way this one was, or the
         // two are not comparable: a previous window one day shorter would
         // otherwise pick days where this picked months and draw a shape that
@@ -1418,7 +1414,11 @@ export default defineModule({
               frame,
               action: '/admin/accounting',
               preset: period.preset,
-              years: yearsOf(String((oldest as AnyRow[])[0]?.date ?? '')),
+              years: yearsOf(
+                String((oldest as AnyRow[])[0]?.accountingDate ?? (oldest as AnyRow[])[0]?.date ?? ''),
+                new Date(),
+                accountingTimezone,
+              ),
               presetHref: (name) => {
                 const target = new URL('/admin/accounting', url)
                 target.searchParams.set('period', name)
@@ -2398,6 +2398,7 @@ export default defineModule({
               journalId: form.journalId ?? '',
               moveType: form.moveType || 'entry',
               ...optional(form, 'date'),
+              ...(form.date ? { accountingDate: form.date, documentDate: form.date } : {}),
               ...optional(form, 'ref'),
               ...optional(form, 'partnerId'),
             },
@@ -2426,7 +2427,7 @@ export default defineModule({
           if (state && row.state !== state) return false
           return (
             !needle ||
-            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${String(row.partnerId ?? '')}`
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.accountingDate ?? row.date ?? '')} ${String(row.partnerId ?? '')}`
               .toLocaleLowerCase()
               .includes(needle)
           )
@@ -2551,7 +2552,7 @@ export default defineModule({
           if (type && row.moveType !== type) return false
           return (
             !needle ||
-            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.accountingDate ?? row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
               .toLocaleLowerCase()
               .includes(needle)
           )
@@ -2717,7 +2718,7 @@ export default defineModule({
           if (type && row.moveType !== type) return false
           return (
             !needle ||
-            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+            `${String(row.name ?? '')} ${String(row.ref ?? '')} ${String(row.accountingDate ?? row.date ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
               .toLocaleLowerCase()
               .includes(needle)
           )
@@ -2884,7 +2885,7 @@ export default defineModule({
           if (partnerId && String(row.partnerId ?? '') !== partnerId) return false
           return (
             !needle ||
-            `${String(row.name ?? '')} ${String(row.date ?? '')} ${String(row.memo ?? '')} ${String(row.paymentReference ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
+            `${String(row.name ?? '')} ${String(row.accountingDate ?? row.date ?? '')} ${String(row.memo ?? '')} ${String(row.paymentReference ?? '')} ${partnerLabels.get(String(row.partnerId)) ?? ''}`
               .toLocaleLowerCase()
               .includes(needle)
           )
@@ -3022,16 +3023,14 @@ export default defineModule({
         const dateFrom = url.searchParams.get('dateFrom') ?? '',
           dateTo = url.searchParams.get('dateTo') ?? ''
         const inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
-        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
-        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
         const [rows, companies] = (await Promise.all([
           inverted
             ? Promise.resolve([])
             : ctx.call(
                 'account.trialBalance',
                 {
-                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
-                  ...(toInstant ? { dateTo: toInstant } : {}),
+                  ...(dateFrom ? { dateFrom } : {}),
+                  ...(dateTo ? { dateTo } : {}),
                 },
                 url,
                 req,
@@ -3091,8 +3090,6 @@ export default defineModule({
           search = searchOf(url) ?? '',
           page = pageOf(url),
           inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
-        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
-        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
         await ctx.call('account.initializeCompany', {}, url, req)
         const [accounts, companies, allRows] = (await Promise.all([
           ctx.call('account.listAccounts', {}, url, req),
@@ -3103,8 +3100,8 @@ export default defineModule({
                 'account.generalLedger',
                 {
                   ...(accountId ? { accountId } : {}),
-                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
-                  ...(toInstant ? { dateTo: toInstant } : {}),
+                  ...(dateFrom ? { dateFrom } : {}),
+                  ...(dateTo ? { dateTo } : {}),
                 },
                 url,
                 req,
@@ -3130,7 +3127,7 @@ export default defineModule({
               return [
                 move.name,
                 move.ref,
-                move.date,
+                move.accountingDate ?? move.date,
                 row.name,
                 row.accountId,
                 accountLabel(_, accounts, row.accountId),
@@ -3166,8 +3163,8 @@ export default defineModule({
               rows,
               summary: {
                 lines: matching.length,
-                debit: matching.reduce((total, row) => total + Number(row.debit ?? 0), 0),
-                credit: matching.reduce((total, row) => total + Number(row.credit ?? 0), 0),
+                debit: matching.reduce((total, row) => addDecimals(total, row.debit ?? '0'), '0'),
+                credit: matching.reduce((total, row) => addDecimals(total, row.credit ?? '0'), '0'),
               },
               currency,
               hidden: {
@@ -3226,8 +3223,6 @@ export default defineModule({
           search = searchOf(url) ?? '',
           page = pageOf(url),
           inverted = Boolean(dateFrom && dateTo && dateFrom > dateTo)
-        const fromInstant = dateFrom ? accountingRangeInstant(dateFrom, 'start') : ''
-        const toInstant = dateTo ? accountingRangeInstant(dateTo, 'end') : ''
         await ctx.call('account.initializeCompany', {}, url, req)
         const [accounts, companies, initialPartners, selectedPartners, allRows] = (await Promise.all([
           ctx.call('account.listAccounts', {}, url, req),
@@ -3241,8 +3236,8 @@ export default defineModule({
                 'account.partnerStatement',
                 {
                   partnerId,
-                  ...(fromInstant ? { dateFrom: fromInstant } : {}),
-                  ...(toInstant ? { dateTo: toInstant } : {}),
+                  ...(dateFrom ? { dateFrom } : {}),
+                  ...(dateTo ? { dateTo } : {}),
                 },
                 url,
                 req,
@@ -3274,7 +3269,7 @@ export default defineModule({
               return [
                 move.name,
                 move.ref,
-                move.date,
+                move.accountingDate ?? move.date,
                 row.name,
                 row.accountId,
                 accountLabel(_, accounts, row.accountId),
@@ -3309,9 +3304,9 @@ export default defineModule({
               action: '/admin/accounting/partner-statement',
               rows,
               summary: {
-                debit: matching.reduce((total, row) => total + Number(row.debit ?? 0), 0),
-                credit: matching.reduce((total, row) => total + Number(row.credit ?? 0), 0),
-                residual: matching.reduce((total, row) => total + Number(row.amountResidual ?? 0), 0),
+                debit: matching.reduce((total, row) => addDecimals(total, row.debit ?? '0'), '0'),
+                credit: matching.reduce((total, row) => addDecimals(total, row.credit ?? '0'), '0'),
+                residual: matching.reduce((total, row) => addDecimals(total, row.amountResidual ?? '0'), '0'),
               },
               currency,
               selected: Boolean(partnerId),

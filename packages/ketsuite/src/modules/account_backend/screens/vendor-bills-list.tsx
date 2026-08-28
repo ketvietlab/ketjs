@@ -58,7 +58,7 @@ export const vendorBillListColumns = (_: Translator, partnerLabel: (row: VendorB
   {
     key: 'date',
     label: _('account_backend.field.date'),
-    cell: (row: VendorBillListRow) => String(row.date).slice(0, 10),
+    cell: (row: VendorBillListRow) => String(row.accountingDate ?? row.date).slice(0, 10),
   },
   {
     key: 'type',

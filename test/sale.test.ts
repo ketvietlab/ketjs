@@ -883,12 +883,35 @@ test('sale: the overview counts every order and adds up one currency', async () 
     // is not simply every order in the table.
     assert.equal(Number(counted.sentTotal), 0)
 
+    await call('sale.createOrder', { id: 'ov-exact', partnerId: 'customer', warehouseId: 'wh' }, adapter)
+    await call(
+      'sale.addLine',
+      {
+        id: 'ov-exact:line',
+        orderId: 'ov-exact',
+        productId: 'goods-1',
+        productUomQty: '1',
+        productUomId: 'unit',
+        priceUnit: '9007199254740993',
+        taxIds: [],
+      },
+      adapter,
+    )
+    assert.equal(
+      ((await call('sale.getOrder', { id: 'ov-exact' }, adapter)).value as Row).amountTotal,
+      '9007199254740993',
+    )
+    await call('sale.confirmOrder', { id: 'ov-exact' }, adapter)
+    const exact = (await call('sale.countOrders', { timezone: 'Asia/Ho_Chi_Minh' }, adapter)).value as Row
+    assert.equal(exact.sale, 2)
+    assert.equal(exact.saleTotal, '9007199254741213')
+
     // The company moves to another currency. The orders it already raised stay in
     // đồng, so they are still counted — and deliberately not added to dollars.
     await call('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'USD' }, adapter)
     const after = (await call('sale.countOrders', { timezone: 'Asia/Ho_Chi_Minh' }, adapter)).value as Row
     assert.equal(after.currency, 'USD')
-    assert.equal(after.sale, 1)
+    assert.equal(after.sale, 2)
     assert.equal(Number(after.saleTotal), 0)
   } finally {
     await adapter.close()

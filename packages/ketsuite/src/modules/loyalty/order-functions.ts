@@ -15,6 +15,7 @@ import {
   or,
 } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Query, Row } from '@ketvietlab/ketjs'
+import { canonicalDecimalText, minorText, moneyMinor, percentOfMinor, scaleOf } from '../account/money.ts'
 import { decimal, evaluate, invalid, issue, n, normalizeCode, now, snapshotOf } from './engine.ts'
 import {
   finalizeReservation,
@@ -103,7 +104,7 @@ const upsertApplication = async (
     code?: string | null
     pointsEarned?: number
     pointsSpent?: number
-    discountAmount?: number
+    discountAmount?: string
     rewardPayload?: unknown
     currency: string
     state?: string
@@ -121,7 +122,7 @@ const upsertApplication = async (
     code: values.code ?? null,
     pointsEarned: decimal(values.pointsEarned ?? 0),
     pointsSpent: decimal(values.pointsSpent ?? 0),
-    discountAmount: decimal(values.discountAmount ?? 0),
+    discountAmount: canonicalDecimalText(values.discountAmount ?? '0'),
     rewardPayload: values.rewardPayload ?? null,
     currency: values.currency,
     state: values.state ?? 'draft',
@@ -245,11 +246,12 @@ export const applyOrderReward = async (
     const tier = membership?.tierId
       ? (await ctx.db.select('loyalty.Tier', { id: membership.tierId }))[0]
       : null
-    const merchandise = snapshot.lines
-      .filter((line) => line.lineKind === 'product')
-      .reduce((sum, line) => sum + line.untaxed, 0)
-    const maximumDiscount = merchandise * (n(tier?.redeemPercent) / 100)
-    if (quote.discountAmount > maximumDiscount + 0.000001)
+    const scale = scaleOf(snapshot.currency)
+    let merchandise = 0n
+    for (const line of snapshot.lines.filter((line) => line.lineKind === 'product'))
+      merchandise += moneyMinor(line.untaxed, scale)
+    const maximumDiscount = percentOfMinor(merchandise, String(tier?.redeemPercent ?? '0'))
+    if (moneyMinor(quote.discountAmount, scale) > maximumDiscount)
       return invalid(issue('points', 'loyalty.error.redeemCap'))
   }
   const walletId = String(current?.walletId ?? result.walletId ?? '')
@@ -763,7 +765,7 @@ export const orderFunctions: Record<string, FnSpec> = {
                 code: previous?.code ? String(previous.code) : null,
                 pointsEarned: result.points + result.splitPoints.reduce((sum, value) => sum + value, 0),
                 pointsSpent,
-                discountAmount: n(previous?.discountAmount),
+                discountAmount: canonicalDecimalText(String(previous?.discountAmount ?? '0')),
                 rewardPayload: previous?.rewardPayload ?? null,
                 currency: snapshot.currency,
                 state: 'finalized',
@@ -771,15 +773,16 @@ export const orderFunctions: Record<string, FnSpec> = {
             )
           }
           if (snapshot.partnerId) {
-            const spend = snapshot.lines
-              .filter((line) => line.lineKind === 'product')
-              .reduce((sum, line) => sum + line.total, 0)
+            let spend = 0n
+            const scale = scaleOf(snapshot.currency)
+            for (const line of snapshot.lines.filter((line) => line.lineKind === 'product'))
+              spend += moneyMinor(line.total, scale)
             await tx.db.insertIfAbsent('loyalty.SpendEntry', {
               id: `${snapshot.orderType}:${snapshot.orderId}`,
               partnerId: snapshot.partnerId,
               sourceType: snapshot.orderType,
               sourceId: snapshot.orderId,
-              amount: decimal(spend),
+              amount: minorText(spend, scale),
               currency: snapshot.currency,
               occurredAt: snapshot.date,
               reversedAt: null,

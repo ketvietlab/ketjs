@@ -196,6 +196,52 @@ test('hospitality billing: a closed folio becomes one posted invoice, however of
   }
 })
 
+test('hospitality billing: folio charges remain exact beyond JavaScript safe integers', async () => {
+  const adapter = await boot()
+  try {
+    const folioId = await stayed(adapter)
+    await rule('room', 'vat8', adapter)
+    await rule('minibar', null, adapter)
+
+    await adapter.run(`UPDATE hospitality_core_folio SET state = 'open' WHERE id = ?`, [folioId])
+    const charged = await value(
+      'hospitality_core.addCharge',
+      {
+        id: 'large-minibar',
+        folioId,
+        description: 'Large exact charge',
+        type: 'minibar',
+        quantity: '1',
+        unitPrice: '9007199254740993',
+      },
+      adapter,
+    )
+    assert.equal(charged.ok, true, JSON.stringify(charged.errors))
+    assert.equal(charged.amount, '9007199254740993')
+    const folio = (await adapter.all('SELECT "amountTotal" FROM hospitality_core_folio'))[0]!
+    assert.equal(String(folio.amountTotal), '9007199254741993')
+    await adapter.run(`UPDATE hospitality_core_folio SET state = 'closed' WHERE id = ?`, [folioId])
+
+    const invoiced = await value('hospitality_billing.invoiceFolio', { folioId }, adapter)
+    assert.equal(invoiced.ok, true, JSON.stringify(invoiced.errors))
+    const move = (
+      await adapter.all('SELECT "amountUntaxed", "amountTax", "amountTotal" FROM account_move')
+    )[0]!
+    assert.equal(String(move.amountUntaxed), '9007199254741993')
+    assert.equal(String(move.amountTax), '80')
+    assert.equal(String(move.amountTotal), '9007199254742073')
+
+    const lines = await adapter.all('SELECT debit, credit FROM account_move_line')
+    const balance = lines.reduce(
+      (sum, line) => sum + BigInt(String(line.debit)) - BigInt(String(line.credit)),
+      0n,
+    )
+    assert.equal(balance, 0n)
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('hospitality billing: a charge nobody has classified is refused, not filed as untaxed', async () => {
   const adapter = await boot()
   try {

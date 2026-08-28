@@ -5,6 +5,8 @@ export type CompanyRow = {
   partnerId: string
   parentId?: string | null
   currency: string
+  accountingTimezone?: string | null
+  currencyLocked?: boolean
   active: boolean
   version: number
 }

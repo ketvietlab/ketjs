@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 export type Tt99Account = {
   code: string
   name: string
@@ -1527,8 +1529,6 @@ export const TT99_ACCOUNTS: readonly Tt99Account[] = [
     reconcile: false,
   },
 ] as const
-export const TT99_ACCOUNT_CHECKSUM = '62e0ccee163b4b4b336a7c9c6e28823a97f9ef16462e2b378e8133ca856c6b71'
-export const TT99_CATALOG_CHECKSUM = 'c5fa8cb1c165ae56c5137d99df72464914a6f9dc63a2d4cdf807a465f0432da9'
 
 /**
  * What a document posts to when nothing more specific applies.
@@ -1549,6 +1549,46 @@ export const TT99_DEFAULT_ACCOUNTS = {
 export const TT99_CODE = 'TT99_2025'
 export const TT99_COUNTRY = 'VN'
 export const TT99_LEGAL_BASIS = 'Thông tư 99/2025/TT-BTC ngày 27/10/2025'
+export const TT99_CATALOG_SCHEMA_VERSION = 1
+export const TT99_CATALOG_VERSION = '1.0.0'
+export const TT99_ISSUED_ON = '2025-10-27'
+export const TT99_EFFECTIVE_FROM = '2026-01-01'
+export const TT99_EFFECTIVE_TO: string | null = null
+export const TT99_AUTHORITY = 'Bộ Tài chính'
+export const TT99_SOURCE_URL =
+  'https://www.mof.gov.vn/tin-tuc-tai-chinh/tin-chinh-sach-tai-chinh/quy-dinh-moi-ve-che-do-ke-toan-doanh-nghiep'
+export const TT99_APPROVAL_STATUS = 'provisional' as const
+export const TT99_EXPECTED_ACCOUNT_COUNT = 216
+export const TT99_EXPECTED_TAX_COUNT = 17
+
+export type Tt99CatalogApprovalStatus = 'provisional' | 'approved' | 'retired'
+
+export type Tt99CatalogMetadata = {
+  version: string
+  standard: string
+  countryCode: string
+  authority: string
+  sourceUrl: string
+  legalBasis: string
+  issuedOn: string
+  effectiveFrom: string
+  effectiveTo: string | null
+  approvalStatus: Tt99CatalogApprovalStatus
+}
+
+/** Statutory identity is part of the checksum, not prose living beside the data. */
+export const TT99_CATALOG_METADATA: Readonly<Tt99CatalogMetadata> = {
+  version: TT99_CATALOG_VERSION,
+  standard: TT99_CODE,
+  countryCode: TT99_COUNTRY,
+  authority: TT99_AUTHORITY,
+  sourceUrl: TT99_SOURCE_URL,
+  legalBasis: TT99_LEGAL_BASIS,
+  issuedOn: TT99_ISSUED_ON,
+  effectiveFrom: TT99_EFFECTIVE_FROM,
+  effectiveTo: TT99_EFFECTIVE_TO,
+  approvalStatus: TT99_APPROVAL_STATUS,
+}
 
 export type VietnamTax = {
   key: string
@@ -1695,3 +1735,224 @@ export const VIETNAM_TAXES: readonly VietnamTax[] = [
     includeBaseAmount: true,
   },
 ] as const
+
+export type Tt99CanonicalTax = {
+  key: string
+  name: string
+  description: string
+  use: 'sale' | 'purchase'
+  amount: string
+  accountCode: string | null
+  includeBaseAmount: boolean
+}
+
+export type Tt99CatalogManifest = {
+  schemaVersion: number
+  metadata: Tt99CatalogMetadata
+  counts: { accounts: number; taxes: number }
+  defaults: { income: string; expense: string; receivable: string; payable: string }
+  accounts: Tt99Account[]
+  taxes: Tt99CanonicalTax[]
+}
+
+export type Tt99CatalogSource = {
+  metadata?: Tt99CatalogMetadata
+  defaults?: Tt99CatalogManifest['defaults']
+  accounts?: readonly Tt99Account[]
+  taxes?: readonly VietnamTax[]
+}
+
+const lexical = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0)
+
+const jsonPrimitive = (value: string | number | boolean): string => {
+  const encoded = JSON.stringify(value)
+  if (encoded === undefined) throw new TypeError('TT99 canonical JSON could not encode a primitive')
+  return encoded
+}
+
+/**
+ * JSON with one spelling: object keys are lexical, arrays keep their supplied
+ * order, and unsupported values fail instead of being silently omitted.
+ */
+export const canonicalTT99Json = (value: unknown): string => {
+  if (value === null) return 'null'
+  if (typeof value === 'string' || typeof value === 'boolean') return jsonPrimitive(value)
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError('TT99 canonical JSON requires finite numbers')
+    return jsonPrimitive(value)
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalTT99Json).join(',')}]`
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+      lexical(left, right),
+    )
+    if (entries.some(([, held]) => held === undefined))
+      throw new TypeError('TT99 canonical JSON does not permit undefined values')
+    return `{${entries.map(([key, held]) => `${jsonPrimitive(key)}:${canonicalTT99Json(held)}`).join(',')}}`
+  }
+  throw new TypeError(`TT99 canonical JSON does not support ${typeof value}`)
+}
+
+/** Normalize source order and optional tax fields before serialization. */
+export const buildTT99CatalogManifest = (source: Tt99CatalogSource = {}): Tt99CatalogManifest => {
+  const accounts = [...(source.accounts ?? TT99_ACCOUNTS)]
+    .map((account) => ({
+      code: String(account.code),
+      name: String(account.name),
+      nameEn: String(account.nameEn),
+      accountType: String(account.accountType),
+      reconcile: account.reconcile === true,
+    }))
+    .sort((left, right) => lexical(left.code, right.code))
+  const taxes = [...(source.taxes ?? VIETNAM_TAXES)]
+    .map((tax) => ({
+      key: String(tax.key),
+      name: String(tax.name),
+      description: String(tax.description),
+      use: tax.use,
+      amount: String(tax.amount),
+      accountCode: tax.accountCode == null ? null : String(tax.accountCode),
+      includeBaseAmount: tax.includeBaseAmount === true,
+    }))
+    .sort((left, right) => lexical(left.key, right.key))
+  return {
+    schemaVersion: TT99_CATALOG_SCHEMA_VERSION,
+    metadata: { ...(source.metadata ?? TT99_CATALOG_METADATA) },
+    counts: { accounts: accounts.length, taxes: taxes.length },
+    defaults: { ...(source.defaults ?? TT99_DEFAULT_ACCOUNTS) },
+    accounts,
+    taxes,
+  }
+}
+
+const catalogError = (message: string): never => {
+  throw new Error(`invalid TT99 catalog: ${message}`)
+}
+
+/** Fail closed when the bundled statutory data no longer satisfies its contract. */
+export const assertTT99Catalog = (manifest: Tt99CatalogManifest): void => {
+  const { metadata } = manifest
+  const date = /^\d{4}-\d{2}-\d{2}$/
+  if (manifest.schemaVersion !== TT99_CATALOG_SCHEMA_VERSION)
+    catalogError(`schema version must be ${TT99_CATALOG_SCHEMA_VERSION}`)
+  if (metadata.version !== TT99_CATALOG_VERSION)
+    catalogError(`catalog version must be ${TT99_CATALOG_VERSION}`)
+  if (metadata.standard !== TT99_CODE) catalogError(`standard must be ${TT99_CODE}`)
+  if (metadata.countryCode !== TT99_COUNTRY) catalogError(`country must be ${TT99_COUNTRY}`)
+  if (metadata.authority !== TT99_AUTHORITY) catalogError(`authority must be ${TT99_AUTHORITY}`)
+  if (metadata.sourceUrl !== TT99_SOURCE_URL) catalogError(`source URL must be ${TT99_SOURCE_URL}`)
+  if (metadata.legalBasis !== TT99_LEGAL_BASIS) catalogError(`legal basis must be ${TT99_LEGAL_BASIS}`)
+  if (!date.test(metadata.issuedOn) || !date.test(metadata.effectiveFrom))
+    catalogError('issuedOn and effectiveFrom must be civil ISO dates')
+  if (metadata.issuedOn !== TT99_ISSUED_ON) catalogError(`issuedOn must be ${TT99_ISSUED_ON}`)
+  if (metadata.effectiveFrom !== TT99_EFFECTIVE_FROM)
+    catalogError(`effectiveFrom must be ${TT99_EFFECTIVE_FROM}`)
+  if (metadata.effectiveTo !== TT99_EFFECTIVE_TO)
+    catalogError(`effectiveTo must be ${String(TT99_EFFECTIVE_TO)}`)
+  if (metadata.approvalStatus !== TT99_APPROVAL_STATUS)
+    catalogError(`approval status must be ${TT99_APPROVAL_STATUS}`)
+  if (metadata.issuedOn > metadata.effectiveFrom) catalogError('effectiveFrom cannot precede issuedOn')
+  if (metadata.effectiveTo != null) {
+    if (!date.test(metadata.effectiveTo)) catalogError('effectiveTo must be a civil ISO date')
+    if (metadata.effectiveTo < metadata.effectiveFrom)
+      catalogError('effectiveTo cannot precede effectiveFrom')
+  }
+
+  if (manifest.counts.accounts !== manifest.accounts.length)
+    catalogError('account count metadata does not match the manifest')
+  if (manifest.counts.taxes !== manifest.taxes.length)
+    catalogError('tax count metadata does not match the manifest')
+  if (manifest.accounts.length !== TT99_EXPECTED_ACCOUNT_COUNT)
+    catalogError(`expected ${TT99_EXPECTED_ACCOUNT_COUNT} accounts, got ${manifest.accounts.length}`)
+  if (manifest.taxes.length !== TT99_EXPECTED_TAX_COUNT)
+    catalogError(`expected ${TT99_EXPECTED_TAX_COUNT} taxes, got ${manifest.taxes.length}`)
+
+  const accounts = new Map<string, Tt99Account>()
+  for (const account of manifest.accounts) {
+    if (!/^\d+$/.test(account.code)) catalogError(`account code ${account.code} is not numeric`)
+    if (accounts.has(account.code)) catalogError(`duplicate account code ${account.code}`)
+    if (!account.name.trim()) catalogError(`account ${account.code} has no Vietnamese name`)
+    if (!account.nameEn.trim()) catalogError(`account ${account.code} has no English name`)
+    if (!account.accountType.trim()) catalogError(`account ${account.code} has no account type`)
+    if (typeof account.reconcile !== 'boolean')
+      catalogError(`account ${account.code} has an invalid reconcile flag`)
+    accounts.set(account.code, account)
+  }
+
+  const expectedDefaults = {
+    income: 'income',
+    expense: 'expense_direct_cost',
+    receivable: 'asset_receivable',
+    payable: 'liability_payable',
+  } as const
+  for (const [kind, accountType] of Object.entries(expectedDefaults)) {
+    const code = manifest.defaults[kind as keyof typeof manifest.defaults]
+    const account = accounts.get(code)
+    if (!account) catalogError(`default ${kind} account ${code} does not exist`)
+    const held = account!
+    if (held.accountType !== accountType)
+      catalogError(`default ${kind} account ${code} must be ${accountType}`)
+    if (['receivable', 'payable'].includes(kind) && held.reconcile !== true)
+      catalogError(`default ${kind} account ${code} must be reconcilable`)
+  }
+
+  const keys = new Set<string>()
+  const scopedNames = new Set<string>()
+  for (const tax of manifest.taxes) {
+    if (!tax.key.trim()) catalogError('tax key is required')
+    if (tax.use !== 'sale' && tax.use !== 'purchase') catalogError(`tax ${tax.key} has an invalid use`)
+    if (keys.has(tax.key)) catalogError(`duplicate tax key ${tax.key}`)
+    keys.add(tax.key)
+    const scopedName = `${tax.use}:${tax.name}`
+    if (scopedNames.has(scopedName)) catalogError(`duplicate tax name ${scopedName}`)
+    scopedNames.add(scopedName)
+    if (!tax.name.trim() || !tax.description.trim()) catalogError(`tax ${tax.key} has incomplete labels`)
+    if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(tax.amount)) catalogError(`tax ${tax.key} has an invalid amount`)
+    if (tax.accountCode != null && !accounts.has(tax.accountCode))
+      catalogError(`tax ${tax.key} points to missing account ${tax.accountCode}`)
+
+    const classification = tax.key.endsWith('-exempt') || tax.key.endsWith('-not-declared')
+    if (classification) {
+      if (tax.accountCode !== null) catalogError(`classification ${tax.key} must not post to an account`)
+      if (tax.includeBaseAmount) catalogError(`classification ${tax.key} cannot change the tax base`)
+      continue
+    }
+    if (tax.key.startsWith('vat-purchase-')) {
+      if (tax.accountCode !== '1331') catalogError(`purchase VAT ${tax.key} must post to 1331`)
+    } else if (tax.key.startsWith('vat-sale-')) {
+      if (tax.accountCode !== '33311') catalogError(`sale VAT ${tax.key} must post to 33311`)
+    } else if (tax.key === 'import-5') {
+      if (tax.accountCode !== '33331') catalogError('import duty must post to 33331')
+      if (!tax.includeBaseAmount) catalogError('import duty must join the later VAT base')
+    } else catalogError(`tax ${tax.key} has no statutory posting rule`)
+    if (Number(tax.amount) > 0 && tax.accountCode === null)
+      catalogError(`non-zero tax ${tax.key} needs a posting account`)
+    if (tax.key !== 'import-5' && tax.includeBaseAmount)
+      catalogError(`tax ${tax.key} must not change the later tax base`)
+  }
+}
+
+export const serializeTT99Catalog = (source: Tt99CatalogSource = {}): string =>
+  canonicalTT99Json(buildTT99CatalogManifest(source))
+
+export const checksumTT99Catalog = (source: Tt99CatalogSource = {}): string =>
+  createHash('sha256').update(serializeTT99Catalog(source)).digest('hex')
+
+export const TT99_CATALOG_MANIFEST = buildTT99CatalogManifest()
+assertTT99Catalog(TT99_CATALOG_MANIFEST)
+
+/** Historical account-only marker stored by installations predating the tax catalog. */
+export const TT99_ACCOUNT_CHECKSUM = '62e0ccee163b4b4b336a7c9c6e28823a97f9ef16462e2b378e8133ca856c6b71'
+
+/**
+ * Published full-catalog identity. Updating statutory content requires explicitly
+ * approving this value; otherwise module initialization fails instead of silently
+ * rolling every company's setup checksum forward.
+ */
+export const TT99_CATALOG_CHECKSUM = 'c2ee5de7daf9b4f9e98f587875d1c374a4c249cd0cfce1262f13457f472cb805'
+
+const bundledCatalogChecksum = checksumTT99Catalog()
+if (bundledCatalogChecksum !== TT99_CATALOG_CHECKSUM)
+  catalogError(
+    `published checksum ${TT99_CATALOG_CHECKSUM} does not match bundled catalog ${bundledCatalogChecksum}`,
+  )

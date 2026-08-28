@@ -43,7 +43,7 @@ export const journalEntryListColumns = (_: Translator) => [
   {
     key: 'date',
     label: _('account_backend.field.date'),
-    cell: (row: JournalEntryListRow) => String(row.date).slice(0, 10),
+    cell: (row: JournalEntryListRow) => String(row.accountingDate ?? row.date).slice(0, 10),
   },
   {
     key: 'reference',

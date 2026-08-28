@@ -7,11 +7,13 @@ import { reportFunctions, reports } from './reports.ts'
 
 export default defineModule({
   name: 'account',
+  // 0.9.0 establishes the Wave 0 ledger contract: exact-money arithmetic,
+  // immutable company-civil dates, shared draft validation and resumable writes.
   // 0.8.0 adds ledger analytics — performance, position, revenueTimeline,
   // openItemSummary and cashFlow, the aggregates an overview screen is made of.
   // 0.7.0 adds a company-scoped product-to-sales-tax mapping. Products remain
   // shared catalogue data while the tax belongs to one legal entity's chart.
-  version: '0.8.0',
+  version: '0.9.0',
   depends: ['company', 'partner', 'product', 'uom'],
   title: 'Kế toán',
   summary: 'Sổ cái, hoá đơn, thanh toán và hệ thống tài khoản Việt Nam theo TT99.',
@@ -42,21 +44,35 @@ export default defineModule({
       'error.moveDraftOnly': 'Chỉ bút toán ở trạng thái nháp mới ghi sổ được.',
       'error.movePostedOnly': 'Chỉ bút toán đã ghi sổ mới đảo được.',
       'error.moveNotCancellable': 'Bút toán đã ghi sổ được sửa bằng cách đảo, không huỷ trực tiếp.',
+      'error.moveConcurrent': 'Bút toán vừa thay đổi; hãy kiểm tra lại rồi thử lại.',
+      'error.moveIdReused': 'Mã này đã thuộc về một bút toán khác.',
       'error.moveTypeUnsupported': 'Loại chứng từ không được hỗ trợ.',
       'error.linesTooFew': 'Một bút toán cần ít nhất hai dòng.',
       'error.lineSideBoth': 'Mỗi dòng chỉ ghi Nợ hoặc Có, không âm và không ghi cả hai.',
+      'error.lineAmountRequired': 'Mỗi dòng bút toán phải có số tiền Nợ hoặc Có khác 0.',
+      'error.lineBalanceInvalid': 'Số dư dòng phải bằng số Nợ trừ số Có.',
+      'error.lineResidualInvalid': 'Số dư còn lại của dòng không khớp với tài khoản và số tiền.',
       'error.entryUnbalanced': 'Bút toán chưa cân đối: Nợ {debit}, Có {credit}.',
+      'error.moveTotalInvalid': 'Tổng chứng từ không khớp với các dòng bút toán đã cân đối.',
       'error.reversalNoLines': 'Bút toán không có dòng nào để đảo.',
+      'error.reversalIdReused': 'Mã này đã thuộc về một bút toán đảo khác.',
+      'error.moveAlreadyReversed': 'Bút toán này đã có một bút toán đảo khác.',
       'error.lineDraftOnly': 'Chỉ thêm được dòng vào bút toán còn ở trạng thái nháp.',
       'error.lineIdTaken': 'Mã này đã thuộc về một dòng bút toán khác.',
+      'error.moneyExactString':
+        'Giá trị tiền phải là chuỗi số thập phân chính xác, không dùng số JavaScript hoặc ký hiệu số mũ.',
+      'error.accountingDateInvalid': 'Ngày hạch toán và ngày chứng từ phải là ngày dân sự hợp lệ.',
+      'error.moveCurrencyMismatch': 'Tiền tệ bút toán phải khớp với sổ cái của công ty đang chọn.',
 
       'error.accountMissing': 'Tài khoản không tồn tại.',
+      'error.accountInactive': 'Không thể ghi dòng bút toán mới vào tài khoản đã ngưng sử dụng.',
       'error.accountTypeUnsupported': 'Loại tài khoản không được hỗ trợ.',
       'error.accountCodeFormat': 'Mã tài khoản chỉ gồm chữ, số và dấu chấm.',
       'error.offBalanceReconcile': 'Tài khoản ngoài bảng không đối soát được.',
       'error.defaultAccountMissing': 'Tài khoản mặc định không tồn tại.',
 
       'error.journalMissing': 'Sổ nhật ký không tồn tại.',
+      'error.journalInactive': 'Không thể ghi bút toán mới vào sổ nhật ký đã ngưng sử dụng.',
       'error.journalTypeUnsupported': 'Loại sổ nhật ký không được hỗ trợ.',
       'error.journalCodeFormat': 'Mã sổ nhật ký chỉ gồm chữ và số.',
       'error.journalMustBeSale': 'Chứng từ khách hàng phải ghi vào sổ bán hàng.',
@@ -85,6 +101,7 @@ export default defineModule({
 
       'error.invoiceTypeRequired':
         'Chức năng này cần loại chứng từ là hoá đơn, hoá đơn trả lại hoặc biên lai.',
+      'error.invoiceIdReused': 'Mã này đã thuộc về một hoá đơn khác.',
       'error.invoiceAccountsMissing': 'Tài khoản trên hoá đơn không tồn tại.',
       'error.lineAccountUndecided':
         'Chưa chọn tài khoản doanh thu/chi phí, mà nhóm sản phẩm lẫn công ty đều chưa đặt mặc định.',
@@ -135,21 +152,35 @@ export default defineModule({
       'error.moveDraftOnly': 'Only a draft entry can be posted.',
       'error.movePostedOnly': 'Only a posted entry can be reversed.',
       'error.moveNotCancellable': 'A posted entry is corrected by reversing it, not by cancelling it.',
+      'error.moveConcurrent': 'The journal entry changed; review it and try again.',
+      'error.moveIdReused': 'A different journal entry already uses this id.',
       'error.moveTypeUnsupported': 'That document type is not supported.',
       'error.linesTooFew': 'A journal entry needs at least two lines.',
       'error.lineSideBoth': 'Each line takes a debit or a credit, never both, and never a negative amount.',
+      'error.lineAmountRequired': 'Each journal item needs a non-zero debit or credit.',
+      'error.lineBalanceInvalid': 'A journal item balance must equal debit minus credit.',
+      'error.lineResidualInvalid': 'A journal item residual does not match its account and balance.',
       'error.entryUnbalanced': 'The entry is not balanced: debit {debit}, credit {credit}.',
+      'error.moveTotalInvalid': 'The document totals do not match its balanced journal items.',
       'error.reversalNoLines': 'The entry has no journal items to reverse.',
+      'error.reversalIdReused': 'A different reversal already uses this id.',
+      'error.moveAlreadyReversed': 'This entry already has a different reversal.',
       'error.lineDraftOnly': 'Lines can only be added to an entry that is still a draft.',
       'error.lineIdTaken': 'A different journal item already uses this id.',
+      'error.moneyExactString':
+        'A money value must be an exact decimal string, not a JavaScript number or exponent notation.',
+      'error.accountingDateInvalid': 'Accounting and document dates must be valid civil dates.',
+      'error.moveCurrencyMismatch': 'The journal entry currency must match the active company ledger.',
 
       'error.accountMissing': 'The account does not exist.',
+      'error.accountInactive': 'An inactive account cannot receive a new journal item.',
       'error.accountTypeUnsupported': 'That account type is not supported.',
       'error.accountCodeFormat': 'An account code may contain only letters, numbers, and dots.',
       'error.offBalanceReconcile': 'An off-balance account cannot be reconciled.',
       'error.defaultAccountMissing': 'The default account does not exist.',
 
       'error.journalMissing': 'The journal does not exist.',
+      'error.journalInactive': 'An inactive journal cannot post a new entry.',
       'error.journalTypeUnsupported': 'That journal type is not supported.',
       'error.journalCodeFormat': 'A journal code must be alphanumeric.',
       'error.journalMustBeSale': 'A customer document belongs in a sale journal.',
@@ -176,6 +207,7 @@ export default defineModule({
       'error.termPercentRange': 'A percentage must be between 0 and 100.',
 
       'error.invoiceTypeRequired': 'This needs an invoice, refund, or receipt document type.',
+      'error.invoiceIdReused': 'A different invoice already uses this id.',
       'error.invoiceAccountsMissing': 'The accounts on this invoice do not exist.',
       'error.lineAccountUndecided':
         'No revenue or expense account was given, and neither the product category nor the company has a default.',

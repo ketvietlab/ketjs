@@ -13,7 +13,16 @@ import {
   or,
 } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Row } from '@ketvietlab/ketjs'
-import { quoteTaxLine, quoteTaxLineForPosting, type TaxShare } from '../account/functions.ts'
+import { insertDraftMove, quoteTaxLine, quoteTaxLineForPosting, type TaxShare } from '../account/functions.ts'
+import {
+  addDecimals,
+  compareDecimals,
+  minorText,
+  moneyMinor,
+  scaleOf,
+  subtractDecimals,
+  sumMoneyMinor,
+} from '../account/money.ts'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
@@ -24,8 +33,8 @@ export const SALE_INVOICE_STATUSES = ['upselling', 'invoiced', 'to invoice', 'no
 export const INVOICE_POLICIES = ['order', 'delivery'] as const
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 const n = (value: unknown) => Number(value ?? 0)
-const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
-const decimal = (value: number) => String(money(value))
+const quantityRound = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+const quantityText = (value: number) => String(quantityRound(value))
 const now = () => new Date().toISOString()
 const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
 
@@ -112,11 +121,14 @@ async function contextOf(ctx: Ctx, productId: unknown) {
   return template ? { product, template } : null
 }
 async function recompute(ctx: Ctx, orderId: unknown) {
+  const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
+  if (!order) return
+  const scale = scaleOf(order.currency)
   const lines = await ours(ctx, 'sale.OrderLine', { orderId })
   const amounts = await Promise.all(
     lines.map(async (line) => {
       if (line.priceSubtotalIncl != null)
-        return { untaxed: n(line.priceSubtotal), total: n(line.priceSubtotalIncl) }
+        return { untaxed: line.priceSubtotal, total: line.priceSubtotalIncl }
       // Rows written before Wave 1B have no stored inclusive total. Re-quote them through the same
       // account boundary; explicit [] preserves a historically tax-free line instead of applying a
       // product default that may have been configured later.
@@ -127,22 +139,26 @@ async function recompute(ctx: Ctx, orderId: unknown) {
         priceUnit: line.priceUnit,
         discount: line.discount,
       })
-      if (quote.ok !== true) return { untaxed: n(line.priceSubtotal), total: n(line.priceSubtotal) }
-      return { untaxed: n(quote.amountUntaxed), total: n(quote.amountTotal) }
+      if (quote.ok !== true) return { untaxed: line.priceSubtotal, total: line.priceSubtotal }
+      return { untaxed: quote.amountUntaxed, total: quote.amountTotal }
     }),
   )
-  const untaxed = money(amounts.reduce((sum, line) => sum + line.untaxed, 0))
-  const total = money(amounts.reduce((sum, line) => sum + line.total, 0))
-  const tax = money(total - untaxed)
-  const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
-  if (!order) return
+  const untaxed = sumMoneyMinor(
+    amounts.map((line) => line.untaxed),
+    scale,
+  )
+  const total = sumMoneyMinor(
+    amounts.map((line) => line.total),
+    scale,
+  )
+  const tax = total - untaxed
   await ctx.db.update(
     'sale.Order',
     { id: orderId },
     {
-      amountUntaxed: decimal(untaxed),
-      amountTax: decimal(tax),
-      amountTotal: decimal(total),
+      amountUntaxed: minorText(untaxed, scale),
+      amountTax: minorText(tax, scale),
+      amountTotal: minorText(total, scale),
       revision: n(order.revision) + 1,
     },
   )
@@ -428,15 +444,16 @@ export const functions: Record<string, FnSpec> = {
       // raised rather than on the day it was in London.
       const timezone = String(args.timezone ?? 'UTC')
       const [dayStart, dayEnd] = localDayRange(dateBucket(now(), 'day', timezone) ?? '1970-01-01', timezone)
-      const total = (rows: Array<{ aggregates: Record<string, unknown> }>) =>
-        decimal(rows.reduce((sum, row) => sum + n(row.aggregates.total), 0))
-      const summed = (condition: Expr) =>
-        ctx.db.group(
-          from(O)
-            .where(mine, priced, condition)
-            .groupBy({ col: O.currency })
-            .aggregate({ fn: 'sum', col: O.amountTotal, as: 'total' }),
+      const scale = scaleOf(currency)
+      const total = (rows: Row[]) =>
+        minorText(
+          sumMoneyMinor(
+            rows.map((row) => row.amountTotal),
+            scale,
+          ),
+          scale,
         )
+      const summed = (condition: Expr) => ctx.db.all(from(O).where(mine, priced, condition))
       const [draft, sent, sale, toInvoice, draftToday, sentTotal, saleTotal, toInvoiceTotal] =
         await Promise.all([
           ctx.db.count(from(O).where(mine, eq(O.state, 'draft'))),
@@ -605,7 +622,8 @@ export const functions: Record<string, FnSpec> = {
       const order = (await ours(ctx, 'sale.Order', { id: args.orderId }))[0]
       if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
         return invalid('orderId', 'lines can only be added to an unlocked quotation')
-      if (!(n(args.productUomQty) > 0)) return invalid('productUomQty', 'ordered quantity must be positive')
+      if (compareDecimals(args.productUomQty, '0') <= 0)
+        return invalid('productUomQty', 'ordered quantity must be positive')
       const sellable = await sellableProduct(ctx, args.productId, args.productUomId, {
         allowMeasurementTreeUom: true,
       })
@@ -626,7 +644,11 @@ export const functions: Record<string, FnSpec> = {
       }
       priceUnit ??= context.template.listPrice
       const discount = args.discount ?? '0'
-      if (n(priceUnit) < 0 || n(discount) < 0 || n(discount) > 100)
+      if (
+        compareDecimals(priceUnit, '0') < 0 ||
+        compareDecimals(discount, '0') < 0 ||
+        compareDecimals(discount, '100') > 0
+      )
         return invalid('priceUnit', 'unit price and discount are invalid')
       // Keep the established Sales contract: omitting tax means tax-free. POS resolves the product
       // default explicitly through its own quote boundary before creating a line.
@@ -876,7 +898,7 @@ export const functions: Record<string, FnSpec> = {
         await ctx.db.update(
           'sale.OrderLine',
           { id: line.id },
-          { qtyDelivered: decimal(moves.reduce((sum, move) => sum + n(move.quantity), 0)) },
+          { qtyDelivered: quantityText(moves.reduce((sum, move) => sum + n(move.quantity), 0)) },
         )
       }
       await refreshStatus(ctx, args.id)
@@ -938,9 +960,9 @@ export const functions: Record<string, FnSpec> = {
         return invalid('receivableAccountId', 'a receivable account is required')
       const billable: Array<{
         line: Row
-        quantity: number
-        subtotal: number
-        taxAmount: number
+        quantity: string
+        subtotal: string
+        taxAmount: string
         shares: TaxShare[]
       }> = []
       // A soft error raised once the transaction has started writing has to
@@ -958,15 +980,16 @@ export const functions: Record<string, FnSpec> = {
         for (const line of await ours(tx, 'sale.OrderLine', { orderId: args.orderId })) {
           const context = await contextOf(tx, line.productId),
             policy = String(context?.template.invoicePolicy ?? 'order')
-          const basis = policy === 'delivery' ? n(line.qtyDelivered) : n(line.productUomQty),
-            quantity = money(basis - n(line.qtyInvoiced))
-          if (quantity <= 0) continue
+          const basis = policy === 'delivery' ? line.qtyDelivered : line.productUomQty
+          const quantity = subtractDecimals(basis ?? '0', line.qtyInvoiced ?? '0')
+          if (compareDecimals(quantity, '0') <= 0) continue
           const quote = await quoteTaxLineForPosting(tx, {
             productId: line.productId,
             taxIds: line.taxIds ?? (line.taxId ? [line.taxId] : undefined),
             quantity,
             priceUnit: line.priceUnit,
             discount: line.discount,
+            allowNegativePrice: line.lineKind === 'reward',
           })
           if (quote.ok !== true) throw new Refused(quote)
           for (const share of quote.shares) {
@@ -977,8 +1000,8 @@ export const functions: Record<string, FnSpec> = {
           billable.push({
             line,
             quantity,
-            subtotal: n(quote.amountUntaxed),
-            taxAmount: n(quote.amountTax),
+            subtotal: quote.amountUntaxed,
+            taxAmount: quote.amountTax,
             shares: quote.shares,
           })
         }
@@ -991,16 +1014,24 @@ export const functions: Record<string, FnSpec> = {
       // fields made every order-sourced invoice due on the day it was issued, so
       // ageing showed it overdue from the start.
       const due = await paymentTermDue(ctx, order.paymentTermId, new Date(invoiceDate))
-      let untaxed = 0,
-        tax = 0,
-        total = 0
+      const scale = scaleOf(order.currency)
+      let untaxed = 0n,
+        tax = 0n,
+        total = 0n
       try {
         await ctx.tx(async (tx) => {
           await build(tx)
-          untaxed = money(billable.reduce((sum, item) => sum + item.subtotal, 0))
-          tax = money(billable.reduce((sum, item) => sum + item.taxAmount, 0))
-          total = money(untaxed + tax)
-          await tx.db.insert('account.Move', {
+          untaxed = sumMoneyMinor(
+            billable.map((item) => item.subtotal),
+            scale,
+          )
+          tax = sumMoneyMinor(
+            billable.map((item) => item.taxAmount),
+            scale,
+          )
+          total = untaxed + tax
+          const zero = minorText(0n, scale)
+          const move: Row = {
             id: args.id,
             name: String(args.id),
             ref: order.name,
@@ -1014,15 +1045,19 @@ export const functions: Record<string, FnSpec> = {
             paymentTermId: order.paymentTermId,
             paymentState: 'not_paid',
             currency: order.currency,
-            amountUntaxed: decimal(untaxed),
-            amountTax: decimal(tax),
-            amountTotal: decimal(total),
+            amountUntaxed: minorText(untaxed, scale),
+            amountTax: minorText(tax, scale),
+            amountTotal: minorText(total, scale),
             postedAt: null,
-          })
+            revision: 0,
+          }
+          const moveLines: Row[] = []
           let sequence = 10
           for (const item of billable) {
             const baseId = `${String(args.id)}:${String(item.line.id)}`
-            await tx.db.insert('account.MoveLine', {
+            const subtotalMinor = moneyMinor(item.subtotal, scale)
+            const balance = -subtotalMinor
+            moveLines.push({
               id: baseId,
               moveId: args.id,
               name: item.line.name,
@@ -1030,25 +1065,28 @@ export const functions: Record<string, FnSpec> = {
               partnerId: order.partnerId,
               productId: item.line.productId,
               productUomId: item.line.productUomId,
-              quantity: decimal(item.quantity),
+              quantity: item.quantity,
               priceUnit: item.line.priceUnit,
               discount: item.line.discount,
               taxId: item.line.taxId,
-              debit: '0',
-              credit: decimal(item.subtotal),
-              balance: decimal(-item.subtotal),
+              debit: minorText(balance > 0n ? balance : 0n, scale),
+              credit: minorText(balance < 0n ? -balance : 0n, scale),
+              balance: minorText(balance, scale),
               dateMaturity: null,
               displayType: null,
               reconciled: false,
-              amountResidual: '0',
+              amountResidual: zero,
               sequence,
               saleLineId: item.line.id,
             })
             sequence += 10
             for (const share of item.shares) {
-              if (!share.amount) continue
+              const amountMinor = moneyMinor(share.amount, scale)
+              const amount = minorText(amountMinor, scale)
+              if (amountMinor === 0n) continue
+              const balance = -amountMinor
               const accountId = (item.shares.length === 1 ? args.taxAccountId : null) ?? share.accountId
-              await tx.db.insert('account.MoveLine', {
+              moveLines.push({
                 id: `${baseId}:tax:${String(share.taxId)}`,
                 moveId: args.id,
                 name: share.name,
@@ -1057,27 +1095,23 @@ export const functions: Record<string, FnSpec> = {
                 productId: null,
                 productUomId: null,
                 quantity: '1',
-                priceUnit: decimal(share.amount),
+                priceUnit: amount,
                 discount: '0',
                 taxId: share.taxId,
-                debit: '0',
-                credit: decimal(share.amount),
-                balance: decimal(-share.amount),
+                debit: minorText(balance > 0n ? balance : 0n, scale),
+                credit: minorText(balance < 0n ? -balance : 0n, scale),
+                balance: minorText(balance, scale),
                 dateMaturity: null,
                 displayType: null,
                 reconciled: false,
-                amountResidual: '0',
+                amountResidual: zero,
                 sequence: sequence++,
                 saleLineId: item.line.id,
               })
             }
-            await tx.db.update(
-              'sale.OrderLine',
-              { id: item.line.id },
-              { qtyInvoiced: decimal(n(item.line.qtyInvoiced) + item.quantity) },
-            )
           }
-          await tx.db.insert('account.MoveLine', {
+          const totalText = minorText(total, scale)
+          moveLines.push({
             id: `${String(args.id)}:counterpart`,
             moveId: args.id,
             name: order.name,
@@ -1086,26 +1120,33 @@ export const functions: Record<string, FnSpec> = {
             productId: null,
             productUomId: null,
             quantity: '1',
-            priceUnit: decimal(total),
+            priceUnit: totalText,
             discount: '0',
             taxId: null,
-            debit: decimal(total),
-            credit: '0',
-            balance: decimal(total),
+            debit: totalText,
+            credit: zero,
+            balance: totalText,
             dateMaturity: due,
             displayType: null,
             reconciled: false,
-            amountResidual: decimal(total),
+            amountResidual: totalText,
             sequence: sequence + 10,
             saleLineId: null,
           })
+          await insertDraftMove(tx, { move, lines: moveLines })
+          for (const item of billable)
+            await tx.db.update(
+              'sale.OrderLine',
+              { id: item.line.id },
+              { qtyInvoiced: addDecimals(item.line.qtyInvoiced ?? '0', item.quantity) },
+            )
         })
       } catch (error) {
         if (error instanceof Refused) return error.result
         throw error
       }
       await refreshStatus(ctx, args.orderId)
-      return { ok: true, id: args.id, amountTotal: decimal(total) }
+      return { ok: true, id: args.id, amountTotal: minorText(total, scale) }
     },
   }),
   lockOrder: defineFn({

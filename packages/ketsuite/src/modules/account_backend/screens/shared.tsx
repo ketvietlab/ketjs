@@ -17,5 +17,5 @@ export const optionsOf = (_: Translator, group: string, values: readonly string[
  */
 export const moveTitle = (_: Translator, move: Record<string, unknown>): string =>
   move.state === 'draft'
-    ? `${_('account_backend.move.draftTitle')} · ${String(move.date ?? '').slice(0, 10)}`
+    ? `${_('account_backend.move.draftTitle')} · ${String(move.accountingDate ?? move.date ?? '').slice(0, 10)}`
     : String(move.name)

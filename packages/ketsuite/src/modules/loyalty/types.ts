@@ -38,8 +38,10 @@ export type OrderLineSnapshot = {
   id: string
   productId: string
   quantity: number
-  untaxed: number
-  total: number
+  /** Canonical decimal money text; never a binary JavaScript number. */
+  untaxed: string
+  /** Canonical decimal money text; never a binary JavaScript number. */
+  total: string
   lineKind?: 'product' | 'shipping' | 'reward'
 }
 
@@ -60,7 +62,7 @@ export type RewardQuote = {
   description: string
   rewardType: RewardType
   requiredPoints: number
-  discountAmount: number
+  discountAmount: string
   productId?: string | null
   productQuantity?: number
   lineKind: 'reward'
