@@ -210,10 +210,10 @@ test('pos PostgreSQL: concurrent returns cannot reserve the same final quantity'
     const exchangeChildren = await first.all(
       'SELECT id FROM pos_order WHERE "exchangeId" IS NOT NULL ORDER BY id',
     )
-    assert.deepEqual(exchangeChildren, [
-      { id: `${String(exchanges[0]!.id)}:replacement` },
-      { id: `${String(exchanges[0]!.id)}:return` },
-    ])
+    assert.deepEqual(
+      [...exchangeChildren],
+      [{ id: `${String(exchanges[0]!.id)}:replacement` }, { id: `${String(exchanges[0]!.id)}:return` }],
+    )
   } finally {
     await Promise.all([first.close().catch(() => {}), second.close().catch(() => {})])
     await admin.exec(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`).catch(() => {})
