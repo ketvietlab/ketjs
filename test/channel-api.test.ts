@@ -207,6 +207,8 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     ['/orders/{id}/loyalty/rewards', 'post', 'pos.orders.loyalty.rewards.apply'],
     ['/orders/{id}/loyalty/rewards/{programId}', 'delete', 'pos.orders.loyalty.rewards.remove'],
     ['/orders/{id}/finalize', 'post', 'pos.orders.finalize'],
+    ['/sync/bootstrap', 'get', 'pos.sync.bootstrap'],
+    ['/sync/reconcile', 'post', 'pos.sync.reconcile'],
   ] as const
   for (const [path, method, operationId] of expected) {
     const operation = document.paths[path]?.[method] as Record<string, unknown> | undefined
