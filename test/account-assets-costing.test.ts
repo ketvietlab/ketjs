@@ -156,8 +156,15 @@ test('account assets: source retries, schedules, batch drafts, posting and audit
       adapter,
     )) as unknown as Row[]
     const draft = lines.find((row) => row.state === 'draft')!
-    const posted = await call('account.postAssetScheduleLine', { id: draft.id }, adapter)
-    assert.equal(posted.ok, true)
+    const posted = await Promise.all([
+      call('account.postAssetScheduleLine', { id: draft.id }, adapter),
+      call('account.postAssetScheduleLine', { id: draft.id }, adapter),
+    ])
+    assert.equal(
+      posted.every((result) => result.ok === true),
+      true,
+    )
+    assert.equal(posted.filter((result) => result.existing === true).length, 1)
     const asset = (
       (await call(
         'account_wave3_probe.rows',
@@ -168,19 +175,25 @@ test('account assets: source retries, schedules, batch drafts, posting and audit
     assert.equal(asset.accumulatedAmount, '100.00')
     assert.equal(asset.carryingValue, '1100.00')
 
-    await call(
-      'account.transitionAsset',
-      {
-        id: 'asset-1',
-        action: 'transfer',
-        expectedRevision: 2,
-        custodianId: 'operations',
-        dimension: { department: 'factory' },
-        reason: 'Move to production',
-        actorId: 'controller',
-      },
-      adapter,
+    const transfers = await Promise.all(
+      ['operations', 'maintenance'].map((custodianId) =>
+        call(
+          'account.transitionAsset',
+          {
+            id: 'asset-1',
+            action: 'transfer',
+            expectedRevision: 2,
+            custodianId,
+            dimension: { department: 'factory' },
+            reason: 'Move to production',
+            actorId: 'controller',
+          },
+          adapter,
+        ),
+      ),
     )
+    assert.equal(transfers.filter((result) => result.ok === true).length, 1)
+    assert.equal(transfers.filter((result) => result.ok === false).length, 1)
     const events = (await call(
       'account.listAssetEvents',
       { assetId: 'asset-1' },
