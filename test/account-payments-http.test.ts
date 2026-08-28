@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { seedAccountingTestFixture } from './accounting-test-fixture.ts'
 
 const formHeaders = { 'content-type': 'application/x-www-form-urlencoded' }
 const post = { headers: formHeaders, redirect: 'manual' as const }
@@ -14,6 +15,7 @@ const bootPayments = async (t: TestContext) => {
   const fixture = (name: string, input: Record<string, unknown>) => app.fixture.call(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
+  await seedAccountingTestFixture(fixture)
   await fixture('user.createUser', {
     id: 'admin',
     login: 'admin',
@@ -35,7 +37,7 @@ const bootPayments = async (t: TestContext) => {
   return {
     app,
     bankId: String(journals.find((row) => row.type === 'bank')?.id),
-    receivableId: String(accounts.find((row) => row.code === '1311')?.id),
+    receivableId: String(accounts.find((row) => row.code === 'AR')?.id),
   }
 }
 

@@ -25,6 +25,7 @@ import {
   sumMoneyMinor,
 } from './money.ts'
 import { ACCOUNT_SETUP_EFFECTS, ensureCompanyAccounting } from './setup.ts'
+import { claimPostingPeriod } from './period.ts'
 
 export const ACCOUNT_TYPES = [
   'asset_receivable',
@@ -116,6 +117,8 @@ const REFUSALS = {
   moneyExactString: 'money values must be canonical decimal strings without exponent notation',
   accountingDateInvalid: 'accounting and document dates must be valid civil dates',
   moveCurrencyMismatch: 'journal entry currency must match the active company ledger',
+  periodLocked: 'the {scope} books are locked through {through}',
+  periodConcurrent: 'the accounting period policy changed; review and retry',
 
   accountMissing: 'account does not exist',
   accountInactive: 'inactive accounts cannot receive new journal items',
@@ -703,7 +706,7 @@ export async function linesOfMoves(ctx: Ctx, moveIds: string[], accountId?: unkn
 /**
  * Every account of the active company, by id. Callers that classify a whole page
  * of journal items need this once instead of a lookup per line — a chart of
- * accounts is bounded (216 rows under TT99) while a ledger is not.
+ * accounts is bounded by a company's configured chart while a ledger is not.
  */
 export async function accountsById(ctx: Ctx): Promise<Map<string, Row>> {
   return new Map((await ctx.db.select('account.Account')).map((row) => [String(row.id), row]))
@@ -746,7 +749,7 @@ const taxOrder = (a: Row, b: Row): number =>
  *
  * A tax marked `includeBaseAmount` adds its own amount to the base every later
  * tax is computed on — this is how import duty compounds into import VAT, which
- * is the case the bundled TT99 catalog ships data for.
+ * is the case for a chart installed by a localization or configured by an operator.
  */
 function taxAmounts(
   taxes: readonly Row[],
@@ -973,10 +976,28 @@ async function nextMoveName(ctx: Ctx, journal: Row, accountingDate: string): Pro
   throw new Error('journal sequence did not settle after concurrent updates')
 }
 
-async function post(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<Record<string, unknown>> {
+export async function postMoveById(
+  ctx: Ctx,
+  id: unknown,
+  expectedRevision?: unknown,
+): Promise<Record<string, unknown>> {
   const move = (await ctx.db.select('account.Move', { id }))[0]
   if (!move) return invalid('id', 'moveMissing')
-  if (move.state === 'posted') return { ok: true, id: move.id, name: move.name }
+  if (move.state === 'posted') {
+    await ctx.db.insertIfAbsent('account.AuditEvent', {
+      id: `move:${String(move.id)}:posted`,
+      subjectType: 'move',
+      subjectId: String(move.id),
+      action: 'posted',
+      actorId: ctx.actor ?? null,
+      accountingDate: move.accountingDate,
+      reason: null,
+      relatedId: null,
+      details: { journalId: move.journalId, name: move.name, moneyPolicyVersion: move.moneyPolicyVersion },
+      createdAt: move.postedAt ?? today(),
+    })
+    return { ok: true, id: move.id, name: move.name }
+  }
   if (move.state !== 'draft') return invalid('state', 'moveDraftOnly')
   const { currency, scale, timezone } = await ledgerOf(ctx)
   if (String(move.currency) !== currency) return invalid('currency', 'moveCurrencyMismatch')
@@ -1079,6 +1100,18 @@ async function post(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<
       } catch {
         throw new Refusal('accountingDateInvalid')
       }
+      let locked: Awaited<ReturnType<typeof claimPostingPeriod>>
+      try {
+        locked = await claimPostingPeriod(tx, {
+          accountingDate,
+          moveType: current.moveType,
+          journalType: journal.type,
+          hasTax: lines.some((line) => line.taxId != null),
+        })
+      } catch {
+        throw new Refusal('periodConcurrent')
+      }
+      if (locked) throw new Refusal('periodLocked', locked)
       const name = await nextMoveName(tx, journal, accountingDate)
       await tx.db.update(
         'account.Move',
@@ -1093,6 +1126,18 @@ async function post(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<
           ...totals,
         },
       )
+      await tx.db.insertIfAbsent('account.AuditEvent', {
+        id: `move:${String(id)}:posted`,
+        subjectType: 'move',
+        subjectId: String(id),
+        action: 'posted',
+        actorId: tx.actor ?? null,
+        accountingDate,
+        reason: null,
+        relatedId: null,
+        details: { journalId: journal.id, name, moneyPolicyVersion: MONEY_POLICY_VERSION },
+        createdAt: postedAt,
+      })
       return name
     })
   } catch (error) {
@@ -1106,7 +1151,9 @@ async function post(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<
     return refused(
       error instanceof Refusal && error.code === 'accountingDateInvalid'
         ? 'accountingDate'
-        : 'expectedRevision',
+        : error instanceof Refusal && error.code === 'periodLocked'
+          ? 'accountingDate'
+          : 'expectedRevision',
       error,
     )
   }
@@ -2377,13 +2424,16 @@ export const functions: Record<string, FnSpec> = {
       'read:account.MoveLine',
       'read:account.Journal',
       'read:account.Account',
+      'read:account.PeriodPolicy',
       'read:company.Company',
       'write:account.Journal',
       'write:account.Move',
+      'write:account.PeriodPolicy',
+      'write:account.AuditEvent',
     ],
     idempotent: true,
     agent: true,
-    handler: (ctx, args) => post(ctx, args.id, args.expectedRevision),
+    handler: (ctx, args) => postMoveById(ctx, args.id, args.expectedRevision),
   }),
   cancelMove: defineFn({
     input: { id: 'id', expectedRevision: 'int?' },
@@ -2428,6 +2478,7 @@ export const functions: Record<string, FnSpec> = {
       accountingDate: 'date?',
       documentDate: 'date?',
       ref: 'text?',
+      reason: 'text?',
       journalId: 'id?',
     },
     output: { ok: 'bool', id: 'id?', reversalId: 'id?', name: 'text?', errors: 'json?' },
@@ -2438,12 +2489,15 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Journal',
       'read:account.PartialReconcile',
       'read:account.Payment',
+      'read:account.PeriodPolicy',
       'read:company.Company',
       'write:account.Journal',
       'write:account.Move',
       'write:account.MoveLine',
       'write:account.PartialReconcile',
       'write:account.Payment',
+      'write:account.PeriodPolicy',
+      'write:account.AuditEvent',
     ],
     idempotent: true,
     agent: true,
@@ -2599,7 +2653,7 @@ export const functions: Record<string, FnSpec> = {
         return refused('reversalId', error)
       }
 
-      const posted = await post(ctx, reversalId)
+      const posted = await postMoveById(ctx, reversalId)
       if (posted.ok !== true) return posted
       const postedReversal = (await ctx.db.select('account.Move', { id: reversalId }))[0]
       if (postedReversal?.reversalStatus === 'creating' || !postedReversal?.reversalStatus)
@@ -2648,6 +2702,18 @@ export const functions: Record<string, FnSpec> = {
           for (const payment of await tx.db.select('account.Payment', { moveId: args.id }))
             await tx.db.update('account.Payment', { id: payment.id }, { state: 'reversed' })
           await tx.db.update('account.Move', { id: reversalId }, { reversalStatus: 'completed' })
+          await tx.db.insertIfAbsent('account.AuditEvent', {
+            id: `move:${String(args.id)}:reversed:${reversalId}`,
+            subjectType: 'move',
+            subjectId: String(args.id),
+            action: 'reversed',
+            actorId: tx.actor ?? null,
+            accountingDate: reversal.accountingDate,
+            reason: args.reason ?? args.ref ?? source.name,
+            relatedId: reversalId,
+            details: { originalId: source.id, reversalId, replacementId: null },
+            createdAt: today(),
+          })
         })
       } catch (error) {
         return refused('reversalId', error)
@@ -2700,12 +2766,15 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Move',
       'read:account.MoveLine',
       'read:account.PartialReconcile',
+      'read:account.PeriodPolicy',
       'read:company.Company',
       'write:account.Payment',
       'write:account.Journal',
       'write:account.Move',
       'write:account.MoveLine',
       'write:account.PartialReconcile',
+      'write:account.PeriodPolicy',
+      'write:account.AuditEvent',
     ],
     idempotent: true,
     agent: true,
@@ -2775,7 +2844,7 @@ export const functions: Record<string, FnSpec> = {
           })
         )[0]
       ) {
-        const posted = await post(ctx, existing.moveId)
+        const posted = await postMoveById(ctx, existing.moveId)
         if (posted.ok !== true) return posted
         if (existing.state !== 'paid')
           await ctx.db.update('account.Payment', { id: args.id }, { state: 'paid' })
@@ -2811,7 +2880,7 @@ export const functions: Record<string, FnSpec> = {
         // that is already taken is not: the stored move is left as it was, and
         // reconciling it for a newly supplied amount would settle an open item
         // against money the ledger never recorded.
-        const posted = await post(ctx, existing.moveId)
+        const posted = await postMoveById(ctx, existing.moveId)
         if (posted.ok !== true) return posted
         if (existing.state !== 'paid')
           await ctx.db.update('account.Payment', { id: args.id }, { state: 'paid' })
@@ -2935,7 +3004,7 @@ export const functions: Record<string, FnSpec> = {
         }
         return refused('expectedRevision', error)
       }
-      const posted = await post(ctx, moveId)
+      const posted = await postMoveById(ctx, moveId)
       if (posted.ok !== true) return posted
       await ctx.db.update('account.Payment', { id: args.id }, { state: 'paid' })
       const failed = await reconcilePayment(moveId)
@@ -2972,12 +3041,15 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Move',
       'read:account.MoveLine',
       'read:account.PartialReconcile',
+      'read:account.PeriodPolicy',
       'read:company.Company',
       'write:account.Payment',
       'write:account.Journal',
       'write:account.Move',
       'write:account.MoveLine',
       'write:account.PartialReconcile',
+      'write:account.PeriodPolicy',
+      'write:account.AuditEvent',
     ],
     idempotent: true,
     agent: true,

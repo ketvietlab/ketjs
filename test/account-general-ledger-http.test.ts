@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { seedAccountingTestFixture } from './accounting-test-fixture.ts'
 
 const clean = (html: string): string => html.replace(/<!--[^>]*-->/g, '')
 
@@ -18,6 +19,7 @@ const bootLedger = async (t: TestContext, populate = false) => {
     partnerId: 'acme-party',
     currency: 'VND',
   })
+  await seedAccountingTestFixture(fixture)
   await fixture('user.createUser', {
     id: 'admin',
     login: 'admin',
@@ -49,7 +51,7 @@ const bootLedger = async (t: TestContext, populate = false) => {
         id: `${moveId}:debit`,
         moveId,
         name: `marker-${suffix} debit`,
-        accountId: accountId('112'),
+        accountId: accountId('BANK'),
         debit: '1000',
         sequence: 10,
       })
@@ -57,7 +59,7 @@ const bootLedger = async (t: TestContext, populate = false) => {
         id: `${moveId}:credit`,
         moveId,
         name: `marker-${suffix} credit`,
-        accountId: accountId('511'),
+        accountId: accountId('REV'),
         credit: '1000',
         sequence: 20,
       })
@@ -103,7 +105,7 @@ test('general ledger HTTP keeps exact totals while paging and searching the incl
 
   const localizedAccountHtml = clean(await (await app.client.get(`${base}&q=Revenue`)).text())
   assert.equal((localizedAccountHtml.match(/data-ui="row"/g) ?? []).length, 16)
-  assert.match(localizedAccountHtml, /511 · Revenue/)
+  assert.match(localizedAccountHtml, /REV · Revenue/)
 })
 
 test('general ledger HTTP explains rejected filters, remains GET-only, and avoids unrelated permissions', async (t) => {

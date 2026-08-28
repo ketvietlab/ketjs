@@ -1,7 +1,13 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { analyticsFunctions } from './analytics.ts'
+import { auditFunctions } from './audit.ts'
+import { bookFunctions } from './books.ts'
+import { closeFunctions } from './close.ts'
 import { functions } from './functions.ts'
 import { models } from './models.ts'
+import { openingFunctions } from './opening.ts'
+import { openItemFunctions } from './open-items.ts'
+import { periodFunctions } from './period.ts'
 import { relations } from './relations.ts'
 import { reportFunctions, reports } from './reports.ts'
 
@@ -13,19 +19,29 @@ export default defineModule({
   // openItemSummary and cashFlow, the aggregates an overview screen is made of.
   // 0.7.0 adds a company-scoped product-to-sales-tax mapping. Products remain
   // shared catalogue data while the tax belongs to one legal entity's chart.
-  version: '0.9.0',
+  version: '0.10.0',
   depends: ['company', 'partner', 'product', 'uom'],
   title: 'Kế toán',
-  summary: 'Sổ cái, hoá đơn, thanh toán và hệ thống tài khoản Việt Nam theo TT99.',
+  summary: 'Sổ cái kép, hoá đơn, thanh toán và kiểm soát kỳ kế toán.',
   category: 'Tài chính',
   models,
   relations,
-  functions: { ...functions, ...reportFunctions, ...analyticsFunctions },
+  functions: {
+    ...functions,
+    ...reportFunctions,
+    ...analyticsFunctions,
+    ...auditFunctions,
+    ...periodFunctions,
+    ...openingFunctions,
+    ...closeFunctions,
+    ...bookFunctions,
+    ...openItemFunctions,
+  },
   reports,
   messages: {
     vi: {
       'app.title': 'Kế toán',
-      'app.summary': 'Sổ cái, hoá đơn, thanh toán và hệ thống tài khoản Việt Nam theo TT99.',
+      'app.summary': 'Sổ cái kép, hoá đơn, thanh toán và kiểm soát kỳ kế toán.',
       'app.category': 'Tài chính',
       'report.customerInvoice': 'HÓA ĐƠN KHÁCH HÀNG',
       'report.vendorBill': 'HÓA ĐƠN NHÀ CUNG CẤP',
@@ -63,6 +79,43 @@ export default defineModule({
         'Giá trị tiền phải là chuỗi số thập phân chính xác, không dùng số JavaScript hoặc ký hiệu số mũ.',
       'error.accountingDateInvalid': 'Ngày hạch toán và ngày chứng từ phải là ngày dân sự hợp lệ.',
       'error.moveCurrencyMismatch': 'Tiền tệ bút toán phải khớp với sổ cái của công ty đang chọn.',
+      'error.periodLocked': 'Sổ {scope} đã khóa đến hết ngày {through}.',
+      'error.periodConcurrent': 'Chính sách khóa kỳ vừa thay đổi; hãy kiểm tra rồi thử lại.',
+      'error.periodScopeUnsupported': 'Phạm vi khóa kỳ không được hỗ trợ.',
+      'error.periodReasonRequired': 'Mỗi thay đổi khóa kỳ phải có lý do.',
+      'error.periodCommandIdReused': 'Mã lệnh này đã thuộc về một thay đổi khóa kỳ khác.',
+      'error.hardLockPermanent': 'Khóa cứng chỉ được giữ nguyên hoặc tiến về sau.',
+      'error.openingLinesRequired': 'Batch số dư đầu kỳ cần ít nhất hai dòng.',
+      'error.openingLineInvalid': 'Dòng số dư đầu kỳ không hợp lệ.',
+      'error.openingSourceKey': 'Mã dòng nguồn phải có và không được trùng.',
+      'error.openingDescriptionRequired': 'Dòng số dư đầu kỳ phải có diễn giải.',
+      'error.openingChecksumInvalid': 'Checksum nguồn phải là SHA-256 dạng hex.',
+      'error.openingJournalType': 'Số dư đầu kỳ phải dùng sổ nhật ký chung.',
+      'error.openingControlMismatch': 'Tổng Nợ/Có nguồn và control total phải cân bằng chính xác.',
+      'error.openingPartnerRequired': 'Dòng công nợ đầu kỳ phải có đối tác.',
+      'error.openingBatchIdReused': 'Mã batch đã thuộc về dữ liệu số dư đầu kỳ khác.',
+      'error.openingBatchConflict': 'Không thể tạo batch số dư đầu kỳ do xung đột dữ liệu.',
+      'error.openingBatchMissing': 'Batch số dư đầu kỳ không tồn tại.',
+      'error.openingBatchState': 'Chỉ batch đã kiểm tra mới được ghi sổ.',
+      'error.openingConcurrent': 'Batch số dư đầu kỳ vừa thay đổi; hãy kiểm tra rồi thử lại.',
+      'error.closePeriodInvalid': 'Ngày kết thúc kỳ chốt không được trước ngày bắt đầu.',
+      'error.closePeriodIdReused': 'Mã đợt chốt đã thuộc về kỳ khác.',
+      'error.closePeriodMissing': 'Đợt chốt kỳ không tồn tại.',
+      'error.closePermanent': 'Kỳ đã khóa cứng không thể thay đổi hoặc mở lại.',
+      'error.closeModeUnsupported': 'Chế độ chốt kỳ phải là mềm hoặc cứng.',
+      'error.closeConcurrent': 'Đợt chốt kỳ vừa thay đổi; hãy kiểm tra rồi thử lại.',
+      'error.closeBlocked': 'Các bước bắt buộc của checklist vẫn còn bị chặn.',
+      'error.closeLaterPeriod': 'Phải mở lại kỳ đóng sau trước kỳ này.',
+      'error.accountBookUnsupported': 'Loại sổ kế toán không được hỗ trợ.',
+      'error.accountBookPeriod': 'Ngày kết thúc sổ không được trước ngày bắt đầu.',
+      'error.accountBookAccountRequired': 'Sổ này cần chọn tài khoản.',
+      'error.accountBookPartnerRequired': 'Sổ đối tác cần chọn đối tác.',
+      'error.openItemInputInvalid': 'Dữ liệu chứng từ/công nợ nguồn không hợp lệ.',
+      'error.openItemControlMismatch': 'Control total công nợ không khớp residual có dấu.',
+      'error.openItemCounterpart': 'Tài khoản đối ứng công nợ không hợp lệ.',
+      'error.openItemJournal': 'Loại sổ nhật ký không khớp loại chứng từ nguồn.',
+      'error.openItemBatchIdReused': 'Mã batch đã thuộc về dữ liệu công nợ khác.',
+      'error.openItemConflict': 'Dữ liệu công nợ xung đột với ledger hiện có.',
 
       'error.accountMissing': 'Tài khoản không tồn tại.',
       'error.accountInactive': 'Không thể ghi dòng bút toán mới vào tài khoản đã ngưng sử dụng.',
@@ -133,7 +186,7 @@ export default defineModule({
     },
     en: {
       'app.title': 'Accounting',
-      'app.summary': 'Ledger, invoices, payments, and Vietnam accounting defaults under Circular 99.',
+      'app.summary': 'Double-entry ledger, invoices, payments, and accounting-period controls.',
       'app.category': 'Finance',
       'report.customerInvoice': 'CUSTOMER INVOICE',
       'report.vendorBill': 'VENDOR BILL',
@@ -171,6 +224,43 @@ export default defineModule({
         'A money value must be an exact decimal string, not a JavaScript number or exponent notation.',
       'error.accountingDateInvalid': 'Accounting and document dates must be valid civil dates.',
       'error.moveCurrencyMismatch': 'The journal entry currency must match the active company ledger.',
+      'error.periodLocked': 'The {scope} books are locked through {through}.',
+      'error.periodConcurrent': 'The period policy changed; review it and try again.',
+      'error.periodScopeUnsupported': 'That period-lock scope is not supported.',
+      'error.periodReasonRequired': 'Every period-lock change requires a reason.',
+      'error.periodCommandIdReused': 'That command id belongs to another period-lock change.',
+      'error.hardLockPermanent': 'A hard lock can only stay in place or move forward.',
+      'error.openingLinesRequired': 'An opening batch needs at least two lines.',
+      'error.openingLineInvalid': 'That opening-balance line is invalid.',
+      'error.openingSourceKey': 'Source line keys are required and must be unique.',
+      'error.openingDescriptionRequired': 'An opening line requires a description.',
+      'error.openingChecksumInvalid': 'The source checksum must be SHA-256 hex.',
+      'error.openingJournalType': 'Opening balances require a general journal.',
+      'error.openingControlMismatch': 'Source debit, credit, and control totals must balance exactly.',
+      'error.openingPartnerRequired': 'An opening receivable or payable requires a partner.',
+      'error.openingBatchIdReused': 'That batch id belongs to different opening data.',
+      'error.openingBatchConflict': 'The opening batch conflicts with existing data.',
+      'error.openingBatchMissing': 'The opening batch does not exist.',
+      'error.openingBatchState': 'Only a validated opening batch can be posted.',
+      'error.openingConcurrent': 'The opening batch changed; review it and try again.',
+      'error.closePeriodInvalid': 'A close period cannot end before it starts.',
+      'error.closePeriodIdReused': 'That close id belongs to a different period.',
+      'error.closePeriodMissing': 'The close period does not exist.',
+      'error.closePermanent': 'A hard-closed period cannot change or reopen.',
+      'error.closeModeUnsupported': 'A close must be soft or hard.',
+      'error.closeConcurrent': 'The close period changed; review it and try again.',
+      'error.closeBlocked': 'Required close-checklist steps remain blocked.',
+      'error.closeLaterPeriod': 'A later closed period must be reopened first.',
+      'error.accountBookUnsupported': 'That accounting book is not supported.',
+      'error.accountBookPeriod': 'The book period cannot end before it starts.',
+      'error.accountBookAccountRequired': 'This book requires an account.',
+      'error.accountBookPartnerRequired': 'The partner book requires a partner.',
+      'error.openItemInputInvalid': 'The source open-item rows are invalid.',
+      'error.openItemControlMismatch': 'Open-item controls do not match signed residuals.',
+      'error.openItemCounterpart': 'The open-item counterpart account is invalid.',
+      'error.openItemJournal': 'The journal type does not match the source document.',
+      'error.openItemBatchIdReused': 'That batch id belongs to different open-item data.',
+      'error.openItemConflict': 'The open-item source conflicts with the existing ledger.',
 
       'error.accountMissing': 'The account does not exist.',
       'error.accountInactive': 'An inactive account cannot receive a new journal item.',
@@ -253,10 +343,3 @@ export {
   TAX_USES,
   TAX_AMOUNT_TYPES,
 } from './functions.ts'
-export {
-  TT99_ACCOUNTS,
-  TT99_ACCOUNT_CHECKSUM,
-  TT99_CATALOG_CHECKSUM,
-  TT99_CODE,
-  VIETNAM_TAXES,
-} from './tt99.ts'
