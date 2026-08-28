@@ -456,18 +456,20 @@ test('purchase: received-quantity billing creates one balanced multi-line vendor
         adapter,
       )
     ).value as Row
-    assert.equal(billed.amountTotal, '250.8')
+    // The source order can carry sub-đồng precision, but a VND ledger cannot.
+    // Quantize once at the shared posting boundary: 228 + 22.8 VAT becomes 251 đồng.
+    assert.equal(billed.amountTotal, '251')
     const journalItems = await adapter.all(
       'SELECT debit, credit, "purchaseLineId" FROM account_move_line WHERE "moveId" = ?',
       ['bill'],
     )
     assert.equal(
       journalItems.reduce((sum, row) => sum + Number(row.debit), 0),
-      250.8,
+      251,
     )
     assert.equal(
       journalItems.reduce((sum, row) => sum + Number(row.credit), 0),
-      250.8,
+      251,
     )
     assert.equal(journalItems.filter((row) => row.purchaseLineId === 'po:line').length, 2)
     assert.equal(
@@ -578,6 +580,61 @@ test('purchase: services bill ordered quantities without an empty receipt and pr
         .invoiceStatus,
       'to invoice',
     )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('purchase: order totals and vendor bills stay exact above the JavaScript safe integer', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'product.saveTemplate',
+      { id: 'exact-service', name: 'Exact service', type: 'service', uomId: 'unit', purchaseOk: true },
+      adapter,
+    )
+    await call(
+      'product.saveVariant',
+      { id: 'exact-service-1', templateId: 'exact-service', combinationKey: '' },
+      adapter,
+    )
+    await call(
+      'purchase.createOrder',
+      { id: 'exact-po', partnerId: 'vendor', pickingTypeId: 'incoming' },
+      adapter,
+    )
+    await call(
+      'purchase.addLine',
+      {
+        id: 'exact-po:line',
+        orderId: 'exact-po',
+        productId: 'exact-service-1',
+        productQty: '1',
+        productUomId: 'unit',
+        priceUnit: '9007199254740993',
+      },
+      adapter,
+    )
+    assert.equal(
+      ((await call('purchase.getOrder', { id: 'exact-po' }, adapter)).value as Row).amountTotal,
+      '9007199254740993',
+    )
+    await call('purchase.confirmOrder', { id: 'exact-po' }, adapter)
+    const bill = (
+      await call(
+        'purchase.createVendorBill',
+        {
+          id: 'exact-bill',
+          orderId: 'exact-po',
+          journalId: 'purchase-journal',
+          expenseAccountId: 'expense',
+          payableAccountId: 'payable',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(bill.amountTotal, '9007199254740993')
+    assert.equal(((await call('account.postMove', { id: 'exact-bill' }, adapter)).value as Row).ok, true)
   } finally {
     await adapter.close()
   }

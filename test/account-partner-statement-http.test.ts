@@ -47,7 +47,7 @@ const bootStatement = async (t: TestContext, populate = false) => {
       journalId,
       moveType: 'entry',
       partnerId: 'customer',
-      date: '2026-06-30T20:30:00.000Z',
+      date: '2026-06-30T16:30:00.000Z',
       ref: 'statement-marker',
     })
     for (let index = 0; index < 32; index += 1) {

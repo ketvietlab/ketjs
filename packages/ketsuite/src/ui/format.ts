@@ -3,6 +3,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 const DEFAULT_CURRENCY = 'VND'
 const PSEUDO_LOCALE = 'qps'
 const formatters = new Map<string, Intl.NumberFormat>()
+const DECIMAL_TEXT = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u
 
 const currencyCode = (value: unknown): string => {
   const code = String(value ?? '')
@@ -44,10 +45,15 @@ export const formatMoney = (
 ): string => {
   if (value === null || value === undefined || value === '') return '—'
 
-  const amount = Number(value)
-  if (!Number.isFinite(amount)) return String(value)
+  if (typeof value === 'number' && !Number.isFinite(value)) return String(value)
+  if (typeof value === 'string' && !DECIMAL_TEXT.test(value.trim())) return value
+  if (!['string', 'number', 'bigint'].includes(typeof value)) return String(value)
 
-  return formatterFor(localeCode(_.locale), currencyCode(currency), options?.compact === true).format(
-    Object.is(amount, -0) ? 0 : amount,
-  )
+  const formatter = formatterFor(localeCode(_.locale), currencyCode(currency), options?.compact === true)
+  // ECMA-402 accepts a decimal string as an exact mathematical value. Keeping
+  // database decimals as strings here avoids changing 9,007,199,254,740,993 to
+  // 9,007,199,254,740,992 merely to add grouping and a currency sign. TypeScript's
+  // older Intl declaration still lists only number/bigint, hence the narrow cast.
+  const format = formatter.format as unknown as (amount: string | number | bigint) => string
+  return format(typeof value === 'number' && Object.is(value, -0) ? 0 : (value as string | number | bigint))
 }

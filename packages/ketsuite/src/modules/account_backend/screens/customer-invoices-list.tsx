@@ -61,7 +61,7 @@ export const customerInvoiceListColumns = (
   {
     key: 'date',
     label: _('account_backend.field.date'),
-    cell: (row: CustomerInvoiceListRow) => String(row.date).slice(0, 10),
+    cell: (row: CustomerInvoiceListRow) => String(row.accountingDate ?? row.date).slice(0, 10),
   },
   {
     key: 'type',

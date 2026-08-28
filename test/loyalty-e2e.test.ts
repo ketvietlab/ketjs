@@ -138,8 +138,8 @@ const snapshot = (orderId: string, total = 100, date = new Date().toISOString())
       id: `${orderId}:line`,
       productId: 'fruit-box',
       quantity: 1,
-      untaxed: total,
-      total,
+      untaxed: String(total),
+      total: String(total),
       lineKind: 'product',
     },
   ],
@@ -565,14 +565,14 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
   )
   const discounted = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
   const rewardLines = (discounted.lines as Row[]).filter((line) => line.lineKind === 'reward')
-  assert.equal(Number(discounted.amountUntaxed), 81.82)
-  assert.equal(Number(discounted.amountTax), 8.18)
-  assert.equal(Number(discounted.amountTotal), 90)
+  assert.equal(String(discounted.amountUntaxed), '82')
+  assert.equal(String(discounted.amountTax), '8')
+  assert.equal(String(discounted.amountTotal), '90')
   assert.equal(rewardLines.length, 1)
   assert.equal(rewardLines[0]?.taxId, 'vat10')
   assert.deepEqual(rewardLines[0]?.taxIds, ['vat10'])
-  assert.equal(Number(rewardLines[0]?.priceSubtotal), -18.18)
-  assert.equal(Number(rewardLines[0]?.priceSubtotalIncl), -20)
+  assert.equal(String(rewardLines[0]?.priceSubtotal), '-18')
+  assert.equal(String(rewardLines[0]?.priceSubtotalIncl), '-20')
   await call<Row>('pos.addPayment', {
     id: 'pos-payment',
     orderId: 'pos-loyalty',
@@ -807,6 +807,90 @@ test('loyalty HTTP E2E: Sale UI adapter, portal actor and company scope stay iso
   await limited.login({ login: 'limited', password: 'correct horse' })
   const denied = await limited.get('/admin/loyalty/programs', { headers: { accept: 'application/json' } })
   assert.equal([400, 403].includes(denied.status), true)
+})
+
+test('loyalty Sale keeps percentage rewards and posted contra revenue exact beyond safe integers', async (t) => {
+  const { e2e, call } = await bootLoyalty(t)
+  for (const [id, code, name, accountType] of [
+    ['revenue', '5111', 'Doanh thu', 'income'],
+    ['receivable', '131', 'Phải thu khách hàng', 'asset_receivable'],
+  ])
+    await call<Row>('account.saveAccount', { id, code, name, accountType })
+  await call<Row>('account.saveJournal', {
+    id: 'sales-journal',
+    name: 'Bán hàng',
+    code: 'SAL',
+    type: 'sale',
+  })
+  await saveProgram(call, { id: 'exact-program', appliesOn: 'current' })
+  await saveRule(call, {
+    id: 'exact-rule',
+    programId: 'exact-program',
+    pointAmount: '5',
+    pointMode: 'order',
+  })
+  await saveReward(call, {
+    id: 'exact-reward',
+    programId: 'exact-program',
+    requiredPoints: '5',
+    discount: '10',
+    discountMode: 'percent',
+  })
+  await call<Row>('sale.createOrder', {
+    id: 'exact-order',
+    partnerId: 'customer',
+    warehouseId: 'wh',
+  })
+  await call<Row>('sale.addLine', {
+    id: 'exact-order:line',
+    orderId: 'exact-order',
+    productId: 'fruit-box',
+    productUomQty: '1',
+    productUomId: 'unit',
+    priceUnit: '9007199254740993',
+  })
+
+  const applied = await call<Row>('loyalty_sale.applyReward', {
+    orderId: 'exact-order',
+    programId: 'exact-program',
+    rewardId: 'exact-reward',
+  })
+  assert.equal(applied.ok, true, JSON.stringify(applied.errors))
+  assert.equal((applied.reward as Row).discountAmount, '900719925474099')
+  const order = await call<Row>('sale.getOrder', { id: 'exact-order' })
+  const rewardLine = (order.lines as Row[]).find((line) => line.lineKind === 'reward')!
+  assert.equal(String(rewardLine.priceUnit), '-900719925474099')
+  assert.equal(String(rewardLine.priceSubtotal), '-900719925474099')
+  assert.equal(String(order.amountTotal), '8106479329266894')
+
+  const confirmed = await call<Row>('loyalty_sale.confirmOrder', { id: 'exact-order' })
+  assert.equal(confirmed.ok, true, JSON.stringify(confirmed.errors))
+  const invoiced = await call<Row>('sale.createInvoice', {
+    id: 'exact-invoice',
+    orderId: 'exact-order',
+    journalId: 'sales-journal',
+    revenueAccountId: 'revenue',
+    receivableAccountId: 'receivable',
+  })
+  assert.equal(invoiced.ok, true, JSON.stringify(invoiced.errors))
+  assert.equal(invoiced.amountTotal, '8106479329266894')
+  const posted = await call<Row>('account.postMove', { id: 'exact-invoice' })
+  assert.equal(posted.ok, true, JSON.stringify(posted.errors))
+
+  const move = (
+    await e2e.adapter!.all('SELECT "amountUntaxed", "amountTotal" FROM account_move WHERE id = ?', [
+      'exact-invoice',
+    ])
+  )[0]!
+  assert.equal(String(move.amountUntaxed), '8106479329266894')
+  assert.equal(String(move.amountTotal), '8106479329266894')
+  const lines = await e2e.adapter!.all('SELECT debit, credit FROM account_move_line WHERE "moveId" = ?', [
+    'exact-invoice',
+  ])
+  const debit = lines.reduce((sum, line) => sum + BigInt(String(line.debit)), 0n)
+  const credit = lines.reduce((sum, line) => sum + BigInt(String(line.credit)), 0n)
+  assert.equal(debit, 9007199254740993n)
+  assert.equal(credit, debit)
 })
 
 test('loyalty Sale adapter keeps tax-inclusive points for legacy lines', async (t) => {

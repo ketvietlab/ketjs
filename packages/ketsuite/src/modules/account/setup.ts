@@ -1,5 +1,7 @@
 import { eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
+import { DEFAULT_ACCOUNTING_TIMEZONE } from './date.ts'
+import { MONEY_POLICY_VERSION } from './money.ts'
 import {
   TT99_ACCOUNTS,
   TT99_CATALOG_CHECKSUM,
@@ -63,13 +65,14 @@ const COMPANY_LOCK_ATTEMPTS = 4
  * retries setup or returns the permanent currency-lock refusal.
  */
 const lockCompanyCurrency = async (ctx: Ctx, company: Row): Promise<void> => {
-  if (company.currencyLocked === true) return
+  if (company.currencyLocked === true && company.accountingTimezone) return
   const currentVersion = Number(company.version ?? 0)
+  const accountingTimezone = String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE)
   const changed = await ctx.db.compareAndSet(
     'company.Company',
     { id: company.id },
     { version: company.version ?? null },
-    { currencyLocked: true, version: currentVersion + 1 },
+    { currencyLocked: true, accountingTimezone, version: currentVersion + 1 },
   )
   if (!('dryRun' in changed) && !changed.matched) throw new Error(COMPANY_CHANGED_DURING_SETUP)
 }
@@ -91,7 +94,21 @@ async function installCompanyAccountingOnce(ctx: Ctx): Promise<Row> {
     // invariant existed.
     if (existingSetup?.sourceChecksum === TT99_CATALOG_CHECKSUM) {
       await lockCompanyCurrency(tx, company)
-      return existingSetup
+      const accountingTimezone = String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE)
+      if (
+        existingSetup.accountingTimezone !== accountingTimezone ||
+        existingSetup.moneyPolicyVersion !== MONEY_POLICY_VERSION
+      )
+        await tx.db.update(
+          'account.Setup',
+          { id: existingSetup.id },
+          { accountingTimezone, moneyPolicyVersion: MONEY_POLICY_VERSION },
+        )
+      return {
+        ...existingSetup,
+        accountingTimezone,
+        moneyPolicyVersion: MONEY_POLICY_VERSION,
+      }
     }
 
     const countryCode = await countryFor(tx, company)
@@ -221,6 +238,8 @@ async function installCompanyAccountingOnce(ctx: Ctx): Promise<Row> {
           standard: TT99_CODE,
           legalBasis: TT99_LEGAL_BASIS,
           sourceChecksum: TT99_CATALOG_CHECKSUM,
+          accountingTimezone: String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE),
+          moneyPolicyVersion: MONEY_POLICY_VERSION,
         },
       )
     else
@@ -230,6 +249,8 @@ async function installCompanyAccountingOnce(ctx: Ctx): Promise<Row> {
         standard: TT99_CODE,
         legalBasis: TT99_LEGAL_BASIS,
         sourceChecksum: TT99_CATALOG_CHECKSUM,
+        accountingTimezone: String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE),
+        moneyPolicyVersion: MONEY_POLICY_VERSION,
         installedAt: new Date().toISOString(),
       })
     const installedId = String(existingSetup?.id ?? setupId(companyId))
@@ -306,9 +327,13 @@ export async function ensureCompanyAccounting(ctx: Ctx): Promise<Row> {
   const companyId = String(ctx.scope.company ?? '')
   if (!companyId) throw new Error('account.error.companyRequired')
   const current = (await ctx.db.select('account.Setup'))[0]
-  if (current?.sourceChecksum === TT99_CATALOG_CHECKSUM) {
+  if (
+    current?.sourceChecksum === TT99_CATALOG_CHECKSUM &&
+    current.accountingTimezone &&
+    current.moneyPolicyVersion === MONEY_POLICY_VERSION
+  ) {
     const company = (await ctx.db.select('company.Company', { id: companyId }))[0]
-    if (company?.currencyLocked === true) {
+    if (company?.currencyLocked === true && company.accountingTimezone) {
       await ensureCompanyDefaults(ctx, companyId)
       return current
     }

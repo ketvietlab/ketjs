@@ -12,10 +12,20 @@
  * already worked out, or it will disagree with the tables printed beside it.
  */
 
+import { isDateText } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { formatMoney } from '../../ui/index.ts'
 import type { ChartKey } from '../../ui/index.ts'
+import { addCivilDays, civilDateAt, DEFAULT_ACCOUNTING_TIMEZONE, periodKey } from '../account/date.ts'
+import {
+  compareDecimals,
+  minorText,
+  moneyMinor,
+  roundedQuotient,
+  scaleOf,
+  sumMoneyMinor,
+} from '../account/money.ts'
 import { axisScale, chartControl, peakOf } from '../backend/chart.ts'
 import type { ChartDataset } from '../backend/chart.ts'
 
@@ -64,13 +74,8 @@ export type Period = {
   preset: string
 }
 
-const day = (at: Date): string => at.toISOString().slice(0, 10)
-const startOf = (value: string): string => `${value}T00:00:00.000Z`
-/** Inclusive: a window ending on the 30th contains everything posted that day. */
-const endOf = (value: string): string => `${value}T23:59:59.999Z`
-const isDay = (value: string): boolean =>
-  /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(new Date(startOf(value)).getTime())
-const shift = (from: string, days: number): string => day(new Date(new Date(from).getTime() + days * DAY))
+const isDay = (value: string): boolean => isDateText(value)
+const shift = (from: string, days: number): string => addCivilDays(from, days)
 
 /**
  * What a named window means today.
@@ -79,9 +84,9 @@ const shift = (from: string, days: number): string => day(new Date(new Date(from
  * what a reader checking in at noon means by it — a window that stopped
  * yesterday would answer a question about the past while claiming to be current.
  */
-const presetWindow = (name: string, now: Date): { from: string; to: string } | null => {
-  const today = day(now)
-  const monthStart = day(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)))
+const presetWindow = (name: string, now: Date, timezone: string): { from: string; to: string } | null => {
+  const today = civilDateAt(now, timezone)
+  const monthStart = `${periodKey(today)}-01`
   switch (name) {
     case 'today':
       return { from: today, to: today }
@@ -119,13 +124,17 @@ const presetWindow = (name: string, now: Date): { from: string; to: string } | n
  * 1st to the 10th is comparing ten days, and answering with a thirty-one day
  * month would have made every figure on the screen look like a collapse.
  */
-export const periodOf = (url: URL, now: Date = new Date()): Period => {
+export const periodOf = (
+  url: URL,
+  now: Date = new Date(),
+  timezone: string = DEFAULT_ACCOUNTING_TIMEZONE,
+): Period => {
   const typed = {
     from: url.searchParams.get('dateFrom') ?? '',
     to: url.searchParams.get('dateTo') ?? '',
   }
   const named = url.searchParams.get('period') ?? ''
-  const resolved = presetWindow(named, now)
+  const resolved = presetWindow(named, now, timezone)
   // A name nobody offers falls back to the month rather than to nothing: the
   // screen has to report on some window, and an empty one is not a period.
   const chosen =
@@ -133,7 +142,7 @@ export const periodOf = (url: URL, now: Date = new Date()): Period => {
       ? { from: typed.from, to: typed.to, preset: 'custom' }
       : resolved
         ? { ...resolved, preset: named }
-        : { ...presetWindow('month', now)!, preset: 'month' }
+        : { ...presetWindow('month', now, timezone)!, preset: 'month' }
   const span = Math.max(
     1,
     Math.round((new Date(chosen.to).getTime() - new Date(chosen.from).getTime()) / DAY) + 1,
@@ -141,10 +150,10 @@ export const periodOf = (url: URL, now: Date = new Date()): Period => {
   const previousEnd = shift(chosen.from, -1)
   const previousStart = shift(previousEnd, -(span - 1))
   return {
-    from: startOf(chosen.from),
-    to: endOf(chosen.to),
-    previousFrom: startOf(previousStart),
-    previousTo: endOf(previousEnd),
+    from: chosen.from,
+    to: chosen.to,
+    previousFrom: previousStart,
+    previousTo: previousEnd,
     fromDay: chosen.from,
     toDay: chosen.to,
     preset: chosen.preset,
@@ -160,9 +169,13 @@ export const periodOf = (url: URL, now: Date = new Date()): Period => {
  */
 export const YEAR_CHOICES = 6
 
-export const yearsOf = (earliest: string, now: Date = new Date()): number[] => {
+export const yearsOf = (
+  earliest: string,
+  now: Date = new Date(),
+  timezone: string = DEFAULT_ACCOUNTING_TIMEZONE,
+): number[] => {
   const first = Number(String(earliest).slice(0, 4))
-  const last = now.getUTCFullYear()
+  const last = Number(civilDateAt(now, timezone).slice(0, 4))
   if (!Number.isFinite(first) || first < 1970 || first > last) return [last]
   const all: number[] = []
   for (let year = last; year >= first && all.length < YEAR_CHOICES; year -= 1) all.push(year)
@@ -220,6 +233,7 @@ export const overviewCharts = async (
   data: { currency: unknown; current: Row; timeline: Row; previousTimeline: Row },
 ): Promise<OverviewCharts> => {
   const money = (value: unknown) => formatMoney(_, value, data.currency)
+  const scale = scaleOf(data.currency)
   const points = (data.timeline.points as Row[] | undefined) ?? []
   const before = (data.previousTimeline.points as Row[] | undefined) ?? []
   const units = {
@@ -252,25 +266,36 @@ export const overviewCharts = async (
     : null
 
   const accounts = ((data.current.revenueByAccount as Row[] | undefined) ?? []).filter(
-    (row) => n(row.amount) > 0,
+    (row) => compareDecimals(row.amount, '0') > 0,
   )
   const head = accounts.slice(0, 5)
   const tail = accounts.slice(5)
-  const tailTotal = tail.reduce((sum, row) => sum + n(row.amount), 0)
+  const tailTotal = sumMoneyMinor(
+    tail.map((row) => row.amount),
+    scale,
+  )
   const slices = [
     ...head.map((row) => ({
       id: String(row.accountId),
       label: `${row.code} · ${row.name}`,
-      amount: n(row.amount),
+      amount: minorText(moneyMinor(row.amount, scale), scale),
+      value: n(row.amount),
     })),
-    ...(tailTotal > 0
-      ? [{ id: 'other', label: _('account_backend.overview.otherRevenue'), amount: tailTotal }]
+    ...(tailTotal > 0n
+      ? [
+          {
+            id: 'other',
+            label: _('account_backend.overview.otherRevenue'),
+            amount: minorText(tailTotal, scale),
+            value: Number(minorText(tailTotal, scale)),
+          },
+        ]
       : []),
   ]
   const mixSet: ChartDataset = {
     label: _('account_backend.overview.revenue'),
     series: 1,
-    values: slices.map((slice) => slice.amount),
+    values: slices.map((slice) => slice.value),
     formatted: slices.map((slice) => money(slice.amount)),
   }
   const mixPlot = slices.length
@@ -282,7 +307,10 @@ export const overviewCharts = async (
       })
     : null
 
-  const total = slices.reduce((sum, slice) => sum + slice.amount, 0)
+  const total = sumMoneyMinor(
+    slices.map((slice) => slice.amount),
+    scale,
+  )
   return {
     revenue: {
       plot: revenuePlot,
@@ -290,7 +318,15 @@ export const overviewCharts = async (
         id: `revenue-${at}`,
         label: set.label,
         series: set.emphasis === 'comparison' ? ('comparison' as const) : at + 1,
-        value: money(set.values.reduce((sum, value) => sum + value, 0)),
+        value: money(
+          minorText(
+            sumMoneyMinor(
+              (at === 0 ? points : before).map((point) => point.revenue),
+              scale,
+            ),
+            scale,
+          ),
+        ),
       })),
     },
     mix: {
@@ -301,7 +337,11 @@ export const overviewCharts = async (
         series: at + 1,
         // Amount and share together: a percentage alone hides the scale, and an
         // amount alone hides how much of the whole it is.
-        value: `${money(slice.amount)} · ${total ? ((slice.amount / total) * 100).toFixed(1) : '0.0'}%`,
+        value: `${money(slice.amount)} · ${
+          total
+            ? (Number(roundedQuotient(moneyMinor(slice.amount, scale) * 1_000n, total)) / 10).toFixed(1)
+            : '0.0'
+        }%`,
       })),
     },
   }

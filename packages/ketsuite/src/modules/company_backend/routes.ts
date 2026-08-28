@@ -77,6 +77,7 @@ const companyValues = (form: Record<string, string>, id?: string): CompanyFormVa
   partnerId: form.partnerId,
   parentId: form.parentId || null,
   currency: form.currency,
+  accountingTimezone: form.accountingTimezone || 'Asia/Ho_Chi_Minh',
 })
 
 const expectedVersion = (value?: string): number | undefined =>
@@ -191,6 +192,7 @@ const saveCompany = (ctx: ServeContext, url: URL, req: Req, id: string, form: Re
       partnerId: form.partnerId ?? '',
       parentId: form.parentId || null,
       currency: form.currency ?? '',
+      ...(form.accountingTimezone ? { accountingTimezone: form.accountingTimezone } : {}),
       ...(form.expectedVersion === undefined
         ? {}
         : { expectedVersion: expectedVersion(form.expectedVersion) }),

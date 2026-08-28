@@ -1,5 +1,13 @@
 import { deleteFrom, defineFn, eq } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import {
+  canonicalDecimalText,
+  compareDecimals,
+  minorText,
+  moneyMinor,
+  roundedQuotient,
+  scaleOf,
+} from '../account/money.ts'
 import { evaluate, invalid, issue, n, normalizeCode } from '../loyalty/engine.ts'
 import { applyOrderReward, orderFunctions, removeOrderReward } from '../loyalty/order-functions.ts'
 import type { OrderSnapshot } from '../loyalty/types.ts'
@@ -8,8 +16,7 @@ import { claimDraftRevision, functions as posFunctions } from '../pos/functions.
 const effectsOf = (...specs: Array<FnSpec | undefined>): string[] => [
   ...new Set(specs.flatMap((spec) => spec?.effects ?? [])),
 ]
-const money = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
-const decimal = (value: number): string => String(money(value))
+const decimal = (value: number): string => String(Math.round((value + Number.EPSILON) * 100) / 100)
 const same = (left: unknown, right: unknown): boolean => Math.abs(n(left) - n(right)) <= 0.000001
 
 class AtomicFailure extends Error {
@@ -54,29 +61,36 @@ export const posSnapshot = async (ctx: Ctx, orderId: string): Promise<OrderSnaps
       id: String(line.id),
       productId: String(line.productId),
       quantity: n(line.qty),
-      untaxed: n(line.priceSubtotal),
-      total: n(line.priceSubtotalIncl),
+      untaxed: canonicalDecimalText(String(line.priceSubtotal)),
+      total: canonicalDecimalText(String(line.priceSubtotalIncl)),
       lineKind: String(line.lineKind ?? 'product') as OrderSnapshot['lines'][number]['lineKind'],
     })),
   }
 }
 
 const recompute = async (ctx: Ctx, orderId: string) => {
+  const order = (await ctx.db.select('pos.Order', { id: orderId }))[0]
+  if (!order) return
+  const scale = scaleOf(order.currency)
   const lines = await ctx.db.select('pos.OrderLine', { orderId })
-  const untaxed = money(lines.reduce((sum, line) => sum + n(line.priceSubtotal), 0))
-  const total = money(lines.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0))
-  const paid = money(
-    (await ctx.db.select('pos.Payment', { orderId })).reduce((sum, payment) => sum + n(payment.amount), 0),
-  )
+  let untaxed = 0n
+  let total = 0n
+  let paid = 0n
+  for (const line of lines) {
+    untaxed += moneyMinor(String(line.priceSubtotal), scale)
+    total += moneyMinor(String(line.priceSubtotalIncl), scale)
+  }
+  for (const payment of await ctx.db.select('pos.Payment', { orderId }))
+    paid += moneyMinor(String(payment.amount), scale)
   await ctx.db.update(
     'pos.Order',
     { id: orderId },
     {
-      amountUntaxed: decimal(untaxed),
-      amountTax: decimal(total - untaxed),
-      amountTotal: decimal(total),
-      amountPaid: decimal(paid),
-      amountReturn: decimal(paid - total),
+      amountUntaxed: minorText(untaxed, scale),
+      amountTax: minorText(total - untaxed, scale),
+      amountTotal: minorText(total, scale),
+      amountPaid: minorText(paid, scale),
+      amountReturn: minorText(paid - total, scale),
     },
   )
 }
@@ -95,31 +109,33 @@ const removeRewardLines = async (ctx: Ctx, orderId: string, programId?: string) 
 const taxIdsOf = (line: Row): string[] =>
   Array.isArray(line.taxIds) ? line.taxIds.map(String) : line.taxId ? [String(line.taxId)] : []
 
-const scaledTaxEvidence = (lines: Row[], allocatedTax: number): Row | null => {
+const scaledTaxEvidence = (lines: Row[], allocatedTax: bigint, scale: number): Row | null => {
   const source = lines
     .map((line) => line.taxEvidence as Row | null)
     .find((evidence) => evidence && Array.isArray(evidence.taxes))
   if (!source) return null
   const definitions = new Map<string, Row>()
-  const shares = new Map<string, number>()
+  const shares = new Map<string, bigint>()
   for (const line of lines) {
     const evidence = line.taxEvidence as Row | null
     for (const tax of (evidence?.taxes as Row[] | undefined) ?? []) {
       const id = String(tax.id)
       definitions.set(id, tax)
-      shares.set(id, (shares.get(id) ?? 0) + n(tax.share))
+      shares.set(id, (shares.get(id) ?? 0n) + moneyMinor(String(tax.share), scale))
     }
   }
-  const sourceTax = [...shares.values()].reduce((sum, share) => sum + share, 0)
+  const sourceTax = [...shares.values()].reduce((sum, share) => sum + share, 0n)
   const entries = [...definitions.entries()]
-  let remaining = money(allocatedTax)
+  let remaining = allocatedTax
   const taxes = entries.map(([id, tax], index) => {
     const share =
       index === entries.length - 1
         ? remaining
-        : money(sourceTax ? allocatedTax * ((shares.get(id) ?? 0) / sourceTax) : 0)
-    remaining = money(remaining - share)
-    return { ...tax, share: decimal(-share) }
+        : sourceTax
+          ? roundedQuotient(allocatedTax * (shares.get(id) ?? 0n), sourceTax)
+          : 0n
+    remaining -= share
+    return { ...tax, share: minorText(-share, scale) }
   })
   return { currency: source.currency, scale: source.scale, taxes }
 }
@@ -128,6 +144,7 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
   const order = (await ctx.db.select('pos.Order', { id: orderId }))[0]
   if (!order) return invalid(issue('orderId', 'loyalty.error.state'))
   if (order.state !== 'draft' || order.isRefund) return invalid(issue('orderId', 'loyalty.error.state'))
+  const scale = scaleOf(order.currency)
   const reward = (await ctx.db.select('loyalty.Reward', { id: payload.rewardId }))[0]
   if (!reward) return invalid(issue('rewardId', 'loyalty.error.rewardMissing'))
   const ordinary = (await ctx.db.select('pos.OrderLine', { orderId })).filter(
@@ -170,10 +187,11 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
       loyaltyPointsCost: decimal(n(payload.requiredPoints)),
     })
   } else {
-    const eligible = ordinary.filter((line) => n(line.priceSubtotalIncl) > 0)
-    const discountAmount = Math.abs(n(payload.discountAmount))
-    const basis = eligible.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0)
-    if (!(basis > 0) || !(discountAmount > 0)) return invalid(issue('rewardId', 'loyalty.error.rewardAmount'))
+    const eligible = ordinary.filter((line) => moneyMinor(String(line.priceSubtotalIncl), scale) > 0n)
+    const rawDiscount = moneyMinor(String(payload.discountAmount), scale)
+    const discountAmount = rawDiscount < 0n ? -rawDiscount : rawDiscount
+    const basis = eligible.reduce((sum, line) => sum + moneyMinor(String(line.priceSubtotalIncl), scale), 0n)
+    if (basis <= 0n || discountAmount <= 0n) return invalid(issue('rewardId', 'loyalty.error.rewardAmount'))
     const groups = new Map<string, Row[]>()
     for (const line of eligible) {
       const key = JSON.stringify(taxIdsOf(line))
@@ -182,14 +200,20 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
       groups.set(key, rows)
     }
     const entries = [...groups.entries()]
-    let remaining = money(discountAmount)
+    let remaining = discountAmount
     for (const [index, [key, lines]] of entries.entries()) {
-      const groupTotal = lines.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0)
-      const groupUntaxed = lines.reduce((sum, line) => sum + n(line.priceSubtotal), 0)
+      const groupTotal = lines.reduce(
+        (sum, line) => sum + moneyMinor(String(line.priceSubtotalIncl), scale),
+        0n,
+      )
+      const groupUntaxed = lines.reduce(
+        (sum, line) => sum + moneyMinor(String(line.priceSubtotal), scale),
+        0n,
+      )
       const allocatedTotal =
-        index === entries.length - 1 ? remaining : money(discountAmount * (groupTotal / basis))
-      remaining = money(remaining - allocatedTotal)
-      const allocatedUntaxed = money(allocatedTotal * (groupUntaxed / groupTotal))
+        index === entries.length - 1 ? remaining : roundedQuotient(discountAmount * groupTotal, basis)
+      remaining -= allocatedTotal
+      const allocatedUntaxed = roundedQuotient(allocatedTotal * groupUntaxed, groupTotal)
       const taxIds = JSON.parse(key) as string[]
       await ctx.db.insert('pos.OrderLine', {
         id: `loyalty:${orderId}:${programId}${index ? `:${index}` : ''}`,
@@ -198,17 +222,17 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
         productUomId: uomId,
         name: reward.description,
         qty: '1',
-        priceUnit: decimal(-allocatedUntaxed),
+        priceUnit: minorText(-allocatedUntaxed, scale),
         discount: '0',
         taxId: taxIds[0] ?? null,
         taxIds,
-        taxEvidence: scaledTaxEvidence(lines, allocatedTotal - allocatedUntaxed),
+        taxEvidence: scaledTaxEvidence(lines, allocatedTotal - allocatedUntaxed, scale),
         quoteRevision: order.priceBookRevision ?? lines[0]?.quoteRevision ?? null,
         tracking: 'none',
         lotSelections: [],
         affectsStock: false,
-        priceSubtotal: decimal(-allocatedUntaxed),
-        priceSubtotalIncl: decimal(-allocatedTotal),
+        priceSubtotal: minorText(-allocatedUntaxed, scale),
+        priceSubtotalIncl: minorText(-allocatedTotal, scale),
         refundedOrderlineId: null,
         sequence: 9000 + index,
         lineKind: 'reward',
@@ -225,6 +249,7 @@ const materializeReward = async (ctx: Ctx, orderId: string, programId: string, p
 export const preflightOrder = async (ctx: Ctx, orderId: string): Promise<Row> => {
   const snapshot = await posSnapshot(ctx, orderId)
   if (!snapshot) return invalid(issue('orderId', 'loyalty.error.order'))
+  const scale = scaleOf(snapshot.currency)
   const applications = (await ctx.db.select('loyalty.Application', { orderType: 'pos', orderId })).filter(
     (application) => application.state !== 'reversed',
   )
@@ -252,7 +277,7 @@ export const preflightOrder = async (ctx: Ctx, orderId: string): Promise<Row> =>
       !quote ||
       !payload ||
       !same(quote.requiredPoints, application.pointsSpent) ||
-      !same(quote.discountAmount, application.discountAmount)
+      compareDecimals(quote.discountAmount, String(application.discountAmount)) !== 0
     )
       return invalid(issue('rewardId', 'loyalty.error.ineligible'))
     const rewardLines = lines.filter(
@@ -264,14 +289,12 @@ export const preflightOrder = async (ctx: Ctx, orderId: string): Promise<Row> =>
         rewardLines.length !== 1 ||
         rewardLines[0]!.productId !== quote.productId ||
         !same(rewardLines[0]!.qty, quote.productQuantity) ||
-        !same(rewardLines[0]!.priceSubtotalIncl, 0)
+        compareDecimals(String(rewardLines[0]!.priceSubtotalIncl), '0') !== 0
       )
         return invalid(issue('rewardId', 'loyalty.error.ineligible'))
     } else if (
-      !same(
-        rewardLines.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0),
-        -quote.discountAmount,
-      )
+      rewardLines.reduce((sum, line) => sum + moneyMinor(String(line.priceSubtotalIncl), scale), 0n) !==
+      -moneyMinor(quote.discountAmount, scale)
     )
       return invalid(issue('rewardId', 'loyalty.error.ineligible'))
 

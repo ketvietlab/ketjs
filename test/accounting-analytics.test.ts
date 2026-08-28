@@ -33,8 +33,8 @@ const read = async (name: string, args: Record<string, unknown>, adapter: Adapte
 const readAll = async (name: string, args: Record<string, unknown>, adapter: Adapter): Promise<Row[]> =>
   (await call(name, args, adapter)).value as Row[]
 
-const JUNE = { dateFrom: '2026-06-01T00:00:00.000Z', dateTo: '2026-06-30T23:59:59.999Z' }
-const MAY = { dateFrom: '2026-05-01T00:00:00.000Z', dateTo: '2026-05-31T23:59:59.999Z' }
+const JUNE = { dateFrom: '2026-06-01', dateTo: '2026-06-30' }
+const MAY = { dateFrom: '2026-05-01', dateTo: '2026-05-31' }
 
 /**
  * A ledger with two months in it, so a window means something.
@@ -287,11 +287,7 @@ test('analytics: performance names the accounts behind each total, largest first
 test('analytics: a period with no sales has no gross margin rather than a zero one', async () => {
   const adapter = await boot()
   try {
-    const quiet = await read(
-      'account.performance',
-      { dateFrom: '2026-07-01T00:00:00.000Z', dateTo: '2026-07-31T23:59:59.999Z' },
-      adapter,
-    )
+    const quiet = await read('account.performance', { dateFrom: '2026-07-01', dateTo: '2026-07-31' }, adapter)
     assert.equal(quiet.revenue, '0')
     assert.equal(quiet.grossMargin, null)
   } finally {
@@ -358,7 +354,7 @@ test('analytics: a long window buckets by month instead of by day', async () => 
   try {
     const line = await read(
       'account.revenueTimeline',
-      { dateFrom: '2026-01-01T00:00:00.000Z', dateTo: '2026-12-31T23:59:59.999Z' },
+      { dateFrom: '2026-01-01', dateTo: '2026-12-31' },
       adapter,
     )
     assert.equal(line.granularity, 'month')

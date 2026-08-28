@@ -6,6 +6,7 @@
 // public standard module.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
+import { compareDecimals } from '../account/money.ts'
 import { channelError, defineChannelRoute, routesOf, sha256, stableHash } from '../channel_api/core.ts'
 
 type Req = Parameters<Route>[1]
@@ -199,8 +200,7 @@ const offsetOf = (cursor: string | null): number => {
   }
 }
 const cursorOf = (offset: number): string => Buffer.from(JSON.stringify({ offset })).toString('base64url')
-const atStartOfDay = (date: string | null): string | undefined => (date ? `${date}T00:00:00.000Z` : undefined)
-const atEndOfDay = (date: string | null): string | undefined => (date ? `${date}T23:59:59.999Z` : undefined)
+const civilDate = (date: string | null): string | undefined => date || undefined
 
 const customerInvoice = (row: Row): boolean => ['out_invoice', 'out_refund'].includes(String(row.moveType))
 const stateOf = (row: Row): string => (row.state === 'cancel' ? 'cancelled' : String(row.state))
@@ -265,8 +265,8 @@ const versionOf = (content: Row, row: Row): string =>
 
 const actionsOf = (row: Row, content: Row): string[] => {
   const actions = lifecycleActionsOf(row).map((item) => item.action)
-  const amount = Number((content.amountDue as { amount?: unknown })?.amount ?? 0)
-  if (row.moveType === 'out_invoice' && row.state === 'posted' && amount > 1e-12)
+  const amount = String((content.amountDue as { amount?: unknown })?.amount ?? '0')
+  if (row.moveType === 'out_invoice' && row.state === 'posted' && compareDecimals(amount, '0') > 0)
     actions.push('collect_payment')
   return actions
 }
@@ -551,8 +551,8 @@ export const channelRoutes = routesOf(
               ? ['not_paid', 'partial']
               : ['paid']
             : undefined,
-          dateFrom: atStartOfDay(url.searchParams.get('dateFrom')),
-          dateTo: atEndOfDay(url.searchParams.get('dateTo')),
+          dateFrom: civilDate(url.searchParams.get('dateFrom')),
+          dateTo: civilDate(url.searchParams.get('dateTo')),
           order: 'desc',
           limit: limit + 1,
           offset,
@@ -636,7 +636,7 @@ export const channelRoutes = routesOf(
       let reason = 'available'
       if (row.moveType !== 'out_invoice') reason = 'unsupported_invoice_type'
       else if (row.state !== 'posted') reason = 'invoice_not_posted'
-      else if (Number(amount.amount) <= 1e-12) reason = 'nothing_due'
+      else if (compareDecimals(amount.amount, '0') <= 0) reason = 'nothing_due'
       const journals = reason === 'available' ? await paymentJournals(ctx, url, req) : []
       if (reason === 'available' && journals.length === 0) reason = 'no_payment_journal'
       const eligible = reason === 'available'

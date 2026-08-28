@@ -42,7 +42,7 @@ const bootLedger = async (t: TestContext, populate = false) => {
         id: moveId,
         journalId,
         moveType: 'entry',
-        date: '2026-06-30T20:30:00.000Z',
+        date: '2026-06-30T16:30:00.000Z',
         ref: `marker-${suffix}`,
       })
       await app.client.call('account.addMoveLine', {

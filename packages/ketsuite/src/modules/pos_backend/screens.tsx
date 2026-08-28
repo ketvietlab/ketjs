@@ -17,6 +17,7 @@ import {
   Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { minorText, scaleOf, sumMoneyMinor } from '../account/money.ts'
 import { selectionLabel } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
@@ -32,7 +33,15 @@ export const dashboard = (
   frame: Frame,
 ): TemplateResult => {
   const paidOrders = orders.filter((row) => ['paid', 'done'].includes(String(row.state)))
-  const sales = paidOrders.reduce((sum, row) => sum + Number(row.amountTotal), 0)
+  const currency = paidOrders[0]?.currency ?? 'VND'
+  const scale = scaleOf(currency)
+  const sales = minorText(
+    sumMoneyMinor(
+      paidOrders.map((row) => row.amountTotal),
+      scale,
+    ),
+    scale,
+  )
   return (
     <Framed
       translator={_}
@@ -62,7 +71,7 @@ export const dashboard = (
             {
               id: 'sales',
               title: _('pos_backend.dashboard.sales'),
-              value: formatMoney(_, sales, paidOrders[0]?.currency),
+              value: formatMoney(_, sales, currency),
               href: '/admin/pos/orders',
             },
           ]}

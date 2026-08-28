@@ -190,7 +190,33 @@ export {
   PAYMENT_STATES,
   TAX_USES,
   TAX_AMOUNT_TYPES,
+  DraftMoveBoundaryError,
+  insertDraftMove,
 } from './modules/account/functions.ts'
+export {
+  absDecimalText,
+  addDecimals,
+  canonicalDecimalText,
+  MONEY_MAX_DIGITS,
+  MONEY_POLICY_VERSION,
+  multiplyDecimals,
+  negateDecimalText,
+  moneyText as quantizeMoneyText,
+  scaleOf as currencyScale,
+  subtractDecimals,
+} from './modules/account/money.ts'
+export {
+  accountingDateText,
+  accountingFilterDateText,
+  addCivilDays,
+  assertAccountingTimezone,
+  civilDateAt,
+  DEFAULT_ACCOUNTING_TIMEZONE,
+  fiscalYearKey,
+  moveAccountingDate,
+  periodKey,
+  quarterKey,
+} from './modules/account/date.ts'
 export {
   assertTT99Catalog,
   buildTT99CatalogManifest,
