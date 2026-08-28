@@ -170,7 +170,7 @@ test('pos PostgreSQL: concurrent returns cannot reserve the same final quantity'
         .some((error) => error.field === 'expectedRevision'),
       true,
     )
-    const linked = await first.all('SELECT id FROM pos_order WHERE "refundedOrderId" = ? AND state <> ?', [
+    const linked = await first.all('SELECT id FROM pos_order WHERE "refundedOrderId" = $1 AND state <> $2', [
       'sale',
       'cancel',
     ])
