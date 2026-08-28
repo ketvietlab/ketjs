@@ -241,8 +241,8 @@ export type ServeSpec = {
 }
 
 export type ClientCompatibilityPolicy = {
-  minimumVersions: Record<string, string>
-  recommendedVersions?: Record<string, string>
+  minimumVersions: { ios: string; android: string }
+  recommendedVersions?: { ios: string; android: string }
   maintenance?: { enabled: boolean; messages?: Record<string, string> }
 }
 

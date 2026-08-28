@@ -166,7 +166,16 @@ export const staffRoutes = routesOf(
         android: policy?.recommendedVersions?.android ?? minimumAppVersion.android,
       }
       const maintenance = policy?.maintenance ?? { enabled: false }
-      const maintenanceMessage = maintenance.messages?.[ctx.localeOf(_url, req)] ?? null
+      const maintenanceLocale = ctx.localeOf(_url, req)
+      const maintenanceLanguage = maintenanceLocale.split('-')[0]!
+      const maintenanceMessage = maintenance.enabled
+        ? (maintenance.messages?.[maintenanceLocale] ??
+          maintenance.messages?.[maintenanceLanguage] ??
+          maintenance.messages?.vi ??
+          maintenance.messages?.en ??
+          Object.values(maintenance.messages ?? {})[0] ??
+          null)
+        : null
       return {
         data: {
           contractVersion: CHANNEL_API_VERSION,

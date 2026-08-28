@@ -103,7 +103,10 @@ The staff bootstrap, account, and attendance success responses publish concrete 
 types the live company and branch scope, credential-presentation-specific CSRF value, capabilities, contract
 revision, deployment name, minimum/recommended native versions, and localized maintenance policy. A deployment
 owns the external-client policy through `serve.clientCompatibility`; absent policy is represented explicitly by
-the non-blocking `0.0.0` baseline rather than an omitted or untyped field. Attendance types clock state, timestamped punch results, and shift history explicitly, including
+the non-blocking `0.0.0` baseline rather than an omitted or untyped field. Disabled maintenance always publishes a
+null message. Enabled maintenance resolves the exact locale or language first, then falls back to Vietnamese,
+English, or the first configured message so an unsupported locale cannot silently remove the blocker copy.
+Attendance types clock state, timestamped punch results, and shift history explicitly, including
 nullable corrections and stop times. Native generators can therefore reject an empty or free-form business data
 schema instead of falling back to an untyped map.
 
