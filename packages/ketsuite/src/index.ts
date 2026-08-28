@@ -204,7 +204,12 @@ export {
 } from './modules/account/tt99.ts'
 export { PURCHASE_STATES, INVOICE_STATUSES, PURCHASE_METHODS } from './modules/purchase/functions.ts'
 export { SALE_STATES, SALE_INVOICE_STATUSES, INVOICE_POLICIES } from './modules/sale/functions.ts'
-export { POS_ORDER_STATES, POS_SESSION_STATES, POS_INVOICE_STATUSES } from './modules/pos/functions.ts'
+export {
+  POS_ORDER_STATES,
+  POS_SESSION_STATES,
+  POS_INVOICE_STATUSES,
+  functions as posFunctionSpecs,
+} from './modules/pos/functions.ts'
 export { default as address } from './modules/address/index.ts'
 export {
   availableCatalogs as availableAddressCatalogs,
