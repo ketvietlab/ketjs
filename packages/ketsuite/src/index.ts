@@ -192,11 +192,39 @@ export {
   TAX_AMOUNT_TYPES,
 } from './modules/account/functions.ts'
 export {
+  assertTT99Catalog,
+  buildTT99CatalogManifest,
+  checksumTT99Catalog,
+  serializeTT99Catalog,
   TT99_ACCOUNTS,
   TT99_ACCOUNT_CHECKSUM,
+  TT99_APPROVAL_STATUS,
+  TT99_AUTHORITY,
   TT99_CATALOG_CHECKSUM,
+  TT99_CATALOG_MANIFEST,
+  TT99_CATALOG_METADATA,
+  TT99_CATALOG_SCHEMA_VERSION,
+  TT99_CATALOG_VERSION,
   TT99_CODE,
+  TT99_COUNTRY,
+  TT99_DEFAULT_ACCOUNTS,
+  TT99_EFFECTIVE_FROM,
+  TT99_EFFECTIVE_TO,
+  TT99_EXPECTED_ACCOUNT_COUNT,
+  TT99_EXPECTED_TAX_COUNT,
+  TT99_ISSUED_ON,
+  TT99_LEGAL_BASIS,
+  TT99_SOURCE_URL,
   VIETNAM_TAXES,
+} from './modules/account/tt99.ts'
+export type {
+  Tt99Account,
+  Tt99CanonicalTax,
+  Tt99CatalogApprovalStatus,
+  Tt99CatalogManifest,
+  Tt99CatalogMetadata,
+  Tt99CatalogSource,
+  VietnamTax,
 } from './modules/account/tt99.ts'
 export { PURCHASE_STATES, INVOICE_STATUSES, PURCHASE_METHODS } from './modules/purchase/functions.ts'
 export { SALE_STATES, SALE_INVOICE_STATUSES, INVOICE_POLICIES } from './modules/sale/functions.ts'

@@ -524,6 +524,99 @@ test('accounting: a posted entry is corrected by its reversal, not by editing', 
   }
 })
 
+test('accounting: reversing resumes after the mirror was posted but settlement did not finish', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.saveJournal', { id: 'misc', name: 'Misc', code: 'MISC', type: 'general' }, adapter)
+    const invoiceArgs = {
+      id: 'invoice-resume',
+      journalId: 'sales',
+      moveType: 'out_invoice',
+      partnerId: 'customer',
+      invoiceDate: '2026-08-20T00:00:00.000Z',
+      description: 'Consulting',
+      quantity: '1',
+      priceUnit: '500',
+      lineAccountId: 'revenue',
+      counterpartAccountId: 'receivable',
+    }
+    await call('account.createInvoice', invoiceArgs, adapter)
+    await call('account.postMove', { id: invoiceArgs.id }, adapter)
+    const original = (await call('account.getMove', { id: invoiceArgs.id }, adapter)).value as Row & {
+      lines: Row[]
+    }
+
+    const reversalId = 'reversal-resume'
+    const reversalDate = '2026-08-21T00:00:00.000Z'
+    await call(
+      'account.createMove',
+      {
+        id: reversalId,
+        journalId: 'misc',
+        moveType: 'entry',
+        date: reversalDate,
+        ref: 'Correction batch',
+        partnerId: original.partnerId,
+      },
+      adapter,
+    )
+    for (const line of original.lines)
+      await call(
+        'account.addMoveLine',
+        {
+          id: `${reversalId}:${String(line.id)}`,
+          moveId: reversalId,
+          name: line.name,
+          accountId: line.accountId,
+          ...(line.partnerId ? { partnerId: line.partnerId } : {}),
+          ...(line.productId ? { productId: line.productId } : {}),
+          ...(line.productUomId ? { productUomId: line.productUomId } : {}),
+          quantity: line.quantity,
+          priceUnit: line.priceUnit,
+          discount: line.discount,
+          ...(line.taxId ? { taxId: line.taxId } : {}),
+          debit: line.credit,
+          credit: line.debit,
+          ...(line.displayType ? { displayType: line.displayType } : {}),
+          sequence: line.sequence,
+        },
+        adapter,
+      )
+    await call('account.postMove', { id: reversalId }, adapter)
+    assert.equal(
+      ((await call('account.getMove', { id: invoiceArgs.id }, adapter)).value as Row).paymentState,
+      'not_paid',
+      'this is the durable state left by a crash after posting the mirror',
+    )
+
+    // The retry only needs the command identity; omitted optional fields resume
+    // from the durable mirror instead of reverting its custom journal/ref/date.
+    const resumed = (
+      await call('account.reverseMove', { id: invoiceArgs.id, reversalId }, adapter)
+    ).value as Row
+    assert.equal(resumed.ok, true)
+    const settled = (await call('account.getMove', { id: invoiceArgs.id }, adapter)).value as Row & {
+      lines: Row[]
+    }
+    assert.equal(settled.paymentState, 'reversed')
+    assert.equal(
+      settled.lines.reduce((sum, line) => sum + Number(line.amountResidual), 0),
+      0,
+    )
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_partial_reconcile'))[0]!.n, 1)
+
+    assert.equal(
+      (
+        (await call('account.reverseMove', { id: invoiceArgs.id, reversalId }, adapter)).value as Row
+      ).ok,
+      true,
+      'a completed resume is idempotent too',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('accounting: posting a manual entry records the total it carries', async () => {
   const adapter = await boot()
   try {
@@ -560,6 +653,146 @@ test('accounting: a journal item id cannot be quietly reused for a different lin
     // A different line under a taken id is a lost write, not a retry.
     assert.equal(
       ((await call('account.addMoveLine', { ...line, debit: '99' }, adapter)).value as Row).ok,
+      false,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: retries require the same normalized financial creation payload', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.saveJournal', { id: 'misc', name: 'Misc', code: 'MISC', type: 'general' }, adapter)
+    const move = {
+      id: 'entry-idempotent',
+      journalId: 'misc',
+      moveType: 'entry',
+      date: '2026-08-20T00:00:00.000Z',
+      ref: 'Batch A',
+    }
+    assert.equal(((await call('account.createMove', move, adapter)).value as Row).ok, true)
+    assert.equal(((await call('account.createMove', move, adapter)).value as Row).ok, true)
+    const reusedMove = (
+      await call('account.createMove', { ...move, ref: 'Batch B' }, adapter)
+    ).value as Row
+    assert.equal(reusedMove.ok, false)
+    assert.equal((reusedMove.errors as Row[])[0]?.code, 'account.error.moveIdReused')
+
+    const invoice = {
+      id: 'invoice-idempotent',
+      journalId: 'sales',
+      moveType: 'out_invoice',
+      partnerId: 'customer',
+      invoiceDate: '2026-08-20T00:00:00.000Z',
+      description: 'Consulting',
+      quantity: '1',
+      priceUnit: '100',
+      lineAccountId: 'revenue',
+      counterpartAccountId: 'receivable',
+    }
+    assert.equal(((await call('account.createInvoice', invoice, adapter)).value as Row).ok, true)
+    await call('account.postMove', { id: invoice.id }, adapter)
+    assert.equal(
+      (
+        (await call(
+          'account.createInvoice',
+          { ...invoice, quantity: '+01.0', priceUnit: '+0100.00', discount: '0.00' },
+          adapter,
+        )).value as Row
+      ).amountTotal,
+      '100',
+      'equivalent decimals replay after mutable posting fields changed',
+    )
+    // A financially different line under the same document id is a conflict,
+    // even though mutable state such as posting name and revision is ignored.
+    const reusedInvoice = (
+      await call('account.createInvoice', { ...invoice, priceUnit: '101' }, adapter)
+    ).value as Row
+    assert.equal(reusedInvoice.ok, false)
+    assert.equal((reusedInvoice.errors as Row[])[0]?.code, 'account.error.invoiceIdReused')
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_move'))[0]!.n, 2)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('accounting: journal items advance the move revision before posting can claim it', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.saveJournal', { id: 'misc', name: 'Misc', code: 'MISC', type: 'general' }, adapter)
+    await call(
+      'account.createMove',
+      {
+        id: 'entry-revision',
+        journalId: 'misc',
+        moveType: 'entry',
+        date: '2026-08-20T00:00:00.000Z',
+      },
+      adapter,
+    )
+    const debit = {
+      id: 'entry-revision:debit',
+      moveId: 'entry-revision',
+      name: 'Debit',
+      accountId: 'bank',
+      debit: '10',
+      expectedRevision: 0,
+    }
+    assert.equal(((await call('account.addMoveLine', debit, adapter)).value as Row).ok, true)
+    assert.equal(
+      (
+        (await call(
+          'account.addMoveLine',
+          {
+            id: 'entry-revision:credit',
+            moveId: 'entry-revision',
+            name: 'Credit',
+            accountId: 'revenue',
+            credit: '10',
+            expectedRevision: 1,
+          },
+          adapter,
+        )).value as Row
+      ).ok,
+      true,
+    )
+    assert.equal(((await call('account.getMove', { id: 'entry-revision' }, adapter)).value as Row).revision, 2)
+
+    const stale = (
+      await call('account.postMove', { id: 'entry-revision', expectedRevision: 1 }, adapter)
+    ).value as Row
+    assert.equal(stale.ok, false)
+    assert.equal((stale.errors as Row[])[0]?.code, 'account.error.moveConcurrent')
+    assert.equal(((await call('account.getMove', { id: 'entry-revision' }, adapter)).value as Row).state, 'draft')
+
+    const attempts = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        call('account.postMove', { id: 'entry-revision', expectedRevision: 2 }, adapter),
+      ),
+    )
+    assert.ok(attempts.every((attempt) => (attempt.value as Row).ok === true))
+    assert.equal(new Set(attempts.map((attempt) => (attempt.value as Row).name)).size, 1)
+
+    assert.equal(
+      ((await call('account.addMoveLine', debit, adapter)).value as Row).existing,
+      true,
+      'the exact completed add is still an idempotent success after posting',
+    )
+    assert.equal(
+      (
+        (await call(
+          'account.addMoveLine',
+          {
+            id: 'entry-revision:late',
+            moveId: 'entry-revision',
+            name: 'Late',
+            accountId: 'bank',
+            debit: '1',
+          },
+          adapter,
+        )).value as Row
+      ).ok,
       false,
     )
   } finally {

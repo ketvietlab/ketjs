@@ -908,6 +908,98 @@ test('live pg: concurrent accounting posts assign one gapless journal sequence',
       posted.map((result) => String((result.value as { name: string }).name)).sort(),
       Array.from({ length: 8 }, (_, index) => `MISC/2026/${String(index + 1).padStart(5, '0')}`),
     )
+
+    await callFn(
+      'account.createMove',
+      {
+        id: 'entry-shared',
+        journalId: 'general',
+        moveType: 'entry',
+        date: '2026-08-20T00:00:00.000Z',
+      },
+      options,
+    )
+    await callFn(
+      'account.addMoveLine',
+      {
+        id: 'entry-shared:debit',
+        moveId: 'entry-shared',
+        name: 'Debit',
+        accountId: 'bank',
+        debit: '1',
+      },
+      options,
+    )
+    await callFn(
+      'account.addMoveLine',
+      {
+        id: 'entry-shared:credit',
+        moveId: 'entry-shared',
+        name: 'Credit',
+        accountId: 'revenue',
+        credit: '1',
+      },
+      options,
+    )
+    const sameMove = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        callFn('account.postMove', { id: 'entry-shared', expectedRevision: 2 }, options),
+      ),
+    )
+    assert.ok(sameMove.every((result) => (result.value as { ok: boolean }).ok))
+    assert.deepEqual(
+      [...new Set(sameMove.map((result) => String((result.value as { name: string }).name)))],
+      ['MISC/2026/00009'],
+      'CAS losers observe the winner and complete as idempotent retries',
+    )
+
+    await callFn(
+      'account.createMove',
+      {
+        id: 'entry-race',
+        journalId: 'general',
+        moveType: 'entry',
+        date: '2026-08-20T00:00:00.000Z',
+      },
+      options,
+    )
+    await callFn(
+      'account.addMoveLine',
+      { id: 'entry-race:debit', moveId: 'entry-race', name: 'Debit', accountId: 'bank', debit: '1' },
+      options,
+    )
+    await callFn(
+      'account.addMoveLine',
+      {
+        id: 'entry-race:credit',
+        moveId: 'entry-race',
+        name: 'Credit',
+        accountId: 'revenue',
+        credit: '1',
+      },
+      options,
+    )
+    const [postRace, lineRace] = await Promise.all([
+      callFn('account.postMove', { id: 'entry-race' }, options),
+      callFn(
+        'account.addMoveLine',
+        { id: 'entry-race:late', moveId: 'entry-race', name: 'Late', accountId: 'bank', debit: '1' },
+        options,
+      ),
+    ])
+    const raced = (
+      await callFn('account.getMove', { id: 'entry-race' }, options)
+    ).value as { state: string; lines: unknown[] }
+    if (raced.state === 'posted') {
+      assert.equal((postRace.value as { ok: boolean }).ok, true)
+      assert.equal((lineRace.value as { ok: boolean }).ok, false)
+      assert.equal(raced.lines.length, 2, 'a posted entry never admits the late line')
+    } else {
+      assert.equal(raced.state, 'draft')
+      assert.equal((postRace.value as { ok: boolean }).ok, false)
+      assert.equal((lineRace.value as { ok: boolean }).ok, true)
+      assert.equal(raced.lines.length, 3, 'posting must revalidate after the line wins the revision')
+    }
   })
 })
 

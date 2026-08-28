@@ -42,11 +42,14 @@ export default defineModule({
       'error.moveDraftOnly': 'Chỉ bút toán ở trạng thái nháp mới ghi sổ được.',
       'error.movePostedOnly': 'Chỉ bút toán đã ghi sổ mới đảo được.',
       'error.moveNotCancellable': 'Bút toán đã ghi sổ được sửa bằng cách đảo, không huỷ trực tiếp.',
+      'error.moveConcurrent': 'Bút toán vừa thay đổi; hãy kiểm tra lại rồi thử lại.',
+      'error.moveIdReused': 'Mã này đã thuộc về một bút toán khác.',
       'error.moveTypeUnsupported': 'Loại chứng từ không được hỗ trợ.',
       'error.linesTooFew': 'Một bút toán cần ít nhất hai dòng.',
       'error.lineSideBoth': 'Mỗi dòng chỉ ghi Nợ hoặc Có, không âm và không ghi cả hai.',
       'error.entryUnbalanced': 'Bút toán chưa cân đối: Nợ {debit}, Có {credit}.',
       'error.reversalNoLines': 'Bút toán không có dòng nào để đảo.',
+      'error.reversalIdReused': 'Mã này đã thuộc về một bút toán đảo khác.',
       'error.lineDraftOnly': 'Chỉ thêm được dòng vào bút toán còn ở trạng thái nháp.',
       'error.lineIdTaken': 'Mã này đã thuộc về một dòng bút toán khác.',
 
@@ -85,6 +88,7 @@ export default defineModule({
 
       'error.invoiceTypeRequired':
         'Chức năng này cần loại chứng từ là hoá đơn, hoá đơn trả lại hoặc biên lai.',
+      'error.invoiceIdReused': 'Mã này đã thuộc về một hoá đơn khác.',
       'error.invoiceAccountsMissing': 'Tài khoản trên hoá đơn không tồn tại.',
       'error.lineAccountUndecided':
         'Chưa chọn tài khoản doanh thu/chi phí, mà nhóm sản phẩm lẫn công ty đều chưa đặt mặc định.',
@@ -135,11 +139,14 @@ export default defineModule({
       'error.moveDraftOnly': 'Only a draft entry can be posted.',
       'error.movePostedOnly': 'Only a posted entry can be reversed.',
       'error.moveNotCancellable': 'A posted entry is corrected by reversing it, not by cancelling it.',
+      'error.moveConcurrent': 'The journal entry changed; review it and try again.',
+      'error.moveIdReused': 'A different journal entry already uses this id.',
       'error.moveTypeUnsupported': 'That document type is not supported.',
       'error.linesTooFew': 'A journal entry needs at least two lines.',
       'error.lineSideBoth': 'Each line takes a debit or a credit, never both, and never a negative amount.',
       'error.entryUnbalanced': 'The entry is not balanced: debit {debit}, credit {credit}.',
       'error.reversalNoLines': 'The entry has no journal items to reverse.',
+      'error.reversalIdReused': 'A different reversal already uses this id.',
       'error.lineDraftOnly': 'Lines can only be added to an entry that is still a draft.',
       'error.lineIdTaken': 'A different journal item already uses this id.',
 
@@ -176,6 +183,7 @@ export default defineModule({
       'error.termPercentRange': 'A percentage must be between 0 and 100.',
 
       'error.invoiceTypeRequired': 'This needs an invoice, refund, or receipt document type.',
+      'error.invoiceIdReused': 'A different invoice already uses this id.',
       'error.invoiceAccountsMissing': 'The accounts on this invoice do not exist.',
       'error.lineAccountUndecided':
         'No revenue or expense account was given, and neither the product category nor the company has a default.',
