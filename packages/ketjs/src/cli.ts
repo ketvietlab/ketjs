@@ -16,7 +16,8 @@ import { agentDescriptor } from './agent/capabilities.ts'
 import { reachOf, functionsOf, formatReach, formatInventory, grantsOfRole } from './agent/permissions.ts'
 import { readConfig, sqliteStore } from './server/config.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
-import { migrateOne, migrateFleet, formatFleet } from './data/fleet.ts'
+import { migrateOne, migrateFleet, formatFleet, verifyPhysicalSchema } from './data/fleet.ts'
+import type { PhysicalSchemaVerification } from './data/fleet.ts'
 import { createAdapterPool } from './data/pool.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
 import { bootDeployment, serveDeployment } from './server/boot.ts'
@@ -181,6 +182,8 @@ const HELP = `ket — zero-dependency fullstack framework
     --role NAME             …or what a role in the database actually grants
   ket migrate [--deployment X]     plan migrations (add --allow-destructive to permit data loss)
     --all                   …or apply them to every tenant database (add --dry-run)
+  ket schema verify [--deployment X]  compare the physical database, migration marker, and manifest
+    --tenant KEY            select one tenant database; --all verifies the complete tenant fleet
   ket diff --against FILE   compare the current manifest with a stored one
   ket snapshot [--deployment X]    write .ket/manifest.<deployment>.json for a later diff
 
@@ -217,6 +220,28 @@ Options: --workspace FILE (default: dist/ket.workspace.js, ket.workspace.js, wor
 `
 
 const TEST_VALUE_OPTIONS = ['test-name-pattern', 'test-concurrency', 'reporter', 'out-dir'] as const
+
+const formatSchemaVerification = (datastore: string, report: PhysicalSchemaVerification): string => {
+  if (report.ok) return `ok    ${datastore.padEnd(24)} physical schema, marker and manifest agree`
+
+  const lines = [`FAIL  ${datastore.padEnd(24)} schema verification failed`]
+  if (!report.applied) lines.push('  marker: missing')
+  else if (!report.markerMatchesManifest) lines.push('  marker: differs from the current manifest')
+
+  if (report.applied && report.markerIssues.length) {
+    lines.push('  physical vs marker:')
+    for (const issue of report.markerIssues) lines.push(`    - ${issue}`)
+  }
+  const sameIssues =
+    report.markerMatchesManifest &&
+    report.markerIssues.length === report.manifestIssues.length &&
+    report.markerIssues.every((issue, index) => issue === report.manifestIssues[index])
+  if (!sameIssues && report.manifestIssues.length) {
+    lines.push('  physical vs manifest:')
+    for (const issue of report.manifestIssues) lines.push(`    - ${issue}`)
+  }
+  return lines.join('\n')
+}
 
 const collectTests = (path: string): string[] => {
   if (!existsSync(path)) throw new Error(`test path does not exist: ${path}`)
@@ -400,7 +425,7 @@ try {
   }
 
   const { ws, deployments: specs, resolved } = await loadWorkspace()
-  if (!(cmd === 'migrate' && flag('dry-run'))) mkdirSync('.ket', { recursive: true })
+  if (!(cmd === 'migrate' && flag('dry-run')) && cmd !== 'schema') mkdirSync('.ket', { recursive: true })
 
   if (cmd === 'serve') {
     const spec = pickSpec(specs)
@@ -616,6 +641,100 @@ try {
     const items = diffManifests(before, m)
     console.log(formatDiff(items))
     process.exit(items.some((i) => i.severity === 'breaking') ? 1 : 0)
+  } else if (cmd === 'schema') {
+    const action = positionals(['workspace', 'module-path', 'deployment', 'tenant'])[0]
+    if (action !== 'verify')
+      throw new Error('usage: ket schema verify [--deployment NAME] [--tenant NAME | --all]')
+
+    if (flag('all')) {
+      if (opt('tenant')) throw new Error('pass either --tenant NAME or --all, not both')
+      const spec = pickFleetSpec(specs)
+      const tenants = spec.serve?.tenants
+      if (!tenants) throw new Error(`deployment "${spec.name}" serves a single datastore; drop --all`)
+      const tenantExists = tenants.exists
+      if (!tenantExists)
+        throw new Error(
+          `deployment "${spec.name}" must define serve.tenants.exists(key, config) before schema verification can inspect tenant datastores without creating them`,
+        )
+      const config = readConfig(process.env, {
+        sqliteFile: `.ket/${spec.name}.db`,
+        ...spec.serve?.defaults,
+      })
+      const pool = createAdapterPool({ create: (key) => tenants.open(key, config) })
+      let failed = false
+      try {
+        const manifest = ws.deployments[spec.name] as Manifest
+        const lines: string[] = []
+        for (const key of await tenants.list()) {
+          try {
+            if (!(await tenantExists(key, config))) {
+              failed = true
+              lines.push(
+                `FAIL  ${key.padEnd(24)} datastore does not exist; schema verification will not create it`,
+              )
+              continue
+            }
+            const report = await pool.with(key, (adapter) => verifyPhysicalSchema(adapter, manifest))
+            lines.push(formatSchemaVerification(key, report))
+            failed ||= !report.ok
+          } catch (error) {
+            failed = true
+            lines.push(`FAIL  ${key.padEnd(24)} ${(error as Error).message}`)
+          }
+        }
+        console.log(lines.join('\n'))
+      } finally {
+        await pool.close()
+      }
+      process.exitCode = failed ? 1 : 0
+    } else {
+      const spec = pickSpec(specs)
+      if (!spec.serve)
+        throw new Error(
+          `deployment "${spec.name}" declares no serve block, so there is no datastore to verify`,
+        )
+      const tenant = opt('tenant')
+      if (spec.serve.tenants && !tenant)
+        throw new Error(`deployment "${spec.name}" has tenant databases; pass --tenant NAME or --all`)
+      if (!spec.serve.tenants && tenant)
+        throw new Error(`deployment "${spec.name}" serves a single datastore; drop --tenant`)
+      const config = readConfig(process.env, {
+        sqliteFile: `.ket/${spec.name}.db`,
+        ...spec.serve.defaults,
+      })
+      if (
+        !spec.serve.tenants &&
+        !spec.serve.openStore &&
+        !config.databaseUrl &&
+        config.sqliteFile !== ':memory:' &&
+        !existsSync(config.sqliteFile)
+      )
+        throw new Error(
+          `SQLite datastore "${config.sqliteFile}" does not exist; schema verification will not create it`,
+        )
+      if (spec.serve.tenants) {
+        const tenantExists = spec.serve.tenants.exists
+        if (!tenantExists)
+          throw new Error(
+            `deployment "${spec.name}" must define serve.tenants.exists(key, config) before schema verification can inspect tenant datastores without creating them`,
+          )
+        if (!(await tenantExists(tenant as string, config)))
+          throw new Error(
+            `tenant datastore "${tenant}" does not exist; schema verification will not create it`,
+          )
+      }
+      const adapter = spec.serve.tenants
+        ? await spec.serve.tenants.open(tenant as string, config)
+        : await (spec.serve.openStore ?? sqliteStore)(config)
+      if (spec.serve.tenants) await adapter.open()
+      try {
+        const report = await verifyPhysicalSchema(adapter, ws.deployments[spec.name] as Manifest)
+        console.log(formatSchemaVerification(tenant ?? spec.name, report))
+        process.exitCode = report.ok ? 0 : 1
+      } finally {
+        await adapter.close()
+      }
+    }
   } else if (cmd === 'migrate') {
     if (flag('all')) {
       // The fleet. A deployment that ships a new module has to reach every tenant

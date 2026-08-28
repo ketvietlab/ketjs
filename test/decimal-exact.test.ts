@@ -106,6 +106,25 @@ const ledger = defineModule({
         )
       },
     },
+    average: {
+      input: { scale: 'int' },
+      effects: ['read:ledger.Entry'],
+      handler: (ctx, args) => {
+        const Entry = ctx.table('ledger.Entry')
+        return ctx.db.group(
+          from(Entry)
+            .groupBy({ col: Entry.note! })
+            .aggregate({
+              fn: 'avg',
+              col: Entry.amount!,
+              as: 'average',
+              scale: Number(args.scale),
+              rounding: 'half-away-from-zero',
+            })
+            .orderGroupsBy({ by: 'key', dir: 'asc' }),
+        )
+      },
+    },
   },
 })
 
@@ -336,29 +355,101 @@ test('decimal: every public write, filter, and UDF boundary enforces 4096 charac
 test('decimal: legacy columns without base metadata fail instead of falling back to SQLite coercion', () => {
   const Entry = table(compose([ledger]), 'ledger.Entry')
   const legacy = { model: 'ledger.Entry', name: 'amount' }
-  assert.throws(() => gte(legacy as never, '1'), /metadata must include model, name, and base/)
+  assert.throws(() => gte(legacy as never, '1'), /metadata cannot be constructed by hand/)
   assert.throws(
     () =>
       from(Entry)
         .groupBy({ col: Entry.note! })
         .aggregate({ fn: 'avg', col: legacy as never, as: 'average' }),
-    /metadata must include model, name, and base/,
+    /metadata cannot be constructed by hand/,
+  )
+
+  const forged = { ...legacy, base: 'text' }
+  assert.throws(
+    () => gte(forged as never, '1'),
+    /metadata cannot be constructed by hand/,
+    'a caller cannot lie about the base type to bypass exact decimal SQL',
+  )
+
+  const copied = { ...Entry.amount, base: 'text' }
+  assert.throws(
+    () => gte(copied as never, '1'),
+    /metadata cannot be constructed by hand/,
+    'spreading a real handle does not copy its private identity',
   )
 })
 
-test('decimal: SQLite average fails before execution unless the caller chooses a rounding rule', () => {
+test('decimal: average requires an explicit portable rounding contract', () => {
   const Entry = table(compose([ledger]), 'ledger.Entry')
-  const average = from(Entry)
+  const implicit = from(Entry)
     .groupBy({ col: Entry.note! })
     .aggregate({ fn: 'avg', col: Entry.amount!, as: 'average' })
+  for (const dialect of ['sqlite', 'postgres'] as const)
+    assert.throws(
+      () => implicit.toSQL(dialect),
+      (error: unknown) => (error as { code?: string }).code === 'E_DECIMAL_AVG_ROUNDING_REQUIRED',
+    )
+
+  const explicit = from(Entry).groupBy({ col: Entry.note! }).aggregate({
+    fn: 'avg',
+    col: Entry.amount!,
+    as: 'average',
+    scale: 2,
+    rounding: 'half-away-from-zero',
+  })
+  const sqlite = explicit.toSQL('sqlite')
+  const postgres = explicit.toSQL('postgres')
+  assert.match(sqlite.text, /ket_decimal_avg\(.*"amount", \?\) AS "average"/)
+  assert.deepEqual(sqlite.params, [2])
+  assert.match(postgres.text, /DIV\(ABS\(SUM\(.*"amount"\)\)/)
+  assert.match(postgres.text, /MOD\(ABS\(SUM\(.*"amount"\)\)/)
+  assert.match(postgres.text, /CAST\(\('1e' \|\| CAST\(\$1 AS TEXT\)\) AS NUMERIC\)/)
+  assert.deepEqual(postgres.params, [2])
+
+  const invalidScale = from(Entry).groupBy({ col: Entry.note! }).aggregate({
+    fn: 'avg',
+    col: Entry.amount!,
+    as: 'average',
+    scale: -1,
+    rounding: 'half-away-from-zero',
+  })
   assert.throws(
-    () => average.toSQL('sqlite'),
-    (error: unknown) => {
-      const held = error as { code?: string; hint?: string }
-      return held.code === 'E_DECIMAL_AVG_SQLITE' && Boolean(held.hint?.includes('same decimal column'))
-    },
+    () => invalidScale.toSQL('sqlite'),
+    (error: unknown) => (error as { code?: string }).code === 'E_DECIMAL_AVG_SCALE',
   )
-  assert.match(average.toSQL('postgres').text, /AVG\(.*"amount"\) AS "average"/)
+})
+
+test('decimal: SQLite computes explicitly rounded averages without binary floats', async (t) => {
+  const { adapter, manifest } = await boot()
+  t.after(() => adapter.close())
+  for (const [id, amount, note] of [
+    ['third-1', '1', 'third'],
+    ['third-2', '0', 'third'],
+    ['third-3', '0', 'third'],
+    ['negative-1', '-1', 'negative'],
+    ['negative-2', '0', 'negative'],
+    ['missing', null, 'third'],
+  ] as const)
+    await callFn('ledger.putNullable', { id, amount, note }, { adapter, manifest })
+
+  const hundredths = (await callFn('ledger.average', { scale: 2 }, { adapter, manifest })).value as Row[]
+  assert.deepEqual(hundredths, [
+    { key: ['negative'], count: 2, aggregates: { average: '-0.5' } },
+    { key: ['third'], count: 4, aggregates: { average: '0.33' } },
+  ])
+  const integers = (await callFn('ledger.average', { scale: 0 }, { adapter, manifest })).value as Row[]
+  assert.equal((integers[0]!.aggregates as Row).average, '-1', 'ties round away from zero like NUMERIC')
+})
+
+test('decimal: SQLite average permits a wider intermediate sum when the result fits', async (t) => {
+  const { adapter, manifest } = await boot()
+  t.after(() => adapter.close())
+  const value = '9'.repeat(4096)
+  for (const id of ['wide-1', 'wide-2'])
+    await callFn('ledger.putNullable', { id, amount: value, note: 'wide' }, { adapter, manifest })
+
+  const rows = (await callFn('ledger.average', { scale: 0 }, { adapter, manifest })).value as Row[]
+  assert.equal((rows[0]!.aggregates as Row).average, value)
 })
 
 test('decimal: SQLite orders exact aggregate aliases numerically', async (t) => {

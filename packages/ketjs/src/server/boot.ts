@@ -19,7 +19,7 @@ import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
-import { createSessions, dbSessionStore } from './session.ts'
+import { createSessions, dbSessionStore, scopeForSession } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
 import { createJoints } from '../theme/joints.ts'
 import { buildMenu } from '../kernel/menu.ts'
@@ -532,12 +532,7 @@ export async function bootDeployment(
       const s = await sessionsOf(url, req)
       return s?.scopeOf(null) ?? { company: null }
     }
-    return {
-      companies: record.companies,
-      company: record.company,
-      branch: record.branch,
-      branches: record.branches,
-    }
+    return scopeForSession(record) ?? { company: null }
   }
 
   /**

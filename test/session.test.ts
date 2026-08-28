@@ -208,6 +208,36 @@ test('session: the scope is exactly the shape D32 defined', async () => {
   })
 })
 
+test('session: scopes detach arrays from records and anonymous policy', async () => {
+  const anonymous = {
+    company: 'public',
+    companies: ['public', 'catalog'],
+    branch: 'web',
+    branches: ['web'],
+  }
+  const s = await createSessions({ store: memorySessionStore(), secret: 'k', anonymous })
+  const { record } = await s.start({
+    userId: 'u1',
+    companies: ['c1', 'c2'],
+    branches: ['north', 'south'],
+  })
+
+  const authenticated = s.scopeOf(record)!
+  authenticated.companies!.push('mutated')
+  authenticated.branches!.push('mutated')
+  assert.deepEqual(record.companies, ['c1', 'c2'])
+  assert.deepEqual(record.branches, ['north', 'south'])
+  assert.deepEqual(s.scopeOf(record)?.companies, ['c1', 'c2'])
+  assert.deepEqual(s.scopeOf(record)?.branches, ['north', 'south'])
+
+  const publicScope = s.scopeOf(null)!
+  publicScope.companies!.push('mutated')
+  publicScope.branches!.push('mutated')
+  assert.deepEqual(anonymous.companies, ['public', 'catalog'])
+  assert.deepEqual(anonymous.branches, ['web'])
+  assert.deepEqual(s.scopeOf(null), anonymous)
+})
+
 test('session: writing to a company the user is not a member of is refused at login', async () => {
   const s = await createSessions({ store: memorySessionStore(), secret: 'k' })
   await assert.rejects(
