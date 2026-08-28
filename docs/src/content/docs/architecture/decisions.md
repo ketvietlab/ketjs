@@ -1933,21 +1933,17 @@ Archiving, check-in, manual status changes and task creation all compare the sam
 requires the property, room type, building and floor to be active and returns the room
 to the front-desk candidate set without deleting its assignment, stay or task history.
 
-## D64 — Accounting includes one mandatory Vietnam TT99 data pack
+## D64 — Accounting core never selects a jurisdiction
 
-The `account` module owns the data that makes Accounting usable. KetSuite does not
-split country data into an `account_localization` application and does not expose a
-Circular 200/Circular 99 selector. For a Vietnam company, the first Accounting read
-installs the `TT99_2025` chart, Vietnam taxes, journals and payment terms in one
-idempotent transaction, then records the legal basis and source checksum in
-`account.Setup`.
+The public `account` module owns double-entry posting, exact money, reconciliation,
+period controls and jurisdiction-neutral books. Its first initialization freezes the
+ledger currency and accounting timezone but does not install a chart, taxes, statutory
+forms or legal metadata. Those belong to a separately deployed localization.
 
-The statutory code is the identity used to preserve existing company accounts: setup
-does not replace a row that already owns a code, and generated journals resolve that
-row as their default. Concurrent requests converge on one setup row and one code per
-company. A company outside Vietnam is refused instead of receiving plausible-looking
-Vietnam accounting data silently. Future country packs remain data inside `account`;
-they do not become hundreds of installable source modules.
+`account.Setup.standard` records which localization is active. A non-custom standard
+makes the public close engine require checksummed `account.CloseEvidence` from that
+localization, so direct use of the core close command cannot bypass statutory checks.
+Core neither knows the provider's form codes nor stores its filing artifacts.
 
 ## D65 — Front-desk identity intake is stay-scoped and exposes only a safe projection
 

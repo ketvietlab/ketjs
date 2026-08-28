@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { seedAccountingTestFixture } from './accounting-test-fixture.ts'
 
 const bootBills = async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
@@ -11,6 +12,7 @@ const bootBills = async (t: TestContext) => {
   const fixture = (name: string, input: Record<string, unknown>) => app.fixture.call(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
+  await seedAccountingTestFixture(fixture)
   await fixture('user.createUser', {
     id: 'admin',
     login: 'admin',

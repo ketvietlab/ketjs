@@ -125,6 +125,44 @@ test('account PostgreSQL: line/post and reversal races preserve one exact ledger
       )
     }
 
+    await call(first, 'account.createMove', {
+      id: 'period-lock-race',
+      journalId: 'sales',
+      moveType: 'entry',
+      accountingDate: '2026-07-31',
+    })
+    await call(first, 'account.addMoveLine', {
+      id: 'period-lock-race:debit',
+      moveId: 'period-lock-race',
+      name: 'Debit',
+      accountId: 'bank',
+      debit: '10',
+    })
+    await call(first, 'account.addMoveLine', {
+      id: 'period-lock-race:credit',
+      moveId: 'period-lock-race',
+      name: 'Credit',
+      accountId: 'revenue',
+      credit: '10',
+    })
+    const [lockResult, lockRacePost] = await Promise.all([
+      call(first, 'account.changePeriodLock', {
+        id: 'lock-july-sales',
+        scope: 'sales',
+        through: '2026-07-31',
+        reason: 'Concurrent July close',
+      }),
+      call(second, 'account.postMove', { id: 'period-lock-race' }),
+    ])
+    assert.equal(lockResult.ok, true)
+    const lockRacedMove = await call(first, 'account.getMove', { id: 'period-lock-race' })
+    if (lockRacePost.ok === true) assert.equal(lockRacedMove.state, 'posted')
+    else {
+      assert.equal(lockRacedMove.state, 'draft')
+      assert.match(JSON.stringify(lockRacePost.errors), /periodLocked|periodConcurrent/u)
+      assert.equal((await call(first, 'account.postMove', { id: 'period-lock-race' })).ok, false)
+    }
+
     const invoiceId = 'exact-invoice'
     const amount = '9007199254740993'
     assert.equal(

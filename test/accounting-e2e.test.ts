@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { seedAccountingTestFixture } from './accounting-test-fixture.ts'
 
 async function bootAccounting(t: TestContext) {
   const e2e = await createTestDeployment(ketsuite, { worker: false })
@@ -15,6 +16,7 @@ async function bootAccounting(t: TestContext) {
     partnerId: 'acme-party',
     currency: 'VND',
   })
+  await seedAccountingTestFixture(fixture)
   await fixture('user.createUser', {
     id: 'admin',
     login: 'admin',
@@ -43,12 +45,12 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
   const journals = (await call<Row[]>('account.listJournals')).value
   const taxes = (await call<Row[]>('account.listTaxes', { typeTaxUse: 'sale' })).value
   const terms = (await call<Row[]>('account.listPaymentTerms')).value
-  assert.equal(accounts.length, 216)
+  assert.equal(accounts.length, 9)
   const accountId = (code: string) => String(accounts.find((row) => row.code === code)?.id)
   const salesJournalId = String(journals.find((row) => row.type === 'sale')?.id)
   const bankJournalId = String(journals.find((row) => row.type === 'bank')?.id)
   const vat10Id = String(taxes.find((row) => Number(row.amount) === 10)?.id)
-  const net30Id = String(terms.find((row) => row.name === '30 ngày')?.id)
+  const net30Id = String(terms.find((row) => row.name === 'Net 30')?.id)
 
   const created = (
     await call<Row>('account.createInvoice', {
@@ -62,8 +64,8 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       description: 'Dịch vụ triển khai',
       quantity: '2',
       priceUnit: '100',
-      lineAccountId: accountId('511'),
-      counterpartAccountId: accountId('1311'),
+      lineAccountId: accountId('REV'),
+      counterpartAccountId: accountId('AR'),
       taxId: vat10Id,
     })
   ).value
@@ -72,7 +74,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
 
   const openItems = (await call<Row[]>('account.listOpenItems', { partnerId: 'customer' })).value
   assert.equal(openItems.length, 1)
-  assert.equal(openItems[0]!.accountId, accountId('1311'))
+  assert.equal(openItems[0]!.accountId, accountId('AR'))
   const receivableLineId = String(openItems[0]!.id)
 
   await call('account.registerPayment', {
@@ -82,7 +84,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     partnerType: 'customer',
     partnerId: 'customer',
     journalId: bankJournalId,
-    destinationAccountId: accountId('1311'),
+    destinationAccountId: accountId('AR'),
     amount: '100',
     reconcileLineId: receivableLineId,
   })
@@ -94,7 +96,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     partnerType: 'customer',
     partnerId: 'customer',
     journalId: bankJournalId,
-    destinationAccountId: accountId('1311'),
+    destinationAccountId: accountId('AR'),
     amount: '120',
     reconcileLineId: receivableLineId,
   })
@@ -110,7 +112,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
     trial.reduce((sum, row) => sum + Number(row.credit), 0),
     440,
   )
-  assert.ok((await call<Row[]>('account.generalLedger', { accountId: accountId('1311') })).value.length >= 3)
+  assert.ok((await call<Row[]>('account.generalLedger', { accountId: accountId('AR') })).value.length >= 3)
 
   const pages: Array<[string, RegExp]> = [
     ['/admin/accounting', /Tổng quan kế toán/],
@@ -140,7 +142,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.match(html, /data-island="activity\.record"/)
     }
     // Every field that names an account reaches the whole chart — over two hundred
-    // rows once the TT99 pack is installed — so each is a picker with a search
+    // rows once a chart is installed — so each is a picker with a search
     // dialog rather than a select the reader scrolls.
     if (path === '/admin/accounting/general-ledger') {
       assert.match(html, /data-island="backend\.relation-select"/, path)
@@ -232,7 +234,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
   assert.equal(english.status, 200)
   const englishHtml = await english.text()
   assert.match(englishHtml, /Chart of accounts/)
-  // The statutory chart reads in the reader's language, not only in Vietnamese.
+  // The installed chart reads in the reader's language.
   assert.match(englishHtml, /Cash/)
   assert.doesNotMatch(englishHtml, /Tiền mặt/)
 })
@@ -240,7 +242,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
 test('e2e accounting: a chart entry is corrected in place, and archived out of the pickers', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   const accounts = (await call<Row[]>('account.listAccounts')).value
-  const target = accounts.find((row) => row.code === '111')!
+  const target = accounts.find((row) => row.code === 'CASH')!
   const path = '/admin/accounting/accounts'
 
   const createPage = await e2e.client.get(`${path}?lang=vi&create=1`, {
@@ -312,23 +314,23 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
   assert.equal(editor.status, 200)
   assert.match(editorHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(editorHtml, /Sửa tài khoản/)
-  assert.match(editorHtml, /value="111"/)
+  assert.match(editorHtml, /value="CASH"/)
 
   const save = await e2e.client.post(
     `${path}?edit=${encodeURIComponent(String(target.id))}`,
-    new URLSearchParams({ code: '111', name: 'Tiền mặt tại quỹ', accountType: 'asset_cash', active: '1' }),
+    new URLSearchParams({ code: 'CASH', name: 'Tiền mặt tại quỹ', accountType: 'asset_cash', active: '1' }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(save.status, 303)
   const corrected = (await call<Row[]>('account.listAccounts')).value
   assert.equal(corrected.find((row) => row.id === target.id)!.name, 'Tiền mặt tại quỹ')
   // Corrected in place — not duplicated into a second row nobody can remove.
-  assert.equal(corrected.filter((row) => row.code === '111').length, 1)
+  assert.equal(corrected.filter((row) => row.code === 'CASH').length, 1)
   assert.equal(corrected.length, accounts.length + 1)
 
   const archive = await e2e.client.post(
     `${path}?edit=${encodeURIComponent(String(target.id))}`,
-    new URLSearchParams({ code: '111', name: 'Tiền mặt tại quỹ', accountType: 'asset_cash' }),
+    new URLSearchParams({ code: 'CASH', name: 'Tiền mặt tại quỹ', accountType: 'asset_cash' }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(archive.status, 303)
@@ -348,7 +350,7 @@ test('e2e accounting: a chart entry is corrected in place, and archived out of t
 test('e2e accounting: journal list and form preserve relations, correction, archive and safe writes', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   const accounts = (await call<Row[]>('account.listAccounts')).value
-  const defaultAccount = accounts.find((row) => row.code === '112')!
+  const defaultAccount = accounts.find((row) => row.code === 'BANK')!
   const path = '/admin/accounting/journals'
 
   const createPage = await e2e.client.get(`${path}?lang=vi&create=1`, {
@@ -475,7 +477,7 @@ test('e2e accounting: journal list and form preserve relations, correction, arch
 test('e2e accounting: tax list and form preserve computation, account, ordering and safe writes', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   const accounts = (await call<Row[]>('account.listAccounts')).value
-  const taxAccount = accounts.find((row) => row.code === '33311') ?? accounts[0]!
+  const taxAccount = accounts.find((row) => row.code === 'TAX.OUT') ?? accounts[0]!
   const path = '/admin/accounting/taxes'
 
   const createPage = await e2e.client.get(`${path}/new?lang=vi`, {
@@ -642,8 +644,8 @@ test('e2e accounting: a posted document is corrected by a reversal reached from 
     description: 'Ghi nhầm',
     quantity: '1',
     priceUnit: '750000',
-    lineAccountId: accountId('511'),
-    counterpartAccountId: accountId('1311'),
+    lineAccountId: accountId('REV'),
+    counterpartAccountId: accountId('AR'),
   })
   await call('account.postMove', { id: 'invoice-9' })
 
@@ -678,7 +680,7 @@ test('e2e accounting: a refused form says which rule it broke and keeps what was
   await call('partner.savePartner', { id: 'supplier', kind: 'company', name: 'Nhà cung cấp ABC' })
   const accounts = (await call<Row[]>('account.listAccounts')).value
   const journals = (await call<Row[]>('account.listJournals')).value
-  const receivable = String(accounts.find((row) => row.code === '1311')?.id)
+  const receivable = String(accounts.find((row) => row.code === 'AR')?.id)
 
   const form = new URLSearchParams({
     name: 'PAY/CHI/001',
@@ -722,7 +724,7 @@ test('e2e accounting: a payment can only be pointed at an account it could settl
     .map((match) => match[1]!)
     .filter(Boolean)
   assert.ok(options.length > 0)
-  // Offering all 216 accounts made the default selection a guaranteed refusal.
+  // Offering every account made the default selection a guaranteed refusal.
   const offered = accounts.filter((row) => options.includes(String(row.id)))
   assert.equal(offered.length, options.length)
   assert.ok(
@@ -747,8 +749,8 @@ test('e2e accounting: the overview reports posted moves, and never a draft', asy
     description: 'Dịch vụ',
     quantity: '1',
     priceUnit: '100000',
-    lineAccountId: accountId('511'),
-    counterpartAccountId: accountId('1311'),
+    lineAccountId: accountId('REV'),
+    counterpartAccountId: accountId('AR'),
   })
   // A second document that is never posted. The card that used to be here
   // counted rows, so a draft moved it; this screen reports the ledger, and a
@@ -762,8 +764,8 @@ test('e2e accounting: the overview reports posted moves, and never a draft', asy
     description: 'Chưa ghi sổ',
     quantity: '1',
     priceUnit: '900000',
-    lineAccountId: accountId('511'),
-    counterpartAccountId: accountId('1311'),
+    lineAccountId: accountId('REV'),
+    counterpartAccountId: accountId('AR'),
   })
 
   const june = 'dateFrom=2026-06-01&dateTo=2026-06-30'
@@ -799,7 +801,7 @@ test('e2e accounting: the overview reports posted moves, and never a draft', asy
       dateTo: '2026-06-30',
     })
   ).value
-  assert.equal(Number(trial.find((row) => row.code === '511')?.credit), 100000)
+  assert.equal(Number(trial.find((row) => row.code === 'REV')?.credit), 100000)
   // The expense breakdown links into the ledger behind each account, and the
   // window travels with it: a figure nobody can open is one to trust blindly.
   assert.match(posted, /data-island="backend\.chart"/)
@@ -821,8 +823,8 @@ test('e2e accounting: the ledger names the account, and a draft is not titled by
     description: 'Dịch vụ',
     quantity: '1',
     priceUnit: '100000',
-    lineAccountId: accountId('511'),
-    counterpartAccountId: accountId('1311'),
+    lineAccountId: accountId('REV'),
+    counterpartAccountId: accountId('AR'),
   })
   await call('account.postMove', { id: 'invoice-ledger' })
   await call('account.createMove', {
@@ -835,8 +837,8 @@ test('e2e accounting: the ledger names the account, and a draft is not titled by
   const ledger = await (
     await e2e.client.get('/admin/accounting/general-ledger?lang=vi', { headers: { accept: 'text/html' } })
   ).text()
-  assert.match(ledger, /511 · Doanh thu/)
-  assert.match(ledger, /1311 · Phải thu/)
+  assert.match(ledger, /REV · Revenue/)
+  assert.match(ledger, /AR · Trade receivables/)
 
   // A draft carries no journal number yet, so `name` still holds its raw id. The
   // id belongs in the link, never in what the reader is shown.
@@ -928,14 +930,14 @@ test('e2e accounting: payment-term sheets preserve list state, write safety and 
 test('e2e accounting: a payment term shows the milestones that define it, and they are editable', async (t) => {
   const { e2e, call } = await bootAccounting(t)
   const terms = (await call<Row[]>('account.listPaymentTerms')).value
-  const net30 = terms.find((row) => row.name === '30 ngày')!
+  const net30 = terms.find((row) => row.name === 'Net 30')!
   const line = (net30.lines as Row[])[0]!
 
   const listed = await (
     await e2e.client.get('/admin/accounting/terms?lang=vi', { headers: { accept: 'text/html' } })
   ).text()
   // Counting the milestones and hiding them left the screen unable to say what
-  // "30 ngày" actually means.
+  // "Net 30" actually means.
   assert.match(listed, /Số ngày sau ngày hoá đơn/)
   assert.match(listed, new RegExp(`editLine=${encodeURIComponent(String(line.id)).replace(/%/g, '%')}`))
 
@@ -996,7 +998,7 @@ test('e2e accounting: a figure on a report opens the rows that produced it', asy
     journalId: String(
       (await call<Row[]>('account.listJournals')).value.find((row) => row.type === 'bank')?.id,
     ),
-    destinationAccountId: idOf('1311'),
+    destinationAccountId: idOf('AR'),
     amount: '400000',
   })
 
@@ -1009,7 +1011,7 @@ test('e2e accounting: a figure on a report opens the rows that produced it', asy
   ).text()
   assert.match(
     trial,
-    new RegExp(`href="/admin/accounting/general-ledger\\?accountId=${encodeURIComponent(idOf('1311'))}`),
+    new RegExp(`href="/admin/accounting/general-ledger\\?accountId=${encodeURIComponent(idOf('AR'))}`),
   )
   assert.match(trial, /dateFrom=2026-01-01/)
 
@@ -1032,12 +1034,12 @@ test('e2e accounting: an invoice form no longer asks which accounts to post to',
   const { e2e, call } = await bootAccounting(t)
   await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Khách hàng ABC' })
 
-  // The install decides the statutory answer once, so the company starts configured.
+  // The deployment fixture selects its own chart, so the company starts configured.
   const defaults = (await call<Row>('account.getDefaults')).value
   const accounts = (await call<Row[]>('account.listAccounts')).value
   const codeOf = (id: unknown) => String(accounts.find((row) => String(row.id) === String(id))?.code)
-  assert.equal(codeOf(defaults.incomeAccountId), '511')
-  assert.equal(codeOf(defaults.receivableAccountId), '1311')
+  assert.equal(codeOf(defaults.incomeAccountId), 'REV')
+  assert.equal(codeOf(defaults.receivableAccountId), 'AR')
 
   // Neither account field is required, and each says where its value comes from.
   const form = await (
@@ -1069,11 +1071,8 @@ test('e2e accounting: an invoice form no longer asks which accounts to post to',
   assert.equal(created.status, 303)
   const id = String(created.headers.get('location')).split('/').pop()?.split('?')[0]
   const invoice = (await call<Row>('account.getMove', { id })).value as Row & { lines: Row[] }
-  assert.equal(codeOf(invoice.lines.find((row) => String(row.id).endsWith(':base'))?.accountId), '511')
-  assert.equal(
-    codeOf(invoice.lines.find((row) => String(row.id).endsWith(':counterpart'))?.accountId),
-    '1311',
-  )
+  assert.equal(codeOf(invoice.lines.find((row) => String(row.id).endsWith(':base'))?.accountId), 'REV')
+  assert.equal(codeOf(invoice.lines.find((row) => String(row.id).endsWith(':counterpart'))?.accountId), 'AR')
 })
 
 test('e2e accounting: a product category posts to the accounts it was given', async (t) => {
@@ -1085,7 +1084,7 @@ test('e2e accounting: a product category posts to the accounts it was given', as
 
   const saved = await e2e.client.post(
     '/admin/accounting/defaults?lang=vi',
-    new URLSearchParams({ action: 'category', categoryId: 'services', incomeAccountId: idOf('515') }),
+    new URLSearchParams({ action: 'category', categoryId: 'services', incomeAccountId: idOf('REV.OTHER') }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(saved.status, 303)
@@ -1094,7 +1093,7 @@ test('e2e accounting: a product category posts to the accounts it was given', as
     await e2e.client.get('/admin/accounting/defaults?lang=vi', { headers: { accept: 'text/html' } })
   ).text()
   assert.match(screen, /Dịch vụ/)
-  assert.match(screen, /515 · Doanh thu hoạt động tài chính/)
+  assert.match(screen, /REV\.OTHER · Other revenue/)
 
   await call('product.saveTemplate', {
     id: 'consulting',
@@ -1120,6 +1119,6 @@ test('e2e accounting: a product category posts to the accounts it was given', as
     lines: Row[]
   }
   // The category is narrower than the company, so it decides the revenue account.
-  assert.equal(invoice.lines.find((row) => String(row.id).endsWith(':base'))?.accountId, idOf('515'))
-  assert.equal(invoice.lines.find((row) => String(row.id).endsWith(':counterpart'))?.accountId, idOf('1311'))
+  assert.equal(invoice.lines.find((row) => String(row.id).endsWith(':base'))?.accountId, idOf('REV.OTHER'))
+  assert.equal(invoice.lines.find((row) => String(row.id).endsWith(':counterpart'))?.accountId, idOf('AR'))
 })
