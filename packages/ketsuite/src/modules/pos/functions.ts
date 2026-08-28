@@ -2221,6 +2221,8 @@ export const functions: Record<string, FnSpec> = {
         if (session?.state !== 'opened') return invalid('sessionId', 'return requires an open session')
         if (String(session.configId) !== String(original.configId))
           return invalid('sessionId', 'return shift must use the original POS configuration and warehouse')
+        const claim = await claimOrderRevision(tx, original.id, args.expectedRevision)
+        if (claim.ok !== true) return claim
 
         const eligibility = await returnableLines(tx, original)
         const eligible = new Map(eligibility.map((entry) => [String(entry.line.id), entry] as const))
@@ -2343,8 +2345,6 @@ export const functions: Record<string, FnSpec> = {
           })
         }
 
-        const claim = await claimOrderRevision(tx, original.id, args.expectedRevision)
-        if (claim.ok !== true) return claim
         const sequenceNumber = await nextOrderNumber(tx, args.sessionId)
         const name = `Order ${String(sequenceNumber).padStart(5, '0')}`
         await tx.db.insert('pos.Order', {
