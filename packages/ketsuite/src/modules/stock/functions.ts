@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { defineFn, deleteFrom, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty } from '../uom/convert.ts'
@@ -72,11 +73,20 @@ async function isStorable(ctx: Ctx, productId: unknown): Promise<boolean> {
 
 async function mutateQuant(
   ctx: Ctx,
-  args: { productId: unknown; locationId: unknown; lotId?: unknown; quantity: number; reserved: number },
+  args: {
+    productId: unknown
+    locationId: unknown
+    lotId?: unknown
+    quantity: number
+    reserved: number
+    expectedVersion?: number
+  },
 ): Promise<Row> {
   const id = quantId(ctx, args.productId, args.locationId, args.lotId)
   for (let attempt = 0; attempt < 8; attempt++) {
     const current = (await ours(ctx, 'stock.Quant', { id }))[0]
+    if (args.expectedVersion !== undefined && n(current?.version ?? -1) !== args.expectedVersion)
+      throw new InventoryRefused(invalid('stockRevision', 'stock position changed'))
     if (!current) {
       // the domain contract keeps the other side of completed moves on supplier, customer and
       // inventory locations as well. Those virtual locations legitimately carry
@@ -131,6 +141,8 @@ async function mutateQuant(
     )
     if ('dryRun' in changed || changed.matched)
       return { ...current, quantity, reservedQuantity, version: Number(current.version) + 1 }
+    if (args.expectedVersion !== undefined)
+      throw new InventoryRefused(invalid('stockRevision', 'stock position changed'))
   }
   throw new Error(`concurrent quant update did not settle for ${id}`)
 }
@@ -190,6 +202,249 @@ async function updatePickingState(ctx: Ctx, pickingId: unknown): Promise<void> {
   else if (live.some((move) => move.state === 'waiting')) state = 'waiting'
   await ctx.db.update('stock.Picking', { id: pickingId }, { state })
 }
+
+type TrackedSelection = { lotId: string; quantity: number; stockRevision: string }
+
+const stockRevision = (rows: Row[]): string =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(
+        rows
+          .map((row) => ({
+            id: String(row.id),
+            quantity: String(row.quantity),
+            reservedQuantity: String(row.reservedQuantity),
+            version: n(row.version),
+          }))
+          .sort((left, right) => left.id.localeCompare(right.id)),
+      ),
+    )
+    .digest('hex')
+
+const availabilityAt = async (
+  ctx: Ctx,
+  args: { productId: unknown; warehouseId: unknown; at?: unknown },
+): Promise<Row> => {
+  const tracking = await trackingOf(ctx, args.productId)
+  const pickingType = (
+    await ours(ctx, 'stock.PickingType', {
+      id: `${String(args.warehouseId)}:outgoing`,
+    })
+  )[0]
+  if (!pickingType?.defaultLocationSrcId) return { tracking, sourceLocationId: null, lots: [] }
+  const sources = new Set(await sourcesUnder(ctx, pickingType.defaultLocationSrcId))
+  const quants = (await ours(ctx, 'stock.Quant', { productId: args.productId })).filter((quant) =>
+    sources.has(String(quant.locationId)),
+  )
+  const lots = await ours(ctx, 'stock.Lot', { productId: args.productId })
+  const at = new Date(String(args.at ?? new Date().toISOString())).getTime()
+  return {
+    tracking,
+    sourceLocationId: String(pickingType.defaultLocationSrcId),
+    lots: lots
+      .map((lot) => {
+        const positions = quants.filter((quant) => String(quant.lotId ?? '') === String(lot.id))
+        const available = positions.reduce(
+          (sum, quant) => sum + Math.max(0, n(quant.quantity) - n(quant.reservedQuantity)),
+          0,
+        )
+        const expiration = lot.expirationDate == null ? null : String(lot.expirationDate)
+        const expired = expiration !== null && Number.isFinite(at) && new Date(expiration).getTime() <= at
+        const serialConflict =
+          tracking === 'serial' && positions.reduce((sum, quant) => sum + n(quant.quantity), 0) > 1
+        return {
+          lotId: String(lot.id),
+          name: String(lot.name),
+          expirationDate: expiration,
+          availableQuantity: String(expired || serialConflict || lot.active === false ? 0 : available),
+          stockRevision: stockRevision(positions),
+          selectable: lot.active !== false && !expired && !serialConflict && available > 0,
+        }
+      })
+      .sort((left, right) => left.name.localeCompare(right.name) || left.lotId.localeCompare(right.lotId)),
+  }
+}
+
+const parsedSelections = (value: unknown): TrackedSelection[] | null => {
+  if (!Array.isArray(value)) return null
+  const selections = value.map((entry) => {
+    const row = entry as Row
+    return {
+      lotId: String(row.lotId ?? ''),
+      quantity: n(row.quantity),
+      stockRevision: String(row.stockRevision ?? ''),
+    }
+  })
+  return selections.every((selection) => selection.lotId && selection.quantity > 0 && selection.stockRevision)
+    ? selections
+    : null
+}
+
+const reserveMoveInContext = async (ctx: Ctx, move: Row, requestedSelections?: unknown): Promise<Row> => {
+  if (!(await isStorable(ctx, move.productId)))
+    return invalid('productId', 'chỉ sản phẩm lưu kho mới được reserve')
+  if (['done', 'cancel'].includes(String(move.state))) return invalid('state', 'move đã kết thúc')
+  if (move.state === 'draft') return invalid('state', 'xác nhận transfer trước khi reserve')
+  const demand = Number(move.productUomQty)
+  const existingLines = await ours(ctx, 'stock.MoveLine', { moveId: move.id })
+  let reserved = existingLines.reduce((sum, line) => sum + Number(line.quantity), 0)
+  let state = 'confirmed'
+  const tracking = await trackingOf(ctx, move.productId)
+  const sources = await sourcesUnder(ctx, move.locationId)
+  const sourceOrder = new Map(sources.map((id, index) => [id, index]))
+  const quants = (await ours(ctx, 'stock.Quant', { productId: move.productId }))
+    .filter((quant) => sourceOrder.has(String(quant.locationId)))
+    .sort(
+      (left, right) =>
+        sourceOrder.get(String(left.locationId))! - sourceOrder.get(String(right.locationId))! ||
+        String(left.lotKey).localeCompare(String(right.lotKey)),
+    )
+  const selections = requestedSelections === undefined ? undefined : parsedSelections(requestedSelections)
+  if (requestedSelections !== undefined && !selections)
+    return invalid('selections', 'lot/serial selection is malformed')
+  if (selections) {
+    if (tracking === 'none') return invalid('selections', 'untracked product must not select a lot')
+    if (new Set(selections.map((selection) => selection.lotId)).size !== selections.length)
+      return invalid('selections', 'a lot/serial can only be selected once per line')
+    if (
+      tracking === 'serial' &&
+      selections.some((selection) => compareQty(selection.quantity, 1, 0.000001) !== 0)
+    )
+      return invalid('selections', 'every selected serial must have quantity 1')
+    if (
+      compareQty(
+        selections.reduce((sum, selection) => sum + selection.quantity, 0),
+        demand,
+        0.000001,
+      ) !== 0
+    )
+      return invalid('selections', 'selected lot/serial quantity must equal line quantity')
+    if (existingLines.length) {
+      const held = new Map<string, number>()
+      for (const line of existingLines)
+        held.set(String(line.lotId ?? ''), (held.get(String(line.lotId ?? '')) ?? 0) + n(line.quantity))
+      const same =
+        compareQty(reserved, demand, 0.000001) === 0 &&
+        selections.every(
+          (selection) => compareQty(held.get(selection.lotId) ?? 0, selection.quantity, 0.000001) === 0,
+        )
+      if (!same) return invalid('selections', 'move already holds a different lot/serial selection')
+      await ctx.db.update('stock.Move', { id: move.id }, { state: 'assigned', quantity: String(reserved) })
+      if (move.pickingId) await updatePickingState(ctx, move.pickingId)
+      return { ok: true, reserved: String(reserved), state: 'assigned' }
+    }
+    for (const selection of selections) {
+      const positions = quants.filter((quant) => String(quant.lotId ?? '') === selection.lotId)
+      if (stockRevision(positions) !== selection.stockRevision)
+        return invalid('stockRevision', 'stock position changed; reload lot availability')
+      const lot = (await ours(ctx, 'stock.Lot', { id: selection.lotId }))[0]
+      if (!lot || lot.productId !== move.productId || lot.active === false)
+        return invalid('lotId', 'lot/serial is not available for this product')
+      if (lot.expirationDate && new Date(String(lot.expirationDate)).getTime() <= Date.now())
+        return invalid('lotId', 'expired lot/serial cannot be sold')
+      if (tracking === 'serial' && positions.reduce((sum, quant) => sum + n(quant.quantity), 0) > 1)
+        return invalid('lotId', 'duplicate serial stock must be reconciled before sale')
+      let remaining = selection.quantity
+      for (const quant of positions) {
+        if (remaining <= 0.000001) break
+        const available = n(quant.quantity) - n(quant.reservedQuantity)
+        if (available <= 0) continue
+        const take = Math.min(available, remaining)
+        await mutateQuant(ctx, {
+          productId: move.productId,
+          locationId: quant.locationId,
+          lotId: quant.lotId,
+          quantity: 0,
+          reserved: take,
+          expectedVersion: n(quant.version),
+        })
+        await ctx.db.insert('stock.MoveLine', {
+          id: `${String(move.id)}:reserve:${String(quant.id)}`,
+          moveId: move.id,
+          pickingId: move.pickingId,
+          productId: move.productId,
+          productUomId: move.productUomId,
+          quantity: String(take),
+          quantityProductUom: String(take),
+          locationId: quant.locationId,
+          locationDestId: move.locationDestId,
+          lotId: quant.lotId,
+          picked: false,
+        })
+        remaining -= take
+        reserved += take
+      }
+      if (remaining > 0.000001)
+        return invalid('stock', `insufficient stock for lot/serial ${selection.lotId}`)
+    }
+  } else {
+    for (const quant of quants) {
+      if (reserved >= demand) break
+      if (tracking !== 'none' && !quant.lotId) continue
+      const available = Number(quant.quantity) - Number(quant.reservedQuantity)
+      if (available <= 0) continue
+      const take = Math.min(
+        available,
+        demand - reserved,
+        tracking === 'serial' ? 1 : Number.POSITIVE_INFINITY,
+      )
+      await mutateQuant(ctx, {
+        productId: move.productId,
+        locationId: quant.locationId,
+        lotId: quant.lotId,
+        quantity: 0,
+        reserved: take,
+      })
+      const lineId = `${String(move.id)}:reserve:${String(quant.id)}`
+      const line = (await ours(ctx, 'stock.MoveLine', { id: lineId }))[0]
+      if (line)
+        await ctx.db.update(
+          'stock.MoveLine',
+          { id: lineId },
+          { quantity: String(Number(line.quantity) + take) },
+        )
+      else
+        await ctx.db.insert('stock.MoveLine', {
+          id: lineId,
+          moveId: move.id,
+          pickingId: move.pickingId,
+          productId: move.productId,
+          productUomId: move.productUomId,
+          quantity: String(take),
+          quantityProductUom: String(take),
+          locationId: quant.locationId,
+          locationDestId: move.locationDestId,
+          lotId: quant.lotId,
+          picked: false,
+        })
+      reserved += take
+    }
+  }
+  state =
+    compareQty(reserved, demand, 0.000001) >= 0
+      ? 'assigned'
+      : reserved > 0
+        ? 'partially_available'
+        : 'confirmed'
+  await ctx.db.update('stock.Move', { id: move.id }, { state, quantity: String(reserved) })
+  if (move.pickingId) await updatePickingState(ctx, move.pickingId)
+  return { ok: true, reserved: String(reserved), state }
+}
+
+const reserveEffects = [
+  'read:stock.Move',
+  'write:stock.Move',
+  'read:stock.Picking',
+  'write:stock.Picking',
+  'read:stock.MoveLine',
+  'write:stock.MoveLine',
+  'read:stock.Quant',
+  'write:stock.Quant',
+  'read:stock.Location',
+  'read:stock.Lot',
+  'read:product.Product',
+  'read:product.Template',
+]
 
 export const functions: Record<string, FnSpec> = {
   listStorableProducts: defineFn({
@@ -579,6 +834,24 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:stock.Lot'],
     agent: true,
     handler: (ctx, args) => ours(ctx, 'stock.Lot', args.productId ? { productId: args.productId } : {}),
+  }),
+  trackedAvailability: defineFn({
+    input: { productId: 'id', warehouseId: 'id', at: 'datetime?' },
+    effects: [
+      'read:product.Product',
+      'read:product.Template',
+      'read:stock.PickingType',
+      'read:stock.Location',
+      'read:stock.Quant',
+      'read:stock.Lot',
+    ],
+    agent: true,
+    handler: (ctx, args) =>
+      availabilityAt(ctx, {
+        productId: args.productId,
+        warehouseId: args.warehouseId,
+        at: args.at,
+      }),
   }),
   listQuants: defineFn({
     input: { productId: 'id?', locationId: 'id?' },
@@ -988,7 +1261,14 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   createLot: defineFn({
-    input: { id: 'id', productId: 'id', name: 'text', ref: 'text?', note: 'text?' },
+    input: {
+      id: 'id',
+      productId: 'id',
+      name: 'text',
+      ref: 'text?',
+      note: 'text?',
+      expirationDate: 'datetime?',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:product.Product', 'write:stock.Lot'],
     idempotent: true,
@@ -1129,108 +1409,51 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   reserveMove: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', selections: 'json?' },
     output: { ok: 'bool', reserved: 'decimal?', state: 'text?', errors: 'json?' },
-    effects: [
-      'read:stock.Move',
-      'write:stock.Move',
-      'read:stock.Picking',
-      'write:stock.Picking',
-      'read:stock.MoveLine',
-      'write:stock.MoveLine',
-      'read:stock.Quant',
-      'write:stock.Quant',
-      // sourcesUnder walks the location tree to find the sub-locations this move
-      // may draw from.
-      'read:stock.Location',
-      'read:product.Product',
-      'read:product.Template',
-    ],
+    effects: reserveEffects,
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const move = (await ours(ctx, 'stock.Move', { id: args.id }))[0]
       if (!move) return invalid('id', 'move không tồn tại')
-      if (!(await isStorable(ctx, move.productId)))
-        return invalid('productId', 'chỉ sản phẩm lưu kho mới được reserve')
-      if (['done', 'cancel'].includes(String(move.state))) return invalid('state', 'move đã kết thúc')
-      if (move.state === 'draft') return invalid('state', 'xác nhận transfer trước khi reserve')
-      const demand = Number(move.productUomQty)
-      // Picked lines still hold their reservation until the picking is completed
-      // or cancelled. Counting only unpicked lines makes a later assignment pass
-      // reserve the same demand twice after an operator has marked a line picked.
-      let reserved = (await ours(ctx, 'stock.MoveLine', { moveId: move.id })).reduce(
-        (sum, line) => sum + Number(line.quantity),
-        0,
-      )
-      let state = 'confirmed'
-      const tracking = await trackingOf(ctx, move.productId)
-      const sources = await sourcesUnder(ctx, move.locationId)
-      const order = new Map(sources.map((id, index) => [id, index]))
-      const quants = (await ours(ctx, 'stock.Quant', { productId: move.productId }))
-        .filter((quant) => order.has(String(quant.locationId)))
-        .sort(
-          (a, b) =>
-            order.get(String(a.locationId))! - order.get(String(b.locationId))! ||
-            String(a.lotKey).localeCompare(String(b.lotKey)),
-        )
-      await ctx.tx(async (tx) => {
-        for (const quant of quants) {
-          if (reserved >= demand) break
-          if (tracking !== 'none' && !quant.lotId) continue
-          const available = Number(quant.quantity) - Number(quant.reservedQuantity)
-          if (available <= 0) continue
-          const take = Math.min(
-            available,
-            demand - reserved,
-            tracking === 'serial' ? 1 : Number.POSITIVE_INFINITY,
-          )
-          await mutateQuant(tx, {
-            productId: move.productId,
-            locationId: quant.locationId,
-            lotId: quant.lotId,
-            quantity: 0,
-            reserved: take,
-          })
-          const lineId = `${String(move.id)}:reserve:${String(quant.id)}`
-          const line = (await ours(tx, 'stock.MoveLine', { id: lineId }))[0]
-          if (line)
-            await tx.db.update(
-              'stock.MoveLine',
-              { id: lineId },
-              { quantity: String(Number(line.quantity) + take) },
-            )
-          else
-            await tx.db.insert('stock.MoveLine', {
-              id: lineId,
-              moveId: move.id,
-              pickingId: move.pickingId,
-              productId: move.productId,
-              productUomId: move.productUomId,
-              quantity: String(take),
-              quantityProductUom: String(take),
-              // Where the goods actually sit, which is the sub-location the quant
-              // was drawn from rather than the parent the move names.
-              locationId: quant.locationId,
-              locationDestId: move.locationDestId,
-              lotId: quant.lotId,
-              picked: false,
-            })
-          reserved += take
-        }
-        state =
-          compareQty(reserved, demand, 0.000001) >= 0
-            ? 'assigned'
-            : reserved > 0
-              ? 'partially_available'
-              : 'confirmed'
-        await tx.db.update('stock.Move', { id: move.id }, { state, quantity: String(reserved) })
-        if (move.pickingId) await updatePickingState(tx, move.pickingId)
-      })
-      // The state that was written, not a second derivation of it: the tolerant
-      // compareQty above and a bare `reserved >= demand` disagree inside 1e-6, and
-      // the caller was being told the opposite of what landed in the row.
-      return { ok: true, reserved: String(reserved), state }
+      try {
+        return await ctx.tx((tx) => reserveMoveInContext(tx, move, args.selections))
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
+    },
+  }),
+
+  reserveMoves: defineFn({
+    input: { moves: 'json', requireFull: 'bool?' },
+    output: { ok: 'bool', results: 'json?', errors: 'json?' },
+    effects: reserveEffects,
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!Array.isArray(args.moves) || !args.moves.length)
+        return invalid('moves', 'at least one move reservation is required')
+      try {
+        const results = await ctx.tx(async (tx) => {
+          const held: Row[] = []
+          for (const entry of args.moves as Row[]) {
+            const move = (await ours(tx, 'stock.Move', { id: entry.id }))[0]
+            if (!move) throw new InventoryRefused(invalid('moves', `move ${String(entry.id)} does not exist`))
+            const result = await reserveMoveInContext(tx, move, entry.selections)
+            if (result.ok !== true) throw new InventoryRefused(result)
+            if (args.requireFull && result.state !== 'assigned')
+              throw new InventoryRefused(invalid('stock', `insufficient stock for move ${String(move.id)}`))
+            held.push({ id: String(move.id), reserved: result.reserved, state: result.state })
+          }
+          return held
+        })
+        return { ok: true, results }
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
     },
   }),
 
