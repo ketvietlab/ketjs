@@ -1126,7 +1126,7 @@ export const syncRoutes = routesOf(
         !Number.isFinite(issuedAt) ||
         !Number.isFinite(expiresAt) ||
         issuedAt > Date.now() + FUTURE_SKEW_MS ||
-        expiresAt <= Date.now()
+        expiresAt + OUTBOX_GRACE_MS <= Date.now()
       )
         return syncError(ctx, url, req, 'syncLeaseInvalid', 401)
       if (
