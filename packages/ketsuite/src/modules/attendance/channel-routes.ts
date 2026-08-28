@@ -55,6 +55,17 @@ const punchResult = {
   required: ['kind', 'occurredAt', 'sessionId'],
 }
 
+const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
+  const key = String(req.headers['idempotency-key'] ?? '').trim()
+  if (key.length >= 8 && key.length <= 200) return key
+  return {
+    status: 400,
+    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
+      messageKey: 'channel_api.error.idempotencyRequired',
+    }),
+  }
+}
+
 /** A domain refusal, carried out with the key the module already translates. */
 const refused = (ctx: ServeContext, url: URL, req: Req, result: unknown, status = 422) => {
   const first = ((result as { errors?: Issue[] })?.errors ?? [])[0] ?? {}
@@ -70,23 +81,31 @@ const refused = (ctx: ServeContext, url: URL, req: Req, result: unknown, status 
   }
 }
 
-const punch = (expect: 'in' | 'out') => async (ctx: ServeContext, url: URL, req: Req) => {
-  // ctx.call, not callUnchecked: whether this operator may punch at all is the
-  // framework's answer, from the permissions their session carries.
-  const result = (await ctx.call('attendance.punch.self', { expect }, url, req)) as {
-    ok?: boolean
-    kind?: string
-    occurredAt?: string
-    sessionId?: string
-    errors?: Issue[]
+const punch =
+  (expect: 'in' | 'out') =>
+  async (ctx: ServeContext, url: URL, req: Req, identity: { companyId: string | null; userId: string }) => {
+    const key = idempotencyKey(ctx, url, req)
+    if (typeof key !== 'string') return key
+    const namespace = `staff:${identity.companyId ?? 'none'}:${identity.userId}:attendance.punch.self:${expect}`
+    // ctx.call, not callUnchecked: whether this operator may punch at all is the
+    // framework's answer, from the permissions their session carries.
+    const result = (await ctx.call('attendance.punch.self', { expect }, url, req, {
+      idempotencyKey: key,
+      idempotencyNamespace: namespace,
+    })) as {
+      ok?: boolean
+      kind?: string
+      occurredAt?: string
+      sessionId?: string
+      errors?: Issue[]
+    }
+    return result.ok
+      ? {
+          status: 201,
+          data: { kind: result.kind, occurredAt: result.occurredAt, sessionId: result.sessionId },
+        }
+      : refused(ctx, url, req, result, 409)
   }
-  return result.ok
-    ? {
-        status: 201,
-        data: { kind: result.kind, occurredAt: result.occurredAt, sessionId: result.sessionId },
-      }
-    : refused(ctx, url, req, result, 409)
-}
 
 export const channelRoutes = routesOf(
   defineChannelRoute({
@@ -134,7 +153,8 @@ export const channelRoutes = routesOf(
     capability: { key: 'attendance.records', action: 'check_in' },
     request: { body: object },
     responses: { '201': envelope(punchResult) },
-    handler: (ctx, url, req) => punch('in')(ctx, url, req),
+    idempotent: true,
+    handler: (ctx, url, req, _params, request) => punch('in')(ctx, url, req, request.identity!),
   }),
   defineChannelRoute({
     profile: 'staff',
@@ -146,6 +166,7 @@ export const channelRoutes = routesOf(
     capability: { key: 'attendance.records', action: 'check_out' },
     request: { body: object },
     responses: { '201': envelope(punchResult) },
-    handler: (ctx, url, req) => punch('out')(ctx, url, req),
+    idempotent: true,
+    handler: (ctx, url, req, _params, request) => punch('out')(ctx, url, req, request.identity!),
   }),
 )

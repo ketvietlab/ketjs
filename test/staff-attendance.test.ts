@@ -65,6 +65,11 @@ const staff = async <T>(
   return { status: response.status, body: (await response.json()) as Envelope<T> }
 }
 
+const command = (key: string): RequestInit => ({
+  method: 'POST',
+  headers: { 'idempotency-key': key },
+})
+
 test('staff attendance: an operator clocks their own shift in and out', async (t) => {
   const booted = await boot(t)
 
@@ -73,7 +78,7 @@ test('staff attendance: an operator clocks their own shift in and out', async (t
   assert.equal(before.body.data.onClock, false)
 
   const started = await staff<{ kind: string; sessionId: string }>(booted, 'attendance/check-in', {
-    method: 'POST',
+    ...command('attendance-check-in-1'),
   })
   assert.equal(started.status, 201, JSON.stringify(started.body.error))
   assert.equal(started.body.data.kind, 'in')
@@ -83,7 +88,11 @@ test('staff attendance: an operator clocks their own shift in and out', async (t
   assert.equal(during.body.data.onClock, true)
   assert.equal(during.body.data.sessionId, started.body.data.sessionId)
 
-  const ended = await staff<{ kind: string }>(booted, 'attendance/check-out', { method: 'POST' })
+  const ended = await staff<{ kind: string }>(
+    booted,
+    'attendance/check-out',
+    command('attendance-check-out-1'),
+  )
   assert.equal(ended.status, 201)
   assert.equal(ended.body.data.kind, 'out')
 
@@ -104,11 +113,25 @@ test('staff attendance: an operator clocks their own shift in and out', async (t
 
 test('staff attendance: a repeated check-in is refused rather than clocking out', async (t) => {
   const booted = await boot(t)
-  assert.equal((await staff(booted, 'attendance/check-in', { method: 'POST' })).status, 201)
+  const first = await staff<{ sessionId: string }>(
+    booted,
+    'attendance/check-in',
+    command('attendance-replay-1'),
+  )
+  assert.equal(first.status, 201)
 
   // The case that matters over a network: the response was lost and the client
-  // tries again. Toggling would have ended the shift the operator just started.
-  const again = await staff(booted, 'attendance/check-in', { method: 'POST' })
+  // tries again with the same logical key. It receives the original result.
+  const replay = await staff<{ sessionId: string }>(
+    booted,
+    'attendance/check-in',
+    command('attendance-replay-1'),
+  )
+  assert.equal(replay.status, 201)
+  assert.equal(replay.body.data.sessionId, first.body.data.sessionId)
+
+  // A distinct logical command is still rejected and cannot toggle the shift.
+  const again = await staff(booted, 'attendance/check-in', command('attendance-replay-2'))
   assert.equal(again.status, 409)
   assert.equal(again.body.error?.code, 'attendance.error.alreadyIn')
 
@@ -118,9 +141,16 @@ test('staff attendance: a repeated check-in is refused rather than clocking out'
 
 test('staff attendance: checking out when off the clock is refused', async (t) => {
   const booted = await boot(t)
-  const early = await staff(booted, 'attendance/check-out', { method: 'POST' })
+  const early = await staff(booted, 'attendance/check-out', command('attendance-check-out-early'))
   assert.equal(early.status, 409)
   assert.equal(early.body.error?.code, 'attendance.error.alreadyOut')
+})
+
+test('staff attendance: a mutation without a usable idempotency key fails closed', async (t) => {
+  const booted = await boot(t)
+  const missing = await staff(booted, 'attendance/check-in', { method: 'POST' })
+  assert.equal(missing.status, 400)
+  assert.equal(missing.body.error?.code, 'channel_api.idempotencyRequired')
 })
 
 test('staff attendance: no session, no attendance', async (t) => {

@@ -520,6 +520,7 @@ export const functions: Record<string, FnSpec> = {
       'write:attendance.Session',
       'write:attendance.Punch',
     ],
+    idempotent: true,
     handler: async (ctx: Ctx, a) => {
       const employee = await employeeForActor(ctx)
       if (!employee) return invalid(issue('employeeId', 'attendance.error.employeeUser'))

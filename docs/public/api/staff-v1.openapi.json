@@ -2361,7 +2361,7 @@
           "action": "check_in"
         },
         "x-ket-auth": "required",
-        "x-ket-idempotent": false
+        "x-ket-idempotent": true
       }
     },
     "/attendance/check-out": {
@@ -2427,7 +2427,7 @@
           "action": "check_out"
         },
         "x-ket-auth": "required",
-        "x-ket-idempotent": false
+        "x-ket-idempotent": true
       }
     },
     "/reports/business-overview": {

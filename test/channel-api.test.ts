@@ -103,6 +103,10 @@ test('channel api: core and attendance staff responses publish concrete client m
     'occurredAt',
     'sessionId',
   ])
+  for (const path of ['/attendance/check-in', '/attendance/check-out']) {
+    const operation = document.paths[path]?.post as Record<string, unknown>
+    assert.equal(operation['x-ket-idempotent'], true, `${path} must publish replay safety`)
+  }
 })
 
 test('channel api: warehouse completion and hospitality responses publish concrete client models', () => {
