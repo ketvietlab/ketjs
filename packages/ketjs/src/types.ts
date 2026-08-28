@@ -48,6 +48,7 @@ export type HttpRouteContract = {
   request?: {
     params?: JsonSchema
     query?: JsonSchema
+    headers?: JsonSchema
     body?: JsonSchema
   }
   responses: Record<string, JsonSchema>
