@@ -591,9 +591,8 @@ test('accounting: reversing resumes after the mirror was posted but settlement d
 
     // The retry only needs the command identity; omitted optional fields resume
     // from the durable mirror instead of reverting its custom journal/ref/date.
-    const resumed = (
-      await call('account.reverseMove', { id: invoiceArgs.id, reversalId }, adapter)
-    ).value as Row
+    const resumed = (await call('account.reverseMove', { id: invoiceArgs.id, reversalId }, adapter))
+      .value as Row
     assert.equal(resumed.ok, true)
     const settled = (await call('account.getMove', { id: invoiceArgs.id }, adapter)).value as Row & {
       lines: Row[]
@@ -606,9 +605,7 @@ test('accounting: reversing resumes after the mirror was posted but settlement d
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_partial_reconcile'))[0]!.n, 1)
 
     assert.equal(
-      (
-        (await call('account.reverseMove', { id: invoiceArgs.id, reversalId }, adapter)).value as Row
-      ).ok,
+      ((await call('account.reverseMove', { id: invoiceArgs.id, reversalId }, adapter)).value as Row).ok,
       true,
       'a completed resume is idempotent too',
     )
@@ -673,9 +670,7 @@ test('accounting: retries require the same normalized financial creation payload
     }
     assert.equal(((await call('account.createMove', move, adapter)).value as Row).ok, true)
     assert.equal(((await call('account.createMove', move, adapter)).value as Row).ok, true)
-    const reusedMove = (
-      await call('account.createMove', { ...move, ref: 'Batch B' }, adapter)
-    ).value as Row
+    const reusedMove = (await call('account.createMove', { ...move, ref: 'Batch B' }, adapter)).value as Row
     assert.equal(reusedMove.ok, false)
     assert.equal((reusedMove.errors as Row[])[0]?.code, 'account.error.moveIdReused')
 
@@ -695,20 +690,21 @@ test('accounting: retries require the same normalized financial creation payload
     await call('account.postMove', { id: invoice.id }, adapter)
     assert.equal(
       (
-        (await call(
-          'account.createInvoice',
-          { ...invoice, quantity: '+01.0', priceUnit: '+0100.00', discount: '0.00' },
-          adapter,
-        )).value as Row
+        (
+          await call(
+            'account.createInvoice',
+            { ...invoice, quantity: '+01.0', priceUnit: '+0100.00', discount: '0.00' },
+            adapter,
+          )
+        ).value as Row
       ).amountTotal,
       '100',
       'equivalent decimals replay after mutable posting fields changed',
     )
     // A financially different line under the same document id is a conflict,
     // even though mutable state such as posting name and revision is ignored.
-    const reusedInvoice = (
-      await call('account.createInvoice', { ...invoice, priceUnit: '101' }, adapter)
-    ).value as Row
+    const reusedInvoice = (await call('account.createInvoice', { ...invoice, priceUnit: '101' }, adapter))
+      .value as Row
     assert.equal(reusedInvoice.ok, false)
     assert.equal((reusedInvoice.errors as Row[])[0]?.code, 'account.error.invoiceIdReused')
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_move'))[0]!.n, 2)
@@ -742,29 +738,36 @@ test('accounting: journal items advance the move revision before posting can cla
     assert.equal(((await call('account.addMoveLine', debit, adapter)).value as Row).ok, true)
     assert.equal(
       (
-        (await call(
-          'account.addMoveLine',
-          {
-            id: 'entry-revision:credit',
-            moveId: 'entry-revision',
-            name: 'Credit',
-            accountId: 'revenue',
-            credit: '10',
-            expectedRevision: 1,
-          },
-          adapter,
-        )).value as Row
+        (
+          await call(
+            'account.addMoveLine',
+            {
+              id: 'entry-revision:credit',
+              moveId: 'entry-revision',
+              name: 'Credit',
+              accountId: 'revenue',
+              credit: '10',
+              expectedRevision: 1,
+            },
+            adapter,
+          )
+        ).value as Row
       ).ok,
       true,
     )
-    assert.equal(((await call('account.getMove', { id: 'entry-revision' }, adapter)).value as Row).revision, 2)
+    assert.equal(
+      ((await call('account.getMove', { id: 'entry-revision' }, adapter)).value as Row).revision,
+      2,
+    )
 
-    const stale = (
-      await call('account.postMove', { id: 'entry-revision', expectedRevision: 1 }, adapter)
-    ).value as Row
+    const stale = (await call('account.postMove', { id: 'entry-revision', expectedRevision: 1 }, adapter))
+      .value as Row
     assert.equal(stale.ok, false)
     assert.equal((stale.errors as Row[])[0]?.code, 'account.error.moveConcurrent')
-    assert.equal(((await call('account.getMove', { id: 'entry-revision' }, adapter)).value as Row).state, 'draft')
+    assert.equal(
+      ((await call('account.getMove', { id: 'entry-revision' }, adapter)).value as Row).state,
+      'draft',
+    )
 
     const attempts = await Promise.all(
       Array.from({ length: 6 }, () =>
@@ -781,17 +784,19 @@ test('accounting: journal items advance the move revision before posting can cla
     )
     assert.equal(
       (
-        (await call(
-          'account.addMoveLine',
-          {
-            id: 'entry-revision:late',
-            moveId: 'entry-revision',
-            name: 'Late',
-            accountId: 'bank',
-            debit: '1',
-          },
-          adapter,
-        )).value as Row
+        (
+          await call(
+            'account.addMoveLine',
+            {
+              id: 'entry-revision:late',
+              moveId: 'entry-revision',
+              name: 'Late',
+              accountId: 'bank',
+              debit: '1',
+            },
+            adapter,
+          )
+        ).value as Row
       ).ok,
       false,
     )

@@ -987,9 +987,10 @@ test('live pg: concurrent accounting posts assign one gapless journal sequence',
         options,
       ),
     ])
-    const raced = (
-      await callFn('account.getMove', { id: 'entry-race' }, options)
-    ).value as { state: string; lines: unknown[] }
+    const raced = (await callFn('account.getMove', { id: 'entry-race' }, options)).value as {
+      state: string
+      lines: unknown[]
+    }
     if (raced.state === 'posted') {
       assert.equal((postRace.value as { ok: boolean }).ok, true)
       assert.equal((lineRace.value as { ok: boolean }).ok, false)

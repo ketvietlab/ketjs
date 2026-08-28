@@ -1788,9 +1788,7 @@ export const canonicalTT99Json = (value: unknown): string => {
     )
     if (entries.some(([, held]) => held === undefined))
       throw new TypeError('TT99 canonical JSON does not permit undefined values')
-    return `{${entries
-      .map(([key, held]) => `${jsonPrimitive(key)}:${canonicalTT99Json(held)}`)
-      .join(',')}}`
+    return `{${entries.map(([key, held]) => `${jsonPrimitive(key)}:${canonicalTT99Json(held)}`).join(',')}}`
   }
   throw new TypeError(`TT99 canonical JSON does not support ${typeof value}`)
 }
@@ -1843,8 +1841,7 @@ export const assertTT99Catalog = (manifest: Tt99CatalogManifest): void => {
   if (metadata.countryCode !== TT99_COUNTRY) catalogError(`country must be ${TT99_COUNTRY}`)
   if (metadata.authority !== TT99_AUTHORITY) catalogError(`authority must be ${TT99_AUTHORITY}`)
   if (metadata.sourceUrl !== TT99_SOURCE_URL) catalogError(`source URL must be ${TT99_SOURCE_URL}`)
-  if (metadata.legalBasis !== TT99_LEGAL_BASIS)
-    catalogError(`legal basis must be ${TT99_LEGAL_BASIS}`)
+  if (metadata.legalBasis !== TT99_LEGAL_BASIS) catalogError(`legal basis must be ${TT99_LEGAL_BASIS}`)
   if (!date.test(metadata.issuedOn) || !date.test(metadata.effectiveFrom))
     catalogError('issuedOn and effectiveFrom must be civil ISO dates')
   if (metadata.issuedOn !== TT99_ISSUED_ON) catalogError(`issuedOn must be ${TT99_ISSUED_ON}`)
@@ -1854,8 +1851,7 @@ export const assertTT99Catalog = (manifest: Tt99CatalogManifest): void => {
     catalogError(`effectiveTo must be ${String(TT99_EFFECTIVE_TO)}`)
   if (metadata.approvalStatus !== TT99_APPROVAL_STATUS)
     catalogError(`approval status must be ${TT99_APPROVAL_STATUS}`)
-  if (metadata.issuedOn > metadata.effectiveFrom)
-    catalogError('effectiveFrom cannot precede issuedOn')
+  if (metadata.issuedOn > metadata.effectiveFrom) catalogError('effectiveFrom cannot precede issuedOn')
   if (metadata.effectiveTo != null) {
     if (!date.test(metadata.effectiveTo)) catalogError('effectiveTo must be a civil ISO date')
     if (metadata.effectiveTo < metadata.effectiveFrom)
@@ -1903,16 +1899,14 @@ export const assertTT99Catalog = (manifest: Tt99CatalogManifest): void => {
   const scopedNames = new Set<string>()
   for (const tax of manifest.taxes) {
     if (!tax.key.trim()) catalogError('tax key is required')
-    if (tax.use !== 'sale' && tax.use !== 'purchase')
-      catalogError(`tax ${tax.key} has an invalid use`)
+    if (tax.use !== 'sale' && tax.use !== 'purchase') catalogError(`tax ${tax.key} has an invalid use`)
     if (keys.has(tax.key)) catalogError(`duplicate tax key ${tax.key}`)
     keys.add(tax.key)
     const scopedName = `${tax.use}:${tax.name}`
     if (scopedNames.has(scopedName)) catalogError(`duplicate tax name ${scopedName}`)
     scopedNames.add(scopedName)
     if (!tax.name.trim() || !tax.description.trim()) catalogError(`tax ${tax.key} has incomplete labels`)
-    if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(tax.amount))
-      catalogError(`tax ${tax.key} has an invalid amount`)
+    if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(tax.amount)) catalogError(`tax ${tax.key} has an invalid amount`)
     if (tax.accountCode != null && !accounts.has(tax.accountCode))
       catalogError(`tax ${tax.key} points to missing account ${tax.accountCode}`)
 
