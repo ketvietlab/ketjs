@@ -33,10 +33,23 @@ const summary = {
     orderedAt: string,
     expectedAt: string,
     vendor: party,
+    itemCount: { type: 'integer', minimum: 0 },
+    receiptState: { type: 'string', enum: ['none', 'pending', 'partial', 'received', 'cancelled'] },
     billingState: string,
     total: money,
   },
-  required: ['id', 'reference', 'state', 'orderedAt', 'expectedAt', 'vendor', 'billingState', 'total'],
+  required: [
+    'id',
+    'reference',
+    'state',
+    'orderedAt',
+    'expectedAt',
+    'vendor',
+    'itemCount',
+    'receiptState',
+    'billingState',
+    'total',
+  ],
 }
 const line = {
   type: 'object',
@@ -49,6 +62,7 @@ const line = {
     receivedQuantity: string,
     billedQuantity: string,
     uomId: string,
+    uomName: string,
     unitPrice: string,
     discount: string,
     subtotal: string,
@@ -61,6 +75,7 @@ const line = {
     'receivedQuantity',
     'billedQuantity',
     'uomId',
+    'uomName',
     'unitPrice',
     'discount',
     'subtotal',
@@ -94,6 +109,8 @@ const detail = {
     notes: nullableString,
     pickingTypeId: string,
     lines: { type: 'array', items: line },
+    untaxed: money,
+    tax: money,
     receipts: { type: 'array', items: receipt },
     vendorBills: { type: 'array', items: bill },
     receiptMoveCount: { type: 'integer', minimum: 0 },
@@ -108,6 +125,8 @@ const detail = {
     'notes',
     'pickingTypeId',
     'lines',
+    'untaxed',
+    'tax',
     'receipts',
     'vendorBills',
     'receiptMoveCount',
@@ -150,6 +169,21 @@ const versionBody = {
   additionalProperties: false,
   properties: { expectedVersion: { type: 'string', pattern: '^pov_[0-9a-f]{64}$' } },
   required: ['expectedVersion'],
+}
+const replayHeaders = {
+  type: 'object',
+  additionalProperties: true,
+  properties: { 'Idempotency-Key': { type: 'string', minLength: 8, maxLength: 200 } },
+  required: ['Idempotency-Key'],
+}
+const versionHeaders = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    ...replayHeaders.properties,
+    'If-Match': { type: 'string', minLength: 1, maxLength: 200 },
+  },
+  required: ['Idempotency-Key', 'If-Match'],
 }
 const receiptResult = {
   type: 'object',
@@ -196,18 +230,35 @@ const vendorOf = (row: Row, names: Map<string, string>) => {
   const id = String(row.partnerId)
   return { id, name: names.get(id) ?? id }
 }
-const projectSummary = (row: Row, names: Map<string, string>) => ({
+const receiptStateOf = (
+  row: Row,
+  metric?: Row,
+): 'none' | 'pending' | 'partial' | 'received' | 'cancelled' => {
+  const states = metric
+    ? Array.isArray(metric.pickingStates)
+      ? metric.pickingStates.map(String)
+      : []
+    : (Array.isArray(row.pickings) ? (row.pickings as Row[]) : []).map((picking) => String(picking.state))
+  if (!states.length) return String(row.state) === 'cancel' ? 'cancelled' : 'none'
+  if (states.every((state) => state === 'cancel')) return 'cancelled'
+  if (states.every((state) => state === 'done')) return 'received'
+  if (states.some((state) => state === 'done')) return 'partial'
+  return 'pending'
+}
+const projectSummary = (row: Row, names: Map<string, string>, metric?: Row) => ({
   id: String(row.id),
   reference: String(row.name),
   state: String(row.state),
   orderedAt: String(row.dateOrder),
   expectedAt: String(row.datePlanned),
   vendor: vendorOf(row, names),
+  itemCount: metric ? Number(metric.itemCount ?? 0) : Array.isArray(row.lines) ? row.lines.length : 0,
+  receiptState: receiptStateOf(row, metric),
   billingState: String(row.invoiceStatus),
   total: { currency: String(row.currency), amount: String(row.amountTotal) },
 })
 
-const projectedLines = (row: Row) =>
+const projectedLines = (row: Row, uomNames = new Map<string, string>()) =>
   (Array.isArray(row.lines) ? (row.lines as Row[]) : [])
     .sort(
       (left, right) =>
@@ -222,10 +273,18 @@ const projectedLines = (row: Row) =>
       receivedQuantity: String(item.qtyReceived),
       billedQuantity: String(item.qtyInvoiced),
       uomId: String(item.productUomId),
+      uomName: uomNames.get(String(item.productUomId)) ?? String(item.productUomId),
       unitPrice: String(item.priceUnit),
       discount: String(item.discount),
       subtotal: String(item.priceSubtotal),
     }))
+
+const uomNamesOf = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
+  const ids = [...new Set(projectedLines(row).map((item) => item.uomId))]
+  if (!ids.length) return new Map<string, string>()
+  const units = (await ctx.call('uom.listUnits', { ids }, url, req)) as Row[]
+  return new Map(units.map((unit) => [String(unit.id), String(unit.name)]))
+}
 
 const readyReceipt = (picking: Row): boolean => {
   if (['done', 'cancel'].includes(String(picking.state))) return false
@@ -269,7 +328,10 @@ const projectedBills = (row: Row) =>
       reference: String(item.name ?? item.id),
       state: String(item.state),
       paymentState: String(item.paymentState ?? 'not_paid'),
-      total: { currency: String(item.currency ?? row.currency), amount: String(item.amountTotal ?? '0') },
+      total: {
+        currency: String(item.currency ?? row.currency),
+        amount: String(item.amountTotal ?? '0'),
+      },
     }))
 
 const orderActions = (state: string): string[] => {
@@ -280,7 +342,7 @@ const orderActions = (state: string): string[] => {
 }
 
 const projectDetail = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
-  const lines = projectedLines(row)
+  const lines = projectedLines(row, await uomNamesOf(ctx, row, url, req))
   const receipts = projectedReceipts(row)
   const vendorBills = projectedBills(row)
   const content = {
@@ -289,6 +351,8 @@ const projectDetail = async (ctx: ServeContext, row: Row, url: URL, req: Req) =>
     notes: row.notes == null ? null : String(row.notes),
     pickingTypeId: String(row.pickingTypeId),
     lines,
+    untaxed: { currency: String(row.currency), amount: String(row.amountUntaxed) },
+    tax: { currency: String(row.currency), amount: String(row.amountTax) },
     receipts,
     vendorBills,
     receiptMoveCount: Array.isArray(row.moves) ? row.moves.length : 0,
@@ -360,7 +424,7 @@ const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
 const requestVersion = (req: Req, body: Row): string | null => {
   const expected = String(body.expectedVersion ?? '')
   const header = String(req.headers['if-match'] ?? '').trim()
-  if (!header) return expected || null
+  if (!header) return null
   return header === expected || header === `"${expected}"` ? expected : null
 }
 
@@ -418,10 +482,10 @@ const lineValues = async (ctx: ServeContext, body: Row, namespace: string, url: 
 
 const incomingPickingType = async (ctx: ServeContext, url: URL, req: Req): Promise<string | null> => {
   const rows = (await ctx.call('stock.listPickingTypes', {}, url, req)) as Row[]
-  const selected = rows
+  const eligible = rows
     .filter((row) => row.active !== false && row.code === 'incoming')
-    .sort((left, right) => String(left.id).localeCompare(String(right.id)))[0]
-  return selected ? String(selected.id) : null
+    .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+  return eligible.length === 1 ? String(eligible[0]!.id) : null
 }
 
 export const orderRoutes = routesOf(
@@ -461,10 +525,21 @@ export const orderRoutes = routesOf(
       )) as Row[]
       const hasMore = rows.length > limit
       const pageRows = rows.slice(0, limit)
-      const names = await namesOf(ctx, pageRows, url, req)
+      const [names, metricRows] = await Promise.all([
+        namesOf(ctx, pageRows, url, req),
+        pageRows.length
+          ? ((await ctx.call(
+              'purchase.listOrderMetrics',
+              { orderIds: pageRows.map((row) => String(row.id)) },
+              url,
+              req,
+            )) as Row[])
+          : [],
+      ])
+      const metrics = new Map(metricRows.map((metric) => [String(metric.orderId), metric]))
       return {
         data: {
-          items: pageRows.map((row) => projectSummary(row, names)),
+          items: pageRows.map((row) => projectSummary(row, names, metrics.get(String(row.id)))),
           nextCursor: hasMore ? cursorOf(offset + limit) : null,
         },
       }
@@ -505,7 +580,7 @@ export const orderRoutes = routesOf(
     summary: 'Create or replay one canonical RFQ and its complete line set.',
     auth: 'required',
     capability: { key: 'purchasing.orders', action: 'create' },
-    request: { body: draftBody(false) },
+    request: { headers: replayHeaders, body: draftBody(false) },
     responses: {
       '200': envelope(detail),
       '409': envelope({ type: 'null' }),
@@ -544,7 +619,7 @@ export const orderRoutes = routesOf(
     summary: 'Replace one RFQ vendor and complete line set under a strong version.',
     auth: 'required',
     capability: { key: 'purchasing.orders', action: 'update' },
-    request: { params: idParams, body: draftBody(true) },
+    request: { params: idParams, headers: versionHeaders, body: draftBody(true) },
     responses: {
       '200': envelope(detail),
       '404': envelope({ type: 'null' }),
@@ -588,7 +663,7 @@ export const orderRoutes = routesOf(
     summary: 'Submit one reviewed RFQ for explicit approval under a strong version.',
     auth: 'required',
     capability: { key: 'purchasing.orders', action: 'confirm' },
-    request: { params: idParams, body: versionBody },
+    request: { params: idParams, headers: versionHeaders, body: versionBody },
     responses: {
       '200': envelope(detail),
       '404': envelope({ type: 'null' }),
@@ -624,7 +699,7 @@ export const orderRoutes = routesOf(
     summary: 'Approve one submitted RFQ and create its receipt under a strong version.',
     auth: 'required',
     capability: { key: 'purchasing.orders', action: 'approve' },
-    request: { params: idParams, body: versionBody },
+    request: { params: idParams, headers: versionHeaders, body: versionBody },
     responses: {
       '200': envelope(detail),
       '404': envelope({ type: 'null' }),
@@ -660,7 +735,7 @@ export const orderRoutes = routesOf(
     summary: 'Cancel one unreceived and unbilled RFQ under a strong version.',
     auth: 'required',
     capability: { key: 'purchasing.orders', action: 'cancel' },
-    request: { params: idParams, body: versionBody },
+    request: { params: idParams, headers: versionHeaders, body: versionBody },
     responses: {
       '200': envelope(detail),
       '404': envelope({ type: 'null' }),
@@ -703,6 +778,7 @@ export const orderRoutes = routesOf(
         properties: { id: string, receiptId: string },
         required: ['id', 'receiptId'],
       },
+      headers: versionHeaders,
       body: versionBody,
     },
     responses: {
