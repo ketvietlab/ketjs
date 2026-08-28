@@ -41,8 +41,29 @@ const attendanceSession = {
     correctedStartAt: { ...nullableString, format: 'date-time' },
     correctedStopAt: { ...nullableString, format: 'date-time' },
     state: string,
+    workedHours: { type: 'string', pattern: '^\\d+(?:\\.\\d{2})$' },
   },
-  required: ['id', 'branchId', 'startAt', 'stopAt', 'correctedStartAt', 'correctedStopAt', 'state'],
+  required: [
+    'id',
+    'branchId',
+    'startAt',
+    'stopAt',
+    'correctedStartAt',
+    'correctedStopAt',
+    'state',
+    'workedHours',
+  ],
+}
+const attendancePage = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    dateFrom: { ...string, format: 'date' },
+    dateTo: { ...string, format: 'date' },
+    items: { type: 'array', items: attendanceSession },
+    nextCursor: nullableString,
+  },
+  required: ['dateFrom', 'dateTo', 'items', 'nextCursor'],
 }
 const punchResult = {
   type: 'object',
@@ -64,6 +85,36 @@ const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
       messageKey: 'channel_api.error.idempotencyRequired',
     }),
   }
+}
+
+const localDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  return new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value
+}
+
+const recordsQuery = (ctx: ServeContext, url: URL, req: Req) => {
+  const today = new Date().toISOString().slice(0, 10)
+  const defaultFrom = new Date(`${today}T00:00:00.000Z`)
+  defaultFrom.setUTCDate(defaultFrom.getUTCDate() - 30)
+  const dateFrom = url.searchParams.get('dateFrom') ?? defaultFrom.toISOString().slice(0, 10)
+  const dateTo = url.searchParams.get('dateTo') ?? today
+  const cursor = url.searchParams.get('cursor') ?? '0'
+  const limitText = url.searchParams.get('limit') ?? '20'
+  const offset = /^\d+$/.test(cursor) ? Number(cursor) : -1
+  const limit = /^\d+$/.test(limitText) ? Number(limitText) : -1
+  const days =
+    localDate(dateFrom) && localDate(dateTo)
+      ? (Date.parse(`${dateTo}T00:00:00.000Z`) - Date.parse(`${dateFrom}T00:00:00.000Z`)) / 86_400_000
+      : -1
+  if (days < 0 || days > 93 || offset < 0 || limit < 1 || limit > 100) {
+    return {
+      status: 400,
+      error: channelError(ctx, url, req, 'channel_api.validation', {
+        messageKey: 'channel_api.error.validation',
+      }),
+    }
+  }
+  return { dateFrom, dateTo, offset, limit }
 }
 
 /** A domain refusal, carried out with the key the module already translates. */
@@ -129,17 +180,40 @@ export const channelRoutes = routesOf(
     summary: 'The operator’s own attendance sessions, newest first.',
     auth: 'required',
     capability: { key: 'attendance.records', action: 'read' },
-    responses: { '200': envelope({ type: 'array', items: attendanceSession }) },
+    request: {
+      query: {
+        type: 'object',
+        properties: {
+          dateFrom: { type: 'string', format: 'date' },
+          dateTo: { type: 'string', format: 'date' },
+          cursor: { type: 'string', pattern: '^\\d+$' },
+          limit: { type: 'integer', minimum: 1, maximum: 100 },
+        },
+      },
+    },
+    responses: { '200': envelope(attendancePage) },
     handler: async (ctx, url, req) => {
-      const month = url.searchParams.get('month')
+      const query = recordsQuery(ctx, url, req)
+      if ('status' in query) return query
       const rows = (await ctx.call(
         'attendance.session.mine',
-        { ...(month ? { month } : {}) },
+        {
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          offset: query.offset,
+          limit: query.limit + 1,
+        },
         url,
         req,
       )) as Array<Record<string, unknown>>
+      const hasMore = rows.length > query.limit
       return {
-        data: [...rows].sort((a, b) => String(b.startAt).localeCompare(String(a.startAt))),
+        data: {
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          items: rows.slice(0, query.limit),
+          nextCursor: hasMore ? String(query.offset + query.limit) : null,
+        },
       }
     },
   }),
@@ -151,7 +225,14 @@ export const channelRoutes = routesOf(
     summary: 'Start a shift. Refused when one is already open.',
     auth: 'required',
     capability: { key: 'attendance.records', action: 'check_in' },
-    request: { body: object },
+    request: {
+      headers: {
+        type: 'object',
+        properties: { 'Idempotency-Key': { type: 'string', minLength: 8, maxLength: 200 } },
+        required: ['Idempotency-Key'],
+      },
+      body: object,
+    },
     responses: { '201': envelope(punchResult) },
     idempotent: true,
     handler: (ctx, url, req, _params, request) => punch('in')(ctx, url, req, request.identity!),
@@ -164,7 +245,14 @@ export const channelRoutes = routesOf(
     summary: 'End the open shift. Refused when there is none.',
     auth: 'required',
     capability: { key: 'attendance.records', action: 'check_out' },
-    request: { body: object },
+    request: {
+      headers: {
+        type: 'object',
+        properties: { 'Idempotency-Key': { type: 'string', minLength: 8, maxLength: 200 } },
+        required: ['Idempotency-Key'],
+      },
+      body: object,
+    },
     responses: { '201': envelope(punchResult) },
     idempotent: true,
     handler: (ctx, url, req, _params, request) => punch('out')(ctx, url, req, request.identity!),

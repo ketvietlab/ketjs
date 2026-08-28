@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { defineFn, eq, from, localDateTimeToUtc } from '@ketvietlab/ketjs'
+import { defineFn, desc, eq, from, gte, localDateTimeToUtc, lt } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, verifyPassword } from '../user/password.ts'
 
@@ -558,7 +558,14 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'session.mine': defineFn({
-    input: { month: 'text?', currentMonth: 'bool?' },
+    input: {
+      month: 'text?',
+      currentMonth: 'bool?',
+      dateFrom: 'text?',
+      dateTo: 'text?',
+      offset: 'int?',
+      limit: 'int?',
+    },
     output: {
       id: 'id',
       branchId: 'id',
@@ -567,20 +574,49 @@ export const functions: Record<string, FnSpec> = {
       correctedStartAt: 'datetime?',
       correctedStopAt: 'datetime?',
       state: 'text',
+      workedHours: 'text',
     },
     effects: ['read:hr.Employee', 'read:attendance.Session', 'read:attendance.Policy'],
     handler: async (ctx: Ctx, a) => {
       const employee = await employeeForActor(ctx)
       if (!employee) return []
-      const rows = await ctx.db.select('attendance.Session', { employeeId: employee.id })
-      if (!a.month && !a.currentMonth) return rows
       const policy = await policyFor(ctx)
+      const S = ctx.table('attendance.Session')
+      let query = from(S).where(eq(S.employeeId, employee.id))
+      if (a.dateFrom) {
+        query = query.where(
+          gte(S.startAt, localDateTimeToUtc(`${String(a.dateFrom)}T00:00`, String(policy.timezone))),
+        )
+      }
+      if (a.dateTo) {
+        const next = new Date(`${String(a.dateTo)}T00:00:00.000Z`)
+        next.setUTCDate(next.getUTCDate() + 1)
+        query = query.where(
+          lt(
+            S.startAt,
+            localDateTimeToUtc(`${next.toISOString().slice(0, 10)}T00:00`, String(policy.timezone)),
+          ),
+        )
+      }
       // A month label and its UTC bounds must come from the same timezone.
       // Letting the caller derive "current" from an employee timezone while
       // these bounds use policy time can skip a whole month at the boundary.
-      const month = a.currentMonth ? currentMonth(String(policy.timezone)) : String(a.month)
-      const [from, to] = monthBounds(month, String(policy.timezone))
-      return rows.filter((row) => String(row.startAt) >= from && String(row.startAt) < to)
+      if (a.month || a.currentMonth) {
+        const month = a.currentMonth ? currentMonth(String(policy.timezone)) : String(a.month)
+        const [from, to] = monthBounds(month, String(policy.timezone))
+        query = query.where(gte(S.startAt, from), lt(S.startAt, to))
+      }
+      query = query.orderBy(desc(S.startAt), desc(S.id))
+      if (a.offset != null) query = query.offset(Math.max(0, Number(a.offset)))
+      if (a.limit != null) query = query.limit(Math.max(1, Math.min(101, Number(a.limit))))
+      const rows = await ctx.db.all(query)
+      const rounding = Math.max(1, Number(policy.roundingMinutes))
+      return rows.map((row) => {
+        const stop = effectiveStop(row)
+        const rawMinutes = stop ? minutes(Date.parse(stop) - Date.parse(effectiveStart(row))) : 0
+        const workedMinutes = Math.round(rawMinutes / rounding) * rounding
+        return { ...row, workedHours: (workedMinutes / 60).toFixed(2) }
+      })
     },
   }),
 

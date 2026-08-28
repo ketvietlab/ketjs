@@ -97,7 +97,7 @@ test('channel api: core and attendance staff responses publish concrete client m
   }
 
   assert.deepEqual(dataSchema('/attendance/status', 'get', '200').required, ['onClock'])
-  assert.equal(dataSchema('/attendance/records', 'get', '200').type, 'array')
+  assert.equal(dataSchema('/attendance/records', 'get', '200').type, 'object')
   assert.deepEqual(dataSchema('/attendance/check-in', 'post', '201').required, [
     'kind',
     'occurredAt',
@@ -106,6 +106,14 @@ test('channel api: core and attendance staff responses publish concrete client m
   for (const path of ['/attendance/check-in', '/attendance/check-out']) {
     const operation = document.paths[path]?.post as Record<string, unknown>
     assert.equal(operation['x-ket-idempotent'], true, `${path} must publish replay safety`)
+    const parameters = operation.parameters as Array<Record<string, unknown>>
+    assert.ok(
+      parameters.some(
+        (parameter) =>
+          parameter.name === 'Idempotency-Key' && parameter.in === 'header' && parameter.required === true,
+      ),
+      `${path} must publish the required Idempotency-Key header`,
+    )
   }
 })
 

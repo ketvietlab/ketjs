@@ -99,16 +99,18 @@ test('staff attendance: an operator clocks their own shift in and out', async (t
   const after = await staff<{ onClock: boolean }>(booted, 'attendance/status')
   assert.equal(after.body.data.onClock, false)
 
-  const records = await staff<Array<{ id: string; state: string; startAt: string; stopAt: string }>>(
-    booted,
-    'attendance/records',
-  )
+  const records = await staff<{
+    items: Array<{ id: string; state: string; startAt: string; stopAt: string; workedHours: string }>
+    nextCursor: string | null
+  }>(booted, 'attendance/records?limit=1')
   assert.equal(records.status, 200)
-  assert.equal(records.body.data.length, 1)
-  assert.equal(records.body.data[0]?.id, started.body.data.sessionId)
-  assert.equal(records.body.data[0]?.state, 'closed')
-  assert.match(records.body.data[0]?.startAt ?? '', /^\d{4}-\d{2}-\d{2}T/)
-  assert.match(records.body.data[0]?.stopAt ?? '', /^\d{4}-\d{2}-\d{2}T/)
+  assert.equal(records.body.data.items.length, 1)
+  assert.equal(records.body.data.items[0]?.id, started.body.data.sessionId)
+  assert.equal(records.body.data.items[0]?.state, 'closed')
+  assert.match(records.body.data.items[0]?.startAt ?? '', /^\d{4}-\d{2}-\d{2}T/)
+  assert.match(records.body.data.items[0]?.stopAt ?? '', /^\d{4}-\d{2}-\d{2}T/)
+  assert.match(records.body.data.items[0]?.workedHours ?? '', /^\d+\.\d{2}$/)
+  assert.equal(records.body.data.nextCursor, null)
 })
 
 test('staff attendance: a repeated check-in is refused rather than clocking out', async (t) => {
@@ -151,6 +153,14 @@ test('staff attendance: a mutation without a usable idempotency key fails closed
   const missing = await staff(booted, 'attendance/check-in', { method: 'POST' })
   assert.equal(missing.status, 400)
   assert.equal(missing.body.error?.code, 'channel_api.idempotencyRequired')
+})
+
+test('staff attendance: records validate bounded date and pagination queries', async (t) => {
+  const booted = await boot(t)
+  const invalid = await staff(booted, 'attendance/records?dateFrom=2026-01-01&dateTo=2026-08-28')
+  assert.equal(invalid.status, 400)
+  const malformed = await staff(booted, 'attendance/records?cursor=nope&limit=101')
+  assert.equal(malformed.status, 422)
 })
 
 test('staff attendance: no session, no attendance', async (t) => {
