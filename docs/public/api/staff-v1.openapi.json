@@ -14614,6 +14614,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -14621,6 +14624,12 @@
                                 "type": "string"
                               },
                               "subtotal": {
+                                "type": "string"
+                              },
+                              "tax": {
+                                "type": "string"
+                              },
+                              "total": {
                                 "type": "string"
                               }
                             },
@@ -14630,11 +14639,40 @@
                               "name",
                               "quantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
-                              "subtotal"
+                              "subtotal",
+                              "tax",
+                              "total"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "deliveryMoveCount": {
                           "type": "integer",
@@ -14690,6 +14728,8 @@
                         "customerReference",
                         "notes",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "deliveryMoveCount",
                         "invoiceCount",
                         "version",
@@ -14972,6 +15012,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -14979,6 +15022,12 @@
                                 "type": "string"
                               },
                               "subtotal": {
+                                "type": "string"
+                              },
+                              "tax": {
+                                "type": "string"
+                              },
+                              "total": {
                                 "type": "string"
                               }
                             },
@@ -14988,11 +15037,40 @@
                               "name",
                               "quantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
-                              "subtotal"
+                              "subtotal",
+                              "tax",
+                              "total"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "deliveryMoveCount": {
                           "type": "integer",
@@ -15048,6 +15126,8 @@
                         "customerReference",
                         "notes",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "deliveryMoveCount",
                         "invoiceCount",
                         "version",
@@ -15105,6 +15185,18 @@
             "staffCookie": []
           }
         ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -15150,7 +15242,7 @@
                     }
                   }
                 },
-                "required": ["partnerId", "warehouseId", "lines"]
+                "required": ["partnerId", "lines"]
               }
             }
           }
@@ -15236,6 +15328,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -15243,6 +15338,12 @@
                                 "type": "string"
                               },
                               "subtotal": {
+                                "type": "string"
+                              },
+                              "tax": {
+                                "type": "string"
+                              },
+                              "total": {
                                 "type": "string"
                               }
                             },
@@ -15252,11 +15353,40 @@
                               "name",
                               "quantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
-                              "subtotal"
+                              "subtotal",
+                              "tax",
+                              "total"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "deliveryMoveCount": {
                           "type": "integer",
@@ -15312,6 +15442,8 @@
                         "customerReference",
                         "notes",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "deliveryMoveCount",
                         "invoiceCount",
                         "version",
@@ -15396,6 +15528,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -15447,7 +15599,7 @@
                     "pattern": "^sov_[0-9a-f]{64}$"
                   }
                 },
-                "required": ["partnerId", "warehouseId", "lines", "expectedVersion"]
+                "required": ["partnerId", "lines", "expectedVersion"]
               }
             }
           }
@@ -15533,6 +15685,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -15540,6 +15695,12 @@
                                 "type": "string"
                               },
                               "subtotal": {
+                                "type": "string"
+                              },
+                              "tax": {
+                                "type": "string"
+                              },
+                              "total": {
                                 "type": "string"
                               }
                             },
@@ -15549,11 +15710,40 @@
                               "name",
                               "quantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
-                              "subtotal"
+                              "subtotal",
+                              "tax",
+                              "total"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "deliveryMoveCount": {
                           "type": "integer",
@@ -15609,6 +15799,8 @@
                         "customerReference",
                         "notes",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "deliveryMoveCount",
                         "invoiceCount",
                         "version",
@@ -15711,6 +15903,26 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -15817,6 +16029,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -15824,6 +16039,12 @@
                                 "type": "string"
                               },
                               "subtotal": {
+                                "type": "string"
+                              },
+                              "tax": {
+                                "type": "string"
+                              },
+                              "total": {
                                 "type": "string"
                               }
                             },
@@ -15833,11 +16054,40 @@
                               "name",
                               "quantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
-                              "subtotal"
+                              "subtotal",
+                              "tax",
+                              "total"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "deliveryMoveCount": {
                           "type": "integer",
@@ -15893,6 +16143,8 @@
                         "customerReference",
                         "notes",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "deliveryMoveCount",
                         "invoiceCount",
                         "version",
@@ -15976,6 +16228,26 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         ],
@@ -16078,6 +16350,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -16085,6 +16360,12 @@
                                 "type": "string"
                               },
                               "subtotal": {
+                                "type": "string"
+                              },
+                              "tax": {
+                                "type": "string"
+                              },
+                              "total": {
                                 "type": "string"
                               }
                             },
@@ -16094,11 +16375,40 @@
                               "name",
                               "quantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
-                              "subtotal"
+                              "subtotal",
+                              "tax",
+                              "total"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "deliveryMoveCount": {
                           "type": "integer",
@@ -16154,6 +16464,8 @@
                         "customerReference",
                         "notes",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "deliveryMoveCount",
                         "invoiceCount",
                         "version",
