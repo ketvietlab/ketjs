@@ -655,6 +655,122 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
   })) as Row | null
   assert.equal(applications === null || Number(applications.balance) >= 0, true)
 
+  await saveProgram(call, { id: 'pos-return-program', appliesOn: 'future', availableSale: false })
+  await saveRule(call, {
+    id: 'pos-return-rule',
+    programId: 'pos-return-program',
+    pointAmount: '5',
+  })
+  await call<Row>('pos.createOrder', {
+    id: 'pos-partial-loyalty',
+    sessionId: 'session',
+    partnerId: 'customer',
+  })
+  await call<Row>('pos.addLine', {
+    id: 'pos-partial-loyalty-line',
+    orderId: 'pos-partial-loyalty',
+    productId: 'fruit-box',
+    productUomId: 'unit',
+    qty: '2',
+    priceUnit: '100',
+  })
+  await call<Row>('pos.addPayment', {
+    id: 'pos-partial-loyalty-pay',
+    orderId: 'pos-partial-loyalty',
+    paymentMethodId: 'cash-method',
+    amount: '220',
+  })
+  await call<Row>('loyalty_pos.validateOrder', { id: 'pos-partial-loyalty' })
+  const earned = await e2e.adapter!.all(
+    'SELECT id, "balanceDelta" FROM loyalty_ledger_entry WHERE "sourceType" = ? AND "sourceId" = ?',
+    ['pos', 'pos-partial-loyalty'],
+  )
+  const earnedTotal = earned.reduce((sum, entry) => sum + Number(entry.balanceDelta), 0)
+  assert.equal(earnedTotal > 0, true)
+
+  let returnEligibility = await call<Row>('pos.getReturnEligibility', { id: 'pos-partial-loyalty' })
+  await call<Row>('loyalty_pos.refundOrder', {
+    id: 'pos-partial-loyalty-return-1',
+    originalOrderId: 'pos-partial-loyalty',
+    sessionId: 'session',
+    expectedRevision: returnEligibility.revision,
+    lines: [{ lineId: 'pos-partial-loyalty-line', quantity: '1' }],
+  })
+  await call<Row>('pos.addPayment', {
+    id: 'pos-partial-loyalty-return-1-pay',
+    orderId: 'pos-partial-loyalty-return-1',
+    paymentMethodId: 'cash-method',
+    amount: '-110',
+  })
+  await call<Row>('loyalty_pos.validateOrder', { id: 'pos-partial-loyalty-return-1' })
+  const firstReversal = await e2e.adapter!.all(
+    'SELECT "balanceDelta" FROM loyalty_ledger_entry WHERE "sourceType" = ? AND "sourceId" = ?',
+    ['pos_return', 'pos-partial-loyalty-return-1'],
+  )
+  assert.equal(
+    firstReversal.reduce((sum, entry) => sum + Number(entry.balanceDelta), 0),
+    -earnedTotal / 2,
+  )
+  assert.equal(
+    (
+      await e2e.adapter!.all(
+        'SELECT state FROM loyalty_application WHERE "orderType" = ? AND "orderId" = ?',
+        ['pos', 'pos-partial-loyalty'],
+      )
+    )[0]!.state,
+    'finalized',
+  )
+  await call<Row>('loyalty_pos.validateOrder', { id: 'pos-partial-loyalty-return-1' })
+  assert.equal(
+    (
+      await e2e.adapter!.all(
+        'SELECT COUNT(*) AS n FROM loyalty_ledger_entry WHERE "sourceType" = ? AND "sourceId" = ?',
+        ['pos_return', 'pos-partial-loyalty-return-1'],
+      )
+    )[0]!.n,
+    firstReversal.length,
+  )
+
+  returnEligibility = await call<Row>('pos.getReturnEligibility', { id: 'pos-partial-loyalty' })
+  await call<Row>('loyalty_pos.refundOrder', {
+    id: 'pos-partial-loyalty-return-2',
+    originalOrderId: 'pos-partial-loyalty',
+    sessionId: 'session',
+    expectedRevision: returnEligibility.revision,
+    lines: [{ lineId: 'pos-partial-loyalty-line', quantity: '1' }],
+  })
+  await call<Row>('pos.addPayment', {
+    id: 'pos-partial-loyalty-return-2-pay',
+    orderId: 'pos-partial-loyalty-return-2',
+    paymentMethodId: 'cash-method',
+    amount: '-110',
+  })
+  await call<Row>('loyalty_pos.validateOrder', { id: 'pos-partial-loyalty-return-2' })
+  const allReversals = await e2e.adapter!.all(
+    'SELECT "balanceDelta" FROM loyalty_ledger_entry WHERE "reversedEntryId" IS NOT NULL AND "sourceType" = ? AND "sourceId" IN (?, ?)',
+    ['pos_return', 'pos-partial-loyalty-return-1', 'pos-partial-loyalty-return-2'],
+  )
+  assert.equal(
+    allReversals.reduce((sum, entry) => sum + Number(entry.balanceDelta), 0),
+    -earnedTotal,
+  )
+  assert.equal(
+    (
+      await e2e.adapter!.all(
+        'SELECT state FROM loyalty_application WHERE "orderType" = ? AND "orderId" = ?',
+        ['pos', 'pos-partial-loyalty'],
+      )
+    )[0]!.state,
+    'reversed',
+  )
+  const spend = await e2e.adapter!.all('SELECT amount FROM loyalty_spend_entry WHERE "sourceType" = ?', [
+    'pos_return:pos-partial-loyalty',
+  ])
+  assert.equal(
+    spend.reduce((sum, entry) => sum + Number(entry.amount), 0),
+    -220,
+  )
+
   await call<Row>('pos.createOrder', {
     id: 'pos-reconcile',
     uuid: 'pos-reconcile',
