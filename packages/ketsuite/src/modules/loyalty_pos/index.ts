@@ -1,10 +1,13 @@
 import { defineModule } from '@ketvietlab/ketjs'
+import { channelRoutes } from './channel.ts'
 import { functions } from './functions.ts'
+import { jobs } from './jobs.ts'
 
 export default defineModule({
   name: 'loyalty_pos',
   version: '0.1.0',
-  depends: ['loyalty', 'pos'],
+  depends: ['loyalty', 'pos', 'product', 'partner', 'channel_api', 'pos_channel'],
+  compatible: { channel_api: '^1' },
   title: 'Loyalty tại điểm bán',
   summary: 'Áp ưu đãi, tích và đổi điểm trên đơn POS.',
   category: 'Bán hàng',
@@ -28,6 +31,8 @@ export default defineModule({
     },
   },
   functions,
+  jobs,
+  routes: channelRoutes,
   messages: {
     vi: {
       'app.title': 'Loyalty tại điểm bán',

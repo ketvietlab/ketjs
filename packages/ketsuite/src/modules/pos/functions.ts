@@ -23,7 +23,11 @@ const now = () => new Date().toISOString()
 
 type RevisionClaim = { ok: true; order: Row; revision: number } | ReturnType<typeof invalid>
 
-async function claimDraftRevision(ctx: Ctx, id: unknown, expectedRevision?: unknown): Promise<RevisionClaim> {
+export async function claimDraftRevision(
+  ctx: Ctx,
+  id: unknown,
+  expectedRevision?: unknown,
+): Promise<RevisionClaim> {
   const order = (await ctx.db.select('pos.Order', { id }))[0]
   if (!order) return invalid('orderId', 'order does not exist')
   if (order.state !== 'draft') return invalid('state', 'only a draft order can be changed')

@@ -376,6 +376,9 @@ const commandOptions = (identity: PosIdentity, action: string, key: string) => (
   idempotencyNamespace: `pos:${identity.companyId}:${identity.posConfigId}:${identity.deviceId}:${action}`,
 })
 
+const lifecycleFunction = async (ctx: ServeContext, req: Req, preferred: string, fallback: string) =>
+  (await ctx.live(req)).functions[preferred] ? preferred : fallback
+
 export const operationRoutes = routesOf(
   defineChannelRoute({
     profile: 'pos',
@@ -1229,7 +1232,7 @@ export const operationRoutes = routesOf(
       const identity = request.identity!
       if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
-        'pos.validateOrder',
+        await lifecycleFunction(ctx, req, 'loyalty_pos.validateOrder', 'pos.validateOrder'),
         { id: params.id, expectedRevision: request.body.expectedRevision },
         url,
         req,
@@ -1260,7 +1263,7 @@ export const operationRoutes = routesOf(
       const identity = request.identity!
       if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
       const result = (await ctx.call(
-        'pos.cancelOrder',
+        await lifecycleFunction(ctx, req, 'loyalty_pos.cancelOrder', 'pos.cancelOrder'),
         { id: params.id, expectedRevision: request.body.expectedRevision },
         url,
         req,
@@ -1271,3 +1274,11 @@ export const operationRoutes = routesOf(
     },
   }),
 )
+
+export {
+  commandOptions,
+  failure as posFailure,
+  keyOf as posCommandKey,
+  notFound as posNotFound,
+  orderFor as posOrderFor,
+}

@@ -483,10 +483,11 @@ test('loyalty HTTP E2E: tier window, stable earn-group priority and redeem cap a
 })
 
 test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the adapter', async (t) => {
-  const { e2e, call } = await bootLoyalty(t)
+  const { e2e, call } = await bootLoyalty(t, true)
   for (const [id, code, name, accountType] of [
     ['revenue', '5111', 'Doanh thu', 'income'],
     ['receivable', '131', 'Phải thu khách hàng', 'asset_receivable'],
+    ['tax', '3331', 'Thuế GTGT', 'liability_current'],
     ['cash', '1111', 'Tiền mặt', 'asset_cash'],
   ])
     await call<Row>('account.saveAccount', { id, code, name, accountType })
@@ -498,6 +499,14 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     type: 'cash',
     defaultAccountId: 'cash',
   })
+  await call<Row>('account.saveTax', {
+    id: 'vat10',
+    name: 'VAT 10%',
+    typeTaxUse: 'sale',
+    amountType: 'percent',
+    amount: '10',
+  })
+  await call<Row>('account.setProductTax', { templateId: 'goods', taxId: 'vat10' })
   await call<Row>('pos.saveConfig', {
     id: 'shop',
     name: 'Cửa hàng chính',
@@ -506,6 +515,7 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     salesJournalId: 'sales',
     revenueAccountId: 'revenue',
     receivableAccountId: 'receivable',
+    taxAccountId: 'tax',
   })
   await call<Row>('pos.savePaymentMethod', {
     id: 'cash-method',
@@ -553,15 +563,48 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     await (await e2e.client.get('/admin/loyalty/orders/pos/pos-loyalty')).text(),
     /undefined/,
   )
+  const discounted = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
+  const rewardLines = (discounted.lines as Row[]).filter((line) => line.lineKind === 'reward')
+  assert.equal(Number(discounted.amountUntaxed), 81.82)
+  assert.equal(Number(discounted.amountTax), 8.18)
+  assert.equal(Number(discounted.amountTotal), 90)
+  assert.equal(rewardLines.length, 1)
+  assert.equal(rewardLines[0]?.taxId, 'vat10')
+  assert.deepEqual(rewardLines[0]?.taxIds, ['vat10'])
+  assert.equal(Number(rewardLines[0]?.priceSubtotal), -18.18)
+  assert.equal(Number(rewardLines[0]?.priceSubtotalIncl), -20)
   await call<Row>('pos.addPayment', {
     id: 'pos-payment',
     orderId: 'pos-loyalty',
     paymentMethodId: 'cash-method',
-    amount: '80',
+    amount: '90',
   })
   const beforePayment = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
-  assert.equal(Number(beforePayment.amountTotal), 80)
-  assert.equal(Number(beforePayment.amountPaid), 80)
+  assert.equal(Number(beforePayment.amountTotal), 90)
+  assert.equal(Number(beforePayment.amountPaid), 90)
+  const staleRemove = await call<Row>('loyalty_pos.removeReward', {
+    orderId: 'pos-loyalty',
+    programId: 'pos-program',
+    expectedRevision: Number(beforePayment.revision) - 1,
+  })
+  assert.equal(staleRemove.ok, false)
+  assert.equal(
+    ((await call<Row>('pos.getOrder', { id: 'pos-loyalty' })).lines as Row[]).some(
+      (line) => line.lineKind === 'reward',
+    ),
+    true,
+  )
+  await call<Row>('loyalty.reward.archive', { id: 'pos-reward', active: false })
+  const stale = await call<Row>('loyalty_pos.validateOrder', {
+    id: 'pos-loyalty',
+    expectedRevision: beforePayment.revision,
+  })
+  assert.equal(stale.ok, false)
+  const unchanged = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
+  assert.equal(unchanged.state, 'draft')
+  assert.equal(unchanged.pickingId, null)
+  assert.equal(unchanged.accountMoveId, null)
+  await call<Row>('loyalty.reward.archive', { id: 'pos-reward', active: true })
   const validated = await call<Row>('loyalty_pos.validateOrder', { id: 'pos-loyalty' })
   assert.equal(validated.ok, true, JSON.stringify(validated))
   await e2e.client.form('/admin/pos/orders/pos-loyalty', { action: 'validate' })
@@ -578,7 +621,7 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     id: 'refund-payment',
     orderId: 'pos-refund',
     paymentMethodId: 'cash-method',
-    amount: '-80',
+    amount: '-90',
   })
   await call<Row>('loyalty_pos.validateOrder', { id: 'pos-refund' })
   order = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
@@ -591,6 +634,49 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     programId: 'pos-program',
   })) as Row | null
   assert.equal(applications === null || Number(applications.balance) >= 0, true)
+
+  await call<Row>('pos.createOrder', {
+    id: 'pos-reconcile',
+    uuid: 'pos-reconcile',
+    sessionId: 'session',
+    partnerId: 'customer',
+  })
+  await call<Row>('pos.addLine', {
+    id: 'pos-reconcile-line',
+    orderId: 'pos-reconcile',
+    productId: 'fruit-box',
+    productUomId: 'unit',
+    qty: '1',
+    priceUnit: '100',
+  })
+  let pending = await call<Row>('pos.getOrder', { id: 'pos-reconcile' })
+  await call<Row>('loyalty_pos.applyReward', {
+    orderId: 'pos-reconcile',
+    programId: 'pos-program',
+    rewardId: 'pos-reward',
+    expectedRevision: pending.revision,
+  })
+  pending = await call<Row>('pos.getOrder', { id: 'pos-reconcile' })
+  await call<Row>('pos.addPayment', {
+    id: 'pos-reconcile-payment',
+    orderId: 'pos-reconcile',
+    paymentMethodId: 'cash-method',
+    amount: '90',
+  })
+  pending = await call<Row>('pos.getOrder', { id: 'pos-reconcile' })
+  const coreValidated = await call<Row>('pos.validateOrder', {
+    id: 'pos-reconcile',
+    expectedRevision: pending.revision,
+  })
+  assert.equal(coreValidated.ok, true)
+  const queued = await call<Row>('loyalty_pos.reconcileOrderAsync', {
+    orderId: 'pos-reconcile',
+    idempotencyKey: 'manual-recovery-1',
+  })
+  assert.equal(queued.ok, true)
+  assert.equal((await call<Row>('pos.getOrder', { id: 'pos-reconcile' })).loyaltyState, 'pending_reconcile')
+  assert.equal(await e2e.drainJobs(), 1)
+  assert.equal((await call<Row>('pos.getOrder', { id: 'pos-reconcile' })).loyaltyState, 'finalized')
 })
 
 test('loyalty HTTP E2E: Sale UI adapter, portal actor and company scope stay isolated', async (t) => {

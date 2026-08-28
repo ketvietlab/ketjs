@@ -70,6 +70,14 @@ export const openApiDocument = (manifest: Manifest, profile: ChannelProfile) => 
       ...Object.entries(
         (contract.request?.query?.properties as Record<string, unknown> | undefined) ?? {},
       ).map(([name, schema]) => ({ name, in: 'query', required: false, schema })),
+      ...Object.entries(
+        (contract.request?.headers?.properties as Record<string, unknown> | undefined) ?? {},
+      ).map(([name, schema]) => ({
+        name,
+        in: 'header',
+        required: ((contract.request?.headers?.required as string[] | undefined) ?? []).includes(name),
+        schema,
+      })),
     ]
     paths[operationPath(path, profile)] = {
       [contract.method.toLowerCase()]: {
