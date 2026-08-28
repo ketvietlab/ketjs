@@ -14,6 +14,7 @@ const string = { type: 'string' }
 const integer = { type: 'integer', minimum: 0 }
 const nullableString = { type: ['string', 'null'] }
 const object = { type: 'object' }
+const boolean = { type: 'boolean' }
 const n = (value: unknown) => Number(value ?? 0)
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 const envelope = (data: unknown) => ({
@@ -78,6 +79,7 @@ const orderLine = {
     quoteRevision: nullableString,
     tracking: string,
     lotSelections: { type: 'array', items: lotSelection },
+    originalLineId: nullableString,
   },
   required: [
     'id',
@@ -94,7 +96,49 @@ const orderLine = {
     'quoteRevision',
     'tracking',
     'lotSelections',
+    'originalLineId',
   ],
+}
+const returnEligibilityLine = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    lineId: string,
+    productId: string,
+    name: string,
+    uomId: string,
+    purchasedQuantity: string,
+    refundedQuantity: string,
+    remainingQuantity: string,
+    unitPrice: string,
+    amountTotal: string,
+    tracking: string,
+  },
+  required: [
+    'lineId',
+    'productId',
+    'name',
+    'uomId',
+    'purchasedQuantity',
+    'refundedQuantity',
+    'remainingQuantity',
+    'unitPrice',
+    'amountTotal',
+    'tracking',
+  ],
+}
+const returnEligibility = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    originalOrderId: string,
+    revision: integer,
+    refundable: boolean,
+    requiresFullReturn: boolean,
+    standaloneAllowed: boolean,
+    lines: { type: 'array', items: returnEligibilityLine },
+  },
+  required: ['originalOrderId', 'revision', 'refundable', 'requiresFullReturn', 'standaloneAllowed', 'lines'],
 }
 const lotAvailability = {
   type: 'object',
@@ -172,6 +216,12 @@ const order = {
     amountPaid: string,
     amountReturn: string,
     priceBookRevision: nullableString,
+    isReturn: boolean,
+    originalOrderId: nullableString,
+    returnPortion: nullableString,
+    returnComplete: boolean,
+    accountMoveId: nullableString,
+    pickingId: nullableString,
     revision: integer,
     lines: { type: 'array', items: orderLine },
     tenders: { type: 'array', items: tender },
@@ -195,6 +245,12 @@ const order = {
     'amountPaid',
     'amountReturn',
     'priceBookRevision',
+    'isReturn',
+    'originalOrderId',
+    'returnPortion',
+    'returnComplete',
+    'accountMoveId',
+    'pickingId',
     'revision',
     'lines',
     'tenders',
@@ -310,6 +366,12 @@ const projectOrder = (row: Row) => ({
   amountPaid: String(row.amountPaid),
   amountReturn: String(row.amountReturn),
   priceBookRevision: row.priceBookRevision == null ? null : String(row.priceBookRevision),
+  isReturn: Boolean(row.isRefund),
+  originalOrderId: row.refundedOrderId == null ? null : String(row.refundedOrderId),
+  returnPortion: row.returnPortion == null ? null : String(row.returnPortion),
+  returnComplete: Boolean(row.returnComplete),
+  accountMoveId: row.accountMoveId == null ? null : String(row.accountMoveId),
+  pickingId: row.pickingId == null ? null : String(row.pickingId),
   revision: Number(row.revision ?? 0),
   lines: (Array.isArray(row.lines) ? (row.lines as Row[]) : [])
     .map((line) => ({
@@ -333,6 +395,7 @@ const projectOrder = (row: Row) => ({
           stockRevision: selection.stockRevision == null ? null : String(selection.stockRevision),
         }),
       ),
+      originalLineId: line.refundedOrderlineId == null ? null : String(line.refundedOrderlineId),
     }))
     .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id)),
   tenders: (Array.isArray(row.payments) ? (row.payments as Row[]) : []).map((payment) => ({
@@ -347,19 +410,23 @@ const projectOrder = (row: Row) => ({
     paymentDate: String(payment.paymentDate),
   })),
   allowedActions:
-    row.state === 'draft'
-      ? [
-          'update',
-          'add_line',
-          'update_line',
-          'remove_line',
-          'reorder_lines',
-          'add_tender',
-          'void_tender',
-          'finalize',
-          'cancel',
-        ]
-      : [],
+    row.state === 'draft' && row.isRefund
+      ? ['add_tender', 'void_tender', 'finalize', 'cancel']
+      : row.state === 'draft'
+        ? [
+            'update',
+            'add_line',
+            'update_line',
+            'remove_line',
+            'reorder_lines',
+            'add_tender',
+            'void_tender',
+            'finalize',
+            'cancel',
+          ]
+        : ['paid', 'done'].includes(String(row.state)) && !row.isRefund
+          ? ['create_return']
+          : [],
 })
 
 const orderFor = async (ctx: ServeContext, url: URL, req: Req, id: string, identity: PosIdentity) => {
@@ -861,6 +928,101 @@ export const operationRoutes = routesOf(
     request: { params: idParams },
     responses: { '200': envelope(order), '404': envelope(object) },
     handler: (ctx, url, req, params, request) => orderResult(ctx, url, req, params.id, request.identity!),
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'GET',
+    path: 'orders/{id}/return-eligibility',
+    operationId: 'pos.orders.returnEligibility',
+    summary: 'Read remaining return capacity from the immutable sale and its return history.',
+    auth: 'required',
+    request: { params: idParams },
+    responses: {
+      '200': envelope(returnEligibility),
+      '404': envelope(object),
+      '422': envelope(object),
+    },
+    handler: async (ctx, url, req, params, request) => {
+      const identity = request.identity!
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call('pos.getReturnEligibility', { id: params.id }, url, req)) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      const data = {
+        originalOrderId: String(result.originalOrderId),
+        revision: Number(result.revision),
+        refundable: Boolean(result.refundable),
+        requiresFullReturn: Boolean(result.requiresFullReturn),
+        standaloneAllowed: Boolean(result.standaloneAllowed),
+        lines: Array.isArray(result.lines) ? result.lines : [],
+      }
+      return { data, headers: { etag: `"pos-return-${data.revision}"` } }
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'POST',
+    path: 'orders/{id}/returns',
+    operationId: 'pos.orders.returns.create',
+    summary: 'Create an immutable partial-return draft against remaining sale quantities.',
+    auth: 'required',
+    request: {
+      params: idParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          shiftId: string,
+          expectedRevision: integer,
+          lines: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: { lineId: string, quantity: string },
+              required: ['lineId', 'quantity'],
+            },
+          },
+        },
+        required: ['shiftId', 'expectedRevision', 'lines'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '400': envelope(object),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      const original = await orderFor(ctx, url, req, params.id, identity)
+      const shift = await shiftFor(ctx, url, req, String(request.body.shiftId), identity)
+      if (!original || !shift) return notFound(ctx, url, req)
+      const id = channelCommandId('return', identity, `${params.id}\n${key}`)
+      const functionName = await lifecycleFunction(ctx, req, 'loyalty_pos.refundOrder', 'pos.refundOrder')
+      const result = (await ctx.call(
+        functionName,
+        {
+          id,
+          uuid: id,
+          originalOrderId: params.id,
+          sessionId: request.body.shiftId,
+          expectedRevision: request.body.expectedRevision,
+          lines: request.body.lines,
+          operatorId: identity.operatorId,
+          deviceId: identity.deviceId,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.return.create', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, String(result.id), identity)
+    },
   }),
   defineChannelRoute({
     profile: 'pos',

@@ -71,6 +71,8 @@ export const models: Record<string, ModelDef> = {
       invoiceStatus: 'text',
       isRefund: 'bool',
       refundedOrderId: 'ref:pos.Order?',
+      returnPortion: 'decimal?',
+      returnComplete: 'bool?',
       dateOrder: 'datetime',
       currency: 'text',
       amountUntaxed: 'decimal',
