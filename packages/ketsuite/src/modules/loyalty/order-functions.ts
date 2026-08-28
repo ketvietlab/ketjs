@@ -800,6 +800,116 @@ export const orderFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  'order.reversePortion': defineFn({
+    input: {
+      orderType: 'text',
+      orderId: 'text',
+      reversalId: 'text',
+      portion: 'decimal',
+      complete: 'bool?',
+      reversedAt: 'datetime?',
+    },
+    effects: [...orderWriteEffects],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const portion = n(args.portion)
+      if (!(portion > 0) || portion > 1.000001) return invalid(issue('portion', 'loyalty.error.order'))
+      let partnerId: string | null = null
+      try {
+        const reversed = await ctx.tx(async (tx) => {
+          const applications = await tx.db.select('loyalty.Application', {
+            orderType: args.orderType,
+            orderId: args.orderId,
+          })
+          partnerId = applications[0]?.partnerId ? String(applications[0].partnerId) : null
+          const entries = (
+            await tx.db.select('loyalty.LedgerEntry', {
+              sourceType: args.orderType,
+              sourceId: args.orderId,
+            })
+          ).filter((entry) => entry.operation !== 'reverse')
+          let count = 0
+          for (const entry of entries) {
+            const prior = await tx.db.select('loyalty.LedgerEntry', { reversedEntryId: entry.id })
+            const remaining = Math.max(
+              0,
+              Math.abs(n(entry.balanceDelta)) -
+                prior.reduce((sum, reversal) => sum + Math.abs(n(reversal.balanceDelta)), 0),
+            )
+            const amount = args.complete
+              ? remaining
+              : Math.min(remaining, Math.abs(n(entry.balanceDelta)) * portion)
+            if (amount <= 0.000001) continue
+            const result = await postDelta(tx, {
+              id: `${String(entry.id)}:reverse:${String(args.reversalId)}`,
+              walletId: String(entry.walletId),
+              operation: 'reverse',
+              amount,
+              balanceDelta: n(entry.balanceDelta) > 0 ? -amount : amount,
+              sourceType: `${String(args.orderType)}_return`,
+              sourceId: String(args.reversalId),
+              sourceOperation: `reverse:${String(entry.id)}`,
+              sourceKey: `${String(entry.sourceKey)}:reverse:${String(args.reversalId)}`,
+              descriptionCode: 'loyalty.ledger.description.reverse',
+              reversedEntryId: String(entry.id),
+              metadata: {
+                originalOrderType: String(args.orderType),
+                originalOrderId: String(args.orderId),
+                portion: decimal(portion),
+                complete: Boolean(args.complete),
+              },
+              allowNegative: true,
+            })
+            if (!result.replayed) count += 1
+          }
+
+          const originalSpend = (
+            await tx.db.select('loyalty.SpendEntry', {
+              sourceType: args.orderType,
+              sourceId: args.orderId,
+            })
+          )[0]
+          if (originalSpend) {
+            const returnSourceType = `${String(args.orderType)}_return:${String(args.orderId)}`
+            const previousSpend = await tx.db.select('loyalty.SpendEntry', {
+              sourceType: returnSourceType,
+            })
+            const remainingSpend = Math.max(
+              0,
+              n(originalSpend.amount) + previousSpend.reduce((sum, entry) => sum + n(entry.amount), 0),
+            )
+            const amount = args.complete
+              ? remainingSpend
+              : Math.min(remainingSpend, n(originalSpend.amount) * portion)
+            await tx.db.insertIfAbsent('loyalty.SpendEntry', {
+              id: `${String(args.orderType)}:${String(args.reversalId)}:spend`,
+              partnerId: originalSpend.partnerId,
+              sourceType: returnSourceType,
+              sourceId: String(args.reversalId),
+              amount: decimal(-amount),
+              currency: originalSpend.currency,
+              occurredAt: args.reversedAt ?? now(),
+              reversedAt: null,
+            })
+          }
+          if (args.complete)
+            for (const application of applications)
+              await tx.db.update(
+                'loyalty.Application',
+                { id: application.id },
+                { state: 'reversed', updatedAt: now() },
+              )
+          return count
+        })
+        const membership = partnerId ? await refreshMembershipRow(ctx, partnerId) : null
+        return { ok: true, reversed, membership }
+      } catch (error) {
+        return concurrentError(error)
+      }
+    },
+  }),
+
   'order.reverse': defineFn({
     input: { orderType: 'text', orderId: 'text', reversedAt: 'datetime?' },
     effects: [...orderWriteEffects],

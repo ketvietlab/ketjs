@@ -56,6 +56,24 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { config_state: { fields: ['companyId', 'configId', 'state'] } },
   },
+  Exchange: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      uuid: 'text',
+      originalOrderId: 'ref:pos.Order',
+      returnOrderId: 'ref:pos.Order',
+      replacementOrderId: 'ref:pos.Order',
+      originalRevision: 'int',
+      reason: 'text?',
+      createdAt: 'datetime',
+    },
+    indexes: {
+      company_uuid: { fields: ['companyId', 'uuid'], unique: true },
+      return_order: { fields: ['companyId', 'returnOrderId'], unique: true },
+      replacement_order: { fields: ['companyId', 'replacementOrderId'], unique: true },
+    },
+  },
   Order: {
     scope: 'company',
     fields: {
@@ -71,6 +89,10 @@ export const models: Record<string, ModelDef> = {
       invoiceStatus: 'text',
       isRefund: 'bool',
       refundedOrderId: 'ref:pos.Order?',
+      returnPortion: 'decimal?',
+      returnComplete: 'bool?',
+      exchangeId: 'ref:pos.Exchange?',
+      exchangeRole: 'text?',
       dateOrder: 'datetime',
       currency: 'text',
       amountUntaxed: 'decimal',
@@ -92,6 +114,7 @@ export const models: Record<string, ModelDef> = {
     indexes: {
       company_uuid: { fields: ['companyId', 'uuid'], unique: true },
       session_sequence: { fields: ['companyId', 'sessionId', 'sequenceNumber'], unique: true },
+      exchange_role: { fields: ['companyId', 'exchangeId', 'exchangeRole'], unique: true },
     },
   },
   OrderLine: {
