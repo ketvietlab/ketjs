@@ -20,6 +20,8 @@ const messages: Record<string, string> = {
   'crm_backend.activity.complete': 'Hoàn tất',
   'crm_backend.activity.cancel': 'Hủy',
   'crm_backend.activity.today': 'Hôm nay',
+  'crm_backend.action.cancelEdit': 'Đóng',
+  'crm_backend.error.title': 'Không thể lưu thay đổi',
   'crm_backend.empty.title': 'Chưa có hoạt động',
   'crm_backend.empty.hint': 'Hoạt động mới sẽ xuất hiện tại đây.',
   'backend.table.columns': 'Cột',
@@ -54,6 +56,8 @@ test('crm activity planner: keeps specialized planning chrome, controls, actions
         activityTypes: [{ id: 'call', name: 'Cuộc gọi' }],
         locale: '?lang=vi',
         errors: ['Ngày hoàn thành không hợp lệ'],
+        failedAction: 'schedule',
+        scheduling: true,
         controls: {
           caseId: html`<ket-island data-island="relation.select" data-field="caseId"></ket-island>`,
           assignee: html`<ket-island data-island="relation.select" data-field="assigneeUserId"></ket-island>`,
@@ -62,14 +66,14 @@ test('crm activity planner: keeps specialized planning chrome, controls, actions
     ),
   )
 
-  assert.match(rendered, /data-ui="record-workspace"/)
-  assert.doesNotMatch(rendered, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(rendered, /data-ui="list-page"/)
+  assert.match(rendered, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(rendered, /Kế hoạch hoạt động/)
   assert.match(rendered, /data-ui="tabs"/)
   assert.match(rendered, /href="\/admin\/crm\/activities\?tab=mine&amp;lang=vi"/)
   assert.match(rendered, /href="\/admin\/crm\/activities\?tab=plans&amp;lang=vi"/)
   assert.match(rendered, /href="\/admin\/crm\/activities\?tab=calendar&amp;lang=vi"/)
-  assert.match(rendered, /action="\/admin\/crm\/activities\?tab=mine&amp;lang=vi"/)
+  assert.match(rendered, /action="\/admin\/crm\/activities\?tab=mine&amp;lang=vi&amp;schedule=1"/)
   assert.match(rendered, /data-island="relation.select" data-field="caseId"/)
   assert.match(rendered, /data-island="relation.select" data-field="assigneeUserId"/)
   assert.match(rendered, /name="action" value="schedule"/)
