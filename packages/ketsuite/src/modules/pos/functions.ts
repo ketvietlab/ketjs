@@ -4,6 +4,7 @@ import { functions as accountFunctions, quoteTaxLine } from '../account/function
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
+import { toProductUnit } from '../stock/units.ts'
 
 export const POS_ORDER_STATES = ['draft', 'cancel', 'paid', 'done'] as const
 export const POS_SESSION_STATES = [
@@ -76,6 +77,27 @@ async function productOf(ctx: Ctx, id: unknown) {
   const product = (await ctx.db.select('product.Product', { id }))[0]
   const template = product && (await ctx.db.select('product.Template', { id: product.templateId }))[0]
   return product && template ? { product, template } : null
+}
+
+async function trackingAvailability(ctx: Ctx, order: Row, line: Row): Promise<Row> {
+  const config = (await ctx.db.select('pos.Config', { id: order.configId }))[0]
+  if (!config) throw new Error(`POS configuration ${String(order.configId)} does not exist`)
+  const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
+  if (!based) throw new Error(`POS line ${String(line.id)} has an incompatible unit`)
+  const availability = (await stockFunctions.trackedAvailability!.handler(ctx, {
+    productId: line.productId,
+    warehouseId: config.warehouseId,
+    at: order.dateOrder,
+  })) as Row
+  return {
+    orderId: String(order.id),
+    lineId: String(line.id),
+    productId: String(line.productId),
+    tracking: String(availability.tracking ?? 'none'),
+    requiredQuantity: String(based.quantity),
+    selections: Array.isArray(line.lotSelections) ? line.lotSelections : [],
+    lots: Array.isArray(availability.lots) ? availability.lots : [],
+  }
 }
 async function nextOrderNumber(ctx: Ctx, sessionId: unknown) {
   const key = String(sessionId)
@@ -406,10 +428,11 @@ const stockEffects = [
   ...(stockFunctions.createPicking!.effects ?? []),
   ...(stockFunctions.addMove!.effects ?? []),
   ...(stockFunctions.confirmPicking!.effects ?? []),
-  ...(stockFunctions.reserveMove!.effects ?? []),
+  ...(stockFunctions.reserveMoves!.effects ?? []),
   ...(stockFunctions.saveMoveLine!.effects ?? []),
   ...(stockFunctions.completePicking!.effects ?? []),
 ]
+const trackingAvailabilityEffects = stockFunctions.trackedAvailability!.effects ?? []
 const accountEffects = [
   ...(accountFunctions.postMove!.effects ?? []),
   ...(accountFunctions.registerPayment!.effects ?? []),
@@ -1025,6 +1048,87 @@ export const functions: Record<string, FnSpec> = {
         : null
     },
   }),
+  getLineTrackingAvailability: defineFn({
+    input: { orderId: 'id', lineId: 'id' },
+    effects: [
+      'read:pos.Order',
+      'read:pos.OrderLine',
+      'read:pos.Config',
+      'read:uom.Unit',
+      ...trackingAvailabilityEffects,
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
+      const line = (await ctx.db.select('pos.OrderLine', { id: args.lineId }))[0]
+      return order && line?.orderId === order.id ? trackingAvailability(ctx, order, line) : null
+    },
+  }),
+  setLineLotSelections: defineFn({
+    input: { orderId: 'id', lineId: 'id', expectedRevision: 'int', selections: 'json' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:pos.Order',
+      'write:pos.Order',
+      'read:pos.OrderLine',
+      'write:pos.OrderLine',
+      'read:pos.Config',
+      'read:uom.Unit',
+      ...trackingAvailabilityEffects,
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
+      const line = (await ctx.db.select('pos.OrderLine', { id: args.lineId }))[0]
+      if (!order || !line || line.orderId !== order.id)
+        return invalid('lineId', 'line does not belong to this order')
+      if (order.state !== 'draft' || order.isRefund)
+        return invalid('orderId', 'lot/serial selection is only editable on a new sale')
+      if (!Array.isArray(args.selections)) return invalid('selections', 'selections must be an array')
+      const availability = await trackingAvailability(ctx, order, line)
+      const tracking = String(availability.tracking)
+      if (tracking === 'none') return invalid('lineId', 'this product does not use lot/serial tracking')
+      if (String(line.tracking ?? 'none') !== tracking)
+        return invalid('tracking', 'product tracking changed; remove and add the line again')
+      const selections = (args.selections as Row[]).map((selection) => ({
+        lotId: String(selection.lotId ?? ''),
+        quantity: n(selection.quantity),
+        stockRevision: String(selection.stockRevision ?? ''),
+      }))
+      if (
+        selections.some(
+          (selection) => !selection.lotId || !(selection.quantity > 0) || !selection.stockRevision,
+        )
+      )
+        return invalid('selections', 'every selection needs lotId, positive quantity and stockRevision')
+      if (new Set(selections.map((selection) => selection.lotId)).size !== selections.length)
+        return invalid('selections', 'a lot/serial can only be selected once per line')
+      if (tracking === 'serial' && selections.some((selection) => selection.quantity !== 1))
+        return invalid('selections', 'every selected serial must have quantity 1')
+      if (
+        Math.abs(
+          selections.reduce((sum, selection) => sum + selection.quantity, 0) -
+            n(availability.requiredQuantity),
+        ) > 0.000001
+      )
+        return invalid('selections', 'selected quantity must equal line quantity in the product unit')
+      const lots = new Map((availability.lots as Row[]).map((lot) => [String(lot.lotId), lot] as const))
+      for (const selection of selections) {
+        const lot = lots.get(selection.lotId)
+        if (lot?.selectable !== true)
+          return invalid('lotId', `lot/serial ${selection.lotId} is not selectable`)
+        if (String(lot.stockRevision) !== selection.stockRevision)
+          return invalid('stockRevision', 'stock position changed; reload lot availability')
+        if (n(lot.availableQuantity) + 0.000001 < selection.quantity)
+          return invalid('quantity', `insufficient stock for lot/serial ${selection.lotId}`)
+      }
+      const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
+      if (claim.ok !== true) return claim
+      await ctx.db.update('pos.OrderLine', { id: args.lineId }, { lotSelections: selections })
+      return { ok: true, id: args.lineId, revision: claim.revision }
+    },
+  }),
   createOrder: defineFn({
     input: {
       id: 'id',
@@ -1214,6 +1318,9 @@ export const functions: Record<string, FnSpec> = {
         taxIds: quote.taxIds,
         taxEvidence: { currency: quote.currency, scale: quote.scale, taxes: quote.taxes },
         quoteRevision: args.quoteRevision ?? null,
+        tracking: String(product.template.tracking ?? 'none'),
+        lotSelections: [],
+        affectsStock: product.template.type !== 'service',
         priceSubtotal: quote.amountUntaxed,
         priceSubtotalIncl: quote.amountTotal,
         refundedOrderlineId: null,
@@ -1558,6 +1665,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.PaymentMethod',
       'read:product.Product',
       'read:product.Template',
+      'read:uom.Unit',
       'read:partner.Partner',
       'write:partner.Partner',
       'read:account.Move',
@@ -1597,15 +1705,56 @@ export const functions: Record<string, FnSpec> = {
       if (n(order.amountTax) && !config.taxAccountId)
         return invalid('taxAccountId', 'a tax account is required before stock is moved')
       const goods: Row[] = []
+      const selectedLots = new Set<string>()
       for (const line of lines) {
+        if (line.affectsStock === false) continue
         const held = await productOf(ctx, line.productId)
         if (held?.template.type !== 'service') {
-          if (held && held.template.tracking !== 'none')
-            return invalid(
-              'tracking',
-              'lot/serial selection is required for tracked POS products and is not supported by this retail subset',
+          const tracking = String(held?.template.tracking ?? 'none')
+          if (tracking !== String(line.tracking ?? 'none'))
+            return invalid('tracking', 'product tracking changed; remove and add the line again')
+          if (tracking !== 'none') {
+            const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
+            if (!based) return invalid('productUomId', 'line unit is incompatible with the product unit')
+            const selections = Array.isArray(line.lotSelections) ? (line.lotSelections as Row[]) : []
+            if (
+              !selections.length ||
+              Math.abs(
+                selections.reduce((sum, selection) => sum + n(selection.quantity), 0) - based.quantity,
+              ) > 0.000001
             )
-          goods.push(line)
+              return invalid('lotSelections', 'selected lot/serial quantity must equal line quantity')
+            if (new Set(selections.map((selection) => String(selection.lotId))).size !== selections.length)
+              return invalid('lotSelections', 'a lot/serial can only be selected once per line')
+            for (const selection of selections) {
+              const lotId = String(selection.lotId)
+              if (selectedLots.has(lotId))
+                return invalid('lotSelections', 'a lot/serial can only be selected on one order line')
+              selectedLots.add(lotId)
+            }
+            if (tracking === 'serial') {
+              for (const selection of selections) {
+                if (Math.abs(n(selection.quantity) - 1) > 0.000001)
+                  return invalid('lotSelections', 'every selected serial must have quantity 1')
+              }
+            }
+            if (!order.isRefund) {
+              const availability = await trackingAvailability(ctx, order, line)
+              const lots = new Map(
+                (availability.lots as Row[]).map((lot) => [String(lot.lotId), lot] as const),
+              )
+              for (const selection of selections) {
+                const lot = lots.get(String(selection.lotId))
+                if (lot?.selectable !== true)
+                  return invalid('lotSelections', `lot/serial ${String(selection.lotId)} is not selectable`)
+                if (String(lot.stockRevision) !== String(selection.stockRevision))
+                  return invalid('stockRevision', 'stock position changed; reload lot availability')
+                if (n(lot.availableQuantity) + 0.000001 < n(selection.quantity))
+                  return invalid('stock', `insufficient stock for lot/serial ${String(selection.lotId)}`)
+              }
+            }
+          }
+          goods.push({ ...line, tracking })
         }
       }
       const claim = await claimDraftRevision(ctx, args.id, args.expectedRevision)
@@ -1644,23 +1793,44 @@ export const functions: Record<string, FnSpec> = {
         }
         const confirmed = (await stockFunctions.confirmPicking!.handler(ctx, { id: pickingId })) as Row
         if (confirmed.ok !== true) return confirmed
-        for (const line of goods) {
-          const moveId = `${String(line.id)}:move`
-          if (order.isRefund) {
+        if (order.isRefund) {
+          for (const line of goods) {
+            const moveId = `${String(line.id)}:move`
             const picking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]!
-            const saved = (await stockFunctions.saveMoveLine!.handler(ctx, {
-              id: `${moveId}:line`,
-              moveId,
-              productUomId: line.productUomId,
-              quantity: decimal(Math.abs(n(line.qty))),
-              locationId: picking.locationId,
-              locationDestId: picking.locationDestId,
-              picked: true,
-            })) as Row
-            if (saved.ok !== true) return saved
-          } else {
-            const reserved = (await stockFunctions.reserveMove!.handler(ctx, { id: moveId })) as Row
-            if (reserved.ok !== true || n(reserved.reserved) + 0.000001 < Math.abs(n(line.qty)))
+            const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
+            if (!based) return invalid('productUomId', 'line unit is incompatible with the product unit')
+            const selections =
+              String(line.tracking) === 'none'
+                ? [{ lotId: null, quantity: based.quantity }]
+                : (line.lotSelections as Row[])
+            for (const [index, selection] of selections.entries()) {
+              const saved = (await stockFunctions.saveMoveLine!.handler(ctx, {
+                id: `${moveId}:line:${String(index + 1)}`,
+                moveId,
+                productUomId: line.productUomId,
+                quantity: decimal(n(selection.quantity)),
+                locationId: picking.locationId,
+                locationDestId: picking.locationDestId,
+                ...(selection.lotId ? { lotId: selection.lotId } : {}),
+                picked: true,
+              })) as Row
+              if (saved.ok !== true) return saved
+            }
+          }
+        } else {
+          const reserved = (await stockFunctions.reserveMoves!.handler(ctx, {
+            requireFull: true,
+            moves: goods.map((line) => ({
+              id: `${String(line.id)}:move`,
+              ...(String(line.tracking) === 'none' ? {} : { selections: line.lotSelections }),
+            })),
+          })) as Row
+          if (reserved.ok !== true) return reserved
+          const results = Array.isArray(reserved.results) ? (reserved.results as Row[]) : []
+          for (const line of goods) {
+            const result = results.find((entry) => String(entry.id) === `${String(line.id)}:move`)
+            const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
+            if (!based || !result || n(result.reserved) + 0.000001 < based.quantity)
               return invalid('stock', `insufficient stock for ${String(line.name)}`)
           }
         }
@@ -1712,6 +1882,8 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.Config',
       'read:partner.Partner',
       'read:company.Company',
+      'read:stock.Move',
+      'read:stock.MoveLine',
     ],
     idempotent: true,
     agent: true,
@@ -1723,6 +1895,29 @@ export const functions: Record<string, FnSpec> = {
         return invalid('originalOrderId', 'only a paid sale can be refunded')
       const session = (await ctx.db.select('pos.Session', { id: args.sessionId }))[0]
       if (session?.state !== 'opened') return invalid('sessionId', 'refund requires an open session')
+      const originalLines = await ctx.db.select('pos.OrderLine', { orderId: original.id })
+      const returnedLots = new Map<string, Row[]>()
+      for (const line of originalLines) {
+        if (String(line.tracking ?? 'none') === 'none') continue
+        const move = (await ctx.db.select('stock.Move', { posLineId: line.id }))[0]
+        const moveLines = move ? await ctx.db.select('stock.MoveLine', { moveId: move.id }) : []
+        const quantities = new Map<string, number>()
+        for (const moved of moveLines) {
+          if (!moved.lotId || !(n(moved.quantity) > 0)) continue
+          const lotId = String(moved.lotId)
+          quantities.set(lotId, (quantities.get(lotId) ?? 0) + n(moved.quantity))
+        }
+        if (!quantities.size)
+          return invalid('originalOrderId', `tracked line ${String(line.id)} has no completed lot evidence`)
+        returnedLots.set(
+          String(line.id),
+          [...quantities.entries()].map(([lotId, quantity]) => ({
+            lotId,
+            quantity: String(quantity),
+            stockRevision: null,
+          })),
+        )
+      }
       const sequenceNumber = await nextOrderNumber(ctx, args.sessionId),
         name = `Order ${String(sequenceNumber).padStart(5, '0')}`
       await ctx.db.insert('pos.Order', {
@@ -1757,7 +1952,7 @@ export const functions: Record<string, FnSpec> = {
         priceBookRevision: original.priceBookRevision ?? null,
       })
       let sequence = 10
-      for (const line of await ctx.db.select('pos.OrderLine', { orderId: original.id })) {
+      for (const line of originalLines) {
         await ctx.db.insert('pos.OrderLine', {
           id: `${String(args.id)}:${String(line.id)}`,
           orderId: args.id,
@@ -1771,6 +1966,9 @@ export const functions: Record<string, FnSpec> = {
           taxIds: line.taxIds ?? (line.taxId ? [line.taxId] : []),
           taxEvidence: line.taxEvidence ?? null,
           quoteRevision: line.quoteRevision ?? null,
+          tracking: line.tracking ?? 'none',
+          lotSelections: returnedLots.get(String(line.id)) ?? [],
+          affectsStock: line.affectsStock ?? null,
           priceSubtotal: decimal(-n(line.priceSubtotal)),
           priceSubtotalIncl: decimal(-n(line.priceSubtotalIncl)),
           refundedOrderlineId: line.id,

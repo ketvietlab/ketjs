@@ -50,6 +50,16 @@ const expectedBody = {
   properties: { expectedRevision: integer },
   required: ['expectedRevision'],
 }
+const lotSelection = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    lotId: string,
+    quantity: string,
+    stockRevision: nullableString,
+  },
+  required: ['lotId', 'quantity', 'stockRevision'],
+}
 const orderLine = {
   type: 'object',
   additionalProperties: false,
@@ -66,6 +76,8 @@ const orderLine = {
     amountTotal: string,
     sequence: integer,
     quoteRevision: nullableString,
+    tracking: string,
+    lotSelections: { type: 'array', items: lotSelection },
   },
   required: [
     'id',
@@ -80,7 +92,38 @@ const orderLine = {
     'amountTotal',
     'sequence',
     'quoteRevision',
+    'tracking',
+    'lotSelections',
   ],
+}
+const lotAvailability = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    orderId: string,
+    lineId: string,
+    productId: string,
+    tracking: string,
+    requiredQuantity: string,
+    selections: { type: 'array', items: lotSelection },
+    lots: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          lotId: string,
+          name: string,
+          expirationDate: nullableString,
+          availableQuantity: string,
+          stockRevision: string,
+          selectable: { type: 'boolean' },
+        },
+        required: ['lotId', 'name', 'expirationDate', 'availableQuantity', 'stockRevision', 'selectable'],
+      },
+    },
+  },
+  required: ['orderId', 'lineId', 'productId', 'tracking', 'requiredQuantity', 'selections', 'lots'],
 }
 const tender = {
   type: 'object',
@@ -282,6 +325,14 @@ const projectOrder = (row: Row) => ({
       amountTotal: String(line.priceSubtotalIncl),
       sequence: Number(line.sequence),
       quoteRevision: line.quoteRevision == null ? null : String(line.quoteRevision),
+      tracking: String(line.tracking ?? 'none'),
+      lotSelections: (Array.isArray(line.lotSelections) ? (line.lotSelections as Row[]) : []).map(
+        (selection) => ({
+          lotId: String(selection.lotId),
+          quantity: String(selection.quantity),
+          stockRevision: selection.stockRevision == null ? null : String(selection.stockRevision),
+        }),
+      ),
     }))
     .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id)),
   tenders: (Array.isArray(row.payments) ? (row.payments as Row[]) : []).map((payment) => ({
@@ -967,6 +1018,88 @@ export const operationRoutes = routesOf(
         url,
         req,
         commandOptions(identity, 'order.line.update', key),
+      )) as Row
+      if (result.ok !== true) return failure(ctx, url, req, result)
+      return orderResult(ctx, url, req, params.id, identity)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'GET',
+    path: 'orders/{id}/lines/{lineId}/lot-availability',
+    operationId: 'pos.orders.lines.lotAvailability',
+    summary: 'Read warehouse-scoped lot or serial availability for one tracked order line.',
+    auth: 'required',
+    request: { params: lineParams },
+    responses: {
+      '200': envelope(lotAvailability),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    handler: async (ctx, url, req, params, request) => {
+      const identity = request.identity!
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const held = (await ctx.call(
+        'pos.getLineTrackingAvailability',
+        { orderId: params.id, lineId: params.lineId },
+        url,
+        req,
+      )) as Row | null
+      return held ? { data: held } : notFound(ctx, url, req)
+    },
+  }),
+  defineChannelRoute({
+    profile: 'pos',
+    method: 'PUT',
+    path: 'orders/{id}/lines/{lineId}/lot-selections',
+    operationId: 'pos.orders.lines.lots.select',
+    summary: 'Persist an exact revision-bound lot or serial selection on one draft line.',
+    auth: 'required',
+    request: {
+      params: lineParams,
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          expectedRevision: integer,
+          selections: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: { lotId: string, quantity: string, stockRevision: string },
+              required: ['lotId', 'quantity', 'stockRevision'],
+            },
+          },
+        },
+        required: ['expectedRevision', 'selections'],
+      },
+    },
+    responses: {
+      '200': envelope(order),
+      '404': envelope(object),
+      '409': envelope(object),
+      '422': envelope(object),
+    },
+    idempotent: true,
+    handler: async (ctx, url, req, params, request) => {
+      const key = keyOf(ctx, url, req)
+      if (typeof key !== 'string') return key
+      const identity = request.identity!
+      if (!(await orderFor(ctx, url, req, params.id, identity))) return notFound(ctx, url, req)
+      const result = (await ctx.call(
+        'pos.setLineLotSelections',
+        {
+          orderId: params.id,
+          lineId: params.lineId,
+          expectedRevision: request.body.expectedRevision,
+          selections: request.body.selections,
+        },
+        url,
+        req,
+        commandOptions(identity, 'order.line.lots.select', key),
       )) as Row
       if (result.ok !== true) return failure(ctx, url, req, result)
       return orderResult(ctx, url, req, params.id, identity)

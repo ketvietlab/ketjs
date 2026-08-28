@@ -123,6 +123,7 @@ export const models: Record<string, ModelDef> = {
       name: 'text',
       ref: 'text?',
       note: 'text?',
+      expirationDate: 'datetime?',
       active: 'bool',
     },
     indexes: { product_name: { fields: ['companyId', 'productId', 'name'], unique: true } },

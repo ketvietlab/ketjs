@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
+import {
+  callFn,
+  compose,
+  migrateOne,
+  registerFunctions,
+  schemaFromManifest,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import {
   account,
@@ -39,6 +46,12 @@ const manifest = compose(modules, { headless: true }),
   scope = { company: 'acme', branches: null }
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
   callFn(name, args, { adapter, manifest, scope })
+
+test('pos: stock moves are indexed by their originating order line', () => {
+  const indexes = Object.values(schemaFromManifest(manifest).tables.stock_move!.indexes)
+  assert.ok(indexes.some((index) => index.fields.join(',') === 'companyId,posLineId'))
+})
+
 async function boot() {
   const adapter = sqliteAdapter()
   await adapter.open()
@@ -282,6 +295,7 @@ test('pos: price-book exposes only active sellable products and explicitly enabl
     assert.equal((first.products as Row[]).length, 1)
     const offered = (first.products as Row[])[0]!
     assert.equal(offered.id, 'goods-1')
+    assert.equal(offered.tracking, 'none')
     assert.equal(offered.listPrice, 90)
     const firstPrice = (offered.prices as Row[])[0]!
     assert.equal((firstPrice.taxIds as string[])[0], 'vat10')
@@ -804,6 +818,304 @@ test('pos: customer invoice is posted and reconciled by the POS payment', async 
     assert.equal(invoice.state, 'posted')
     assert.equal(invoice.paymentState, 'paid')
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_partial_reconcile'))[0]!.n, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: immediate fulfillment rolls back every reservation when the whole picking cannot fill', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'pos.createSession',
+      { id: 'atomic-stock-session', configId: 'shop', userId: 'cashier' },
+      adapter,
+    )
+    await call('pos.openSession', { id: 'atomic-stock-session' }, adapter)
+    await call('pos.createOrder', { id: 'atomic-stock-order', sessionId: 'atomic-stock-session' }, adapter)
+    for (const lineId of ['atomic-stock-a', 'atomic-stock-b'])
+      await call(
+        'pos.addLine',
+        {
+          id: lineId,
+          orderId: 'atomic-stock-order',
+          productId: 'goods-1',
+          productUomId: 'unit',
+          qty: '6',
+          priceUnit: '100',
+        },
+        adapter,
+      )
+    await call(
+      'pos.addPayment',
+      {
+        id: 'atomic-stock-payment',
+        orderId: 'atomic-stock-order',
+        paymentMethodId: 'cash-method',
+        amount: '1320',
+      },
+      adapter,
+    )
+    const refused = (
+      await call('pos.validateOrder', { id: 'atomic-stock-order', expectedRevision: 3 }, adapter)
+    ).value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Row[])[0]!.field, 'stock')
+    const quant = (
+      await adapter.all(
+        'SELECT quantity, "reservedQuantity" FROM stock_quant WHERE "productId" = ? AND "locationId" = ?',
+        ['goods-1', 'wh:stock'],
+      )
+    )[0]!
+    assert.deepEqual({ ...quant }, { quantity: '10', reservedQuantity: '0' })
+    assert.equal(
+      (
+        await adapter.all('SELECT COUNT(*) AS n FROM stock_move_line WHERE "pickingId" = ?', [
+          'atomic-stock-order:picking',
+        ])
+      )[0]!.n,
+      0,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: lot and serial selections are revision-bound, exact and returned to the original lot', async () => {
+  const adapter = await boot()
+  try {
+    for (const [templateId, productId, tracking, price] of [
+      ['batch-goods', 'batch-1', 'lot', '10'],
+      ['serial-goods', 'serial-1', 'serial', '5'],
+    ]) {
+      await call(
+        'product.saveTemplate',
+        { id: templateId, name: templateId, type: 'goods', uomId: 'unit', listPrice: price, saleOk: true },
+        adapter,
+      )
+      await call(
+        'product.saveVariant',
+        { id: productId, templateId, defaultCode: productId, combinationKey: '' },
+        adapter,
+      )
+      await call('stock.configureProduct', { templateId, isStorable: true, tracking }, adapter)
+    }
+    await call('stock.createLot', { id: 'batch-live', productId: 'batch-1', name: 'BATCH-LIVE' }, adapter)
+    await call(
+      'stock.createLot',
+      {
+        id: 'batch-expired',
+        productId: 'batch-1',
+        name: 'BATCH-EXPIRED',
+        expirationDate: '2020-01-01T00:00:00.000Z',
+      },
+      adapter,
+    )
+    for (const lotId of ['serial-a', 'serial-b'])
+      await call('stock.createLot', { id: lotId, productId: 'serial-1', name: lotId.toUpperCase() }, adapter)
+    for (const [id, productId, lotId, quantity] of [
+      ['batch-live-stock', 'batch-1', 'batch-live', '3'],
+      ['batch-expired-stock', 'batch-1', 'batch-expired', '1'],
+      ['serial-a-stock', 'serial-1', 'serial-a', '1'],
+      ['serial-b-stock', 'serial-1', 'serial-b', '1'],
+    ])
+      await call(
+        'stock.adjustInventory',
+        {
+          id,
+          productId,
+          lotId,
+          locationId: 'wh:stock',
+          inventoryLocationId: 'inventory',
+          countedQuantity: quantity,
+          productUomId: 'unit',
+        },
+        adapter,
+      )
+
+    await call('pos.createSession', { id: 'tracked-s1', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'tracked-s1' }, adapter)
+    await call('pos.createOrder', { id: 'tracked-sale', sessionId: 'tracked-s1' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'tracked-line',
+        orderId: 'tracked-sale',
+        productId: 'batch-1',
+        productUomId: 'unit',
+        qty: '2',
+        priceUnit: '10',
+      },
+      adapter,
+    )
+    let availability = (
+      await call(
+        'pos.getLineTrackingAvailability',
+        { orderId: 'tracked-sale', lineId: 'tracked-line' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(availability.tracking, 'lot')
+    assert.equal((availability.lots as Row[]).find((lot) => lot.lotId === 'batch-expired')!.selectable, false)
+    const live = (availability.lots as Row[]).find((lot) => lot.lotId === 'batch-live')!
+    const selected = (
+      await call(
+        'pos.setLineLotSelections',
+        {
+          orderId: 'tracked-sale',
+          lineId: 'tracked-line',
+          expectedRevision: 1,
+          selections: [{ lotId: 'batch-live', quantity: '2', stockRevision: live.stockRevision }],
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(selected.ok, true)
+    await call(
+      'stock.adjustInventory',
+      {
+        id: 'batch-live-recount',
+        productId: 'batch-1',
+        lotId: 'batch-live',
+        locationId: 'wh:stock',
+        inventoryLocationId: 'inventory',
+        countedQuantity: '4',
+        productUomId: 'unit',
+      },
+      adapter,
+    )
+    await call(
+      'pos.addPayment',
+      { id: 'tracked-pay', orderId: 'tracked-sale', paymentMethodId: 'cash-method', amount: '20' },
+      adapter,
+    )
+    const stale = (await call('pos.validateOrder', { id: 'tracked-sale', expectedRevision: 3 }, adapter))
+      .value as Row
+    assert.equal(stale.ok, false)
+    assert.equal((stale.errors as Row[])[0]!.field, 'stockRevision')
+    assert.equal(
+      (
+        await adapter.all('SELECT COUNT(*) AS n FROM stock_picking WHERE id = ?', ['tracked-sale:picking'])
+      )[0]!.n,
+      0,
+    )
+
+    availability = (
+      await call(
+        'pos.getLineTrackingAvailability',
+        { orderId: 'tracked-sale', lineId: 'tracked-line' },
+        adapter,
+      )
+    ).value as Row
+    const refreshed = (availability.lots as Row[]).find((lot) => lot.lotId === 'batch-live')!
+    await call(
+      'pos.setLineLotSelections',
+      {
+        orderId: 'tracked-sale',
+        lineId: 'tracked-line',
+        expectedRevision: 3,
+        selections: [{ lotId: 'batch-live', quantity: '2', stockRevision: refreshed.stockRevision }],
+      },
+      adapter,
+    )
+    const paid = (await call('pos.validateOrder', { id: 'tracked-sale', expectedRevision: 4 }, adapter))
+      .value as Row
+    assert.equal(paid.ok, true)
+    assert.equal(
+      (
+        await adapter.all(
+          'SELECT quantity FROM stock_quant WHERE "productId" = ? AND "locationId" = ? AND "lotId" = ?',
+          ['batch-1', 'wh:stock', 'batch-live'],
+        )
+      )[0]!.quantity,
+      '2',
+    )
+
+    await call('pos.startClosing', { id: 'tracked-s1' }, adapter)
+    await call('pos.closeSession', { id: 'tracked-s1', closingCash: '20' }, adapter)
+    await call('pos.createSession', { id: 'tracked-s2', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'tracked-s2' }, adapter)
+    await call(
+      'pos.refundOrder',
+      { id: 'tracked-refund', originalOrderId: 'tracked-sale', sessionId: 'tracked-s2' },
+      adapter,
+    )
+    const refund = (await call('pos.getOrder', { id: 'tracked-refund' }, adapter)).value as Row
+    assert.deepEqual((refund.lines as Row[])[0]!.lotSelections, [
+      { lotId: 'batch-live', quantity: '2', stockRevision: null },
+    ])
+    await call(
+      'pos.addPayment',
+      { id: 'tracked-refund-pay', orderId: 'tracked-refund', paymentMethodId: 'cash-method', amount: '-20' },
+      adapter,
+    )
+    assert.equal(((await call('pos.validateOrder', { id: 'tracked-refund' }, adapter)).value as Row).ok, true)
+    assert.equal(
+      (
+        await adapter.all(
+          'SELECT quantity FROM stock_quant WHERE "productId" = ? AND "locationId" = ? AND "lotId" = ?',
+          ['batch-1', 'wh:stock', 'batch-live'],
+        )
+      )[0]!.quantity,
+      '4',
+    )
+
+    await call('pos.createOrder', { id: 'serial-sale', sessionId: 'tracked-s2' }, adapter)
+    for (const lineId of ['serial-line-a', 'serial-line-b'])
+      await call(
+        'pos.addLine',
+        {
+          id: lineId,
+          orderId: 'serial-sale',
+          productId: 'serial-1',
+          productUomId: 'unit',
+          qty: '1',
+          priceUnit: '5',
+        },
+        adapter,
+      )
+    const serialAvailability = (
+      await call(
+        'pos.getLineTrackingAvailability',
+        { orderId: 'serial-sale', lineId: 'serial-line-a' },
+        adapter,
+      )
+    ).value as Row
+    const serialA = (serialAvailability.lots as Row[]).find((lot) => lot.lotId === 'serial-a')!
+    await call(
+      'pos.setLineLotSelections',
+      {
+        orderId: 'serial-sale',
+        lineId: 'serial-line-a',
+        expectedRevision: 2,
+        selections: [{ lotId: 'serial-a', quantity: '1', stockRevision: serialA.stockRevision }],
+      },
+      adapter,
+    )
+    await call(
+      'pos.setLineLotSelections',
+      {
+        orderId: 'serial-sale',
+        lineId: 'serial-line-b',
+        expectedRevision: 3,
+        selections: [{ lotId: 'serial-a', quantity: '1', stockRevision: serialA.stockRevision }],
+      },
+      adapter,
+    )
+    await call(
+      'pos.addPayment',
+      { id: 'serial-pay', orderId: 'serial-sale', paymentMethodId: 'cash-method', amount: '10' },
+      adapter,
+    )
+    const duplicate = (await call('pos.validateOrder', { id: 'serial-sale', expectedRevision: 5 }, adapter))
+      .value as Row
+    assert.equal(duplicate.ok, false)
+    assert.match(String((duplicate.errors as Row[])[0]!.message), /only be selected on one order line/)
+    assert.equal(
+      (await adapter.all('SELECT COUNT(*) AS n FROM stock_picking WHERE id = ?', ['serial-sale:picking']))[0]!
+        .n,
+      0,
+    )
   } finally {
     await adapter.close()
   }
