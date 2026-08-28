@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
 import { renderToString } from '@ketvietlab/ketjs-view'
+import { periodOf, yearsOf } from '../packages/ketsuite/src/modules/account_backend/overview.ts'
 import { accountingOverviewScreen } from '../packages/ketsuite/src/modules/account_backend/screens/overview.tsx'
 
 const messages: Record<string, string> = {
@@ -76,25 +77,25 @@ const options = {
     { name: 'dateTo', label: 'Đến ngày', value: '2026-12-31' },
   ] as const,
   current: {
-    revenue: 2_000_000,
-    profit: 600_000,
-    expense: 1_400_000,
+    revenue: '2000000',
+    profit: '600000',
+    expense: '1400000',
     grossMargin: 0.3,
-    expenseByAccount: [{ accountId: '642', code: '642', name: 'Chi phí quản lý', amount: 1_400_000 }],
+    expenseByAccount: [{ accountId: '642', code: '642', name: 'Chi phí quản lý', amount: '1400000' }],
   },
-  previous: { revenue: 1_500_000, profit: 400_000, grossMargin: 0.25 },
-  position: { cash: 800_000, assets: 3_000_000, liabilities: 400_000 },
-  opening: { cash: 500_000, assets: 2_400_000, liabilities: 500_000 },
+  previous: { revenue: '1500000', profit: '400000', grossMargin: 0.25 },
+  position: { cash: '800000', assets: '3000000', liabilities: '400000' },
+  opening: { cash: '500000', assets: '2400000', liabilities: '500000' },
   openItems: {
     receivable: {
-      total: 900_000,
-      current: 600_000,
-      overdue: 300_000,
-      partners: [{ partnerId: 'customer-1', name: 'Khách hàng An', total: 900_000, overdue: 300_000 }],
+      total: '900000',
+      current: '600000',
+      overdue: '300000',
+      partners: [{ partnerId: 'customer-1', name: 'Khách hàng An', total: '900000', overdue: '300000' }],
     },
-    payable: { total: 0, current: 0, overdue: 0, partners: [] },
+    payable: { total: '0', current: '0', overdue: '0', partners: [] },
   },
-  cashFlow: { sales: 1_200_000, purchases: -400_000, operating: -200_000, other: 50_000, net: 650_000 },
+  cashFlow: { sales: '1200000', purchases: '-400000', operating: '-200000', other: '50000', net: '650000' },
   revenue: {
     plot: <span data-island="backend.chart">Biểu đồ doanh thu</span>,
     keys: [{ id: 'current', label: 'Kỳ này', series: 1 as const, value: '2.000.000 ₫' }],
@@ -109,6 +110,26 @@ const options = {
   partnerHref: (partnerId: string) =>
     `/admin/accounting/partner-statement?partnerId=${partnerId}&dateFrom=2026-01-01&dateTo=2026-12-31&lang=vi`,
 }
+
+test('accounting overview presets use the company civil day at the UTC year boundary', () => {
+  const now = new Date('2026-12-31T17:00:00.000Z')
+  const period = periodOf(new URL('http://ket.local/admin/accounting?period=today'), now, 'Asia/Ho_Chi_Minh')
+  assert.deepEqual(
+    {
+      from: period.from,
+      to: period.to,
+      previousFrom: period.previousFrom,
+      previousTo: period.previousTo,
+    },
+    {
+      from: '2027-01-01',
+      to: '2027-01-01',
+      previousFrom: '2026-12-31',
+      previousTo: '2026-12-31',
+    },
+  )
+  assert.equal(yearsOf('2024-01-01', now, 'Asia/Ho_Chi_Minh')[0], 2027)
+})
 
 test('accounting overview stays specialized: preserves period, ledger KPIs, drill-downs and cash queues', () => {
   const html = renderToString(accountingOverviewScreen(translate, options))
@@ -146,11 +167,11 @@ test('accounting overview preserves analytical empty states and hides custom dat
     accountingOverviewScreen(translate, {
       ...options,
       preset: 'last30',
-      current: { revenue: 0, profit: 0, expense: 0, grossMargin: null, expenseByAccount: [] },
-      previous: { revenue: 0, profit: 0, grossMargin: null },
+      current: { revenue: '0', profit: '0', expense: '0', grossMargin: null, expenseByAccount: [] },
+      previous: { revenue: '0', profit: '0', grossMargin: null },
       openItems: {
-        receivable: { total: 0, current: 0, overdue: 0, partners: [] },
-        payable: { total: 0, current: 0, overdue: 0, partners: [] },
+        receivable: { total: '0', current: '0', overdue: '0', partners: [] },
+        payable: { total: '0', current: '0', overdue: '0', partners: [] },
       },
       revenue: { plot: null, keys: [] },
       mix: { plot: null, keys: [] },

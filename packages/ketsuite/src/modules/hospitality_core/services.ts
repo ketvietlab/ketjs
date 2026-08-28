@@ -1,5 +1,13 @@
 import { asc, defineFn, desc, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import {
+  addDecimals,
+  canonicalDecimalText,
+  compareDecimals,
+  decimalSign,
+  multiplyDecimals,
+  negateDecimalText,
+} from '../account/money.ts'
 import { appendContentChange } from './content.ts'
 import { occupancyDates } from './inventory.ts'
 import { CHARGE_TYPES, EXTRA_RECURRENCES, PROPERTY_CHARGE_TYPES } from './types.ts'
@@ -25,7 +33,6 @@ const date = (value: unknown): Date | null => {
   const parsed = new Date(String(value ?? ''))
   return Number.isFinite(parsed.getTime()) ? parsed : null
 }
-const decimal = (value: unknown): number => Number(String(value ?? ''))
 const includes = (values: readonly string[], value: unknown): boolean => values.includes(String(value))
 
 class ChargePostingConflict extends Error {}
@@ -73,11 +80,26 @@ export const postCharge = async (
   const extraLine = args.extraLineId ? await one(ctx, 'hospitality_core.ExtraLine', args.extraLineId) : null
   const product = args.productId ? await productDetails(ctx, args.productId, args.uomId) : null
   const type = String(args.type ?? 'service')
-  const quantity = decimal(args.quantity ?? 1)
-  const unitPrice = decimal(args.unitPrice)
-  const rawAmount = quantity * unitPrice
-  const amount = String(type === 'discount' ? -Math.abs(rawAmount) : rawAmount)
+  let quantity = ''
+  let unitPrice = ''
+  let amount = ''
   const errors: Issue[] = []
+  try {
+    quantity = canonicalDecimalText(String(args.quantity ?? '1'))
+  } catch {
+    errors.push(issue('quantity', 'decimal'))
+  }
+  try {
+    unitPrice = canonicalDecimalText(String(args.unitPrice))
+  } catch {
+    errors.push(issue('unitPrice', 'decimal'))
+  }
+  try {
+    const rawAmount = multiplyDecimals(quantity, unitPrice)
+    amount = type === 'discount' && decimalSign(rawAmount) > 0 ? negateDecimalText(rawAmount) : rawAmount
+  } catch {
+    if (quantity && unitPrice) errors.push(issue('unitPrice', 'decimal'))
+  }
   if (!folio) errors.push(issue('folioId', 'folio_missing'))
   else if (folio.state !== 'open') errors.push(issue('folioId', 'folio_not_open'))
   if (args.stayId && !stay) errors.push(issue('stayId', 'stay_missing'))
@@ -90,8 +112,8 @@ export const postCharge = async (
   if (args.uomId && !product?.validUom) errors.push(issue('uomId', 'product_uom_mismatch'))
   if (!text(args.description)) errors.push(issue('description', 'required'))
   if (!includes(CHARGE_TYPES, type)) errors.push(issue('type', 'charge_type'))
-  if (!Number.isFinite(quantity) || quantity < 0) errors.push(issue('quantity', 'non_negative'))
-  if (!Number.isFinite(unitPrice) || unitPrice < 0) errors.push(issue('unitPrice', 'non_negative'))
+  if (quantity && compareDecimals(quantity, '0') < 0) errors.push(issue('quantity', 'non_negative'))
+  if (unitPrice && compareDecimals(unitPrice, '0') < 0) errors.push(issue('unitPrice', 'non_negative'))
   const occurredAt = date(args.occurredAt)?.toISOString() ?? new Date().toISOString()
   const serviceDate = args.serviceDate == null ? null : text(args.serviceDate)
   if (serviceDate && !/^\d{4}-\d{2}-\d{2}$/u.test(serviceDate)) errors.push(issue('serviceDate', 'date'))
@@ -109,8 +131,8 @@ export const postCharge = async (
         uomId: args.uomId,
         description: text(args.description),
         type,
-        quantity: String(quantity),
-        unitPrice: String(unitPrice),
+        quantity,
+        unitPrice,
         amount,
         occurredAt,
         serviceDate,
@@ -129,7 +151,7 @@ export const postCharge = async (
       for (let attempt = 0; attempt < 5; attempt++) {
         const current = await one(tx, 'hospitality_core.Folio', folio.id)
         if (current?.state !== 'open') throw new ChargePostingConflict()
-        const next = String(Number(current.amountTotal) + Number(amount))
+        const next = addDecimals(String(current.amountTotal), amount)
         const changed = await tx.db.compareAndSet(
           'hospitality_core.Folio',
           { id: folio.id },
@@ -190,11 +212,9 @@ const withProductNames = async (ctx: Ctx, rows: Row[]): Promise<Row[]> => {
       productName: String(template?.name ?? row.productId),
       productCode: product?.defaultCode ?? null,
       materializedCount: charges.filter((charge) => charge.state === 'active').length,
-      materializedAmount: String(
-        charges
-          .filter((charge) => charge.state === 'active')
-          .reduce((total, charge) => total + Number(charge.amount ?? 0), 0),
-      ),
+      materializedAmount: charges
+        .filter((charge) => charge.state === 'active')
+        .reduce((total, charge) => addDecimals(total, String(charge.amount ?? '0')), '0'),
     }
   })
 }
@@ -267,13 +287,13 @@ export const services: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const property = await one(ctx, 'hospitality_core.Property', args.propertyId)
       const existing = await one(ctx, 'hospitality_core.PropertyCharge', args.id)
-      const amount = decimal(args.amount)
+      const amount = canonicalDecimalText(String(args.amount))
       const errors: Issue[] = []
       if (!property) errors.push(issue('propertyId', 'property_missing'))
       if (!includes(PROPERTY_CHARGE_TYPES, args.chargeType))
         errors.push(issue('chargeType', 'property_charge_type'))
       if (!text(args.name)) errors.push(issue('name', 'required'))
-      if (!Number.isFinite(amount) || amount < 0) errors.push(issue('amount', 'non_negative'))
+      if (compareDecimals(amount, '0') < 0) errors.push(issue('amount', 'non_negative'))
       const C = ctx.table('hospitality_core.PropertyCharge')
       const duplicate = (
         await ctx.db.all(from(C).where(eq(C.propertyId, args.propertyId), eq(C.chargeType, args.chargeType)))
@@ -286,7 +306,7 @@ export const services: Record<string, FnSpec> = {
           propertyId: args.propertyId,
           chargeType: args.chargeType,
           name: text(args.name),
-          amount: String(amount),
+          amount,
           description: text(args.description) || null,
           active: args.active ?? true,
         }
@@ -370,8 +390,10 @@ export const services: Record<string, FnSpec> = {
             (args.productId != null && args.productId !== existing.productId) ||
             (args.uomId != null && args.uomId !== existing.uomId) ||
             (args.description != null && text(args.description) !== existing.description) ||
-            (args.quantity != null && decimal(args.quantity) !== Number(existing.quantity)) ||
-            (args.unitPrice != null && decimal(args.unitPrice) !== Number(existing.unitPrice)) ||
+            (args.quantity != null &&
+              compareDecimals(String(args.quantity), String(existing.quantity)) !== 0) ||
+            (args.unitPrice != null &&
+              compareDecimals(String(args.unitPrice), String(existing.unitPrice)) !== 0) ||
             (args.recurrence != null && args.recurrence !== existing.recurrence) ||
             (args.active != null && args.active !== existing.active)
           return changed
@@ -388,8 +410,8 @@ export const services: Record<string, FnSpec> = {
       const folio = target ? await one(ctx, 'hospitality_core.Folio', target.folioId) : null
       const product = await productDetails(ctx, args.productId, args.uomId)
       const recurrence = String(args.recurrence ?? 'once')
-      const quantity = decimal(args.quantity ?? 1)
-      const unitPrice = decimal(args.unitPrice ?? product.template?.listPrice)
+      const quantity = canonicalDecimalText(String(args.quantity ?? '1'))
+      const unitPrice = canonicalDecimalText(String(args.unitPrice ?? product.template?.listPrice))
       const errors: Issue[] = []
       if (targetCount !== 1) errors.push(issue('reservationId', 'extra_line_target'))
       if (args.reservationId && !reservation) errors.push(issue('reservationId', 'reservation_missing'))
@@ -408,8 +430,8 @@ export const services: Record<string, FnSpec> = {
         errors.push(issue('productId', 'product_not_saleable'))
       if (args.uomId && !product.validUom) errors.push(issue('uomId', 'product_uom_mismatch'))
       if (!includes(EXTRA_RECURRENCES, recurrence)) errors.push(issue('recurrence', 'extra_recurrence'))
-      if (!Number.isFinite(quantity) || quantity <= 0) errors.push(issue('quantity', 'positive'))
-      if (!Number.isFinite(unitPrice) || unitPrice < 0) errors.push(issue('unitPrice', 'non_negative'))
+      if (compareDecimals(quantity, '0') <= 0) errors.push(issue('quantity', 'positive'))
+      if (compareDecimals(unitPrice, '0') < 0) errors.push(issue('unitPrice', 'non_negative'))
       if (errors.length || !target || !folio || !product.template) return failure(...errors)
       const timestamp = new Date().toISOString()
       const values = {
@@ -421,8 +443,8 @@ export const services: Record<string, FnSpec> = {
         productId: args.productId,
         uomId: args.uomId ?? product.template.uomId ?? null,
         description: text(args.description) || String(product.template.name),
-        quantity: String(quantity),
-        unitPrice: String(unitPrice),
+        quantity,
+        unitPrice,
         recurrence,
         active: args.active ?? true,
         createdAt: existing?.createdAt ?? timestamp,
@@ -491,7 +513,7 @@ export const services: Record<string, FnSpec> = {
       const serviceDate = text(args.serviceDate)
       const errors: Issue[] = []
       let suffix = 'once'
-      let quantity = decimal(line.quantity)
+      let quantity = canonicalDecimalText(String(line.quantity))
       if (line.recurrence === 'per_night') {
         if (!/^\d{4}-\d{2}-\d{2}$/u.test(serviceDate)) errors.push(issue('serviceDate', 'date'))
         const schedule = selectedStay ?? reservation
@@ -506,8 +528,8 @@ export const services: Record<string, FnSpec> = {
         suffix = `night:${serviceDate}`
       } else if (line.recurrence === 'per_unit') {
         if (!args.requestKey) errors.push(issue('requestKey', 'required'))
-        quantity = decimal(args.quantity)
-        if (!Number.isFinite(quantity) || quantity <= 0) errors.push(issue('quantity', 'positive'))
+        quantity = canonicalDecimalText(String(args.quantity))
+        if (compareDecimals(quantity, '0') <= 0) errors.push(issue('quantity', 'positive'))
         suffix = `unit:${String(args.requestKey ?? '')}`
       } else if (line.recurrence !== 'once') errors.push(issue('recurrence', 'extra_recurrence'))
       if (errors.length) return failure(...errors)

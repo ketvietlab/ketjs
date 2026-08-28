@@ -16,6 +16,7 @@ import {
   Surface,
 } from '../../../ui/index.ts'
 import type { DatePickerField, Frame } from '../../../ui/index.ts'
+import { addDecimals } from '../../account/money.ts'
 
 export type TrialBalanceRow = Record<string, unknown>
 
@@ -35,7 +36,7 @@ export type TrialBalanceScreenOptions = {
 /** A specialized financial report: filter, control totals, and drillable account rows. */
 export const trialBalanceScreen = (_: Translator, options: TrialBalanceScreenOptions): TemplateResult => {
   const total = (field: 'debit' | 'credit' | 'balance') =>
-    options.rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0)
+    options.rows.reduce((sum, row) => addDecimals(sum, row[field] ?? '0'), '0')
   const table = options.rows.length ? (
     dataTable(_, {
       rows: options.rows,

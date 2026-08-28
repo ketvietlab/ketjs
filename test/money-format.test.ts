@@ -16,6 +16,8 @@ const en = translator(manifest, 'en')
 test('money format: follows locale and ISO currency precision', () => {
   assert.equal(formatMoney(en, '1234.5', 'usd'), '$1,234.50')
   assert.match(formatMoney(vi, '1234567.89', 'VND'), /^1\.234\.568\s₫$/u)
+  assert.equal(formatMoney(en, '9007199254740993', 'VND'), '₫9,007,199,254,740,993')
+  assert.equal(formatMoney(en, '9007199254740993.125', 'USD'), '$9,007,199,254,740,993.13')
   assert.equal(formatMoney(en, -0, 'USD'), '$0.00')
 })
 

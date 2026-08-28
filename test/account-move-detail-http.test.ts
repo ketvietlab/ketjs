@@ -158,7 +158,7 @@ test('move detail HTTP preserves CSRF, rejected line values, version checks and 
 
   const posted = await app.client.post(
     `${path}?lang=vi`,
-    new URLSearchParams({ action: 'post', expectedRevision: '0' }),
+    new URLSearchParams({ action: 'post', expectedRevision: '2' }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(posted.status, 303)

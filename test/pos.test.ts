@@ -296,6 +296,108 @@ test('pos: exact session/order states, pricing, payment, stock and accounting fo
   }
 })
 
+test('pos: money remains exact above the JavaScript safe-integer boundary', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'pos.createSession',
+      { id: 'exact-shift', configId: 'shop', userId: 'cashier', openingCash: '0' },
+      adapter,
+    )
+    await call('pos.openSession', { id: 'exact-shift', expectedRevision: 0 }, adapter)
+    await call(
+      'pos.createOrder',
+      { id: 'exact-sale', sessionId: 'exact-shift', partnerId: 'customer' },
+      adapter,
+    )
+    await call(
+      'pos.addLine',
+      {
+        id: 'exact-line',
+        orderId: 'exact-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        priceUnit: '9007199254740993',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    const order = (await call('pos.getOrder', { id: 'exact-sale' }, adapter)).value as Row
+    assert.equal(order.amountUntaxed, '9007199254740993')
+    assert.equal(order.amountTax, '900719925474099')
+    assert.equal(order.amountTotal, '9907919180215092')
+
+    const conflictingLine = (
+      await call(
+        'pos.addLine',
+        {
+          id: 'exact-line',
+          orderId: 'exact-sale',
+          productId: 'goods-1',
+          productUomId: 'unit',
+          qty: '1',
+          priceUnit: '9007199254740992',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(conflictingLine.ok, false)
+    assert.equal((conflictingLine.errors as Row[])[0]?.field, 'id')
+
+    const tender = (
+      await call(
+        'pos.addPayment',
+        {
+          id: 'exact-payment',
+          orderId: 'exact-sale',
+          paymentMethodId: 'cash-method',
+          tenderedAmount: '9907919180215093',
+          expectedRevision: 1,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(tender.appliedAmount, '9907919180215092')
+    assert.equal(tender.change, '1')
+
+    const conflictingTender = (
+      await call(
+        'pos.addPayment',
+        {
+          id: 'exact-payment',
+          orderId: 'exact-sale',
+          paymentMethodId: 'cash-method',
+          tenderedAmount: '9907919180215092',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(conflictingTender.ok, false)
+    assert.equal((conflictingTender.errors as Row[])[0]?.field, 'id')
+
+    const paid = (await call('pos.validateOrder', { id: 'exact-sale', expectedRevision: 2 }, adapter))
+      .value as Row
+    assert.equal(paid.state, 'paid')
+    assert.equal(
+      ((await call('pos.getSession', { id: 'exact-shift' }, adapter)).value as Row).cashRegisterBalanceEnd,
+      '9907919180215092',
+    )
+    await call('pos.startClosing', { id: 'exact-shift', expectedRevision: 1 }, adapter)
+    const closed = (
+      await call(
+        'pos.closeSession',
+        { id: 'exact-shift', closingCash: '9907919180215092', expectedRevision: 2 },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(closed.difference, '0')
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('pos: price-book exposes only active sellable products and explicitly enabled units', async () => {
   const adapter = await boot()
   try {

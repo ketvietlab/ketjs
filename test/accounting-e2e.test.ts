@@ -795,8 +795,8 @@ test('e2e accounting: the overview reports posted moves, and never a draft', asy
   // And the same number the trial balance reports over the same window.
   const trial = (
     await call<Row[]>('account.trialBalance', {
-      dateFrom: '2026-06-01T00:00:00.000Z',
-      dateTo: '2026-06-30T23:59:59.999Z',
+      dateFrom: '2026-06-01',
+      dateTo: '2026-06-30',
     })
   ).value
   assert.equal(Number(trial.find((row) => row.code === '511')?.credit), 100000)

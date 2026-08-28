@@ -1,6 +1,17 @@
 import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
+  addDecimals,
+  canonicalDecimalText,
+  compareDecimals,
+  moneyMinor,
+  minorText,
+  multiplyDecimals,
+  percentOfMinor,
+  scaleOf,
+  subtractDecimals,
+} from '../account/money.ts'
+import {
   BILLING_MODES,
   BOOKING_PROVIDERS,
   BOOKING_TYPES,
@@ -77,8 +88,13 @@ const scheduleOf = (
   if (!checkIn) errors.push(issue('checkIn', 'datetime'))
   if (!checkOut) errors.push(issue('checkOut', 'datetime'))
   if (checkIn && checkOut && checkOut <= checkIn) errors.push(issue('checkOut', 'schedule_order'))
-  const rate = Number(rateValue ?? 0)
-  if (!Number.isFinite(rate) || rate < 0) errors.push(issue('rate', 'non_negative'))
+  let rate = ''
+  try {
+    rate = canonicalDecimalText(String(rateValue ?? '0'))
+    if (compareDecimals(rate, '0') < 0) errors.push(issue('rate', 'non_negative'))
+  } catch {
+    errors.push(issue('rate', 'non_negative'))
+  }
   if (errors.length || !checkIn || !checkOut) return { errors }
 
   const hours = (checkOut.getTime() - checkIn.getTime()) / 3_600_000
@@ -102,7 +118,7 @@ const scheduleOf = (
       checkIn: checkIn.toISOString(),
       checkOut: checkOut.toISOString(),
       quantity: String(quantity),
-      amountTotal: String(quantity * rate),
+      amountTotal: multiplyDecimals(String(quantity), rate),
     },
   }
 }
@@ -130,26 +146,30 @@ const cancellationFee = async (
   ctx: Ctx,
   reservation: Row,
   at: Date,
-): Promise<{ amount: number; code: string }> => {
+): Promise<{ amount: string; code: string }> => {
   // Reservations booked before the snapshot existed fall back to the live
   // policy; new ones carry their own terms and are immune to later edits.
   const terms = reservation.cancellationPolicyType
     ? reservation
     : await cancellationTerms(ctx, reservation.propertyId, reservation.roomTypeId)
-  if (!terms.cancellationPolicyType) return { amount: 0, code: 'policy' }
-  const total = Number(reservation.amountTotal ?? 0)
-  if (!Number.isFinite(total) || total <= 0) return { amount: 0, code: 'policy' }
-  const percent =
+  if (!terms.cancellationPolicyType) return { amount: '0', code: 'policy' }
+  const total = canonicalDecimalText(String(reservation.amountTotal ?? '0'))
+  if (compareDecimals(total, '0') <= 0) return { amount: '0', code: 'policy' }
+  const percent = canonicalDecimalText(
     terms.cancellationPolicyType === 'non_refundable'
-      ? 100
+      ? '100'
       : at.getTime() >
           new Date(String(reservation.checkIn)).getTime() -
             Number(terms.freeCancellationHours ?? 0) * 3_600_000
-        ? Number(terms.penaltyPercent ?? 0)
-        : 0
+        ? String(terms.penaltyPercent ?? '0')
+        : '0',
+  )
   const code = String(terms.cancellationPolicyType)
-  if (!Number.isFinite(percent) || percent <= 0) return { amount: 0, code }
-  return { amount: Math.round(total * Math.min(percent, 100)) / 100, code }
+  if (compareDecimals(percent, '0') <= 0) return { amount: '0', code }
+  const bounded = compareDecimals(percent, '100') > 0 ? '100' : percent
+  const company = await record(ctx, 'company.Company', ctx.scope.company)
+  const scale = scaleOf(company?.currency)
+  return { amount: minorText(percentOfMinor(moneyMinor(total, scale), bounded), scale), code }
 }
 
 const overlaps = (startA: unknown, endA: unknown, startB: Date, endB: Date): boolean => {
@@ -431,7 +451,7 @@ const voidPostedCharge = async (ctx: Ctx, args: Record<string, unknown>) => {
         if (!folio) return failure(issue('folioId', 'folio_missing'))
         if (folio.state !== 'open') return failure(issue('folioId', 'folio_not_open'))
 
-        const nextTotal = String(Number(folio.amountTotal) - Number(charge.amount))
+        const nextTotal = subtractDecimals(String(folio.amountTotal), String(charge.amount))
         const changedFolio = await tx.db.compareAndSet(
           'hospitality_core.Folio',
           { id: folio.id },
@@ -901,8 +921,9 @@ export const operations: Record<string, FnSpec> = {
             if (charge?.state !== 'active')
               throw new TransitionConflict(issue('folioId', 'room_charge_missing'))
             if (folio?.state !== 'open') throw new TransitionConflict(issue('folioId', 'folio_not_open'))
-            const nextFolioTotal = String(
-              Number(folio.amountTotal) - Number(charge.amount) + Number(schedule.amountTotal),
+            const nextFolioTotal = addDecimals(
+              subtractDecimals(String(folio.amountTotal), String(charge.amount)),
+              schedule.amountTotal,
             )
             await tx.db.update(
               'hospitality_core.Charge',
@@ -986,6 +1007,7 @@ export const operations: Record<string, FnSpec> = {
       'read:hospitality_core.Property',
       'read:hospitality_core.RoomType',
       'read:hospitality_core.CancellationPolicy',
+      'read:company.Company',
       'read:hospitality_core.Room',
       'read:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.Reservation',
@@ -1039,7 +1061,7 @@ export const operations: Record<string, FnSpec> = {
           )
           for (const charge of charges)
             await tx.db.update('hospitality_core.Charge', { id: charge.id }, { state: 'void' })
-          if (fee.amount > 0)
+          if (compareDecimals(fee.amount, '0') > 0)
             await tx.db.insert('hospitality_core.Charge', {
               id: `${String(reservation.id)}:cancellation`,
               folioId: reservation.folioId,
@@ -1047,8 +1069,8 @@ export const operations: Record<string, FnSpec> = {
               description: `cancellation:${fee.code}`,
               type: 'cancellation',
               quantity: '1',
-              unitPrice: String(fee.amount),
-              amount: String(fee.amount),
+              unitPrice: fee.amount,
+              amount: fee.amount,
               occurredAt: at,
               sourceKey: `reservation:${String(reservation.id)}:cancellation`,
               state: 'active',
@@ -1059,8 +1081,8 @@ export const operations: Record<string, FnSpec> = {
             'hospitality_core.Folio',
             { id: reservation.folioId },
             {
-              state: fee.amount > 0 ? 'closed' : 'cancelled',
-              amountTotal: String(fee.amount),
+              state: compareDecimals(fee.amount, '0') > 0 ? 'closed' : 'cancelled',
+              amountTotal: fee.amount,
               closedAt: at,
               version: Number(folio?.version ?? 0) + 1,
             },
@@ -1082,7 +1104,7 @@ export const operations: Record<string, FnSpec> = {
               dateTo: inventoryDates.at(-1)!,
               aggregateId: reservation.id,
             })
-          return success(args.id, { state: 'cancelled', cancellationFee: String(fee.amount) })
+          return success(args.id, { state: 'cancelled', cancellationFee: fee.amount })
         }),
       )
     },
@@ -1394,8 +1416,9 @@ export const operations: Record<string, FnSpec> = {
             if (charge?.state !== 'active')
               throw new TransitionConflict(issue('folioId', 'room_charge_missing'))
             if (folio?.state !== 'open') throw new TransitionConflict(issue('folioId', 'folio_not_open'))
-            const nextFolioTotal = String(
-              Number(folio.amountTotal) - Number(charge.amount) + Number(schedule.amountTotal),
+            const nextFolioTotal = addDecimals(
+              subtractDecimals(String(folio.amountTotal), String(charge.amount)),
+              schedule.amountTotal,
             )
             await tx.db.update(
               'hospitality_core.Charge',

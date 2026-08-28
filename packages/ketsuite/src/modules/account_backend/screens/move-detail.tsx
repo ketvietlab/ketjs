@@ -18,6 +18,7 @@ import {
   Surface,
 } from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
+import { addDecimals } from '../../account/money.ts'
 import { labelOf, moveTitle } from './shared.tsx'
 
 export type MoveDetailRow = Record<string, unknown>
@@ -52,7 +53,7 @@ export const moveDetailScreen = (_: Translator, options: MoveDetailScreenOptions
       ? [{ value: rejectedAccountId, label: rejectedAccountId }, ...options.accountOptions]
       : options.accountOptions
   const accountLabels = new Map(accountOptions.map((option) => [option.value, option.label]))
-  const residual = lines.reduce((total, line) => total + Number(line.amountResidual ?? 0), 0)
+  const residual = lines.reduce((total, line) => addDecimals(total, line.amountResidual ?? '0'), '0')
   const title = moveTitle(_, move)
   const showsPaymentState = move.moveType !== 'entry'
   const expectedRevision = String(move.revision ?? 0)

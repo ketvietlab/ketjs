@@ -1,4 +1,12 @@
 import type { Ctx, Row } from '@ketvietlab/ketjs'
+import {
+  canonicalDecimalText,
+  minorText,
+  moneyMinor,
+  multiplyToMinor,
+  percentOfMinor,
+  scaleOf,
+} from '../account/money.ts'
 import type { EligibilityResult, OrderLineSnapshot, OrderSnapshot, RewardQuote } from './types.ts'
 import {
   DISCOUNT_APPLICABILITY,
@@ -29,6 +37,13 @@ export const normalizeCode = (value: unknown): string =>
     .toLocaleUpperCase('en-US')
 export const now = (): string => new Date().toISOString()
 
+/** Money may feed a points formula only while its minor-unit integer is exactly representable. */
+const safeMoneyNumber = (value: unknown, scale: number): number | null => {
+  const minor = moneyMinor(value, scale)
+  const held = Number(minor)
+  return Number.isSafeInteger(held) ? held / 10 ** scale : null
+}
+
 const record = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -38,6 +53,11 @@ export const snapshotOf = (value: unknown): OrderSnapshot | null => {
   const held = record(value)
   if (!held || !LOYALTY_CHANNELS.includes(String(held.orderType) as never)) return null
   if (!String(held.orderId ?? '').trim() || !String(held.currency ?? '').trim()) return null
+  try {
+    scaleOf(held.currency)
+  } catch {
+    return null
+  }
   if (!held.date || Number.isNaN(new Date(String(held.date)).getTime()) || !Array.isArray(held.lines))
     return null
   const lines: OrderLineSnapshot[] = []
@@ -45,10 +65,16 @@ export const snapshotOf = (value: unknown): OrderSnapshot | null => {
     const line = record(raw)
     if (!line || !String(line.id ?? '') || !String(line.productId ?? '')) return null
     const quantity = n(line.quantity),
-      untaxed = n(line.untaxed),
-      total = n(line.total),
       lineKind = String(line.lineKind ?? 'product')
-    if (![quantity, untaxed, total].every(Number.isFinite)) return null
+    let untaxed: string
+    let total: string
+    try {
+      untaxed = canonicalDecimalText(line.untaxed)
+      total = canonicalDecimalText(line.total)
+    } catch {
+      return null
+    }
+    if (!Number.isFinite(quantity)) return null
     if (!['product', 'shipping', 'reward'].includes(lineKind)) return null
     lines.push({
       id: String(line.id),
@@ -170,6 +196,7 @@ const rewardQuote = async (
   linkedProductIds: ReadonlySet<string>,
   requestedPoints?: number,
 ): Promise<RewardQuote | null> => {
+  const scale = scaleOf(snapshot.currency)
   const required = n(reward.requiredPoints)
   const spend = reward.clearWallet ? availablePoints : (requestedPoints ?? required)
   if (!(required > 0) || spend + 0.000001 < required || availablePoints + 0.000001 < spend) return null
@@ -183,36 +210,47 @@ const rewardQuote = async (
       description: String(reward.description),
       rewardType: 'product',
       requiredPoints: round(spend, 6),
-      discountAmount: 0,
+      discountAmount: minorText(0n, scale),
       productId: String(reward.rewardProductId),
       productQuantity: n(reward.rewardProductQuantity),
       lineKind: 'reward',
     }
   }
   const candidates = snapshot.lines.filter((line) => line.lineKind !== 'reward')
-  let base = 0
+  let base = 0n
   if (rewardType === 'shipping')
-    base = candidates.filter((line) => line.lineKind === 'shipping').reduce((s, l) => s + l.total, 0)
+    for (const line of candidates.filter((line) => line.lineKind === 'shipping'))
+      base += moneyMinor(line.total, scale)
   else {
     const products = candidates.filter((line) => line.lineKind === 'product')
     const applicability = String(reward.discountApplicability)
     if (applicability === 'cheapest') {
-      const eligibleTotals = products.map((line) => line.total).filter((value) => value > 0)
-      base = eligibleTotals.length ? Math.min(...eligibleTotals) : 0
+      const eligibleTotals = products
+        .map((line) => moneyMinor(line.total, scale))
+        .filter((value) => value > 0n)
+      base = eligibleTotals.reduce(
+        (lowest, value) => (value < lowest ? value : lowest),
+        eligibleTotals[0] ?? 0n,
+      )
     } else if (applicability === 'specific') {
       for (const line of products)
-        if (await rewardMatches(ctx, reward, line, cache, linkedProductIds)) base += line.total
-    } else base = products.reduce((sum, line) => sum + line.total, 0)
+        if (await rewardMatches(ctx, reward, line, cache, linkedProductIds))
+          base += moneyMinor(line.total, scale)
+    } else for (const line of products) base += moneyMinor(line.total, scale)
   }
-  if (!(base > 0)) return null
+  if (base <= 0n) return null
   let discountAmount = base
   if (rewardType === 'discount') {
     const mode = String(reward.discountMode)
-    if (mode === 'percent') discountAmount = base * (n(reward.discount) / 100)
-    else if (mode === 'per_point') discountAmount = n(reward.discount) * spend
-    else discountAmount = n(reward.discount)
-    if (reward.discountMaximum) discountAmount = Math.min(discountAmount, n(reward.discountMaximum))
-    discountAmount = Math.min(base, discountAmount)
+    if (mode === 'percent') discountAmount = percentOfMinor(base, String(reward.discount))
+    else if (mode === 'per_point')
+      discountAmount = multiplyToMinor([String(reward.discount), decimal(spend)], scale)
+    else discountAmount = moneyMinor(String(reward.discount), scale)
+    if (reward.discountMaximum) {
+      const maximum = moneyMinor(String(reward.discountMaximum), scale)
+      if (discountAmount > maximum) discountAmount = maximum
+    }
+    if (discountAmount > base) discountAmount = base
   }
   return {
     rewardId: String(reward.id),
@@ -220,7 +258,7 @@ const rewardQuote = async (
     description: String(reward.description),
     rewardType: rewardType as RewardQuote['rewardType'],
     requiredPoints: round(spend, 6),
-    discountAmount: round(discountAmount),
+    discountAmount: minorText(discountAmount, scale),
     lineKind: 'reward',
   }
 }
@@ -256,6 +294,7 @@ export const evaluate = async (
     requestedPointsByProgram?: Readonly<Record<string, number>>
   } = {},
 ): Promise<EvaluatedProgram[]> => {
+  const scale = scaleOf(snapshot.currency)
   const cache = new Map<string, ProductContext | null>()
   const allPrograms = await ctx.db.select('loyalty.Program', { active: true })
   const programs = allPrograms
@@ -363,11 +402,14 @@ export const evaluate = async (
         if (await ruleMatches(ctx, rule, line, cache, ruleProducts.get(String(rule.id)) ?? new Set()))
           matched.push(line)
       const quantity = matched.reduce((sum, line) => sum + line.quantity, 0)
-      const amount = matched.reduce(
-        (sum, line) => sum + (rule.taxMode === 'incl' ? line.total : line.untaxed),
-        0,
+      let amount = 0n
+      for (const line of matched)
+        amount += moneyMinor(rule.taxMode === 'incl' ? line.total : line.untaxed, scale)
+      if (
+        quantity + 0.000001 < n(rule.minimumQuantity) ||
+        amount < moneyMinor(String(rule.minimumAmount), scale)
       )
-      if (quantity + 0.000001 < n(rule.minimumQuantity) || amount + 0.000001 < n(rule.minimumAmount)) continue
+        continue
       const pointAmount = n(rule.pointAmount)
       if (!(pointAmount > 0)) continue
       if (program.appliesOn === 'future' && rule.pointSplit && rule.pointMode !== 'order') {
@@ -377,14 +419,18 @@ export const evaluate = async (
         } else {
           for (const line of matched) {
             if (!(line.quantity > 0)) continue
-            const perUnit = round((pointAmount * line.total) / line.quantity, 2)
+            const lineTotal = safeMoneyNumber(line.total, scale)
+            if (lineTotal === null) continue
+            const perUnit = round((pointAmount * lineTotal) / line.quantity, 2)
             for (let index = 0; index < Math.floor(line.quantity); index += 1)
               if (perUnit) splitPoints.push(perUnit)
           }
         }
       } else if (rule.pointMode === 'order') earned += pointAmount
-      else if (rule.pointMode === 'money') earned += round(pointAmount * amount, 2)
-      else earned += pointAmount * quantity
+      else if (rule.pointMode === 'money') {
+        const moneyAmount = safeMoneyNumber(minorText(amount, scale), scale)
+        if (moneyAmount !== null) earned += round(pointAmount * moneyAmount, 2)
+      } else earned += pointAmount * quantity
     }
     const membershipConfig = configByProgram.get(String(program.id))
     const earnGroups = membershipConfig ? (groupsByProgram.get(String(program.id)) ?? []) : []
@@ -399,10 +445,14 @@ export const evaluate = async (
             break
           }
         if (matched) {
-          if (matched.earnsPoints && n(matched.currencyPerPoint) > 0)
-            earned += round(line.total / n(matched.currencyPerPoint), 2)
-        } else if (membershipConfig.fallbackEnabled && n(membershipConfig.fallbackCurrencyPerPoint) > 0)
-          earned += round(line.total / n(membershipConfig.fallbackCurrencyPerPoint), 2)
+          if (matched.earnsPoints && n(matched.currencyPerPoint) > 0) {
+            const lineTotal = safeMoneyNumber(line.total, scale)
+            if (lineTotal !== null) earned += round(lineTotal / n(matched.currencyPerPoint), 2)
+          }
+        } else if (membershipConfig.fallbackEnabled && n(membershipConfig.fallbackCurrencyPerPoint) > 0) {
+          const lineTotal = safeMoneyNumber(line.total, scale)
+          if (lineTotal !== null) earned += round(lineTotal / n(membershipConfig.fallbackCurrencyPerPoint), 2)
+        }
       }
     }
     if (!codeMatched && !wallet) continue

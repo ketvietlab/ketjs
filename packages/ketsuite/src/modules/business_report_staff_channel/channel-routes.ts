@@ -1,4 +1,12 @@
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
+import {
+  canonicalDecimalText,
+  minorText,
+  moneyMinor,
+  roundedQuotient,
+  scaleOf,
+  sumMoneyMinor,
+} from '../account/money.ts'
 import { defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
 
 type Req = Parameters<Route>[1]
@@ -10,9 +18,9 @@ const envelope = (data: unknown) => ({
   type: 'object',
   properties: { data, error: {}, meta: { type: 'object' } },
 })
-const money = (currency: string, amount: number) => ({
+const money = (currency: string, amount: bigint, scale: number) => ({
   currency,
-  amount: amount.toFixed(2).replace(/\.00$/u, ''),
+  amount: canonicalDecimalText(minorText(amount, scale)),
 })
 const startOfDay = (date: Date) =>
   new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
@@ -63,19 +71,24 @@ const within = (value: unknown, start: Date, end: Date) => {
   const date = dateOf(value)
   return Boolean(date && date >= start && date < end)
 }
-const total = (rows: Row[], field: string) =>
-  rows.reduce((sum, row) => sum + (Number.isFinite(Number(row[field])) ? Number(row[field]) : 0), 0)
-const change = (current: number, previous: number) => {
-  if (current === 0 && previous === 0) return { kind: 'unchanged', percent: '0' }
-  if (previous === 0) return { kind: 'new_activity' }
-  const percent = Math.abs(((current - previous) / previous) * 100)
-    .toFixed(2)
-    .replace(/\.00$/u, '')
+const total = (rows: Row[], field: string, scale: number) =>
+  sumMoneyMinor(
+    rows.map((row) => row[field] ?? '0'),
+    scale,
+  )
+const change = (current: bigint, previous: bigint) => {
+  if (current === 0n && previous === 0n) return { kind: 'unchanged', percent: '0' }
+  if (previous === 0n) return { kind: 'new_activity' }
+  const difference = current - previous
+  const magnitude = difference < 0n ? -difference : difference
+  const basis = previous < 0n ? -previous : previous
+  const percent = canonicalDecimalText(minorText(roundedQuotient(magnitude * 10_000n, basis), 2))
   return { kind: current > previous ? 'increase' : current < previous ? 'decrease' : 'unchanged', percent }
 }
-const comparison = (currency: string, current: number, previous: number) => ({
-  current: money(currency, current),
-  previous: money(currency, previous),
+const countChange = (current: number, previous: number) => change(BigInt(current), BigInt(previous))
+const comparison = (currency: string, scale: number, current: bigint, previous: bigint) => ({
+  current: money(currency, current, scale),
+  previous: money(currency, previous, scale),
   change: change(current, previous),
 })
 
@@ -310,6 +323,7 @@ export const channelRoutes = routesOf(
         ctx.call('stock.listPickingViews', { limit: 101, offset: 0 }, url, req),
       ])) as [Row, Row[], Row[], Row[], Row[]]
       const currency = String(company.currency)
+      const scale = scaleOf(currency)
       const confirmed = orders.filter((row) => row.state === 'sale')
       const currentOrders = confirmed.filter((row) => within(row.dateOrder, period.start, period.end))
       const previousOrders = confirmed.filter((row) =>
@@ -321,11 +335,12 @@ export const channelRoutes = routesOf(
       )
       const invoiceValue = (rows: Row[]) =>
         rows.reduce(
-          (sum, row) => sum + Number(row.amountTotal ?? 0) * (row.moveType === 'out_refund' ? -1 : 1),
-          0,
+          (sum, row) =>
+            sum + moneyMinor(row.amountTotal ?? '0', scale) * (row.moveType === 'out_refund' ? -1n : 1n),
+          0n,
         )
-      const currentOrderValue = total(currentOrders, 'amountTotal')
-      const previousOrderValue = total(previousOrders, 'amountTotal')
+      const currentOrderValue = total(currentOrders, 'amountTotal', scale)
+      const previousOrderValue = total(previousOrders, 'amountTotal', scale)
       const currentInvoiceValue = invoiceValue(currentInvoices)
       const previousInvoiceValue = invoiceValue(previousInvoices)
       const partnerIds = [...new Set(currentOrders.map((row) => String(row.partnerId)).filter(Boolean))]
@@ -338,33 +353,33 @@ export const channelRoutes = routesOf(
           )) as Row[])
         : []
       const partnerNames = new Map(partners.map((row) => [String(row.id), String(row.name)]))
-      const customerTotals = new Map<string, { count: number; value: number }>()
+      const customerTotals = new Map<string, { count: number; value: bigint }>()
       for (const order of currentOrders) {
         const id = String(order.partnerId)
-        const held = customerTotals.get(id) ?? { count: 0, value: 0 }
+        const held = customerTotals.get(id) ?? { count: 0, value: 0n }
         held.count += 1
-        held.value += Number(order.amountTotal ?? 0)
+        held.value += moneyMinor(order.amountTotal ?? '0', scale)
         customerTotals.set(id, held)
       }
-      const trend = new Map<string, { confirmed: number; invoiced: number }>()
+      const trend = new Map<string, { confirmed: bigint; invoiced: bigint }>()
       const bucketMs = period.bucket === 'hour' ? 3_600_000 : 86_400_000
       for (let at = period.start.getTime(); at < period.end.getTime(); at += bucketMs)
-        trend.set(new Date(at).toISOString(), { confirmed: 0, invoiced: 0 })
-      const addTrend = (value: unknown, field: 'confirmed' | 'invoiced', amount: number) => {
+        trend.set(new Date(at).toISOString(), { confirmed: 0n, invoiced: 0n })
+      const addTrend = (value: unknown, field: 'confirmed' | 'invoiced', amount: bigint) => {
         const date = dateOf(value)
         if (!date) return
         const start = bucketStart(date, period.bucket).toISOString()
-        const held = trend.get(start) ?? { confirmed: 0, invoiced: 0 }
+        const held = trend.get(start) ?? { confirmed: 0n, invoiced: 0n }
         held[field] += amount
         trend.set(start, held)
       }
       for (const order of currentOrders)
-        addTrend(order.dateOrder, 'confirmed', Number(order.amountTotal ?? 0))
+        addTrend(order.dateOrder, 'confirmed', moneyMinor(order.amountTotal ?? '0', scale))
       for (const invoice of currentInvoices)
         addTrend(
           invoice.date,
           'invoiced',
-          Number(invoice.amountTotal ?? 0) * (invoice.moveType === 'out_refund' ? -1 : 1),
+          moneyMinor(invoice.amountTotal ?? '0', scale) * (invoice.moveType === 'out_refund' ? -1n : 1n),
         )
       const pipelineStates = [
         ['draft', 'draft'],
@@ -394,33 +409,38 @@ export const channelRoutes = routesOf(
             bucket: period.bucket,
           },
           kpis: {
-            confirmedOrderValue: comparison(currency, currentOrderValue, previousOrderValue),
-            invoicedRevenue: comparison(currency, currentInvoiceValue, previousInvoiceValue),
+            confirmedOrderValue: comparison(currency, scale, currentOrderValue, previousOrderValue),
+            invoicedRevenue: comparison(currency, scale, currentInvoiceValue, previousInvoiceValue),
             receivables: {
-              value: money(currency, total(openItems, 'amountResidual')),
+              value: money(currency, total(openItems, 'amountResidual', scale), scale),
               asOf: new Date().toISOString(),
             },
             orderCount: {
               current: currentOrders.length,
               previous: previousOrders.length,
-              change: change(currentOrders.length, previousOrders.length),
+              change: countChange(currentOrders.length, previousOrders.length),
             },
             averageOrderValue: comparison(
               currency,
-              currentOrders.length ? currentOrderValue / currentOrders.length : 0,
-              previousOrders.length ? previousOrderValue / previousOrders.length : 0,
+              scale,
+              currentOrders.length ? roundedQuotient(currentOrderValue, BigInt(currentOrders.length)) : 0n,
+              previousOrders.length ? roundedQuotient(previousOrderValue, BigInt(previousOrders.length)) : 0n,
             ),
           },
           trend: [...trend.entries()]
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([startAt, held]) => ({
               startAt,
-              confirmedOrderValue: money(currency, held.confirmed),
-              invoicedRevenue: money(currency, held.invoiced),
+              confirmedOrderValue: money(currency, held.confirmed, scale),
+              invoicedRevenue: money(currency, held.invoiced, scale),
             })),
           pipeline: pipelineStates.map(([state, source]) => {
             const rows = orders.filter((row) => row.state === source)
-            return { state, count: rows.length, value: money(currency, total(rows, 'amountTotal')) }
+            return {
+              state,
+              count: rows.length,
+              value: money(currency, total(rows, 'amountTotal', scale), scale),
+            }
           }),
           operations: {
             pendingOutboundPickings: pickings.filter(
@@ -433,13 +453,15 @@ export const channelRoutes = routesOf(
             activeDeliveries: 0,
           },
           topCustomers: [...customerTotals.entries()]
-            .sort(([, left], [, right]) => right.value - left.value || right.count - left.count)
+            .sort(([, left], [, right]) =>
+              right.value === left.value ? right.count - left.count : right.value > left.value ? 1 : -1,
+            )
             .slice(0, 5)
             .map(([id, held]) => ({
               reference: `customer_${sha256(`${companyId}\0${id}`)}`,
               displayName: partnerNames.get(id) ?? 'Customer',
               orderCount: held.count,
-              value: money(currency, held.value),
+              value: money(currency, held.value, scale),
             })),
           recentOrders: currentOrders
             .slice()
@@ -455,7 +477,7 @@ export const channelRoutes = routesOf(
               customerName: partnerNames.get(String(row.partnerId)) ?? 'Customer',
               state: 'confirmed',
               orderedAt: dateOf(row.dateOrder)?.toISOString() ?? period.start.toISOString(),
-              value: money(currency, Number(row.amountTotal ?? 0)),
+              value: money(currency, moneyMinor(row.amountTotal ?? '0', scale), scale),
             })),
           drilldowns: {
             salesOrders: hasCapability('sales.orders'),

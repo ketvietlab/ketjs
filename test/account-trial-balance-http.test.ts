@@ -45,8 +45,8 @@ const bootTrial = async (t: TestContext) => {
     })
     if (post) await app.client.call('account.postMove', { id })
   }
-  await entry('entry-end-day', '2026-06-30T20:30:00.000Z', '125000', true)
-  await entry('entry-draft', '2026-06-30T22:00:00.000Z', '900000', false)
+  await entry('entry-end-day', '2026-06-30T16:30:00.000Z', '125000', true)
+  await entry('entry-draft', '2026-06-30T16:45:00.000Z', '900000', false)
   return { app, accountId }
 }
 

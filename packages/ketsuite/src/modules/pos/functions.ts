@@ -1,7 +1,15 @@
 import { createHash } from 'node:crypto'
 import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { functions as accountFunctions, quoteTaxLine } from '../account/functions.ts'
+import { functions as accountFunctions, insertDraftMove, quoteTaxLine } from '../account/functions.ts'
+import {
+  absDecimalText,
+  compareDecimals,
+  minorText,
+  moneyMinor,
+  scaleOf,
+  sumMoneyMinor,
+} from '../account/money.ts'
 import { functions as pricingFunctions } from '../pricing/functions.ts'
 import { sellableProduct } from '../product/sellable.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
@@ -354,6 +362,24 @@ async function currencyOf(ctx: Ctx) {
   if (!company) throw new Error(`company ${ctx.scope.company} does not exist`)
   return String(company.currency)
 }
+const absoluteMinor = (value: bigint) => (value < 0n ? -value : value)
+
+async function sessionCashMinor(ctx: Ctx, session: Row, scale: number): Promise<bigint> {
+  let expected = moneyMinor(session.cashRegisterBalanceStart, scale)
+  const orders = await ctx.db.select('pos.Order', { sessionId: session.id })
+  for (const order of orders)
+    for (const payment of await ctx.db.select('pos.Payment', { orderId: order.id })) {
+      if ((payment.state ?? 'captured') !== 'captured') continue
+      const method = (await ctx.db.select('pos.PaymentMethod', { id: payment.paymentMethodId }))[0]
+      if (method?.isCash) expected += moneyMinor(payment.appliedAmount ?? payment.amount, scale)
+    }
+  for (const movement of await ctx.db.select('pos.CashMovement', { sessionId: session.id })) {
+    const amount = moneyMinor(movement.amount, scale)
+    expected += movement.direction === 'in' ? amount : -amount
+  }
+  return expected
+}
+
 async function productOf(ctx: Ctx, id: unknown) {
   const product = (await ctx.db.select('product.Product', { id }))[0]
   const template = product && (await ctx.db.select('product.Template', { id: product.templateId }))[0]
@@ -397,31 +423,43 @@ async function nextOrderNumber(ctx: Ctx, sessionId: unknown) {
   throw new Error('POS order sequence did not settle after concurrent updates')
 }
 async function recompute(ctx: Ctx, orderId: unknown) {
+  const order = (await ctx.db.select('pos.Order', { id: orderId }))[0]
+  if (!order) throw new Error(`POS order ${String(orderId)} does not exist`)
+  const scale = scaleOf(order.currency)
   const lines = await ctx.db.select('pos.OrderLine', { orderId })
-  const untaxed = money(lines.reduce((sum, line) => sum + n(line.priceSubtotal), 0))
-  const total = money(lines.reduce((sum, line) => sum + n(line.priceSubtotalIncl), 0))
-  const tax = money(total - untaxed)
+  const untaxed = sumMoneyMinor(
+    lines.map((line) => line.priceSubtotal),
+    scale,
+  )
+  const total = sumMoneyMinor(
+    lines.map((line) => line.priceSubtotalIncl),
+    scale,
+  )
+  const tax = total - untaxed
   const payments = await ctx.db.select('pos.Payment', { orderId }),
     captured = payments.filter((payment) => (payment.state ?? 'captured') === 'captured'),
-    paid = money(captured.reduce((sum, payment) => sum + n(payment.appliedAmount ?? payment.amount), 0)),
-    returned = money(
-      captured.reduce(
-        (sum, payment) =>
-          sum + n(payment.tenderedAmount ?? payment.amount) - n(payment.appliedAmount ?? payment.amount),
-        0,
-      ),
+    paid = sumMoneyMinor(
+      captured.map((payment) => payment.appliedAmount ?? payment.amount),
+      scale,
+    ),
+    returned = captured.reduce(
+      (sum, payment) =>
+        sum +
+        moneyMinor(payment.tenderedAmount ?? payment.amount, scale) -
+        moneyMinor(payment.appliedAmount ?? payment.amount, scale),
+      0n,
     )
   await ctx.db.update(
     'pos.Order',
     { id: orderId },
     {
-      amountUntaxed: decimal(untaxed),
-      amountTax: decimal(tax),
-      amountExact: decimal(total),
-      amountRounding: '0',
-      amountTotal: decimal(total),
-      amountPaid: decimal(paid),
-      amountReturn: decimal(returned),
+      amountUntaxed: minorText(untaxed, scale),
+      amountTax: minorText(tax, scale),
+      amountExact: minorText(total, scale),
+      amountRounding: minorText(0n, scale),
+      amountTotal: minorText(total, scale),
+      amountPaid: minorText(paid, scale),
+      amountReturn: minorText(returned, scale),
     },
   )
 }
@@ -449,16 +487,22 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
   const id = `${String(order.id)}:account`,
     existing = (await ctx.db.select('account.Move', { id }))[0]
   if (existing) return id
-  const invoice = Boolean(order.toInvoice),
-    refund = n(order.amountTotal) < 0,
-    date = String(order.dateOrder),
-    total = Math.abs(n(order.amountTotal)),
-    untaxed = Math.abs(n(order.amountUntaxed)),
-    tax = Math.abs(n(order.amountTax))
+  const invoice = Boolean(order.toInvoice)
+  const date = String(order.dateOrder)
+  const scale = scaleOf(order.currency)
+  const signedTotal = moneyMinor(order.amountTotal, scale)
+  const refund = signedTotal < 0n
+  const total = refund ? -signedTotal : signedTotal
+  const signedUntaxed = moneyMinor(order.amountUntaxed, scale)
+  const untaxed = signedUntaxed < 0n ? -signedUntaxed : signedUntaxed
+  const signedTax = moneyMinor(order.amountTax, scale)
+  const tax = signedTax < 0n ? -signedTax : signedTax
   if (invoice && !order.partnerId) throw new Error('a customer is required to invoice a POS order')
-  if (tax && !config.taxAccountId) throw new Error('a tax account is required for taxed POS orders')
+  if (tax > 0n && !config.taxAccountId) throw new Error('a tax account is required for taxed POS orders')
   await ctx.tx(async (tx) => {
-    await tx.db.insert('account.Move', {
+    const zero = minorText(0n, scale)
+    const totalText = minorText(total, scale)
+    const move: Row = {
       id,
       name: id,
       ref: order.posReference,
@@ -472,20 +516,23 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
       paymentTermId: null,
       paymentState: invoice ? 'not_paid' : 'paid',
       currency: order.currency,
-      amountUntaxed: decimal(untaxed),
-      amountTax: decimal(tax),
-      amountTotal: decimal(total),
+      amountUntaxed: minorText(untaxed, scale),
+      amountTax: minorText(tax, scale),
+      amountTotal: totalText,
       postedAt: null,
-    })
+      revision: 0,
+    }
+    const moveLines: Row[] = []
     let sequence = 10
     for (const line of lines) {
       // Revenue follows the signed line subtotal. A negative Loyalty line is a
       // contra-revenue debit on a sale, and becomes a credit when a refund
       // reverses it. Looking only at the order direction would overstate revenue.
-      const balance = -n(line.priceSubtotal),
-        debit = Math.max(0, balance),
-        credit = Math.max(0, -balance)
-      await tx.db.insert('account.MoveLine', {
+      const subtotal = moneyMinor(line.priceSubtotal, scale)
+      const balance = -subtotal
+      const debit = balance > 0n ? balance : 0n
+      const credit = balance < 0n ? -balance : 0n
+      moveLines.push({
         id: `${id}:line:${String(line.id)}`,
         moveId: id,
         name: line.name,
@@ -493,24 +540,24 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
         partnerId: order.partnerId ?? null,
         productId: line.productId,
         productUomId: line.productUomId,
-        quantity: decimal(Math.abs(n(line.qty))),
+        quantity: absDecimalText(line.qty),
         priceUnit: line.priceUnit,
         discount: line.discount,
         taxId: line.taxId,
-        debit: decimal(debit),
-        credit: decimal(credit),
-        balance: decimal(balance),
+        debit: minorText(debit, scale),
+        credit: minorText(credit, scale),
+        balance: minorText(balance, scale),
         dateMaturity: null,
         displayType: null,
         reconciled: false,
-        amountResidual: '0',
+        amountResidual: zero,
         sequence,
         posLineId: line.id,
       })
       sequence += 10
     }
-    if (tax)
-      await tx.db.insert('account.MoveLine', {
+    if (tax > 0n)
+      moveLines.push({
         id: `${id}:tax`,
         moveId: id,
         name: 'Tax',
@@ -519,20 +566,20 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
         productId: null,
         productUomId: null,
         quantity: '1',
-        priceUnit: decimal(tax),
+        priceUnit: minorText(tax, scale),
         discount: '0',
         taxId: null,
-        debit: refund ? decimal(tax) : '0',
-        credit: refund ? '0' : decimal(tax),
-        balance: decimal(refund ? tax : -tax),
+        debit: refund ? minorText(tax, scale) : zero,
+        credit: refund ? zero : minorText(tax, scale),
+        balance: minorText(refund ? tax : -tax, scale),
         dateMaturity: null,
         displayType: null,
         reconciled: false,
-        amountResidual: '0',
+        amountResidual: zero,
         sequence: 900,
       })
     if (invoice) {
-      await tx.db.insert('account.MoveLine', {
+      moveLines.push({
         id: `${id}:counterpart`,
         moveId: id,
         name: order.posReference,
@@ -541,16 +588,16 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
         productId: null,
         productUomId: null,
         quantity: '1',
-        priceUnit: decimal(total),
+        priceUnit: totalText,
         discount: '0',
         taxId: null,
-        debit: refund ? '0' : decimal(total),
-        credit: refund ? decimal(total) : '0',
-        balance: decimal(refund ? -total : total),
+        debit: refund ? zero : totalText,
+        credit: refund ? totalText : zero,
+        balance: minorText(refund ? -total : total, scale),
         dateMaturity: date,
         displayType: null,
         reconciled: false,
-        amountResidual: decimal(total),
+        amountResidual: totalText,
         sequence: 1000,
       })
     } else {
@@ -558,8 +605,9 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
       for (const payment of payments) {
         const method = (await tx.db.select('pos.PaymentMethod', { id: payment.paymentMethodId }))[0]!,
           journal = (await tx.db.select('account.Journal', { id: method.journalId }))[0]!
-        const amount = Math.abs(n(payment.amount))
-        await tx.db.insert('account.MoveLine', {
+        const signedAmount = moneyMinor(payment.amount, scale)
+        const amount = signedAmount < 0n ? -signedAmount : signedAmount
+        moveLines.push({
           id: `${id}:payment:${String(payment.id)}`,
           moveId: id,
           name: method.name,
@@ -568,21 +616,22 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
           productId: null,
           productUomId: null,
           quantity: '1',
-          priceUnit: decimal(amount),
+          priceUnit: minorText(amount, scale),
           discount: '0',
           taxId: null,
-          debit: refund ? '0' : decimal(amount),
-          credit: refund ? decimal(amount) : '0',
-          balance: decimal(refund ? -amount : amount),
+          debit: refund ? zero : minorText(amount, scale),
+          credit: refund ? minorText(amount, scale) : zero,
+          balance: minorText(refund ? -amount : amount, scale),
           dateMaturity: null,
           displayType: null,
           reconciled: false,
-          amountResidual: '0',
+          amountResidual: zero,
           sequence: paymentSequence,
         })
         paymentSequence += 10
       }
     }
+    await insertDraftMove(tx, { move, lines: moveLines })
   })
   const posted = (await accountFunctions.postMove!.handler(ctx, { id })) as Row
   if (posted.ok !== true)
@@ -600,7 +649,13 @@ async function createAccounting(ctx: Ctx, order: Row, config: Row, lines: Row[],
         partnerId: order.partnerId,
         journalId: method.journalId,
         destinationAccountId: config.receivableAccountId,
-        amount: decimal(Math.abs(n(payment.amount))),
+        amount: minorText(
+          (() => {
+            const held = moneyMinor(payment.amount, scale)
+            return held < 0n ? -held : held
+          })(),
+          scale,
+        ),
         date,
         paymentReference: order.posReference,
         reconcileLineId: `${id}:counterpart`,
@@ -619,7 +674,7 @@ async function createCashAdjustmentAccounting(
   session: Row,
   config: Row,
   adjustmentId: string,
-  difference: number,
+  difference: unknown,
 ) {
   if (!config.cashOverShortAccountId)
     throw new Error('a cash over/short clearing account is required before approving variance')
@@ -637,67 +692,78 @@ async function createCashAdjustmentAccounting(
   if (!journal?.defaultAccountId) throw new Error('the cash journal needs a default account')
   const moveId = `${adjustmentId}:account`
   if (!(await ctx.db.select('account.Move', { id: moveId }))[0]) {
-    const amount = Math.abs(difference)
-    await ctx.db.insert('account.Move', {
-      id: moveId,
-      name: moveId,
-      ref: `POS cash variance ${String(session.name)}`,
-      date: now(),
-      moveType: 'entry',
-      state: 'draft',
-      journalId: method.journalId,
-      partnerId: null,
-      invoiceDate: null,
-      invoiceDateDue: null,
-      paymentTermId: null,
-      paymentState: 'paid',
-      currency: await currencyOf(ctx),
-      amountUntaxed: '0',
-      amountTax: '0',
-      amountTotal: '0',
-      postedAt: null,
-    })
-    await ctx.db.insert('account.MoveLine', {
-      id: `${moveId}:cash`,
-      moveId,
-      name: method.name,
-      accountId: journal.defaultAccountId,
-      partnerId: null,
-      productId: null,
-      productUomId: null,
-      quantity: '1',
-      priceUnit: decimal(amount),
-      discount: '0',
-      taxId: null,
-      debit: difference > 0 ? decimal(amount) : '0',
-      credit: difference < 0 ? decimal(amount) : '0',
-      balance: decimal(difference),
-      dateMaturity: null,
-      displayType: null,
-      reconciled: false,
-      amountResidual: '0',
-      sequence: 10,
-    })
-    await ctx.db.insert('account.MoveLine', {
-      id: `${moveId}:clearing`,
-      moveId,
-      name: 'Cash over/short',
-      accountId: config.cashOverShortAccountId,
-      partnerId: null,
-      productId: null,
-      productUomId: null,
-      quantity: '1',
-      priceUnit: decimal(amount),
-      discount: '0',
-      taxId: null,
-      debit: difference < 0 ? decimal(amount) : '0',
-      credit: difference > 0 ? decimal(amount) : '0',
-      balance: decimal(-difference),
-      dateMaturity: null,
-      displayType: null,
-      reconciled: false,
-      amountResidual: '0',
-      sequence: 20,
+    const currency = await currencyOf(ctx)
+    const scale = scaleOf(currency)
+    const signed = moneyMinor(difference, scale)
+    const amount = signed < 0n ? -signed : signed
+    const zero = minorText(0n, scale)
+    const amountText = minorText(amount, scale)
+    await ctx.tx(async (tx) => {
+      const move: Row = {
+        id: moveId,
+        name: moveId,
+        ref: `POS cash variance ${String(session.name)}`,
+        date: now(),
+        moveType: 'entry',
+        state: 'draft',
+        journalId: method.journalId,
+        partnerId: null,
+        invoiceDate: null,
+        invoiceDateDue: null,
+        paymentTermId: null,
+        paymentState: 'paid',
+        currency,
+        amountUntaxed: amountText,
+        amountTax: zero,
+        amountTotal: amountText,
+        postedAt: null,
+        revision: 0,
+      }
+      const lines: Row[] = [
+        {
+          id: `${moveId}:cash`,
+          moveId,
+          name: method.name,
+          accountId: journal.defaultAccountId,
+          partnerId: null,
+          productId: null,
+          productUomId: null,
+          quantity: '1',
+          priceUnit: amountText,
+          discount: '0',
+          taxId: null,
+          debit: signed > 0n ? amountText : zero,
+          credit: signed < 0n ? amountText : zero,
+          balance: minorText(signed, scale),
+          dateMaturity: null,
+          displayType: null,
+          reconciled: false,
+          amountResidual: zero,
+          sequence: 10,
+        },
+        {
+          id: `${moveId}:clearing`,
+          moveId,
+          name: 'Cash over/short',
+          accountId: config.cashOverShortAccountId,
+          partnerId: null,
+          productId: null,
+          productUomId: null,
+          quantity: '1',
+          priceUnit: amountText,
+          discount: '0',
+          taxId: null,
+          debit: signed < 0n ? amountText : zero,
+          credit: signed > 0n ? amountText : zero,
+          balance: minorText(-signed, scale),
+          dateMaturity: null,
+          displayType: null,
+          reconciled: false,
+          amountResidual: zero,
+          sequence: 20,
+        },
+      ]
+      await insertDraftMove(tx, { move, lines })
     })
   }
   const posted = (await accountFunctions.postMove!.handler(ctx, { id: moveId })) as Row
@@ -934,8 +1000,10 @@ export const functions: Record<string, FnSpec> = {
         !(await ctx.db.select('account.Account', { id: args.cashOverShortAccountId }))[0]
       )
         return invalid('cashOverShortAccountId', 'cash over/short account does not exist')
-      if (n(args.cashRoundingIncrement) !== 0)
+      if (compareDecimals(args.cashRoundingIncrement ?? '0', '0') !== 0)
         return invalid('cashRoundingIncrement', 'cash rounding is modeled but disabled for the pilot')
+      if (compareDecimals(args.maximumDifference ?? '0', '0') < 0)
+        return invalid('maximumDifference', 'maximum cash difference cannot be negative')
       const existing = (await ctx.db.select('pos.Config', { id: args.id }))[0],
         values = {
           name: args.name,
@@ -1024,25 +1092,17 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.Payment',
       'read:pos.PaymentMethod',
       'read:pos.CashMovement',
+      'read:company.Company',
     ],
     agent: true,
     handler: async (ctx, args) => {
       const session = (await ctx.db.select('pos.Session', { id: args.id }))[0]
       if (!session) return null
       const orders = await ctx.db.select('pos.Order', { sessionId: args.id })
-      let expectedCash = n(session.cashRegisterBalanceStart)
-      for (const order of orders)
-        for (const payment of await ctx.db.select('pos.Payment', { orderId: order.id })) {
-          if ((payment.state ?? 'captured') !== 'captured') continue
-          const method = (await ctx.db.select('pos.PaymentMethod', { id: payment.paymentMethodId }))[0]
-          if (method?.isCash) expectedCash += n(payment.appliedAmount ?? payment.amount)
-        }
+      const scale = scaleOf(await currencyOf(ctx))
+      const expectedCash = await sessionCashMinor(ctx, session, scale)
       const cashMovements = await ctx.db.select('pos.CashMovement', { sessionId: args.id })
-      expectedCash += cashMovements.reduce(
-        (sum, movement) => sum + (movement.direction === 'in' ? n(movement.amount) : -n(movement.amount)),
-        0,
-      )
-      return { ...session, cashRegisterBalanceEnd: decimal(expectedCash), orders, cashMovements }
+      return { ...session, cashRegisterBalanceEnd: minorText(expectedCash, scale), orders, cashMovements }
     },
   }),
   createSession: defineFn({
@@ -1062,16 +1122,22 @@ export const functions: Record<string, FnSpec> = {
       'write:pos.SessionLock',
       'read:pos.Config',
       'read:user.User',
+      'read:company.Company',
     ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
+      const scale = scaleOf(await currencyOf(ctx))
+      const openingCash = moneyMinor(args.openingCash ?? '0', scale)
       const existing = (await ctx.db.select('pos.Session', { id: args.id }))[0]
       if (existing) {
         const same =
           existing.configId === args.configId &&
           existing.userId === args.userId &&
-          (args.deviceId === undefined || existing.deviceId === args.deviceId)
+          (args.deviceId === undefined || existing.deviceId === args.deviceId) &&
+          (args.openingCash === undefined ||
+            moneyMinor(existing.cashRegisterBalanceStart, scale) === openingCash) &&
+          (args.openingNotes === undefined || existing.openingNotes === args.openingNotes)
         return same
           ? { ok: true, id: args.id, revision: n(existing.revision) }
           : invalid('id', 'session id is already used by a different command')
@@ -1109,10 +1175,10 @@ export const functions: Record<string, FnSpec> = {
         stopAt: null,
         openingNotes: args.openingNotes ?? null,
         closingNotes: null,
-        cashRegisterBalanceStart: args.openingCash ?? '0',
-        cashRegisterBalanceEnd: args.openingCash ?? '0',
-        cashRegisterBalanceEndReal: args.openingCash ?? '0',
-        cashRegisterDifference: '0',
+        cashRegisterBalanceStart: minorText(openingCash, scale),
+        cashRegisterBalanceEnd: minorText(openingCash, scale),
+        cashRegisterBalanceEndReal: minorText(openingCash, scale),
+        cashRegisterDifference: minorText(0n, scale),
         varianceStatus: 'none',
         varianceReason: null,
         varianceNote: null,
@@ -1153,22 +1219,30 @@ export const functions: Record<string, FnSpec> = {
       expectedRevision: 'int',
     },
     output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
-    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.CashMovement', 'write:pos.CashMovement'],
+    effects: [
+      'read:pos.Session',
+      'write:pos.Session',
+      'read:pos.CashMovement',
+      'write:pos.CashMovement',
+      'read:company.Company',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       if (!['in', 'out'].includes(String(args.direction)))
         return invalid('direction', 'cash movement direction must be in or out')
-      if (!(n(args.amount) > 0)) return invalid('amount', 'cash movement amount must be positive')
       if (!String(args.reason).trim()) return invalid('reason', 'cash movement requires a reason')
       const session = (await ctx.db.select('pos.Session', { id: args.sessionId }))[0]
       if (session?.state !== 'opened') return invalid('state', 'cash movement requires an open shift')
+      const scale = scaleOf(await currencyOf(ctx))
+      const amount = moneyMinor(args.amount, scale)
+      if (amount <= 0n) return invalid('amount', 'cash movement amount must be positive')
       const existing = (await ctx.db.select('pos.CashMovement', { id: args.id }))[0]
       if (existing) {
         const same =
           existing.sessionId === args.sessionId &&
           existing.direction === args.direction &&
-          n(existing.amount) === n(args.amount)
+          moneyMinor(existing.amount, scale) === amount
         return same
           ? { ok: true, id: args.id, revision: n(session.revision) }
           : invalid('id', 'cash movement id is already used by a different command')
@@ -1179,7 +1253,7 @@ export const functions: Record<string, FnSpec> = {
         id: args.id,
         sessionId: args.sessionId,
         direction: args.direction,
-        amount: decimal(n(args.amount)),
+        amount: minorText(amount, scale),
         reason: String(args.reason),
         note: args.note ?? null,
         actorId: args.actorId,
@@ -1282,6 +1356,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.PaymentMethod',
       'read:pos.CashMovement',
       'write:pos.Order',
+      'read:company.Company',
     ],
     idempotent: true,
     agent: true,
@@ -1299,19 +1374,12 @@ export const functions: Record<string, FnSpec> = {
       if (session.state !== 'closing_control') return invalid('state', 'session must be in closing control')
       const config = (await ctx.db.select('pos.Config', { id: session.configId }))[0]!,
         orders = await ctx.db.select('pos.Order', { sessionId: args.id })
-      let cash = n(session.cashRegisterBalanceStart)
-      for (const order of orders)
-        for (const payment of await ctx.db.select('pos.Payment', { orderId: order.id })) {
-          if ((payment.state ?? 'captured') !== 'captured') continue
-          const method = (await ctx.db.select('pos.PaymentMethod', { id: payment.paymentMethodId }))[0]
-          if (method?.isCash) cash += n(payment.appliedAmount ?? payment.amount)
-        }
-      cash += (await ctx.db.select('pos.CashMovement', { sessionId: args.id })).reduce(
-        (sum, movement) => sum + (movement.direction === 'in' ? n(movement.amount) : -n(movement.amount)),
-        0,
-      )
-      const difference = money(n(args.closingCash) - cash)
-      const pendingApproval = Math.abs(difference) - n(config.maximumDifference) > 0.000001
+      const scale = scaleOf(await currencyOf(ctx))
+      const cash = await sessionCashMinor(ctx, session, scale)
+      const closingCash = moneyMinor(args.closingCash, scale)
+      const difference = closingCash - cash
+      const maximumDifference = moneyMinor(config.maximumDifference ?? '0', scale)
+      const pendingApproval = absoluteMinor(difference) > maximumDifference
       if (pendingApproval && !String(args.varianceReason ?? '').trim())
         return invalid('varianceReason', 'cash difference requires a reason before sealing the shift')
       const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
@@ -1325,9 +1393,9 @@ export const functions: Record<string, FnSpec> = {
           state: pendingApproval ? 'pending_approval' : 'closed',
           stopAt: now(),
           closingNotes: args.closingNotes ?? null,
-          cashRegisterBalanceEnd: decimal(cash),
-          cashRegisterBalanceEndReal: args.closingCash,
-          cashRegisterDifference: decimal(difference),
+          cashRegisterBalanceEnd: minorText(cash, scale),
+          cashRegisterBalanceEndReal: minorText(closingCash, scale),
+          cashRegisterDifference: minorText(difference, scale),
           varianceStatus: pendingApproval ? 'pending' : 'none',
           varianceReason: pendingApproval ? String(args.varianceReason) : null,
           varianceNote: pendingApproval ? (args.varianceNote ?? null) : null,
@@ -1337,7 +1405,7 @@ export const functions: Record<string, FnSpec> = {
         ok: true,
         id: args.id,
         revision: claim.revision,
-        difference: decimal(difference),
+        difference: minorText(difference, scale),
         pendingApproval,
       }
     },
@@ -1352,7 +1420,7 @@ export const functions: Record<string, FnSpec> = {
       pendingApproval: 'bool?',
       errors: 'json?',
     },
-    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.Config'],
+    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.Config', 'read:company.Company'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -1360,8 +1428,11 @@ export const functions: Record<string, FnSpec> = {
       if (session?.state !== 'pending_approval')
         return invalid('state', 'only a sealed variance can be recounted')
       const config = (await ctx.db.select('pos.Config', { id: session.configId }))[0]!
-      const difference = money(n(args.countedCash) - n(session.cashRegisterBalanceEnd))
-      const pendingApproval = Math.abs(difference) - n(config.maximumDifference) > 0.000001
+      const scale = scaleOf(await currencyOf(ctx))
+      const countedCash = moneyMinor(args.countedCash, scale)
+      const difference = countedCash - moneyMinor(session.cashRegisterBalanceEnd, scale)
+      const maximumDifference = moneyMinor(config.maximumDifference ?? '0', scale)
+      const pendingApproval = absoluteMinor(difference) > maximumDifference
       const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
       if (claim.ok !== true) return claim
       await ctx.db.update(
@@ -1369,8 +1440,8 @@ export const functions: Record<string, FnSpec> = {
         { id: args.id },
         {
           state: pendingApproval ? 'pending_approval' : 'closed',
-          cashRegisterBalanceEndReal: args.countedCash,
-          cashRegisterDifference: decimal(difference),
+          cashRegisterBalanceEndReal: minorText(countedCash, scale),
+          cashRegisterDifference: minorText(difference, scale),
           varianceStatus: pendingApproval ? 'pending' : 'corrected',
           varianceNote: args.note ?? session.varianceNote ?? null,
           varianceApprovedBy: pendingApproval ? null : args.reviewedBy,
@@ -1381,7 +1452,7 @@ export const functions: Record<string, FnSpec> = {
         ok: true,
         id: args.id,
         revision: claim.revision,
-        difference: decimal(difference),
+        difference: minorText(difference, scale),
         pendingApproval,
       }
     },
@@ -1439,7 +1510,7 @@ export const functions: Record<string, FnSpec> = {
           session,
           config,
           adjustmentId,
-          n(session.cashRegisterDifference),
+          session.cashRegisterDifference,
         )
       } catch (error) {
         return invalid('accounting', (error as Error).message)
@@ -1711,7 +1782,7 @@ export const functions: Record<string, FnSpec> = {
       if (order?.state !== 'draft' || order.isRefund)
         return invalid('orderId', 'products can only be added to a new non-refund order')
       if (order.paymentLockId) return invalid('orderId', 'order is locked by an external payment attempt')
-      if (!(n(args.qty) > 0)) return invalid('qty', 'quantity must be positive')
+      if (compareDecimals(args.qty, '0') <= 0) return invalid('qty', 'quantity must be positive')
       const sellable = await sellableProduct(ctx, args.productId, args.productUomId)
       if (!sellable.ok)
         return invalid(sellable.field === 'uomId' ? 'productUomId' : sellable.field, sellable.message)
@@ -1731,7 +1802,11 @@ export const functions: Record<string, FnSpec> = {
         priceUnit = result.price
       }
       priceUnit ??= product.template.listPrice
-      if (n(discount) < 0 || n(discount) > 100 || n(priceUnit) < 0)
+      if (
+        compareDecimals(discount, '0') < 0 ||
+        compareDecimals(discount, '100') > 0 ||
+        compareDecimals(priceUnit, '0') < 0
+      )
         return invalid('discount', 'price and discount are invalid')
       const taxIds = args.taxIds !== undefined ? args.taxIds : args.taxId ? [args.taxId] : undefined
       const quote = await quoteTaxLine(ctx, {
@@ -1748,9 +1823,9 @@ export const functions: Record<string, FnSpec> = {
           existing.orderId === args.orderId &&
           existing.productId === args.productId &&
           existing.productUomId === args.productUomId &&
-          n(existing.qty) === n(args.qty) &&
-          n(existing.priceUnit) === n(priceUnit) &&
-          n(existing.discount) === n(discount) &&
+          compareDecimals(existing.qty, args.qty) === 0 &&
+          compareDecimals(existing.priceUnit, priceUnit) === 0 &&
+          compareDecimals(existing.discount, discount) === 0 &&
           JSON.stringify(existing.taxIds ?? []) === JSON.stringify(quote.taxIds)
         return same
           ? { ok: true, id: args.id, priceUnit: String(priceUnit), revision: n(order.revision) }
@@ -1859,7 +1934,7 @@ export const functions: Record<string, FnSpec> = {
       if (order?.state !== 'draft' || order.isRefund)
         return invalid('orderId', 'only a new non-refund order can be changed')
       if (order.paymentLockId) return invalid('orderId', 'order is locked by an external payment attempt')
-      if (!(n(args.qty) > 0)) return invalid('qty', 'quantity must be positive')
+      if (compareDecimals(args.qty, '0') <= 0) return invalid('qty', 'quantity must be positive')
       const sellable = await sellableProduct(ctx, line.productId, line.productUomId)
       if (!sellable.ok) return invalid(sellable.field, sellable.message)
       const config = (await ctx.db.select('pos.Config', { id: order.configId }))[0]!
@@ -1877,6 +1952,12 @@ export const functions: Record<string, FnSpec> = {
       }
       priceUnit ??= sellable.value.template.listPrice
       const discount = args.discount ?? line.discount
+      if (
+        compareDecimals(discount, '0') < 0 ||
+        compareDecimals(discount, '100') > 0 ||
+        compareDecimals(priceUnit, '0') < 0
+      )
+        return invalid('discount', 'price and discount are invalid')
       const taxIds = args.taxIds !== undefined ? args.taxIds : (line.taxIds ?? [])
       const quote = await quoteTaxLine(ctx, {
         productId: line.productId,
@@ -2004,8 +2085,14 @@ export const functions: Record<string, FnSpec> = {
       const order = (await ctx.db.select('pos.Order', { id: args.orderId }))[0]
       if (order?.state !== 'draft') return invalid('orderId', 'payments can only be added to a new order')
       if (order.paymentLockId) return invalid('orderId', 'order is locked by an external payment attempt')
-      const tendered = n(args.tenderedAmount ?? args.amount)
-      if ((order.isRefund && tendered >= 0) || (!order.isRefund && tendered <= 0))
+      const scale = scaleOf(order.currency)
+      let tendered: bigint
+      try {
+        tendered = moneyMinor(args.tenderedAmount ?? args.amount, scale)
+      } catch {
+        return invalid('tenderedAmount', 'payment must be a valid monetary amount')
+      }
+      if ((order.isRefund && tendered >= 0n) || (!order.isRefund && tendered <= 0n))
         return invalid(
           'tenderedAmount',
           order.isRefund ? 'refund payments must be negative' : 'payment must be positive',
@@ -2026,7 +2113,7 @@ export const functions: Record<string, FnSpec> = {
         const same =
           existing.orderId === args.orderId &&
           existing.paymentMethodId === args.paymentMethodId &&
-          n(existing.tenderedAmount ?? existing.amount) === tendered &&
+          moneyMinor(existing.tenderedAmount ?? existing.amount, scale) === tendered &&
           String(existing.reference ?? '') === String(args.reference ?? '')
         return same
           ? {
@@ -2034,8 +2121,10 @@ export const functions: Record<string, FnSpec> = {
               id: args.id,
               revision: n(order.revision),
               appliedAmount: existing.appliedAmount ?? existing.amount,
-              change: decimal(
-                n(existing.tenderedAmount ?? existing.amount) - n(existing.appliedAmount ?? existing.amount),
+              change: minorText(
+                moneyMinor(existing.tenderedAmount ?? existing.amount, scale) -
+                  moneyMinor(existing.appliedAmount ?? existing.amount, scale),
+                scale,
               ),
             }
           : invalid('id', 'tender id is already used by a different command')
@@ -2043,27 +2132,28 @@ export const functions: Record<string, FnSpec> = {
       const captured = (await ctx.db.select('pos.Payment', { orderId: args.orderId })).filter(
         (payment) => (payment.state ?? 'captured') === 'captured',
       )
-      const remaining = Math.max(
-        0,
-        Math.abs(n(order.amountTotal)) -
-          captured.reduce((sum, payment) => sum + Math.abs(n(payment.appliedAmount ?? payment.amount)), 0),
+      const capturedAmount = captured.reduce(
+        (sum, payment) => sum + absoluteMinor(moneyMinor(payment.appliedAmount ?? payment.amount, scale)),
+        0n,
       )
-      if (remaining <= 0.000001) return invalid('amount', 'the order is already fully covered')
-      const tenderedAbsolute = Math.abs(tendered)
-      if (!method.isCash && tenderedAbsolute - remaining > 0.000001)
+      const payable = absoluteMinor(moneyMinor(order.amountTotal, scale))
+      const remaining = payable > capturedAmount ? payable - capturedAmount : 0n
+      if (remaining === 0n) return invalid('amount', 'the order is already fully covered')
+      const tenderedAbsolute = absoluteMinor(tendered)
+      if (!method.isCash && tenderedAbsolute > remaining)
         return invalid('tenderedAmount', 'manual non-cash tender cannot exceed the remaining payable')
-      const appliedAbsolute = method.isCash ? Math.min(tenderedAbsolute, remaining) : tenderedAbsolute
-      const direction = order.isRefund ? -1 : 1
-      const applied = money(direction * appliedAbsolute)
+      const appliedAbsolute = method.isCash && tenderedAbsolute > remaining ? remaining : tenderedAbsolute
+      const direction = order.isRefund ? -1n : 1n
+      const applied = direction * appliedAbsolute
       const claim = await claimDraftRevision(ctx, args.orderId, args.expectedRevision)
       if (claim.ok !== true) return claim
       await ctx.db.insert('pos.Payment', {
         id: args.id,
         orderId: args.orderId,
         paymentMethodId: args.paymentMethodId,
-        amount: decimal(applied),
-        tenderedAmount: decimal(tendered),
-        appliedAmount: decimal(applied),
+        amount: minorText(applied, scale),
+        tenderedAmount: minorText(tendered, scale),
+        appliedAmount: minorText(applied, scale),
         state: 'captured',
         kind: method.isCash ? 'cash' : 'manual',
         reference: args.reference ?? null,
@@ -2077,8 +2167,8 @@ export const functions: Record<string, FnSpec> = {
         ok: true,
         id: args.id,
         revision: claim.revision,
-        appliedAmount: decimal(applied),
-        change: decimal(tendered - applied),
+        appliedAmount: minorText(applied, scale),
+        change: minorText(tendered - applied, scale),
       }
     },
   }),
@@ -2745,10 +2835,11 @@ export const functions: Record<string, FnSpec> = {
       const payments = (await ctx.db.select('pos.Payment', { orderId: args.id })).filter(
         (payment) => (payment.state ?? 'captured') === 'captured',
       )
-      if (Math.abs(n(order.amountPaid) - n(order.amountTotal)) > 0.000001)
+      const scale = scaleOf(order.currency)
+      if (moneyMinor(order.amountPaid, scale) !== moneyMinor(order.amountTotal, scale))
         return invalid('amountPaid', 'paid amount must equal order total')
       const config = (await ctx.db.select('pos.Config', { id: order.configId }))[0]!
-      if (n(order.amountTax) && !config.taxAccountId)
+      if (moneyMinor(order.amountTax, scale) !== 0n && !config.taxAccountId)
         return invalid('taxAccountId', 'a tax account is required before stock is moved')
       const goods: Row[] = []
       const selectedLots = new Set<string>()

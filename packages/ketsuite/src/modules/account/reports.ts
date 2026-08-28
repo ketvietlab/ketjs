@@ -1,11 +1,13 @@
 import { defineFn } from '@ketvietlab/ketjs'
 import type { FnSpec, ReportDef, Row } from '@ketvietlab/ketjs'
+import { accountingDateText, DEFAULT_ACCOUNTING_TIMEZONE } from './date.ts'
+import { minorText, moneyMinor, scaleOf } from './money.ts'
 
 const template = (title: string) => `<report paper="A4" margin="42">
   <header><row gap="6"><text size="10" weight="bold" tone="accent">{{ company.name }}</text><text size="8" weight="semibold" tone="muted" align="right">KETSUITE · ACCOUNTING</text></row></header>
   <text size="9" weight="semibold" tone="accent" gap="12">{{ '${title}' | _ }}</text>
   <text size="24" weight="bold" gap="14">{{ name }}</text>
-  <row gap="12"><text size="9" weight="semibold">{{ 'account.report.number' | _ }} · {{ name }}</text><text size="9" tone="muted" align="right">{{ 'account.report.date' | _ }} · {{ invoiceDate | date }}</text></row>
+  <row gap="12"><text size="9" weight="semibold">{{ 'account.report.number' | _ }} · {{ name }}</text><text size="9" tone="muted" align="right">{{ 'account.report.date' | _ }} · {{ documentDate | date }}</text></row>
   <text size="8" weight="semibold" tone="muted" gap="3">{{ 'account.report.partner' | _ }}</text>
   <text size="12" weight="semibold" gap="18">{{ partner.name }}</text>
   <table><thead><tr><th>{{ 'account.report.description' | _ }}</th><th>{{ 'account.report.quantity' | _ }}</th><th>{{ 'account.report.unitPrice' | _ }}</th><th>{{ 'account.report.balance' | _ }}</th></tr></thead>
@@ -36,14 +38,17 @@ const template = (title: string) => `<report paper="A4" margin="42">
  * what it is in double entry, but a customer reading an invoice for a million
  * đồng should not be shown minus one million.
  */
-const invoiceLines = (lines: Row[], accounts: Map<string, Row>) =>
+const invoiceLines = (lines: Row[], accounts: Map<string, Row>, scale: number) =>
   lines
     .filter((line) => {
       if (line.displayType) return false
       const type = String(accounts.get(String(line.accountId))?.accountType ?? '')
       return type.startsWith('income') || type.startsWith('expense')
     })
-    .map((line) => ({ ...line, amount: Math.abs(Number(line.balance ?? 0)) }))
+    .map((line) => {
+      const balance = moneyMinor(line.balance ?? '0', scale)
+      return { ...line, amount: minorText(balance < 0n ? -balance : balance, scale) }
+    })
 
 async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, moveType: string) {
   // `/reports/{report}/{id}` calls a source with only the record id and enforces
@@ -61,13 +66,21 @@ async function data(ctx: Parameters<FnSpec['handler']>[0], id: unknown, moveType
   )
   return {
     ...move,
+    documentDate: accountingDateText(
+      move.documentDate ?? move.invoiceDate ?? move.date,
+      company?.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE,
+    ),
     company: company
       ? ((await ctx.db.select('partner.Partner', { id: company.partnerId }))[0] ?? { name: '' })
       : { name: '' },
     partner: move.partnerId
       ? ((await ctx.db.select('partner.Partner', { id: move.partnerId }))[0] ?? { name: '' })
       : { name: '' },
-    lines: invoiceLines(await ctx.db.select('account.MoveLine', { moveId: id, companyId }), accounts),
+    lines: invoiceLines(
+      await ctx.db.select('account.MoveLine', { moveId: id, companyId }),
+      accounts,
+      scaleOf(move.currency),
+    ),
   }
 }
 const effects = [
@@ -81,6 +94,7 @@ const output = {
   id: 'id',
   name: 'text',
   invoiceDate: 'datetime?',
+  documentDate: 'date?',
   currency: 'text',
   amountUntaxed: 'decimal',
   amountTax: 'decimal',

@@ -5,13 +5,22 @@ import type { Adapter, Row } from '@ketvietlab/ketjs'
 import {
   account,
   address,
+  assertTT99Catalog,
+  buildTT99CatalogManifest,
+  checksumTT99Catalog,
   company,
   partner,
   product,
+  serializeTT99Catalog,
   TT99_ACCOUNT_CHECKSUM,
   TT99_ACCOUNTS,
   TT99_CATALOG_CHECKSUM,
+  TT99_CATALOG_MANIFEST,
+  TT99_CATALOG_METADATA,
   TT99_CODE,
+  TT99_DEFAULT_ACCOUNTS,
+  TT99_EXPECTED_ACCOUNT_COUNT,
+  TT99_EXPECTED_TAX_COUNT,
   uom,
   VIETNAM_TAXES,
 } from '@ketvietlab/ketsuite'
@@ -41,6 +50,127 @@ async function boot(companyId = 'acme', currency = 'VND') {
   )
   return adapter
 }
+
+test('account TT99: canonical manifest owns the statutory catalog and posting map', () => {
+  const catalog = TT99_CATALOG_MANIFEST
+  assert.equal(catalog.schemaVersion, 1)
+  assert.deepEqual(catalog.metadata, {
+    version: '1.0.0',
+    standard: 'TT99_2025',
+    countryCode: 'VN',
+    authority: 'Bộ Tài chính',
+    sourceUrl:
+      'https://www.mof.gov.vn/tin-tuc-tai-chinh/tin-chinh-sach-tai-chinh/quy-dinh-moi-ve-che-do-ke-toan-doanh-nghiep',
+    legalBasis: 'Thông tư 99/2025/TT-BTC ngày 27/10/2025',
+    issuedOn: '2025-10-27',
+    effectiveFrom: '2026-01-01',
+    effectiveTo: null,
+    approvalStatus: 'provisional',
+  })
+  assert.deepEqual(catalog.counts, {
+    accounts: TT99_EXPECTED_ACCOUNT_COUNT,
+    taxes: TT99_EXPECTED_TAX_COUNT,
+  })
+  assert.equal(catalog.accounts.length, 216)
+  assert.equal(catalog.taxes.length, 17)
+  assert.match(TT99_CATALOG_CHECKSUM, /^[0-9a-f]{64}$/)
+  assert.equal(TT99_CATALOG_CHECKSUM, 'c2ee5de7daf9b4f9e98f587875d1c374a4c249cd0cfce1262f13457f472cb805')
+  assert.equal(TT99_ACCOUNT_CHECKSUM, '62e0ccee163b4b4b336a7c9c6e28823a97f9ef16462e2b378e8133ca856c6b71')
+  assert.equal(checksumTT99Catalog(), TT99_CATALOG_CHECKSUM)
+  assert.doesNotThrow(() => assertTT99Catalog(catalog))
+
+  // Source order is not catalog identity; normalized statutory content is.
+  const reordered = {
+    accounts: [...TT99_ACCOUNTS].reverse(),
+    taxes: [...VIETNAM_TAXES].reverse(),
+  }
+  assert.equal(serializeTT99Catalog(reordered), serializeTT99Catalog())
+  assert.equal(checksumTT99Catalog(reordered), TT99_CATALOG_CHECKSUM)
+
+  assert.equal(new Set(catalog.accounts.map((item) => item.code)).size, catalog.accounts.length)
+  assert.ok(catalog.accounts.every((item) => item.name.trim() && item.nameEn.trim()))
+  assert.equal(new Set(catalog.taxes.map((item) => item.key)).size, catalog.taxes.length)
+  assert.equal(new Set(catalog.taxes.map((item) => `${item.use}:${item.name}`)).size, catalog.taxes.length)
+
+  const accounts = new Map(catalog.accounts.map((item) => [item.code, item]))
+  assert.deepEqual(catalog.defaults, TT99_DEFAULT_ACCOUNTS)
+  assert.equal(accounts.get(catalog.defaults.income)?.accountType, 'income')
+  assert.equal(accounts.get(catalog.defaults.expense)?.accountType, 'expense_direct_cost')
+  assert.equal(accounts.get(catalog.defaults.receivable)?.accountType, 'asset_receivable')
+  assert.equal(accounts.get(catalog.defaults.receivable)?.reconcile, true)
+  assert.equal(accounts.get(catalog.defaults.payable)?.accountType, 'liability_payable')
+  assert.equal(accounts.get(catalog.defaults.payable)?.reconcile, true)
+
+  for (const tax of catalog.taxes)
+    assert.ok(tax.accountCode === null || accounts.has(tax.accountCode), tax.key)
+  const classifications = catalog.taxes.filter(
+    (tax) => tax.key.endsWith('-exempt') || tax.key.endsWith('-not-declared'),
+  )
+  assert.equal(classifications.length, 4)
+  assert.ok(classifications.every((tax) => tax.accountCode === null && !tax.includeBaseAmount))
+  assert.ok(
+    catalog.taxes
+      .filter((tax) => tax.key.startsWith('vat-purchase-') && !classifications.includes(tax))
+      .every((tax) => tax.accountCode === '1331'),
+  )
+  assert.ok(
+    catalog.taxes
+      .filter((tax) => tax.key.startsWith('vat-sale-') && !classifications.includes(tax))
+      .every((tax) => tax.accountCode === '33311'),
+  )
+  const importDuty = catalog.taxes.find((tax) => tax.key === 'import-5')
+  assert.equal(importDuty?.accountCode, '33331')
+  assert.equal(importDuty?.includeBaseAmount, true)
+})
+
+test('account TT99: checksum detects mutations and semantic validation fails closed', () => {
+  const renamedAccounts = TT99_ACCOUNTS.map((account) =>
+    account.code === '111' ? { ...account, nameEn: 'Cash changed' } : account,
+  )
+  assert.notEqual(checksumTT99Catalog({ accounts: renamedAccounts }), TT99_CATALOG_CHECKSUM)
+
+  const shiftedMetadata = { ...TT99_CATALOG_METADATA, effectiveFrom: '2026-01-02' }
+  assert.notEqual(checksumTT99Catalog({ metadata: shiftedMetadata }), TT99_CATALOG_CHECKSUM)
+  assert.throws(
+    () => assertTT99Catalog(buildTT99CatalogManifest({ metadata: shiftedMetadata })),
+    /effectiveFrom must be 2026-01-01/,
+  )
+
+  const remappedTaxes = VIETNAM_TAXES.map((tax) =>
+    tax.key === 'import-5' ? { ...tax, accountCode: '33311' } : tax,
+  )
+  assert.notEqual(checksumTT99Catalog({ taxes: remappedTaxes }), TT99_CATALOG_CHECKSUM)
+  assert.throws(
+    () => assertTT99Catalog(buildTT99CatalogManifest({ taxes: remappedTaxes })),
+    /import duty must post to 33331/,
+  )
+
+  const duplicateAccounts = TT99_ACCOUNTS.map((account, index) =>
+    index === 1 ? { ...account, code: '111' } : account,
+  )
+  assert.throws(
+    () => assertTT99Catalog(buildTT99CatalogManifest({ accounts: duplicateAccounts })),
+    /duplicate account code 111/,
+  )
+
+  const untranslatedAccounts = TT99_ACCOUNTS.map((account) =>
+    account.code === '111' ? { ...account, nameEn: '' } : account,
+  )
+  assert.throws(
+    () => assertTT99Catalog(buildTT99CatalogManifest({ accounts: untranslatedAccounts })),
+    /account 111 has no English name/,
+  )
+
+  assert.throws(
+    () =>
+      assertTT99Catalog(
+        buildTT99CatalogManifest({
+          defaults: { ...TT99_DEFAULT_ACCOUNTS, receivable: '111' },
+        }),
+      ),
+    /default receivable account 111 must be asset_receivable/,
+  )
+})
 
 test('account TT99: first accounting read installs the complete Vietnam defaults exactly once', async () => {
   const adapter = await boot()
@@ -76,6 +206,78 @@ test('account TT99: first accounting read installs the complete Vietnam defaults
     assert.equal(((await call('account.listJournals', {}, adapter)).value as Row[]).length, 5)
     assert.equal(((await call('account.listPaymentTerms', {}, adapter)).value as Row[]).length, 2)
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM account_setup'))[0]!.n, 1)
+    assert.equal(
+      ((await call('company.getCompany', { id: 'acme' }, adapter)).value as Row).currencyLocked,
+      true,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('account TT99: setup freezes currency but company metadata saves and exact retries still work', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.initializeCompany', {}, adapter)
+    const locked = (await call('company.getCompany', { id: 'acme' }, adapter)).value as Row
+    assert.equal(locked.currency, 'VND')
+    assert.equal(locked.currencyLocked, true)
+
+    const refused = (
+      await call(
+        'company.saveCompany',
+        {
+          id: 'acme',
+          code: 'ACME',
+          partnerId: 'acme-party',
+          currency: 'USD',
+          expectedVersion: locked.version,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(refused.ok, false)
+    assert.match(JSON.stringify(refused.errors), /company\.error\.currencyLocked/)
+
+    const metadataSave = {
+      id: 'acme',
+      code: 'ACME-NEW',
+      partnerId: 'acme-party',
+      currency: 'VND',
+      expectedVersion: locked.version,
+    }
+    const saved = (await call('company.saveCompany', metadataSave, adapter)).value as Row
+    assert.equal(saved.ok, true)
+    assert.equal(saved.version, Number(locked.version) + 1)
+
+    const replay = (await call('company.saveCompany', metadataSave, adapter)).value as Row
+    assert.equal(replay.ok, true)
+    assert.equal(replay.version, saved.version)
+    const current = (await call('company.getCompany', { id: 'acme' }, adapter)).value as Row
+    assert.equal(current.code, 'ACME-NEW')
+    assert.equal(current.currency, 'VND')
+    assert.equal(current.currencyLocked, true)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('account TT99: a legacy current setup backfills the currency lock once', async () => {
+  const adapter = await boot()
+  try {
+    await call('account.initializeCompany', {}, adapter)
+    const before = (await call('company.getCompany', { id: 'acme' }, adapter)).value as Row
+    await adapter.run('UPDATE company_company SET "currencyLocked" = NULL WHERE id = ?', ['acme'])
+
+    await call('account.initializeCompany', {}, adapter)
+    const backfilled = (await call('company.getCompany', { id: 'acme' }, adapter)).value as Row
+    assert.equal(backfilled.currencyLocked, true)
+    assert.equal(backfilled.version, Number(before.version) + 1)
+
+    await call('account.initializeCompany', {}, adapter)
+    const replay = (await call('company.getCompany', { id: 'acme' }, adapter)).value as Row
+    assert.equal(replay.currencyLocked, true)
+    assert.equal(replay.version, backfilled.version)
   } finally {
     await adapter.close()
   }

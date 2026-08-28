@@ -8,7 +8,9 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'company',
-  version: '0.1.0',
+  // 0.3.0 adds the company civil-date timezone and lets Accounting freeze it
+  // with the book currency without making this foundational module depend on Accounting.
+  version: '0.3.0',
   depends: ['partner'],
   title: 'Công ty',
   summary: 'Pháp nhân và chi nhánh hạch toán độc lập.',
