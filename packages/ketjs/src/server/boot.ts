@@ -731,7 +731,7 @@ export async function bootDeployment(
     // functions without turning a POS/customer token into a staff session.
     if (!serve.permissions) return customAudience ? [] : null
     const granted = await serve.permissions(ctx, record.userId, url, req)
-    return granted === null ? null : [...new Set([...anonymousFns, ...granted])]
+    return granted === null ? (customAudience ? [] : null) : [...new Set([...anonymousFns, ...granted])]
   }
 
   const pages = serve.pages

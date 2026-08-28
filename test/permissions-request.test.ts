@@ -178,8 +178,12 @@ test('permissions: a custom audience receives only its deployment-scoped functio
               securityVersion: 1,
             }
           : null,
-      permissions: async (_ctx, _userId, url) =>
-        url.pathname.startsWith('/api/pos/v1/') ? ['core.open'] : [],
+      permissions: async (_ctx, _userId, url, req) =>
+        req.headers['x-null-grant'] === '1'
+          ? null
+          : url.pathname.startsWith('/api/pos/v1/')
+            ? ['core.open']
+            : [],
     },
   })
   const booted = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0, log: () => {} })
@@ -187,6 +191,11 @@ test('permissions: a custom audience receives only its deployment-scoped functio
   const headers = { authorization: 'Bearer pos-token', 'content-type': 'application/json' }
   const allowed = await fetch(`http://127.0.0.1:${booted.port}/api/pos/v1/probe`, { headers })
   assert.equal(allowed.status, 200)
+  const nullGrant = await fetch(`http://127.0.0.1:${booted.port}/api/pos/v1/probe`, {
+    headers: { ...headers, 'x-null-grant': '1' },
+  })
+  assert.equal(nullGrant.status, 400)
+  assert.equal(((await nullGrant.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
   const bypass = await fetch(`http://127.0.0.1:${booted.port}/_ket/fn/core.open`, {
     method: 'POST',
     headers,

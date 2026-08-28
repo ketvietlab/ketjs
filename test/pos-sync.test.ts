@@ -302,7 +302,9 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
       batchId: 'offline-batch-0002',
       leaseToken,
       resumeCursor: reconciled.body.meta.nextCursor,
-      commands,
+      // ES256 signatures may differ on a retry. Idempotency is bound to the canonical unsigned
+      // command, while the provider still verifies the newly presented signature.
+      commands: commands.map((held) => ({ ...held, signature: `${held.signature}-retry` })),
     }),
   })
   assert.equal(replayed.status, 200)

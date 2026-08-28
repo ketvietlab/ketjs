@@ -21,6 +21,7 @@ import {
   posShiftFor,
 } from './operations.ts'
 import {
+  posOfflineCommandDigest,
   posOfflineLeaseProvider,
   type PosOfflineCommandEvidence,
   type PosOfflineLeaseClaims,
@@ -1160,7 +1161,10 @@ export const syncRoutes = routesOf(
       let last: Row | null = null
       for (const command of ordered) {
         const captured = new Date(command.capturedAt).getTime()
-        const requestHash = stableHash(command)
+        // A valid ES256 signature is not deterministic. Retries may carry a different signature for
+        // the same canonical command, so idempotency must bind the unsigned evidence rather than the
+        // transport proof. The lease provider still verifies every presented signature above.
+        const requestHash = posOfflineCommandDigest(command)
         const claim = (await ctx.call(
           'pos_channel.claimSyncCommand',
           {
