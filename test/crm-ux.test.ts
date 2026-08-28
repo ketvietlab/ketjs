@@ -283,7 +283,7 @@ test('crm backend: an activity can be completed from the case and from the plann
   assert.match(plannerHtml, /href="\/admin\/crm\/cases\/follow-up\?lang=en"/)
   const schedule = await app.client.get('/admin/crm/activities?tab=mine&schedule=1&lang=en')
   const scheduleHtml = await schedule.text()
-  assert.match(scheduleHtml, /data-ui="modal-workspace"/)
+  assert.match(scheduleHtml, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(scheduleHtml, /name="action" value="schedule"/)
 
   const completed = await app.client.post(
