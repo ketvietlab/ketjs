@@ -21,6 +21,7 @@ const tsInput = (spec: string): string => {
     text: 'string',
     int: 'number',
     float: 'number',
+    decimal: 'string',
     bool: 'boolean',
     json: 'unknown',
     date: 'string',

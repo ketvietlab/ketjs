@@ -149,6 +149,17 @@ const pickSpec = (specs: DeploymentSpec[]): DeploymentSpec => {
   return found
 }
 
+const pickFleetSpec = (specs: DeploymentSpec[]): DeploymentSpec => {
+  if (opt('deployment')) return pickSpec(specs)
+  const fleets = specs.filter((spec) => spec.serve?.tenants)
+  if (!fleets.length) throw new Error('the workspace declares no tenant-fleet deployment')
+  if (fleets.length > 1)
+    throw new Error(
+      `the workspace declares multiple tenant-fleet deployments (${fleets.map((spec) => spec.name).join(', ')}); pass --deployment NAME`,
+    )
+  return fleets[0] as DeploymentSpec
+}
+
 const pickDeployment = (ws: { deployments: Record<string, Manifest> }): [string, Manifest] => {
   const name = opt('deployment') ?? (Object.keys(ws.deployments)[0] as string)
   const m = ws.deployments[name]
@@ -389,7 +400,7 @@ try {
   }
 
   const { ws, deployments: specs, resolved } = await loadWorkspace()
-  mkdirSync('.ket', { recursive: true })
+  if (!(cmd === 'migrate' && flag('dry-run'))) mkdirSync('.ket', { recursive: true })
 
   if (cmd === 'serve') {
     const spec = pickSpec(specs)
@@ -606,15 +617,15 @@ try {
     console.log(formatDiff(items))
     process.exit(items.some((i) => i.severity === 'breaking') ? 1 : 0)
   } else if (cmd === 'migrate') {
-    const spec = pickSpec(specs)
     if (flag('all')) {
       // The fleet. A deployment that ships a new module has to reach every tenant
       // database, and one that cannot be opened must not stop the others — a
       // half-migrated fleet you cannot see is worse than one you can.
+      const spec = pickFleetSpec(specs)
       const tenants = spec.serve?.tenants
       if (!tenants) throw new Error(`deployment "${spec.name}" serves a single datastore; drop --all`)
       const config = readConfig(process.env, spec.serve?.defaults ?? {})
-      const pool = createAdapterPool({ create: (key) => tenants.open(key, config) as never })
+      const pool = createAdapterPool({ create: (key) => tenants.open(key, config) })
       try {
         const keys = await tenants.list()
         const m = ws.deployments[spec.name] as Manifest
@@ -636,8 +647,11 @@ try {
     const next = schemaFromManifest(m)
     const ops = planMigration(prev, next, { allowDestructive: flag('allow-destructive') })
     for (const sql of renderSql(ops, adapter)) console.log(sql + ';')
-    writeFileSync(snapPath, JSON.stringify(next, null, 2))
-    console.log(`\n-- ${ops.length} operation(s); schema snapshot written to ${snapPath}`)
+    if (flag('dry-run')) console.log(`\n-- dry run: ${ops.length} operation(s); schema snapshot unchanged`)
+    else {
+      writeFileSync(snapPath, JSON.stringify(next, null, 2))
+      console.log(`\n-- ${ops.length} operation(s); schema snapshot written to ${snapPath}`)
+    }
     adapter.close()
   } else {
     console.error(`unknown command "${cmd}"\n\n${HELP}`)

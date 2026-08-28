@@ -69,8 +69,22 @@ test('query: grouping and aggregates render without interpolating values', () =>
   const sql = q.toSQL('sqlite')
   assert.match(sql.text, /COUNT\(\*\) AS "__count"/)
   assert.match(sql.text, /SUM\(.*"priceCents"\) AS "total"/)
-  assert.match(sql.text, /GROUP BY 1 ORDER BY "__count" DESC LIMIT \?/)
+  assert.match(sql.text, /GROUP BY 1 ORDER BY "__count" DESC NULLS FIRST LIMIT \?/)
   assert.deepEqual(sql.params, [true, 10])
+})
+
+test('query: both dialects render PostgreSQL-compatible NULL order and nullable counts', () => {
+  const rows = from(P).orderBy(asc(P.slug!), desc(P.priceCents!))
+  const groups = from(P)
+    .groupBy({ col: P.slug! })
+    .aggregate({ fn: 'count', col: P.slug!, as: 'present' })
+    .orderGroupsBy({ by: 'key', dir: 'asc' }, { by: 'present', dir: 'desc' })
+  for (const dialect of ['sqlite', 'postgres'] as const) {
+    assert.match(rows.toSQL(dialect).text, /"slug" ASC NULLS LAST, .*"priceCents" DESC NULLS FIRST/)
+    const grouped = groups.toSQL(dialect).text
+    assert.match(grouped, /COUNT\(.*"slug"\) AS "present"/)
+    assert.match(grouped, /ORDER BY "__group0" ASC NULLS LAST, "present" DESC NULLS FIRST/)
+  }
 })
 
 test('query: a group interval is a member of the closed set, not a string the caller supplies', () => {
@@ -141,8 +155,8 @@ test('query: db.group returns normalized keys, counts and aggregates', async () 
     await callFn('grouped.add', row, { adapter, manifest: m })
   const result = await callFn('grouped.summary', {}, { adapter, manifest: m })
   assert.deepEqual(result.value, [
-    { key: [null], count: 1, aggregates: { amount: 7 } },
     { key: ['a'], count: 2, aggregates: { amount: 5 } },
+    { key: [null], count: 1, aggregates: { amount: 7 } },
   ])
   await adapter.close()
 })
@@ -223,7 +237,7 @@ test('query: the whole set of operators renders', () => {
   assert.match(sql.text, /IN \(\?, \?\)/)
   assert.match(sql.text, /LIKE \?/)
   assert.match(sql.text, /"slug" IS NULL/)
-  assert.match(sql.text, /ORDER BY .*"priceCents" DESC, .*"title" ASC/)
+  assert.match(sql.text, /ORDER BY .*"priceCents" DESC NULLS FIRST, .*"title" ASC NULLS LAST/)
   assert.deepEqual(sql.params, ['a', 'b', '%áo%', 10, 20])
 })
 

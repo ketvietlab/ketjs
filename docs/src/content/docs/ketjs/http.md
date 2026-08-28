@@ -262,16 +262,29 @@ Content-Type: application/json
 Use `TestClient.call()` or `ket call` instead of manually constructing this transport. They preserve
 cookies, identity headers, dry-run, idempotency keys, and error parsing.
 
+The generic transport buffers at most 1 MiB of JSON by default. Configure `serve.maxJsonBodyBytes` (or
+`maxJsonBodyBytes` on `createKetServer`) when a deployment needs a smaller boundary. KetJS checks both
+`Content-Length` and streamed bytes before it runs scope, permission, or actor resolvers, so an
+unauthenticated request cannot make those paths retain an unbounded body first.
+
 ## Error handling
 
 `KetError` values serialize their `code`, message, and optional hint. Use stable codes for machine
 decisions and messages for diagnostics. Unexpected errors remain server failures; do not convert every
 exception into a successful JSON body.
 
+Malformed request URLs, `Host` headers, percent encoding, and JSON bodies are client errors. KetJS
+answers them with HTTP `400` inside the normal JSON error boundary; they never escape from the async
+server listener. As an origin server, KetJS accepts only origin-form request targets (`/path?...`) and
+a `Host` authority without userinfo, path, query, fragment, encoded delimiters, or whitespace. Absolute
+and scheme-relative request targets are rejected before tenant resolution. Function bodies must be
+JSON objects rather than arrays or scalar values.
+
 `FormValidationError` and invalid generic function input use HTTP `422`. Their JSON includes flat
 `issues`, grouped `fieldErrors`, and whole-form `formErrors`. See [Form validation](/ketjs/form-validation/)
 for the shared browser/server contract. Other `KetError` values remain HTTP `400` unless a more specific
 transport status applies.
 
-Keep body-size limits and provider authentication on dedicated routes. Use [Storage, transport, and
-streams](/ketjs/integrations/) for bounded multipart uploads and webhook/service boundaries.
+The generic JSON limit is only a baseline. Keep content-specific limits and provider authentication on
+dedicated routes. Use [Storage, transport, and streams](/ketjs/integrations/) for bounded multipart
+uploads and webhook/service boundaries.

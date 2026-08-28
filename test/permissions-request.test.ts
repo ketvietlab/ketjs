@@ -7,7 +7,6 @@ import {
   memorySessionStore,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
-import { createSessions } from '@ketvietlab/ketjs'
 import type { Adapter } from '@ketvietlab/ketjs'
 
 const SECRET = 'permissions-request-test'
@@ -87,9 +86,21 @@ const boot = async () => {
     },
   })
   const booted = await bootDeployment(app, { port: 0, log: () => {} })
-  const sessions = await createSessions({ secret: SECRET, store })
-  const started = await sessions.start({ userId: 'u1', companies: ['c1'], company: 'c1' })
-  const cookie = started.cookie.split(';')[0]!
+  const cookie = Object.fromEntries(
+    await Promise.all(
+      ['t1', 't2'].map(async (tenant) => [
+        tenant,
+        await booted.tenants.with(tenant, async (resolved) => {
+          const started = await resolved.sessions!.start({
+            userId: 'u1',
+            companies: ['c1'],
+            company: 'c1',
+          })
+          return started.cookie.split(';')[0]!
+        }),
+      ]),
+    ),
+  ) as Record<'t1' | 't2', string>
   return { booted, dbs, seen, cookie }
 }
 
@@ -111,17 +122,17 @@ test('permissions: the resolver answers from the tenant the request named', asyn
 
   // Only t1 grants core.open. Nothing distinguishes the two requests except the
   // header that chooses the database.
-  const granted = await post(booted.port, 't1', 'core.grant', cookie, {
+  const granted = await post(booted.port, 't1', 'core.grant', cookie.t1, {
     id: 'g1',
     userId: 'u1',
     fn: 'core.open',
   })
   assert.equal(granted.status, 200)
 
-  const allowed = await post(booted.port, 't1', 'core.open', cookie)
+  const allowed = await post(booted.port, 't1', 'core.open', cookie.t1)
   assert.equal(allowed.status, 200)
 
-  const refused = await post(booted.port, 't2', 'core.open', cookie)
+  const refused = await post(booted.port, 't2', 'core.open', cookie.t2)
   assert.equal(refused.status, 400)
   assert.equal(((await refused.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
 
@@ -134,10 +145,10 @@ test('permissions: granting in one tenant does not leak into the other', async (
   const { booted, cookie } = await boot()
   t.after(() => booted.close())
 
-  await post(booted.port, 't2', 'core.grant', cookie, { id: 'g2', userId: 'u1', fn: 'core.open' })
-  assert.equal((await post(booted.port, 't2', 'core.open', cookie)).status, 200)
+  await post(booted.port, 't2', 'core.grant', cookie.t2, { id: 'g2', userId: 'u1', fn: 'core.open' })
+  assert.equal((await post(booted.port, 't2', 'core.open', cookie.t2)).status, 200)
 
-  const other = await post(booted.port, 't1', 'core.open', cookie)
+  const other = await post(booted.port, 't1', 'core.open', cookie.t1)
   assert.equal(other.status, 400)
   assert.equal(((await other.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
 })

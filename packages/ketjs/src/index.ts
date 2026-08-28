@@ -152,7 +152,13 @@ export { sqliteAdapter } from './data/sqlite.ts'
 export { assertAdapter, ADAPTER_METHODS } from './data/adapter.ts'
 export { createAdapterPool } from './data/pool.ts'
 export type { AdapterPool, PoolOptions } from './data/pool.ts'
-export { migrateOne, migrateFleet, formatFleet } from './data/fleet.ts'
+export {
+  migrateOne,
+  confirmManualMigration,
+  migrateFleet,
+  formatFleet,
+  ManualMigrationConfirmationError,
+} from './data/fleet.ts'
 export type { MigrationResult } from './data/fleet.ts'
 export { from, deleteFrom, table, asc, desc, Query } from './data/query.ts'
 export type {
@@ -228,6 +234,7 @@ export {
   renderSql,
   tableNameFor,
   DestructiveMigrationError,
+  ManualMigrationRequiredError,
 } from './data/migrate.ts'
 
 // Re-exported whole; the view layer is its own package and can be installed alone

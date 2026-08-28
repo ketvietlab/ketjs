@@ -100,6 +100,8 @@ adapters and operational tooling, not a requirement for ordinary modules.
 | `schemaFromManifest`, `planMigration`, `renderSql` | Derive and render schema migration plans. |
 | `tableNameFor` | Resolve the physical table name for a manifest model. |
 | `DestructiveMigrationError` | Identify a plan requiring explicit destructive permission. |
+| `ManualMigrationRequiredError` | Identify a schema change that needs an explicit backfill or conversion. |
+| `confirmManualMigration`, `ManualMigrationConfirmationError` | Verify physical DDL/backfill before adopting a manual migration. |
 | `migrateOne`, `migrateFleet`, `formatFleet` | Apply or report one-database and tenant-fleet migrations. |
 
 The `Adapter`, `Transaction`, `Scope`, `Dialect`, `Sql`, `Table`, `Expr`, `FieldError`, and `Validator`

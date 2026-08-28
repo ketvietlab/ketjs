@@ -16,12 +16,16 @@ export const SESSION_COOKIE = 'ket_session'
 
 export type SessionOptions = {
   store?: SessionStore
+  /** Bind records to one tenant when several tenants share the same store. */
+  tenant?: string
   /**
    * Signing key. It MUST be the same on every pod: a cookie signed by one and
    * rejected by another is a login that works only until the load balancer sends
    * you elsewhere. Absent, one is generated and the fact is said out loud.
    */
   secret?: string
+  /** The supplied secret was generated for this process and must still be reported as ephemeral. */
+  ephemeralSecret?: boolean
   /** How long an idle session lives. Refreshed while it is being used. */
   idleTtlMs?: number
   /** How long any session may live, however active. Not refreshable. */
@@ -64,6 +68,8 @@ export function parseCookies(header: string | undefined): Record<string, string>
 
 export type Sessions = {
   readonly store: SessionStore
+  /** Present when records in this session manager are bound to one tenant. */
+  readonly tenant?: string
   /** True when the secret was generated rather than configured — see the banner. */
   readonly ephemeralSecret: boolean
   start(o: {
@@ -89,10 +95,54 @@ export type Sessions = {
 
 export async function createSessions(o: SessionOptions = {}): Promise<Sessions> {
   const now = o.now ?? (() => Date.now())
-  const store = o.store ?? memorySessionStore({ now })
+  const backingStore = o.store ?? memorySessionStore({ now })
+  const belongs = (record: SessionRecord | null): record is SessionRecord =>
+    record !== null && (record.tenant ?? null) === o.tenant
+  // A shared store is still exposed through Sessions.store for administrative
+  // flows. Scope the store itself, not only cookie reads, so logout/reconciliation
+  // in one tenant cannot revoke or mutate another tenant's record.
+  const store: SessionStore =
+    o.tenant === undefined
+      ? backingStore
+      : {
+          name: backingStore.name,
+          init: () => backingStore.init(),
+          create: (record) => backingStore.create({ ...record, tenant: o.tenant }),
+          async read(id) {
+            const record = await backingStore.read(id)
+            return belongs(record) ? record : null
+          },
+          async touch(id, expiresAt) {
+            if (!belongs(await backingStore.read(id))) return null
+            return backingStore.touch(id, expiresAt)
+          },
+          async updateContext(id, expectedRevision, context) {
+            if (!belongs(await backingStore.read(id))) return null
+            return backingStore.updateContext(id, expectedRevision, context)
+          },
+          async destroy(id) {
+            if (belongs(await backingStore.read(id))) await backingStore.destroy(id)
+          },
+          async listUser(userId) {
+            return (await backingStore.listUser(userId)).filter(belongs)
+          },
+          async destroyUser(userId) {
+            const records = (await backingStore.listUser(userId)).filter(belongs)
+            for (const record of records) await backingStore.destroy(record.id)
+            return records.length
+          },
+          async destroyUserExcept(userId, keepId) {
+            const records = (await backingStore.listUser(userId)).filter(
+              (record) => belongs(record) && record.id !== keepId,
+            )
+            for (const record of records) await backingStore.destroy(record.id)
+            return records.length
+          },
+          sweep: (at) => backingStore.sweep(at),
+        }
   await store.init()
 
-  const ephemeralSecret = !o.secret
+  const ephemeralSecret = o.ephemeralSecret ?? !o.secret
   const secret = o.secret ?? randomBytes(32).toString('base64url')
   const idleTtl = o.idleTtlMs ?? DEFAULTS.idleTtlMs
   const absoluteTtl = o.absoluteTtlMs ?? DEFAULTS.absoluteTtlMs
@@ -116,6 +166,7 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
 
   return {
     store,
+    ...(o.tenant === undefined ? {} : { tenant: o.tenant }),
     ephemeralSecret,
 
     async start({ userId, companies, company, branch, branches, securityVersion }) {
@@ -146,6 +197,7 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
       const at = now()
       const record: SessionRecord = {
         id: randomBytes(32).toString('base64url'),
+        tenant: o.tenant ?? null,
         userId,
         companies: [...companies],
         company: active,
@@ -215,7 +267,7 @@ export async function createSessions(o: SessionOptions = {}): Promise<Sessions> 
     },
 
     scopeOf(record) {
-      if (!record) return o.anonymous ?? null
+      if (!record || (o.tenant !== undefined && !belongs(record))) return o.anonymous ?? null
       return {
         company: record.company,
         companies: record.companies,

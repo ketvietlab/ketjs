@@ -36,11 +36,7 @@ export async function permittedFor(ctx: Ctx, userId: string): Promise<string[] |
   )
   if (!roleIds.length) return []
   const G = ctx.table('user.Grant')
-  const rows = await ctx.db.all(
-    from(G)
-      .select(G.fnKey)
-      .where(inArray({ model: 'user.Grant', name: 'roleId' }, roleIds)),
-  )
+  const rows = await ctx.db.all(from(G).select(G.fnKey).where(inArray(G.roleId, roleIds)))
   return [...new Set(rows.map((r) => String(r.fnKey)))].sort()
 }
 

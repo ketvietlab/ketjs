@@ -17,7 +17,9 @@ Honest list of what is not settled or not built.
 
 ## Not built
 - **Streams under a database-per-tenant layout.** Whose database a stream belongs to
-  is unanswered, so the pooled server defaults to an in-memory store.
+  is unanswered, so the pooled server defaults to an in-memory store. HTTP access is
+  now closed by default and an explicit resolver can authorize and namespace a topic,
+  but that resolver does not choose a durable per-tenant backing store.
 
 ## Not settled
 - **Does a theme get its own routes?** Currently regions only; Shopify-style JSON

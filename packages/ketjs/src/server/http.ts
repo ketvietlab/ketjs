@@ -47,6 +47,17 @@ export type ServeOpts = {
   /** Defaults to a table on the deployment adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
   /**
+   * Authorize a resumable-stream request and map its public id to the internal,
+   * tenant-namespaced topic stored by `streams`.
+   *
+   * The endpoint is disabled when this resolver is absent. Returning null also
+   * refuses the request, so looking up a topic never happens before the deployment
+   * has authenticated the caller and chosen its tenant.
+   */
+  resolveStream?: (id: string, url: URL, req: IncomingMessage) => string | null | Promise<string | null>
+  /** Maximum buffered JSON body for the generic function transport. Defaults to 1 MiB. */
+  maxJsonBodyBytes?: number
+  /**
    * Which language this request is in. Resolved in one place, like the datastore,
    * so a handler cannot answer in the wrong one by forgetting to pass it along.
    */
@@ -374,11 +385,87 @@ const send = async (res: ServerResponse, result: RouteResult): Promise<void> => 
   await pipeline(result.body, res)
 }
 
-const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> => {
+const requestUrl = (req: IncomingMessage): URL => {
+  const target = req.url ?? '/'
+  const host = req.headers.host ?? 'localhost'
+  const invalid = () =>
+    new KetError({
+      code: 'E_INVALID_REQUEST_URL',
+      message: 'request target or Host header is invalid',
+    })
+
+  // KetJS is an origin server, not a forward proxy. Absolute-form and
+  // scheme-relative targets can replace the Host-derived authority in WHATWG URL
+  // parsing, and a backslash is treated like a slash for special schemes.
+  if (!target.startsWith('/') || target.startsWith('//') || target.includes('\\')) throw invalid()
+
+  // Parse only an authority. Userinfo and path/query delimiters are all valid to
+  // URL(), but none are valid in the Host contract and each can change which
+  // tenant a resolver sees.
+  const forbiddenHostCharacter = [...host].some((character) => {
+    const code = character.charCodeAt(0)
+    return (
+      character.trim() === '' ||
+      code <= 0x1f ||
+      (code >= 0x7f && code <= 0x9f) ||
+      '@/\\?#%'.includes(character)
+    )
+  })
+  if (!host || forbiddenHostCharacter) throw invalid()
+  try {
+    const base = new URL(`http://${host}`)
+    if (base.username || base.password || base.pathname !== '/' || base.search || base.hash) throw invalid()
+    const url = new URL(target, base)
+    if (url.origin !== base.origin) throw invalid()
+    return url
+  } catch {
+    throw invalid()
+  }
+}
+
+const decodeRequestPath = (value: string): string => {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    throw new KetError({
+      code: 'E_ROUTE_ENCODING',
+      message: 'request path contains invalid percent encoding',
+    })
+  }
+}
+
+const readBody = async (req: IncomingMessage, maxBytes: number): Promise<Record<string, unknown>> => {
+  const declared = Number(req.headers['content-length'])
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new KetError({
+      code: 'E_PAYLOAD_TOO_LARGE',
+      message: `JSON body exceeds ${maxBytes} bytes`,
+    })
+  }
   const chunks: Buffer[] = []
-  for await (const c of req) chunks.push(c as Buffer)
+  let total = 0
+  for await (const held of req) {
+    const chunk = Buffer.isBuffer(held) ? held : Buffer.from(held)
+    total += chunk.byteLength
+    if (total > maxBytes) {
+      throw new KetError({
+        code: 'E_PAYLOAD_TOO_LARGE',
+        message: `JSON body exceeds ${maxBytes} bytes`,
+      })
+    }
+    chunks.push(chunk)
+  }
   if (!chunks.length) return {}
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
+  let value: unknown
+  try {
+    value = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  } catch {
+    throw new KetError({ code: 'E_INVALID_JSON_BODY', message: 'request body must be valid JSON' })
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new KetError({ code: 'E_INVALID_JSON_BODY', message: 'request body must be a JSON object' })
+  }
+  return value as Record<string, unknown>
 }
 
 export async function createKetServer(o: ServeOpts) {
@@ -388,6 +475,12 @@ export async function createKetServer(o: ServeOpts) {
     throw new KetErr({
       code: 'E_NO_RESOLVER',
       message: 'a pool needs resolveDatastore to know which database a request belongs to',
+    })
+  const maxJsonBodyBytes = o.maxJsonBodyBytes ?? 1024 * 1024
+  if (!Number.isSafeInteger(maxJsonBodyBytes) || maxJsonBodyBytes <= 0)
+    throw new KetErr({
+      code: 'E_JSON_BODY_LIMIT',
+      message: 'maxJsonBodyBytes must be a positive safe integer',
     })
 
   // Compile once: matching stays cheap per request, and an ambiguous surface is
@@ -441,8 +534,8 @@ export async function createKetServer(o: ServeOpts) {
   )
 
   const server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     try {
+      const url = requestUrl(req)
       // Static files. Several mounts, because the deployment has its own and every
       // composed module may ship some. `resolve` keeps the file lookup behind the
       // same request boundary as every other route.
@@ -514,7 +607,12 @@ export async function createKetServer(o: ServeOpts) {
       // Resumable stream: the client reconnects with ?from=<cursor> and gets
       // exactly what it missed, never a duplicate and never a gap.
       if (url.pathname.startsWith('/_ket/stream/')) {
-        const id = url.pathname.slice('/_ket/stream/'.length)
+        const publicId = decodeRequestPath(url.pathname.slice('/_ket/stream/'.length))
+        // A public stream id is never a storage key by default. The resolver is the
+        // deployment's authentication and tenant boundary; omitting it keeps this
+        // framework endpoint closed, and null does not reveal whether a topic exists.
+        const id = await o.resolveStream?.(publicId, url, req)
+        if (!id) return json(res, 404, { code: 'E_STREAM_NOT_FOUND', message: 'stream not found' })
         const from = Number(url.searchParams.get('from') ?? 0)
         res.writeHead(200, {
           'content-type': 'text/event-stream',
@@ -540,7 +638,7 @@ export async function createKetServer(o: ServeOpts) {
       }
 
       if (url.pathname.startsWith('/_ket/fn/') && req.method === 'POST') {
-        const fnKey = decodeURIComponent(url.pathname.slice('/_ket/fn/'.length))
+        const fnKey = decodeRequestPath(url.pathname.slice('/_ket/fn/'.length))
         const meta = o.manifest.functions[fnKey]
         if (meta?.exposure === 'internal') {
           throw new KetError({
@@ -549,7 +647,10 @@ export async function createKetServer(o: ServeOpts) {
             hint: 'call it from the trusted route that owns its security policy',
           })
         }
-        const args = await readBody(req)
+        // Bound the untrusted body before authentication/session resolvers run. A
+        // caller must not be able to make those expensive paths retain an unbounded
+        // payload first, whether or not Content-Length was supplied.
+        const args = await readBody(req, maxJsonBodyBytes)
         // Resolved before the pool lease, so a session lookup never holds one.
         const scope = await o.resolveScope?.(url, req)
         const allow = await o.resolveAllow?.(url, req)

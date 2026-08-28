@@ -144,9 +144,16 @@ read, write, enqueue, cross-company, and output reach.
 - a custom `SessionStore` for a shared identity datastore.
 
 With subdomain tenancy, the host identifies the tenant before the cookie is read, so sessions can live
-inside each tenant database. If one domain serves every tenant and the session itself chooses the
-tenant, provide a shared session store; otherwise resolving the database would require reading a
-session from the database that has not yet been selected.
+inside each tenant database. If one domain serves every tenant, resolve the tenant first from an
+authenticated gateway assertion or another explicit request key and provide a shared identity store.
+Do not make the session select its own datastore: resolving the database would require reading a
+session from a database that has not yet been selected.
+
+KetJS stamps every record written through a tenant session manager with that tenant key. Reads,
+context updates, logout, and user-wide revocation are filtered by the same key, so a valid cookie from
+one tenant is treated as anonymous by another even when both managers use the same backing store.
+Existing shared-store rows created before tenant binding have no tenant key and fail closed; plan for
+those users to sign in again during the upgrade rather than assigning an ambiguous legacy session.
 
 ## One database per tenant
 
@@ -177,6 +184,20 @@ const app = defineDeployment({
 The bounded adapter pool leases one tenant for the duration of a callback and prevents connections
 from escaping their lease. An adapter counts as busy while `open()` is pending, so a concurrent request
 cannot evict or close a connection that the first request is still establishing.
+
+Schema preparation is cached against both the tenant key and the concrete adapter. If eviction later
+reopens that key on a new connection—or as a fresh SQLite `:memory:` database—the replacement is migrated
+and initialized before it reaches the request. A failed preparation is removed from the cache so the next
+lease can retry instead of replaying a permanently rejected promise.
+
+`tenants.open()` is an adapter factory: return a fresh adapter object for each pool entry and let the
+pool own `open()`/`close()` rather than caching an object that the pool already closed.
+
+Per-tenant session handles are lease-safe facades rather than captured database connections. If an
+idle adapter is evicted, the next session operation leases the replacement and rebuilds its database
+store before reading the cookie. Tenant deployments without an explicit signing secret generate one
+stable key for the lifetime of the booted process; the startup banner still warns that those sessions
+cannot survive a restart or span multiple pods.
 
 ## Per-tenant runtime state
 

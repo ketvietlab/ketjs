@@ -9,6 +9,7 @@ import { createIdempotency } from './idem.ts'
 import { FormValidationError } from './form.ts'
 import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
+import { DECIMAL_MAX_CHARS, parseDecimal } from '../data/changeset.ts'
 import { queueFor } from './queue.ts'
 import type { Adapter, Ctx, FnSpec, KetModule, Manifest, WriteRecord } from '../types.ts'
 
@@ -47,8 +48,6 @@ const JS_OF: Record<string, string> = {
   json: 'object',
 }
 
-const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
-
 export function validateInput(fnKey: string, manifest: Manifest, args: Record<string, unknown>): void {
   const sig = manifest.functions[fnKey]?.input ?? {}
   const errors: string[] = []
@@ -79,11 +78,18 @@ export function validateInput(fnKey: string, manifest: Manifest, args: Record<st
       })
       continue
     }
-    if (
-      t.base === 'decimal' &&
-      !((typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && DECIMAL.test(v.trim())))
-    )
-      add(name, 'decimal', `input "${name}" expects a finite number or an exact decimal string`)
+    if (t.base === 'decimal') {
+      const parsed = parseDecimal(v)
+      if (!parsed.ok)
+        add(
+          name,
+          parsed.reason === 'size' ? 'maxLength' : 'decimal',
+          parsed.reason === 'size'
+            ? `input "${name}" exceeds the ${DECIMAL_MAX_CHARS}-character decimal limit`
+            : `input "${name}" expects a finite number or an exact decimal string`,
+          parsed.reason === 'size' ? { max: DECIMAL_MAX_CHARS } : {},
+        )
+    }
     if (t.base === 'int' && typeof v === 'number' && !Number.isInteger(v))
       add(name, 'integer', `input "${name}" expects an integer`)
     if (t.base === 'date' && !isDateText(v))
@@ -210,23 +216,29 @@ export async function callFn(
   const meta = o.manifest.functions[fnKey]!
   const dryRun = o.dryRun ?? false
 
+  if (o.idempotencyKey && !meta.idempotent) {
+    throw new KetError({
+      code: 'E_NOT_IDEMPOTENT',
+      message: `"${fnKey}" is not declared idempotent but was called with an idempotency key`,
+      hint: 'declare `idempotent: true` on the function, or drop the key',
+    })
+  }
+  if (dryRun && !meta.dryRun)
+    throw new KetError({ code: 'E_NO_DRY_RUN', message: `"${fnKey}" does not support dry-run` })
+
   // Create system queue tables on the root adapter before user code can enter a
   // transaction. Lazy DDL inside a rolled-back transaction would otherwise leave
   // an in-memory "initialized" marker pointing at a table that no longer exists.
   if (Object.keys(o.manifest.jobs).length) await queueFor(o.adapter)
 
-  const idemKey = o.idempotencyKey ? idempotencyKey(fnKey, o.idempotencyKey, o) : null
+  // A dry-run is a preview, not an execution. It neither claims nor completes the
+  // caller's durable key: otherwise the following real command would replay the
+  // simulated result and never perform the writes it previewed.
+  const idemKey = !dryRun && o.idempotencyKey ? idempotencyKey(fnKey, o.idempotencyKey, o) : null
   const idemDigest = idemKey ? (o.idempotencyDigest ?? requestDigest(args)) : null
   let idem: Idem | null = null
 
   if (idemKey) {
-    if (!meta.idempotent) {
-      throw new KetError({
-        code: 'E_NOT_IDEMPOTENT',
-        message: `"${fnKey}" is not declared idempotent but was called with an idempotency key`,
-        hint: 'declare `idempotent: true` on the function, or drop the key',
-      })
-    }
     idem = await idemFor(o.adapter)
     // Claim the key before doing any work. Losing the race means another caller is
     // either mid-flight or already finished, and both are answered from the record.
@@ -248,9 +260,6 @@ export async function callFn(
       })
     }
   }
-  if (dryRun && !meta.dryRun)
-    throw new KetError({ code: 'E_NO_DRY_RUN', message: `"${fnKey}" does not support dry-run` })
-
   const ctx: Ctx = createContext({
     adapter: o.adapter,
     manifest: o.manifest,

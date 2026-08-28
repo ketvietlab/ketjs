@@ -85,33 +85,52 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     return tables
   }
 
-  const fromHandle = (handle: Sql): Adapter => ({
-    ...a,
-    transaction: true,
-    notifications: {
-      // pg_notify participates in the transaction on this reserved connection;
-      // PostgreSQL delivers it only after COMMIT and drops it on ROLLBACK.
-      async publish(channel, payload) {
-        await handle.unsafe('SELECT pg_notify($1, $2)', [channel, payload])
+  const fromHandle = (handle: Sql): { adapter: Adapter; deactivate: () => void } => {
+    let active = true
+    const needActive = (): Sql => {
+      if (!active) throw new Error('transaction-scoped adapter used after its transaction ended')
+      return handle
+    }
+    return {
+      adapter: {
+        ...a,
+        transaction: true,
+        async open() {
+          throw new Error('a transaction-scoped adapter is already open')
+        },
+        async close() {
+          throw new Error('a transaction-scoped adapter cannot close its root connection')
+        },
+        notifications: {
+          // pg_notify participates in the transaction on this reserved connection;
+          // PostgreSQL delivers it only after COMMIT and drops it on ROLLBACK.
+          async publish(channel, payload) {
+            await needActive().unsafe('SELECT pg_notify($1, $2)', [channel, payload])
+          },
+        },
+        async exec(text) {
+          await needActive().unsafe(text)
+        },
+        async all(text, params = []) {
+          return (await needActive().unsafe(text, params.map(bind))) as Row[]
+        },
+        async run(text, params = []) {
+          const r = (await needActive().unsafe(text, params.map(bind))) as unknown[] & { count?: number }
+          return { changes: Number(r.count ?? r.length ?? 0) }
+        },
+        async tx() {
+          needActive()
+          throw new Error('nested transactions are not supported')
+        },
+        async introspect() {
+          return introspect(needActive())
+        },
       },
-    },
-    async exec(text) {
-      await handle.unsafe(text)
-    },
-    async all(text, params = []) {
-      return (await handle.unsafe(text, params.map(bind))) as Row[]
-    },
-    async run(text, params = []) {
-      const r = (await handle.unsafe(text, params.map(bind))) as unknown[] & { count?: number }
-      return { changes: Number(r.count ?? r.length ?? 0) }
-    },
-    async tx() {
-      throw new Error('nested transactions are not supported')
-    },
-    async introspect() {
-      return introspect(handle)
-    },
-  })
+      deactivate: () => {
+        active = false
+      },
+    }
+  }
 
   const a: Adapter = {
     name: 'postgres',
@@ -171,13 +190,16 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
       const scoped = fromHandle(conn)
       try {
         await conn.unsafe('BEGIN')
-        const r = await fn(scoped)
+        const r = await fn(scoped.adapter)
+        scoped.deactivate()
         await conn.unsafe('COMMIT')
         return r
       } catch (e) {
+        scoped.deactivate()
         await conn.unsafe('ROLLBACK').catch(() => {})
         throw e
       } finally {
+        scoped.deactivate()
         conn.release()
       }
     },
