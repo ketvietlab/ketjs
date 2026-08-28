@@ -110,6 +110,7 @@ export const leaderboardScreen = (
     title,
     <ListPage
       title={title}
+      description={_('crm_backend.leaderboard.subtitle')}
       actions={inline([refresh, frame.extras?.['topbar.end'] ?? ''])}
       controls={
         frame.chrome
@@ -140,5 +141,8 @@ export const leaderboardScreen = (
           : emptyState(_('crm_backend.leaderboard.emptyTitle'), _('crm_backend.leaderboard.emptyHint'))
       }
     />,
+    // The frame is not optional: without it the shell renders an empty sidebar
+    // and a topbar repeating the title this screen already prints itself.
+    { ...frame, chrome: null, topbar: false },
   )
 }

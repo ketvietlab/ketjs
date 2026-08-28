@@ -143,6 +143,7 @@ export const plannerScreen = (
     _('crm_backend.planner.title'),
     <ListPage
       title={_('crm_backend.planner.title')}
+      description={_('crm_backend.planner.subtitle')}
       actions={
         options.tab === 'mine'
           ? linkButton({
@@ -163,7 +164,7 @@ export const plannerScreen = (
           }))}
         />
       }
-      status={`${rows.length}`}
+      status={`${_('crm_backend.planner.title')}: ${String(rows.length)}`}
       body={stack([
         ...(options.errors?.length && options.failedAction !== 'schedule'
           ? [

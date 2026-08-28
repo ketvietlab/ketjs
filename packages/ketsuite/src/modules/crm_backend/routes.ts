@@ -512,6 +512,15 @@ export const routes: Record<string, RouteEntry> = {
       const figures = new Map(
         (((summary?.stages as AnyRow[]) ?? []) as AnyRow[]).map((row) => [String(row.id), row]),
       )
+      // What each column says it holds, and what the header adds up. The summary
+      // is authoritative when it answered; a column falls back to the page it
+      // actually fetched rather than reporting nothing.
+      const countOf = (stageId: string): number => {
+        const figure = figures.get(stageId)
+        return figure
+          ? Number(figure.count ?? 0)
+          : (pages.find((item) => String(item.stage.id) === stageId)?.total ?? 0)
+      }
       const money = (value: unknown) => formatMoney(_, value)
       const board = await ctx.joint(url, req, 'crm_backend:screen.pipeline', {
         lang,
@@ -551,14 +560,13 @@ export const routes: Record<string, RouteEntry> = {
             const figure = figures.get(String(stage.id))
             const expected = Number(figure?.expectedRevenue ?? 0)
             const weighted = Number(figure?.weightedRevenue ?? 0)
-            const shown = pages.find((item) => item.stage.id === stage.id)
             const more = new URLSearchParams({ 'f.stageId': String(stage.id) })
             if (search) more.set('q', search)
             return {
               id: stage.id,
               name: stage.name,
               tone: stageTone(stage, index),
-              total: figure ? Number(figure.count ?? 0) : (shown?.total ?? 0),
+              total: countOf(String(stage.id)),
               // Withheld rather than reported short: `partial` means the board is
               // larger than the summary reads in one pass, so the amounts it did
               // add up are the amounts of a subset.
@@ -684,7 +692,13 @@ export const routes: Record<string, RouteEntry> = {
               },
             ],
           }
-          return pipelineScreen(_, frame, board, pipelineFigures(_, summary, money))
+          return pipelineScreen(
+            _,
+            frame,
+            board,
+            pipelineFigures(_, summary, money),
+            stages.reduce((sum, stage) => sum + countOf(String(stage.id)), 0),
+          )
         },
       })
     },

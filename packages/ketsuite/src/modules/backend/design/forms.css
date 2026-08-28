@@ -620,6 +620,11 @@
   [data-ui="record-form"][data-layout="inline"] > [data-ui="form-grid"] {
     display: block;
   }
+  /* `:empty` never matches here: the renderer leaves its own comment markers
+     inside the element, so a field-less form kept a phantom grid item and the
+     form's gap before its button. The attribute says the same thing and is not
+     a claim about the DOM the view layer is free to break. */
+  [data-ui="record-form"][data-layout="inline"][data-has-fields="false"] > [data-ui="form-grid"],
   [data-ui="record-form"][data-layout="inline"] > [data-ui="form-grid"]:empty {
     display: none;
   }

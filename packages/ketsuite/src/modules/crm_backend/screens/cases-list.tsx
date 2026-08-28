@@ -100,6 +100,7 @@ export const casesListScreen = (
     _('crm_backend.cases.title'),
     <ListPage
       title={_('crm_backend.cases.title')}
+      description={_('crm_backend.cases.subtitle')}
       actions={
         hasActions
           ? inline([

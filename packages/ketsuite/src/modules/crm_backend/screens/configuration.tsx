@@ -63,6 +63,7 @@ export const configurationScreen = (
     _('crm_backend.configuration.title'),
     <ListPage
       title={_('crm_backend.configuration.title')}
+      description={_('crm_backend.configuration.subtitle')}
       actions={linkButton({
         href: createHref,
         label: _('crm_backend.configuration.create'),
@@ -79,7 +80,7 @@ export const configurationScreen = (
           }))}
         />
       }
-      status={`${_(`crm_backend.configuration.${options.tab}`)} · ${options.rows.length}`}
+      status={`${_(`crm_backend.configuration.${options.tab}`)}: ${String(options.rows.length)}`}
       body={
         options.rows.length
           ? dataTable(_, {

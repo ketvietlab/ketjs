@@ -19,6 +19,14 @@
 
   [data-ui="crm-kanban-column"] {
     display: grid;
+    /*
+     * `minmax(0, 1fr)`, not the implicit `auto`: an auto row track takes its
+     * width from the widest thing standing in it, so one long card title made
+     * its column wider than the track the board gave it and the card spilled
+     * over the neighbour. The column is as wide as the board says, and what
+     * stands in it wraps or ellipses.
+     */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
     min-block-size: 22rem;
     min-inline-size: 0;
@@ -31,6 +39,7 @@
 
   [data-ui="crm-kanban-stage"] {
     display: flex;
+    min-inline-size: 0;
     align-items: center;
     gap: var(--kv-space-2);
     padding: var(--kv-space-3);
@@ -75,6 +84,7 @@
 
   [data-ui="crm-stage-name"] {
     overflow: hidden;
+    min-inline-size: 0;
     margin: 0;
     color: var(--kv-text-main);
     font-size: var(--kv-text-md);
@@ -173,6 +183,8 @@
 
   [data-ui="crm-kanban-cards"] {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-inline-size: 0;
     align-content: start;
     gap: var(--kv-space-2);
     padding: var(--kv-space-2);
@@ -180,6 +192,8 @@
 
   [data-ui="crm-kanban-card"] {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-inline-size: 0;
     gap: var(--kv-space-1-5);
     padding: var(--kv-space-3);
     border: 1px solid var(--kv-panel-border);
@@ -204,6 +218,7 @@
 
   [data-ui="crm-card-title"] {
     margin: 0;
+    overflow-wrap: anywhere;
     font-size: var(--kv-text-md);
     font-weight: var(--kv-weight-semibold);
     line-height: var(--kv-leading-tight);
@@ -218,7 +233,9 @@
 
   [data-ui="crm-card-party"] {
     display: flex;
+    min-inline-size: 0;
     flex-wrap: wrap;
+    overflow-wrap: anywhere;
     gap: var(--kv-space-1);
     margin: 0;
     color: var(--kv-text-muted);
@@ -246,6 +263,8 @@
 
   [data-ui="crm-card-figures"] {
     display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
     gap: var(--kv-space-2);
@@ -265,6 +284,7 @@
 
   [data-ui="crm-card-foot"] {
     display: flex;
+    min-inline-size: 0;
     align-items: center;
     gap: var(--kv-space-1-5);
     padding-block-start: var(--kv-space-1-5);

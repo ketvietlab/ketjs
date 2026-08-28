@@ -86,7 +86,11 @@ test('crm pipeline: keeps specialized chrome, figures and the route-owned board 
     ),
   )
 
-  assert.match(rendered, /data-ui="record-workspace"/)
+  // The board wears the collection header the rest of CRM wears, not a record's.
+  assert.match(rendered, /data-ui="list-page"/)
+  assert.doesNotMatch(rendered, /data-ui="record-workspace"/)
+  assert.match(rendered, /data-ui="list-page-title"><!--k\[-->Pipeline CRM/)
+  assert.match(rendered, /data-ui="list-page-description"/)
   assert.match(rendered, /data-ui="chrome-search-input"[^>]*name="q"[^>]*value="May mặc"/)
   assert.match(rendered, /type="hidden"[^>]*name="teamId"[^>]*value="north"/)
   assert.match(rendered, /type="hidden"[^>]*name="mine"[^>]*value="1"/)
