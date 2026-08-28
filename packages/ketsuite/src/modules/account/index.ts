@@ -2,6 +2,7 @@ import { defineModule } from '@ketvietlab/ketjs'
 import { analyticsFunctions } from './analytics.ts'
 import { auditFunctions } from './audit.ts'
 import { bookFunctions } from './books.ts'
+import { cashReceivableFunctions } from './cash-receivables.ts'
 import { closeFunctions } from './close.ts'
 import { functions } from './functions.ts'
 import { models } from './models.ts'
@@ -19,7 +20,7 @@ export default defineModule({
   // openItemSummary and cashFlow, the aggregates an overview screen is made of.
   // 0.7.0 adds a company-scoped product-to-sales-tax mapping. Products remain
   // shared catalogue data while the tax belongs to one legal entity's chart.
-  version: '0.10.0',
+  version: '0.11.0',
   depends: ['company', 'partner', 'product', 'uom'],
   title: 'Kế toán',
   summary: 'Sổ cái kép, hoá đơn, thanh toán và kiểm soát kỳ kế toán.',
@@ -36,6 +37,7 @@ export default defineModule({
     ...closeFunctions,
     ...bookFunctions,
     ...openItemFunctions,
+    ...cashReceivableFunctions,
   },
   reports,
   messages: {
@@ -116,6 +118,31 @@ export default defineModule({
       'error.openItemJournal': 'Loại sổ nhật ký không khớp loại chứng từ nguồn.',
       'error.openItemBatchIdReused': 'Mã batch đã thuộc về dữ liệu công nợ khác.',
       'error.openItemConflict': 'Dữ liệu công nợ xung đột với ledger hiện có.',
+      'error.bankAccountMissing': 'Tài khoản ngân hàng hoặc quỹ không tồn tại.',
+      'error.bankJournalInvalid': 'Cần sổ nhật ký ngân hàng hoặc tiền mặt.',
+      'error.bankCurrencyMismatch': 'Tiền tệ tài khoản ngân hàng phải khớp sổ cái công ty.',
+      'error.bankLiquidityInvalid': 'Tài khoản thanh khoản phải là tiền mặt hoặc tiền gửi.',
+      'error.bankControlAccountMissing': 'Tài khoản clearing và treo phải tồn tại.',
+      'error.bankProfileMissing': 'Profile nhập sao kê không tồn tại.',
+      'error.bankFormatInvalid': 'Định dạng sao kê phải là CSV, XLSX hoặc API.',
+      'error.bankBalancePolicyInvalid': 'Policy số dư phải chặn hoặc cảnh báo.',
+      'error.bankTransactionMissing': 'Giao dịch ngân hàng không tồn tại.',
+      'error.bankTransactionNotPosted': 'Chỉ giao dịch đã ghi nhận mới được đối soát.',
+      'error.matchRuleMissing': 'Rule matching đang hoạt động không tồn tại.',
+      'error.reconcileAllocationsRequired': 'Cần ít nhất một dòng phân bổ.',
+      'error.writeOffAccountRequired': 'Chênh lệch đối soát cần tài khoản xử lý.',
+      'error.writeOffAmountMismatch': 'Số chênh lệch không khớp phân bổ.',
+      'error.bankReconciliationMissing': 'Lần đối soát ngân hàng không tồn tại.',
+      'error.bankReconciliationNotPosted': 'Chỉ đối soát đã ghi sổ mới hoàn tác được.',
+      'error.agingBasisInvalid': 'Aging phải dựa trên ngày đến hạn hoặc ngày hóa đơn.',
+      'error.cashDocumentKindInvalid': 'Loại chứng từ tiền không được hỗ trợ.',
+      'error.cashDocumentMoveInvalid': 'Chứng từ tiền cần một bút toán đã ghi sổ.',
+      'error.cashCountMissing': 'Biên bản kiểm kê quỹ không tồn tại.',
+      'error.cashCountBalanced': 'Kiểm kê đã cân bằng, không cần bút toán chênh lệch.',
+      'error.followUpConsentRequired': 'Chỉ gửi nhắc nợ khi có đồng ý nhận thông báo.',
+      'error.followUpCaseMissing': 'Hồ sơ nhắc nợ không tồn tại.',
+      'error.followUpMessageMissing': 'Thông báo nhắc nợ không tồn tại.',
+      'error.followUpStateInvalid': 'Trạng thái gửi không được hỗ trợ.',
 
       'error.accountMissing': 'Tài khoản không tồn tại.',
       'error.accountInactive': 'Không thể ghi dòng bút toán mới vào tài khoản đã ngưng sử dụng.',
@@ -261,6 +288,31 @@ export default defineModule({
       'error.openItemJournal': 'The journal type does not match the source document.',
       'error.openItemBatchIdReused': 'That batch id belongs to different open-item data.',
       'error.openItemConflict': 'The open-item source conflicts with the existing ledger.',
+      'error.bankAccountMissing': 'The bank or cash account does not exist.',
+      'error.bankJournalInvalid': 'A bank or cash account requires a bank or cash journal.',
+      'error.bankCurrencyMismatch': 'Bank account currency must match the company ledger.',
+      'error.bankLiquidityInvalid': 'The liquidity account must be cash or bank.',
+      'error.bankControlAccountMissing': 'Clearing and suspense accounts must exist.',
+      'error.bankProfileMissing': 'The statement import profile does not exist.',
+      'error.bankFormatInvalid': 'Statement format must be CSV, XLSX, or API.',
+      'error.bankBalancePolicyInvalid': 'Balance policy must block or warn.',
+      'error.bankTransactionMissing': 'The bank transaction does not exist.',
+      'error.bankTransactionNotPosted': 'Only a posted bank transaction can be reconciled.',
+      'error.matchRuleMissing': 'The active matching rule does not exist.',
+      'error.reconcileAllocationsRequired': 'At least one allocation is required.',
+      'error.writeOffAccountRequired': 'A difference requires a write-off account.',
+      'error.writeOffAmountMismatch': 'The write-off does not match the allocation difference.',
+      'error.bankReconciliationMissing': 'The bank reconciliation does not exist.',
+      'error.bankReconciliationNotPosted': 'Only a posted reconciliation can be undone.',
+      'error.agingBasisInvalid': 'Aging basis must be due date or invoice date.',
+      'error.cashDocumentKindInvalid': 'That cash document type is unsupported.',
+      'error.cashDocumentMoveInvalid': 'A cash document requires a posted entry.',
+      'error.cashCountMissing': 'The cash count does not exist.',
+      'error.cashCountBalanced': 'A balanced cash count needs no difference entry.',
+      'error.followUpConsentRequired': 'A reminder requires delivery consent.',
+      'error.followUpCaseMissing': 'The follow-up case does not exist.',
+      'error.followUpMessageMissing': 'The follow-up message does not exist.',
+      'error.followUpStateInvalid': 'That delivery state is unsupported.',
 
       'error.accountMissing': 'The account does not exist.',
       'error.accountInactive': 'An inactive account cannot receive a new journal item.',
