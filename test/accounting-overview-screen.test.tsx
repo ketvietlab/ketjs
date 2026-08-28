@@ -105,7 +105,7 @@ const options = {
     keys: [{ id: 'sales', label: 'Doanh thu bán hàng', series: 1 as const, value: '2.000.000 ₫' }],
   },
   currency: 'VND',
-  standard: 'TT99/2025',
+  standard: 'Custom',
   ledgerHref: (accountId: string) => `/admin/accounting/general-ledger?accountId=${accountId}&lang=vi`,
   partnerHref: (partnerId: string) =>
     `/admin/accounting/partner-statement?partnerId=${partnerId}&dateFrom=2026-01-01&dateTo=2026-12-31&lang=vi`,
@@ -139,7 +139,7 @@ test('accounting overview stays specialized: preserves period, ledger KPIs, dril
     html,
     /data-ui="list-page"|data-ui="form-page"|data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/,
   )
-  assert.match(html, /Tổng quan kế toán[\s\S]*?TT99\/2025/)
+  assert.match(html, /Tổng quan kế toán[\s\S]*?Custom/)
   assert.match(html, /href="\/admin\/accounting\?period=2026&amp;lang=vi"[^>]*aria-current="page"/)
   assert.match(html, /data-ui="date-picker" method="get" action="\/admin\/accounting"/)
   assert.match(html, /name="lang" value="vi"/)

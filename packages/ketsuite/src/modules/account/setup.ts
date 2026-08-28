@@ -1,347 +1,73 @@
-import { eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { DEFAULT_ACCOUNTING_TIMEZONE } from './date.ts'
 import { MONEY_POLICY_VERSION } from './money.ts'
-import {
-  TT99_ACCOUNTS,
-  TT99_CATALOG_CHECKSUM,
-  TT99_CODE,
-  TT99_COUNTRY,
-  TT99_DEFAULT_ACCOUNTS,
-  TT99_LEGAL_BASIS,
-  VIETNAM_TAXES,
-} from './tt99.ts'
+
+export const ACCOUNT_CORE_STANDARD = 'custom'
+export const ACCOUNT_CORE_CHECKSUM = 'account-core-v1'
 
 export const ACCOUNT_SETUP_EFFECTS = [
   'read:company.Company',
-  'read:partner.Address',
   'read:account.Setup',
-  'read:account.Account',
-  'read:account.Tax',
-  'read:account.Journal',
-  'read:account.PaymentTerm',
-  'read:account.PaymentTermLine',
-  'read:account.Defaults',
   'write:company.Company',
   'write:account.Setup',
-  'write:account.Account',
-  'write:account.Tax',
-  'write:account.Journal',
-  'write:account.PaymentTerm',
-  'write:account.PaymentTermLine',
-  'write:account.Defaults',
 ] as const
 
-const accountId = (company: string, code: string): string => `account:${company}:tt99:${code}`
-const taxId = (company: string, key: string): string => `tax:${company}:vn:${key}`
-const journalId = (company: string, key: string): string => `journal:${company}:${key}`
-const termId = (company: string, key: string): string => `term:${company}:${key}`
 const setupId = (company: string): string => `account-setup:${company}`
-const defaultsId = (company: string): string => `account-defaults:${company}`
-
-const countryFor = async (ctx: Ctx, company: Row): Promise<string | null> => {
-  const addresses = await ctx.db.select('partner.Address', { partnerId: company.partnerId })
-  const legal =
-    addresses.find((row) => row.use === 'invoice') ?? addresses.find((row) => row.use === 'contact')
-  if (legal?.countryCode) return String(legal.countryCode).trim().toUpperCase()
-  // KetSuite currently ships only the Vietnam accounting data pack. VND is a
-  // deterministic fallback for provisioned companies that do not yet have an address.
-  return String(company.currency).toUpperCase() === 'VND' ? TT99_COUNTRY : null
-}
-
-const put = async (ctx: Ctx, model: string, values: Row): Promise<void> => {
-  await ctx.db.insertIfAbsent(model, values)
-}
-
 const COMPANY_CHANGED_DURING_SETUP = 'account.error.companyConcurrent'
 const COMPANY_LOCK_ATTEMPTS = 4
 
-/**
- * Freeze the book currency with the same optimistic token used by company.saveCompany.
- *
- * Merely updating the flag would leave a gap: a save that read the old company just
- * before this transaction could still change its currency afterward. Advancing the
- * version makes exactly one of setup and that save win; the loser rereads and either
- * retries setup or returns the permanent currency-lock refusal.
- */
-const lockCompanyCurrency = async (ctx: Ctx, company: Row): Promise<void> => {
-  if (company.currencyLocked === true && company.accountingTimezone) return
-  const currentVersion = Number(company.version ?? 0)
-  const accountingTimezone = String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE)
-  const changed = await ctx.db.compareAndSet(
-    'company.Company',
-    { id: company.id },
-    { version: company.version ?? null },
-    { currencyLocked: true, accountingTimezone, version: currentVersion + 1 },
-  )
-  if (!('dryRun' in changed) && !changed.matched) throw new Error(COMPANY_CHANGED_DURING_SETUP)
-}
-
-async function installCompanyAccountingOnce(ctx: Ctx): Promise<Row> {
+/** Initialize jurisdiction-neutral ledger invariants, never a national chart. */
+async function initializeCompanyAccountingOnce(ctx: Ctx): Promise<Row> {
   const companyId = String(ctx.scope.company ?? '')
   if (!companyId) throw new Error('account.error.companyRequired')
-
   return ctx.tx(async (tx) => {
-    const existingSetup = await tx.db.one(
-      from(tx.table('account.Setup')).where(eq(tx.table('account.Setup').companyId, companyId)),
-    )
     const company = (await tx.db.select('company.Company', { id: companyId }))[0]
     if (!company) throw new Error('account.error.companyMissing')
-
-    // Older databases may already have the current setup row but no lock column
-    // value. Backfill the guard without rewriting the currency they currently hold;
-    // historical data cannot tell us which value an operator intended before this
-    // invariant existed.
-    if (existingSetup?.sourceChecksum === TT99_CATALOG_CHECKSUM) {
-      await lockCompanyCurrency(tx, company)
-      const accountingTimezone = String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE)
-      if (
-        existingSetup.accountingTimezone !== accountingTimezone ||
-        existingSetup.moneyPolicyVersion !== MONEY_POLICY_VERSION
+    const timezone = String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE)
+    if (company.currencyLocked !== true || !company.accountingTimezone) {
+      const version = Number(company.version ?? 0)
+      const changed = await tx.db.compareAndSet(
+        'company.Company',
+        { id: company.id },
+        { version: company.version ?? null },
+        { currencyLocked: true, accountingTimezone: timezone, version: version + 1 },
       )
-        await tx.db.update(
-          'account.Setup',
-          { id: existingSetup.id },
-          { accountingTimezone, moneyPolicyVersion: MONEY_POLICY_VERSION },
-        )
-      return {
-        ...existingSetup,
-        accountingTimezone,
-        moneyPolicyVersion: MONEY_POLICY_VERSION,
-      }
+      if (!('dryRun' in changed) && !changed.matched) throw new Error(COMPANY_CHANGED_DURING_SETUP)
     }
-
-    const countryCode = await countryFor(tx, company)
-    if (countryCode !== TT99_COUNTRY) throw new Error('account.error.countryUnsupported')
-    await lockCompanyCurrency(tx, company)
-
-    const existingAccounts = await tx.db.select('account.Account')
-    const byCode = new Map(existingAccounts.map((row) => [String(row.code), row]))
-    for (const account of TT99_ACCOUNTS) {
-      const catalogId = accountId(companyId, account.code)
-      const held = byCode.get(account.code)
-      if (!held) {
-        await put(tx, 'account.Account', {
-          id: catalogId,
-          code: account.code,
-          name: account.name,
-          nameEn: account.nameEn,
-          accountType: account.accountType,
-          reconcile: account.reconcile,
-          active: true,
-        })
-        continue
-      }
-      // A code the company created itself is theirs to keep. A row this catalog
-      // installed is the catalog's to correct, otherwise a renamed or reclassified
-      // account silently keeps its old definition while the checksum claims the
-      // upgrade landed.
-      if (String(held.id) !== catalogId) continue
-      const patch: Row = {}
-      if (held.name !== account.name) patch.name = account.name
-      if (held.nameEn !== account.nameEn) patch.nameEn = account.nameEn
-      if (held.accountType !== account.accountType) patch.accountType = account.accountType
-      if (held.reconcile !== account.reconcile) patch.reconcile = account.reconcile
-      if (Object.keys(patch).length) await tx.db.update('account.Account', { id: catalogId }, patch)
-    }
-
-    const accounts = await tx.db.select('account.Account')
-    const ids = new Map(accounts.map((row) => [String(row.code), String(row.id)]))
-    const required = (code: string): string => {
-      const id = ids.get(code)
-      if (!id) throw new Error(`account.error.defaultMissing:${code}`)
-      return id
-    }
-
-    const existingTaxes = new Map(
-      (await tx.db.select('account.Tax')).map((row) => [String(row.id), row] as const),
-    )
-    for (const tax of VIETNAM_TAXES) {
-      const id = taxId(companyId, tax.key)
-      const values = {
-        name: tax.name,
-        description: tax.description,
-        typeTaxUse: tax.use,
-        amountType: 'percent',
-        amount: tax.amount,
-        includeBaseAmount: tax.includeBaseAmount === true,
-        accountId: tax.accountCode ? required(tax.accountCode) : null,
-      }
-      const held = existingTaxes.get(id)
-      if (!held) {
-        await put(tx, 'account.Tax', {
-          id,
-          taxScope: null,
-          priceInclude: false,
-          sequence: 10,
-          active: true,
-          ...values,
-        })
-        continue
-      }
-      // A statutory rate change arrives as a new catalog, and the company's own
-      // taxes are never touched — only the rows this catalog installed.
-      const patch = Object.fromEntries(
-        Object.entries(values).filter(([field, value]) => held[field] !== value),
-      )
-      if (Object.keys(patch).length) await tx.db.update('account.Tax', { id }, patch)
-    }
-
-    for (const journal of [
-      { key: 'sale', name: 'Bán hàng', code: 'SAL', type: 'sale' },
-      { key: 'purchase', name: 'Mua hàng', code: 'PUR', type: 'purchase' },
-      { key: 'bank', name: 'Ngân hàng', code: 'BNK', type: 'bank', account: '112' },
-      { key: 'cash', name: 'Tiền mặt', code: 'CSH', type: 'cash', account: '111' },
-      { key: 'general', name: 'Nghiệp vụ khác', code: 'MISC', type: 'general' },
-    ])
-      await put(tx, 'account.Journal', {
-        id: journalId(companyId, journal.key),
-        name: journal.name,
-        code: journal.code,
-        type: journal.type,
-        defaultAccountId: journal.account ? required(journal.account) : null,
-        sequenceNumber: 0,
-        active: true,
-      })
-
-    const immediate = termId(companyId, 'immediate')
-    const net30 = termId(companyId, 'net30')
-    await put(tx, 'account.PaymentTerm', { id: immediate, name: 'Thanh toán ngay', note: null, active: true })
-    await put(tx, 'account.PaymentTermLine', {
-      id: `${immediate}:line`,
-      paymentId: immediate,
-      value: 'percent',
-      valueAmount: '100',
-      delayType: 'days_after',
-      nbDays: 0,
-      daysNextMonth: null,
-      sequence: 10,
-    })
-    await put(tx, 'account.PaymentTerm', { id: net30, name: '30 ngày', note: null, active: true })
-    await put(tx, 'account.PaymentTermLine', {
-      id: `${net30}:line`,
-      paymentId: net30,
-      value: 'percent',
-      valueAmount: '100',
-      delayType: 'days_after',
-      nbDays: 30,
-      daysNextMonth: null,
-      sequence: 10,
-    })
-
-    if (existingSetup)
-      await tx.db.update(
-        'account.Setup',
-        { id: existingSetup.id },
-        {
-          countryCode,
-          standard: TT99_CODE,
-          legalBasis: TT99_LEGAL_BASIS,
-          sourceChecksum: TT99_CATALOG_CHECKSUM,
-          accountingTimezone: String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE),
-          moneyPolicyVersion: MONEY_POLICY_VERSION,
-        },
-      )
-    else
-      await put(tx, 'account.Setup', {
+    const current = (await tx.db.select('account.Setup'))[0]
+    if (!current) {
+      const row = {
         id: setupId(companyId),
-        countryCode,
-        standard: TT99_CODE,
-        legalBasis: TT99_LEGAL_BASIS,
-        sourceChecksum: TT99_CATALOG_CHECKSUM,
-        accountingTimezone: String(company.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE),
+        countryCode: 'XX',
+        standard: ACCOUNT_CORE_STANDARD,
+        legalBasis: 'custom',
+        sourceChecksum: ACCOUNT_CORE_CHECKSUM,
+        accountingTimezone: timezone,
         moneyPolicyVersion: MONEY_POLICY_VERSION,
         installedAt: new Date().toISOString(),
-      })
-    const installedId = String(existingSetup?.id ?? setupId(companyId))
-    return (await tx.db.select('account.Setup', { id: installedId }))[0]!
+      }
+      await tx.db.insert('account.Setup', row)
+      return row
+    }
+    if (current.accountingTimezone !== timezone || current.moneyPolicyVersion !== MONEY_POLICY_VERSION)
+      await tx.db.update(
+        'account.Setup',
+        { id: current.id },
+        { accountingTimezone: timezone, moneyPolicyVersion: MONEY_POLICY_VERSION },
+      )
+    return { ...current, accountingTimezone: timezone, moneyPolicyVersion: MONEY_POLICY_VERSION }
   })
 }
 
-async function installCompanyAccounting(ctx: Ctx): Promise<Row> {
+export async function ensureCompanyAccounting(ctx: Ctx): Promise<Row> {
   let lastConflict: Error | null = null
   for (let attempt = 0; attempt < COMPANY_LOCK_ATTEMPTS; attempt += 1) {
     try {
-      return await installCompanyAccountingOnce(ctx)
+      return await initializeCompanyAccountingOnce(ctx)
     } catch (error) {
       if (!(error instanceof Error) || error.message !== COMPANY_CHANGED_DURING_SETUP) throw error
       lastConflict = error
     }
   }
   throw lastConflict ?? new Error(COMPANY_CHANGED_DURING_SETUP)
-}
-
-/**
- * Give the company the accounts a document falls back to, if it has none.
- *
- * Kept out of the catalog install because it is not versioned with the catalog:
- * a company that installed TT99 before defaults existed is already at the current
- * checksum, and would otherwise never receive them. Only unset fields are filled —
- * a chosen default is a decision, not something to reassert on every request.
- */
-async function ensureCompanyDefaults(ctx: Ctx, companyId: string): Promise<void> {
-  const held = (await ctx.db.select('account.Defaults'))[0]
-  if (held?.incomeAccountId && held.expenseAccountId && held.receivableAccountId && held.payableAccountId)
-    return
-  const byCode = new Map(
-    (await ctx.db.select('account.Account')).map((row) => [String(row.code), String(row.id)]),
-  )
-  const seeded = Object.fromEntries(
-    (
-      [
-        ['incomeAccountId', TT99_DEFAULT_ACCOUNTS.income],
-        ['expenseAccountId', TT99_DEFAULT_ACCOUNTS.expense],
-        ['receivableAccountId', TT99_DEFAULT_ACCOUNTS.receivable],
-        ['payableAccountId', TT99_DEFAULT_ACCOUNTS.payable],
-      ] as const
-    )
-      .map(([field, code]) => [field, byCode.get(code) ?? null] as const)
-      .filter(([, id]) => id),
-  )
-  if (!Object.keys(seeded).length) return
-  if (!held) {
-    await ctx.db.insertIfAbsent('account.Defaults', {
-      id: defaultsId(companyId),
-      incomeAccountId: null,
-      expenseAccountId: null,
-      receivableAccountId: null,
-      payableAccountId: null,
-      ...seeded,
-    })
-    return
-  }
-  const missing = Object.fromEntries(Object.entries(seeded).filter(([field]) => !held[field]))
-  if (Object.keys(missing).length) await ctx.db.update('account.Defaults', { id: held.id }, missing)
-}
-
-/**
- * Install the bundled data pack for the active company, once.
- *
- * The guard is the transaction and the checksum on `account.Setup`, not a map in
- * this process: a company id is only unique within its own database, so a
- * process-wide cache would let one tenant wait on — and be answered by — another
- * tenant's install. Concurrent first requests both enter the transaction; the one
- * that arrives second sees the committed checksum and returns without writing.
- */
-export async function ensureCompanyAccounting(ctx: Ctx): Promise<Row> {
-  const companyId = String(ctx.scope.company ?? '')
-  if (!companyId) throw new Error('account.error.companyRequired')
-  const current = (await ctx.db.select('account.Setup'))[0]
-  if (
-    current?.sourceChecksum === TT99_CATALOG_CHECKSUM &&
-    current.accountingTimezone &&
-    current.moneyPolicyVersion === MONEY_POLICY_VERSION
-  ) {
-    const company = (await ctx.db.select('company.Company', { id: companyId }))[0]
-    if (company?.currencyLocked === true && company.accountingTimezone) {
-      await ensureCompanyDefaults(ctx, companyId)
-      return current
-    }
-  }
-
-  await installCompanyAccounting(ctx)
-  await ensureCompanyDefaults(ctx, companyId)
-  const completed = (await ctx.db.select('account.Setup'))[0]
-  if (!completed) throw new Error('account.error.setupIncomplete')
-  return completed
 }

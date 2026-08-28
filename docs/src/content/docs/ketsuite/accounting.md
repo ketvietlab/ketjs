@@ -5,10 +5,9 @@ description: How KetSuite posts, corrects and settles journal entries, and the c
 
 # Accounting ledger
 
-The `account` module holds the double-entry ledger: journals, entries, invoices,
-payments, reconciliation and the three reports built on them. The bundled Vietnam
-chart, taxes and journals that a company starts from are described in
-[Vietnam accounting defaults](/ketsuite/accounting-tt99/).
+The `account` module holds the jurisdiction-neutral double-entry ledger: journals,
+entries, invoices, payments, reconciliation, period controls and books. A deployment
+must install or configure its own chart, taxes and statutory reporting localization.
 
 ## Currency arithmetic
 
@@ -146,7 +145,7 @@ Nothing at any level is a refusal, not a guess: `lineAccountUndecided` and
 `counterpartAccountUndecided` say which one was undecided and where it could have come
 from.
 
-Asking the person writing an invoice to name a revenue account out of 216 is asking
+Asking the person writing an invoice to name a revenue account out of a full chart is asking
 them to re-answer a question the chart already answers the same way every time — and
 to get it wrong occasionally. The fields remain on the form so an unusual document can
 still say otherwise; they are simply no longer required.
@@ -154,9 +153,7 @@ still say otherwise; they are simply no longer required.
 ### Where each level lives
 
 - **Company** — `account.Defaults`, one row per company, on **Accounting → Default
-  accounts**. Circular 99 answers this the same way for every Vietnamese company, so
-  installation seeds it: revenue 511, cost of goods sold 632, receivables 1311,
-  payables 3311. Only unset fields are ever seeded, so a company that chose
+  accounts**. A localization or operator may seed unset values; a company that chose
   differently keeps its choice.
 - **Product category** — `account.CategoryAccount`, on the same screen. The catalogue
   is shared across every company in the tenant while a chart of accounts belongs to
@@ -266,8 +263,8 @@ displayed amount, compounding taxes, reversal, and manual entry totals.
 months in it, and holds them to each other: total assets equal liabilities plus equity
 plus the result, the open items add up to the receivable balance, net cash flow equals
 the change in the cash balance, and no aggregate moves for a draft.
-`test/account-tt99.test.ts` covers installation, catalog upgrade — both the additive and
-the corrective path — and refusal of unsupported countries. `test/accounting-e2e.test.ts`
+Localization repositories test their own chart installation and statutory upgrades.
+`test/accounting-e2e.test.ts`
 drives the real HTTP backend through the invoice, payment and report workflow, through
 correcting and archiving a chart entry, and through reversing a posted document.
 

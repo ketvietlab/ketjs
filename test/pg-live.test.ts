@@ -41,10 +41,8 @@ import {
   pos,
   stock,
   storage,
-  TT99_ACCOUNTS,
   uom,
   user,
-  VIETNAM_TAXES,
 } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 import backend from '@ketvietlab/ketsuite/backend'
@@ -740,57 +738,44 @@ test('live pg: concurrent admin provisioning creates exactly one complete bootst
   })
 })
 
-test('live pg: concurrent TT99 initialization converges on one complete company setup', live, async () => {
-  await withPg(async (a) => {
-    const accountModules = [address, partner, company, uom, product, account]
-    const accountManifest = compose(accountModules, { headless: true })
-    const accountSchema = schemaFromManifest(accountManifest)
-    for (const tableName of Object.keys(accountSchema.tables))
-      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
-    for (const sql of renderSql(planMigration(null, accountSchema), a)) await a.exec(sql)
-    registerFunctions(accountModules)
-    const options = { adapter: a, manifest: accountManifest, scope: SCOPE }
-    await callFn(
-      'partner.savePartner',
-      { id: 'company-party', kind: 'company', name: 'Công ty Việt Nam' },
-      options,
-    )
-    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
+test(
+  'live pg: concurrent ledger-core initialization converges without choosing a localization',
+  live,
+  async () => {
+    await withPg(async (a) => {
+      const accountModules = [address, partner, company, uom, product, account]
+      const accountManifest = compose(accountModules, { headless: true })
+      const accountSchema = schemaFromManifest(accountManifest)
+      for (const tableName of Object.keys(accountSchema.tables))
+        await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+      for (const sql of renderSql(planMigration(null, accountSchema), a)) await a.exec(sql)
+      registerFunctions(accountModules)
+      const options = { adapter: a, manifest: accountManifest, scope: SCOPE }
+      await callFn(
+        'partner.savePartner',
+        { id: 'company-party', kind: 'company', name: 'Công ty Việt Nam' },
+        options,
+      )
+      await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
 
-    const peers = [a, postgresAdapter(URL), postgresAdapter(URL), postgresAdapter(URL)]
-    await Promise.all(peers.slice(1).map((adapter) => adapter.open()))
-    try {
-      await Promise.all(
-        peers.map((adapter) => callFn('account.initializeCompany', {}, { ...options, adapter })),
-      )
-      assert.equal(Number((await a.all('SELECT COUNT(*) AS count FROM account_setup'))[0]!.count), 1)
-      assert.equal(
-        Number((await a.all('SELECT COUNT(*) AS count FROM account_account'))[0]!.count),
-        TT99_ACCOUNTS.length,
-      )
-      assert.equal(
-        Number((await a.all('SELECT COUNT(*) AS count FROM account_tax'))[0]!.count),
-        VIETNAM_TAXES.length,
-      )
-      assert.equal(
-        Number((await a.all(`SELECT COUNT(*) AS count FROM account_tax WHERE name = 'KKKNT'`))[0]!.count),
-        2,
-      )
-      assert.equal(
-        Number(
-          (
-            await a.all('SELECT COUNT(DISTINCT code) AS count FROM account_account WHERE "companyId" = $1', [
-              'c1',
-            ])
-          )[0]!.count,
-        ),
-        TT99_ACCOUNTS.length,
-      )
-    } finally {
-      await Promise.all(peers.slice(1).map((adapter) => adapter.close()))
-    }
-  })
-})
+      const peers = [a, postgresAdapter(URL), postgresAdapter(URL), postgresAdapter(URL)]
+      await Promise.all(peers.slice(1).map((adapter) => adapter.open()))
+      try {
+        await Promise.all(
+          peers.map((adapter) => callFn('account.initializeCompany', {}, { ...options, adapter })),
+        )
+        assert.equal(Number((await a.all('SELECT COUNT(*) AS count FROM account_setup'))[0]!.count), 1)
+        assert.equal(Number((await a.all('SELECT COUNT(*) AS count FROM account_account'))[0]!.count), 0)
+        assert.equal(Number((await a.all('SELECT COUNT(*) AS count FROM account_tax'))[0]!.count), 0)
+        const setup = (await a.all('SELECT standard, "countryCode" FROM account_setup'))[0]!
+        assert.equal(setup.standard, 'custom')
+        assert.equal(setup.countryCode, 'XX')
+      } finally {
+        await Promise.all(peers.slice(1).map((adapter) => adapter.close()))
+      }
+    })
+  },
+)
 
 test('live pg: concurrent stock reservations never over-reserve one quant', live, async () => {
   await withPg(async (a) => {

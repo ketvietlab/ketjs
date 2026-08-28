@@ -311,10 +311,7 @@ test('staff accounting channel reviews exact full-payment eligibility without mu
     expectedVersion: detail.data.version,
     amount: { currency: 'VND', amount: '150' },
     paymentDate: '2026-08-25',
-    journals: [
-      { id: 'cash-journal', name: 'Tiền mặt', type: 'cash' },
-      { id: 'journal:acme:bank', name: 'Ngân hàng', type: 'bank' },
-    ],
+    journals: [{ id: 'cash-journal', name: 'Tiền mặt', type: 'cash' }],
   })
   // The concurrency token is still the invoice's, which is the half worth
   // sharing: a payment command checks it against the invoice. The ETag is not,

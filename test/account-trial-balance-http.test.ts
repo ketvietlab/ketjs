@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { seedAccountingTestFixture } from './accounting-test-fixture.ts'
 
 const bootTrial = async (t: TestContext) => {
   const app = await createTestDeployment(ketsuite, { worker: false })
@@ -11,6 +12,7 @@ const bootTrial = async (t: TestContext) => {
   const fixture = (name: string, input: Record<string, unknown>) => app.fixture.call(name, input, { scope })
   await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
   await fixture('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
+  await seedAccountingTestFixture(fixture)
   await fixture('user.createUser', {
     id: 'admin',
     login: 'admin',
@@ -33,14 +35,14 @@ const bootTrial = async (t: TestContext) => {
       id: `${id}:debit`,
       moveId: id,
       name: `${id} debit`,
-      accountId: accountId('112'),
+      accountId: accountId('BANK'),
       debit: amount,
     })
     await app.client.call('account.addMoveLine', {
       id: `${id}:credit`,
       moveId: id,
       name: `${id} credit`,
-      accountId: accountId('511'),
+      accountId: accountId('REV'),
       credit: amount,
     })
     if (post) await app.client.call('account.postMove', { id })
@@ -64,21 +66,21 @@ test('trial balance HTTP includes the full end day, sorts accounts and preserves
   assert.match(html, /name="dateTo"[^>]*value="2026-06-30"/)
   assert.match(html, /125[.,]000/)
   assert.doesNotMatch(html, /900[.,]000/)
-  const code112 = html.indexOf('>112<')
-  const code511 = html.indexOf('>511<')
-  assert.ok(code112 >= 0 && code511 > code112, 'account rows follow numeric code order')
+  const bank = html.indexOf('>BANK<')
+  const revenue = html.indexOf('>REV<')
+  assert.ok(bank >= 0 && revenue > bank, 'account rows follow code order')
   assert.match(
     html,
     new RegExp(
       `href="/admin/accounting/general-ledger\\?accountId=${encodeURIComponent(
-        accountId('112'),
+        accountId('BANK'),
       )}&amp;dateFrom=2026-06-30&amp;dateTo=2026-06-30&amp;lang=vi"`,
     ),
   )
 
   const ledger = await app.client.get(
     `/admin/accounting/general-ledger?accountId=${encodeURIComponent(
-      accountId('112'),
+      accountId('BANK'),
     )}&dateFrom=2026-06-30&dateTo=2026-06-30&lang=vi`,
   )
   assert.equal(ledger.status, 200)

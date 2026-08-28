@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+import { seedAccountingTestFixture } from './accounting-test-fixture.ts'
 
 const clean = (html: string): string => html.replace(/<!--[^>]*-->/g, '')
 
@@ -18,6 +19,7 @@ const bootStatement = async (t: TestContext, populate = false) => {
     partnerId: 'acme-party',
     currency: 'VND',
   })
+  await seedAccountingTestFixture(fixture)
   await fixture('partner.savePartner', {
     id: 'customer',
     kind: 'company',
@@ -56,7 +58,7 @@ const bootStatement = async (t: TestContext, populate = false) => {
         id: `${moveId}:receivable:${suffix}`,
         moveId,
         name: `statement-marker-${suffix}`,
-        accountId: accountId('1311'),
+        accountId: accountId('AR'),
         debit: '1000',
         sequence: index + 1,
       })
@@ -65,7 +67,7 @@ const bootStatement = async (t: TestContext, populate = false) => {
       id: `${moveId}:counterpart`,
       moveId,
       name: 'statement counterpart',
-      accountId: accountId('511'),
+      accountId: accountId('REV'),
       credit: '32000',
       sequence: 100,
     })
@@ -93,7 +95,7 @@ test('partner statement HTTP keeps exact totals while paging, searching, and fil
   assert.match(html, /type="hidden" name="lang" value="en"/)
   assert.match(html, /name="dateFrom" value="2026-06-30"/)
   assert.match(html, /name="dateTo" value="2026-06-30"/)
-  assert.match(html, /1311 · Trade receivables/)
+  assert.match(html, /AR · Trade receivables/)
   assert.match(html, /href="\/admin\/accounting\/entries\/partner-statement%3Amove\?lang=en"/)
 
   const secondHtml = clean(await (await app.client.get(`${base}&page=2`)).text())

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, Frame } from '../../ui/index.ts'
@@ -21,6 +21,7 @@ import {
 import { addDecimals } from '../account/money.ts'
 import {
   accountDefaultsScreen,
+  accountingBooksScreen,
   accountFormModal,
   accountingOverviewScreen,
   accountsListScreen,
@@ -38,12 +39,17 @@ import {
   paymentFormScreen,
   paymentsListScreen,
   partnerLedgerScreen,
+  openingBalanceDetailScreen,
+  openingBalanceImportScreen,
+  openingBalancesListScreen,
   paymentTermFormModal,
   paymentTermLineFormModal,
   paymentTermsListScreen,
   taxFormScreen,
   taxesListScreen,
   trialBalanceScreen,
+  periodCloseDetailScreen,
+  periodClosesListScreen,
   vendorBillFormScreen,
   vendorBillsListScreen,
 } from './screens/index.ts'
@@ -1314,6 +1320,27 @@ export default defineModule({
       path: '/admin/accounting/partner-statement',
       needs: 'account.partnerStatement',
       sequence: 30,
+    },
+    'accounting.books': {
+      parent: 'accounting.reporting',
+      label: 'menu.books',
+      path: '/admin/accounting/books',
+      needs: 'account.accountingBook',
+      sequence: 40,
+    },
+    'accounting.periodCloses': {
+      parent: 'accounting.operations',
+      label: 'menu.periodCloses',
+      path: '/admin/accounting/period-closes',
+      needs: 'account.listClosePeriods',
+      sequence: 30,
+    },
+    'accounting.openingBalances': {
+      parent: 'accounting.configuration',
+      label: 'menu.openingBalances',
+      path: '/admin/accounting/opening-balances',
+      needs: 'account.listOpeningBatches',
+      sequence: 5,
     },
     'accounting.configuration': { parent: 'accounting', label: 'menu.configuration', sequence: 50 },
     'accounting.accounts': {
@@ -3360,6 +3387,356 @@ export default defineModule({
           },
         })
       },
+    '/admin/accounting/opening-balances':
+      (ctx): Route =>
+      async (url, req) => {
+        if (req.method !== 'GET') return text('GET', { status: 405 })
+        const rows = (await ctx.call('account.listOpeningBatches', {}, url, req)) as AnyRow[]
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.opening.title',
+          body: (_, frame) =>
+            openingBalancesListScreen(_, {
+              frame,
+              rows,
+              createHref: `/admin/accounting/opening-balances/new${localeQuery(url)}`,
+              rowHref: (row) =>
+                `/admin/accounting/opening-balances/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
+            }),
+        })
+      },
+    '/admin/accounting/opening-balances/new':
+      (ctx): Route =>
+      async (url, req) => {
+        let rejected: Rejection | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          let lines: unknown = []
+          try {
+            lines = JSON.parse(form.lines || '[]')
+          } catch {
+            rejected = {
+              messages: [ctx.translate(ctx.localeOf(url, req))('account_backend.opening.linesInvalid')],
+              fields: {
+                lines: ctx.translate(ctx.localeOf(url, req))('account_backend.opening.linesInvalid'),
+              },
+              values: form,
+            }
+          }
+          if (!rejected) {
+            const id = form.id || randomUUID()
+            const sourceChecksum = createHash('sha256')
+              .update(`${form.sourceName || 'manual'}\n${form.lines || '[]'}`)
+              .digest('hex')
+            const result = await ctx.call(
+              'account.prepareOpeningBatch',
+              {
+                id,
+                accountingDate: form.accountingDate,
+                journalId: form.journalId,
+                sourceChecksum,
+                controlDebit: form.controlDebit,
+                controlCredit: form.controlCredit,
+                lines,
+              },
+              url,
+              req,
+            )
+            if (succeeded(result))
+              return seeOther(
+                `/admin/accounting/opening-balances/${encodeURIComponent(id)}${localeQuery(url)}`,
+              )
+            rejected = rejection(result, ctx.translate(ctx.localeOf(url, req)), form)
+          }
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const journals = (await ctx.call('account.listJournals', {}, url, req)) as AnyRow[]
+        const values = rejected?.values ?? {}
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.opening.create',
+          body: (_, frame) =>
+            openingBalanceImportScreen(_, {
+              frame,
+              action: `${url.pathname}${localeQuery(url)}`,
+              cancelHref: `/admin/accounting/opening-balances${localeQuery(url)}`,
+              errors: rejected?.messages,
+              fields: [
+                {
+                  name: 'sourceName',
+                  label: _('account_backend.opening.sourceName'),
+                  value: values.sourceName ?? '',
+                  required: true,
+                },
+                {
+                  name: 'accountingDate',
+                  label: _('account_backend.field.accountingDate'),
+                  type: 'date',
+                  value: values.accountingDate ?? '',
+                  required: true,
+                },
+                {
+                  name: 'journalId',
+                  label: _('account_backend.field.journalId'),
+                  type: 'select',
+                  value: values.journalId ?? '',
+                  required: true,
+                  options: choices(
+                    journals.filter((row) => row.type === 'general'),
+                    true,
+                  ),
+                },
+                {
+                  name: 'controlDebit',
+                  label: _('account_backend.opening.controlDebit'),
+                  type: 'decimal',
+                  step: '0.01',
+                  value: values.controlDebit ?? '',
+                  required: true,
+                },
+                {
+                  name: 'controlCredit',
+                  label: _('account_backend.opening.controlCredit'),
+                  type: 'decimal',
+                  step: '0.01',
+                  value: values.controlCredit ?? '',
+                  required: true,
+                },
+                {
+                  name: 'lines',
+                  label: _('account_backend.opening.linesJson'),
+                  type: 'textarea',
+                  span: 'full',
+                  value:
+                    values.lines ??
+                    '[\n  {"sourceKey":"1","accountId":"...","description":"Số dư đầu kỳ","debit":"0.00","credit":"0.00"}\n]',
+                  required: true,
+                  error: rejected?.fields.lines,
+                  help: _('account_backend.opening.linesJsonHint'),
+                },
+              ],
+            }),
+        })
+      },
+    '/admin/accounting/opening-balances/{id}':
+      (ctx): Route =>
+      async (url, req, params) => {
+        let errors: string[] | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const result = await ctx.call('account.postOpeningBatch', { id: params.id }, url, req)
+          if (succeeded(result)) return seeOther(`${url.pathname}${localeQuery(url)}`)
+          errors = rejection(result, ctx.translate(ctx.localeOf(url, req)), form).messages
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const [{ batch, lines }, companies] = (await Promise.all([
+          ctx.call('account.getOpeningBatch', { id: params.id }, url, req),
+          ctx.call('company.listCompanies', {}, url, req),
+        ])) as [{ batch: AnyRow | null; lines: AnyRow[] }, AnyRow[]]
+        if (!batch) return text('Not found', { status: 404 })
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.opening.batch',
+          body: (_, frame) =>
+            openingBalanceDetailScreen(_, {
+              frame,
+              batch,
+              lines,
+              action: `${url.pathname}${localeQuery(url)}`,
+              currency: currencyOf(companies, frame),
+              entryHref: batch.moveId
+                ? `/admin/accounting/entries/${encodeURIComponent(String(batch.moveId))}${localeQuery(url)}`
+                : undefined,
+            }),
+        })
+      },
+    '/admin/accounting/period-closes':
+      (ctx): Route =>
+      async (url, req) => {
+        let errors: string[] | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const result = await ctx.call(
+            'account.createClosePeriod',
+            {
+              id: form.id || randomUUID(),
+              periodKey: form.periodKey,
+              dateFrom: form.dateFrom,
+              dateTo: form.dateTo,
+            },
+            url,
+            req,
+          )
+          if (succeeded(result)) return seeOther(`${url.pathname}${localeQuery(url)}`)
+          errors = rejection(result, ctx.translate(ctx.localeOf(url, req)), form).messages
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const rows = (await ctx.call('account.listClosePeriods', {}, url, req)) as AnyRow[]
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.close.title',
+          body: (_, frame) =>
+            periodClosesListScreen(_, {
+              frame,
+              rows,
+              action: `${url.pathname}${localeQuery(url)}`,
+              fields: [
+                {
+                  name: 'periodKey',
+                  label: _('account_backend.close.period'),
+                  placeholder: '2026-08',
+                  required: true,
+                },
+                {
+                  name: 'dateFrom',
+                  label: _('account_backend.field.dateFrom'),
+                  type: 'date',
+                  required: true,
+                },
+                { name: 'dateTo', label: _('account_backend.field.dateTo'), type: 'date', required: true },
+              ],
+              rowHref: (row) =>
+                `/admin/accounting/period-closes/${encodeURIComponent(String(row.id))}${localeQuery(url)}`,
+            }),
+        })
+      },
+    '/admin/accounting/period-closes/{id}':
+      (ctx): Route =>
+      async (url, req, params) => {
+        let errors: string[] | undefined
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const form = await readForm(req)
+          const name =
+            form.action === 'refresh'
+              ? 'account.refreshClosePeriod'
+              : form.action === 'reopen'
+                ? 'account.reopenClosePeriod'
+                : 'account.closePeriod'
+          const args =
+            form.action === 'refresh'
+              ? { id: params.id }
+              : form.action === 'reopen'
+                ? { id: params.id, expectedRevision: Number(form.expectedRevision), reason: form.reason }
+                : {
+                    id: params.id,
+                    mode: form.mode || 'soft',
+                    expectedRevision: Number(form.expectedRevision),
+                    reason: form.reason,
+                  }
+          const result = await ctx.call(name, args, url, req)
+          if (succeeded(result)) return seeOther(`${url.pathname}${localeQuery(url)}`)
+          errors = rejection(result, ctx.translate(ctx.localeOf(url, req)), form).messages
+        } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const result = (await ctx.call('account.getClosePeriod', { id: params.id }, url, req)) as {
+          period: AnyRow | null
+          steps: AnyRow[]
+        }
+        if (!result.period) return text('Not found', { status: 404 })
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.close.title',
+          body: (_, frame) =>
+            periodCloseDetailScreen(_, {
+              frame,
+              period: result.period!,
+              steps: result.steps,
+              action: `${url.pathname}${localeQuery(url)}`,
+              errors,
+            }),
+        })
+      },
+    '/admin/accounting/books':
+      (ctx): Route =>
+      async (url, req) => {
+        if (req.method !== 'GET') return text('GET', { status: 405 })
+        const book = url.searchParams.get('book') ?? 'general_journal'
+        const dateFrom = url.searchParams.get('dateFrom') ?? ''
+        const dateTo = url.searchParams.get('dateTo') ?? ''
+        const accountId = url.searchParams.get('accountId') ?? ''
+        const journalId = url.searchParams.get('journalId') ?? ''
+        const partnerId = url.searchParams.get('partnerId') ?? ''
+        const [accounts, journals, companies, result] = (await Promise.all([
+          ctx.call('account.listAccounts', {}, url, req),
+          ctx.call('account.listJournals', {}, url, req),
+          ctx.call('company.listCompanies', {}, url, req),
+          dateFrom && dateTo
+            ? ctx.call(
+                'account.accountingBook',
+                {
+                  book,
+                  dateFrom,
+                  dateTo,
+                  ...(accountId ? { accountId } : {}),
+                  ...(journalId ? { journalId } : {}),
+                  ...(partnerId ? { partnerId } : {}),
+                },
+                url,
+                req,
+              )
+            : Promise.resolve(null),
+        ])) as [AnyRow[], AnyRow[], AnyRow[], AnyRow | null]
+        return adminPage(ctx, url, req, {
+          title: 'account_backend.books.title',
+          body: (_, frame) =>
+            accountingBooksScreen(_, {
+              frame,
+              action: url.pathname,
+              result: result?.errors ? undefined : (result ?? undefined),
+              currency: currencyOf(companies, frame),
+              errors: (result?.errors as Issue[] | undefined)?.map((issue) =>
+                issue.code ? _(issue.code) : String(issue.message),
+              ),
+              entryHref: (row) =>
+                `/admin/accounting/entries/${encodeURIComponent(String(row.moveId))}${localeQuery(url)}`,
+              fields: [
+                {
+                  name: 'book',
+                  label: _('account_backend.books.book'),
+                  type: 'select',
+                  value: book,
+                  options: [
+                    'general_journal',
+                    'general_ledger',
+                    'account_detail',
+                    'cash',
+                    'bank',
+                    'partner',
+                  ].map((value) => ({ value, label: _(`account_backend.books.${value}`) })),
+                },
+                {
+                  name: 'dateFrom',
+                  label: _('account_backend.field.dateFrom'),
+                  type: 'date',
+                  value: dateFrom,
+                  required: true,
+                },
+                {
+                  name: 'dateTo',
+                  label: _('account_backend.field.dateTo'),
+                  type: 'date',
+                  value: dateTo,
+                  required: true,
+                },
+                {
+                  name: 'accountId',
+                  label: _('account_backend.field.accountId'),
+                  type: 'select',
+                  value: accountId,
+                  options: choices(accounts, true),
+                },
+                {
+                  name: 'journalId',
+                  label: _('account_backend.field.journalId'),
+                  type: 'select',
+                  value: journalId,
+                  options: choices(journals, true),
+                },
+                {
+                  name: 'partnerId',
+                  label: _('account_backend.field.partnerId'),
+                  value: partnerId,
+                  help: _('account_backend.books.partnerHint'),
+                },
+              ],
+            }),
+        })
+      },
   },
   messages: MESSAGES,
 })
@@ -3387,6 +3764,90 @@ const vi: Record<string, string> = {
   'menu.taxes': 'Thuế',
   'menu.paymentTerms': 'Điều khoản thanh toán',
   'menu.defaults': 'Tài khoản mặc định',
+  'menu.openingBalances': 'Số dư đầu kỳ',
+  'menu.periodCloses': 'Đóng kỳ',
+  'menu.books': 'Sổ kế toán',
+  'opening.title': 'Số dư đầu kỳ',
+  'opening.subtitle': 'Nhập, kiểm soát và ghi sổ số dư chuyển sang.',
+  'opening.create': 'Nhập số dư đầu kỳ',
+  'opening.createHint': 'Dán dữ liệu nguồn có mã dòng ổn định; hệ thống đối chiếu tổng Nợ/Có trước khi ghi.',
+  'opening.summary': 'Số đợt nhập',
+  'opening.empty': 'Chưa có số dư đầu kỳ',
+  'opening.emptyHint': 'Tạo đợt nhập đầu tiên khi chuẩn bị chuyển đổi dữ liệu.',
+  'opening.batch': 'Đợt số dư',
+  'opening.lines': 'Số dòng',
+  'opening.source': 'Checksum nguồn',
+  'opening.sourceName': 'Tên nguồn',
+  'opening.controlDebit': 'Tổng Nợ kiểm soát',
+  'opening.controlCredit': 'Tổng Có kiểm soát',
+  'opening.linesJson': 'Các dòng nguồn (JSON)',
+  'opening.linesJsonHint':
+    'Mỗi dòng cần sourceKey, accountId, description và đúng một số tiền debit hoặc credit.',
+  'opening.linesInvalid': 'JSON dòng nguồn không hợp lệ.',
+  'opening.validate': 'Kiểm tra dữ liệu',
+  'opening.control': 'Đối chiếu số dư',
+  'opening.controlHint': 'Mỗi dòng mở được về tài khoản và chứng từ nguồn.',
+  'opening.openEntry': 'Mở bút toán',
+  'opening.post': 'Ghi sổ số dư',
+  'opening.postHint': 'Sau khi ghi sổ, mọi chỉnh sửa phải thực hiện bằng bút toán đảo.',
+  'close.title': 'Đóng kỳ kế toán',
+  'close.subtitle': 'Checklist có bằng chứng, khóa mềm và khóa cứng theo kỳ.',
+  'close.summary': 'Số kỳ',
+  'close.create': 'Tạo kỳ đóng sổ',
+  'close.createHint': 'Kỳ chỉ đóng khi toàn bộ kiểm tra bắt buộc đã hoàn tất.',
+  'close.period': 'Kỳ',
+  'close.range': 'Khoảng ngày',
+  'close.blockers': 'Chặn',
+  'close.empty': 'Chưa có kỳ đóng sổ',
+  'close.emptyHint': 'Tạo kỳ đầu tiên để chạy checklist.',
+  'close.version': 'Phiên bản checklist',
+  'close.revision': 'Lần cập nhật',
+  'close.blocked': 'Chưa thể đóng kỳ',
+  'close.checklist': 'Checklist đóng kỳ',
+  'close.checklistHint': 'Mỗi bước giữ checksum bằng chứng để có thể kiểm toán lại.',
+  'close.refresh': 'Chạy lại kiểm tra',
+  'close.check': 'Kiểm tra',
+  'close.required': 'Bắt buộc',
+  'close.evidence': 'Bằng chứng',
+  'close.actions': 'Kiểm soát kỳ',
+  'close.actionsHint': 'Khóa mềm có thể mở lại với lý do; khóa cứng là vĩnh viễn.',
+  'close.soft': 'Khóa mềm',
+  'close.hard': 'Khóa cứng vĩnh viễn',
+  'close.reopen': 'Mở lại kỳ',
+  'close.check.draft_moves': 'Không còn bút toán nháp',
+  'close.check.trial_balance': 'Tổng Nợ bằng tổng Có',
+  'close.check.localization_evidence': 'Bằng chứng chuẩn kế toán đang dùng',
+  'close.check.bank_reconciled': 'Đối chiếu ngân hàng',
+  'close.check.inventory_closed': 'Đóng kho',
+  'close.check.assets_tied_out': 'Đối chiếu tài sản',
+  'books.title': 'Sổ kế toán',
+  'books.subtitle': 'Sổ trung lập quốc gia với số đầu kỳ, phát sinh và số cuối kỳ chính xác.',
+  'books.filter': 'Phạm vi sổ',
+  'books.filterHint': 'Chọn loại sổ, kỳ và chiều phân tích cần thiết.',
+  'books.result': 'Dòng sổ',
+  'books.resultHint': 'Mỗi dòng mở về bút toán đã tạo ra số liệu.',
+  'books.book': 'Loại sổ',
+  'books.opening': 'Đầu kỳ',
+  'books.closing': 'Cuối kỳ',
+  'books.running': 'Số dư lũy kế',
+  'books.partnerHint': 'Mã đối tác là bắt buộc với sổ đối tác.',
+  'books.general_journal': 'Sổ nhật ký chung',
+  'books.general_ledger': 'Sổ cái',
+  'books.account_detail': 'Sổ chi tiết tài khoản',
+  'books.cash': 'Sổ quỹ tiền mặt',
+  'books.bank': 'Sổ tiền gửi ngân hàng',
+  'books.partner': 'Sổ đối tác',
+  'wave1.state.validated': 'Đã kiểm tra',
+  'wave1.state.posted': 'Đã ghi sổ',
+  'wave1.state.open': 'Đang mở',
+  'wave1.state.soft_closed': 'Đã khóa mềm',
+  'wave1.state.hard_closed': 'Đã khóa cứng',
+  'wave1.state.reopened': 'Đã mở lại',
+  'wave1.state.complete': 'Hoàn tất',
+  'wave1.state.blocked': 'Bị chặn',
+  'wave1.state.pending': 'Chờ xử lý',
+  'field.accountingDate': 'Ngày hạch toán',
+  'field.reason': 'Lý do',
   'defaults.title': 'Tài khoản mặc định',
   'defaults.kicker': 'Cấu hình hạch toán',
   'defaults.subtitle': 'Quyết định trước tài khoản cho hoá đơn, để chứng từ khỏi phải hỏi lại mỗi lần.',
@@ -3475,7 +3936,7 @@ const vi: Record<string, string> = {
   'dashboard.trialBalanceHint': 'Đối chiếu tổng phát sinh Nợ và Có theo tài khoản.',
   'dashboard.generalLedgerHint': 'Xem chi tiết phát sinh trên từng tài khoản.',
   'dashboard.partnerLedgerHint': 'Theo dõi công nợ phải thu, phải trả theo đối tác.',
-  'dashboard.accountsHint': 'Hệ thống tài khoản Việt Nam theo Thông tư 99/2025/TT-BTC.',
+  'dashboard.accountsHint': 'Hệ thống tài khoản đang được cấu hình cho công ty.',
   'dashboard.journalsHint': 'Phân loại và đánh số chứng từ kế toán.',
   'dashboard.taxesHint': 'Cấu hình phạm vi và cách tính thuế.',
   'dashboard.paymentTermsHint': 'Lịch thanh toán dùng cho hoá đơn và công nợ.',
@@ -3840,6 +4301,91 @@ const en: Record<string, string> = {
   'dashboard.customerInvoicesHint': 'Sales invoices and outstanding customer balances.',
   'dashboard.vendorBillsHint': 'Purchase documents and supplier obligations.',
   'menu.defaults': 'Default accounts',
+  'menu.openingBalances': 'Opening balances',
+  'menu.periodCloses': 'Period closes',
+  'menu.books': 'Accounting books',
+  'opening.title': 'Opening balances',
+  'opening.subtitle': 'Import, control, and post brought-forward balances.',
+  'opening.create': 'Import opening balances',
+  'opening.createHint':
+    'Paste source rows with stable keys; debit and credit controls are checked before posting.',
+  'opening.summary': 'Import batches',
+  'opening.empty': 'No opening balances yet',
+  'opening.emptyHint': 'Create the first import batch when preparing migration.',
+  'opening.batch': 'Opening batch',
+  'opening.lines': 'Lines',
+  'opening.source': 'Source checksum',
+  'opening.sourceName': 'Source name',
+  'opening.controlDebit': 'Control debit',
+  'opening.controlCredit': 'Control credit',
+  'opening.linesJson': 'Source rows (JSON)',
+  'opening.linesJsonHint':
+    'Each row needs sourceKey, accountId, description, and exactly one debit or credit amount.',
+  'opening.linesInvalid': 'The source-row JSON is invalid.',
+  'opening.validate': 'Validate data',
+  'opening.control': 'Balance control',
+  'opening.controlHint': 'Every row remains drillable to its account and source entry.',
+  'opening.openEntry': 'Open journal entry',
+  'opening.post': 'Post opening balances',
+  'opening.postHint': 'After posting, corrections use a reversal entry.',
+  'close.title': 'Accounting period close',
+  'close.subtitle': 'Evidence-backed checklist with soft and hard locks.',
+  'close.summary': 'Close periods',
+  'close.create': 'Create close period',
+  'close.createHint': 'A period closes only after all required checks pass.',
+  'close.period': 'Period',
+  'close.range': 'Date range',
+  'close.blockers': 'Blockers',
+  'close.empty': 'No close periods yet',
+  'close.emptyHint': 'Create the first period to run its checklist.',
+  'close.version': 'Checklist version',
+  'close.revision': 'Revision',
+  'close.blocked': 'Period cannot close yet',
+  'close.checklist': 'Close checklist',
+  'close.checklistHint': 'Every step retains an evidence checksum for later audit.',
+  'close.refresh': 'Refresh checks',
+  'close.check': 'Check',
+  'close.required': 'Required',
+  'close.evidence': 'Evidence',
+  'close.actions': 'Period control',
+  'close.actionsHint': 'A soft lock can reopen with a reason; a hard lock is permanent.',
+  'close.soft': 'Soft close',
+  'close.hard': 'Permanent hard close',
+  'close.reopen': 'Reopen period',
+  'close.check.draft_moves': 'No draft journal entries',
+  'close.check.trial_balance': 'Debits equal credits',
+  'close.check.localization_evidence': 'Installed-standard evidence',
+  'close.check.bank_reconciled': 'Bank reconciliation',
+  'close.check.inventory_closed': 'Inventory close',
+  'close.check.assets_tied_out': 'Asset tie-out',
+  'books.title': 'Accounting books',
+  'books.subtitle': 'Jurisdiction-neutral books with exact opening, movement, and closing controls.',
+  'books.filter': 'Book scope',
+  'books.filterHint': 'Choose the book, period, and required analysis dimensions.',
+  'books.result': 'Book rows',
+  'books.resultHint': 'Every row drills into the journal entry that produced it.',
+  'books.book': 'Book',
+  'books.opening': 'Opening',
+  'books.closing': 'Closing',
+  'books.running': 'Running balance',
+  'books.partnerHint': 'A partner id is required for the partner book.',
+  'books.general_journal': 'General journal',
+  'books.general_ledger': 'General ledger',
+  'books.account_detail': 'Account detail',
+  'books.cash': 'Cash book',
+  'books.bank': 'Bank book',
+  'books.partner': 'Partner book',
+  'wave1.state.validated': 'Validated',
+  'wave1.state.posted': 'Posted',
+  'wave1.state.open': 'Open',
+  'wave1.state.soft_closed': 'Soft closed',
+  'wave1.state.hard_closed': 'Hard closed',
+  'wave1.state.reopened': 'Reopened',
+  'wave1.state.complete': 'Complete',
+  'wave1.state.blocked': 'Blocked',
+  'wave1.state.pending': 'Pending',
+  'field.accountingDate': 'Accounting date',
+  'field.reason': 'Reason',
   'defaults.title': 'Default accounts',
   'defaults.kicker': 'Posting configuration',
   'defaults.subtitle': 'Decide the accounts once, so a document stops asking on every line.',
@@ -3858,7 +4404,7 @@ const en: Record<string, string> = {
   'dashboard.trialBalanceHint': 'Compare total debit and credit movements by account.',
   'dashboard.generalLedgerHint': 'Inspect posted movements on an individual account.',
   'dashboard.partnerLedgerHint': 'Track receivable and payable balances by partner.',
-  'dashboard.accountsHint': 'Vietnam chart of accounts under Circular 99/2025/TT-BTC.',
+  'dashboard.accountsHint': 'The chart of accounts configured for this company.',
   'dashboard.journalsHint': 'Classify and sequence accounting documents.',
   'dashboard.taxesHint': 'Configure tax scope and calculation methods.',
   'dashboard.paymentTermsHint': 'Payment schedules used by invoices and balances.',
