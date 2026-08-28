@@ -73,6 +73,30 @@ test('channel api: the staff document names both credential presentations', () =
       assert.ok(operation.security?.length, `${method} ${path} publishes no credential`)
 })
 
+test('channel api: staff sales mutations publish replay and concurrency headers', () => {
+  const document = openApiDocument(compose(ketsuite.modules, { headless: true }), 'staff')
+  for (const [path, method] of [
+    ['/sales/orders/{id}/update', 'put'],
+    ['/sales/orders/{id}/confirm', 'post'],
+    ['/sales/orders/{id}/cancel', 'post'],
+  ] as const) {
+    const operation = document.paths[path]?.[method] as Record<string, unknown>
+    const parameters = operation.parameters as Array<Record<string, unknown>>
+    for (const name of ['Idempotency-Key', 'If-Match'])
+      assert.ok(
+        parameters.some(
+          (parameter) => parameter.in === 'header' && parameter.name === name && parameter.required === true,
+        ),
+        `${method.toUpperCase()} ${path} must require ${name}`,
+      )
+  }
+
+  const create = document.paths['/sales/orders/create']?.post as Record<string, unknown>
+  const requestBody = create.requestBody as Record<string, Record<string, Record<string, unknown>>>
+  const schema = requestBody.content['application/json']!.schema as Record<string, unknown>
+  assert.ok(!(schema.required as string[]).includes('warehouseId'))
+})
+
 test('channel api: core and attendance staff responses publish concrete client models', () => {
   const document = openApiDocument(compose(ketsuite.modules, { headless: true }), 'staff')
   const dataSchema = (path: string, method: 'get' | 'post', status: string) => {

@@ -152,8 +152,23 @@ const draftBody = (withVersion: boolean) => ({
     lines: { type: 'array', minItems: 1, maxItems: 100, items: draftLine },
     ...(withVersion ? { expectedVersion: { type: 'string', pattern: '^sov_[0-9a-f]{64}$' } } : {}),
   },
-  required: ['partnerId', 'warehouseId', 'lines', ...(withVersion ? ['expectedVersion'] : [])],
+  required: ['partnerId', 'lines', ...(withVersion ? ['expectedVersion'] : [])],
 })
+const replayHeaders = {
+  type: 'object',
+  additionalProperties: true,
+  properties: { 'Idempotency-Key': { type: 'string', minLength: 8, maxLength: 200 } },
+  required: ['Idempotency-Key'],
+}
+const versionHeaders = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    ...replayHeaders.properties,
+    'If-Match': { type: 'string', minLength: 1, maxLength: 200 },
+  },
+  required: ['Idempotency-Key', 'If-Match'],
+}
 const expectedVersionBody = (availability = false) => ({
   type: 'object',
   additionalProperties: false,
@@ -325,8 +340,14 @@ const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
 const requestVersion = (req: Req, body: Row): string | null => {
   const expected = String(body.expectedVersion ?? '')
   const header = String(req.headers['if-match'] ?? '').trim()
-  if (!header) return expected || null
+  if (!header) return null
   return header === expected || header === `"${expected}"` ? expected : null
+}
+
+const warehouseForCreate = async (ctx: ServeContext, url: URL, req: Req, requested: unknown) => {
+  if (requested != null && String(requested).trim()) return String(requested)
+  const warehouses = (await ctx.call('stock.listWarehouses', {}, url, req)) as Row[]
+  return warehouses.length === 1 ? String(warehouses[0]!.id) : null
 }
 
 const versionFailure = (ctx: ServeContext, url: URL, req: Req) => ({
@@ -452,7 +473,7 @@ export const orderRoutes = routesOf(
     summary: 'Create or replay one canonical draft sales order and all of its lines atomically.',
     auth: 'required',
     capability: { key: 'sales.orders', action: 'create' },
-    request: { body: draftBody(false) },
+    request: { headers: replayHeaders, body: draftBody(false) },
     responses: {
       '200': envelope(detail),
       '409': envelope({ type: 'null' }),
@@ -463,6 +484,11 @@ export const orderRoutes = routesOf(
     handler: async (ctx, url, req, _params, request) => {
       const key = idempotencyKey(ctx, url, req)
       if (typeof key !== 'string') return key
+      const warehouseId = await warehouseForCreate(ctx, url, req, request.body.warehouseId)
+      if (!warehouseId)
+        return domainFailure(ctx, url, req, {
+          errors: [{ field: 'warehouseId', message: 'select one warehouse' }],
+        })
       const body = request.body
       const namespace = `staff:${String(request.identity!.companyId)}:${request.identity!.userId}:sale.saveDraft.create`
       const id = commandId(namespace, key)
@@ -471,7 +497,7 @@ export const orderRoutes = routesOf(
         {
           id,
           partnerId: body.partnerId,
-          warehouseId: body.warehouseId,
+          warehouseId,
           clientOrderRef: body.customerReference,
           notes: body.notes,
           create: true,
@@ -498,7 +524,7 @@ export const orderRoutes = routesOf(
     summary: 'Replace one draft order header and line set under a strong version.',
     auth: 'required',
     capability: { key: 'sales.orders', action: 'update' },
-    request: { params: idParams, body: draftBody(true) },
+    request: { params: idParams, headers: versionHeaders, body: draftBody(true) },
     responses: {
       '200': envelope(detail),
       '404': envelope({ type: 'null' }),
@@ -522,7 +548,7 @@ export const orderRoutes = routesOf(
         {
           id: params.id,
           partnerId: body.partnerId,
-          warehouseId: body.warehouseId,
+          warehouseId: body.warehouseId ?? row.warehouseId,
           clientOrderRef: body.customerReference,
           notes: body.notes,
           expectedRevision: Number(row.revision ?? 0),
@@ -549,7 +575,7 @@ export const orderRoutes = routesOf(
     summary: 'Confirm one reviewed quotation against fresh order and availability evidence.',
     auth: 'required',
     capability: { key: 'sales.orders', action: 'confirm' },
-    request: { params: idParams, body: expectedVersionBody(true) },
+    request: { params: idParams, headers: versionHeaders, body: expectedVersionBody(true) },
     responses: {
       '200': envelope(detail),
       '404': envelope({ type: 'null' }),
@@ -587,7 +613,7 @@ export const orderRoutes = routesOf(
     summary: 'Cancel one undelivered and uninvoiced sales order under a strong version.',
     auth: 'required',
     capability: { key: 'sales.orders', action: 'cancel' },
-    request: { params: idParams, body: expectedVersionBody(false) },
+    request: { params: idParams, headers: versionHeaders, body: expectedVersionBody(false) },
     responses: {
       '200': envelope(detail),
       '404': envelope({ type: 'null' }),
