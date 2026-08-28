@@ -100,8 +100,13 @@ owns token persistence, expiry, revocation and live membership resolution.
 customer profile's `customer` and `optional-customer` still work and mean the same thing.
 
 The staff bootstrap, account, and attendance success responses publish concrete OpenAPI data models. Bootstrap
-types the live company and branch scope, credential-presentation-specific CSRF value, capabilities, and contract
-revision. Attendance types clock state, timestamped punch results, and shift history explicitly, including
+types the live company and branch scope, credential-presentation-specific CSRF value, capabilities, contract
+revision, deployment name, minimum/recommended native versions, and localized maintenance policy. A deployment
+owns the external-client policy through `serve.clientCompatibility`; absent policy is represented explicitly by
+the non-blocking `0.0.0` baseline rather than an omitted or untyped field. Disabled maintenance always publishes a
+null message. Enabled maintenance resolves the exact locale or language first, then falls back to Vietnamese,
+English, or the first configured message so an unsupported locale cannot silently remove the blocker copy.
+Attendance types clock state, timestamped punch results, and shift history explicitly, including
 nullable corrections and stop times. Native generators can therefore reject an empty or free-form business data
 schema instead of falling back to an untyped map.
 

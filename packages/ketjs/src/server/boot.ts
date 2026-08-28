@@ -70,6 +70,9 @@ export type Route = (
 export type ServeContext = {
   /** The immutable manifest selected by this deployment. */
   manifest: Manifest
+  /** The authored deployment and its external-client compatibility policy. */
+  deploymentName: string
+  clientCompatibility: ClientCompatibilityPolicy | null
   /** Same manifest for every tenant; request-shaped for convenient route composition. */
   live: (req: IncomingMessage) => Promise<Manifest>
   config: RuntimeConfig
@@ -201,6 +204,8 @@ export type ServeSpec = {
   openStorage?: OpenStorage
   /** Inject a deployment-owned outbound provider for durable worker jobs. */
   openTransport?: OpenTransport
+  /** Version and maintenance policy published by profile bootstrap routes. */
+  clientCompatibility?: ClientCompatibilityPolicy
   /**
    * Turn on sessions. Present means the X-Ket-Company shim is gone and identity
    * comes from a signed cookie; absent means the shim stays and the banner says so.
@@ -233,6 +238,12 @@ export type ServeSpec = {
     req: IncomingMessage,
   ) => Promise<readonly string[] | null>
   defaults?: Partial<RuntimeConfig>
+}
+
+export type ClientCompatibilityPolicy = {
+  minimumVersions: { ios: string; android: string }
+  recommendedVersions?: { ios: string; android: string }
+  maintenance?: { enabled: boolean; messages?: Record<string, string> }
 }
 
 export type BootedDeployment = {
@@ -544,6 +555,8 @@ export async function bootDeployment(
 
   const ctx: ServeContext = {
     manifest,
+    deploymentName: spec.name,
+    clientCompatibility: serve.clientCompatibility ?? null,
     config,
     scopeOf,
     localeOf,
