@@ -31,3 +31,4 @@ export default defineModule({
   },
 })
 export { POS_ORDER_STATES, POS_SESSION_STATES, POS_INVOICE_STATUSES } from './functions.ts'
+export { functions as posFunctionSpecs } from './functions.ts'

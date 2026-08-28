@@ -68,6 +68,51 @@ transaction shown above, the DDL rolls back and the marker remains unchanged. SQ
 catalogs are supported; a custom adapter is refused unless KetJS can verify it safely. A subsequent
 `migrateOne(adapter, manifest)` returns no operations after a successful confirmation.
 
+## Read-only physical verification
+
+An applied marker is a claim about the database, not proof that an older framework version enforced
+every constraint. Use `verifyPhysicalSchema()` to audit that claim without running DDL or changing
+`ket_migration`:
+
+```ts
+// File: scripts/verify-schema.ts
+import { verifyPhysicalSchema } from '@ketvietlab/ketjs'
+
+const report = await verifyPhysicalSchema(adapter, manifest)
+if (!report.ok) {
+  console.error({
+    markerMatchesManifest: report.markerMatchesManifest,
+    markerIssues: report.markerIssues,
+    manifestIssues: report.manifestIssues,
+  })
+  process.exitCode = 1
+}
+```
+
+`markerIssues` compares the physical catalog with the schema recorded in `ket_migration`. It detects
+legacy drift such as a marker declaring `optional: false` while the physical column remains nullable.
+`manifestIssues` compares the same catalog with the current composed manifest. `ok` is true only when
+the marker exists, matches that manifest, and both physical comparisons are clean. SQLite and PostgreSQL
+catalogs are supported. Run the verifier while no migration is concurrently changing the same database.
+
+The CLI opens the deployment's configured datastore and performs the same read-only audit:
+
+```bash
+# Run from: /path/to/example-app
+ket schema verify --deployment backoffice --workspace dist/ket.workspace.js
+ket schema verify --deployment erp --tenant acme --workspace dist/ket.workspace.js
+ket schema verify --deployment erp --all --workspace dist/ket.workspace.js
+```
+
+Tenant deployments must provide the non-mutating `serve.tenants.exists(key, config)` check. Verification
+calls it before `open()`, reports a missing datastore, and never creates an empty tenant database merely
+to inspect it.
+
+A failed comparison exits non-zero and prints physical-versus-marker and physical-versus-manifest
+differences separately. For the built-in SQLite store, verification refuses to create a missing database
+file. `physicalSchemaIssues()` is also exported for operational tooling that already owns explicit
+`Schema` values.
+
 Installing or removing a module at runtime is not a destructive migration. Disabled module data stays
 in place for a later reinstall.
 
@@ -200,6 +245,8 @@ one transaction, so a partial fleet is visible and retryable instead of being hi
 exception. `--dry-run` reads the marker and plan without creating framework or application tables.
 
 Programmatic tooling can use `createAdapterPool()`, `migrateFleet()`, and `formatFleet()`.
+Closing an adapter pool is terminal and idempotent; create a new pool rather than acquiring from one whose
+shutdown has started.
 
 ## Deployment sequence
 

@@ -106,6 +106,7 @@ test('account PostgreSQL: line/post and reversal races preserve one exact ledger
     assert.equal([postedRace, addedRace].filter((result) => result.ok === true).length, 1)
     const racedMove = await call(first, 'account.getMove', { id: 'posting-race' })
     const racedLines = racedMove.lines as Row[]
+    const racedRevenueCredit = racedMove.state === 'posted' ? 10n : 11n
     if (racedMove.state === 'posted') {
       assert.equal(racedLines.length, 2)
     } else {
@@ -185,7 +186,10 @@ test('account PostgreSQL: line/post and reversal races preserve one exact ledger
     assert.equal((await call(first, 'account.postMove', { id: invoiceId })).ok, true)
     const beforeReversal = (await call(first, 'account.trialBalance')) as unknown as Row[]
     assert.equal(beforeReversal.find((row) => row.accountId === 'receivable')?.debit, amount)
-    assert.equal(beforeReversal.find((row) => row.accountId === 'revenue')?.credit, '9007199254741003')
+    assert.equal(
+      beforeReversal.find((row) => row.accountId === 'revenue')?.credit,
+      String(BigInt(amount) + racedRevenueCredit),
+    )
 
     const reversalIds = ['exact-reversal-a', 'exact-reversal-b']
     const results = await Promise.all([

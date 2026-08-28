@@ -91,6 +91,16 @@ async function bootPos(t: TestContext) {
     receivableAccountId: 'receivable',
     taxAccountId: 'tax',
   })
+  await call('pos.saveConfig', {
+    id: 'other-shop',
+    name: 'Cửa hàng khác',
+    warehouseId: 'wh',
+    pricelistId: 'retail',
+    salesJournalId: 'sales',
+    revenueAccountId: 'revenue',
+    receivableAccountId: 'receivable',
+    taxAccountId: 'tax',
+  })
   await call('pos.savePaymentMethod', {
     id: 'cash-method',
     name: 'Tiền mặt',
@@ -98,6 +108,12 @@ async function bootPos(t: TestContext) {
     isCash: true,
   })
   await call('pos.linkPaymentMethod', { id: 'shop:cash', configId: 'shop', paymentMethodId: 'cash-method' })
+  await call('pos.createSession', {
+    id: 'other-session',
+    configId: 'other-shop',
+    userId: 'admin',
+  })
+  await call('pos.openSession', { id: 'other-session' })
   await call('pos.createSession', {
     id: 'session-1',
     configId: 'shop',
@@ -154,6 +170,12 @@ test('pos-e2e: real HTTP session carries a register sale through stock and accou
   })
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Paid/)
+  await e2e.client.form('/admin/pos/orders/order-1', { action: 'refund' })
+  const refunds = ((await call<Row[]>('pos.listOrders')).value ?? []).filter(
+    (order) => order.refundedOrderId === 'order-1',
+  )
+  assert.equal(refunds.length, 1)
+  assert.equal(refunds[0]?.sessionId, 'session-1')
   await e2e.client.logout()
   const denied = await e2e.client.get('/admin/pos/orders', { headers: { accept: 'application/json' } })
   assert.equal(denied.status, 401)

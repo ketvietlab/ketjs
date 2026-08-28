@@ -870,9 +870,11 @@ every trip through the database puts back the error the rounding just took out.
   explicit caller choice, as in the domain contract.
 - SQLite predicates and ordering compare normalized decimal parts exactly rather
   than casting through `REAL`. Grouping and `countDistinct` use canonical numeric
-  equivalence; `sum`, `min`, and `max` use string/`BigInt` aggregates. Decimal `avg`
-  fails explicitly because a rational result may not have a finite decimal spelling;
-  its rounding rule stays a domain concern or uses PostgreSQL.
+  equivalence; `sum`, `min`, and `max` use string/`BigInt` aggregates. An unrounded
+  decimal `avg` fails explicitly on both adapters because a rational result may not
+  have a finite decimal spelling. Callers can supply a finite scale and the explicit
+  half-away-from-zero rule for portable SQLite/PostgreSQL execution, or keep another
+  rounding policy in the domain by requesting `sum` and `count`.
 - Computed decimal keys and aggregates are canonicalized after either adapter, while
   ordinary selected fields retain their stored spelling. Every order explicitly follows
   PostgreSQL's null convention: ascending last, descending first.
