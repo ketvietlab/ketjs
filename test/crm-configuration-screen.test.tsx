@@ -116,6 +116,32 @@ test('crm configuration: preserves edit values, validation, cancel, detail and r
   assert.match(rendered, /name="action" value="restore"/)
 })
 
+test('crm configuration: keeps large forms in a centered dialog instead of a side sheet', () => {
+  const rendered = renderToString(
+    configurationScreen(
+      translate,
+      {},
+      {
+        tab: 'assignmentRules',
+        rows: [],
+        creating: true,
+        editing: null,
+        fields: [
+          { name: 'name', label: 'Tên' },
+          { name: 'teamId', label: 'Đội bán hàng' },
+          { name: 'kind', label: 'Loại' },
+          { name: 'sequence', label: 'Thứ tự', type: 'number' },
+          { name: 'active', label: 'Hoạt động', type: 'checkbox' },
+        ],
+      },
+    ),
+  )
+
+  assert.match(rendered, /data-presentation="dialog"/)
+  assert.match(rendered, /data-size="large"/)
+  assert.doesNotMatch(rendered, /data-presentation="sheet"/)
+})
+
 test('crm configuration: every configuration section remains selectable and can render empty', () => {
   for (const tab of CONFIGURATION_TABS) {
     const rendered = renderToString(

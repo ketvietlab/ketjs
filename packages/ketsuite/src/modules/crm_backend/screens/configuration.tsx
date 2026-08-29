@@ -158,7 +158,7 @@ export const configurationScreen = (
         : _('crm_backend.configuration.create'),
       closeHref: endpoint,
       closeLabel: _('crm_backend.action.cancelEdit'),
-      presentation: options.fields.length > 4 ? 'sheet' : 'dialog',
+      presentation: 'dialog',
       size: options.fields.length > 4 ? 'large' : 'default',
       form: {
         scope: `crm-configuration-${options.tab}`,
