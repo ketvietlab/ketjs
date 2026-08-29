@@ -330,7 +330,12 @@ export class Query {
             const count = `COUNT(${column})`
             const shifted = `ABS(${sum}) * ${factor}`
             const rounded = `DIV(${shifted}, ${count}) + CASE WHEN MOD(${shifted}, ${count}) * 2 >= ${count} THEN 1 ELSE 0 END`
-            average = `CASE WHEN ${count} = 0 THEN NULL ELSE SIGN(${sum}) * (${rounded}) / ${factor} END`
+            // Multiplication by an exact negative-power factor preserves the
+            // requested display scale. PostgreSQL numeric division derives a
+            // result scale from operand precision and can truncate this back
+            // to 20 digits before the client receives it.
+            const inverseFactor = `CAST(('1e-' || CAST(${scale} AS TEXT)) AS NUMERIC)`
+            average = `CASE WHEN ${count} = 0 THEN NULL ELSE SIGN(${sum}) * (${rounded}) * ${inverseFactor} END`
           }
           return `${average} AS ${q(aggregate.as)}`
         }
