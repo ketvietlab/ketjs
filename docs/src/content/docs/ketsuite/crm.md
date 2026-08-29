@@ -162,6 +162,10 @@ to create was refused.
 - **Configuration** — teams, team members, stages, tags, assignment rules and scoring rules; each row
   can be edited and archived, not only created.
 
+All URL-owned CRM overlays use centered dialogs on desktop, including long configuration forms and
+the activity scheduler. On narrow screens the shared dialog contract expands them to the full viewport;
+CRM does not use right-side sheets.
+
 The board's figures come from `crm.pipeline.summary`, which takes the screen's filters and answers
 per-stage counts and amounts plus the four totals. Every column keeps its own figures, including Won
 and Lost, because that is what a column head states; the four above the board count only the stages
