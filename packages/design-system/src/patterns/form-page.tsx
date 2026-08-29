@@ -85,9 +85,9 @@ export const FormPage = (props: FormPageProps): TemplateResult => {
       {props.controller !== undefined && <div data-ui="form-page-controller">{props.controller}</div>}
       {props.navigation !== undefined && <div data-ui="form-page-navigation">{props.navigation}</div>}
       <div data-ui="form-page-layout">
-        <main data-ui="form-page-body" data-ket-slot={props.slots?.body}>
+        <div data-ui="form-page-body" data-ket-slot={props.slots?.body}>
           {props.body}
-        </main>
+        </div>
         {props.aside !== undefined && (
           <aside data-ui="form-page-aside" aria-label={props.asideLabel ?? null}>
             {props.aside}

@@ -70,6 +70,17 @@ test('design system: a stacked FormPage rail keeps space above its content', () 
   )
 })
 
+test('design system: FormPage does not nest a second main landmark inside AppShell', () => {
+  const html = renderToString(
+    <AppShell
+      sidebar="Menu"
+      main={<FormPage title="Supplier" body="Partner fields" aside="Record facts" />}
+    />,
+  )
+  assert.equal([...html.matchAll(/<main\b/g)].length, 1)
+  assert.match(html, /<div data-ui="form-page-body">[\s\S]*Partner fields[\s\S]*<\/div>/)
+})
+
 test('design system: form controls stack below 768px', () => {
   const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
   const compatibility = readFileSync('packages/ketsuite/src/modules/backend/design/forms.css', 'utf8')

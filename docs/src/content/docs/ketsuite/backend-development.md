@@ -130,6 +130,10 @@ Use Post/Redirect/Get after successful mutation. This prevents refresh from resu
 keeps the record URL canonical. A rejected form should render directly with its errors and preserve
 the input.
 
+`AppShell` owns the page's single `main` landmark. Patterns rendered inside it, including `FormPage`,
+use sections and neutral body containers instead of adding another `main`; optional contextual rails
+use a labelled `aside`. This keeps the primary reading region unambiguous for assistive technology.
+
 ## Islands
 
 An island declares a validated prop contract, a stable identity key, server view, and client export:
