@@ -351,6 +351,32 @@
     box-shadow: var(--admin-shadow-float);
   }
 
+  [data-ui="search-menu-query"] {
+    display: flex;
+    gap: var(--admin-gap-xs);
+    padding: 0.25rem;
+    border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="search-menu-query"] input {
+    min-inline-size: 11rem;
+    min-block-size: 2rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    padding-inline: 0.5rem;
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+  }
+
+  [data-ui="search-menu-query"] button {
+    min-inline-size: 2rem;
+    min-block-size: 2rem;
+    border: 0;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-control-bg);
+    color: var(--admin-ink);
+  }
+
   [data-ui="search-menu-item"] {
     display: flex;
     min-block-size: 2rem;
