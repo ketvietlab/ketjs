@@ -126,6 +126,7 @@ export const models: Record<string, ModelDef> = {
       paymentLockMethodId: 'ref:pos.PaymentMethod?',
       paymentLockAmount: 'decimal?',
       dateOrder: 'datetime',
+      finalizedAt: 'datetime?',
       currency: 'text',
       amountUntaxed: 'decimal',
       amountTax: 'decimal',
@@ -146,6 +147,10 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: {
       company_uuid: { fields: ['companyId', 'uuid'], unique: true },
+      company_order_date: { fields: ['companyId', 'dateOrder'] },
+      config_order_date: { fields: ['companyId', 'configId', 'dateOrder'] },
+      company_finalized: { fields: ['companyId', 'finalizedAt'] },
+      config_finalized: { fields: ['companyId', 'configId', 'finalizedAt'] },
       session_sequence: { fields: ['companyId', 'sessionId', 'sequenceNumber'], unique: true },
       exchange_role: { fields: ['companyId', 'exchangeId', 'exchangeRole'], unique: true },
       payment_lock: { fields: ['companyId', 'paymentLockId'], unique: true },
@@ -182,7 +187,10 @@ export const models: Record<string, ModelDef> = {
     fields: {
       id: 'id',
       orderId: 'ref:pos.Order',
+      configId: 'ref:pos.Config?',
+      sessionId: 'ref:pos.Session?',
       paymentMethodId: 'ref:pos.PaymentMethod',
+      currency: 'text?',
       amount: 'decimal',
       tenderedAmount: 'decimal',
       appliedAmount: 'decimal',
@@ -196,6 +204,8 @@ export const models: Record<string, ModelDef> = {
       paymentDate: 'datetime',
     },
     indexes: {
+      company_time: { fields: ['companyId', 'paymentDate'] },
+      config_time: { fields: ['companyId', 'configId', 'paymentDate'] },
       provider_attempt: { fields: ['companyId', 'providerAttemptId'], unique: true },
       provider_reversal: { fields: ['companyId', 'reversalOfId'], unique: true },
     },
@@ -219,6 +229,7 @@ export const models: Record<string, ModelDef> = {
     fields: {
       id: 'id',
       sessionId: 'ref:pos.Session',
+      configId: 'ref:pos.Config?',
       direction: 'text',
       amount: 'decimal',
       reason: 'text',
@@ -228,7 +239,11 @@ export const models: Record<string, ModelDef> = {
       occurredAt: 'datetime',
       reversalOfId: 'ref:pos.CashMovement?',
     },
-    indexes: { session_time: { fields: ['companyId', 'sessionId', 'occurredAt'] } },
+    indexes: {
+      company_time: { fields: ['companyId', 'occurredAt'] },
+      session_time: { fields: ['companyId', 'sessionId', 'occurredAt'] },
+      config_time: { fields: ['companyId', 'configId', 'occurredAt'] },
+    },
   },
   /** Append-only operational timeline for sensitive POS commands. */
   AuditEvent: {
@@ -237,6 +252,8 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       subjectType: 'text',
       subjectId: 'text',
+      configId: 'ref:pos.Config?',
+      sessionId: 'ref:pos.Session?',
       action: 'text',
       actorId: 'text?',
       deviceId: 'text?',
@@ -246,7 +263,10 @@ export const models: Record<string, ModelDef> = {
       occurredAt: 'datetime',
     },
     indexes: {
+      company_time: { fields: ['companyId', 'occurredAt'] },
       subject_time: { fields: ['companyId', 'subjectType', 'subjectId', 'occurredAt'] },
+      config_time: { fields: ['companyId', 'configId', 'occurredAt'] },
+      session_time: { fields: ['companyId', 'sessionId', 'occurredAt'] },
       action_time: { fields: ['companyId', 'action', 'occurredAt'] },
     },
   },
