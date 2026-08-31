@@ -9,7 +9,11 @@ import { migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
 const route = () => () => async () => text('ok')
 
 test('channel api: reserved prefixes reject bypasses and accept published contributions', () => {
-  const owner = defineModule({ name: 'channel_api', version: '1.0.0', reserves: ['/api/customer/v1/'] })
+  const owner = defineModule({
+    name: 'channel_api',
+    version: '1.0.0',
+    reserves: ['/api/customer/v1/'],
+  })
   const bypass = defineModule({
     name: 'bypass',
     routes: { '/api/customer/v1/orders': route() },
@@ -95,6 +99,38 @@ test('channel api: staff sales mutations publish replay and concurrency headers'
   const requestBody = create.requestBody as Record<string, Record<string, Record<string, unknown>>>
   const schema = requestBody.content['application/json']!.schema as Record<string, unknown>
   assert.ok(!(schema.required as string[]).includes('warehouseId'))
+})
+
+test('channel api: staff purchasing mutations publish replay and concurrency headers', () => {
+  const document = openApiDocument(compose(ketsuite.modules, { headless: true }), 'staff')
+  const mutations = [
+    ['/purchasing/orders/create', 'post', false],
+    ['/purchasing/orders/{id}/update', 'put', true],
+    ['/purchasing/orders/{id}/confirm', 'post', true],
+    ['/purchasing/orders/{id}/approve', 'post', true],
+    ['/purchasing/orders/{id}/cancel', 'post', true],
+    ['/purchasing/orders/{id}/receipts/{receiptId}/receive', 'post', true],
+  ] as const
+  for (const [path, method, versioned] of mutations) {
+    const operation = document.paths[path]?.[method] as Record<string, unknown>
+    assert.equal(operation['x-ket-idempotent'], true, `${method.toUpperCase()} ${path} is not replay-safe`)
+    const parameters = operation.parameters as Array<Record<string, unknown>>
+    assert.ok(
+      parameters.some(
+        (parameter) =>
+          parameter.name === 'Idempotency-Key' && parameter.in === 'header' && parameter.required === true,
+      ),
+      `${method.toUpperCase()} ${path} must require Idempotency-Key`,
+    )
+    assert.equal(
+      parameters.some(
+        (parameter) =>
+          parameter.name === 'If-Match' && parameter.in === 'header' && parameter.required === true,
+      ),
+      versioned,
+      `${method.toUpperCase()} ${path} has the wrong If-Match contract`,
+    )
+  }
 })
 
 test('channel api: core and attendance staff responses publish concrete client models', () => {
