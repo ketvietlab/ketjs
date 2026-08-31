@@ -3169,6 +3169,14 @@
             }
           },
           {
+            "name": "stageId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "type",
             "in": "query",
             "required": false,
@@ -3605,7 +3613,7 @@
                             },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -3887,7 +3895,7 @@
                         },
                         "readOnly": {
                           "type": "boolean",
-                          "const": true
+                          "const": false
                         }
                       },
                       "required": [
@@ -4228,7 +4236,7 @@
                             },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -4591,7 +4599,7 @@
                             },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -4951,7 +4959,7 @@
                             },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -5316,7 +5324,7 @@
                             },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -5687,7 +5695,7 @@
                             },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -6063,7 +6071,7 @@
                             },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [

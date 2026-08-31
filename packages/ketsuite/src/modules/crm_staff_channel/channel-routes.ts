@@ -137,7 +137,7 @@ const detail = {
       type: 'array',
       items: { type: 'string', enum: workflowActions },
     },
-    readOnly: { type: 'boolean', const: true },
+    readOnly: { type: 'boolean', const: false },
   },
   required: [
     ...summary.required,
@@ -381,9 +381,9 @@ const projectDetail = async (ctx: ServeContext, row: Row, url: URL, req: Req) =>
         }))
       : [],
     workflowActions: actions,
-    // This remains a narrow projection: writes are explicit commands below, not a
-    // promise that an arbitrary edited detail object can be saved back.
-    readOnly: true,
+    // The projection is actionable through the explicit commands below; this is
+    // not a promise that an arbitrary edited detail object can be saved back.
+    readOnly: false,
   }
 }
 
@@ -499,6 +499,7 @@ export const channelRoutes = routesOf(
         type: 'object',
         properties: {
           query: { type: 'string', minLength: 2 },
+          stageId: string,
           type: { type: 'string', enum: [...CASE_KINDS] },
           outcome: { type: 'string', enum: [...OUTCOMES] },
           cursor: string,
@@ -514,6 +515,7 @@ export const channelRoutes = routesOf(
         'crm.case.list',
         {
           search: url.searchParams.get('query') || undefined,
+          stageId: url.searchParams.get('stageId') || undefined,
           kind: url.searchParams.get('type') || undefined,
           terminalState: outcome === 'pending' ? 'open' : outcome || undefined,
           cursor: cursorValue(url.searchParams.get('cursor')),
