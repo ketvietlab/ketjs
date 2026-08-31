@@ -23,7 +23,9 @@ const normalizedEmail = (value: unknown): string | null => {
   return email || null
 }
 const normalizedPhone = (value: unknown): string | null => {
-  const raw = String(value ?? '').normalize('NFKC').trim()
+  const raw = String(value ?? '')
+    .normalize('NFKC')
+    .trim()
   if (!raw) return null
   const international = raw.startsWith('+') || raw.startsWith('00')
   const digits = raw.replace(/\D/g, '')
@@ -408,18 +410,7 @@ export const functions: Record<string, FnSpec> = {
           },
           existing,
         )
-        .cast([
-          'id',
-          'kind',
-          'name',
-          'parentId',
-          'vat',
-          'ref',
-          'email',
-          'phone',
-          'contactConsent',
-          'lang',
-        ])
+        .cast(['id', 'kind', 'name', 'parentId', 'vat', 'ref', 'email', 'phone', 'contactConsent', 'lang'])
       if (!existing) cs = cs.put('active', true)
       if (!cs.valid) return invalid(changeIssues(cs.errors))
       await ctx.db.commit(cs, existing ? { id: a.id } : undefined)
