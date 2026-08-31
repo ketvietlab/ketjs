@@ -94,6 +94,32 @@ const nextActivity = {
   },
   required: ['id', 'type', 'summary', 'dueDate'],
 }
+const mobileStage = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { id: string, name: string, isWon: { type: 'boolean' } },
+  required: ['id', 'name', 'isWon'],
+}
+const activityTypeOption = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: string,
+    name: string,
+    minimumDueDate: string,
+    suggestedDueDate: string,
+    maximumDueDate: string,
+  },
+  required: ['id', 'name', 'minimumDueDate', 'suggestedDueDate', 'maximumDueDate'],
+}
+const workflowActions = [
+  'transition',
+  'assign',
+  'schedule_activity',
+  'complete_activity',
+  'mark_won',
+  'mark_lost',
+]
 const detail = {
   ...summary,
   properties: {
@@ -102,9 +128,31 @@ const detail = {
     expectedClosing: nullableString,
     description: nullableString,
     nextActivity,
-    readOnly: { type: 'boolean', const: true },
+    activityDeadline: nullableString,
+    activityTypeOptions: { type: 'array', items: activityTypeOption },
+    assigneeOptions: { type: 'array', items: party },
+    lossReasonOptions: { type: 'array', items: party },
+    stageOptions: { type: 'array', items: mobileStage },
+    workflowActions: {
+      type: 'array',
+      items: { type: 'string', enum: workflowActions },
+    },
+    readOnly: { type: 'boolean', const: false },
   },
-  required: [...summary.required, 'priority', 'expectedClosing', 'description', 'nextActivity', 'readOnly'],
+  required: [
+    ...summary.required,
+    'priority',
+    'expectedClosing',
+    'description',
+    'nextActivity',
+    'activityDeadline',
+    'activityTypeOptions',
+    'assigneeOptions',
+    'lossReasonOptions',
+    'stageOptions',
+    'workflowActions',
+    'readOnly',
+  ],
 }
 const page = {
   type: 'object',
@@ -274,16 +322,70 @@ const idempotencyKey = (ctx: ServeContext, url: URL, req: Req): string | ReturnT
   }
 }
 
-const projectDetail = async (ctx: ServeContext, row: Row, url: URL, req: Req) => ({
-  ...projectSummary(row),
-  priority: String(row.priority),
-  expectedClosing: row.expectedClosing == null ? null : String(row.expectedClosing),
-  description: row.description == null ? null : String(row.description),
-  nextActivity: await pendingActivityOf(ctx, row, url, req),
-  // This remains a narrow projection: writes are explicit commands below, not a
-  // promise that an arbitrary edited detail object can be saved back.
-  readOnly: true,
-})
+const dateOffset = (base: string, days: number): string => {
+  const value = new Date(`${base}T00:00:00.000Z`)
+  value.setUTCDate(value.getUTCDate() + days)
+  return value.toISOString().slice(0, 10)
+}
+
+const projectDetail = async (ctx: ServeContext, row: Row, url: URL, req: Req) => {
+  const today = new Date().toISOString().slice(0, 10)
+  const [nextActivityValue, activityTypes] = await Promise.all([
+    pendingActivityOf(ctx, row, url, req),
+    ctx.call('activity.listTypes', {}, url, req) as Promise<Row[]>,
+  ])
+  const pending = outcomeOf(row) === 'pending'
+  const actions = pending
+    ? [
+        'transition',
+        'assign',
+        'schedule_activity',
+        ...(nextActivityValue ? ['complete_activity'] : []),
+        ...(row.kind === 'opportunity' ? ['mark_won', 'mark_lost'] : []),
+      ]
+    : []
+  return {
+    ...projectSummary(row),
+    priority: String(row.priority),
+    expectedClosing: row.expectedClosing == null ? null : String(row.expectedClosing),
+    description: row.description == null ? null : String(row.description),
+    nextActivity: nextActivityValue,
+    activityDeadline: nextActivityValue?.dueDate ?? null,
+    activityTypeOptions: activityTypes
+      .filter((type) => type.active !== false)
+      .map((type) => ({
+        id: String(type.id),
+        name: String(type.name),
+        minimumDueDate: today,
+        suggestedDueDate: dateOffset(today, Number(type.defaultDelayDays ?? 0)),
+        maximumDueDate: dateOffset(today, 90),
+      })),
+    assigneeOptions: Array.isArray(row.assigneeOptions)
+      ? (row.assigneeOptions as Row[]).map((assignee) => ({
+          id: String(assignee.id),
+          name: String(assignee.name),
+        }))
+      : [],
+    lossReasonOptions: [
+      { id: 'budget', name: 'Budget' },
+      { id: 'timing', name: 'Timing' },
+      { id: 'competitor', name: 'Competitor' },
+      { id: 'unreachable', name: 'Unreachable' },
+      { id: 'other', name: 'Other' },
+    ],
+    stageOptions: Array.isArray(row.stageOptions)
+      ? (row.stageOptions as Row[]).map((stage) => ({
+          id: String(stage.id),
+          name: String(stage.name),
+          isWon: stage.terminalState === 'won',
+        }))
+      : [],
+    workflowActions: actions,
+    // The projection is actionable through the explicit commands below; this is
+    // not a promise that an arbitrary edited detail object can be saved back.
+    readOnly: false,
+  }
+}
 
 const mutate =
   (
@@ -397,6 +499,7 @@ export const channelRoutes = routesOf(
         type: 'object',
         properties: {
           query: { type: 'string', minLength: 2 },
+          stageId: string,
           type: { type: 'string', enum: [...CASE_KINDS] },
           outcome: { type: 'string', enum: [...OUTCOMES] },
           cursor: string,
@@ -412,6 +515,7 @@ export const channelRoutes = routesOf(
         'crm.case.list',
         {
           search: url.searchParams.get('query') || undefined,
+          stageId: url.searchParams.get('stageId') || undefined,
           kind: url.searchParams.get('type') || undefined,
           terminalState: outcome === 'pending' ? 'open' : outcome || undefined,
           cursor: cursorValue(url.searchParams.get('cursor')),

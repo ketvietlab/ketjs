@@ -159,7 +159,16 @@ test('staff sales channel lists only customers with bounded cursor pagination', 
       '/api/staff/v1/sales/customers?limit=1',
     )
   ).data
-  assert.deepEqual(first.items, [{ id: 'customer-a', name: 'An Nhiên', kind: 'company' }])
+  assert.deepEqual(first.items, [
+    {
+      id: 'customer-a',
+      name: 'An Nhiên',
+      kind: 'company',
+      emailHint: null,
+      phoneHint: null,
+      contactConsent: false,
+    },
+  ])
   assert.ok(first.nextCursor)
 
   const second = (
@@ -167,11 +176,20 @@ test('staff sales channel lists only customers with bounded cursor pagination', 
       `/api/staff/v1/sales/customers?limit=1&cursor=${encodeURIComponent(first.nextCursor!)}`,
     )
   ).data
-  assert.deepEqual(second.items, [{ id: 'customer-b', name: 'Bình Minh', kind: 'company' }])
+  assert.deepEqual(second.items, [
+    {
+      id: 'customer-b',
+      name: 'Bình Minh',
+      kind: 'company',
+      emailHint: null,
+      phoneHint: null,
+      contactConsent: false,
+    },
+  ])
   assert.equal(second.nextCursor, null)
 })
 
-test('staff sales channel returns a read-only customer and hides non-customer partners', async (t) => {
+test('staff sales channel returns an editable redacted customer and hides non-customer partners', async (t) => {
   const e2e = await boot(t)
   await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
 
@@ -180,12 +198,80 @@ test('staff sales channel returns a read-only customer and hides non-customer pa
     id: 'customer-a',
     name: 'An Nhiên',
     kind: 'company',
-    readOnly: true,
+    emailHint: null,
+    phoneHint: null,
+    contactConsent: false,
+    readOnly: false,
   })
 
   const supplier = await e2e.client.get('/api/staff/v1/sales/customers/supplier')
   assert.equal(supplier.status, 404)
   assert.equal(((await supplier.json()) as Envelope<null>).error?.code, 'sale_staff_channel.customerNotFound')
+})
+
+test('staff sales customer create and update normalize PII, require consent, and redact responses', async (t) => {
+  const e2e = await boot(t)
+  await e2e.client.login({ login: 'salesperson', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const headers = mutationHeaders(bootstrap.data.csrfToken, 'staff-customer-create-1')
+
+  const refused = await e2e.client.request('/api/staff/v1/sales/customers/create', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      name: 'Khách Không Đồng Ý',
+      kind: 'person',
+      email: 'private@example.test',
+      contactConsent: false,
+    }),
+  })
+  assert.equal(refused.status, 422)
+  assert.equal(JSON.stringify(await refused.json()).includes('private@example.test'), false)
+
+  const createBody = {
+    name: 'Nguyễn Minh Anh',
+    kind: 'person',
+    email: '  MINH.ANH@EXAMPLE.TEST ',
+    phone: '00 84 901-234-567',
+    contactConsent: true,
+  }
+  const createdResponse = await e2e.client.request('/api/staff/v1/sales/customers/create', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(createBody),
+  })
+  assert.equal(createdResponse.status, 200)
+  const created = (await createdResponse.json()) as Envelope<Row>
+  const createdCustomer = created.data.customer as Row
+  assert.equal(created.data.outcome, 'created')
+  assert.equal(createdCustomer.emailHint, 'm***@example.test')
+  assert.equal(createdCustomer.phoneHint, '•••• 4567')
+  assert.equal(JSON.stringify(created).includes('minh.anh@example.test'), false)
+  assert.equal(JSON.stringify(created).includes('+84901234567'), false)
+
+  const id = String(createdCustomer.id)
+  const stored = (
+    await e2e.fixture.call<Row>('partner.getPartner', { id }, { scope: { company: 'acme', branches: null } })
+  ).value
+  assert.equal(stored.email, 'minh.anh@example.test')
+  assert.equal(stored.phone, '+84901234567')
+  assert.equal(stored.contactConsent, true)
+
+  const updateResponse = await e2e.client.request(`/api/staff/v1/sales/customers/${id}/update`, {
+    method: 'PUT',
+    headers: mutationHeaders(bootstrap.data.csrfToken, 'staff-customer-update-1'),
+    body: JSON.stringify({ name: 'Nguyễn Minh Anh mới', kind: 'person', contactConsent: false }),
+  })
+  assert.equal(updateResponse.status, 200)
+  const updated = (await updateResponse.json()) as Envelope<Row>
+  assert.equal((updated.data.customer as Row).emailHint, null)
+  assert.equal((updated.data.customer as Row).phoneHint, null)
+  const cleared = (
+    await e2e.fixture.call<Row>('partner.getPartner', { id }, { scope: { company: 'acme', branches: null } })
+  ).value
+  assert.equal(cleared.email, null)
+  assert.equal(cleared.phone, null)
+  assert.equal(cleared.contactConsent, false)
 })
 
 test('staff sales channel pages and searches bounded order summaries', async (t) => {
