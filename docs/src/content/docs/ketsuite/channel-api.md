@@ -17,7 +17,7 @@ inside them:
 | --- | --- | --- | --- |
 | Customer | `/api/customer/v1/` | Headless websites and customer mobile apps | Available |
 | Staff | `/api/staff/v1/` | Internal staff apps | Available |
-| POS | `/api/pos/v1/` | Point-of-sale terminals | Reserved |
+| POS | `/api/pos/v1/` | Point-of-sale terminals | Available |
 | Integration | `/api/integration/v1/` | Partner systems and webhooks | Reserved |
 | Internal | `/internal/v1/` | Trusted service-to-service traffic | Reserved |
 
@@ -144,6 +144,13 @@ company, granted POS configuration, grant and session ids. POS request bodies do
 `integration` remains `never` deliberately: its prefix is reserved but its identity is not designed, so
 writing an integration route is a compile error rather than a route that silently trusts whichever credential
 happens to arrive.
+
+`GET /api/pos/v1/sync/bootstrap` projects that resolved operator, device, company and configuration scope
+without accepting any of it from the client. It also publishes the Channel API contract version, the offline
+protocol version, the request locale, the live catalogue currency, authorized capabilities and their stable
+revision, domain revision vectors, the active shift, payment methods, offline policy and optional signed lease.
+The contract and offline protocol versions remain separate: a compatible envelope can evolve without silently
+changing the replay protocol persisted by a terminal.
 
 POS command ids derive their namespace from the resolved company, POS configuration and device. Reusing a
 client idempotency key on another terminal or configuration therefore cannot return the first terminal's
