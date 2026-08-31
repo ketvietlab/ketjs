@@ -286,6 +286,28 @@ test('channel api: POS publishes revisioned shift and cart commands', () => {
     'quantity',
     'quoteRevision',
   ])
+  const bootstrap = document.paths['/sync/bootstrap']?.get as Row
+  const bootstrapResponse = (bootstrap.responses as Row)['200'] as Row
+  const bootstrapContent = bootstrapResponse.content as Row
+  const bootstrapEnvelope = (bootstrapContent['application/json'] as Row).schema as Row
+  const bootstrapData = (bootstrapEnvelope.properties as Row).data as Row
+  assert.deepEqual(bootstrapData.required, [
+    'contractVersion',
+    'protocolVersion',
+    'operatorId',
+    'companyId',
+    'posConfigId',
+    'deviceId',
+    'locale',
+    'currency',
+    'capabilities',
+    'revisions',
+    'shift',
+    'paymentMethods',
+    'policy',
+    'offlineLease',
+    'resumeCursor',
+  ])
   const getReceipt = document.paths['/orders/{id}/receipt']?.get as Row
   const receiptResponses = getReceipt.responses as Row
   const receiptContent = (receiptResponses['200'] as Row).content as Row
