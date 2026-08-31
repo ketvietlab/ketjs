@@ -622,6 +622,46 @@ export const functions: Record<string, FnSpec> = {
       )
     },
   }),
+  listOrderMetrics: defineFn({
+    input: { orderIds: 'json' },
+    effects: ['read:purchase.OrderLine', 'read:stock.Move', 'read:stock.Picking'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const orderIds = Array.isArray(args.orderIds)
+        ? [...new Set(args.orderIds.map(String).filter(Boolean))]
+        : []
+      if (!orderIds.length) return []
+      const L = ctx.table('purchase.OrderLine')
+      const lines = await ctx.db.all(from(L).where(inArray(L.orderId, orderIds)))
+      const lineIds = lines.map((line) => String(line.id))
+      const M = ctx.table('stock.Move')
+      const moves = lineIds.length ? await ctx.db.all(from(M).where(inArray(M.purchaseLineId, lineIds))) : []
+      const pickingIds = [
+        ...new Set(moves.flatMap((move) => (move.pickingId ? [String(move.pickingId)] : []))),
+      ]
+      const P = ctx.table('stock.Picking')
+      const pickingStates = new Map<string, string>()
+      if (pickingIds.length)
+        for (const picking of await ctx.db.all(from(P).where(inArray(P.id, pickingIds))))
+          pickingStates.set(String(picking.id), String(picking.state))
+      const orderByLine = new Map(lines.map((line) => [String(line.id), String(line.orderId)]))
+      return orderIds.map((orderId) => ({
+        orderId,
+        itemCount: lines.filter((line) => String(line.orderId) === orderId).length,
+        pickingStates: [
+          ...new Set(
+            moves
+              .filter((move) => orderByLine.get(String(move.purchaseLineId)) === orderId)
+              .flatMap((move) =>
+                move.pickingId && pickingStates.has(String(move.pickingId))
+                  ? [pickingStates.get(String(move.pickingId))!]
+                  : [],
+              ),
+          ),
+        ],
+      }))
+    },
+  }),
   getOrder: defineFn({
     input: { id: 'id' },
     effects: [

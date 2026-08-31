@@ -63,8 +63,16 @@ const seedOrdersAndBills = async (e2e: Awaited<ReturnType<typeof boot>>) => {
     defaultCode: 'BAN-01',
     combinationKey: '',
   })
-  await fixture('stock.saveLocation', { id: 'supplier-location', name: 'Nhà cung cấp', usage: 'supplier' })
-  await fixture('stock.saveLocation', { id: 'stock-location', name: 'Kho chính', usage: 'internal' })
+  await fixture('stock.saveLocation', {
+    id: 'supplier-location',
+    name: 'Nhà cung cấp',
+    usage: 'supplier',
+  })
+  await fixture('stock.saveLocation', {
+    id: 'stock-location',
+    name: 'Kho chính',
+    usage: 'internal',
+  })
   await fixture('stock.savePickingType', {
     id: 'incoming',
     name: 'Nhập hàng',
@@ -267,6 +275,10 @@ test('staff purchasing channel returns a narrow versioned order detail', async (
   assert.equal(response.data.vendorReference, 'SPECIAL-RFQ')
   assert.equal(response.data.readOnly, false)
   assert.deepEqual(response.data.availableActions, ['update', 'cancel', 'confirm'])
+  assert.equal(response.data.itemCount, 1)
+  assert.equal(response.data.receiptState, 'none')
+  assert.deepEqual(response.data.untaxed, { currency: 'VND', amount: '3000000' })
+  assert.deepEqual(response.data.tax, { currency: 'VND', amount: '0' })
   assert.match(String(response.data.version), /^pov_[0-9a-f]{64}$/)
   assert.deepEqual(response.data.lines, [
     {
@@ -277,6 +289,7 @@ test('staff purchasing channel returns a narrow versioned order detail', async (
       receivedQuantity: '0',
       billedQuantity: '0',
       uomId: 'unit',
+      uomName: 'Đơn vị',
       unitPrice: '1500000',
       discount: '0',
       subtotal: '3000000',
@@ -392,7 +405,10 @@ test('staff purchasing channel completes all fourteen operations with one review
     (
       await e2e.client.request('/api/staff/v1/purchasing/orders/create', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'idempotency-key': 'purchase-create-no-csrf' },
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': 'purchase-create-no-csrf',
+        },
         body: JSON.stringify(draft),
       })
     ).status,
@@ -425,6 +441,16 @@ test('staff purchasing channel completes all fourteen operations with one review
     lines: [{ productId: 'desk', quantity: '3' }],
     expectedVersion: created.data.version,
   }
+  const missingMatch = await e2e.client.request(`/api/staff/v1/purchasing/orders/${id}/update`, {
+    method: 'PUT',
+    headers: mutationHeaders(csrf, 'purchase-update-missing-match'),
+    body: JSON.stringify(updateBody),
+  })
+  assert.equal(missingMatch.status, 409)
+  assert.equal(
+    ((await missingMatch.json()) as Envelope<null>).error?.code,
+    'purchase_staff_channel.versionConflict',
+  )
   const update = await e2e.client.request(`/api/staff/v1/purchasing/orders/${id}/update`, {
     method: 'PUT',
     headers: mutationHeaders(csrf, 'purchase-update-reviewed-1', String(created.data.version)),
@@ -489,7 +515,9 @@ test('staff purchasing channel completes all fourteen operations with one review
     },
   )
   assert.equal(premature.status, 409)
-  const refusal = (await premature.json()) as { error: { fieldErrors?: Record<string, unknown> } | null }
+  const refusal = (await premature.json()) as {
+    error: { fieldErrors?: Record<string, unknown> } | null
+  }
   assert.ok(Object.keys(refusal.error?.fieldErrors ?? {}).includes('receiptId'))
 
   const scope = { company: 'acme', branches: null }
