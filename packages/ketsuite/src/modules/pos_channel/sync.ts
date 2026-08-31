@@ -4,6 +4,7 @@ import type { FnSpec, ModelDef, Route, Row, ServeContext } from '@ketvietlab/ket
 import {
   channelCommandId,
   channelError,
+  authorizedChannelCapabilities,
   defineChannelRoute,
   routesOf,
   stableHash,
@@ -177,6 +178,12 @@ const paymentMethodSchema = {
   },
   required: ['id', 'name', 'isCashCount', 'type'],
 }
+const capabilitySchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { key: string, actions: { type: 'array', items: string } },
+  required: ['key', 'actions'],
+}
 const syncPolicySchema = {
   type: 'object',
   properties: {
@@ -214,6 +221,7 @@ const bootstrapSchema = {
     companyId: string,
     posConfigId: string,
     deviceId: string,
+    capabilities: { type: 'array', items: capabilitySchema },
     revisions: revisionVectorSchema,
     shift: { ...posShiftSchema, type: ['object', 'null'] },
     paymentMethods: { type: 'array', items: paymentMethodSchema },
@@ -226,6 +234,7 @@ const bootstrapSchema = {
     'companyId',
     'posConfigId',
     'deviceId',
+    'capabilities',
     'revisions',
     'shift',
     'paymentMethods',
@@ -996,6 +1005,7 @@ export const syncRoutes = routesOf(
     responses: { '200': envelope(bootstrapSchema), '404': envelope({ type: 'null' }) },
     handler: async (ctx, url, req, _params, request) => {
       const identity = request.identity!
+      const capabilities = await authorizedChannelCapabilities('pos', ctx, url, req, identity)
       const catalog = await liveCatalog(ctx, url, req, identity.posConfigId)
       if (!catalog) return syncError(ctx, url, req, 'syncUnavailable', 404)
       const revisions = rowOf(catalog.revisions)
@@ -1036,13 +1046,14 @@ export const syncRoutes = routesOf(
           companyId: identity.companyId,
           posConfigId: identity.posConfigId,
           deviceId: identity.deviceId,
+          capabilities,
           revisions: {
             config: revisions.config,
             catalog: revisions.catalog,
             price: revisions.price,
             tax: revisions.tax,
             paymentMethods: revisions.paymentMethods,
-            capabilities: stableHash(policy),
+            capabilities: stableHash(capabilities),
             master: catalog.revision,
             shift: active ? String(active.revision ?? 0) : null,
           },

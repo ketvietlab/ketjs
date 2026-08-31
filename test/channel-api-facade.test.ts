@@ -4,6 +4,7 @@ import { defineDeployment, defineModule } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import channelApi from '../packages/ketsuite/src/modules/channel_api/index.ts'
 import {
+  authorizedChannelCapabilities,
   csrfTokenFor,
   defineChannelRoute,
   registerChannelCapabilityAuthorizer,
@@ -75,6 +76,27 @@ const probe = defineModule({
         reached.push('whoami')
         return { data: { accountId: request.identity!.accountId } }
       },
+    }),
+    defineChannelRoute({
+      profile: 'customer',
+      method: 'POST',
+      path: 'probe/capability-write',
+      operationId: 'customer.probe.capabilityWrite',
+      auth: 'customer',
+      capability: { key: 'customer.orders', action: 'write' },
+      responses: { '200': envelope, '403': envelope },
+      handler: () => ({ data: { allowed: true } }),
+    }),
+    defineChannelRoute({
+      profile: 'customer',
+      method: 'GET',
+      path: 'probe/capabilities',
+      operationId: 'customer.probe.capabilities',
+      auth: 'customer',
+      responses: { '200': envelope },
+      handler: async (ctx, url, req, _params, request) => ({
+        data: await authorizedChannelCapabilities('customer', ctx, url, req, request.identity!),
+      }),
     }),
     defineChannelRoute({
       profile: 'customer',
@@ -213,6 +235,29 @@ test('channel facade: a registered profile authorizer enforces declared capabili
   assert.equal(allowed.status, 200)
   assert.deepEqual((await read(allowed)).data, { allowed: true })
   assert.deepEqual(reached, ['capability'])
+})
+
+test('channel facade: capability discovery is composed, deduplicated and filtered by the live authorizer', async (t) => {
+  const e2e = await boot(t)
+  presented = asIdentity('bearer')
+
+  const denied = await e2e.client.get('/api/customer/v1/probe/capabilities')
+  assert.equal(denied.status, 200)
+  assert.deepEqual((await read(denied)).data, [])
+  assert.deepEqual(capabilityChecks.map(({ key, action }) => `${key}:${action}`).sort(), [
+    'customer.orders:read',
+    'customer.orders:write',
+  ])
+
+  capabilityAllowed = true
+  capabilityChecks = []
+  const allowed = await e2e.client.get('/api/customer/v1/probe/capabilities')
+  assert.equal(allowed.status, 200)
+  assert.deepEqual((await read(allowed)).data, [{ key: 'customer.orders', actions: ['read', 'write'] }])
+  assert.deepEqual(capabilityChecks.map(({ key, action }) => `${key}:${action}`).sort(), [
+    'customer.orders:read',
+    'customer.orders:write',
+  ])
 })
 
 test('channel facade: capability authorization ownership cannot depend on import order', () => {

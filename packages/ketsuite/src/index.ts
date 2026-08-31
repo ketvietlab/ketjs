@@ -9,6 +9,7 @@
 export { default as channelApi } from './modules/channel_api/index.ts'
 export {
   CHANNEL_API_VERSION,
+  authorizedChannelCapabilities,
   channelCredentialFailure,
   channelCommandId,
   defineChannelRoute,
@@ -21,6 +22,8 @@ export {
 } from './modules/channel_api/index.ts'
 export type {
   ChannelAccount,
+  AuthorizedChannelCapability,
+  ChannelCapability,
   ChannelCapabilityAuthorizer,
   ChannelCapabilityAuthorizerRegistration,
   ChannelCredentialFailure,

@@ -88,6 +88,11 @@ After registration, every capability-declared route in that profile is fail-clos
 validation, or handler execution. Profiles without an authorizer retain metadata-only capability discovery, so
 adding a role backend is an explicit product decision rather than a framework guess.
 
+Bootstrap code can call `authorizedChannelCapabilities()` to enumerate only capability actions contributed by
+the live deployment and accepted by that same authorizer for the resolved identity. The result is deduplicated,
+grouped and sorted, so its stable hash can be used as a capability revision. POS bootstrap uses this list rather
+than advertising every route in the package or hashing a static offline policy.
+
 Registration is immediately usable in the current phase; email activation is not required.
 
 ## Staff profile
