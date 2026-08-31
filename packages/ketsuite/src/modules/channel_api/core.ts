@@ -181,6 +181,20 @@ export type ChannelIdentityResolver<P extends ChannelProfile = ChannelProfile> =
   req: Req,
 ) => Promise<ChannelIdentityFor<P> | null>
 
+export type ChannelCapabilityAuthorizer<P extends ChannelProfile = ChannelProfile> = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  identity: ChannelIdentityFor<P>,
+  capability: { key: string; action: string },
+) => boolean | Promise<boolean>
+
+export type ChannelCapabilityAuthorizerRegistration<P extends ChannelProfile = ChannelProfile> = {
+  /** Stable package/module owner; reloading the same owner is idempotent. */
+  owner: string
+  authorize: ChannelCapabilityAuthorizer<P>
+}
+
 /**
  * One resolver per profile, registered by whoever owns that profile's credentials.
  *
@@ -191,6 +205,29 @@ export type ChannelIdentityResolver<P extends ChannelProfile = ChannelProfile> =
  * everyone except the person reading the declaration.
  */
 const identityResolvers = new Map<ChannelProfile, ChannelIdentityResolver<ChannelProfile>>()
+const capabilityAuthorizers = new Map<
+  ChannelProfile,
+  ChannelCapabilityAuthorizerRegistration<ChannelProfile>
+>()
+
+/**
+ * Enforce capability metadata for one channel profile at the same boundary that
+ * resolves its identity. Profiles opt in because their role stores are owned by
+ * different modules; once registered, every capability-declared route in that
+ * profile is fail-closed through this authorizer.
+ */
+export const registerChannelCapabilityAuthorizer = <P extends ChannelProfile>(
+  profile: P,
+  registration: ChannelCapabilityAuthorizerRegistration<P>,
+): void => {
+  const existing = capabilityAuthorizers.get(profile)
+  if (existing?.owner === registration.owner) return
+  if (existing)
+    throw new Error(
+      `channel capability authorizer for "${profile}" is owned by "${existing.owner}", not "${registration.owner}"`,
+    )
+  capabilityAuthorizers.set(profile, registration as ChannelCapabilityAuthorizerRegistration<ChannelProfile>)
+}
 
 export type ChannelIdentityPresentationResolver<P extends ChannelProfile = ChannelProfile> = {
   /** Stable package/module owner; reloading the same owner is idempotent. */
@@ -741,6 +778,14 @@ export const defineChannelRoute = <P extends ChannelProfile>(
               if (!safeEqual(String(req.headers['x-csrf-token'] ?? ''), csrfTokenFor(secretOf(identity))))
                 return fail(403, 'channel_api.csrf', 'channel_api.error.csrf')
             }
+            const capabilityAuthorizer = capabilityAuthorizers.get(spec.profile)
+            if (
+              identity &&
+              spec.capability &&
+              capabilityAuthorizer &&
+              !(await capabilityAuthorizer.authorize(ctx, url, req, identity, spec.capability))
+            )
+              return fail(403, 'channel_api.forbidden', 'channel_api.error.forbidden')
             if (spec.rateLimit) {
               const realm =
                 (identity ? tenantOf(identity) : null) ??

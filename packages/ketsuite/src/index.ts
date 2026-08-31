@@ -13,6 +13,7 @@ export {
   channelCommandId,
   defineChannelRoute,
   openApiDocument,
+  registerChannelCapabilityAuthorizer,
   registerChannelIdentity,
   registerChannelIdentityPresentation,
   registerChannelRealm,
@@ -20,6 +21,8 @@ export {
 } from './modules/channel_api/index.ts'
 export type {
   ChannelAccount,
+  ChannelCapabilityAuthorizer,
+  ChannelCapabilityAuthorizerRegistration,
   ChannelCredentialFailure,
   ChannelIdentities,
   ChannelIdentityFor,
