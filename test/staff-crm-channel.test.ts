@@ -267,6 +267,27 @@ test('staff CRM channel returns one narrow read-only detail with the canonical n
     summary: 'Call the buyer',
     dueDate: '2026-08-27',
   })
+  assert.deepEqual(
+    (response.data.stageOptions as Row[]).map((stage) => stage.id),
+    ['crm-stage-new', 'crm-stage-qualified'],
+  )
+  assert.deepEqual(response.data.assigneeOptions, [
+    { id: 'admin', name: 'Administrator' },
+    { id: 'crm-user', name: 'CRM Operator' },
+  ])
+  assert.deepEqual(response.data.lossReasonOptions, [
+    { id: 'budget', name: 'Budget' },
+    { id: 'timing', name: 'Timing' },
+    { id: 'competitor', name: 'Competitor' },
+    { id: 'unreachable', name: 'Unreachable' },
+    { id: 'other', name: 'Other' },
+  ])
+  assert.deepEqual(response.data.workflowActions, [
+    'transition',
+    'assign',
+    'schedule_activity',
+    'complete_activity',
+  ])
   assert.equal(response.data.readOnly, true)
   assert.equal('email' in response.data, false)
   assert.equal('phone' in response.data, false)
