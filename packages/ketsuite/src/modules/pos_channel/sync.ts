@@ -1180,11 +1180,38 @@ export const syncRoutes = routesOf(
       }
 
       const { ordered, cyclic } = dependencyOrder(held)
+      const batchCommandIds = new Set(held.map((command) => command.commandId))
       const completed = new Map<string, Row>()
       const results: Row[] = []
       let last: Row | null = null
       for (const command of ordered) {
         const captured = new Date(command.capturedAt).getTime()
+        let dependencyInFlight = false
+        if (!cyclic.has(command.commandId)) {
+          for (const dependencyId of command.dependencyIds) {
+            const dependency = completed.get(dependencyId) ?? (await loadCommand(ctx, url, req, dependencyId))
+            if (
+              (!dependency && batchCommandIds.has(dependencyId)) ||
+              (String(dependency?.state) === 'processing' &&
+                String(dependency?.deviceId) === identity.deviceId &&
+                String(dependency?.configId) === identity.posConfigId)
+            ) {
+              dependencyInFlight = true
+              break
+            }
+          }
+        }
+        if (dependencyInFlight) {
+          results.push({
+            status: 'refused',
+            commandId: command.commandId,
+            operation: command.operation,
+            code: 'dependency_in_flight',
+            retryable: true,
+            allowedRecovery: ['retry'],
+          })
+          continue
+        }
         // A valid ES256 signature is not deterministic. Retries may carry a different signature for
         // the same canonical command, so idempotency must bind the unsigned evidence rather than the
         // transport proof. The lease provider still verifies every presented signature above.
