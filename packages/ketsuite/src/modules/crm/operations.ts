@@ -653,6 +653,27 @@ export async function caseDetail(ctx: Ctx, id: string): Promise<Row | null> {
         from(ctx.table('calendar.Event')).where(inArray(ctx.table('calendar.Event').id, eventIds)),
       )
     : []
+  const stages = (await ctx.db.select('crm.Stage', { active: true }))
+    .filter((stage) => stageKinds(stage).includes(String(row.kind)))
+    .sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
+  const team = row.teamId
+    ? ((await ctx.db.select('crm.Team', { id: row.teamId, active: true }))[0] ?? null)
+    : null
+  const memberships = team ? await ctx.db.select('crm.TeamMember', { teamId: team.id, active: true }) : []
+  const assigneeIds = [
+    ...memberships.map((member) => String(member.userId)),
+    ...(team?.leaderUserId ? [String(team.leaderUserId)] : []),
+    ...(row.assigneeUserId ? [String(row.assigneeUserId)] : []),
+  ].filter((userId, index, values) => values.indexOf(userId) === index)
+  const assignees = assigneeIds.length
+    ? await ctx.db.all(
+        from(ctx.table('user.User')).where(
+          inArray(ctx.table('user.User').id, assigneeIds),
+          eq(ctx.table('user.User').active, true),
+        ),
+      )
+    : []
+  const userById = new Map(assignees.map((user) => [String(user.id), user]))
   return {
     ...serialized!,
     salesDetail: salesDetail[0] ?? null,
@@ -662,6 +683,15 @@ export async function caseDetail(ctx: Ctx, id: string): Promise<Row | null> {
     attachments,
     activities,
     meetings,
+    stageOptions: stages.map((stage) => ({
+      id: String(stage.id),
+      name: String(stage.name),
+      terminalState: String(stage.terminalState),
+    })),
+    assigneeOptions: assigneeIds
+      .map((userId) => userById.get(userId))
+      .filter((user): user is Row => Boolean(user))
+      .map((user) => ({ id: String(user.id), name: String(user.name) })),
   }
 }
 

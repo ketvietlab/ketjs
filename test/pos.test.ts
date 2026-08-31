@@ -93,7 +93,16 @@ async function boot() {
   registerFunctions(modules)
   await call('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' }, adapter)
   await call('partner.savePartner', { id: 'customer', kind: 'company', name: 'Customer' }, adapter)
-  await call('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' }, adapter)
+  await call(
+    'company.saveCompany',
+    {
+      id: 'acme',
+      partnerId: 'acme-party',
+      currency: 'VND',
+      accountingTimezone: 'Asia/Ho_Chi_Minh',
+    },
+    adapter,
+  )
   await call(
     'user.createUser',
     { id: 'cashier', login: 'cashier', password: 'correct horse', name: 'Cashier', defaultCompanyId: 'acme' },
@@ -557,6 +566,321 @@ test('pos: concurrent shift creation keeps one active shift per configuration', 
     assert.equal(answers.filter((answer) => answer.ok === true).length, 1)
     assert.equal(answers.filter((answer) => answer.ok === false).length, 1)
     assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM pos_session'))[0]!.n, 1)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: sensitive commands append one retry-stable operational audit event', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'pos.createSession',
+      {
+        id: 'audit-shift',
+        configId: 'shop',
+        userId: 'cashier',
+        deviceId: 'device-1',
+        openingCash: '0',
+      },
+      adapter,
+    )
+    await call('pos.openSession', { id: 'audit-shift', expectedRevision: 0 }, adapter)
+    const movement = {
+      id: 'audit-cash-in',
+      sessionId: 'audit-shift',
+      direction: 'in',
+      amount: '5',
+      reason: 'Petty cash float',
+      actorId: 'cashier',
+      deviceId: 'device-1',
+      expectedRevision: 1,
+    }
+    await call('pos.recordCashMovement', movement, adapter)
+    await call('pos.recordCashMovement', movement, adapter)
+    await call(
+      'pos.reverseCashMovement',
+      {
+        id: 'audit-cash-reversal',
+        sessionId: 'audit-shift',
+        movementId: 'audit-cash-in',
+        expectedRevision: 2,
+        reason: 'Float entered twice',
+        actorId: 'manager',
+        deviceId: 'device-1',
+      },
+      adapter,
+    )
+
+    await call(
+      'pos.createOrder',
+      {
+        id: 'audit-order',
+        sessionId: 'audit-shift',
+        operatorId: 'cashier',
+        deviceId: 'device-1',
+      },
+      adapter,
+    )
+    await call(
+      'pos.addLine',
+      {
+        id: 'audit-line',
+        orderId: 'audit-order',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    await call(
+      'pos.updateLine',
+      {
+        id: 'audit-line',
+        orderId: 'audit-order',
+        qty: '1',
+        discount: '10',
+        overrideReason: 'Damaged packaging',
+        overrideBy: 'manager',
+        expectedRevision: 1,
+      },
+      adapter,
+    )
+    await call('pos.cancelOrder', { id: 'audit-order', expectedRevision: 2 }, adapter)
+    await call('pos.startClosing', { id: 'audit-shift', expectedRevision: 3 }, adapter)
+    await call('pos.closeSession', { id: 'audit-shift', closingCash: '0', expectedRevision: 4 }, adapter)
+    await call('pos.closeSession', { id: 'audit-shift', closingCash: '0', expectedRevision: 5 }, adapter)
+
+    const events = (await call('pos.listAuditEvents', { limit: 200 }, adapter)).value as Row[]
+    assert.equal(events.length, 8)
+    assert.deepEqual(
+      new Set(events.map((event) => event.action)),
+      new Set([
+        'session.created',
+        'session.opened',
+        'cash_movement.recorded',
+        'cash_movement.reversed',
+        'order.line_adjusted',
+        'order.cancelled',
+        'session.closing_started',
+        'session.closed',
+      ]),
+    )
+    const adjusted = events.find((event) => event.action === 'order.line_adjusted')!
+    assert.ok(events.every((event) => event.configId === 'shop' && event.sessionId === 'audit-shift'))
+    assert.equal(adjusted.actorId, 'manager')
+    assert.equal(adjusted.deviceId, 'device-1')
+    assert.equal(adjusted.reason, 'Damaged packaging')
+    assert.equal((adjusted.details as Row).previousDiscount, '0')
+    assert.equal((adjusted.details as Row).discount, '10')
+
+    const sessionEvents = (
+      await call(
+        'pos.listAuditEvents',
+        { subjectType: 'session', subjectId: 'audit-shift', limit: 2 },
+        adapter,
+      )
+    ).value as Row[]
+    assert.equal(sessionEvents.length, 2)
+    assert.ok(sessionEvents.every((event) => event.subjectId === 'audit-shift'))
+    assert.equal(events.filter((event) => event.id === 'cash-movement:audit-cash-in:recorded').length, 1)
+    const otherCompany = await callFn(
+      'pos.listAuditEvents',
+      {},
+      { adapter, manifest, scope: { company: 'other-company', branches: null } },
+    )
+    assert.deepEqual(otherCompany.value, [])
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('pos: operations report is date-bounded, configuration-scoped and aggregated in the database', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'pos.saveConfig',
+      {
+        id: 'branch-shop',
+        name: 'Branch Shop',
+        warehouseId: 'wh',
+        pricelistId: 'retail',
+        salesJournalId: 'sales',
+        revenueAccountId: 'revenue',
+        receivableAccountId: 'receivable',
+        taxAccountId: 'tax',
+        cashOverShortAccountId: 'cash-over-short',
+        maximumDifference: '0',
+      },
+      adapter,
+    )
+    await call(
+      'pos.linkPaymentMethod',
+      { id: 'branch-shop:cash', configId: 'branch-shop', paymentMethodId: 'cash-method' },
+      adapter,
+    )
+
+    for (const [configId, shiftId, orderId] of [
+      ['shop', 'report-main-shift', 'report-main-order'],
+      ['branch-shop', 'report-branch-shift', 'report-branch-order'],
+    ]) {
+      await call('pos.createSession', { id: shiftId, configId, userId: 'cashier' }, adapter)
+      await call('pos.openSession', { id: shiftId, expectedRevision: 0 }, adapter)
+      await call('pos.createOrder', { id: orderId, sessionId: shiftId }, adapter)
+      await call(
+        'pos.addLine',
+        {
+          id: `${orderId}:line`,
+          orderId,
+          productId: 'goods-1',
+          productUomId: 'unit',
+          qty: '1',
+          expectedRevision: 0,
+        },
+        adapter,
+      )
+      await call(
+        'pos.addPayment',
+        {
+          id: `${orderId}:payment`,
+          orderId,
+          paymentMethodId: 'cash-method',
+          amount: '99',
+          expectedRevision: 1,
+        },
+        adapter,
+      )
+      await call('pos.validateOrder', { id: orderId, expectedRevision: 2 }, adapter)
+    }
+
+    await call(
+      'pos.recordCashMovement',
+      {
+        id: 'report-float',
+        sessionId: 'report-main-shift',
+        direction: 'in',
+        amount: '5',
+        reason: 'Add float',
+        actorId: 'cashier',
+        expectedRevision: 1,
+      },
+      adapter,
+    )
+    await call(
+      'pos.reverseCashMovement',
+      {
+        id: 'report-float-reversal',
+        sessionId: 'report-main-shift',
+        movementId: 'report-float',
+        reason: 'Wrong register',
+        actorId: 'manager',
+        expectedRevision: 2,
+      },
+      adapter,
+    )
+
+    const civil = Object.fromEntries(
+      new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+        .formatToParts(new Date())
+        .map((part) => [part.type, part.value]),
+    )
+    const today = `${civil.year}-${civil.month}-${civil.day}`
+    const scoped = (
+      await call(
+        'pos.operationsReport',
+        { dateFrom: today, dateTo: today, configId: 'shop', auditLimit: 1 },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(scoped.ok, true)
+    const report = scoped.report as Row
+    const reportScope = report.scope as Row
+    assert.equal(reportScope.configId, 'shop')
+    assert.equal(reportScope.timezone, 'Asia/Ho_Chi_Minh')
+    assert.deepEqual(report.scopeCoverage, {
+      complete: true,
+      missingPaymentScope: 0,
+      missingPaymentCurrency: 0,
+      missingMovementScope: 0,
+      missingAuditScope: 0,
+      missingOrderFinalizedAt: 0,
+    })
+    assert.deepEqual((report.orders as Row).sales, [
+      {
+        currency: 'VND',
+        saleCount: 1,
+        returnCount: 0,
+        grossSales: '99',
+        refunds: '0',
+        netSales: '99',
+      },
+    ])
+    assert.deepEqual(report.tenders, [
+      { state: 'captured', kind: 'cash', currency: 'VND', count: 1, amount: '99' },
+    ])
+    assert.deepEqual(report.cash, {
+      currency: 'VND',
+      count: 2,
+      cashIn: '5',
+      cashOut: '5',
+      net: '0',
+    })
+    assert.equal((report.shifts as Row).opened, 1)
+    assert.equal((report.exceptions as Row).reversedCashMovements, 1)
+    assert.equal(((report.audit as Row).events as Row[]).length, 1)
+    assert.equal((report.audit as Row).truncated, true)
+
+    const all = (await call('pos.operationsReport', { dateFrom: today, dateTo: today }, adapter)).value as Row
+    assert.deepEqual(((all.report as Row).orders as Row).sales, [
+      {
+        currency: 'VND',
+        saleCount: 2,
+        returnCount: 0,
+        grossSales: '198',
+        refunds: '0',
+        netSales: '198',
+      },
+    ])
+
+    const audit = (
+      await call(
+        'pos.listAuditEvents',
+        {
+          configId: 'shop',
+          sessionId: 'report-main-shift',
+          from: reportScope.from,
+          to: reportScope.toExclusive,
+          limit: 200,
+        },
+        adapter,
+      )
+    ).value as Row[]
+    assert.ok(audit.length > 0)
+    assert.ok(audit.every((event) => event.configId === 'shop' && event.sessionId === 'report-main-shift'))
+
+    await adapter.run('UPDATE pos_payment SET "configId" = NULL, currency = NULL WHERE id = ?', [
+      'report-main-order:payment',
+    ])
+    await adapter.run('UPDATE pos_order SET "finalizedAt" = NULL WHERE id = ?', ['report-main-order'])
+    const legacy = (
+      await call('pos.operationsReport', { dateFrom: today, dateTo: today, configId: 'shop' }, adapter)
+    ).value as Row
+    assert.equal(((legacy.report as Row).scopeCoverage as Row).complete as boolean, false)
+    assert.equal(((legacy.report as Row).scopeCoverage as Row).missingPaymentScope, 1)
+    assert.equal(((legacy.report as Row).scopeCoverage as Row).missingPaymentCurrency, 1)
+    assert.equal(((legacy.report as Row).scopeCoverage as Row).missingOrderFinalizedAt, 1)
+
+    const tooWide = (
+      await call('pos.operationsReport', { dateFrom: '2026-01-01', dateTo: '2026-02-01' }, adapter)
+    ).value as Row
+    assert.equal(tooWide.ok, false)
+    assert.equal((tooWide.errors as Row[])[0]?.field, 'dateTo')
   } finally {
     await adapter.close()
   }
