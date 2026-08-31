@@ -34,6 +34,7 @@ flowchart LR
   subgraph Pipeline["Per legal entity"]
     T["Team"]
     TM["TeamMember<br/>unique company + team + user"]
+    AG["AccessGrant<br/>view, edit, assign scopes"]
     S["Stage<br/>allowedKinds, terminalState"]
     C["Case<br/>lead | opportunity"]
     SD["SalesDetail<br/>unique company + case"]
@@ -47,6 +48,7 @@ flowchart LR
     T -->|has many| TM
     C -->|stage| S
     C -->|team| T
+    AG -->|limits access to| C
     C -->|has one| SD
     C -->|has many| CT
     CT -->|tag| TAG
@@ -65,36 +67,49 @@ reads that one field for cycle time.
 ## Who sees which case
 
 Every read resolves one audience and applies it the same way, whether the caller is listing, opening
-a record or counting duplicates:
+a record or counting duplicates. Company isolation is enforced by the data layer before this record
+policy runs:
 
 - no actor — a job, a fixture, the seed — sees everything;
 - a superuser sees everything;
-- everyone else sees the cases they are assigned, the cases they created, and the cases held by a
-  team they are an active member of.
+- an agent sees cases assigned to them plus unassigned work in their active team queues;
+- a team leader sees assigned and unassigned cases in teams they lead;
+- an active `AccessGrant` may independently widen `viewScope`, `editScope`, or `assignScope` from
+  `none` through `self`, `team`, and `company`.
 
-The list, group and duplicate queries push those three clauses into SQL, so a case that appears in a
-list is a case the detail screen will open. Commands re-check the same audience before they write.
+Creating a record does not grant permanent access after somebody else owns it. List, group, summary,
+and duplicate queries push the audience clauses into SQL, so a filter can only narrow a permitted
+set. Commands resolve the appropriate action again before they write; knowing a record id does not
+bypass the policy.
 
 The Staff Channel API keeps that same audience boundary. `GET /api/staff/v1/crm/leads` provides bounded
 search, kind and outcome filters with an opaque cursor; `GET /api/staff/v1/crm/leads/{id}` provides a narrow
 detail and the next pending activity. Neither projection carries raw email or phone fields, internal
 timeline/messages, attachments, or option lists. The detail carries CRM's real integer version, and the
-transition, assign, and mark-won routes pass it straight to the existing domain commands. Those commands also
+transition, claim, reassign, and terminal-state routes pass it straight to the existing domain commands. Those commands also
 require the bootstrap CSRF token and an `Idempotency-Key`, isolate replay state by company, actor, and command,
 and return the refreshed safe projection with its new integer ETag. Create, mark-lost, and activity commands
 stay unpublished until their path or request-shape mismatch can be resolved without inventing behavior.
 
 ## Assignment
 
-A case is assigned inside its team. `crm.case.assign` takes an explicit user, or falls through to the
-team's `assignmentMode`:
+A case is assigned inside its team. `crm.case.assign` is the initial assignment and queue-claim
+command; it does not change an already-owned record. For system routing it takes an explicit user,
+or falls through to the team's `assignmentMode`:
 
 - `manual` — nobody is chosen automatically;
 - `round_robin` — the team's cursor walks its active members in `sequence` order;
 - `capacity` — the member with the most headroom against their `capacity` wins.
 
 Both routing modes read `TeamMember`, which is managed from **Configuration → Team members**. A team
-with no members can only be assigned by hand.
+with no members can only be assigned by hand. An ordinary agent can atomically claim only unassigned
+work in one of their queues and can claim it only for themselves.
+
+`crm.case.reassign` is the separate ownership-transfer command. It requires the current `version`, an
+idempotency key, an active target team and member, and one of the documented business reasons. The
+`manual_correction` reason also requires a note. A successful transfer increments the version and
+writes an immutable timeline entry containing the previous and new team and assignee. Retrying the
+same key replays the result; a stale version fails without changing the record.
 
 ## Scoring and the leaderboard
 

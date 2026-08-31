@@ -389,8 +389,8 @@ const projectDetail = async (ctx: ServeContext, row: Row, url: URL, req: Req) =>
 
 const mutate =
   (
-    fn: 'crm.case.move' | 'crm.case.assign' | 'crm.case.markWon' | 'crm.case.markLost',
-    outcome: 'transitioned' | 'assigned' | 'won' | 'lost',
+    fn: 'crm.case.move' | 'crm.case.assign' | 'crm.case.reassign' | 'crm.case.markWon' | 'crm.case.markLost',
+    outcome: 'transitioned' | 'assigned' | 'reassigned' | 'won' | 'lost',
     input: (body: Record<string, unknown>, id: string) => Record<string, unknown>,
   ) =>
   async (
@@ -651,6 +651,51 @@ export const channelRoutes = routesOf(
     handler: mutate('crm.case.assign', 'assigned', (body, id) => ({
       id,
       assigneeUserId: body.assigneeUserId,
+      expectedVersion: body.expectedVersion,
+    })),
+  }),
+  defineChannelRoute({
+    profile: 'staff',
+    method: 'POST',
+    path: 'crm/leads/{id}/reassign',
+    operationId: 'staff.crm.leads.reassign',
+    summary: 'Reassign an actor-visible CRM record with an audited business reason.',
+    auth: 'required',
+    capability: { key: 'crm.pipeline', action: 'assign' },
+    request: {
+      params: leadParams,
+      body: commandBody(
+        {
+          teamId: string,
+          assigneeUserId: nullableString,
+          reasonCode: {
+            type: 'string',
+            enum: [
+              'workload_balance',
+              'absence',
+              'escalation',
+              'territory_change',
+              'employee_departure',
+              'manual_correction',
+            ],
+          },
+          reasonNote: nullableString,
+        },
+        ['teamId', 'assigneeUserId', 'reasonCode'],
+      ),
+    },
+    responses: {
+      '200': envelope(mutation),
+      '404': envelope({ type: 'null' }),
+      '409': envelope({ type: 'null' }),
+    },
+    idempotent: true,
+    handler: mutate('crm.case.reassign', 'reassigned', (body, id) => ({
+      id,
+      teamId: body.teamId,
+      assigneeUserId: body.assigneeUserId,
+      reasonCode: body.reasonCode,
+      reasonNote: body.reasonNote,
       expectedVersion: body.expectedVersion,
     })),
   }),

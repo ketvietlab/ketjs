@@ -4685,6 +4685,386 @@
         "x-ket-idempotent": true
       }
     },
+    "/crm/leads/{id}/reassign": {
+      "post": {
+        "operationId": "staff.crm.leads.reassign",
+        "summary": "Reassign an actor-visible CRM record with an audited business reason.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "teamId": {
+                    "type": "string"
+                  },
+                  "assigneeUserId": {
+                    "type": ["string", "null"]
+                  },
+                  "reasonCode": {
+                    "type": "string",
+                    "enum": [
+                      "workload_balance",
+                      "absence",
+                      "escalation",
+                      "territory_change",
+                      "employee_departure",
+                      "manual_correction"
+                    ]
+                  },
+                  "reasonNote": {
+                    "type": ["string", "null"]
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["teamId", "assigneeUserId", "reasonCode", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "activityDeadline": {
+                              "type": ["string", "null"]
+                            },
+                            "activityTypeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "minimumDueDate": {
+                                    "type": "string"
+                                  },
+                                  "suggestedDueDate": {
+                                    "type": "string"
+                                  },
+                                  "maximumDueDate": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "minimumDueDate",
+                                  "suggestedDueDate",
+                                  "maximumDueDate"
+                                ]
+                              }
+                            },
+                            "assigneeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "lossReasonOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "stageOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isWon": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["id", "name", "isWon"]
+                              }
+                            },
+                            "workflowActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "transition",
+                                  "assign",
+                                  "schedule_activity",
+                                  "complete_activity",
+                                  "mark_won",
+                                  "mark_lost"
+                                ]
+                              }
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": false
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "activityDeadline",
+                            "activityTypeOptions",
+                            "assigneeOptions",
+                            "lossReasonOptions",
+                            "stageOptions",
+                            "workflowActions",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "assign"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
     "/crm/leads/{id}/won": {
       "post": {
         "operationId": "staff.crm.leads.markWon",

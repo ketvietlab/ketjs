@@ -141,6 +141,15 @@ const CHROME: ListChrome = {
       {
         id: 'filters',
         label: 'Bộ lọc',
+        icon: 'users',
+        ariaLabel: 'Người phụ trách',
+        badge: 2,
+        search: {
+          name: 'assigneeQuery',
+          value: 'An',
+          placeholder: 'Tìm người phụ trách',
+          submitLabel: 'Tìm',
+        },
         items: [{ id: 'active', label: 'Đang hoạt động', path: '?preset=active', active: true }],
         customFilter: {
           fields: [{ value: 'name', label: 'Tên' }],

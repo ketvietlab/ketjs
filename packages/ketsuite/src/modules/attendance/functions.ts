@@ -51,6 +51,20 @@ const currentMonth = (timezone: string): string => {
   return `${year}-${month}`
 }
 
+const currentDate = (timezone: string): string => {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+  if (!year || !month || !day) throw new Error('date')
+  return `${year}-${month}-${day}`
+}
+
 const monthBounds = (month: string, timezone: string): [string, string] => {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('month')
   const [year, number] = month.split('-').map(Number)
@@ -554,6 +568,18 @@ export const functions: Record<string, FnSpec> = {
         startAt: session?.startAt ?? null,
         branchId: session?.branchId ?? null,
       }
+    },
+  }),
+
+  /** The attendance policy's local calendar date for channel defaults. */
+  'calendar.mine': defineFn({
+    input: {},
+    output: { today: 'text', timezone: 'text' },
+    effects: ['read:attendance.Policy'],
+    handler: async (ctx: Ctx) => {
+      const policy = await policyFor(ctx)
+      const timezone = String(policy.timezone)
+      return { today: currentDate(timezone), timezone }
     },
   }),
 

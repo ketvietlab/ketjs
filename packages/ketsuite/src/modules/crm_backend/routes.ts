@@ -827,14 +827,21 @@ export const routes: Record<string, RouteEntry> = {
         else if (form.action === 'won') result = await call('crm.case.markWon', base)
         else if (form.action === 'lost')
           result = await call('crm.case.markLost', { ...base, lostReason: form.lostReason ?? '' })
-        else if (form.action === 'assign')
-          result = await call('crm.case.assign', {
+        else if (form.action === 'assign') {
+          const assignment = {
             ...base,
             ...optional(form, 'teamId'),
             ...optional(form, 'assigneeUserId'),
-            force: true,
-          })
-        else if (form.action === 'merge')
+          }
+          result = held.assigneeUserId
+            ? await call('crm.case.reassign', {
+                ...assignment,
+                teamId: form.teamId ?? held.teamId ?? '',
+                reasonCode: 'manual_correction',
+                reasonNote: form.reasonNote ?? 'CRM record assignment form',
+              })
+            : await call('crm.case.assign', assignment)
+        } else if (form.action === 'merge')
           result = await call('crm.case.merge', {
             targetId: params.id,
             sourceId: form.sourceId ?? '',

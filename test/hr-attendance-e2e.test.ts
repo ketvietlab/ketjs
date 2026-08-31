@@ -129,6 +129,14 @@ const bootHr = async (t: TestContext) => {
 
 test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n', async (t) => {
   const { e2e, fixture } = await bootHr(t)
+  const currentMonthParts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date())
+  const currentMonth = `${currentMonthParts.find((part) => part.type === 'year')?.value}-${
+    currentMonthParts.find((part) => part.type === 'month')?.value
+  }`
   await e2e.client.login({ login: 'employee', password: 'correct horse' })
 
   const mine = await e2e.client.get('/my/work', { headers: { accept: 'text/html' } })
@@ -237,12 +245,14 @@ test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n'
   )) as unknown as Row[]
   assert.deepEqual(rolledBack, [])
 
-  const period = await e2e.client.get('/admin/attendance?month=2026-08')
+  const period = await e2e.client.get(`/admin/attendance?month=${currentMonth}`)
   assert.equal(period.status, 200)
   assert.match(await period.text(), /Bảng công tháng/)
-  const locked = await e2e.client.form<string>('/admin/attendance?month=2026-08', { action: 'close' })
+  const locked = await e2e.client.form<string>(`/admin/attendance?month=${currentMonth}`, {
+    action: 'close',
+  })
   assert.match(locked, /Đã khóa/)
-  const exported = await e2e.client.get('/admin/attendance/export/2026-08')
+  const exported = await e2e.client.get(`/admin/attendance/export/${currentMonth}`)
   assert.equal(exported.status, 200)
   assert.match(await exported.text(), /employee_code,employee_name,date/)
 
