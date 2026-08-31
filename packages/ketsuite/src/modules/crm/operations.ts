@@ -691,7 +691,8 @@ export async function caseDetail(ctx: Ctx, id: string): Promise<Row | null> {
     assigneeOptions: assigneeIds
       .map((userId) => userById.get(userId))
       .filter((user): user is Row => Boolean(user))
-      .map((user) => ({ id: String(user.id), name: String(user.name) })),
+      .map((user) => ({ id: String(user.id), name: String(user.name) }))
+      .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id)),
   }
 }
 
