@@ -6,7 +6,9 @@ import { ours } from '../sale/scope.ts'
 
 export const quotationEffects = [
   'read:crm.Case',
+  'read:crm.Team',
   'read:crm.TeamMember',
+  'read:crm.AccessGrant',
   'read:user.User',
   'read:crm.SalesDetail',
   'read:crm_sale.OpportunityQuotation',
@@ -238,7 +240,9 @@ export const saleFunctionsPublic: Record<string, FnSpec> = {
     },
     effects: [
       'read:crm.Case',
+      'read:crm.Team',
       'read:crm.TeamMember',
+      'read:crm.AccessGrant',
       'read:user.User',
       'read:crm_sale.OpportunityQuotation',
       'read:sale.Order',
