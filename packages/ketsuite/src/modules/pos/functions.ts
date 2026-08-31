@@ -65,6 +65,11 @@ type AuditInput = {
   occurredAt?: string
 }
 
+const traceHash = (kind: string, value: unknown): string | null => {
+  const held = String(value ?? '').trim()
+  return held ? createHash('sha256').update(`pos:${kind}\n${held}`).digest('hex') : null
+}
+
 /**
  * Sensitive POS commands are retryable, so their audit identity must be retryable too.
  * Callers derive the id from the command/domain identity and this helper never updates
@@ -83,8 +88,28 @@ const appendAudit = (ctx: Ctx, event: AuditInput) =>
     reason: event.reason == null ? null : String(event.reason).trim().slice(0, 500),
     relatedId: event.relatedId ?? null,
     details: event.details ?? {},
+    correlationHash: traceHash('correlation', ctx.correlationId),
+    actorHash: traceHash('actor', event.actorId),
+    subjectHash: traceHash(event.subjectType, event.subjectId),
+    relatedHash: traceHash('related', event.relatedId),
+    sessionHash: traceHash('session', event.sessionId),
+    deviceHash: traceHash('device', event.deviceId),
     occurredAt: event.occurredAt ?? now(),
   })
+
+const projectedAudit = (event: Row) => ({
+  id: traceHash('audit-event', event.id),
+  subjectType: String(event.subjectType ?? 'unknown'),
+  subjectHash: event.subjectHash ?? traceHash(String(event.subjectType ?? 'unknown'), event.subjectId),
+  action: String(event.action ?? ''),
+  actorHash: event.actorHash ?? traceHash('actor', event.actorId),
+  correlationHash: event.correlationHash ?? null,
+  relatedHash: event.relatedHash ?? traceHash('related', event.relatedId),
+  sessionHash: event.sessionHash ?? traceHash('session', event.sessionId),
+  deviceHash: event.deviceHash ?? traceHash('device', event.deviceId),
+  reason: event.reason ?? null,
+  occurredAt: String(event.occurredAt),
+})
 
 const POS_OPERATIONS_MAX_DAYS = 31
 const DAY_MS = 86_400_000
@@ -1126,6 +1151,8 @@ export const functions: Record<string, FnSpec> = {
         missingMovementScope,
         missingAuditScope,
         missingOrderFinalizedAt,
+        auditTotal,
+        auditTraceGaps,
       ] = await Promise.all([
         ctx.db.group(
           financialOrderBase
@@ -1149,6 +1176,8 @@ export const functions: Record<string, FnSpec> = {
         ctx.db.count(movementWindow.where(isNull(movement.configId))),
         ctx.db.count(auditWindow.where(isNull(event.configId))),
         ctx.db.count(missingFinalizedAt),
+        ctx.db.count(auditBase),
+        ctx.db.count(auditBase.where(isNull(event.correlationHash))),
       ])
       const currency = ledger.currency
 
@@ -1220,6 +1249,12 @@ export const functions: Record<string, FnSpec> = {
         else if (group.key[0] === 'out') cashOut += amount
       }
       const actions = Object.fromEntries(auditGroups.map((group) => [String(group.key[0]), group.count]))
+      const unscopedAudit = args.configId ? missingAuditScope : 0
+      const coreAuditTotal = auditTotal + unscopedAudit
+      const coreTraceGaps = auditTraceGaps + unscopedAudit
+      const traceRatio = coreAuditTotal
+        ? Number(((coreAuditTotal - coreTraceGaps) / coreAuditTotal).toFixed(6))
+        : 1
       return {
         ok: true,
         report: {
@@ -1238,12 +1273,14 @@ export const functions: Record<string, FnSpec> = {
               missingPaymentCurrency === 0 &&
               missingMovementScope === 0 &&
               missingAuditScope === 0 &&
-              missingOrderFinalizedAt === 0,
+              missingOrderFinalizedAt === 0 &&
+              coreTraceGaps === 0,
             missingPaymentScope,
             missingPaymentCurrency,
             missingMovementScope,
             missingAuditScope,
             missingOrderFinalizedAt,
+            missingAuditCorrelation: coreTraceGaps,
           },
           orders: { sales, cancelledCount: actions['order.cancelled'] ?? 0 },
           tenders,
@@ -1266,8 +1303,22 @@ export const functions: Record<string, FnSpec> = {
             reversedCashMovements: actions['cash_movement.reversed'] ?? 0,
             pendingVariances: actions['session.variance_pending'] ?? 0,
           },
+          observability: {
+            metrics: {
+              auditEventTotal: coreAuditTotal,
+              exceptionTotal:
+                (actions['order.cancelled'] ?? 0) +
+                (actions['payment.voided'] ?? 0) +
+                (actions['cash_movement.reversed'] ?? 0) +
+                (actions['session.variance_pending'] ?? 0),
+            },
+            traceCoverage: { coreAuditTotal, coreTraceGaps, ratio: traceRatio },
+            alerts: coreTraceGaps
+              ? [{ code: 'core_trace_gap', severity: 'warning', count: coreTraceGaps }]
+              : [],
+          },
           audit: {
-            events: auditRows.slice(0, auditLimit),
+            events: auditRows.slice(0, auditLimit).map(projectedAudit),
             limit: auditLimit,
             truncated: auditRows.length > auditLimit,
           },

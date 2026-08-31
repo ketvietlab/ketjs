@@ -385,6 +385,7 @@ export type TestFixtureCallOptions = {
   allow?: readonly string[] | null
   dryRun?: boolean
   idempotencyKey?: string | null
+  correlationId?: string | null
 }
 
 export type TestFixtureTenant = {
@@ -503,6 +504,7 @@ export async function createTestDeployment(
             allow: callOptions.allow,
             dryRun: callOptions.dryRun,
             idempotencyKey: callOptions.idempotencyKey,
+            correlationId: callOptions.correlationId,
             queueNotify: false,
           }) as Promise<CallResult & { value: T }>,
       )
