@@ -47,7 +47,12 @@ const modules = [
 const manifest = compose(modules, { headless: true }),
   scope = { company: 'acme', branches: null }
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
-  callFn(name, args, { adapter, manifest, scope })
+  callFn(name, args, {
+    adapter,
+    manifest,
+    scope,
+    correlationId: `test:${name}:${String(args.id ?? args.sessionId ?? 'read')}`,
+  })
 
 test('pos: provider payment primitives stay behind an internal integration seam', async () => {
   const names = [
@@ -674,6 +679,9 @@ test('pos: sensitive commands append one retry-stable operational audit event', 
     assert.equal(adjusted.reason, 'Damaged packaging')
     assert.equal((adjusted.details as Row).previousDiscount, '0')
     assert.equal((adjusted.details as Row).discount, '10')
+    assert.ok(events.every((event) => String(event.correlationHash).length === 64))
+    assert.ok(events.every((event) => String(event.subjectHash).length === 64))
+    assert.equal(JSON.stringify(events).includes('test:pos.'), false)
 
     const sessionEvents = (
       await call(
@@ -810,6 +818,7 @@ test('pos: operations report is date-bounded, configuration-scoped and aggregate
       missingMovementScope: 0,
       missingAuditScope: 0,
       missingOrderFinalizedAt: 0,
+      missingAuditCorrelation: 0,
     })
     assert.deepEqual((report.orders as Row).sales, [
       {
@@ -835,6 +844,19 @@ test('pos: operations report is date-bounded, configuration-scoped and aggregate
     assert.equal((report.exceptions as Row).reversedCashMovements, 1)
     assert.equal(((report.audit as Row).events as Row[]).length, 1)
     assert.equal((report.audit as Row).truncated, true)
+    const projected = ((report.audit as Row).events as Row[])[0]!
+    assert.equal(String(projected.id).length, 64)
+    assert.equal(String(projected.subjectHash).length, 64)
+    assert.equal(String(projected.correlationHash).length, 64)
+    assert.equal(String(projected.actorHash).length, 64)
+    assert.equal('actorId' in projected, false)
+    assert.equal('subjectId' in projected, false)
+    assert.equal('relatedId' in projected, false)
+    assert.equal('details' in projected, false)
+    const traceCoverage = (report.observability as Row).traceCoverage as Row
+    assert.ok(Number(traceCoverage.coreAuditTotal) > 0)
+    assert.equal(traceCoverage.coreTraceGaps, 0)
+    assert.equal(traceCoverage.ratio, 1)
 
     const all = (await call('pos.operationsReport', { dateFrom: today, dateTo: today }, adapter)).value as Row
     assert.deepEqual(((all.report as Row).orders as Row).sales, [
@@ -868,6 +890,9 @@ test('pos: operations report is date-bounded, configuration-scoped and aggregate
       'report-main-order:payment',
     ])
     await adapter.run('UPDATE pos_order SET "finalizedAt" = NULL WHERE id = ?', ['report-main-order'])
+    await adapter.run('UPDATE pos_audit_event SET "correlationHash" = NULL WHERE id = ?', [
+      'cash-movement:report-float:recorded',
+    ])
     const legacy = (
       await call('pos.operationsReport', { dateFrom: today, dateTo: today, configId: 'shop' }, adapter)
     ).value as Row
@@ -875,6 +900,8 @@ test('pos: operations report is date-bounded, configuration-scoped and aggregate
     assert.equal(((legacy.report as Row).scopeCoverage as Row).missingPaymentScope, 1)
     assert.equal(((legacy.report as Row).scopeCoverage as Row).missingPaymentCurrency, 1)
     assert.equal(((legacy.report as Row).scopeCoverage as Row).missingOrderFinalizedAt, 1)
+    assert.equal(((legacy.report as Row).scopeCoverage as Row).missingAuditCorrelation, 1)
+    assert.equal((((legacy.report as Row).observability as Row).traceCoverage as Row).coreTraceGaps, 1)
 
     const tooWide = (
       await call('pos.operationsReport', { dateFrom: '2026-01-01', dateTo: '2026-02-01' }, adapter)

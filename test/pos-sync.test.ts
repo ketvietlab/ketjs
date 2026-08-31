@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { test, type TestContext } from 'node:test'
 import { defineDeployment, type Row, type Scope } from '@ketvietlab/ketjs'
 import { createTestDeployment, type TestDeployment } from '@ketvietlab/ketjs/testing'
@@ -332,6 +333,13 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
   assert.ok(order.pickingId)
   assert.ok(order.accountMoveId)
   assert.ok(order.receiptId)
+  const audits = (await call('pos.listAuditEvents', { subjectType: 'order', limit: 20 })).value as Row[]
+  const finalized = audits.find((event) => event.action === 'order.finalized')!
+  assert.equal(
+    finalized.correlationHash,
+    createHash('sha256').update('pos:correlation\nfinalize-order01-key').digest('hex'),
+  )
+  assert.equal(JSON.stringify(audits).includes('finalize-order01-key'), false)
 
   const conflict = await channel<{
     conflicted: number

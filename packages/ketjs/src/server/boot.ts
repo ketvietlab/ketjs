@@ -91,6 +91,7 @@ export type ServeContext = {
       idempotencyKey?: string | null
       idempotencyNamespace?: string | null
       idempotencyDigest?: string | null
+      correlationId?: string | null
     },
   ) => Promise<unknown>
   /**
@@ -110,6 +111,7 @@ export type ServeContext = {
       idempotencyKey?: string | null
       idempotencyNamespace?: string | null
       idempotencyDigest?: string | null
+      correlationId?: string | null
     },
   ) => Promise<unknown>
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
@@ -629,6 +631,7 @@ export async function bootDeployment(
               idempotencyKey: options?.idempotencyKey,
               idempotencyNamespace: options?.idempotencyNamespace,
               idempotencyDigest: options?.idempotencyDigest,
+              correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
             })
           ).value,
@@ -654,6 +657,7 @@ export async function bootDeployment(
               idempotencyKey: options?.idempotencyKey,
               idempotencyNamespace: options?.idempotencyNamespace,
               idempotencyDigest: options?.idempotencyDigest,
+              correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
             })
           ).value,

@@ -26,6 +26,7 @@ export function createContext(o: {
   fnKey: string
   dryRun?: boolean
   actor?: string | null
+  correlationId?: string | null
   scope?: Scope
   kind?: 'function' | 'job'
   queueNotify?: boolean
@@ -620,6 +621,7 @@ export function createContext(o: {
 
   const ctx: Ctx = {
     fnKey,
+    correlationId: o.correlationId ?? null,
     manifest,
     scope,
     actor: o.actor ?? null,
