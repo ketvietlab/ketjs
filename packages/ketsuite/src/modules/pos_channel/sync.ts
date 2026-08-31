@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { defineFn } from '@ketvietlab/ketjs'
 import type { FnSpec, ModelDef, Route, Row, ServeContext } from '@ketvietlab/ketjs'
 import {
+  CHANNEL_API_VERSION,
   channelCommandId,
   channelError,
   authorizedChannelCapabilities,
@@ -217,10 +218,14 @@ const bootstrapSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    contractVersion: string,
     protocolVersion: string,
+    operatorId: string,
     companyId: string,
     posConfigId: string,
     deviceId: string,
+    locale: string,
+    currency: string,
     capabilities: { type: 'array', items: capabilitySchema },
     revisions: revisionVectorSchema,
     shift: { ...posShiftSchema, type: ['object', 'null'] },
@@ -230,10 +235,14 @@ const bootstrapSchema = {
     resumeCursor: nullableString,
   },
   required: [
+    'contractVersion',
     'protocolVersion',
+    'operatorId',
     'companyId',
     'posConfigId',
     'deviceId',
+    'locale',
+    'currency',
     'capabilities',
     'revisions',
     'shift',
@@ -1042,10 +1051,14 @@ export const syncRoutes = routesOf(
           : null
       return {
         data: {
+          contractVersion: CHANNEL_API_VERSION,
           protocolVersion: policy.protocolVersion,
+          operatorId: identity.operatorId,
           companyId: identity.companyId,
           posConfigId: identity.posConfigId,
           deviceId: identity.deviceId,
+          locale: ctx.localeOf(url, req),
+          currency: catalog.currency,
           capabilities,
           revisions: {
             config: revisions.config,

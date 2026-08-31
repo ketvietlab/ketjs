@@ -221,6 +221,14 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
   }
   const { e2e, call } = await setup(t, () => identity)
   const bootstrap = await channel<{
+    contractVersion: string
+    protocolVersion: string
+    operatorId: string
+    companyId: string
+    posConfigId: string
+    deviceId: string
+    locale: string
+    currency: string
     revisions: Record<string, string>
     capabilities: Array<{ key: string; actions: string[] }>
     policy: {
@@ -230,8 +238,16 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
       onlineOnlyOperationIds: string[]
     }
     offlineLease: { token: string }
-  }>(e2e, 'sync/bootstrap')
+  }>(e2e, 'sync/bootstrap', { headers: { 'accept-language': 'vi-VN' } })
   assert.equal(bootstrap.status, 200, JSON.stringify(bootstrap.body))
+  assert.equal(bootstrap.body.data.contractVersion, '1.0.0')
+  assert.equal(bootstrap.body.data.protocolVersion, '1.0')
+  assert.equal(bootstrap.body.data.operatorId, 'cashier')
+  assert.equal(bootstrap.body.data.companyId, 'default')
+  assert.equal(bootstrap.body.data.posConfigId, 'shop')
+  assert.equal(bootstrap.body.data.deviceId, 'device-1')
+  assert.equal(bootstrap.body.data.locale, 'vi')
+  assert.equal(bootstrap.body.data.currency, 'VND')
   assert.equal(bootstrap.body.data.policy.maxBatchSize, 50)
   assert.equal(bootstrap.body.data.policy.requiresSignedLease, true)
   assert.equal(bootstrap.body.data.policy.requiresDeviceSignature, true)
