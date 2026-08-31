@@ -40,6 +40,8 @@ export const models: Record<string, ModelDef> = {
       ref: 'text?',
       email: 'text?',
       phone: 'text?',
+      /** Explicit permission to retain and use the optional contact PII. */
+      contactConsent: 'bool?',
       /** UI language for anything sent to them. Content is not translated (D14). */
       lang: 'text?',
       active: 'bool',
