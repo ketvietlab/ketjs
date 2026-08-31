@@ -26,8 +26,9 @@ compatible contract major. Composition fails when a route bypasses the facade or
 incompatible version.
 
 The facade runs before the handler and settles everything the contract declares: the caller is resolved and
-rejected against `auth`, a cookie caller proves intent on mutations, and the request body is validated against
-the published schema. A handler receives the result as its fifth argument and never repeats those checks.
+rejected against `auth`, a cookie caller proves intent on mutations, a profile capability authorizer (when
+registered) accepts or rejects declared capabilities, and the request body is validated against the published
+schema. A handler receives the result as its fifth argument and never repeats those checks.
 The framework routes on path alone, so one path is one operation — `routesOf()` refuses two contributions
 that claim the same path rather than letting the later one silently win.
 
@@ -80,6 +81,12 @@ client is never asked for one. Which profile supplies identities is registered w
 `registerChannelIdentityPresentation()` so a private Bearer resolver composes with the public cookie resolver
 without import-order precedence. A contract declaring `auth` on a profile with no resolver fails the request
 rather than serving it open, and supplying both presentations fails before either resolver runs.
+
+Role storage stays with the module that owns a profile. It can call
+`registerChannelCapabilityAuthorizer(profile, { owner, authorize })` to enforce the `{ key, action }` declared by its routes.
+After registration, every capability-declared route in that profile is fail-closed before rate limiting, body
+validation, or handler execution. Profiles without an authorizer retain metadata-only capability discovery, so
+adding a role backend is an explicit product decision rather than a framework guess.
 
 Registration is immediately usable in the current phase; email activation is not required.
 

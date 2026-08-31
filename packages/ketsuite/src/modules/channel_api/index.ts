@@ -68,6 +68,7 @@ export {
   channelCredentialFailure,
   channelCommandId,
   defineChannelRoute,
+  registerChannelCapabilityAuthorizer,
   registerChannelIdentity,
   registerChannelIdentityPresentation,
   registerChannelRealm,
@@ -76,6 +77,8 @@ export {
 export { openApiDocument } from './openapi.ts'
 export type {
   ChannelAccount,
+  ChannelCapabilityAuthorizer,
+  ChannelCapabilityAuthorizerRegistration,
   ChannelCredentialFailure,
   ChannelIdentities,
   ChannelIdentityFor,
