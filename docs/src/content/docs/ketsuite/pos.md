@@ -71,6 +71,20 @@ a configuration-filtered report is complete. A missing correlation hash is also 
 legacy rows without a config dimension count as trace gaps instead of disappearing. Financial totals still come from orders, tenders, and
 cash movements; the audit timeline supplies command and exception counts, not ledger amounts.
 
+## PostgreSQL concurrency evidence
+
+The live PostgreSQL suite rebuilds a fresh POS schema and drives conflicting commands through the
+public function runtime. It verifies that concurrent order creation allocates one gapless,
+session-local sequence; duplicate shift opening converges on one opened revision; competing cart
+updates allow only one expected-revision winner; and concurrent tender/finalization attempts persist
+one payment, one posted accounting move, and one stock picking. A separate race submits two partial
+returns against the same sold quantity and proves that only one reservation succeeds, leaving the
+remaining returnable quantity intact.
+
+These checks are database-level release evidence for the upstream POS transaction boundary. They do
+not cover deployment-owned provider callbacks, offline batch ingestion, or loyalty wallets; each
+owning module must supply its own PostgreSQL concurrency evidence for those paths.
+
 ## Retry and transaction boundary
 
 An audit event is written in the same command context as its business mutation. Finalization writes the
