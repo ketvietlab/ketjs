@@ -29,10 +29,37 @@ Payment-provider reconciliation, device grant/revoke, receipt delivery, and manu
 deployment-owned. Those modules must keep their own immutable evidence and may project it beside this
 timeline; they must not write fabricated upstream POS events.
 
-`pos.listAuditEvents` reads only the active company scope. It accepts optional `subjectType`,
-`subjectId`, and `action` filters, returns newest events first, and clamps `limit` to 1–200 records.
-This bounded query is the source for administration timelines and exports; generic mutation of audit
-rows is not part of the public function contract.
+`pos.listAuditEvents` reads only the active company scope. Audit rows carry immutable `configId` and
+`sessionId` dimensions captured with the command, rather than reconstructing scope from mutable
+records later. The query accepts optional subject, action, configuration, session, and half-open
+`from`/`to` filters, returns newest events first, and clamps `limit` to 1–200 records. This bounded
+query is the source for administration timelines and exports; generic mutation of audit rows is not
+part of the public function contract.
+
+## Operations report
+
+`pos.operationsReport` is a company-scoped operational projection over a required inclusive civil-date
+range of at most 31 days. Midnight boundaries use the company's locked accounting timezone (default
+`Asia/Ho_Chi_Minh`), not UTC. An optional `configId` narrows every source at the database layer.
+Orders, tenders, cash movements, and audit actions are grouped and summed by the adapters, so the
+report does not load an unbounded transaction set into application memory. The result contains:
+
+- gross sales, returns, net sales, and transaction counts per currency;
+- tender totals by state, kind, and currency;
+- cash-in, cash-out, and net movement in company currency;
+- shift open/close and variance-control counts;
+- cancellation, manual-void, cash-reversal, and pending-variance exception counts;
+- a newest-first audit sample whose requested size is clamped to 1–200 and whose `truncated` flag
+  tells an administration export to request a narrower window.
+
+`pos.Order.finalizedAt` assigns revenue and returns to the civil day when the transaction became
+immutable, rather than the day its draft was created. `pos.Payment` and `pos.CashMovement` persist
+their immutable configuration and session dimensions at creation for this projection. The new
+dimensions are optional at the schema level so an existing deployment can add them without a
+blocking manual migration; every new command writes them. The report exposes `scopeCoverage`
+counters for legacy rows missing a dimension or finalization timestamp instead of silently claiming
+a configuration-filtered report is complete. Financial totals still come from orders, tenders, and
+cash movements; the audit timeline supplies command and exception counts, not ledger amounts.
 
 ## Retry and transaction boundary
 
