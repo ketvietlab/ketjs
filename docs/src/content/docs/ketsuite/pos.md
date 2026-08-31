@@ -16,6 +16,12 @@ Each event has a retry-stable ID derived from the domain command, a subject and 
 identity when available, a bounded reason, explicit related record, details, and occurrence time. A
 command replay uses `insertIfAbsent`; it never produces a second event and never edits the first event.
 
+The function runtime carries an ephemeral `correlationId` separately from validated business input. POS channel
+commands set it to the durable idempotency/command key; offline replay uses the same command metadata. The audit
+helper stores only a namespaced SHA-256 `correlationHash`, plus hashed actor, subject, related, session, and device
+identities. The framework never persists the raw correlation value. Domain code must apply the same rule before
+persisting `ctx.correlationId`; it is request metadata, not a secret-storage facility.
+
 The upstream module records:
 
 - shift creation, opening, closing control, close sealing, recount, and variance approval;
@@ -50,7 +56,10 @@ report does not load an unbounded transaction set into application memory. The r
 - shift open/close and variance-control counts;
 - cancellation, manual-void, cash-reversal, and pending-variance exception counts;
 - a newest-first audit sample whose requested size is clamped to 1–200 and whose `truncated` flag
-  tells an administration export to request a narrower window.
+  tells an administration export to request a narrower window. This sample emits only hashed event/subject/
+  actor/related/session/device identities and omits raw IDs and arbitrary `details`.
+- core audit-event and exception counters, trace coverage ratio, and a stable `core_trace_gap` warning when
+  post-migration correlation evidence is incomplete.
 
 `pos.Order.finalizedAt` assigns revenue and returns to the civil day when the transaction became
 immutable, rather than the day its draft was created. `pos.Payment` and `pos.CashMovement` persist
@@ -58,7 +67,8 @@ their immutable configuration and session dimensions at creation for this projec
 dimensions are optional at the schema level so an existing deployment can add them without a
 blocking manual migration; every new command writes them. The report exposes `scopeCoverage`
 counters for legacy rows missing a dimension or finalization timestamp instead of silently claiming
-a configuration-filtered report is complete. Financial totals still come from orders, tenders, and
+a configuration-filtered report is complete. A missing correlation hash is also explicit coverage debt; scoped
+legacy rows without a config dimension count as trace gaps instead of disappearing. Financial totals still come from orders, tenders, and
 cash movements; the audit timeline supplies command and exception counts, not ledger amounts.
 
 ## Retry and transaction boundary

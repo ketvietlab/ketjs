@@ -511,6 +511,8 @@ export type Scope = {
 
 export type Ctx = {
   fnKey: string
+  /** Ephemeral request/command correlation. Domains must hash it before persistence. */
+  correlationId: string | null
   scope: Scope
   /** The composed manifest, so a module can check data against what is installed. */
   manifest: Manifest

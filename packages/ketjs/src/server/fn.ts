@@ -170,6 +170,8 @@ export async function callFn(
     manifest: Manifest
     dryRun?: boolean
     actor?: string | null
+    /** Ephemeral correlation propagated to Ctx; never persisted by the framework. */
+    correlationId?: string | null
     idempotencyKey?: string | null
     /** Separates public callers that can choose the same client key. */
     idempotencyNamespace?: string | null
@@ -266,6 +268,7 @@ export async function callFn(
     fnKey,
     dryRun,
     actor: o.actor ?? null,
+    correlationId: o.correlationId ?? null,
     scope: o.scope,
     queueNotify: o.queueNotify,
   })

@@ -728,6 +728,7 @@ const shiftResult = async (ctx: ServeContext, url: URL, req: Req, id: string, id
 const commandOptions = (identity: PosIdentity, action: string, key: string) => ({
   idempotencyKey: key,
   idempotencyNamespace: `pos:${identity.companyId}:${identity.posConfigId}:${identity.deviceId}:${action}`,
+  correlationId: key,
 })
 
 const lifecycleFunction = async (ctx: ServeContext, req: Req, preferred: string, fallback: string) =>

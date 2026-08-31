@@ -260,6 +260,12 @@ export const models: Record<string, ModelDef> = {
       reason: 'text?',
       relatedId: 'text?',
       details: 'json',
+      correlationHash: 'text?',
+      actorHash: 'text?',
+      subjectHash: 'text?',
+      relatedHash: 'text?',
+      sessionHash: 'text?',
+      deviceHash: 'text?',
       occurredAt: 'datetime',
     },
     indexes: {
