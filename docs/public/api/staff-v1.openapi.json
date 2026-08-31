@@ -4263,6 +4263,281 @@
         "x-ket-idempotent": true
       }
     },
+    "/crm/leads/{id}/reassign": {
+      "post": {
+        "operationId": "staff.crm.leads.reassign",
+        "summary": "Reassign an actor-visible CRM record with an audited business reason.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "teamId": {
+                    "type": "string"
+                  },
+                  "assigneeUserId": {
+                    "type": ["string", "null"]
+                  },
+                  "reasonCode": {
+                    "type": "string",
+                    "enum": [
+                      "workload_balance",
+                      "absence",
+                      "escalation",
+                      "territory_change",
+                      "employee_departure",
+                      "manual_correction"
+                    ]
+                  },
+                  "reasonNote": {
+                    "type": ["string", "null"]
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["teamId", "assigneeUserId", "reasonCode", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "transitioned",
+                            "assigned",
+                            "activity_scheduled",
+                            "activity_completed",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "lead": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": ["lead", "opportunity"]
+                            },
+                            "stage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "terminalState": {
+                                  "type": "string",
+                                  "enum": ["open", "won", "lost"]
+                                }
+                              },
+                              "required": ["id", "name", "terminalState"]
+                            },
+                            "customer": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "assignee": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "name"]
+                            },
+                            "expectedRevenue": {
+                              "type": "string"
+                            },
+                            "probability": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string",
+                              "enum": ["pending", "won", "lost"]
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "priority": {
+                              "type": "string"
+                            },
+                            "expectedClosing": {
+                              "type": ["string", "null"]
+                            },
+                            "description": {
+                              "type": ["string", "null"]
+                            },
+                            "nextActivity": {
+                              "type": ["object", "null"],
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": ["id", "name"]
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "dueDate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "type", "summary", "dueDate"]
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "stage",
+                            "customer",
+                            "assignee",
+                            "expectedRevenue",
+                            "probability",
+                            "outcome",
+                            "version",
+                            "priority",
+                            "expectedClosing",
+                            "description",
+                            "nextActivity",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "lead"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "crm.pipeline",
+          "action": "assign"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
     "/crm/leads/{id}/won": {
       "post": {
         "operationId": "staff.crm.leads.markWon",
@@ -10705,6 +10980,14 @@
                                 },
                                 "required": ["id", "name"]
                               },
+                              "itemCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "receiptState": {
+                                "type": "string",
+                                "enum": ["none", "pending", "partial", "received", "cancelled"]
+                              },
                               "billingState": {
                                 "type": "string"
                               },
@@ -10729,6 +11012,8 @@
                               "orderedAt",
                               "expectedAt",
                               "vendor",
+                              "itemCount",
+                              "receiptState",
                               "billingState",
                               "total"
                             ]
@@ -10821,6 +11106,14 @@
                           },
                           "required": ["id", "name"]
                         },
+                        "itemCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "receiptState": {
+                          "type": "string",
+                          "enum": ["none", "pending", "partial", "received", "cancelled"]
+                        },
                         "billingState": {
                           "type": "string"
                         },
@@ -10873,6 +11166,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -10891,11 +11187,38 @@
                               "receivedQuantity",
                               "billedQuantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
                               "subtotal"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "receipts": {
                           "type": "array",
@@ -11004,12 +11327,16 @@
                         "orderedAt",
                         "expectedAt",
                         "vendor",
+                        "itemCount",
+                        "receiptState",
                         "billingState",
                         "total",
                         "vendorReference",
                         "notes",
                         "pickingTypeId",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "receipts",
                         "vendorBills",
                         "receiptMoveCount",
@@ -11066,6 +11393,18 @@
           },
           {
             "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -11145,6 +11484,14 @@
                           },
                           "required": ["id", "name"]
                         },
+                        "itemCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "receiptState": {
+                          "type": "string",
+                          "enum": ["none", "pending", "partial", "received", "cancelled"]
+                        },
                         "billingState": {
                           "type": "string"
                         },
@@ -11197,6 +11544,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -11215,11 +11565,38 @@
                               "receivedQuantity",
                               "billedQuantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
                               "subtotal"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "receipts": {
                           "type": "array",
@@ -11328,12 +11705,16 @@
                         "orderedAt",
                         "expectedAt",
                         "vendor",
+                        "itemCount",
+                        "receiptState",
                         "billingState",
                         "total",
                         "vendorReference",
                         "notes",
                         "pickingTypeId",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "receipts",
                         "vendorBills",
                         "receiptMoveCount",
@@ -11419,6 +11800,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -11502,6 +11903,14 @@
                           },
                           "required": ["id", "name"]
                         },
+                        "itemCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "receiptState": {
+                          "type": "string",
+                          "enum": ["none", "pending", "partial", "received", "cancelled"]
+                        },
                         "billingState": {
                           "type": "string"
                         },
@@ -11554,6 +11963,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -11572,11 +11984,38 @@
                               "receivedQuantity",
                               "billedQuantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
                               "subtotal"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "receipts": {
                           "type": "array",
@@ -11685,12 +12124,16 @@
                         "orderedAt",
                         "expectedAt",
                         "vendor",
+                        "itemCount",
+                        "receiptState",
                         "billingState",
                         "total",
                         "vendorReference",
                         "notes",
                         "pickingTypeId",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "receipts",
                         "vendorBills",
                         "receiptMoveCount",
@@ -11795,6 +12238,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -11856,6 +12319,14 @@
                           },
                           "required": ["id", "name"]
                         },
+                        "itemCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "receiptState": {
+                          "type": "string",
+                          "enum": ["none", "pending", "partial", "received", "cancelled"]
+                        },
                         "billingState": {
                           "type": "string"
                         },
@@ -11908,6 +12379,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -11926,11 +12400,38 @@
                               "receivedQuantity",
                               "billedQuantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
                               "subtotal"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "receipts": {
                           "type": "array",
@@ -12039,12 +12540,16 @@
                         "orderedAt",
                         "expectedAt",
                         "vendor",
+                        "itemCount",
+                        "receiptState",
                         "billingState",
                         "total",
                         "vendorReference",
                         "notes",
                         "pickingTypeId",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "receipts",
                         "vendorBills",
                         "receiptMoveCount",
@@ -12130,6 +12635,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -12191,6 +12716,14 @@
                           },
                           "required": ["id", "name"]
                         },
+                        "itemCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "receiptState": {
+                          "type": "string",
+                          "enum": ["none", "pending", "partial", "received", "cancelled"]
+                        },
                         "billingState": {
                           "type": "string"
                         },
@@ -12243,6 +12776,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -12261,11 +12797,38 @@
                               "receivedQuantity",
                               "billedQuantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
                               "subtotal"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "receipts": {
                           "type": "array",
@@ -12374,12 +12937,16 @@
                         "orderedAt",
                         "expectedAt",
                         "vendor",
+                        "itemCount",
+                        "receiptState",
                         "billingState",
                         "total",
                         "vendorReference",
                         "notes",
                         "pickingTypeId",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "receipts",
                         "vendorBills",
                         "receiptMoveCount",
@@ -12465,6 +13032,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -12526,6 +13113,14 @@
                           },
                           "required": ["id", "name"]
                         },
+                        "itemCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "receiptState": {
+                          "type": "string",
+                          "enum": ["none", "pending", "partial", "received", "cancelled"]
+                        },
                         "billingState": {
                           "type": "string"
                         },
@@ -12578,6 +13173,9 @@
                               "uomId": {
                                 "type": "string"
                               },
+                              "uomName": {
+                                "type": "string"
+                              },
                               "unitPrice": {
                                 "type": "string"
                               },
@@ -12596,11 +13194,38 @@
                               "receivedQuantity",
                               "billedQuantity",
                               "uomId",
+                              "uomName",
                               "unitPrice",
                               "discount",
                               "subtotal"
                             ]
                           }
+                        },
+                        "untaxed": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
+                        },
+                        "tax": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "amount": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["currency", "amount"]
                         },
                         "receipts": {
                           "type": "array",
@@ -12709,12 +13334,16 @@
                         "orderedAt",
                         "expectedAt",
                         "vendor",
+                        "itemCount",
+                        "receiptState",
                         "billingState",
                         "total",
                         "vendorReference",
                         "notes",
                         "pickingTypeId",
                         "lines",
+                        "untaxed",
+                        "tax",
                         "receipts",
                         "vendorBills",
                         "receiptMoveCount",
@@ -12808,6 +13437,26 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
           }
         ],
         "requestBody": {
@@ -12887,6 +13536,14 @@
                               },
                               "required": ["id", "name"]
                             },
+                            "itemCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "receiptState": {
+                              "type": "string",
+                              "enum": ["none", "pending", "partial", "received", "cancelled"]
+                            },
                             "billingState": {
                               "type": "string"
                             },
@@ -12939,6 +13596,9 @@
                                   "uomId": {
                                     "type": "string"
                                   },
+                                  "uomName": {
+                                    "type": "string"
+                                  },
                                   "unitPrice": {
                                     "type": "string"
                                   },
@@ -12957,11 +13617,38 @@
                                   "receivedQuantity",
                                   "billedQuantity",
                                   "uomId",
+                                  "uomName",
                                   "unitPrice",
                                   "discount",
                                   "subtotal"
                                 ]
                               }
+                            },
+                            "untaxed": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
+                            },
+                            "tax": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "amount": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["currency", "amount"]
                             },
                             "receipts": {
                               "type": "array",
@@ -13070,12 +13757,16 @@
                             "orderedAt",
                             "expectedAt",
                             "vendor",
+                            "itemCount",
+                            "receiptState",
                             "billingState",
                             "total",
                             "vendorReference",
                             "notes",
                             "pickingTypeId",
                             "lines",
+                            "untaxed",
+                            "tax",
                             "receipts",
                             "vendorBills",
                             "receiptMoveCount",

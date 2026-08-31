@@ -9,7 +9,7 @@ import {
   applyCasePlan,
   assignCase,
   cancelCaseActivity,
-  canReadCase,
+  canEditCase,
   caseDetail,
   closedAtFor,
   duplicateCases,
@@ -28,6 +28,7 @@ import {
   now,
   refreshCaseScore,
   pipelineSummary,
+  reassignCase,
   saveCase,
   scheduleCaseActivity,
   serializeCaseList,
@@ -38,6 +39,7 @@ import { ASSIGNMENT_MODES, CASE_KINDS, TERMINAL_STATES } from './types.ts'
 
 const caseReadEffects = [
   'read:crm.Case',
+  'read:crm.AccessGrant',
   'read:crm.Stage',
   'read:crm.Team',
   'read:crm.TeamMember',
@@ -105,6 +107,14 @@ const command = (ctx: Ctx, key: unknown) => {
   return null
 }
 
+const isSuperuser = async (ctx: Ctx): Promise<boolean> => {
+  if (!ctx.actor) return false
+  const actor = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0]
+  return actor?.superuser === true
+}
+
+const accessScopes = new Set(['none', 'self', 'team', 'company'])
+
 const ensureCase = async (ctx: Ctx, id: unknown): Promise<Row | null> =>
   (await ctx.db.select('crm.Case', { id }))[0] ?? null
 
@@ -147,7 +157,7 @@ async function moveToTerminal(
   if (error) return error
   return ctx.tx(async (tx) => {
     const held = await ensureCase(tx, input.id)
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
     if (held.kind !== 'opportunity') return invalid(issue('kind', 'crm.error.leadConversion'))
     const stages = (await tx.db.select('crm.Stage', { active: true })).filter(
       (stage) =>
@@ -245,6 +255,75 @@ export const functions: Record<string, FnSpec> = {
       if (error) return error
       await ensureCrmDefaults(ctx)
       return { ok: true }
+    },
+  }),
+
+  'access.get': defineFn({
+    input: { userId: 'id?' },
+    output: { grant: 'json?' },
+    effects: ['read:crm.AccessGrant', 'read:user.User'],
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!ctx.actor) return { grant: null }
+      const requested = String(args.userId ?? ctx.actor)
+      if (requested !== ctx.actor && !(await isSuperuser(ctx))) return { grant: null }
+      const grant = (await ctx.db.select('crm.AccessGrant', { userId: requested }))[0] ?? null
+      return { grant }
+    },
+  }),
+
+  'access.save': defineFn({
+    input: {
+      id: 'id',
+      userId: 'id',
+      viewScope: 'text',
+      editScope: 'text',
+      assignScope: 'text',
+      active: 'bool?',
+      expectedVersion: 'int?',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
+    effects: ['read:crm.AccessGrant', 'write:crm.AccessGrant', 'read:user.User'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const error = command(ctx, args.idempotencyKey)
+      if (error) return error
+      if (!(await isSuperuser(ctx))) return invalid(issue('actor', 'crm.error.permission'))
+      if (
+        !accessScopes.has(String(args.viewScope)) ||
+        !accessScopes.has(String(args.editScope)) ||
+        !accessScopes.has(String(args.assignScope))
+      )
+        return invalid(issue('viewScope', 'crm.error.invalidAccessScope'))
+      const user = (await ctx.db.select('user.User', { id: args.userId, active: true }))[0]
+      if (!user) return invalid(issue('userId', 'crm.error.notFound'))
+      const byUser = (await ctx.db.select('crm.AccessGrant', { userId: args.userId }))[0]
+      const existing = (await ctx.db.select('crm.AccessGrant', { id: args.id }))[0]
+      if (byUser && byUser.id !== args.id) return invalid(issue('userId', 'crm.error.duplicateName'))
+      if (existing && existing.userId !== args.userId) return invalid(issue('userId', 'crm.error.permission'))
+      const expected = args.expectedVersion == null ? n(existing?.version) : n(args.expectedVersion)
+      const version = n(existing?.version) + 1
+      const values = {
+        userId: args.userId,
+        viewScope: args.viewScope,
+        editScope: args.editScope,
+        assignScope: args.assignScope,
+        active: args.active ?? true,
+        version,
+      }
+      if (existing) {
+        const changed = await ctx.db.compareAndSet(
+          'crm.AccessGrant',
+          { id: args.id },
+          { version: expected },
+          values,
+        )
+        if (!('dryRun' in changed) && !changed.matched)
+          return invalid(issue('version', 'crm.error.stageConflict', { current: existing.version }))
+      } else await ctx.db.insert('crm.AccessGrant', { id: args.id, ...values })
+      return { ok: true, id: args.id, version }
     },
   }),
 
@@ -426,6 +505,8 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
+      'read:crm.AccessGrant',
+      'read:crm.Team',
       'read:crm.Stage',
       'read:crm.TeamMember',
       'read:user.User',
@@ -463,6 +544,7 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
+      'read:crm.AccessGrant',
       'read:crm.Team',
       'write:crm.Team',
       'read:crm.TeamMember',
@@ -476,12 +558,47 @@ export const functions: Record<string, FnSpec> = {
     handler: (ctx, args) => assignCase(ctx, args as never),
   }),
 
+  'case.reassign': defineFn({
+    input: {
+      id: 'id',
+      teamId: 'id',
+      assigneeUserId: 'id?',
+      reasonCode: 'text',
+      reasonNote: 'text?',
+      expectedVersion: 'int',
+      idempotencyKey: 'text',
+    },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      teamId: 'id?',
+      assigneeUserId: 'id?',
+      version: 'int?',
+      errors: 'json?',
+    },
+    effects: [
+      'read:crm.Case',
+      'write:crm.Case',
+      'read:crm.AccessGrant',
+      'read:crm.Team',
+      'read:crm.TeamMember',
+      'read:user.User',
+      'read:crm.TimelineEntry',
+      'write:crm.TimelineEntry',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) => reassignCase(ctx, args as never),
+  }),
+
   'case.convertLead': defineFn({
     input: { id: 'id', expectedVersion: 'int', stageId: 'id?', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
     effects: [
       'read:crm.Case',
       'write:crm.Case',
+      'read:crm.AccessGrant',
+      'read:crm.Team',
       'read:crm.Stage',
       'read:crm.SalesDetail',
       'write:crm.SalesDetail',
@@ -496,7 +613,7 @@ export const functions: Record<string, FnSpec> = {
       if (error) return error
       return ctx.tx(async (tx) => {
         const held = await ensureCase(tx, args.id)
-        if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
+        if (!held || !(await canEditCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
         if (held.kind !== 'lead') {
           if (held.kind === 'opportunity') return { ok: true, id: held.id, version: held.version }
           return invalid(issue('kind', 'crm.error.leadConversion'))
@@ -540,6 +657,8 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
+      'read:crm.AccessGrant',
+      'read:crm.Team',
       'read:crm.CaseTag',
       'write:crm.CaseTag',
       'read:crm.Message',
@@ -567,8 +686,8 @@ export const functions: Record<string, FnSpec> = {
           ensureCase(tx, args.sourceId),
         ])
         if (!target || !source) return invalid(issue('id', 'crm.error.notFound'))
-        if (!(await canReadCase(tx, target))) return invalid(issue('targetId', 'crm.error.notFound'))
-        if (!(await canReadCase(tx, source))) return invalid(issue('sourceId', 'crm.error.notFound'))
+        if (!(await canEditCase(tx, target))) return invalid(issue('targetId', 'crm.error.notFound'))
+        if (!(await canEditCase(tx, source))) return invalid(issue('sourceId', 'crm.error.notFound'))
         if (target.kind !== source.kind) return invalid(issue('sourceId', 'crm.error.invalidKind'))
         // Merging a record that is already folded into a third one would strand
         // the history it carries, and merging into an archived target hides the
@@ -659,6 +778,8 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
+      'read:crm.AccessGrant',
+      'read:crm.Team',
       'read:crm.Stage',
       'write:crm.TimelineEntry',
       'read:crm.TeamMember',
@@ -682,6 +803,8 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
+      'read:crm.AccessGrant',
+      'read:crm.Team',
       'read:crm.Stage',
       'read:crm.SalesDetail',
       'write:crm.SalesDetail',

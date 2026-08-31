@@ -25,6 +25,8 @@ export {
   activeStage,
   actorRequired,
   applyCaseScore,
+  canAssignCase,
+  canEditCase,
   canReadCase,
   caseAudience,
   caseDetail,
@@ -43,9 +45,11 @@ export {
   ownedKinds,
   ownsKind,
   pipelineSummary,
+  reassignCase,
   saveCase,
   seededId,
   serializeCaseList,
   stageKinds,
   visibleCases,
 } from './operations.ts'
+export type { CaseAccessScope, CaseAction, CaseAudience } from './operations.ts'
