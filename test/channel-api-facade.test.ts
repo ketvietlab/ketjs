@@ -6,6 +6,7 @@ import channelApi from '../packages/ketsuite/src/modules/channel_api/index.ts'
 import {
   csrfTokenFor,
   defineChannelRoute,
+  registerChannelCapabilityAuthorizer,
   registerChannelIdentity,
   routesOf,
 } from '../packages/ketsuite/src/modules/channel_api/core.ts'
@@ -32,8 +33,17 @@ const asIdentity = (presentation: 'cookie' | 'bearer'): ChannelIdentity => ({
 /** What the probe routes see. A handler that runs when it should not is a failure. */
 let presented: ChannelIdentity | null = null
 let reached: string[] = []
+let capabilityAllowed = false
+let capabilityChecks: Array<{ accountId: string; key: string; action: string }> = []
 
 registerChannelIdentity('customer', async () => presented)
+registerChannelCapabilityAuthorizer('customer', {
+  owner: 'ketjs.channel-api-facade-test',
+  authorize: (_ctx, _url, _req, identity, capability) => {
+    capabilityChecks.push({ accountId: identity.accountId, ...capability })
+    return capabilityAllowed
+  },
+})
 
 const envelope = { type: 'object' }
 const profileBody = {
@@ -92,6 +102,19 @@ const probe = defineModule({
     }),
     defineChannelRoute({
       profile: 'customer',
+      method: 'GET',
+      path: 'probe/capability',
+      operationId: 'customer.probe.capability',
+      auth: 'customer',
+      capability: { key: 'customer.orders', action: 'read' },
+      responses: { '200': envelope, '403': envelope },
+      handler: () => {
+        reached.push('capability')
+        return { data: { allowed: true } }
+      },
+    }),
+    defineChannelRoute({
+      profile: 'customer',
       method: 'POST',
       path: 'probe/inflight',
       operationId: 'customer.probe.inflight',
@@ -117,6 +140,8 @@ const probe = defineModule({
 const boot = async (t: TestContext) => {
   presented = null
   reached = []
+  capabilityAllowed = false
+  capabilityChecks = []
   const e2e = await createTestDeployment(
     defineDeployment({
       name: 'channel_probe',
@@ -171,6 +196,34 @@ test('channel facade: optional-customer resolves the caller without requiring on
   assert.deepEqual((await read(await e2e.client.get('/api/customer/v1/probe/open'))).data, {
     signedIn: true,
   })
+})
+
+test('channel facade: a registered profile authorizer enforces declared capabilities before handlers', async (t) => {
+  const e2e = await boot(t)
+  presented = asIdentity('bearer')
+
+  const denied = await e2e.client.get('/api/customer/v1/probe/capability')
+  assert.equal(denied.status, 403)
+  assert.equal((await read(denied)).error?.code, 'channel_api.forbidden')
+  assert.deepEqual(reached, [])
+  assert.deepEqual(capabilityChecks, [{ accountId: 'account-1', key: 'customer.orders', action: 'read' }])
+
+  capabilityAllowed = true
+  const allowed = await e2e.client.get('/api/customer/v1/probe/capability')
+  assert.equal(allowed.status, 200)
+  assert.deepEqual((await read(allowed)).data, { allowed: true })
+  assert.deepEqual(reached, ['capability'])
+})
+
+test('channel facade: capability authorization ownership cannot depend on import order', () => {
+  assert.throws(
+    () =>
+      registerChannelCapabilityAuthorizer('customer', {
+        owner: 'another.customer-authorizer',
+        authorize: () => true,
+      }),
+    /is owned by "ketjs\.channel-api-facade-test"/u,
+  )
 })
 
 test('channel facade: a cookie caller must prove intent on every mutation', async (t) => {
