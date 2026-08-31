@@ -363,26 +363,44 @@ test('staff warehouse channel covers claim, scanning, execution, and return as o
   assert.match(String(preview.data.expectedVersion), /^opv_[0-9a-f]{64}$/)
   const move = (preview.data.moves as Row[])[0]!
   const reservation = (move.reservations as Row[])[0]!
+  const executionBody = {
+    expectedVersion: preview.data.expectedVersion,
+    lines: [
+      {
+        moveId: move.moveId,
+        moveLineId: reservation.moveLineId,
+        productId: move.productId,
+        quantity: '10',
+        sourceLocationId: reservation.sourceLocationId,
+        destinationLocationId: move.destinationLocationId,
+      },
+    ],
+  }
   const execution = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/execution/complete', {
     method: 'POST',
     headers: mutationHeaders(csrf, 'warehouse-execution-1', String(preview.data.expectedVersion)),
-    body: JSON.stringify({
-      expectedVersion: preview.data.expectedVersion,
-      lines: [
-        {
-          moveId: move.moveId,
-          moveLineId: reservation.moveLineId,
-          productId: move.productId,
-          quantity: '10',
-          sourceLocationId: reservation.sourceLocationId,
-          destinationLocationId: move.destinationLocationId,
-        },
-      ],
-    }),
+    body: JSON.stringify(executionBody),
   })
   assert.equal(execution.status, 200)
-  assert.equal(((await execution.json()) as Envelope<Row>).data.status, 'done')
+  const executed = (await execution.json()) as Envelope<Row>
+  assert.equal(executed.data.status, 'done')
   assert.equal((await detail(e2e)).state, 'done')
+
+  // A lost success response must be recoverable without creating another stock
+  // movement or backorder. Replay the exact logical command after the aggregate
+  // version has advanced and require the original canonical result.
+  const replayedExecution = await e2e.client.request(
+    '/api/staff/v1/warehouse/pickings/pick-a/execution/complete',
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-execution-1', String(preview.data.expectedVersion)),
+      body: JSON.stringify(executionBody),
+    },
+  )
+  assert.equal(replayedExecution.status, 200, await replayedExecution.clone().text())
+  const replayedExecutionBody = (await replayedExecution.json()) as Envelope<Row>
+  assert.equal(replayedExecutionBody.data.status, executed.data.status)
+  assert.deepEqual(replayedExecutionBody.data.backorderIds, executed.data.backorderIds)
 
   const done = await detail(e2e)
   const returnClaimResponse = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/claim', {
