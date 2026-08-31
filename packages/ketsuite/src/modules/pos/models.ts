@@ -230,4 +230,24 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { session_time: { fields: ['companyId', 'sessionId', 'occurredAt'] } },
   },
+  /** Append-only operational timeline for sensitive POS commands. */
+  AuditEvent: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      subjectType: 'text',
+      subjectId: 'text',
+      action: 'text',
+      actorId: 'text?',
+      deviceId: 'text?',
+      reason: 'text?',
+      relatedId: 'text?',
+      details: 'json',
+      occurredAt: 'datetime',
+    },
+    indexes: {
+      subject_time: { fields: ['companyId', 'subjectType', 'subjectId', 'occurredAt'] },
+      action_time: { fields: ['companyId', 'action', 'occurredAt'] },
+    },
+  },
 }

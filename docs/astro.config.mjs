@@ -143,6 +143,7 @@ export default defineConfig({
                 { label: 'Manufacturing', slug: 'ketsuite/manufacturing' },
                 { label: 'CRM', slug: 'ketsuite/crm' },
                 { label: 'Loyalty', slug: 'ketsuite/loyalty' },
+                { label: 'Point of Sale', slug: 'ketsuite/pos' },
                 { label: 'Accounting ledger', slug: 'ketsuite/accounting' },
               ],
             },

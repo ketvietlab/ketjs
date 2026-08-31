@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { defineFn, deleteFrom, eq } from '@ketvietlab/ketjs'
+import { and, defineFn, deleteFrom, desc, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { functions as accountFunctions, insertDraftMove, quoteTaxLine } from '../account/functions.ts'
 import {
@@ -30,6 +30,38 @@ const n = (value: unknown) => Number(value ?? 0)
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 const decimal = (value: number) => String(money(value))
 const now = () => new Date().toISOString()
+
+type AuditInput = {
+  id: string
+  subjectType: 'session' | 'order' | 'payment' | 'cash_movement' | 'exchange'
+  subjectId: string
+  action: string
+  actorId?: unknown
+  deviceId?: unknown
+  reason?: unknown
+  relatedId?: unknown
+  details?: Row
+  occurredAt?: string
+}
+
+/**
+ * Sensitive POS commands are retryable, so their audit identity must be retryable too.
+ * Callers derive the id from the command/domain identity and this helper never updates
+ * an existing event.
+ */
+const appendAudit = (ctx: Ctx, event: AuditInput) =>
+  ctx.db.insertIfAbsent('pos.AuditEvent', {
+    id: event.id,
+    subjectType: event.subjectType,
+    subjectId: event.subjectId,
+    action: event.action,
+    actorId: event.actorId ?? ctx.actor ?? null,
+    deviceId: event.deviceId ?? null,
+    reason: event.reason == null ? null : String(event.reason).trim().slice(0, 500),
+    relatedId: event.relatedId ?? null,
+    details: event.details ?? {},
+    occurredAt: event.occurredAt ?? now(),
+  })
 
 type RevisionClaim = { ok: true; order: Row; revision: number } | ReturnType<typeof invalid>
 type ProviderFinalizationClaim =
@@ -948,9 +980,27 @@ const refundOrderEffects = [
   'read:product.TemplateUom',
   'read:product.ProductUom',
   'read:uom.Unit',
+  'write:pos.AuditEvent',
 ] as const
 
 export const functions: Record<string, FnSpec> = {
+  listAuditEvents: defineFn({
+    input: { subjectType: 'text?', subjectId: 'text?', action: 'text?', limit: 'int?' },
+    effects: ['read:pos.AuditEvent'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const event = ctx.table('pos.AuditEvent')
+      const filters = [
+        ...(args.subjectType ? [eq(event.subjectType, args.subjectType)] : []),
+        ...(args.subjectId ? [eq(event.subjectId, args.subjectId)] : []),
+        ...(args.action ? [eq(event.action, args.action)] : []),
+      ]
+      const base = from(event)
+        .orderBy(desc(event.occurredAt), desc(event.id))
+        .limit(Math.max(1, Math.min(200, Math.trunc(n(args.limit ?? 100)) || 100)))
+      return ctx.db.all(filters.length ? base.where(and(...filters)) : base)
+    },
+  }),
   listConfigs: defineFn({
     input: {},
     effects: ['read:pos.Config'],
@@ -1123,6 +1173,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.Config',
       'read:user.User',
       'read:company.Company',
+      'write:pos.AuditEvent',
     ],
     idempotent: true,
     agent: true,
@@ -1187,13 +1238,22 @@ export const functions: Record<string, FnSpec> = {
         cashAdjustmentId: null,
         revision: 0,
       })
+      await appendAudit(ctx, {
+        id: `session:${String(args.id)}:created`,
+        subjectType: 'session',
+        subjectId: String(args.id),
+        action: 'session.created',
+        actorId: args.userId,
+        deviceId: args.deviceId,
+        details: { configId: args.configId, openingCash: minorText(openingCash, scale) },
+      })
       return { ok: true, id: args.id, revision: 0 }
     },
   }),
   openSession: defineFn({
     input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
-    effects: ['read:pos.Session', 'write:pos.Session'],
+    effects: ['read:pos.Session', 'write:pos.Session', 'write:pos.AuditEvent'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -1203,6 +1263,15 @@ export const functions: Record<string, FnSpec> = {
       const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
       if (claim.ok !== true) return claim
       await ctx.db.update('pos.Session', { id: args.id }, { state: 'opened', startAt: held.startAt ?? now() })
+      await appendAudit(ctx, {
+        id: `session:${String(args.id)}:opened`,
+        subjectType: 'session',
+        subjectId: String(args.id),
+        action: 'session.opened',
+        actorId: held.userId,
+        deviceId: held.deviceId,
+        details: { revision: claim.revision },
+      })
       return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
@@ -1225,6 +1294,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.CashMovement',
       'write:pos.CashMovement',
       'read:company.Company',
+      'write:pos.AuditEvent',
     ],
     idempotent: true,
     agent: true,
@@ -1261,6 +1331,17 @@ export const functions: Record<string, FnSpec> = {
         occurredAt: now(),
         reversalOfId: null,
       })
+      await appendAudit(ctx, {
+        id: `cash-movement:${String(args.id)}:recorded`,
+        subjectType: 'cash_movement',
+        subjectId: String(args.id),
+        action: 'cash_movement.recorded',
+        actorId: args.actorId,
+        deviceId: args.deviceId,
+        reason: args.reason,
+        relatedId: args.sessionId,
+        details: { direction: args.direction, amount: minorText(amount, scale), revision: claim.revision },
+      })
       return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
@@ -1276,7 +1357,13 @@ export const functions: Record<string, FnSpec> = {
       deviceId: 'text?',
     },
     output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
-    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.CashMovement', 'write:pos.CashMovement'],
+    effects: [
+      'read:pos.Session',
+      'write:pos.Session',
+      'read:pos.CashMovement',
+      'write:pos.CashMovement',
+      'write:pos.AuditEvent',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -1307,13 +1394,24 @@ export const functions: Record<string, FnSpec> = {
         occurredAt: now(),
         reversalOfId: original.id,
       })
+      await appendAudit(ctx, {
+        id: `cash-movement:${String(args.id)}:reversed`,
+        subjectType: 'cash_movement',
+        subjectId: String(args.id),
+        action: 'cash_movement.reversed',
+        actorId: args.actorId,
+        deviceId: args.deviceId,
+        reason: args.reason,
+        relatedId: original.id,
+        details: { sessionId: args.sessionId, amount: original.amount, revision: claim.revision },
+      })
       return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
   startClosing: defineFn({
     input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
-    effects: ['read:pos.Session', 'read:pos.Order', 'write:pos.Session'],
+    effects: ['read:pos.Session', 'read:pos.Order', 'write:pos.Session', 'write:pos.AuditEvent'],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -1327,6 +1425,15 @@ export const functions: Record<string, FnSpec> = {
       const claim = await claimSessionRevision(ctx, args.id, args.expectedRevision)
       if (claim.ok !== true) return claim
       await ctx.db.update('pos.Session', { id: args.id }, { state: 'closing_control' })
+      await appendAudit(ctx, {
+        id: `session:${String(args.id)}:closing`,
+        subjectType: 'session',
+        subjectId: String(args.id),
+        action: 'session.closing_started',
+        actorId: session.userId,
+        deviceId: session.deviceId,
+        details: { revision: claim.revision },
+      })
       return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
@@ -1357,6 +1464,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.CashMovement',
       'write:pos.Order',
       'read:company.Company',
+      'write:pos.AuditEvent',
     ],
     idempotent: true,
     agent: true,
@@ -1401,6 +1509,21 @@ export const functions: Record<string, FnSpec> = {
           varianceNote: pendingApproval ? (args.varianceNote ?? null) : null,
         },
       )
+      await appendAudit(ctx, {
+        id: `session:${String(args.id)}:sealed`,
+        subjectType: 'session',
+        subjectId: String(args.id),
+        action: pendingApproval ? 'session.variance_pending' : 'session.closed',
+        actorId: session.userId,
+        deviceId: session.deviceId,
+        reason: pendingApproval ? args.varianceReason : undefined,
+        details: {
+          expectedCash: minorText(cash, scale),
+          countedCash: minorText(closingCash, scale),
+          difference: minorText(difference, scale),
+          revision: claim.revision,
+        },
+      })
       return {
         ok: true,
         id: args.id,
@@ -1420,7 +1543,13 @@ export const functions: Record<string, FnSpec> = {
       pendingApproval: 'bool?',
       errors: 'json?',
     },
-    effects: ['read:pos.Session', 'write:pos.Session', 'read:pos.Config', 'read:company.Company'],
+    effects: [
+      'read:pos.Session',
+      'write:pos.Session',
+      'read:pos.Config',
+      'read:company.Company',
+      'write:pos.AuditEvent',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -1448,6 +1577,20 @@ export const functions: Record<string, FnSpec> = {
           varianceApprovedAt: pendingApproval ? null : now(),
         },
       )
+      await appendAudit(ctx, {
+        id: `session:${String(args.id)}:recount:${String(claim.revision)}`,
+        subjectType: 'session',
+        subjectId: String(args.id),
+        action: pendingApproval ? 'session.recount_pending' : 'session.recount_accepted',
+        actorId: args.reviewedBy,
+        deviceId: session.deviceId,
+        reason: args.note,
+        details: {
+          countedCash: minorText(countedCash, scale),
+          difference: minorText(difference, scale),
+          revision: claim.revision,
+        },
+      })
       return {
         ok: true,
         id: args.id,
@@ -1480,6 +1623,7 @@ export const functions: Record<string, FnSpec> = {
       'write:account.Move',
       'write:account.MoveLine',
       'read:company.Company',
+      'write:pos.AuditEvent',
       ...accountEffects,
     ],
     idempotent: true,
@@ -1537,6 +1681,21 @@ export const functions: Record<string, FnSpec> = {
           cashAdjustmentId: adjustmentId,
         },
       )
+      await appendAudit(ctx, {
+        id: `session:${String(args.id)}:variance-approved`,
+        subjectType: 'session',
+        subjectId: String(args.id),
+        action: 'session.variance_approved',
+        actorId: args.approvedBy,
+        deviceId: session.deviceId,
+        reason: args.note ?? session.varianceReason,
+        relatedId: adjustmentId,
+        details: {
+          difference: session.cashRegisterDifference,
+          accountMoveId,
+          revision: claim.revision,
+        },
+      })
       return { ok: true, id: args.id, revision: claim.revision, adjustmentId, accountMoveId }
     },
   }),
@@ -1924,6 +2083,7 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Tax',
       'read:account.ProductTax',
       'read:company.Company',
+      'write:pos.AuditEvent',
     ],
     idempotent: true,
     agent: true,
@@ -1994,6 +2154,24 @@ export const functions: Record<string, FnSpec> = {
         },
       )
       await recompute(ctx, args.orderId)
+      if (args.priceUnit !== undefined || args.discount !== undefined)
+        await appendAudit(ctx, {
+          id: `order-line:${String(args.id)}:adjusted:${String(claim.revision)}`,
+          subjectType: 'order',
+          subjectId: String(args.orderId),
+          action: 'order.line_adjusted',
+          actorId: args.overrideBy,
+          deviceId: order.deviceId,
+          reason: args.overrideReason,
+          relatedId: args.id,
+          details: {
+            previousPriceUnit: line.priceUnit,
+            priceUnit: String(priceUnit),
+            previousDiscount: line.discount,
+            discount: String(discount),
+            revision: claim.revision,
+          },
+        })
       return { ok: true, id: args.id, priceUnit: String(priceUnit), revision: claim.revision }
     },
   }),
@@ -2705,6 +2883,7 @@ export const functions: Record<string, FnSpec> = {
       'read:pos.OrderLine',
       'read:pos.Payment',
       'write:pos.Payment',
+      'write:pos.AuditEvent',
     ],
     idempotent: true,
     agent: true,
@@ -2725,6 +2904,17 @@ export const functions: Record<string, FnSpec> = {
       if (claim.ok !== true) return claim
       await ctx.db.update('pos.Payment', { id: args.id }, { state: 'voided' })
       await recompute(ctx, args.orderId)
+      await appendAudit(ctx, {
+        id: `payment:${String(args.id)}:voided`,
+        subjectType: 'payment',
+        subjectId: String(args.id),
+        action: 'payment.voided',
+        actorId: args.operatorId,
+        deviceId: payment.deviceId ?? order.deviceId,
+        reason: args.reason,
+        relatedId: args.orderId,
+        details: { amount: payment.appliedAmount ?? payment.amount, revision: claim.revision },
+      })
       return { ok: true, id: args.id, revision: claim.revision }
     },
   }),
@@ -2763,6 +2953,7 @@ export const functions: Record<string, FnSpec> = {
       'write:account.MoveLine',
       'read:account.Journal',
       'read:account.Account',
+      'write:pos.AuditEvent',
       ...stockEffects,
       ...accountEffects,
     ],
@@ -3043,6 +3234,22 @@ export const functions: Record<string, FnSpec> = {
               receiptId,
             },
           )
+          await appendAudit(tx, {
+            id: `order:${String(args.id)}:finalized`,
+            subjectType: 'order',
+            subjectId: String(args.id),
+            action: order.isRefund ? 'order.refund_finalized' : 'order.finalized',
+            actorId: order.operatorId ?? session.userId,
+            deviceId: order.deviceId ?? session.deviceId,
+            relatedId: receiptId,
+            details: {
+              amountTotal: order.amountTotal,
+              accountMoveId,
+              pickingId,
+              receiptId,
+              revision: claim.revision,
+            },
+          })
         })
         finalizationCommitted = true
         return {
@@ -3386,6 +3593,22 @@ export const functions: Record<string, FnSpec> = {
           sequence += 10
         }
         await recompute(tx, args.id)
+        await appendAudit(tx, {
+          id: `order:${String(args.id)}:refund-created`,
+          subjectType: 'order',
+          subjectId: String(args.id),
+          action: 'order.refund_created',
+          actorId: args.operatorId,
+          deviceId: args.deviceId ?? session.deviceId,
+          reason: args.reason,
+          relatedId: original.id,
+          details: {
+            sessionId: args.sessionId,
+            returnComplete: completesReturn,
+            returnPortion: decimal(returnPortion),
+            originalRevision: claim.revision,
+          },
+        })
         return {
           ok: true,
           id: args.id,
@@ -3539,6 +3762,18 @@ export const functions: Record<string, FnSpec> = {
           { id: replacementOrderId },
           { exchangeId: args.id, exchangeRole: 'replacement' },
         )
+        await appendAudit(tx, {
+          id: `exchange:${String(args.id)}:created`,
+          subjectType: 'exchange',
+          subjectId: String(args.id),
+          action: 'exchange.created',
+          actorId: args.operatorId,
+          deviceId: args.deviceId,
+          reason,
+          relatedId: original.id,
+          details: { returnOrderId, replacementOrderId, originalRevision: returned.originalRevision },
+          occurredAt: createdAt,
+        })
         return {
           ok: true,
           id: args.id,
@@ -3557,7 +3792,7 @@ export const functions: Record<string, FnSpec> = {
   cancelOrder: defineFn({
     input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
-    effects: ['read:pos.Order', 'write:pos.Order', 'read:pos.Payment'],
+    effects: ['read:pos.Order', 'write:pos.Order', 'read:pos.Payment', 'write:pos.AuditEvent'],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -3579,6 +3814,16 @@ export const functions: Record<string, FnSpec> = {
           if (released.ok !== true) return released
         }
         await tx.db.update('pos.Order', { id: args.id }, { state: 'cancel' })
+        await appendAudit(tx, {
+          id: `order:${String(args.id)}:cancelled`,
+          subjectType: 'order',
+          subjectId: String(args.id),
+          action: 'order.cancelled',
+          actorId: order.operatorId,
+          deviceId: order.deviceId,
+          relatedId: order.sessionId,
+          details: { revision: claim.revision },
+        })
         return { ok: true, id: args.id, revision: claim.revision }
       }),
   }),
