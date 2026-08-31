@@ -3458,76 +3458,110 @@ export const functions: Record<string, FnSpec> = {
         if (goods.length) {
           pickingId = `${String(order.id)}:picking`
           const suffix = order.isRefund ? 'incoming' : 'outgoing'
-          const created = (await stockFunctions.createPicking!.handler(ctx, {
-            id: pickingId,
-            name: `${order.isRefund ? 'Refund' : 'POS'} ${String(order.posReference)}`,
-            pickingTypeId: `${String(config.warehouseId)}:${suffix}`,
-            scheduledDate: order.dateOrder,
-          })) as Row
-          if (created.ok !== true) return created
-          for (const line of goods) {
-            const moveId = `${String(line.id)}:move`,
-              quantity = Math.abs(n(line.qty))
-            const moved = (await stockFunctions.addMove!.handler(ctx, {
-              id: moveId,
-              name: line.name,
-              pickingId,
-              productId: line.productId,
-              productUomId: line.productUomId,
-              productUomQty: decimal(quantity),
-              origin: order.posReference,
-            })) as Row
-            if (moved.ok !== true) return moved
-            await ctx.db.update('stock.Move', { id: moveId }, { posLineId: line.id })
-          }
-          const confirmed = (await stockFunctions.confirmPicking!.handler(ctx, { id: pickingId })) as Row
-          if (confirmed.ok !== true) return confirmed
-          if (order.isRefund) {
+          const pickingTypeId = `${String(config.warehouseId)}:${suffix}`
+          const completedPicking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]
+          if (completedPicking?.state === 'done') {
+            const completedMoves = await ctx.db.select('stock.Move', { pickingId })
+            let matches =
+              completedPicking.pickingTypeId === pickingTypeId && completedMoves.length === goods.length
             for (const line of goods) {
               const moveId = `${String(line.id)}:move`
-              const picking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]!
               const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
-              if (!based) return invalid('productUomId', 'line unit is incompatible with the product unit')
-              const selections =
-                String(line.tracking) === 'none'
-                  ? [{ lotId: null, quantity: based.quantity }]
-                  : (line.lotSelections as Row[])
-              for (const [index, selection] of selections.entries()) {
-                const saved = (await stockFunctions.saveMoveLine!.handler(ctx, {
-                  id: `${moveId}:line:${String(index + 1)}`,
-                  moveId,
-                  productUomId: line.productUomId,
-                  quantity: decimal(n(selection.quantity)),
-                  locationId: picking.locationId,
-                  locationDestId: picking.locationDestId,
-                  ...(selection.lotId ? { lotId: selection.lotId } : {}),
-                  picked: true,
-                })) as Row
-                if (saved.ok !== true) return saved
+              const move = completedMoves.find((candidate) => candidate.id === moveId)
+              matches =
+                matches &&
+                based !== null &&
+                move?.state === 'done' &&
+                move.productId === line.productId &&
+                move.productUomId === based.uomId &&
+                move.posLineId === line.id &&
+                move.origin === order.posReference &&
+                Math.abs(n(move.productUomQty) - based.quantity) <= 0.000001
+            }
+            if (!matches)
+              return invalid('pickingId', 'completed stock transfer does not match this order retry')
+          } else {
+            const created = (await stockFunctions.createPicking!.handler(ctx, {
+              id: pickingId,
+              name: `${order.isRefund ? 'Refund' : 'POS'} ${String(order.posReference)}`,
+              pickingTypeId,
+              scheduledDate: order.dateOrder,
+            })) as Row
+            if (created.ok !== true) return created
+            for (const line of goods) {
+              const moveId = `${String(line.id)}:move`,
+                quantity = Math.abs(n(line.qty))
+              const moved = (await stockFunctions.addMove!.handler(ctx, {
+                id: moveId,
+                name: line.name,
+                pickingId,
+                productId: line.productId,
+                productUomId: line.productUomId,
+                productUomQty: decimal(quantity),
+                origin: order.posReference,
+              })) as Row
+              if (moved.ok !== true) return moved
+              await ctx.db.update('stock.Move', { id: moveId }, { posLineId: line.id })
+            }
+            const confirmed = (await stockFunctions.confirmPicking!.handler(ctx, { id: pickingId })) as Row
+            if (confirmed.ok !== true) return confirmed
+            if (order.isRefund) {
+              for (const line of goods) {
+                const moveId = `${String(line.id)}:move`
+                const picking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]!
+                const based = await toProductUnit(
+                  ctx,
+                  line.productId,
+                  line.productUomId,
+                  Math.abs(n(line.qty)),
+                )
+                if (!based) return invalid('productUomId', 'line unit is incompatible with the product unit')
+                const selections =
+                  String(line.tracking) === 'none'
+                    ? [{ lotId: null, quantity: based.quantity }]
+                    : (line.lotSelections as Row[])
+                for (const [index, selection] of selections.entries()) {
+                  const saved = (await stockFunctions.saveMoveLine!.handler(ctx, {
+                    id: `${moveId}:line:${String(index + 1)}`,
+                    moveId,
+                    productUomId: line.productUomId,
+                    quantity: decimal(n(selection.quantity)),
+                    locationId: picking.locationId,
+                    locationDestId: picking.locationDestId,
+                    ...(selection.lotId ? { lotId: selection.lotId } : {}),
+                    picked: true,
+                  })) as Row
+                  if (saved.ok !== true) return saved
+                }
+              }
+            } else {
+              const reserved = (await stockFunctions.reserveMoves!.handler(ctx, {
+                requireFull: true,
+                moves: goods.map((line) => ({
+                  id: `${String(line.id)}:move`,
+                  ...(String(line.tracking) === 'none' ? {} : { selections: line.lotSelections }),
+                })),
+              })) as Row
+              if (reserved.ok !== true) return reserved
+              const results = Array.isArray(reserved.results) ? (reserved.results as Row[]) : []
+              for (const line of goods) {
+                const result = results.find((entry) => String(entry.id) === `${String(line.id)}:move`)
+                const based = await toProductUnit(
+                  ctx,
+                  line.productId,
+                  line.productUomId,
+                  Math.abs(n(line.qty)),
+                )
+                if (!based || !result || n(result.reserved) + 0.000001 < based.quantity)
+                  return invalid('stock', `insufficient stock for ${String(line.name)}`)
               }
             }
-          } else {
-            const reserved = (await stockFunctions.reserveMoves!.handler(ctx, {
-              requireFull: true,
-              moves: goods.map((line) => ({
-                id: `${String(line.id)}:move`,
-                ...(String(line.tracking) === 'none' ? {} : { selections: line.lotSelections }),
-              })),
+            const completed = (await stockFunctions.completePicking!.handler(ctx, {
+              id: pickingId,
+              createBackorder: false,
             })) as Row
-            if (reserved.ok !== true) return reserved
-            const results = Array.isArray(reserved.results) ? (reserved.results as Row[]) : []
-            for (const line of goods) {
-              const result = results.find((entry) => String(entry.id) === `${String(line.id)}:move`)
-              const based = await toProductUnit(ctx, line.productId, line.productUomId, Math.abs(n(line.qty)))
-              if (!based || !result || n(result.reserved) + 0.000001 < based.quantity)
-                return invalid('stock', `insufficient stock for ${String(line.name)}`)
-            }
+            if (completed.ok !== true) return completed
           }
-          const completed = (await stockFunctions.completePicking!.handler(ctx, {
-            id: pickingId,
-            createBackorder: false,
-          })) as Row
-          if (completed.ok !== true) return completed
         }
         let accountMoveId: string
         try {

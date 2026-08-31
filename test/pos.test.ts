@@ -2310,6 +2310,104 @@ test('pos: customer invoice is posted and reconciled by the POS payment', async 
   }
 })
 
+test('pos: retry after an accounting fault reuses the completed stock transfer exactly once', async () => {
+  const adapter = await boot()
+  try {
+    await call('pos.createSession', { id: 'retry-session', configId: 'shop', userId: 'cashier' }, adapter)
+    await call('pos.openSession', { id: 'retry-session' }, adapter)
+    await call(
+      'pos.createOrder',
+      { id: 'retry-order', sessionId: 'retry-session', partnerId: 'customer' },
+      adapter,
+    )
+    await call(
+      'pos.addLine',
+      {
+        id: 'retry-line',
+        orderId: 'retry-order',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+      },
+      adapter,
+    )
+    await call(
+      'pos.addPayment',
+      { id: 'retry-payment', orderId: 'retry-order', paymentMethodId: 'cash-method', amount: '99' },
+      adapter,
+    )
+    await adapter.run('UPDATE pos_config SET "salesJournalId" = ? WHERE id = ?', [
+      'missing-sales-journal',
+      'shop',
+    ])
+    const failed = (await call('pos.validateOrder', { id: 'retry-order', expectedRevision: 2 }, adapter))
+      .value as Row
+    assert.equal(failed.ok, false, JSON.stringify(failed))
+    assert.equal((failed.errors as Row[])[0]?.field, 'accounting')
+    assert.equal(
+      (await adapter.all('SELECT state FROM stock_picking WHERE id = ?', ['retry-order:picking']))[0]?.state,
+      'done',
+    )
+    assert.equal(
+      (await adapter.all('SELECT COUNT(*) AS n FROM account_move WHERE id = ?', ['retry-order:account']))[0]
+        ?.n,
+      0,
+    )
+    assert.equal(
+      (
+        await adapter.all('SELECT COUNT(*) AS n FROM pos_receipt_document WHERE "orderId" = ?', [
+          'retry-order',
+        ])
+      )[0]?.n,
+      0,
+    )
+
+    await adapter.run('UPDATE pos_config SET "salesJournalId" = ? WHERE id = ?', ['sales', 'shop'])
+    const held = (await adapter.all('SELECT revision FROM pos_order WHERE id = ?', ['retry-order']))[0]!
+    const recovered = (
+      await call('pos.validateOrder', { id: 'retry-order', expectedRevision: Number(held.revision) }, adapter)
+    ).value as Row
+    assert.equal(recovered.ok, true, JSON.stringify(recovered))
+    assert.equal(
+      ((await call('pos.validateOrder', { id: 'retry-order' }, adapter)).value as Row).state,
+      'paid',
+    )
+    assert.equal(
+      (await adapter.all('SELECT COUNT(*) AS n FROM stock_picking WHERE id = ?', ['retry-order:picking']))[0]
+        ?.n,
+      1,
+    )
+    assert.equal(
+      (await adapter.all('SELECT COUNT(*) AS n FROM stock_move WHERE id = ?', ['retry-line:move']))[0]?.n,
+      1,
+    )
+    assert.equal(
+      (await adapter.all('SELECT COUNT(*) AS n FROM account_move WHERE id = ?', ['retry-order:account']))[0]
+        ?.n,
+      1,
+    )
+    assert.equal(
+      (
+        await adapter.all('SELECT COUNT(*) AS n FROM pos_receipt_document WHERE "orderId" = ?', [
+          'retry-order',
+        ])
+      )[0]?.n,
+      1,
+    )
+    assert.equal(
+      (
+        await adapter.all('SELECT quantity FROM stock_quant WHERE "productId" = ? AND "locationId" = ?', [
+          'goods-1',
+          'wh:stock',
+        ])
+      )[0]?.quantity,
+      '9',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('pos: immediate fulfillment rolls back every reservation when the whole picking cannot fill', async () => {
   const adapter = await boot()
   try {
