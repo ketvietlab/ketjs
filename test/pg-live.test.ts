@@ -27,7 +27,7 @@ import {
   schemaFromManifest,
   table,
 } from '@ketvietlab/ketjs'
-import type { Adapter } from '@ketvietlab/ketjs'
+import type { Adapter, Row } from '@ketvietlab/ketjs'
 import {
   account,
   catalog,
@@ -1286,61 +1286,253 @@ test('live pg: concurrent quotations assign one gapless sales sequence', live, a
   })
 })
 
+const setupLivePos = async (a: Adapter) => {
+  const posModules = [address, partner, company, user, uom, product, pricing, stock, account, pos]
+  const posManifest = compose(posModules, { headless: true })
+  const posSchema = schemaFromManifest(posManifest)
+  for (const tableName of Object.keys(posSchema.tables))
+    await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+  for (const sql of renderSql(planMigration(null, posSchema), a)) await a.exec(sql)
+  registerFunctions(posModules)
+  const options = { adapter: a, manifest: posManifest, scope: SCOPE }
+  const call = (name: string, input: Record<string, unknown>) => callFn(name, input, options)
+
+  await call('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' })
+  await call('partner.savePartner', { id: 'customer', kind: 'person', name: 'Customer' })
+  await call('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' })
+  await call('user.createUser', {
+    id: 'cashier',
+    login: 'cashier',
+    password: 'correct horse',
+    name: 'Cashier',
+    defaultCompanyId: 'c1',
+  })
+  await call('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' })
+  await call('product.saveTemplate', {
+    id: 'goods',
+    name: 'Goods',
+    type: 'goods',
+    uomId: 'unit',
+    listPrice: '100',
+    saleOk: true,
+  })
+  await call('product.saveVariant', {
+    id: 'goods-1',
+    templateId: 'goods',
+    defaultCode: 'G1',
+    combinationKey: '',
+  })
+  await call('stock.configureProduct', { templateId: 'goods', isStorable: true, tracking: 'none' })
+  await call('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' })
+  await call('stock.saveLocation', { id: 'inventory', name: 'Inventory', usage: 'inventory' })
+  await call('stock.adjustInventory', {
+    id: 'adjust',
+    productId: 'goods-1',
+    locationId: 'wh:stock',
+    inventoryLocationId: 'inventory',
+    countedQuantity: '100',
+    productUomId: 'unit',
+  })
+  for (const [id, code, name, accountType] of [
+    ['revenue', '5111', 'Revenue', 'income'],
+    ['receivable', '131', 'Receivable', 'asset_receivable'],
+    ['cash', '1111', 'Cash', 'asset_cash'],
+  ])
+    await call('account.saveAccount', { id, code, name, accountType })
+  await call('account.saveJournal', { id: 'sales', name: 'Sales', code: 'SAL', type: 'sale' })
+  await call('account.saveJournal', {
+    id: 'cash-journal',
+    name: 'Cash',
+    code: 'CSH',
+    type: 'cash',
+    defaultAccountId: 'cash',
+  })
+  await call('pricing.savePricelist', { id: 'retail', name: 'Retail', currency: 'VND' })
+  await call('pricing.savePricelistItem', {
+    id: 'retail:goods',
+    pricelistId: 'retail',
+    appliedOn: '0_product_variant',
+    productId: 'goods-1',
+    computePrice: 'fixed',
+    fixedPrice: '100',
+  })
+  await call('pos.saveConfig', {
+    id: 'shop',
+    name: 'Shop',
+    warehouseId: 'wh',
+    pricelistId: 'retail',
+    salesJournalId: 'sales',
+    revenueAccountId: 'revenue',
+    receivableAccountId: 'receivable',
+  })
+  await call('pos.savePaymentMethod', {
+    id: 'cash-method',
+    name: 'Cash',
+    journalId: 'cash-journal',
+    isCash: true,
+  })
+  await call('pos.linkPaymentMethod', {
+    id: 'shop:cash',
+    configId: 'shop',
+    paymentMethodId: 'cash-method',
+  })
+  return call
+}
+
 test('live pg: concurrent POS orders assign one session-unique gapless sequence', live, async () => {
   await withPg(async (a) => {
-    const posModules = [address, partner, company, user, uom, product, pricing, stock, account, pos]
-    const posManifest = compose(posModules, { headless: true }),
-      posSchema = schemaFromManifest(posManifest)
-    for (const tableName of Object.keys(posSchema.tables))
-      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
-    for (const sql of renderSql(planMigration(null, posSchema), a)) await a.exec(sql)
-    registerFunctions(posModules)
-    const options = { adapter: a, manifest: posManifest, scope: SCOPE }
-    await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, options)
-    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
-    await callFn(
-      'user.createUser',
-      { id: 'cashier', login: 'cashier', password: 'correct horse', name: 'Cashier', defaultCompanyId: 'c1' },
-      options,
-    )
-    await callFn('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' }, options)
-    await callFn(
-      'account.saveAccount',
-      { id: 'revenue', code: '5111', name: 'Revenue', accountType: 'income' },
-      options,
-    )
-    await callFn(
-      'account.saveAccount',
-      { id: 'receivable', code: '131', name: 'Receivable', accountType: 'asset_receivable' },
-      options,
-    )
-    await callFn('account.saveJournal', { id: 'sales', name: 'Sales', code: 'SAL', type: 'sale' }, options)
-    await callFn(
-      'pos.saveConfig',
-      {
-        id: 'shop',
-        name: 'Shop',
-        warehouseId: 'wh',
-        salesJournalId: 'sales',
-        revenueAccountId: 'revenue',
-        receivableAccountId: 'receivable',
-      },
-      options,
-    )
-    await callFn('pos.createSession', { id: 'session', configId: 'shop', userId: 'cashier' }, options)
-    await callFn('pos.openSession', { id: 'session' }, options)
+    const call = await setupLivePos(a)
+    await call('pos.createSession', { id: 'session', configId: 'shop', userId: 'cashier' })
+    await call('pos.openSession', { id: 'session' })
     const created = await Promise.all(
       Array.from({ length: 8 }, (_, index) =>
-        callFn(
-          'pos.createOrder',
-          { id: `pos-${index + 1}`, uuid: `offline-${index + 1}`, sessionId: 'session' },
-          options,
-        ),
+        call('pos.createOrder', {
+          id: `pos-${index + 1}`,
+          uuid: `offline-${index + 1}`,
+          sessionId: 'session',
+        }),
       ),
     )
     assert.deepEqual(
       created.map((result) => String((result.value as { name: string }).name)).sort(),
       Array.from({ length: 8 }, (_, index) => `Order ${String(index + 1).padStart(5, '0')}`),
+    )
+  })
+})
+
+test(
+  'live pg: concurrent POS shift, cart, tender and finalization commands converge once',
+  live,
+  async () => {
+    await withPg(async (a) => {
+      const call = await setupLivePos(a)
+      await call('pos.createSession', { id: 'race-shift', configId: 'shop', userId: 'cashier' })
+      const opened = await Promise.all([
+        call('pos.openSession', { id: 'race-shift', expectedRevision: 0 }),
+        call('pos.openSession', { id: 'race-shift', expectedRevision: 0 }),
+      ])
+      assert.equal(opened.filter((result) => (result.value as Row).ok === true).length, 2)
+      const [shift] = await a.all('SELECT state, revision FROM pos_session WHERE id = $1', ['race-shift'])
+      assert.equal(shift?.state, 'opened')
+      assert.equal(shift?.revision, '1')
+
+      await call('pos.createOrder', { id: 'race-order', sessionId: 'race-shift', partnerId: 'customer' })
+      await call('pos.addLine', {
+        id: 'race-line',
+        orderId: 'race-order',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      })
+      const updates = await Promise.all([
+        call('pos.updateLine', {
+          id: 'race-line',
+          orderId: 'race-order',
+          qty: '2',
+          expectedRevision: 1,
+        }),
+        call('pos.updateLine', {
+          id: 'race-line',
+          orderId: 'race-order',
+          qty: '3',
+          expectedRevision: 1,
+        }),
+      ])
+      assert.equal(updates.filter((result) => (result.value as Row).ok === true).length, 1)
+      assert.equal(updates.filter((result) => (result.value as Row).ok === false).length, 1)
+      const order = (await call('pos.getOrder', { id: 'race-order' })).value as Row
+      assert.equal(order.revision, '2')
+      const tendered = await Promise.all([
+        call('pos.addPayment', {
+          id: 'race-tender',
+          orderId: 'race-order',
+          paymentMethodId: 'cash-method',
+          tenderedAmount: order.amountTotal,
+          expectedRevision: 2,
+        }),
+        call('pos.addPayment', {
+          id: 'race-tender',
+          orderId: 'race-order',
+          paymentMethodId: 'cash-method',
+          tenderedAmount: order.amountTotal,
+          expectedRevision: 2,
+        }),
+      ])
+      assert.ok(tendered.some((result) => (result.value as Row).ok === true))
+      assert.equal(
+        (await a.all('SELECT COUNT(*) AS n FROM pos_payment WHERE id = $1', ['race-tender']))[0]!.n,
+        '1',
+      )
+
+      const paid = await Promise.all([
+        call('pos.validateOrder', { id: 'race-order', expectedRevision: 3 }),
+        call('pos.validateOrder', { id: 'race-order', expectedRevision: 3 }),
+      ])
+      assert.ok(paid.some((result) => (result.value as Row).ok === true))
+      const [finalized] = await a.all('SELECT state, revision FROM pos_order WHERE id = $1', ['race-order'])
+      assert.equal(finalized?.state, 'paid')
+      assert.equal(finalized?.revision, '4')
+      assert.equal(
+        (await a.all('SELECT COUNT(*) AS n FROM account_move WHERE id = $1', ['race-order:account']))[0]!.n,
+        '1',
+      )
+      assert.equal(
+        (await a.all('SELECT COUNT(*) AS n FROM stock_picking WHERE id = $1', ['race-order:picking']))[0]!.n,
+        '1',
+      )
+    })
+  },
+)
+
+test('live pg: concurrent POS partial returns reserve one quantity budget', live, async () => {
+  await withPg(async (a) => {
+    const call = await setupLivePos(a)
+    await call('pos.createSession', { id: 'return-shift', configId: 'shop', userId: 'cashier' })
+    await call('pos.openSession', { id: 'return-shift' })
+    await call('pos.createOrder', { id: 'return-sale', sessionId: 'return-shift', partnerId: 'customer' })
+    await call('pos.addLine', {
+      id: 'return-line',
+      orderId: 'return-sale',
+      productId: 'goods-1',
+      productUomId: 'unit',
+      qty: '3',
+      expectedRevision: 0,
+    })
+    const sale = (await call('pos.getOrder', { id: 'return-sale' })).value as Row
+    await call('pos.addPayment', {
+      id: 'return-payment',
+      orderId: 'return-sale',
+      paymentMethodId: 'cash-method',
+      tenderedAmount: sale.amountTotal,
+      expectedRevision: 1,
+    })
+    await call('pos.validateOrder', { id: 'return-sale', expectedRevision: 2 })
+    const eligibility = (await call('pos.getReturnEligibility', { id: 'return-sale' })).value as Row
+    const returns = await Promise.all([
+      call('pos.refundOrder', {
+        id: 'return-a',
+        originalOrderId: 'return-sale',
+        sessionId: 'return-shift',
+        expectedRevision: eligibility.revision,
+        lines: [{ lineId: 'return-line', quantity: '2' }],
+      }),
+      call('pos.refundOrder', {
+        id: 'return-b',
+        originalOrderId: 'return-sale',
+        sessionId: 'return-shift',
+        expectedRevision: eligibility.revision,
+        lines: [{ lineId: 'return-line', quantity: '2' }],
+      }),
+    ])
+    assert.equal(returns.filter((result) => (result.value as Row).ok === true).length, 1)
+    assert.equal(returns.filter((result) => (result.value as Row).ok === false).length, 1)
+    const remaining = (await call('pos.getReturnEligibility', { id: 'return-sale' })).value as Row
+    assert.equal((remaining.lines as Row[])[0]!.remainingQuantity, '1')
+    assert.equal(
+      (await a.all('SELECT COUNT(*) AS n FROM pos_order WHERE "refundedOrderId" = $1', ['return-sale']))[0]!
+        .n,
+      '1',
     )
   })
 })
