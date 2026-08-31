@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
+  and,
   asc,
   bucketEq,
   compileListFilter,
@@ -163,6 +164,7 @@ export async function ensureCrmDefaults(ctx: Ctx): Promise<void> {
     code: 'sales',
     name: 'Sales',
     active: true,
+    leaderUserId: ctx.actor ?? null,
     assignmentMode: 'round_robin',
     assignmentCursor: 0,
     version: 1,
@@ -228,32 +230,72 @@ const userExists = async (ctx: Ctx, id: unknown): Promise<boolean> =>
 const teamExists = async (ctx: Ctx, id: unknown): Promise<boolean> =>
   !id || Boolean((await ctx.db.select('crm.Team', { id, active: true }))[0])
 
+export type CaseAction = 'view' | 'edit' | 'assign'
+export type CaseAccessScope = 'none' | 'self' | 'team' | 'company'
+export type CaseAudience = {
+  actor: string
+  action: CaseAction
+  scope: CaseAccessScope
+  /** Teams whose assigned records are visible for this action. */
+  teams: string[]
+  /** Teams whose unassigned queue the actor may inspect or claim. */
+  queueTeams: string[]
+}
+
+const ACCESS_SCOPES = ['none', 'self', 'team', 'company'] as const
+const accessScope = (value: unknown, fallback: CaseAccessScope): CaseAccessScope =>
+  ACCESS_SCOPES.includes(String(value) as CaseAccessScope) ? (String(value) as CaseAccessScope) : fallback
+
 /**
- * Who the actor may see, resolved once per call.
+ * Resolve record access independently for view, edit and assignment.
  *
  * `null` means "everything": either the call carries no actor at all — a job or
- * a fixture running as the system — or the actor is a superuser. Every other
- * actor sees the cases they own, the ones they created, and the ones their
- * active teams hold. The same three clauses are pushed into SQL by `caseQuery`,
- * so a case that appears in a list is a case `caseDetail` will open; keeping the
- * two in one place is what stops them drifting apart again.
+ * a fixture running as the system — or the actor is a superuser. Ordinary users
+ * default to owner-private access. Team leaders get their teams for every action,
+ * while an explicit company-scoped grant is the business-manager alternative to
+ * making somebody a technical superuser.
  */
-export async function caseAudience(ctx: Ctx): Promise<{ actor: string; teams: string[] } | null> {
+export async function caseAudience(ctx: Ctx, action: CaseAction = 'view'): Promise<CaseAudience | null> {
   if (!ctx.actor) return null
   const user = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0]
   if (user?.superuser === true) return null
-  const memberships = await ctx.db.select('crm.TeamMember', { userId: ctx.actor, active: true })
-  return { actor: ctx.actor, teams: [...new Set(memberships.map((row) => String(row.teamId)))] }
+  const [memberships, ledTeams, grant] = await Promise.all([
+    ctx.db.select('crm.TeamMember', { userId: ctx.actor, active: true }),
+    ctx.db.select('crm.Team', { leaderUserId: ctx.actor, active: true }),
+    ctx.db.select('crm.AccessGrant', { userId: ctx.actor, active: true }).then((rows) => rows[0] ?? null),
+  ])
+  const memberTeams = [...new Set(memberships.map((row) => String(row.teamId)))]
+  const leaderTeams = [...new Set(ledTeams.map((row) => String(row.id)))]
+  const scope = accessScope(
+    grant?.[`${action}Scope`],
+    action === 'view' ? 'self' : action === 'edit' ? 'self' : 'self',
+  )
+  if (scope === 'company') return null
+  const teams = scope === 'team' ? [...new Set([...memberTeams, ...leaderTeams])] : leaderTeams
+  const queueTeams = action === 'edit' || scope === 'none' ? [] : memberTeams
+  return { actor: ctx.actor, action, scope, teams, queueTeams }
 }
 
-const audienceHolds = (audience: { actor: string; teams: string[] } | null, row: Row): boolean =>
-  !audience ||
-  row.assigneeUserId === audience.actor ||
-  row.createdByUserId === audience.actor ||
-  (Boolean(row.teamId) && audience.teams.includes(String(row.teamId)))
+const audienceHolds = (audience: CaseAudience | null, row: Row): boolean => {
+  if (!audience) return true
+  const teamId = row.teamId ? String(row.teamId) : null
+  if (teamId && audience.teams.includes(teamId)) return true
+  if (audience.scope !== 'none' && row.assigneeUserId === audience.actor) return true
+  return Boolean(
+    audience.action !== 'edit' && !row.assigneeUserId && teamId && audience.queueTeams.includes(teamId),
+  )
+}
 
 export async function canReadCase(ctx: Ctx, row: Row): Promise<boolean> {
-  return audienceHolds(await caseAudience(ctx), row)
+  return audienceHolds(await caseAudience(ctx, 'view'), row)
+}
+
+export async function canEditCase(ctx: Ctx, row: Row): Promise<boolean> {
+  return audienceHolds(await caseAudience(ctx, 'edit'), row)
+}
+
+export async function canAssignCase(ctx: Ctx, row: Row): Promise<boolean> {
+  return audienceHolds(await caseAudience(ctx, 'assign'), row)
 }
 
 /**
@@ -268,8 +310,8 @@ export async function canReadCase(ctx: Ctx, row: Row): Promise<boolean> {
 export const ownedKinds = (): string[] => [...CASE_KINDS]
 export const ownsKind = (kind: unknown): boolean => CASE_KINDS.includes(String(kind) as never)
 
-export async function visibleCases(ctx: Ctx, rows: Row[]): Promise<Row[]> {
-  const audience = await caseAudience(ctx)
+export async function visibleCases(ctx: Ctx, rows: Row[], action: CaseAction = 'view'): Promise<Row[]> {
+  const audience = await caseAudience(ctx, action)
   return audience ? rows.filter((row) => audienceHolds(audience, row)) : rows
 }
 
@@ -320,14 +362,37 @@ export async function saveCase(
   const run = async (tx: Ctx): Promise<CrmResult> => {
     await ensureCrmDefaults(tx)
     const existing = (await tx.db.select('crm.Case', { id: input.id }))[0]
-    if (existing && !(await canReadCase(tx, existing))) return invalid(issue('id', 'crm.error.notFound'))
+    if (existing && !(await canEditCase(tx, existing))) return invalid(issue('id', 'crm.error.notFound'))
     if (existing && existing.kind !== input.kind) return invalid(issue('kind', 'crm.error.leadConversion'))
     const stage = input.stageId
       ? await activeStage(tx, input.stageId, input.kind)
       : await firstStage(tx, input.kind)
     if (!stage) return invalid(issue('stageId', 'crm.error.invalidStage'))
-    const teamId = input.teamId ?? stage.teamId ?? (await seededId(tx, 'crm.Team', 'crm-team-sales'))
+    const teamId =
+      input.teamId ?? existing?.teamId ?? stage.teamId ?? (await seededId(tx, 'crm.Team', 'crm-team-sales'))
     if (!teamId || !(await teamExists(tx, teamId))) return invalid(issue('teamId', 'crm.error.notFound'))
+    if (existing) {
+      if (input.teamId && String(input.teamId) !== String(existing.teamId ?? ''))
+        return invalid(issue('teamId', 'crm.error.permission'))
+      if (input.assigneeUserId && String(input.assigneeUserId) !== String(existing.assigneeUserId ?? ''))
+        return invalid(issue('assigneeUserId', 'crm.error.permission'))
+    } else {
+      const candidate = { teamId, assigneeUserId: input.assigneeUserId || null }
+      if (!(await canAssignCase(tx, candidate)))
+        return invalid(issue('assigneeUserId', 'crm.error.permission'))
+      if (input.assigneeUserId) {
+        const team = (await tx.db.select('crm.Team', { id: teamId, active: true }))[0]
+        const member = (
+          await tx.db.select('crm.TeamMember', {
+            teamId,
+            userId: input.assigneeUserId,
+            active: true,
+          })
+        )[0]
+        if (!member && team?.leaderUserId !== input.assigneeUserId)
+          return invalid(issue('assigneeUserId', 'crm.error.notTeamMember'))
+      }
+    }
     const timestamp = now()
     const nextVersion = n(existing?.version) + 1
     const values: Row = {
@@ -339,7 +404,7 @@ export async function saveCase(
       phone: String(input.phone ?? '').trim() || null,
       phoneDigits: dialled(input.phone) || null,
       teamId,
-      assigneeUserId: input.assigneeUserId || null,
+      assigneeUserId: existing?.assigneeUserId ?? input.assigneeUserId ?? null,
       stageId: stage.id,
       priority: input.priority ?? existing?.priority ?? '1',
       description: input.description?.trim() || null,
@@ -603,6 +668,18 @@ export async function caseDetail(ctx: Ctx, id: string): Promise<Row | null> {
 const listStateOf = (value: unknown): ListState | null =>
   value && typeof value === 'object' ? (value as ListState) : null
 
+const caseAudienceCondition = async (ctx: Ctx, C: ReturnType<Ctx['table']>, action: CaseAction = 'view') => {
+  const audience = await caseAudience(ctx, action)
+  if (!audience) return null
+  const clauses = []
+  if (audience.scope !== 'none') clauses.push(eq(C.assigneeUserId, audience.actor))
+  if (audience.teams.length) clauses.push(inArray(C.teamId, audience.teams))
+  if (action !== 'edit' && audience.queueTeams.length)
+    clauses.push(and(isNull(C.assigneeUserId), inArray(C.teamId, audience.queueTeams)))
+  if (!clauses.length) return inArray(C.id, [])
+  return clauses.length === 1 ? clauses[0]! : or(...clauses)
+}
+
 const caseQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const C = ctx.table('crm.Case')
   const state = listStateOf(args.listState) ?? emptyCaseListState()
@@ -638,15 +715,8 @@ const caseQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   if (args.terminalState) query = query.where(eq(C.terminalState, args.terminalState))
   if (!state.includeArchived && args.includeArchived !== true) query = query.where(eq(C.active, true))
   if (args.search) query = query.where(like(C.name, `%${String(args.search).trim()}%`))
-  const audience = await caseAudience(ctx)
-  if (audience)
-    query = query.where(
-      or(
-        eq(C.assigneeUserId, audience.actor),
-        eq(C.createdByUserId, audience.actor),
-        ...(audience.teams.length ? [inArray(C.teamId, audience.teams)] : []),
-      ),
-    )
+  const audience = await caseAudienceCondition(ctx, C)
+  if (audience) query = query.where(audience)
   const sorts = state.sort.length ? state.sort : emptyCaseListState().sort
   const sortable = new Map((spec.sortable ?? []).map((field) => [field.key, field.col]))
   for (const sort of sorts) {
@@ -806,15 +876,8 @@ export async function duplicateCases(
     )
     .orderBy(desc(C.updatedAt), asc(C.id))
   if (input.id) query = query.where(ne(C.id, input.id))
-  const audience = await caseAudience(ctx)
-  if (audience)
-    query = query.where(
-      or(
-        eq(C.assigneeUserId, audience.actor),
-        eq(C.createdByUserId, audience.actor),
-        ...(audience.teams.length ? [inArray(C.teamId, audience.teams)] : []),
-      ),
-    )
+  const audience = await caseAudienceCondition(ctx, C)
+  if (audience) query = query.where(audience)
   // The clauses above are a union, so a row can arrive because its name looked
   // similar; this keeps only the ones that actually match on something.
   const rows = await ctx.db.all(query.limit(Math.max(1, Math.min(100, limit)) + 20))
@@ -854,7 +917,7 @@ export async function addCaseMessage(
   if (!MESSAGE_VISIBILITIES.includes(input.visibility as never))
     return invalid(issue('visibility', 'crm.error.invalidVisibility'))
   const held = (await ctx.db.select('crm.Case', { id: input.caseId }))[0]
-  if (!held || !(await canReadCase(ctx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
+  if (!held || !(await canEditCase(ctx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
   if (!input.body.trim()) return invalid(issue('body', 'crm.error.required'))
   const existing = (await ctx.db.select('crm.Message', { id: input.id }))[0]
   if (existing) return { ok: true, id: input.id }
@@ -888,7 +951,7 @@ export async function moveCase(
     return invalid(issue('idempotencyKey', 'crm.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.id }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
     const stage = await activeStage(tx, input.stageId, String(held.kind))
     if (!stage) return invalid(issue('stageId', 'crm.error.invalidStage'))
     const timestamp = now()
@@ -941,6 +1004,39 @@ async function routedAssignee(ctx: Ctx, team: Row): Promise<Row | null> {
   return members[n(team.assignmentCursor) % members.length]!
 }
 
+const assignmentTargetAllowed = async (
+  ctx: Ctx,
+  held: Row,
+  teamId: string,
+  assigneeUserId: string | null,
+): Promise<boolean> => {
+  const audience = await caseAudience(ctx, 'assign')
+  if (!audience) return true
+  if (audience.teams.includes(teamId)) return true
+  return Boolean(
+    audience.scope === 'self' &&
+      !held.assigneeUserId &&
+      String(held.teamId ?? '') === teamId &&
+      assigneeUserId === audience.actor &&
+      audience.queueTeams.includes(teamId),
+  )
+}
+
+const assignmentMember = async (ctx: Ctx, team: Row, assigneeUserId: string | null): Promise<boolean> => {
+  if (!assigneeUserId) return true
+  if (!(await userExists(ctx, assigneeUserId))) return false
+  if (String(team.leaderUserId ?? '') === assigneeUserId) return true
+  return Boolean(
+    (
+      await ctx.db.select('crm.TeamMember', {
+        teamId: team.id,
+        userId: assigneeUserId,
+        active: true,
+      })
+    )[0],
+  )
+}
+
 export async function assignCase(
   ctx: Ctx,
   input: {
@@ -958,8 +1054,21 @@ export async function assignCase(
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.id }))[0]
     if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
-    if (held.assigneeUserId && !input.force && !input.assigneeUserId)
-      return { ok: true, id: input.id, assigneeUserId: held.assigneeUserId, version: held.version }
+    if (!(await canAssignCase(tx, held))) return invalid(issue('id', 'crm.error.permission'))
+    if (held.assigneeUserId) {
+      if (
+        String(held.teamId ?? '') === String(input.teamId ?? held.teamId ?? '') &&
+        String(held.assigneeUserId) === String(input.assigneeUserId ?? held.assigneeUserId)
+      )
+        return {
+          ok: true,
+          id: input.id,
+          teamId: held.teamId,
+          assigneeUserId: held.assigneeUserId,
+          version: held.version,
+        }
+      return invalid(issue('assigneeUserId', 'crm.error.permission'))
+    }
     let teamId = input.teamId ?? (held.teamId ? String(held.teamId) : null)
     let assigneeUserId = input.assigneeUserId ?? null
     if (!teamId || !assigneeUserId) {
@@ -980,23 +1089,21 @@ export async function assignCase(
     if (!team) return invalid(issue('teamId', 'crm.error.notFound'))
     let member: Row | null = null
     if (!assigneeUserId) {
-      member = await routedAssignee(tx, team)
-      assigneeUserId = member?.userId
-        ? String(member.userId)
-        : team.leaderUserId
-          ? String(team.leaderUserId)
-          : null
+      const audience = await caseAudience(tx, 'assign')
+      if (audience) assigneeUserId = audience.actor
+      else {
+        member = await routedAssignee(tx, team)
+        assigneeUserId = member?.userId
+          ? String(member.userId)
+          : team.leaderUserId
+            ? String(team.leaderUserId)
+            : null
+      }
     }
-    if (!assigneeUserId || !(await userExists(tx, assigneeUserId)))
+    if (!assigneeUserId || !(await assignmentMember(tx, team, assigneeUserId)))
       return invalid(issue('assigneeUserId', 'crm.error.notFound'))
-    // A case is assigned inside its team; saying so is the difference between a
-    // form the user can correct and one that reports "not found" for a person
-    // they just picked from a list.
-    if (
-      !(await tx.db.select('crm.TeamMember', { teamId, userId: assigneeUserId, active: true }))[0] &&
-      team.leaderUserId !== assigneeUserId
-    )
-      return invalid(issue('assigneeUserId', 'crm.error.notTeamMember'))
+    if (!(await assignmentTargetAllowed(tx, held, teamId, assigneeUserId)))
+      return invalid(issue('assigneeUserId', 'crm.error.permission'))
     const expected = input.expectedVersion ?? n(held.version)
     const timestamp = now()
     const changed = await tx.db.compareAndSet(
@@ -1041,6 +1148,96 @@ export async function assignCase(
   })
 }
 
+const REASSIGN_REASONS = new Set([
+  'workload_balance',
+  'absence',
+  'escalation',
+  'territory_change',
+  'employee_departure',
+  'manual_correction',
+])
+
+export async function reassignCase(
+  ctx: Ctx,
+  input: {
+    id: string
+    teamId: string
+    assigneeUserId?: string | null
+    reasonCode: string
+    reasonNote?: string | null
+    expectedVersion: number
+    idempotencyKey: string
+  },
+): Promise<CrmResult> {
+  if (!actorRequired(ctx)) return invalid(issue('actor', 'crm.error.actorRequired'))
+  if (!commandKey(input.idempotencyKey))
+    return invalid(issue('idempotencyKey', 'crm.error.idempotencyRequired'))
+  if (!REASSIGN_REASONS.has(input.reasonCode)) return invalid(issue('reasonCode', 'crm.error.reassignReason'))
+  if (input.reasonCode === 'manual_correction' && !String(input.reasonNote ?? '').trim())
+    return invalid(issue('reasonNote', 'crm.error.reassignReason'))
+  return ctx.tx(async (tx) => {
+    const held = (await tx.db.select('crm.Case', { id: input.id }))[0]
+    if (!held || !ownsKind(held.kind) || !(await canReadCase(tx, held)))
+      return invalid(issue('id', 'crm.error.notFound'))
+    const auditId = `timeline:${input.id}:reassign:${input.idempotencyKey}`
+    const replay = (await tx.db.select('crm.TimelineEntry', { id: auditId }))[0]
+    if (replay)
+      return {
+        ok: true,
+        id: input.id,
+        teamId: held.teamId,
+        assigneeUserId: held.assigneeUserId,
+        version: held.version,
+      }
+    if (!(await canAssignCase(tx, held))) return invalid(issue('id', 'crm.error.permission'))
+    if (String(held.terminalState) !== 'open' || held.active === false)
+      return invalid(issue('id', 'crm.error.permission'))
+    const team = (await tx.db.select('crm.Team', { id: input.teamId, active: true }))[0]
+    if (!team) return invalid(issue('teamId', 'crm.error.notFound'))
+    const target = input.assigneeUserId ? String(input.assigneeUserId) : null
+    if (!(await assignmentMember(tx, team, target)))
+      return invalid(issue('assigneeUserId', 'crm.error.notTeamMember'))
+    if (!(await assignmentTargetAllowed(tx, held, String(team.id), target)))
+      return invalid(issue('assigneeUserId', 'crm.error.permission'))
+    const timestamp = now()
+    const changed = await tx.db.compareAndSet(
+      'crm.Case',
+      { id: input.id },
+      { version: input.expectedVersion },
+      {
+        teamId: team.id,
+        assigneeUserId: target,
+        version: n(held.version) + 1,
+        updatedAt: timestamp,
+      },
+    )
+    if (!('dryRun' in changed) && !changed.matched)
+      return invalid(issue('version', 'crm.error.stageConflict', { current: held.version }))
+    await addTimeline(tx, {
+      id: auditId,
+      caseId: input.id,
+      eventType: 'reassigned',
+      body: 'crm.timeline.reassigned',
+      metadata: {
+        fromTeamId: held.teamId ?? null,
+        fromAssigneeUserId: held.assigneeUserId ?? null,
+        toTeamId: team.id,
+        toAssigneeUserId: target,
+        reasonCode: input.reasonCode,
+        reasonNote: String(input.reasonNote ?? '').trim() || null,
+      },
+      occurredAt: timestamp,
+    })
+    return {
+      ok: true,
+      id: input.id,
+      teamId: team.id,
+      assigneeUserId: target,
+      version: n(held.version) + 1,
+    }
+  })
+}
+
 export async function scheduleCaseActivity(
   ctx: Ctx,
   input: {
@@ -1059,7 +1256,7 @@ export async function scheduleCaseActivity(
     return invalid(issue('idempotencyKey', 'crm.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.caseId }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
     const activity = await scheduleActivity(tx, {
       id: input.id,
       threadId: String(held.threadId),
@@ -1096,7 +1293,7 @@ export async function completeCaseActivity(
     const link = (await tx.db.select('crm.ActivityLink', { activityId: input.id }))[0]
     if (!link) return invalid(issue('id', 'crm.error.notFound'))
     const held = (await tx.db.select('crm.Case', { id: link.caseId }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
     const result = await completeActivity(tx, input.id, input.feedback ?? '', input.completedDate)
     await addTimeline(tx, {
       id: `timeline:${String(link.caseId)}:activity-done:${input.id}`,
@@ -1120,7 +1317,7 @@ export async function cancelCaseActivity(
     const link = (await tx.db.select('crm.ActivityLink', { activityId: input.id }))[0]
     if (!link) return invalid(issue('id', 'crm.error.notFound'))
     const held = (await tx.db.select('crm.Case', { id: link.caseId }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
     const activity = await cancelActivity(tx, input.id, input.feedback)
     await addTimeline(tx, {
       id: `timeline:${String(link.caseId)}:activity-cancel:${input.id}`,
@@ -1142,7 +1339,7 @@ export async function applyCasePlan(
   if (!actorRequired(ctx)) return invalid(issue('actor', 'crm.error.actorRequired'))
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.caseId }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
     const plan = (await tx.db.select('activity.Plan', { id: input.planId, active: true }))[0]
     if (!plan) return invalid(issue('planId', 'crm.error.notFound'))
     const steps = (await tx.db.select('activity.PlanStep', { planId: input.planId })).sort(
@@ -1198,7 +1395,7 @@ export async function applyCaseScore(ctx: Ctx, caseId: string, sourceKey: string
   {
     const tx = ctx
     const held = (await tx.db.select('crm.Case', { id: caseId }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
     const rules = (await tx.db.select('crm.ScoreRule', { active: true })).sort(
       (a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)),
     )
