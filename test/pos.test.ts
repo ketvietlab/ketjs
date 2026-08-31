@@ -562,6 +562,130 @@ test('pos: concurrent shift creation keeps one active shift per configuration', 
   }
 })
 
+test('pos: sensitive commands append one retry-stable operational audit event', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'pos.createSession',
+      {
+        id: 'audit-shift',
+        configId: 'shop',
+        userId: 'cashier',
+        deviceId: 'device-1',
+        openingCash: '0',
+      },
+      adapter,
+    )
+    await call('pos.openSession', { id: 'audit-shift', expectedRevision: 0 }, adapter)
+    const movement = {
+      id: 'audit-cash-in',
+      sessionId: 'audit-shift',
+      direction: 'in',
+      amount: '5',
+      reason: 'Petty cash float',
+      actorId: 'cashier',
+      deviceId: 'device-1',
+      expectedRevision: 1,
+    }
+    await call('pos.recordCashMovement', movement, adapter)
+    await call('pos.recordCashMovement', movement, adapter)
+    await call(
+      'pos.reverseCashMovement',
+      {
+        id: 'audit-cash-reversal',
+        sessionId: 'audit-shift',
+        movementId: 'audit-cash-in',
+        expectedRevision: 2,
+        reason: 'Float entered twice',
+        actorId: 'manager',
+        deviceId: 'device-1',
+      },
+      adapter,
+    )
+
+    await call(
+      'pos.createOrder',
+      {
+        id: 'audit-order',
+        sessionId: 'audit-shift',
+        operatorId: 'cashier',
+        deviceId: 'device-1',
+      },
+      adapter,
+    )
+    await call(
+      'pos.addLine',
+      {
+        id: 'audit-line',
+        orderId: 'audit-order',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    await call(
+      'pos.updateLine',
+      {
+        id: 'audit-line',
+        orderId: 'audit-order',
+        qty: '1',
+        discount: '10',
+        overrideReason: 'Damaged packaging',
+        overrideBy: 'manager',
+        expectedRevision: 1,
+      },
+      adapter,
+    )
+    await call('pos.cancelOrder', { id: 'audit-order', expectedRevision: 2 }, adapter)
+    await call('pos.startClosing', { id: 'audit-shift', expectedRevision: 3 }, adapter)
+    await call('pos.closeSession', { id: 'audit-shift', closingCash: '0', expectedRevision: 4 }, adapter)
+    await call('pos.closeSession', { id: 'audit-shift', closingCash: '0', expectedRevision: 5 }, adapter)
+
+    const events = (await call('pos.listAuditEvents', { limit: 200 }, adapter)).value as Row[]
+    assert.equal(events.length, 8)
+    assert.deepEqual(
+      new Set(events.map((event) => event.action)),
+      new Set([
+        'session.created',
+        'session.opened',
+        'cash_movement.recorded',
+        'cash_movement.reversed',
+        'order.line_adjusted',
+        'order.cancelled',
+        'session.closing_started',
+        'session.closed',
+      ]),
+    )
+    const adjusted = events.find((event) => event.action === 'order.line_adjusted')!
+    assert.equal(adjusted.actorId, 'manager')
+    assert.equal(adjusted.deviceId, 'device-1')
+    assert.equal(adjusted.reason, 'Damaged packaging')
+    assert.equal((adjusted.details as Row).previousDiscount, '0')
+    assert.equal((adjusted.details as Row).discount, '10')
+
+    const sessionEvents = (
+      await call(
+        'pos.listAuditEvents',
+        { subjectType: 'session', subjectId: 'audit-shift', limit: 2 },
+        adapter,
+      )
+    ).value as Row[]
+    assert.equal(sessionEvents.length, 2)
+    assert.ok(sessionEvents.every((event) => event.subjectId === 'audit-shift'))
+    assert.equal(events.filter((event) => event.id === 'cash-movement:audit-cash-in:recorded').length, 1)
+    const otherCompany = await callFn(
+      'pos.listAuditEvents',
+      {},
+      { adapter, manifest, scope: { company: 'other-company', branches: null } },
+    )
+    assert.deepEqual(otherCompany.value, [])
+  } finally {
+    await adapter.close()
+  }
+})
+
 test('pos: cash tender separates applied amount and change and always posts a Vietnam invoice', async () => {
   const adapter = await boot()
   try {
