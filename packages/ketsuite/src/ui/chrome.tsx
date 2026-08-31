@@ -36,6 +36,7 @@ export const HOOKS = [
   'facet-remove',
   'search-menu',
   'search-menu-open',
+  'search-menu-badge',
   'search-menu-content',
   'search-menu-item',
   'custom-filter',
@@ -67,6 +68,10 @@ export type SearchMenuItem = {
 export type SearchMenu = {
   id: string
   label: string
+  /** Optional compact trigger for high-frequency filters next to the global query. */
+  icon?: string
+  ariaLabel?: string
+  badge?: string | number
   items: SearchMenuItem[]
   customFilter?: {
     fields: Array<{ value: string; label: string }>
@@ -227,8 +232,14 @@ const menuItems = (items: SearchMenuItem[]): TemplateResult => (
 
 const searchMenu = (menu: SearchMenu): TemplateResult => (
   <details data-ui="search-menu">
-    <summary data-ui="search-menu-open">
-      {menu.label}
+    <summary
+      data-ui="search-menu-open"
+      data-icon-only={menu.icon ? 'true' : null}
+      aria-label={menu.ariaLabel ?? menu.label}
+      title={menu.ariaLabel ?? menu.label}
+    >
+      {menu.icon ? icon(menu.icon) : menu.label}
+      {menu.badge != null && <span data-ui="search-menu-badge">{String(menu.badge)}</span>}
       {icon('chevron-down')}
     </summary>
     <div data-ui="search-menu-content">
