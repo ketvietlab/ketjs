@@ -195,6 +195,9 @@ export type ChannelCapabilityAuthorizerRegistration<P extends ChannelProfile = C
   authorize: ChannelCapabilityAuthorizer<P>
 }
 
+export type ChannelCapability = { key: string; action: string }
+export type AuthorizedChannelCapability = { key: string; actions: string[] }
+
 /**
  * One resolver per profile, registered by whoever owns that profile's credentials.
  *
@@ -227,6 +230,49 @@ export const registerChannelCapabilityAuthorizer = <P extends ChannelProfile>(
       `channel capability authorizer for "${profile}" is owned by "${existing.owner}", not "${registration.owner}"`,
     )
   capabilityAuthorizers.set(profile, registration as ChannelCapabilityAuthorizerRegistration<ChannelProfile>)
+}
+
+/**
+ * Discover only capabilities the composed deployment serves and this live
+ * identity may use. The same authorizer that guards each route is the source of
+ * truth, so bootstrap cannot advertise an action that the next request rejects.
+ */
+export const authorizedChannelCapabilities = async <P extends ChannelProfile>(
+  profile: P,
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  identity: ChannelIdentityFor<P>,
+): Promise<AuthorizedChannelCapability[]> => {
+  const declared = new Map<string, ChannelCapability>()
+  for (const entry of Object.values((await ctx.live(req)).routes)) {
+    const contract = entry.contract
+    if (contract?.profile !== profile || !contract.capability) continue
+    const capability = contract.capability
+    declared.set(`${capability.key}\0${capability.action}`, capability)
+  }
+  const authorizer = capabilityAuthorizers.get(profile)
+  const allowed = authorizer
+    ? (
+        await Promise.all(
+          [...declared.values()].map(async (capability) => ({
+            capability,
+            allowed: await authorizer.authorize(ctx, url, req, identity, capability),
+          })),
+        )
+      )
+        .filter((result) => result.allowed)
+        .map((result) => result.capability)
+    : [...declared.values()]
+  const grouped = new Map<string, Set<string>>()
+  for (const capability of allowed) {
+    const actions = grouped.get(capability.key) ?? new Set<string>()
+    actions.add(capability.action)
+    grouped.set(capability.key, actions)
+  }
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, actions]) => ({ key, actions: [...actions].sort() }))
 }
 
 export type ChannelIdentityPresentationResolver<P extends ChannelProfile = ChannelProfile> = {
