@@ -144,6 +144,8 @@ export {
   activeStage as crmActiveStage,
   addCaseMessage as crmAddCaseMessage,
   addTimeline as crmAddTimeline,
+  canAssignCase as crmCanAssignCase,
+  canEditCase as crmCanEditCase,
   canReadCase as crmCanReadCase,
   caseAudience as crmCaseAudience,
   caseDetail as crmCaseDetail,
@@ -158,9 +160,15 @@ export {
   ownedKinds as crmOwnedKinds,
   ownsKind as crmOwnsKind,
   saveCase as crmSaveCase,
+  reassignCase as crmReassignCase,
   seededId as crmSeededId,
   serializeCaseList as crmSerializeCaseList,
   visibleCases as crmVisibleCases,
+} from './modules/crm/index.ts'
+export type {
+  CaseAccessScope as CrmCaseAccessScope,
+  CaseAction as CrmCaseAction,
+  CaseAudience as CrmCaseAudience,
 } from './modules/crm/index.ts'
 export {
   APPLICATION_STATES,

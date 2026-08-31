@@ -35,6 +35,21 @@ export const models: Record<string, ModelDef> = {
       routing: { fields: ['companyId', 'teamId', 'active', 'sequence'] },
     },
   },
+  AccessGrant: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      userId: 'ref:user.User',
+      viewScope: 'text',
+      editScope: 'text',
+      assignScope: 'text',
+      active: 'bool',
+      version: 'int',
+    },
+    indexes: {
+      user: { fields: ['companyId', 'userId'], unique: true },
+    },
+  },
   GamificationProfile: {
     scope: 'company',
     fields: {

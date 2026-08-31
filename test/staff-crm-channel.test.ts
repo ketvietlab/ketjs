@@ -61,6 +61,7 @@ const boot = async (t: TestContext) => {
     'crm.overview',
     'crm.case.move',
     'crm.case.assign',
+    'crm.case.reassign',
     'crm.case.markWon',
     'crm.case.markLost',
     'crm.case.save',
@@ -91,6 +92,28 @@ const boot = async (t: TestContext) => {
         expectedVersion: 1,
       },
       idempotencyKey: 'staff-crm-team-leader',
+    },
+    'admin',
+  )
+  await fixture(
+    'crm.team.member.save',
+    {
+      id: 'crm-team-sales:crm-user',
+      teamId: 'crm-team-sales',
+      userId: 'crm-user',
+      idempotencyKey: 'staff-crm-team-member',
+    },
+    'admin',
+  )
+  await fixture(
+    'crm.access.save',
+    {
+      id: 'crm-access-crm-user',
+      userId: 'crm-user',
+      viewScope: 'self',
+      editScope: 'self',
+      assignScope: 'team',
+      idempotencyKey: 'staff-crm-access-crm-user',
     },
     'admin',
   )
@@ -132,6 +155,7 @@ const boot = async (t: TestContext) => {
       id: 'opportunity-open',
       kind: 'opportunity',
       name: 'Open opportunity',
+      assigneeUserId: 'crm-user',
       expectedRevenue: '2400',
       probability: '50',
       idempotencyKey: 'staff-crm-opportunity-open',
@@ -144,6 +168,7 @@ const boot = async (t: TestContext) => {
       id: 'opportunity-won',
       kind: 'opportunity',
       name: 'Won opportunity',
+      assigneeUserId: 'crm-user',
       expectedRevenue: '3600',
       probability: '100',
       idempotencyKey: 'staff-crm-opportunity-won',
@@ -417,21 +442,26 @@ test('staff CRM commands enforce CSRF, idempotency, schema and optimistic concur
   assert.equal(((await stale.json()) as Envelope<null>).error?.code, 'crm.error.stageConflict')
 })
 
-test('staff CRM assign and won commands return the refreshed safe projection', async (t) => {
+test('staff CRM reassign and won commands return the refreshed safe projection', async (t) => {
   const e2e = await boot(t)
   await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
   const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
   const csrf = bootstrap.data.csrfToken
 
-  const assigned = await e2e.client.request('/api/staff/v1/crm/leads/lead-a/assign', {
+  const assigned = await e2e.client.request('/api/staff/v1/crm/leads/lead-a/reassign', {
     method: 'POST',
     headers: mutationHeaders(csrf, 'crm-assign-admin'),
-    body: JSON.stringify({ assigneeUserId: 'admin', expectedVersion: 1 }),
+    body: JSON.stringify({
+      teamId: 'crm-team-sales',
+      assigneeUserId: null,
+      reasonCode: 'workload_balance',
+      expectedVersion: 1,
+    }),
   })
   assert.equal(assigned.status, 200)
   const assignedBody = (await assigned.json()) as Envelope<{ outcome: string; lead: Row }>
-  assert.equal(assignedBody.data.outcome, 'assigned')
-  assert.deepEqual(assignedBody.data.lead.assignee, { id: 'admin', name: 'Administrator' })
+  assert.equal(assignedBody.data.outcome, 'reassigned')
+  assert.equal(assignedBody.data.lead.assignee, null)
   assert.equal(assignedBody.data.lead.version, 2)
   assert.equal('email' in assignedBody.data.lead, false)
   assert.equal('timeline' in assignedBody.data.lead, false)
