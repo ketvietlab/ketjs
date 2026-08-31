@@ -253,6 +253,14 @@ test('staff CRM channel filters only the domain-supported type, outcome and sear
   ).data
   assert.deepEqual(opportunities.items.map((item) => item.id).sort(), ['opportunity-open', 'opportunity-won'])
 
+  const qualified = (
+    await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/crm/leads?stageId=crm-stage-qualified')
+  ).data
+  assert.deepEqual(
+    qualified.items.map((item) => item.id),
+    [],
+  )
+
   const won = (await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/crm/leads?outcome=won')).data
   assert.deepEqual(
     won.items.map((item) => item.id),
@@ -274,7 +282,7 @@ test('staff CRM channel filters only the domain-supported type, outcome and sear
   assert.ok(plain.items.length > 0)
 })
 
-test('staff CRM channel returns one narrow read-only detail with the canonical next activity', async (t) => {
+test('staff CRM channel returns one narrow actionable detail with the canonical next activity', async (t) => {
   const e2e = await boot(t)
   await e2e.client.login({ login: 'crm-user', password: 'correct horse battery' })
 
@@ -292,7 +300,28 @@ test('staff CRM channel returns one narrow read-only detail with the canonical n
     summary: 'Call the buyer',
     dueDate: '2026-08-27',
   })
-  assert.equal(response.data.readOnly, true)
+  assert.deepEqual(
+    (response.data.stageOptions as Row[]).map((stage) => stage.id),
+    ['crm-stage-new', 'crm-stage-qualified'],
+  )
+  assert.deepEqual(response.data.assigneeOptions, [
+    { id: 'admin', name: 'Administrator' },
+    { id: 'crm-user', name: 'CRM Operator' },
+  ])
+  assert.deepEqual(response.data.lossReasonOptions, [
+    { id: 'budget', name: 'Budget' },
+    { id: 'timing', name: 'Timing' },
+    { id: 'competitor', name: 'Competitor' },
+    { id: 'unreachable', name: 'Unreachable' },
+    { id: 'other', name: 'Other' },
+  ])
+  assert.deepEqual(response.data.workflowActions, [
+    'transition',
+    'assign',
+    'schedule_activity',
+    'complete_activity',
+  ])
+  assert.equal(response.data.readOnly, false)
   assert.equal('email' in response.data, false)
   assert.equal('phone' in response.data, false)
   assert.equal('timeline' in response.data, false)

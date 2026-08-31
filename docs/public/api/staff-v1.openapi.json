@@ -3169,6 +3169,14 @@
             }
           },
           {
+            "name": "stageId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "type",
             "in": "query",
             "required": false,
@@ -3504,9 +3512,108 @@
                               },
                               "required": ["id", "type", "summary", "dueDate"]
                             },
+                            "activityDeadline": {
+                              "type": ["string", "null"]
+                            },
+                            "activityTypeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "minimumDueDate": {
+                                    "type": "string"
+                                  },
+                                  "suggestedDueDate": {
+                                    "type": "string"
+                                  },
+                                  "maximumDueDate": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "minimumDueDate",
+                                  "suggestedDueDate",
+                                  "maximumDueDate"
+                                ]
+                              }
+                            },
+                            "assigneeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "lossReasonOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "stageOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isWon": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["id", "name", "isWon"]
+                              }
+                            },
+                            "workflowActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "transition",
+                                  "assign",
+                                  "schedule_activity",
+                                  "complete_activity",
+                                  "mark_won",
+                                  "mark_lost"
+                                ]
+                              }
+                            },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -3524,6 +3631,12 @@
                             "expectedClosing",
                             "description",
                             "nextActivity",
+                            "activityDeadline",
+                            "activityTypeOptions",
+                            "assigneeOptions",
+                            "lossReasonOptions",
+                            "stageOptions",
+                            "workflowActions",
                             "readOnly"
                           ]
                         }
@@ -3687,9 +3800,102 @@
                           },
                           "required": ["id", "type", "summary", "dueDate"]
                         },
+                        "activityDeadline": {
+                          "type": ["string", "null"]
+                        },
+                        "activityTypeOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "minimumDueDate": {
+                                "type": "string"
+                              },
+                              "suggestedDueDate": {
+                                "type": "string"
+                              },
+                              "maximumDueDate": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "name", "minimumDueDate", "suggestedDueDate", "maximumDueDate"]
+                          }
+                        },
+                        "assigneeOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "name"]
+                          }
+                        },
+                        "lossReasonOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "name"]
+                          }
+                        },
+                        "stageOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "isWon": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["id", "name", "isWon"]
+                          }
+                        },
+                        "workflowActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "transition",
+                              "assign",
+                              "schedule_activity",
+                              "complete_activity",
+                              "mark_won",
+                              "mark_lost"
+                            ]
+                          }
+                        },
                         "readOnly": {
                           "type": "boolean",
-                          "const": true
+                          "const": false
                         }
                       },
                       "required": [
@@ -3707,6 +3913,12 @@
                         "expectedClosing",
                         "description",
                         "nextActivity",
+                        "activityDeadline",
+                        "activityTypeOptions",
+                        "assigneeOptions",
+                        "lossReasonOptions",
+                        "stageOptions",
+                        "workflowActions",
                         "readOnly"
                       ]
                     },
@@ -3923,9 +4135,108 @@
                               },
                               "required": ["id", "type", "summary", "dueDate"]
                             },
+                            "activityDeadline": {
+                              "type": ["string", "null"]
+                            },
+                            "activityTypeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "minimumDueDate": {
+                                    "type": "string"
+                                  },
+                                  "suggestedDueDate": {
+                                    "type": "string"
+                                  },
+                                  "maximumDueDate": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "minimumDueDate",
+                                  "suggestedDueDate",
+                                  "maximumDueDate"
+                                ]
+                              }
+                            },
+                            "assigneeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "lossReasonOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "stageOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isWon": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["id", "name", "isWon"]
+                              }
+                            },
+                            "workflowActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "transition",
+                                  "assign",
+                                  "schedule_activity",
+                                  "complete_activity",
+                                  "mark_won",
+                                  "mark_lost"
+                                ]
+                              }
+                            },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -3943,6 +4254,12 @@
                             "expectedClosing",
                             "description",
                             "nextActivity",
+                            "activityDeadline",
+                            "activityTypeOptions",
+                            "assigneeOptions",
+                            "lossReasonOptions",
+                            "stageOptions",
+                            "workflowActions",
                             "readOnly"
                           ]
                         }
@@ -4181,9 +4498,108 @@
                               },
                               "required": ["id", "type", "summary", "dueDate"]
                             },
+                            "activityDeadline": {
+                              "type": ["string", "null"]
+                            },
+                            "activityTypeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "minimumDueDate": {
+                                    "type": "string"
+                                  },
+                                  "suggestedDueDate": {
+                                    "type": "string"
+                                  },
+                                  "maximumDueDate": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "minimumDueDate",
+                                  "suggestedDueDate",
+                                  "maximumDueDate"
+                                ]
+                              }
+                            },
+                            "assigneeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "lossReasonOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "stageOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isWon": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["id", "name", "isWon"]
+                              }
+                            },
+                            "workflowActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "transition",
+                                  "assign",
+                                  "schedule_activity",
+                                  "complete_activity",
+                                  "mark_won",
+                                  "mark_lost"
+                                ]
+                              }
+                            },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -4201,6 +4617,12 @@
                             "expectedClosing",
                             "description",
                             "nextActivity",
+                            "activityDeadline",
+                            "activityTypeOptions",
+                            "assigneeOptions",
+                            "lossReasonOptions",
+                            "stageOptions",
+                            "workflowActions",
                             "readOnly"
                           ]
                         }
@@ -4711,9 +5133,108 @@
                               },
                               "required": ["id", "type", "summary", "dueDate"]
                             },
+                            "activityDeadline": {
+                              "type": ["string", "null"]
+                            },
+                            "activityTypeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "minimumDueDate": {
+                                    "type": "string"
+                                  },
+                                  "suggestedDueDate": {
+                                    "type": "string"
+                                  },
+                                  "maximumDueDate": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "minimumDueDate",
+                                  "suggestedDueDate",
+                                  "maximumDueDate"
+                                ]
+                              }
+                            },
+                            "assigneeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "lossReasonOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "stageOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isWon": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["id", "name", "isWon"]
+                              }
+                            },
+                            "workflowActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "transition",
+                                  "assign",
+                                  "schedule_activity",
+                                  "complete_activity",
+                                  "mark_won",
+                                  "mark_lost"
+                                ]
+                              }
+                            },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -4731,6 +5252,12 @@
                             "expectedClosing",
                             "description",
                             "nextActivity",
+                            "activityDeadline",
+                            "activityTypeOptions",
+                            "assigneeOptions",
+                            "lossReasonOptions",
+                            "stageOptions",
+                            "workflowActions",
                             "readOnly"
                           ]
                         }
@@ -4971,9 +5498,108 @@
                               },
                               "required": ["id", "type", "summary", "dueDate"]
                             },
+                            "activityDeadline": {
+                              "type": ["string", "null"]
+                            },
+                            "activityTypeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "minimumDueDate": {
+                                    "type": "string"
+                                  },
+                                  "suggestedDueDate": {
+                                    "type": "string"
+                                  },
+                                  "maximumDueDate": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "minimumDueDate",
+                                  "suggestedDueDate",
+                                  "maximumDueDate"
+                                ]
+                              }
+                            },
+                            "assigneeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "lossReasonOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "stageOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isWon": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["id", "name", "isWon"]
+                              }
+                            },
+                            "workflowActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "transition",
+                                  "assign",
+                                  "schedule_activity",
+                                  "complete_activity",
+                                  "mark_won",
+                                  "mark_lost"
+                                ]
+                              }
+                            },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -4991,6 +5617,12 @@
                             "expectedClosing",
                             "description",
                             "nextActivity",
+                            "activityDeadline",
+                            "activityTypeOptions",
+                            "assigneeOptions",
+                            "lossReasonOptions",
+                            "stageOptions",
+                            "workflowActions",
                             "readOnly"
                           ]
                         }
@@ -5237,9 +5869,108 @@
                               },
                               "required": ["id", "type", "summary", "dueDate"]
                             },
+                            "activityDeadline": {
+                              "type": ["string", "null"]
+                            },
+                            "activityTypeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "minimumDueDate": {
+                                    "type": "string"
+                                  },
+                                  "suggestedDueDate": {
+                                    "type": "string"
+                                  },
+                                  "maximumDueDate": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "minimumDueDate",
+                                  "suggestedDueDate",
+                                  "maximumDueDate"
+                                ]
+                              }
+                            },
+                            "assigneeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "lossReasonOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "stageOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isWon": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["id", "name", "isWon"]
+                              }
+                            },
+                            "workflowActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "transition",
+                                  "assign",
+                                  "schedule_activity",
+                                  "complete_activity",
+                                  "mark_won",
+                                  "mark_lost"
+                                ]
+                              }
+                            },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -5257,6 +5988,12 @@
                             "expectedClosing",
                             "description",
                             "nextActivity",
+                            "activityDeadline",
+                            "activityTypeOptions",
+                            "assigneeOptions",
+                            "lossReasonOptions",
+                            "stageOptions",
+                            "workflowActions",
                             "readOnly"
                           ]
                         }
@@ -5508,9 +6245,108 @@
                               },
                               "required": ["id", "type", "summary", "dueDate"]
                             },
+                            "activityDeadline": {
+                              "type": ["string", "null"]
+                            },
+                            "activityTypeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "minimumDueDate": {
+                                    "type": "string"
+                                  },
+                                  "suggestedDueDate": {
+                                    "type": "string"
+                                  },
+                                  "maximumDueDate": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "minimumDueDate",
+                                  "suggestedDueDate",
+                                  "maximumDueDate"
+                                ]
+                              }
+                            },
+                            "assigneeOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "lossReasonOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["id", "name"]
+                              }
+                            },
+                            "stageOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isWon": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["id", "name", "isWon"]
+                              }
+                            },
+                            "workflowActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "transition",
+                                  "assign",
+                                  "schedule_activity",
+                                  "complete_activity",
+                                  "mark_won",
+                                  "mark_lost"
+                                ]
+                              }
+                            },
                             "readOnly": {
                               "type": "boolean",
-                              "const": true
+                              "const": false
                             }
                           },
                           "required": [
@@ -5528,6 +6364,12 @@
                             "expectedClosing",
                             "description",
                             "nextActivity",
+                            "activityDeadline",
+                            "activityTypeOptions",
+                            "assigneeOptions",
+                            "lossReasonOptions",
+                            "stageOptions",
+                            "workflowActions",
                             "readOnly"
                           ]
                         }
@@ -14862,9 +15704,18 @@
                               "kind": {
                                 "type": "string",
                                 "enum": ["company", "person"]
+                              },
+                              "emailHint": {
+                                "type": ["string", "null"]
+                              },
+                              "phoneHint": {
+                                "type": ["string", "null"]
+                              },
+                              "contactConsent": {
+                                "type": "boolean"
                               }
                             },
-                            "required": ["id", "name", "kind"]
+                            "required": ["id", "name", "kind", "emailHint", "phoneHint", "contactConsent"]
                           }
                         },
                         "nextCursor": {
@@ -14935,12 +15786,29 @@
                           "type": "string",
                           "enum": ["company", "person"]
                         },
+                        "emailHint": {
+                          "type": ["string", "null"]
+                        },
+                        "phoneHint": {
+                          "type": ["string", "null"]
+                        },
+                        "contactConsent": {
+                          "type": "boolean"
+                        },
                         "readOnly": {
                           "type": "boolean",
-                          "const": true
+                          "const": false
                         }
                       },
-                      "required": ["id", "name", "kind", "readOnly"]
+                      "required": [
+                        "id",
+                        "name",
+                        "kind",
+                        "emailHint",
+                        "phoneHint",
+                        "contactConsent",
+                        "readOnly"
+                      ]
                     },
                     "error": {},
                     "meta": {
@@ -14977,6 +15845,317 @@
         },
         "x-ket-auth": "required",
         "x-ket-idempotent": false
+      }
+    },
+    "/sales/customers/create": {
+      "post": {
+        "operationId": "staff.sales.customers.create",
+        "summary": "Create a customer with normalized optional contact PII and explicit consent.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["company", "person"]
+                  },
+                  "email": {
+                    "type": ["string", "null"],
+                    "maxLength": 320
+                  },
+                  "phone": {
+                    "type": ["string", "null"],
+                    "minLength": 7,
+                    "maxLength": 40
+                  },
+                  "contactConsent": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["name", "kind", "contactConsent"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["created", "updated"]
+                        },
+                        "customer": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": ["company", "person"]
+                            },
+                            "emailHint": {
+                              "type": ["string", "null"]
+                            },
+                            "phoneHint": {
+                              "type": ["string", "null"]
+                            },
+                            "contactConsent": {
+                              "type": "boolean"
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": false
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "kind",
+                            "emailHint",
+                            "phoneHint",
+                            "contactConsent",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "customer"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.customers",
+          "action": "create"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/sales/customers/{id}/update": {
+      "put": {
+        "operationId": "staff.sales.customers.update",
+        "summary": "Update a customer while keeping raw contact PII out of every response.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["company", "person"]
+                  },
+                  "email": {
+                    "type": ["string", "null"],
+                    "maxLength": 320
+                  },
+                  "phone": {
+                    "type": ["string", "null"],
+                    "minLength": 7,
+                    "maxLength": 40
+                  },
+                  "contactConsent": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["name", "kind", "contactConsent"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "outcome": {
+                          "type": "string",
+                          "enum": ["created", "updated"]
+                        },
+                        "customer": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": ["company", "person"]
+                            },
+                            "emailHint": {
+                              "type": ["string", "null"]
+                            },
+                            "phoneHint": {
+                              "type": ["string", "null"]
+                            },
+                            "contactConsent": {
+                              "type": "boolean"
+                            },
+                            "readOnly": {
+                              "type": "boolean",
+                              "const": false
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "kind",
+                            "emailHint",
+                            "phoneHint",
+                            "contactConsent",
+                            "readOnly"
+                          ]
+                        }
+                      },
+                      "required": ["outcome", "customer"]
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {},
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "sales.customers",
+          "action": "update"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
       }
     },
     "/sales/products": {
