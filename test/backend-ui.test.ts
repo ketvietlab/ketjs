@@ -141,6 +141,9 @@ const CHROME: ListChrome = {
       {
         id: 'filters',
         label: 'Bộ lọc',
+        icon: 'users',
+        ariaLabel: 'Người phụ trách',
+        badge: 2,
         items: [{ id: 'active', label: 'Đang hoạt động', path: '?preset=active', active: true }],
         customFilter: {
           fields: [{ value: 'name', label: 'Tên' }],
