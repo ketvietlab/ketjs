@@ -222,6 +222,7 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
   const { e2e, call } = await setup(t, () => identity)
   const bootstrap = await channel<{
     revisions: Record<string, string>
+    capabilities: Array<{ key: string; actions: string[] }>
     policy: {
       maxBatchSize: number
       requiresSignedLease: boolean
@@ -240,6 +241,11 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
   assert.ok(bootstrap.body.data.revisions.tax)
   assert.ok(bootstrap.body.data.revisions.paymentMethods)
   assert.ok(bootstrap.body.data.revisions.capabilities)
+  assert.deepEqual(bootstrap.body.data.capabilities, [
+    { key: 'pos.loyalty', actions: ['apply_code', 'apply_reward', 'read', 'remove_reward'] },
+    { key: 'pos.orders', actions: ['discount', 'override_price'] },
+    { key: 'pos.shifts', actions: ['approve_variance', 'cash_movement'] },
+  ])
   assert.ok(bootstrap.body.data.policy.onlineOnlyOperationIds.includes('pos.orders.paymentAttempts.create'))
 
   const master = bootstrap.body.data.revisions.master

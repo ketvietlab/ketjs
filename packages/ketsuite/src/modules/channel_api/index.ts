@@ -65,6 +65,7 @@ export default defineModule({
 
 export {
   CHANNEL_API_VERSION,
+  authorizedChannelCapabilities,
   channelCredentialFailure,
   channelCommandId,
   defineChannelRoute,
@@ -77,6 +78,8 @@ export {
 export { openApiDocument } from './openapi.ts'
 export type {
   ChannelAccount,
+  AuthorizedChannelCapability,
+  ChannelCapability,
   ChannelCapabilityAuthorizer,
   ChannelCapabilityAuthorizerRegistration,
   ChannelCredentialFailure,

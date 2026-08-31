@@ -10,6 +10,7 @@
 
 import { SESSION_COOKIE, type Route, type ServeContext } from '@ketvietlab/ketjs'
 import {
+  authorizedChannelCapabilities,
   channelError,
   csrfTokenFor,
   defineChannelRoute,
@@ -141,21 +142,9 @@ export const staffRoutes = routesOf(
     responses: { '200': envelope(bootstrapData) },
     handler: async (ctx, _url, req, _params, request) => {
       const identity = request.identity!
-      const live = await ctx.live(req)
-      // What this deployment serves this tenant, not what it ships. An operator
-      // has no more business than a shopper does learning which other verticals
-      // exist on the box.
-      const grouped = new Map<string, Set<string>>()
-      for (const entry of Object.values(live.routes)) {
-        const contract = entry.contract
-        if (contract?.profile !== 'staff' || !contract.capability) continue
-        const actions = grouped.get(contract.capability.key) ?? new Set<string>()
-        actions.add(contract.capability.action)
-        grouped.set(contract.capability.key, actions)
-      }
-      const capabilities = [...grouped.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, actions]) => ({ key, actions: [...actions].sort() }))
+      // What this deployment serves this tenant, filtered through the profile's
+      // live authorizer when one is registered.
+      const capabilities = await authorizedChannelCapabilities('staff', ctx, _url, req, identity)
       const policy = ctx.clientCompatibility
       const minimumAppVersion = {
         ios: policy?.minimumVersions.ios ?? '0.0.0',
