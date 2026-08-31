@@ -90,6 +90,7 @@ smallest stable contract from the package entry point and cover that contract wi
 | CRM behavior | [CRM modules](/ketsuite/crm/) | [Testing KetSuite](/ketsuite/testing/) |
 | Manufacturing behavior | [Manufacturing](/ketsuite/manufacturing/) | [Testing KetSuite](/ketsuite/testing/) |
 | Loyalty behavior | [Loyalty](/ketsuite/loyalty/) | [Loyalty benchmark evidence](/ketsuite/benchmarks/loyalty/) |
+| Point of Sale behavior | [Point of Sale](/ketsuite/pos/) | [Channel API architecture](/ketsuite/channel-api/) |
 | Accounting core | [Accounting ledger](/ketsuite/accounting/) | [Testing KetSuite](/ketsuite/testing/) |
 
 ## Framework prerequisites
