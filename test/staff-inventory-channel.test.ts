@@ -129,6 +129,24 @@ const boot = async (t: TestContext) => {
     countedQuantity: '7',
     productUomId: 'unit',
   })
+  await fixture('storage.createAttachment', {
+    id: 'mango-image',
+    name: 'Mango image',
+    resModel: 'product.Template',
+    resId: 'mango-template',
+    resField: 'media',
+    kind: 'url',
+    url: 'https://cdn.example.test/mango.png',
+    mimetype: 'image/png',
+    size: 0,
+    public: false,
+    createdAt: '2026-09-01T00:00:00.000Z',
+  })
+  await fixture('product_media.attachMedia', {
+    id: 'media:mango-image',
+    attachmentId: 'mango-image',
+    templateId: 'mango-template',
+  })
   return e2e
 }
 
@@ -177,6 +195,7 @@ test('staff inventory channel pages active goods with stock and channel evidence
   ).data
   assert.equal(second.items[0]?.id, 'mango')
   assert.equal(second.items[0]?.availableQuantity, '7')
+  assert.equal(second.items[0]?.hasImage, true)
   assert.equal(second.nextCursor, null)
 
   const archived = (
@@ -201,6 +220,8 @@ test('staff inventory channel returns managed stock positions and strong version
   assert.equal(detail.data.availableQuantity, '7')
   assert.equal(detail.data.tracking, 'none')
   assert.equal(detail.data.categoryId, null)
+  assert.equal(detail.data.hasImage, true)
+  assert.equal('variants' in detail.data, false)
   assert.equal(detail.data.readOnly, false)
   assert.deepEqual(detail.data.availableActions, ['update', 'archive', 'adjust_stock'])
   const stock = (detail.data.stockPositions as Row[]).find((position) => position.locationId === 'wh:stock')
