@@ -157,6 +157,12 @@ client idempotency key on another terminal or configuration therefore cannot ret
 record. The deployment that owns the device registry registers the POS resolver; KetJS owns only this public
 identity and routing seam.
 
+Concurrent uploads of the same dependency-ordered batch may observe an earlier command while another request
+still owns its processing lease. The reconcile route returns `dependency_in_flight` as a retryable, non-durable
+result before claiming the dependent command. It never records that temporary observation as the command's
+terminal refusal. A later retry therefore replays accepted dependencies and continues the remaining commands
+without duplicating their retail effects or poisoning the outbox chain.
+
 Enrollment and exchange are different: the caller does not have a POS identity yet. Such a route remains
 `auth: 'public'` to the POS resolver, declares `credentials: ['operatorBearer']` for its OpenAPI contract,
 and delegates to a function that requires the live upstream operator actor and company scope. The credential

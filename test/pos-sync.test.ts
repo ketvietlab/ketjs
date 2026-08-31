@@ -317,19 +317,49 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
   assert.equal(invalidLease.status, 401)
   assert.equal(invalidLease.body.error?.code, 'pos.syncLeaseInvalid')
 
-  const reconciled = await channel<{
+  type Reconciliation = {
     accepted: number
     replayed: number
-    results: Array<{ status: string; projection: Row; entityId: string }>
-  }>(e2e, 'sync/reconcile', {
-    method: 'POST',
-    key: 'offline-batch-0001',
-    body: JSON.stringify({ batchId: 'offline-batch-0001', leaseToken, commands }),
-  })
+    refused: number
+    results: Array<{
+      status: string
+      projection: Row
+      entityId: string
+      code?: string
+      retryable?: boolean
+    }>
+  }
+  const concurrent = await Promise.all(
+    ['offline-batch-0001-a', 'offline-batch-0001-b'].map((key) =>
+      channel<Reconciliation>(e2e, 'sync/reconcile', {
+        method: 'POST',
+        key,
+        body: JSON.stringify({ batchId: key, leaseToken, commands }),
+      }),
+    ),
+  )
+  assert.equal(
+    concurrent.every((response) => response.status === 200),
+    true,
+    JSON.stringify(concurrent),
+  )
+  const reconciled = concurrent.find((response) => response.body.data.accepted === 4)
+  assert.ok(reconciled, JSON.stringify(concurrent))
   assert.equal(reconciled.status, 200, JSON.stringify(reconciled.body))
   assert.equal(reconciled.body.data.accepted, 4)
   assert.equal(reconciled.body.data.results[3]?.projection.state, 'paid')
   assert.ok(reconciled.body.meta.nextCursor)
+  for (const response of concurrent.filter((candidate) => candidate !== reconciled))
+    assert.equal(
+      response.body.data.results.every(
+        (result) =>
+          result.status === 'replayed' ||
+          (['command_in_flight', 'dependency_in_flight'].includes(String(result.code)) &&
+            result.retryable === true),
+      ),
+      true,
+      JSON.stringify(response.body),
+    )
 
   const replayed = await channel<{ accepted: number; replayed: number }>(e2e, 'sync/reconcile', {
     method: 'POST',
@@ -346,6 +376,48 @@ test('pos sync: bootstrap and dependency replay converge without duplicate retai
   assert.equal(replayed.status, 200)
   assert.equal(replayed.body.data.accepted, 0)
   assert.equal(replayed.body.data.replayed, 4)
+
+  const cyclic = await channel<{ refused: number; results: Array<{ code?: string; retryable?: boolean }> }>(
+    e2e,
+    'sync/reconcile',
+    {
+      method: 'POST',
+      key: 'offline-batch-cycle',
+      body: JSON.stringify({
+        batchId: 'offline-batch-cycle',
+        leaseToken,
+        commands: [
+          command(
+            'cycle-command-01',
+            90,
+            'pos.orders.update',
+            'command:create-order-0001',
+            3,
+            { note: 'cycle one' },
+            ['cycle-command-02'],
+          ),
+          command(
+            'cycle-command-02',
+            91,
+            'pos.orders.update',
+            'command:create-order-0001',
+            3,
+            { note: 'cycle two' },
+            ['cycle-command-01'],
+          ),
+        ],
+      }),
+    },
+  )
+  assert.equal(cyclic.status, 200, JSON.stringify(cyclic.body))
+  assert.equal(cyclic.body.data.refused, 2)
+  assert.equal(
+    cyclic.body.data.results.every(
+      (result) => result.code === 'dependency_cycle' && result.retryable !== true,
+    ),
+    true,
+    JSON.stringify(cyclic.body),
+  )
 
   const orders = (await call('pos.listOrders', {})).value as Row[]
   assert.equal(orders.length, 1)
