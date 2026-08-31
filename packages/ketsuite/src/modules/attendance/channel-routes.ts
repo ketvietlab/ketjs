@@ -92,8 +92,7 @@ const localDate = (value: string): boolean => {
   return new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value
 }
 
-const recordsQuery = (ctx: ServeContext, url: URL, req: Req) => {
-  const today = new Date().toISOString().slice(0, 10)
+const recordsQuery = (ctx: ServeContext, url: URL, req: Req, today: string) => {
   const defaultFrom = new Date(`${today}T00:00:00.000Z`)
   defaultFrom.setUTCDate(defaultFrom.getUTCDate() - 30)
   const dateFrom = url.searchParams.get('dateFrom') ?? defaultFrom.toISOString().slice(0, 10)
@@ -193,7 +192,8 @@ export const channelRoutes = routesOf(
     },
     responses: { '200': envelope(attendancePage) },
     handler: async (ctx, url, req) => {
-      const query = recordsQuery(ctx, url, req)
+      const calendar = (await ctx.call('attendance.calendar.mine', {}, url, req)) as { today: string }
+      const query = recordsQuery(ctx, url, req, calendar.today)
       if ('status' in query) return query
       const rows = (await ctx.call(
         'attendance.session.mine',
