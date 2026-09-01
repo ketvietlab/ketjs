@@ -120,6 +120,13 @@ export type {
 } from './modules/pos_channel/index.ts'
 export { default as posBackend } from './modules/pos_backend/index.ts'
 export { default as loyalty } from './modules/loyalty/index.ts'
+export {
+  applyOrderReward as applyLoyaltyOrderReward,
+  finalizeOrderLoyalty,
+  orderFunctions as loyaltyOrderFunctionSpecs,
+  removeOrderReward as removeLoyaltyOrderReward,
+  reverseOrderLoyaltyPortion,
+} from './modules/loyalty/order-functions.ts'
 export { default as loyaltySale } from './modules/loyalty_sale/index.ts'
 export { default as loyaltyPos } from './modules/loyalty_pos/index.ts'
 export { default as loyaltyBackend } from './modules/loyalty_backend/index.ts'
