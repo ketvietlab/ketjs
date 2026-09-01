@@ -85,6 +85,12 @@ Idempotent mutations should accept stable identifiers or use KetJS idempotency n
 external boundary. The Channel API requires `Idempotency-Key` for operations whose route contract marks
 them idempotent and rejects reuse with a different body.
 
+Warehouse completion treats the picking state as the concurrency fence: the final transition to `done`
+uses compare-and-set, and any generated backorder is committed in the same transaction as the stock
+ledger changes. Staff execution must also validate each submitted quantity against the move demand and
+each return against a delivered move line; a preview version alone does not authorize arbitrary line
+content.
+
 ## Review checklist
 
 - Which identity plane calls this code: staff, customer, anonymous, worker, or internal service?
