@@ -22,7 +22,14 @@ export const models: Record<string, ModelDef> = {
   },
   PaymentMethod: {
     scope: 'company',
-    fields: { id: 'id', name: 'text', journalId: 'ref:account.Journal', isCash: 'bool', active: 'bool' },
+    fields: {
+      id: 'id',
+      name: 'text',
+      journalId: 'ref:account.Journal',
+      settlementKind: 'text?',
+      isCash: 'bool',
+      active: 'bool',
+    },
   },
   ConfigPaymentMethod: {
     scope: 'company',

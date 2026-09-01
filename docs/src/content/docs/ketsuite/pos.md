@@ -9,6 +9,19 @@ operational audit timeline. `pos_channel` exposes the device-facing contract; `p
 trusted administration screens. Deployment-specific device enrollment, payment providers, and receipt
 delivery remain outside the upstream module.
 
+## Payment settlement kinds
+
+A payment method defaults to `settlementKind: 'liquidity'` and therefore requires a cash or bank
+journal. `stored_value` is the second core kind: it requires a general journal whose default account
+is a liability and can never be marked as cash. Finalizing a sale debits that liability and settles
+the invoice receivable; finalizing a return credits the liability and settles the credit note. POS
+still owns the tender and receipt, Account owns the posted movement and reconciliation, and Loyalty
+or another instrument authority owns the customer balance. A POS client must reserve that balance
+before adding the tender and finalize or release the reservation from its composing transaction.
+
+Payment-method names and receipt lines remain safe display data. Raw gift-card codes, wallet tokens
+and token hashes do not belong to POS records, references, receipts or audit details.
+
 ## Operational audit
 
 `pos.AuditEvent` is an append-only timeline for commands that change money, stock, or shift control.

@@ -188,6 +188,8 @@ export default defineModule({
       'error.journalMustBePurchase': 'Chứng từ nhà cung cấp phải ghi vào sổ mua hàng.',
       'error.journalLiquidityMissing': 'Sổ nhật ký thanh toán cần một tài khoản tiền mặc định.',
       'error.journalNotLiquidity': 'Thanh toán phải dùng sổ ngân hàng hoặc tiền mặt.',
+      'error.journalNotStoredValue': 'Thanh toán giá trị trả trước phải dùng sổ nhật ký chung.',
+      'error.journalStoredValueAccount': 'Thanh toán giá trị trả trước cần tài khoản nợ phải trả mặc định.',
 
       'error.taxMissing': 'Sắc thuế không tồn tại.',
       'error.taxUseUnsupported': 'Phạm vi sử dụng thuế không được hỗ trợ.',
@@ -223,6 +225,11 @@ export default defineModule({
 
       'error.paymentTypeUnsupported': 'Loại thanh toán phải là nhận tiền hoặc gửi tiền.',
       'error.partnerTypeUnsupported': 'Loại đối tác phải là khách hàng hoặc nhà cung cấp.',
+      'error.paymentSettlementKindUnsupported':
+        'Nguồn thanh toán phải là thanh khoản hoặc giá trị trả trước.',
+      'error.storedValueOperationUnsupported': 'Nghiệp vụ số dư trả trước phải là phát hành hoặc hết hạn.',
+      'error.storedValueCounterpart':
+        'Phát hành cần tài khoản tài sản đối ứng; hết hạn cần tài khoản thu nhập đối ứng.',
       'error.amountPositive': 'Số tiền thanh toán phải lớn hơn 0.',
       'error.destinationMissing': 'Tài khoản đối ứng không tồn tại.',
       'error.destinationMustBeReceivable': 'Thu tiền khách hàng phải tất toán một tài khoản phải thu.',
@@ -385,6 +392,8 @@ export default defineModule({
       'error.journalMustBePurchase': 'A vendor document belongs in a purchase journal.',
       'error.journalLiquidityMissing': 'A payment journal needs a default liquidity account.',
       'error.journalNotLiquidity': 'Payments require a bank or cash journal.',
+      'error.journalNotStoredValue': 'Stored value settlements require a general journal.',
+      'error.journalStoredValueAccount': 'Stored value settlements require a default liability account.',
 
       'error.taxMissing': 'The tax does not exist.',
       'error.taxUseUnsupported': 'That tax use is not supported.',
@@ -418,6 +427,10 @@ export default defineModule({
 
       'error.paymentTypeUnsupported': 'A payment must be inbound or outbound.',
       'error.partnerTypeUnsupported': 'A partner type must be customer or supplier.',
+      'error.paymentSettlementKindUnsupported': 'A settlement must use liquidity or stored value.',
+      'error.storedValueOperationUnsupported': 'A stored value balance operation must issue or expire value.',
+      'error.storedValueCounterpart':
+        'Issuance needs an asset counterpart; expiry needs an income counterpart.',
       'error.amountPositive': 'The payment amount must be greater than zero.',
       'error.destinationMissing': 'The destination account does not exist.',
       'error.destinationMustBeReceivable': 'Money received from a customer settles a receivable account.',
@@ -445,6 +458,7 @@ export {
   MOVE_STATES,
   PAYMENT_STATES,
   PAYMENT_TYPES,
+  PAYMENT_SETTLEMENT_KINDS,
   PARTNER_TYPES,
   PAYMENT_TERM_VALUES,
   PAYMENT_TERM_DELAY_TYPES,

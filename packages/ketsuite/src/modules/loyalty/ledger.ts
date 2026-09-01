@@ -37,6 +37,19 @@ export const postDelta = async (
 ): Promise<{ entry: Row; wallet: Row; replayed: boolean }> => {
   const previous = (await ctx.db.select('loyalty.LedgerEntry', { sourceKey: args.sourceKey }))[0]
   if (previous) {
+    if (
+      String(previous.id) !== String(args.id) ||
+      String(previous.walletId) !== String(args.walletId) ||
+      String(previous.operation) !== String(args.operation) ||
+      Math.abs(n(previous.amount) - Math.abs(args.amount)) > 0.000001 ||
+      Math.abs(n(previous.balanceDelta) - args.balanceDelta) > 0.000001 ||
+      String(previous.sourceType) !== String(args.sourceType) ||
+      String(previous.sourceId) !== String(args.sourceId) ||
+      String(previous.sourceOperation) !== String(args.sourceOperation) ||
+      String(previous.descriptionCode) !== String(args.descriptionCode) ||
+      String(previous.reversedEntryId ?? '') !== String(args.reversedEntryId ?? '')
+    )
+      throw new LoyaltyConflict('ledger source key changed')
     const wallet = (await ctx.db.select('loyalty.Wallet', { id: previous.walletId }))[0]!
     return { entry: previous, wallet, replayed: true }
   }
