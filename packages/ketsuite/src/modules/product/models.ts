@@ -49,6 +49,7 @@ export const models: Record<string, ModelDef> = {
       purchaseOk: 'bool',
       active: 'bool',
     },
+    indexes: { name: { fields: ['name'] } },
   },
 
   /** One sellable combination of a template. the domain contract calls this product.product. */
@@ -103,11 +104,16 @@ export const models: Record<string, ModelDef> = {
       createVariant: 'text',
       active: 'bool',
     },
+    indexes: { name: { fields: ['name'] } },
   },
 
   AttributeValue: {
     scope: 'shared',
     fields: { id: 'id', attributeId: 'ref:product.Attribute', name: 'text', sequence: 'int' },
+    indexes: {
+      attribute_name: { fields: ['attributeId', 'name'] },
+      name: { fields: ['name'] },
+    },
   },
 
   TemplateAttributeLine: {
@@ -119,7 +125,10 @@ export const models: Record<string, ModelDef> = {
   TemplateAttributeValue: {
     scope: 'shared',
     fields: { id: 'id', lineId: 'ref:product.TemplateAttributeLine', valueId: 'ref:product.AttributeValue' },
-    indexes: { line_value: { fields: ['lineId', 'valueId'], unique: true } },
+    indexes: {
+      line_value: { fields: ['lineId', 'valueId'], unique: true },
+      value: { fields: ['valueId'] },
+    },
   },
 
   /**
@@ -134,6 +143,9 @@ export const models: Record<string, ModelDef> = {
       productId: 'ref:product.Product',
       templateAttributeValueId: 'ref:product.TemplateAttributeValue',
     },
-    indexes: { product_value: { fields: ['productId', 'templateAttributeValueId'], unique: true } },
+    indexes: {
+      product_value: { fields: ['productId', 'templateAttributeValueId'], unique: true },
+      template_attribute_value: { fields: ['templateAttributeValueId'] },
+    },
   },
 }
