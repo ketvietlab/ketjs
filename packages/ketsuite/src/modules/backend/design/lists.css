@@ -88,6 +88,18 @@
     flex: 0 0 auto;
   }
 
+  [data-ui="chrome-tail-menu"] {
+    display: contents;
+  }
+
+  /* A resource filter is a peer of paging and view choice, not another token
+     inside the global query. Give its trigger the same fixed toolbar footprint. */
+  [data-ui="chrome-tail-menu"] [data-ui="search-menu-open"] {
+    min-block-size: var(--admin-control-height);
+    border: 1px solid var(--admin-line-strong);
+    background: var(--admin-control-bg);
+  }
+
   [data-ui="chrome-create"] {
     display: inline-flex;
     min-block-size: var(--admin-control-height);

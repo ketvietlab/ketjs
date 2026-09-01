@@ -190,6 +190,7 @@ export type {
   ViewKind,
   SearchMenu,
   SearchMenuItem,
+  TailMenu,
   Indicator,
   Viewer,
   ActionVariant,

@@ -107,7 +107,15 @@ export type {
 export { sidebar, sidebarMain, sidebarFoot, navGroup } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { bulkActions, listChrome, topbarSearch } from './chrome.tsx'
-export type { Facet, ListChrome, Pager, ViewKind, SearchMenu, SearchMenuItem } from './chrome.tsx'
+export type {
+  Facet,
+  ListChrome,
+  Pager,
+  ViewKind,
+  SearchMenu,
+  SearchMenuItem,
+  TailMenu,
+} from './chrome.tsx'
 export { backendPage, shell, framedPage, definitionList } from './layout.tsx'
 export type { Extras, Frame } from './layout.tsx'
 export { HOOKS, OWNERS } from './hooks.ts'
