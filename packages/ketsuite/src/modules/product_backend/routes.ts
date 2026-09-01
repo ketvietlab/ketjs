@@ -717,6 +717,9 @@ export const routes: Record<string, RouteEntry> = {
               ],
             }
           : undefined
+      const extensionActions = await ctx.joint(url, req, 'product_backend:catalogue.actions', {
+        locale: localeQuery(url),
+      })
 
       return adminPage(ctx, url, req, {
         title: 'KetSuite',
@@ -755,6 +758,7 @@ export const routes: Record<string, RouteEntry> = {
             { shown: colsOf(url), colsHref: colsHref(url), groups, selection },
             localeQuery(url),
             count,
+            extensionActions,
           )
           if (url.searchParams.get('modal') !== 'favorite') return workspace
           const returnUrl = new URL(url)
@@ -1270,6 +1274,12 @@ export const routes: Record<string, RouteEntry> = {
           ),
           stockEnabled: hasStock,
           errors: invalidErrors(url, _),
+          actions: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:template.actions', {
+                templateId: row.id,
+                locale: localeQuery(url),
+              }),
           controls: {
             uom: await uomControl(ctx, url, req, _, {
               id: `product-uom:${row.id}`,
