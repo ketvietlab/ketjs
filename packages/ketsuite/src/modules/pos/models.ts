@@ -144,6 +144,10 @@ export const models: Record<string, ModelDef> = {
       operatorId: 'text?',
       deviceId: 'text?',
       priceBookRevision: 'text?',
+      /** Optional integration state owned by the composed Loyalty authority. */
+      loyaltyState: 'text?',
+      loyaltyPointsEarned: 'decimal?',
+      loyaltyPointsSpent: 'decimal?',
     },
     indexes: {
       company_uuid: { fields: ['companyId', 'uuid'], unique: true },
@@ -180,6 +184,11 @@ export const models: Record<string, ModelDef> = {
       priceSubtotalIncl: 'decimal',
       refundedOrderlineId: 'ref:pos.OrderLine?',
       sequence: 'int',
+      /** Core POS can carry reward lines without requiring a particular channel adapter. */
+      lineKind: 'text?',
+      loyaltyApplicationId: 'text?',
+      loyaltyRewardId: 'text?',
+      loyaltyPointsCost: 'decimal?',
     },
   },
   Payment: {

@@ -11,19 +11,6 @@ export default defineModule({
   title: 'Loyalty tại điểm bán',
   summary: 'Áp ưu đãi, tích và đổi điểm trên đơn POS.',
   category: 'Bán hàng',
-  extend: {
-    'pos.Order': {
-      loyaltyState: 'text?',
-      loyaltyPointsEarned: 'decimal?',
-      loyaltyPointsSpent: 'decimal?',
-    },
-    'pos.OrderLine': {
-      lineKind: 'text?',
-      loyaltyApplicationId: 'ref:loyalty.Application?',
-      loyaltyRewardId: 'ref:loyalty.Reward?',
-      loyaltyPointsCost: 'decimal?',
-    },
-  },
   relations: {
     'pos.OrderLine': {
       loyaltyApplication: { belongsTo: 'loyalty.Application', by: 'loyaltyApplicationId' },
