@@ -140,7 +140,12 @@ const scaledTaxEvidence = (lines: Row[], allocatedTax: bigint, scale: number): R
   return { currency: source.currency, scale: source.scale, taxes }
 }
 
-const materializeReward = async (ctx: Ctx, orderId: string, programId: string, payload: Row) => {
+export const materializePosLoyaltyReward = async (
+  ctx: Ctx,
+  orderId: string,
+  programId: string,
+  payload: Row,
+) => {
   const order = (await ctx.db.select('pos.Order', { id: orderId }))[0]
   if (!order) return invalid(issue('orderId', 'loyalty.error.state'))
   if (order.state !== 'draft' || order.isRefund) return invalid(issue('orderId', 'loyalty.error.state'))
@@ -517,7 +522,7 @@ export const functions: Record<string, FnSpec> = {
           { inTransaction: true },
         )
         if (applied.ok !== true) return applied
-        const materialized = await materializeReward(
+        const materialized = await materializePosLoyaltyReward(
           tx,
           String(args.orderId),
           String(args.programId),
