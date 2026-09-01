@@ -339,6 +339,272 @@ export const removeOrderReward = async (
   }
 }
 
+/**
+ * Finalize one loyalty order as part of either its own transaction or a wider
+ * channel transaction. Vertical adapters use `inTransaction` so their order,
+ * reservation and loyalty ledger commit atomically without nesting a database
+ * transaction.
+ */
+export const finalizeOrderLoyalty = async (
+  ctx: Ctx,
+  args: Row,
+  options: TransactionOptions = {},
+): Promise<Row> => {
+  const snapshot = snapshotOf(args.order)
+  if (!snapshot) return invalid(issue('order', 'loyalty.error.order'))
+  if (snapshot.partnerId && !(await ctx.db.select('partner.Partner', { id: snapshot.partnerId }))[0])
+    return invalid(issue('partnerId', 'loyalty.error.partnerMissing'))
+  try {
+    const finalized = await transact(ctx, options, async (tx) => {
+      const prior = await tx.db.select('loyalty.Application', {
+        orderType: snapshot.orderType,
+        orderId: snapshot.orderId,
+      })
+      const priorByProgram = new Map(prior.map((row) => [String(row.programId), row]))
+      const codes = [
+        ...(snapshot.codes ?? []),
+        ...prior.map((row) => normalizeCode(row.code)).filter(Boolean),
+      ]
+      const evaluated = await evaluate(tx, {
+        ...snapshot,
+        codes: [...new Set(codes)],
+      })
+      const applications: Row[] = []
+      const issuedWallets: Row[] = []
+      for (const result of evaluated) {
+        const program = (await tx.db.select('loyalty.Program', { id: result.programId }))[0]!
+        const previous = priorByProgram.get(result.programId)
+        let wallet: Row | null = previous?.walletId
+          ? ((await tx.db.select('loyalty.Wallet', { id: previous.walletId }))[0] ?? null)
+          : result.walletId
+            ? ((await tx.db.select('loyalty.Wallet', { id: result.walletId }))[0] ?? null)
+            : null
+        if (
+          ['future', 'both'].includes(String(program.appliesOn)) &&
+          snapshot.partnerId &&
+          ['loyalty', 'ewallet'].includes(String(program.programType))
+        )
+          wallet = await ensureWallet(tx, program, {
+            id: `member:${String(program.id)}:${snapshot.partnerId}`,
+            partnerId: snapshot.partnerId,
+          })
+        const points = result.splitPoints.length ? 0 : result.points
+        if (['future', 'both'].includes(String(program.appliesOn))) {
+          if (result.splitPoints.length) {
+            let index = 0
+            for (const split of result.splitPoints) {
+              const coupon = await ensureWallet(tx, program, {
+                id: `coupon:${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:${index}`,
+                partnerId: snapshot.partnerId,
+              })
+              await postDelta(tx, {
+                id: `${String(coupon.id)}:earn`,
+                walletId: String(coupon.id),
+                operation: 'earn',
+                amount: split,
+                balanceDelta: split,
+                sourceType: snapshot.orderType,
+                sourceId: snapshot.orderId,
+                sourceOperation: `earn:${String(program.id)}:${index}`,
+                sourceKey: `${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:earn:${index}`,
+                descriptionCode: 'loyalty.ledger.description.earn',
+              })
+              issuedWallets.push((await tx.db.select('loyalty.Wallet', { id: coupon.id }))[0]!)
+              index += 1
+            }
+          } else if (points > 0) {
+            if (!wallet)
+              wallet = await ensureWallet(tx, program, {
+                id: `coupon:${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:0`,
+                partnerId: snapshot.partnerId,
+              })
+            await postDelta(tx, {
+              id: `${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:earn`,
+              walletId: String(wallet.id),
+              operation: 'earn',
+              amount: points,
+              balanceDelta: points,
+              sourceType: snapshot.orderType,
+              sourceId: snapshot.orderId,
+              sourceOperation: `earn:${String(program.id)}`,
+              sourceKey: `${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:earn`,
+              descriptionCode: 'loyalty.ledger.description.earn',
+            })
+            issuedWallets.push((await tx.db.select('loyalty.Wallet', { id: wallet.id }))[0]!)
+          }
+        }
+        const pointsSpent = n(previous?.pointsSpent)
+        if (previous?.rewardId && pointsSpent > 0 && wallet) {
+          const reservation = (
+            await tx.db.select('loyalty.Reservation', {
+              orderType: snapshot.orderType,
+              orderId: snapshot.orderId,
+              rewardId: previous.rewardId,
+            })
+          )[0]
+          if (reservation) await finalizeReservation(tx, reservation, pointsSpent)
+          else
+            await postDelta(tx, {
+              id: `${snapshot.orderType}:${snapshot.orderId}:${String(previous.rewardId)}:redeem`,
+              walletId: String(wallet.id),
+              operation: 'redeem',
+              amount: pointsSpent,
+              balanceDelta: -pointsSpent,
+              sourceType: snapshot.orderType,
+              sourceId: snapshot.orderId,
+              sourceOperation: 'redeem',
+              sourceKey: `${snapshot.orderType}:${snapshot.orderId}:${String(previous.rewardId)}:redeem`,
+              descriptionCode: 'loyalty.ledger.description.redeem',
+            })
+        }
+        applications.push(
+          await upsertApplication(tx, {
+            orderType: snapshot.orderType,
+            orderId: snapshot.orderId,
+            partnerId: snapshot.partnerId,
+            programId: result.programId,
+            walletId: wallet ? String(wallet.id) : null,
+            rewardId: previous?.rewardId ? String(previous.rewardId) : null,
+            code: previous?.code ? String(previous.code) : null,
+            pointsEarned: result.points + result.splitPoints.reduce((sum, value) => sum + value, 0),
+            pointsSpent,
+            discountAmount: canonicalDecimalText(String(previous?.discountAmount ?? '0')),
+            rewardPayload: previous?.rewardPayload ?? null,
+            currency: snapshot.currency,
+            state: 'finalized',
+          }),
+        )
+      }
+      if (snapshot.partnerId) {
+        let spend = 0n
+        const scale = scaleOf(snapshot.currency)
+        for (const line of snapshot.lines.filter((line) => line.lineKind === 'product'))
+          spend += moneyMinor(line.total, scale)
+        await tx.db.insertIfAbsent('loyalty.SpendEntry', {
+          id: `${snapshot.orderType}:${snapshot.orderId}`,
+          partnerId: snapshot.partnerId,
+          sourceType: snapshot.orderType,
+          sourceId: snapshot.orderId,
+          amount: minorText(spend, scale),
+          currency: snapshot.currency,
+          occurredAt: snapshot.date,
+          reversedAt: null,
+        })
+      }
+      return { applications, issuedWallets }
+    })
+    const membership = snapshot.partnerId ? await refreshMembershipRow(ctx, snapshot.partnerId) : null
+    return {
+      ok: true,
+      applications: finalized.applications,
+      issuedWallets: finalized.issuedWallets.map(walletSummary),
+      membership,
+    }
+  } catch (error) {
+    return concurrentError(error)
+  }
+}
+
+/** Reverse a deterministic portion while participating in an adapter-owned transaction. */
+export const reverseOrderLoyaltyPortion = async (
+  ctx: Ctx,
+  args: Row,
+  options: TransactionOptions = {},
+): Promise<Row> => {
+  const portion = n(args.portion)
+  if (!(portion > 0) || portion > 1.000001) return invalid(issue('portion', 'loyalty.error.order'))
+  let partnerId: string | null = null
+  try {
+    const reversed = await transact(ctx, options, async (tx) => {
+      const applications = await tx.db.select('loyalty.Application', {
+        orderType: args.orderType,
+        orderId: args.orderId,
+      })
+      partnerId = applications[0]?.partnerId ? String(applications[0].partnerId) : null
+      const entries = (
+        await tx.db.select('loyalty.LedgerEntry', {
+          sourceType: args.orderType,
+          sourceId: args.orderId,
+        })
+      ).filter((entry) => entry.operation !== 'reverse')
+      let count = 0
+      for (const entry of entries) {
+        const prior = await tx.db.select('loyalty.LedgerEntry', { reversedEntryId: entry.id })
+        const remaining = Math.max(
+          0,
+          Math.abs(n(entry.balanceDelta)) -
+            prior.reduce((sum, reversal) => sum + Math.abs(n(reversal.balanceDelta)), 0),
+        )
+        const amount = args.complete
+          ? remaining
+          : Math.min(remaining, Math.abs(n(entry.balanceDelta)) * portion)
+        if (amount <= 0.000001) continue
+        const result = await postDelta(tx, {
+          id: `${String(entry.id)}:reverse:${String(args.reversalId)}`,
+          walletId: String(entry.walletId),
+          operation: 'reverse',
+          amount,
+          balanceDelta: n(entry.balanceDelta) > 0 ? -amount : amount,
+          sourceType: `${String(args.orderType)}_return`,
+          sourceId: String(args.reversalId),
+          sourceOperation: `reverse:${String(entry.id)}`,
+          sourceKey: `${String(entry.sourceKey)}:reverse:${String(args.reversalId)}`,
+          descriptionCode: 'loyalty.ledger.description.reverse',
+          reversedEntryId: String(entry.id),
+          metadata: {
+            originalOrderType: String(args.orderType),
+            originalOrderId: String(args.orderId),
+            portion: decimal(portion),
+            complete: Boolean(args.complete),
+          },
+          allowNegative: true,
+        })
+        if (!result.replayed) count += 1
+      }
+
+      const originalSpend = (
+        await tx.db.select('loyalty.SpendEntry', {
+          sourceType: args.orderType,
+          sourceId: args.orderId,
+        })
+      )[0]
+      if (originalSpend) {
+        const returnSourceType = `${String(args.orderType)}_return:${String(args.orderId)}`
+        const previousSpend = await tx.db.select('loyalty.SpendEntry', { sourceType: returnSourceType })
+        const remainingSpend = Math.max(
+          0,
+          n(originalSpend.amount) + previousSpend.reduce((sum, entry) => sum + n(entry.amount), 0),
+        )
+        const amount = args.complete
+          ? remainingSpend
+          : Math.min(remainingSpend, n(originalSpend.amount) * portion)
+        await tx.db.insertIfAbsent('loyalty.SpendEntry', {
+          id: `${String(args.orderType)}:${String(args.reversalId)}:spend`,
+          partnerId: originalSpend.partnerId,
+          sourceType: returnSourceType,
+          sourceId: String(args.reversalId),
+          amount: decimal(-amount),
+          currency: originalSpend.currency,
+          occurredAt: args.reversedAt ?? now(),
+          reversedAt: null,
+        })
+      }
+      if (args.complete)
+        for (const application of applications)
+          await tx.db.update(
+            'loyalty.Application',
+            { id: application.id },
+            { state: 'reversed', updatedAt: now() },
+          )
+      return count
+    })
+    const membership = partnerId ? await refreshMembershipRow(ctx, partnerId) : null
+    return { ok: true, reversed, membership }
+  } catch (error) {
+    return concurrentError(error)
+  }
+}
+
 export const orderFunctions: Record<string, FnSpec> = {
   /**
    * Wallets, filtered and paged by the store rather than in memory.
@@ -638,169 +904,7 @@ export const orderFunctions: Record<string, FnSpec> = {
     effects: [...orderWriteEffects],
     idempotent: true,
     agent: true,
-    handler: async (ctx, args) => {
-      const snapshot = snapshotOf(args.order)
-      if (!snapshot) return invalid(issue('order', 'loyalty.error.order'))
-      if (snapshot.partnerId && !(await ctx.db.select('partner.Partner', { id: snapshot.partnerId }))[0])
-        return invalid(issue('partnerId', 'loyalty.error.partnerMissing'))
-      try {
-        const finalized = await ctx.tx(async (tx) => {
-          const prior = await tx.db.select('loyalty.Application', {
-            orderType: snapshot.orderType,
-            orderId: snapshot.orderId,
-          })
-          const priorByProgram = new Map(prior.map((row) => [String(row.programId), row]))
-          const codes = [
-            ...(snapshot.codes ?? []),
-            ...prior.map((row) => normalizeCode(row.code)).filter(Boolean),
-          ]
-          const evaluated = await evaluate(tx, {
-            ...snapshot,
-            codes: [...new Set(codes)],
-          })
-          const applications: Row[] = []
-          const issuedWallets: Row[] = []
-          for (const result of evaluated) {
-            const program = (await tx.db.select('loyalty.Program', { id: result.programId }))[0]!
-            const previous = priorByProgram.get(result.programId)
-            let wallet: Row | null = previous?.walletId
-              ? ((
-                  await tx.db.select('loyalty.Wallet', {
-                    id: previous.walletId,
-                  })
-                )[0] ?? null)
-              : result.walletId
-                ? ((
-                    await tx.db.select('loyalty.Wallet', {
-                      id: result.walletId,
-                    })
-                  )[0] ?? null)
-                : null
-            if (
-              ['future', 'both'].includes(String(program.appliesOn)) &&
-              snapshot.partnerId &&
-              ['loyalty', 'ewallet'].includes(String(program.programType))
-            )
-              wallet = await ensureWallet(tx, program, {
-                id: `member:${String(program.id)}:${snapshot.partnerId}`,
-                partnerId: snapshot.partnerId,
-              })
-            const points = result.splitPoints.length ? 0 : result.points
-            if (['future', 'both'].includes(String(program.appliesOn))) {
-              if (result.splitPoints.length) {
-                let index = 0
-                for (const split of result.splitPoints) {
-                  const coupon = await ensureWallet(tx, program, {
-                    id: `coupon:${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:${index}`,
-                    partnerId: snapshot.partnerId,
-                  })
-                  await postDelta(tx, {
-                    id: `${String(coupon.id)}:earn`,
-                    walletId: String(coupon.id),
-                    operation: 'earn',
-                    amount: split,
-                    balanceDelta: split,
-                    sourceType: snapshot.orderType,
-                    sourceId: snapshot.orderId,
-                    sourceOperation: `earn:${String(program.id)}:${index}`,
-                    sourceKey: `${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:earn:${index}`,
-                    descriptionCode: 'loyalty.ledger.description.earn',
-                  })
-                  issuedWallets.push((await tx.db.select('loyalty.Wallet', { id: coupon.id }))[0]!)
-                  index += 1
-                }
-              } else if (points > 0) {
-                if (!wallet)
-                  wallet = await ensureWallet(tx, program, {
-                    id: `coupon:${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:0`,
-                    partnerId: snapshot.partnerId,
-                  })
-                await postDelta(tx, {
-                  id: `${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:earn`,
-                  walletId: String(wallet.id),
-                  operation: 'earn',
-                  amount: points,
-                  balanceDelta: points,
-                  sourceType: snapshot.orderType,
-                  sourceId: snapshot.orderId,
-                  sourceOperation: `earn:${String(program.id)}`,
-                  sourceKey: `${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:earn`,
-                  descriptionCode: 'loyalty.ledger.description.earn',
-                })
-                issuedWallets.push((await tx.db.select('loyalty.Wallet', { id: wallet.id }))[0]!)
-              }
-            }
-            const pointsSpent = n(previous?.pointsSpent)
-            if (previous?.rewardId && pointsSpent > 0 && wallet) {
-              const reservation = (
-                await tx.db.select('loyalty.Reservation', {
-                  orderType: snapshot.orderType,
-                  orderId: snapshot.orderId,
-                  rewardId: previous.rewardId,
-                })
-              )[0]
-              if (reservation) await finalizeReservation(tx, reservation, pointsSpent)
-              else
-                await postDelta(tx, {
-                  id: `${snapshot.orderType}:${snapshot.orderId}:${String(previous.rewardId)}:redeem`,
-                  walletId: String(wallet.id),
-                  operation: 'redeem',
-                  amount: pointsSpent,
-                  balanceDelta: -pointsSpent,
-                  sourceType: snapshot.orderType,
-                  sourceId: snapshot.orderId,
-                  sourceOperation: 'redeem',
-                  sourceKey: `${snapshot.orderType}:${snapshot.orderId}:${String(previous.rewardId)}:redeem`,
-                  descriptionCode: 'loyalty.ledger.description.redeem',
-                })
-            }
-            applications.push(
-              await upsertApplication(tx, {
-                orderType: snapshot.orderType,
-                orderId: snapshot.orderId,
-                partnerId: snapshot.partnerId,
-                programId: result.programId,
-                walletId: wallet ? String(wallet.id) : null,
-                rewardId: previous?.rewardId ? String(previous.rewardId) : null,
-                code: previous?.code ? String(previous.code) : null,
-                pointsEarned: result.points + result.splitPoints.reduce((sum, value) => sum + value, 0),
-                pointsSpent,
-                discountAmount: canonicalDecimalText(String(previous?.discountAmount ?? '0')),
-                rewardPayload: previous?.rewardPayload ?? null,
-                currency: snapshot.currency,
-                state: 'finalized',
-              }),
-            )
-          }
-          if (snapshot.partnerId) {
-            let spend = 0n
-            const scale = scaleOf(snapshot.currency)
-            for (const line of snapshot.lines.filter((line) => line.lineKind === 'product'))
-              spend += moneyMinor(line.total, scale)
-            await tx.db.insertIfAbsent('loyalty.SpendEntry', {
-              id: `${snapshot.orderType}:${snapshot.orderId}`,
-              partnerId: snapshot.partnerId,
-              sourceType: snapshot.orderType,
-              sourceId: snapshot.orderId,
-              amount: minorText(spend, scale),
-              currency: snapshot.currency,
-              occurredAt: snapshot.date,
-              reversedAt: null,
-            })
-          }
-          return { applications, issuedWallets }
-        })
-        const membership = snapshot.partnerId ? await refreshMembershipRow(ctx, snapshot.partnerId) : null
-        return {
-          ok: true,
-          applications: finalized.applications,
-          issuedWallets: finalized.issuedWallets.map(walletSummary),
-          membership,
-        }
-      } catch (error) {
-        return concurrentError(error)
-      }
-    },
+    handler: (ctx, args) => finalizeOrderLoyalty(ctx, args),
   }),
 
   'order.reversePortion': defineFn({
@@ -815,102 +919,7 @@ export const orderFunctions: Record<string, FnSpec> = {
     effects: [...orderWriteEffects],
     idempotent: true,
     agent: true,
-    handler: async (ctx, args) => {
-      const portion = n(args.portion)
-      if (!(portion > 0) || portion > 1.000001) return invalid(issue('portion', 'loyalty.error.order'))
-      let partnerId: string | null = null
-      try {
-        const reversed = await ctx.tx(async (tx) => {
-          const applications = await tx.db.select('loyalty.Application', {
-            orderType: args.orderType,
-            orderId: args.orderId,
-          })
-          partnerId = applications[0]?.partnerId ? String(applications[0].partnerId) : null
-          const entries = (
-            await tx.db.select('loyalty.LedgerEntry', {
-              sourceType: args.orderType,
-              sourceId: args.orderId,
-            })
-          ).filter((entry) => entry.operation !== 'reverse')
-          let count = 0
-          for (const entry of entries) {
-            const prior = await tx.db.select('loyalty.LedgerEntry', { reversedEntryId: entry.id })
-            const remaining = Math.max(
-              0,
-              Math.abs(n(entry.balanceDelta)) -
-                prior.reduce((sum, reversal) => sum + Math.abs(n(reversal.balanceDelta)), 0),
-            )
-            const amount = args.complete
-              ? remaining
-              : Math.min(remaining, Math.abs(n(entry.balanceDelta)) * portion)
-            if (amount <= 0.000001) continue
-            const result = await postDelta(tx, {
-              id: `${String(entry.id)}:reverse:${String(args.reversalId)}`,
-              walletId: String(entry.walletId),
-              operation: 'reverse',
-              amount,
-              balanceDelta: n(entry.balanceDelta) > 0 ? -amount : amount,
-              sourceType: `${String(args.orderType)}_return`,
-              sourceId: String(args.reversalId),
-              sourceOperation: `reverse:${String(entry.id)}`,
-              sourceKey: `${String(entry.sourceKey)}:reverse:${String(args.reversalId)}`,
-              descriptionCode: 'loyalty.ledger.description.reverse',
-              reversedEntryId: String(entry.id),
-              metadata: {
-                originalOrderType: String(args.orderType),
-                originalOrderId: String(args.orderId),
-                portion: decimal(portion),
-                complete: Boolean(args.complete),
-              },
-              allowNegative: true,
-            })
-            if (!result.replayed) count += 1
-          }
-
-          const originalSpend = (
-            await tx.db.select('loyalty.SpendEntry', {
-              sourceType: args.orderType,
-              sourceId: args.orderId,
-            })
-          )[0]
-          if (originalSpend) {
-            const returnSourceType = `${String(args.orderType)}_return:${String(args.orderId)}`
-            const previousSpend = await tx.db.select('loyalty.SpendEntry', {
-              sourceType: returnSourceType,
-            })
-            const remainingSpend = Math.max(
-              0,
-              n(originalSpend.amount) + previousSpend.reduce((sum, entry) => sum + n(entry.amount), 0),
-            )
-            const amount = args.complete
-              ? remainingSpend
-              : Math.min(remainingSpend, n(originalSpend.amount) * portion)
-            await tx.db.insertIfAbsent('loyalty.SpendEntry', {
-              id: `${String(args.orderType)}:${String(args.reversalId)}:spend`,
-              partnerId: originalSpend.partnerId,
-              sourceType: returnSourceType,
-              sourceId: String(args.reversalId),
-              amount: decimal(-amount),
-              currency: originalSpend.currency,
-              occurredAt: args.reversedAt ?? now(),
-              reversedAt: null,
-            })
-          }
-          if (args.complete)
-            for (const application of applications)
-              await tx.db.update(
-                'loyalty.Application',
-                { id: application.id },
-                { state: 'reversed', updatedAt: now() },
-              )
-          return count
-        })
-        const membership = partnerId ? await refreshMembershipRow(ctx, partnerId) : null
-        return { ok: true, reversed, membership }
-      } catch (error) {
-        return concurrentError(error)
-      }
-    },
+    handler: (ctx, args) => reverseOrderLoyaltyPortion(ctx, args),
   }),
 
   'order.reverse': defineFn({

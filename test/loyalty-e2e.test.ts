@@ -1,8 +1,44 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
-import type { Row } from '@ketvietlab/ketjs'
+import { defineDeployment, defineFn, defineModule, type Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import {
+  finalizeOrderLoyalty,
+  loyaltyOrderFunctionSpecs,
+  reverseOrderLoyaltyPortion,
+} from '@ketvietlab/ketsuite'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
+
+const loyaltyTransactionBridge = defineModule({
+  name: 'loyalty_transaction_bridge_test',
+  depends: ['loyalty'],
+  functions: {
+    finalize: defineFn({
+      input: { order: 'json' },
+      effects: [...(loyaltyOrderFunctionSpecs['order.finalize']?.effects ?? [])],
+      agent: true,
+      handler: (ctx, args) => ctx.tx((tx) => finalizeOrderLoyalty(tx, args, { inTransaction: true })),
+    }),
+    reversePortion: defineFn({
+      input: {
+        orderType: 'text',
+        orderId: 'text',
+        reversalId: 'text',
+        portion: 'decimal',
+        complete: 'bool?',
+      },
+      effects: [...(loyaltyOrderFunctionSpecs['order.reversePortion']?.effects ?? [])],
+      agent: true,
+      handler: (ctx, args) => ctx.tx((tx) => reverseOrderLoyaltyPortion(tx, args, { inTransaction: true })),
+    }),
+  },
+})
+
+const loyaltyTransactionDeployment = defineDeployment({
+  ...ketsuite,
+  name: 'loyalty_transaction_test',
+  modules: [...ketsuite.modules, loyaltyTransactionBridge],
+})
 
 type Call = <T = unknown>(
   name: string,
@@ -10,8 +46,8 @@ type Call = <T = unknown>(
   options?: { idempotencyKey?: string },
 ) => Promise<T>
 
-const bootLoyalty = async (t: TestContext, worker = false) => {
-  const e2e = await createTestDeployment(ketsuite, { worker })
+const bootLoyalty = async (t: TestContext, worker = false, deployment = ketsuite) => {
+  const e2e = await createTestDeployment(deployment, { worker })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branches: null }
   const fixture = (name: string, input: Record<string, unknown>, at = scope) =>
@@ -287,6 +323,35 @@ test('loyalty HTTP E2E: reservation, concurrent redeem, finalize retry and rever
   assert.equal(wallet.balance, 10)
   assert.equal(wallet.reserved, 0)
   assert.equal((wallet.ledger as Row[]).filter((entry) => entry.operation === 'reverse').length, 2)
+})
+
+test('loyalty transaction helper joins a channel-owned transaction without nesting', async (t) => {
+  const { call } = await bootLoyalty(t, false, loyaltyTransactionDeployment)
+  assert.equal((await saveProgram(call)).ok, true)
+  assert.equal((await saveRule(call)).ok, true)
+
+  const finalized = await call<Row>('loyalty_transaction_bridge_test.finalize', {
+    order: snapshot('transaction-order'),
+  })
+  assert.equal(finalized.ok, true)
+  let wallet = await call<Row>('loyalty.wallet.get', {
+    partnerId: 'customer',
+    programId: 'program',
+  })
+  assert.equal(wallet.balance, 2)
+  assert.equal((wallet.ledger as Row[]).filter((entry) => entry.sourceId === 'transaction-order').length, 1)
+
+  const reversed = await call<Row>('loyalty_transaction_bridge_test.reversePortion', {
+    orderType: 'sale',
+    orderId: 'transaction-order',
+    reversalId: 'transaction-return',
+    portion: '1',
+    complete: true,
+  })
+  assert.equal(reversed.ok, true)
+  wallet = await call<Row>('loyalty.wallet.get', { id: wallet.id })
+  assert.equal(wallet.balance, 0)
+  assert.equal((wallet.ledger as Row[]).filter((entry) => entry.operation === 'reverse').length, 1)
 })
 
 test('loyalty HTTP E2E: promotion code is applied through the public HTTP boundary', async (t) => {
