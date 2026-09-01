@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { renderToString } from '@ketvietlab/ketjs-view'
+import { html, renderToString } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
 import { productsScreen } from '../packages/ketsuite/src/modules/product_backend/screens/list.tsx'
 
@@ -125,4 +125,22 @@ test('product list: keeps empty and kanban states inside the same page baseline'
   assert.match(kanban, /data-ui="kanban"/)
   assert.match(kanban, /data-ui="list-page-body"/)
   assert.match(kanban, /href="\/admin\/product\/templates\/ao-khoac-gio\?lang=vi"/)
+})
+
+test('product list: renders contributed catalogue actions beside native actions', () => {
+  const htmlOutput = renderToString(
+    productsScreen(
+      translate,
+      rows,
+      'list',
+      {},
+      {},
+      '?lang=vi',
+      1,
+      html`<a data-ui="action" href="/admin/channels/products">Kênh bán</a>`,
+    ),
+  )
+
+  assert.match(htmlOutput, /data-ui="list-page-actions"[\s\S]*?Kênh bán/)
+  assert.match(htmlOutput, /href="\/admin\/channels\/products"/)
 })

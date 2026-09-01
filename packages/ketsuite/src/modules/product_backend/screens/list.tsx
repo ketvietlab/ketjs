@@ -1,4 +1,4 @@
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { MenuNode, Translator } from '@ketvietlab/ketjs'
 import {
   badge,
@@ -172,6 +172,7 @@ export const productsScreen = (
   table: Partial<DataTable<TemplateRow>> = {},
   locale = '',
   total = rows.length,
+  extensionActions?: JSXChild,
 ): TemplateResult =>
   shell(
     _,
@@ -180,7 +181,10 @@ export const productsScreen = (
       title={_('product_backend.screen.title')}
       description={_('product_backend.screen.description')}
       actions={
-        frame.chrome?.create || frame.chrome?.selection || frame.extras?.['topbar.end'] !== undefined
+        frame.chrome?.create ||
+        frame.chrome?.selection ||
+        extensionActions !== undefined ||
+        frame.extras?.['topbar.end'] !== undefined
           ? inline([
               frame.chrome?.create ? (
                 <LinkButton
@@ -192,6 +196,7 @@ export const productsScreen = (
                 ''
               ),
               frame.chrome?.selection ? bulkActions(_, frame.chrome.selection) : '',
+              extensionActions ?? '',
               frame.extras?.['topbar.end'] ?? '',
             ])
           : undefined
