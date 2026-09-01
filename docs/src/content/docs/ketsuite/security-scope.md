@@ -55,6 +55,12 @@ Prefer `ctx.call()` from a route. Every use of `ctx.callUnchecked()` needs a vis
 Channel API uses it behind its own authentication, CSRF, realm, capability, and contract checks; staff
 backend routes do not need that bypass.
 
+An anonymous provider callback that owns a cryptographic company binding may use
+`ctx.callUncheckedForVerifiedCompany()` after signature verification. Derive the company from signed
+credential material and verify the exact request bytes before dispatch. The helper deliberately creates one
+company scope inside the already selected tenant; an unsigned URL, header, query, or decoded payload field is
+never enough authority to select that company.
+
 ## Customer Channel API
 
 `channel_api` owns and reserves `/api/customer/v1/`, `/api/staff/v1/`, `/api/pos/v1/`,
