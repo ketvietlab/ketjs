@@ -424,6 +424,18 @@ test('staff warehouse channel covers claim, scanning, execution, and return as o
     destinationLocationId: reverseLine.destinationLocationId,
     ...(reverseLine.lotId ? { lotId: reverseLine.lotId } : {}),
   }
+  const refusedReturn = await e2e.client.request(
+    '/api/staff/v1/warehouse/pickings/pick-a/return-execution/complete',
+    {
+      method: 'POST',
+      headers: mutationHeaders(csrf, 'warehouse-return-over-delivered', String(reverse.data.expectedVersion)),
+      body: JSON.stringify({
+        expectedVersion: reverse.data.expectedVersion,
+        lines: [{ ...returnInput, quantity: '11' }],
+      }),
+    },
+  )
+  assert.equal(refusedReturn.status, 422)
   const returned = await e2e.client.request(
     '/api/staff/v1/warehouse/pickings/pick-a/return-execution/complete',
     {
@@ -603,4 +615,69 @@ test('staff warehouse channel names the backorder a partial execution leaves beh
   const backorder = pickings.value.find((row) => String(row.id) === String(executed.data.backorderIds[0]))
   assert.ok(backorder, `no transfer named ${String(executed.data.backorderIds[0])}`)
   assert.equal(String(backorder.backorderId), 'pick-a')
+})
+
+test('staff warehouse channel refuses execution beyond move demand before reserving more stock', async (t) => {
+  const e2e = await boot(t)
+  await prepareAssignedPicking(e2e)
+  await e2e.client.login({ login: 'warehouse-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+  const ready = await detail(e2e)
+  const claim = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/claim', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-over-claim-1', String(ready.version)),
+    body: JSON.stringify({ expectedVersion: ready.version, reason: 'Validate demand boundary' }),
+  })
+  assert.equal(claim.status, 200)
+  const preview = await e2e.client.json<Envelope<Row>>('/api/staff/v1/warehouse/pickings/pick-a/execution')
+  const move = (preview.data.moves as Row[])[0]!
+  const reservation = (move.reservations as Row[])[0]!
+  const response = await e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/execution/complete', {
+    method: 'POST',
+    headers: mutationHeaders(csrf, 'warehouse-over-execution-1', String(preview.data.expectedVersion)),
+    body: JSON.stringify({
+      expectedVersion: preview.data.expectedVersion,
+      lines: [
+        {
+          moveId: move.moveId,
+          moveLineId: reservation.moveLineId,
+          productId: move.productId,
+          quantity: '11',
+          sourceLocationId: reservation.sourceLocationId,
+          destinationLocationId: move.destinationLocationId,
+        },
+      ],
+    }),
+  })
+  assert.equal(response.status, 422)
+  const after = await e2e.fixture.call<Row>(
+    'stock.getPickingView',
+    { id: 'pick-a' },
+    { scope: { company: 'acme', branches: null } },
+  )
+  const afterMove = (after.value.moves as Row[])[0]!
+  assert.equal((afterMove.lines as Row[])[0]!.quantity, '10')
+})
+
+test('staff warehouse channel resolves concurrent claims to one winner and one conflict', async (t) => {
+  const e2e = await boot(t)
+  await prepareAssignedPicking(e2e)
+  await e2e.client.login({ login: 'warehouse-user', password: 'correct horse battery' })
+  const bootstrap = await e2e.client.json<Envelope<{ csrfToken: string }>>('/api/staff/v1/bootstrap')
+  const csrf = bootstrap.data.csrfToken
+  const ready = await detail(e2e)
+  const results = await Promise.all(
+    ['warehouse-race-claim-a', 'warehouse-race-claim-b'].map((key) =>
+      e2e.client.request('/api/staff/v1/warehouse/pickings/pick-a/claim', {
+        method: 'POST',
+        headers: mutationHeaders(csrf, key, String(ready.version)),
+        body: JSON.stringify({ expectedVersion: ready.version, reason: 'Competing claim' }),
+      }),
+    ),
+  )
+  assert.deepEqual(
+    results.map((response) => response.status).sort((a, b) => a - b),
+    [200, 409],
+  )
 })

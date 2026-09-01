@@ -42,6 +42,8 @@ class InventoryRefused extends Error {
   }
 }
 
+class PickingConflict extends Error {}
+
 const claimInventoryRevision = async (ctx: Ctx, template: Row, expected: unknown): Promise<boolean> => {
   const revision = n(template.inventoryRevision)
   if (revision !== n(expected)) return false
@@ -1602,151 +1604,179 @@ export const functions: Record<string, FnSpec> = {
       'read:stock.MoveLink',
       'write:stock.MoveLink',
     ],
+    idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
+      const completedResult = async (): Promise<Row> => {
+        const backorder = (await ours(ctx, 'stock.Picking', { backorderId: args.id }))[0]
+        return { ok: true, id: args.id, ...(backorder ? { backorderId: backorder.id } : {}) }
+      }
       const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
       if (!picking) return invalid('id', 'transfer không tồn tại')
-      if (picking.state === 'done') return { ok: true, id: args.id }
+      if (picking.state === 'done') return completedResult()
       if (picking.state === 'cancel') return invalid('state', 'transfer đã hủy')
       const requested = new Map<string, number>()
       if (Array.isArray(args.quantities))
         for (const entry of args.quantities as Array<{ moveLineId: string; quantity: number }>)
           requested.set(String(entry.moveLineId), Number(entry.quantity))
-      const moves = await ours(ctx, 'stock.Move', { pickingId: args.id })
-      const remaining: Array<{ move: Row; quantity: number }> = []
-      await ctx.tx(async (tx) => {
-        for (const move of moves) {
-          const tracking = await trackingOf(tx, move.productId)
-          const destination = (await ours(tx, 'stock.Location', { id: move.locationDestId }))[0]!
-          const lines = await ours(tx, 'stock.MoveLine', { moveId: move.id })
-          let done = 0
-          for (const line of lines) {
-            // A line records the location its goods actually sit in, which is the
-            // sub-location reserveMove drew them from rather than the parent the
-            // move names. Releasing and deducting at the move's location would
-            // touch a quant the line never held.
-            const source = (await ours(tx, 'stock.Location', { id: line.locationId }))[0]!
-            const reserved = Number(line.quantity)
-            if (args.pickedOnly && !line.picked) {
-              if ((source.usage === 'internal' || source.usage === 'transit') && reserved)
+      let alreadyDone = false
+      let backorderId: string | null = null
+      try {
+        await ctx.tx(async (tx) => {
+          const current = (await ours(tx, 'stock.Picking', { id: args.id }))[0]
+          if (!current) throw new Error('transfer disappeared while completing')
+          if (current.state === 'done') {
+            alreadyDone = true
+            return
+          }
+          if (current.state === 'cancel') throw new Error('transfer đã hủy')
+          const moves = await ours(tx, 'stock.Move', { pickingId: args.id })
+          const remaining: Array<{ move: Row; quantity: number }> = []
+          for (const move of moves) {
+            const tracking = await trackingOf(tx, move.productId)
+            const destination = (await ours(tx, 'stock.Location', { id: move.locationDestId }))[0]!
+            const lines = await ours(tx, 'stock.MoveLine', { moveId: move.id })
+            let done = 0
+            for (const line of lines) {
+              // A line records the location its goods actually sit in, which is the
+              // sub-location reserveMove drew them from rather than the parent the
+              // move names. Releasing and deducting at the move's location would
+              // touch a quant the line never held.
+              const source = (await ours(tx, 'stock.Location', { id: line.locationId }))[0]!
+              const reserved = Number(line.quantity)
+              if (args.pickedOnly && !line.picked) {
+                if ((source.usage === 'internal' || source.usage === 'transit') && reserved)
+                  await mutateQuant(tx, {
+                    productId: move.productId,
+                    locationId: line.locationId,
+                    lotId: line.lotId,
+                    quantity: 0,
+                    reserved: -reserved,
+                  })
+                await tx.db.update(
+                  'stock.MoveLine',
+                  { id: line.id },
+                  { quantity: '0', quantityProductUom: '0', picked: true },
+                )
+                continue
+              }
+              const quantity = requested.has(String(line.id))
+                ? requested.get(String(line.id))!
+                : requested.size
+                  ? 0
+                  : reserved
+              if (quantity < 0 || quantity > reserved)
+                throw new Error(`invalid done quantity for ${String(line.id)}`)
+              if (tracking !== 'none' && !line.lotId)
+                throw new Error(`${tracking} tracked product requires a lot/serial`)
+              if (tracking === 'serial' && quantity > 0 && compareQty(quantity, 1, 0.000001) !== 0)
+                throw new Error('serial picked move line quantity must equal 1')
+              if (source.usage === 'internal' || source.usage === 'transit') {
+                // Release what this line holds, capped at what the quant has left to
+                // release. Both reserveMove and saveMoveLine reserve as they write a
+                // line, so the two agree in normal operation; the cap is a floor
+                // against a ledger already off, where releasing the full quantity
+                // would drive the mirror negative and throw, leaving the transfer
+                // impossible to complete by any later call.
+                const held = await reservedOn(tx, move.productId, line.locationId, line.lotId)
                 await mutateQuant(tx, {
                   productId: move.productId,
                   locationId: line.locationId,
                   lotId: line.lotId,
-                  quantity: 0,
-                  reserved: -reserved,
+                  quantity: -quantity,
+                  reserved: -Math.min(reserved, held),
+                })
+              } else {
+                await mutateQuant(tx, {
+                  productId: move.productId,
+                  locationId: line.locationId,
+                  lotId: line.lotId,
+                  quantity: -quantity,
+                  reserved: 0,
+                })
+              }
+              // Keep both sides of every completed move in the quant ledger. The
+              // forecast still counts only internal/transit locations.
+              if (destination)
+                await mutateQuant(tx, {
+                  productId: move.productId,
+                  locationId: move.locationDestId,
+                  lotId: line.lotId,
+                  quantity,
+                  reserved: 0,
                 })
               await tx.db.update(
                 'stock.MoveLine',
                 { id: line.id },
-                { quantity: '0', quantityProductUom: '0', picked: true },
+                { quantity: String(quantity), quantityProductUom: String(quantity), picked: true },
               )
-              continue
+              done += quantity
             }
-            const quantity = requested.has(String(line.id))
-              ? requested.get(String(line.id))!
-              : requested.size
-                ? 0
-                : reserved
-            if (quantity < 0 || quantity > reserved)
-              throw new Error(`invalid done quantity for ${String(line.id)}`)
-            if (tracking !== 'none' && !line.lotId)
-              throw new Error(`${tracking} tracked product requires a lot/serial`)
-            if (tracking === 'serial' && quantity > 0 && compareQty(quantity, 1, 0.000001) !== 0)
-              throw new Error('serial picked move line quantity must equal 1')
-            if (source.usage === 'internal' || source.usage === 'transit') {
-              // Release what this line holds, capped at what the quant has left to
-              // release. Both reserveMove and saveMoveLine reserve as they write a
-              // line, so the two agree in normal operation; the cap is a floor
-              // against a ledger already off, where releasing the full quantity
-              // would drive the mirror negative and throw, leaving the transfer
-              // impossible to complete by any later call.
-              const held = await reservedOn(tx, move.productId, line.locationId, line.lotId)
-              await mutateQuant(tx, {
-                productId: move.productId,
-                locationId: line.locationId,
-                lotId: line.lotId,
-                quantity: -quantity,
-                reserved: -Math.min(reserved, held),
-              })
-            } else {
-              await mutateQuant(tx, {
-                productId: move.productId,
-                locationId: line.locationId,
-                lotId: line.lotId,
-                quantity: -quantity,
-                reserved: 0,
-              })
-            }
-            // Keep both sides of every completed move in the quant ledger. The
-            // forecast still counts only internal/transit locations.
-            if (destination)
-              await mutateQuant(tx, {
-                productId: move.productId,
-                locationId: move.locationDestId,
-                lotId: line.lotId,
-                quantity,
-                reserved: 0,
-              })
+            if (done > Number(move.productUomQty) + 0.000001)
+              throw new Error(`done quantity exceeds demand for ${String(move.id)}`)
             await tx.db.update(
-              'stock.MoveLine',
-              { id: line.id },
-              { quantity: String(quantity), quantityProductUom: String(quantity), picked: true },
+              'stock.Move',
+              { id: move.id },
+              { quantity: String(done), picked: true, state: 'done' },
             )
-            done += quantity
+            await pushFromCompletedMove(tx, move, done)
+            const left = Math.max(0, Number(move.productUomQty) - done)
+            if (left > 0) remaining.push({ move, quantity: left })
           }
-          await tx.db.update(
-            'stock.Move',
-            { id: move.id },
-            { quantity: String(done), picked: true, state: 'done' },
+          const finishedAt = new Date().toISOString()
+          const completed = await tx.db.compareAndSet(
+            'stock.Picking',
+            { id: args.id },
+            { state: current.state },
+            { state: 'done', dateDone: finishedAt },
           )
-          await pushFromCompletedMove(tx, move, done)
-          const left = Math.max(0, Number(move.productUomQty) - done)
-          if (left > 0) remaining.push({ move, quantity: left })
-        }
-        await tx.db.update(
-          'stock.Picking',
-          { id: args.id },
-          { state: 'done', dateDone: new Date().toISOString() },
-        )
-      })
+          if (!('dryRun' in completed) && !completed.matched) throw new PickingConflict()
 
-      const type = (await ours(ctx, 'stock.PickingType', { id: picking.pickingTypeId }))[0]
-      const shouldBackorder =
-        remaining.length > 0 && (args.createBackorder ?? type?.createBackorder !== 'never')
-      let backorderId: string | null = null
-      if (shouldBackorder) {
-        backorderId = `${String(args.id)}:backorder:${Date.now()}`
-        await ctx.db.insert('stock.Picking', {
-          id: backorderId,
-          name: `${String(picking.name)} backorder`,
-          pickingTypeId: picking.pickingTypeId,
-          locationId: picking.locationId,
-          locationDestId: picking.locationDestId,
-          moveType: picking.moveType,
-          state: 'confirmed',
-          backorderId: picking.id,
-          scheduledDate: new Date().toISOString(),
-          dateDone: null,
+          const type = (await ours(tx, 'stock.PickingType', { id: current.pickingTypeId }))[0]
+          const shouldBackorder =
+            remaining.length > 0 && (args.createBackorder ?? type?.createBackorder !== 'never')
+          if (shouldBackorder) {
+            backorderId = companyKey(ctx, String(args.id), 'backorder')
+            await tx.db.insertIfAbsent('stock.Picking', {
+              id: backorderId,
+              name: `${String(current.name)} backorder`,
+              pickingTypeId: current.pickingTypeId,
+              locationId: current.locationId,
+              locationDestId: current.locationDestId,
+              moveType: current.moveType,
+              state: 'confirmed',
+              backorderId: current.id,
+              scheduledDate: finishedAt,
+              dateDone: null,
+            })
+            for (const { move, quantity } of remaining) {
+              const id = companyKey(ctx, String(move.id), 'backorder')
+              await tx.db.insertIfAbsent('stock.Move', {
+                ...Object.fromEntries(Object.entries(move).filter(([key]) => key !== 'companyId')),
+                id,
+                pickingId: backorderId,
+                productUomQty: String(quantity),
+                quantity: '0',
+                state: 'confirmed',
+                picked: false,
+              })
+              await tx.db.insertIfAbsent('stock.MoveLink', {
+                id: `${String(move.id)}:${id}`,
+                originMoveId: move.id,
+                destinationMoveId: id,
+              })
+            }
+          }
         })
-        for (const { move, quantity } of remaining) {
-          const id = `${String(move.id)}:backorder:${Date.now()}`
-          await ctx.db.insert('stock.Move', {
-            ...Object.fromEntries(Object.entries(move).filter(([key]) => key !== 'companyId')),
-            id,
-            pickingId: backorderId,
-            productUomQty: String(quantity),
-            quantity: '0',
-            state: 'confirmed',
-            picked: false,
-          })
-          await ctx.db.insertIfAbsent('stock.MoveLink', {
-            id: `${String(move.id)}:${id}`,
-            originMoveId: move.id,
-            destinationMoveId: id,
-          })
+      } catch (error) {
+        if (error instanceof PickingConflict) {
+          const latest = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
+          if (latest?.state === 'done') return completedResult()
+          return invalid('state', 'transfer đã thay đổi, hãy tải lại')
         }
+        throw error
       }
+      if (alreadyDone) return completedResult()
       return { ok: true, id: args.id, backorderId }
     },
   }),
