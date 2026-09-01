@@ -70,6 +70,20 @@ optionally reconciles the counterpart against a chosen open item. The payment am
 is rounded to the currency scale before it is compared with the residual, so an amount
 copied from the screen matches.
 
+The same command supports `settlementKind: 'stored_value'` for gift cards and money
+wallets. That kind requires a general journal whose default account is a liability;
+an inbound customer settlement debits the liability and credits receivable, while a
+refund does the reverse. It cannot be marked as cash and does not pass through a bank
+or cash account. POS payment methods carry the same settlement kind, so Retail and
+private verticals use the canonical invoice/payment/reconciliation path rather than
+posting a second payment ledger.
+
+`account.postStoredValueBalance` owns the two liability movements that are not customer
+invoice settlements. `issue` debits an asset/clearing account and credits the liability;
+`expire` debits the liability and credits income. Its `id` is the source identity, so a
+retry with the same financial content returns the posted move and reuse with different
+content fails. The command never accepts a wallet code or provider token.
+
 `account.reconcile` is the primitive underneath: it takes one debit line and one credit
 line on the same reconcilable account, both posted, and records a partial reconcile for
 an amount neither residual can be exceeded by. Both residuals move under
@@ -267,6 +281,8 @@ Localization repositories test their own chart installation and statutory upgrad
 `test/accounting-e2e.test.ts`
 drives the real HTTP backend through the invoice, payment and report workflow, through
 correcting and archiving a chart entry, and through reversing a posted document.
+`test/stored-value.test.ts` proves issue/expiry posting, liability-backed POS settlement,
+receivable reconciliation and retry-stable coordination with the Loyalty wallet ledger.
 
 `e2e/account_backend` drives the overview in a browser, at desktop and phone widths in
 both colour schemes and in both locales. Three of its assertions exist because nothing

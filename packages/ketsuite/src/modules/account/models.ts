@@ -227,6 +227,8 @@ export const models: Record<string, ModelDef> = {
       documentDate: 'date?',
       memo: 'text?',
       paymentReference: 'text?',
+      /** Liquidity for cash/bank rails; stored_value for a liability-backed settlement. */
+      settlementKind: 'text?',
       state: 'text',
       currency: 'text',
       moneyPolicyVersion: 'text?',

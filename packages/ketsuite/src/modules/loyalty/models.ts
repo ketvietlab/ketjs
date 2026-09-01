@@ -157,6 +157,26 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { order_reward: { fields: ['companyId', 'orderType', 'orderId', 'rewardId'], unique: true } },
   },
+  /** A money reservation is separate from a reward so stored value never becomes a discount. */
+  StoredValueReservation: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      walletId: 'ref:loyalty.Wallet',
+      sourceType: 'text',
+      sourceId: 'text',
+      sourceKey: 'text',
+      amount: 'decimal',
+      state: 'text',
+      expiresAt: 'datetime?',
+      createdAt: 'datetime',
+      updatedAt: 'datetime',
+    },
+    indexes: {
+      source: { fields: ['companyId', 'sourceKey'], unique: true },
+      wallet_state: { fields: ['companyId', 'walletId', 'state', 'expiresAt'] },
+    },
+  },
   Application: {
     scope: 'company',
     fields: {

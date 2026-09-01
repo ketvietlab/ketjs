@@ -127,6 +127,16 @@ export {
   removeOrderReward as removeLoyaltyOrderReward,
   reverseOrderLoyaltyPortion,
 } from './modules/loyalty/order-functions.ts'
+export {
+  expireStoredValue,
+  finalizeStoredValue,
+  issueStoredValue,
+  openStoredValueWallet,
+  refundStoredValue,
+  releaseStoredValue,
+  reserveStoredValue,
+  storedValueFunctions as loyaltyStoredValueFunctionSpecs,
+} from './modules/loyalty/stored-value.ts'
 export { default as loyaltySale } from './modules/loyalty_sale/index.ts'
 export { default as loyaltyPos } from './modules/loyalty_pos/index.ts'
 export {
@@ -228,6 +238,7 @@ export {
   JOURNAL_TYPES,
   MOVE_TYPES,
   MOVE_STATES,
+  PAYMENT_SETTLEMENT_KINDS,
   PAYMENT_STATES,
   TAX_USES,
   TAX_AMOUNT_TYPES,
@@ -271,6 +282,7 @@ export { PURCHASE_STATES, INVOICE_STATUSES, PURCHASE_METHODS } from './modules/p
 export { SALE_STATES, SALE_INVOICE_STATUSES, INVOICE_POLICIES } from './modules/sale/functions.ts'
 export {
   POS_ORDER_STATES,
+  POS_PAYMENT_SETTLEMENT_KINDS,
   POS_SESSION_STATES,
   POS_INVOICE_STATUSES,
   functions as posFunctionSpecs,
