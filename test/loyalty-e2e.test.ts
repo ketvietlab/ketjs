@@ -3,15 +3,19 @@ import { test, type TestContext } from 'node:test'
 import { defineDeployment, defineFn, defineModule, type Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import {
+  applyLoyaltyOrderReward,
   finalizeOrderLoyalty,
   loyaltyOrderFunctionSpecs,
+  loyaltyPosFunctionSpecs,
+  materializePosLoyaltyReward,
+  posLoyaltyOrderSnapshot,
   reverseOrderLoyaltyPortion,
 } from '@ketvietlab/ketsuite'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const loyaltyTransactionBridge = defineModule({
   name: 'loyalty_transaction_bridge_test',
-  depends: ['loyalty'],
+  depends: ['loyalty', 'pos', 'product'],
   functions: {
     finalize: defineFn({
       input: { order: 'json' },
@@ -30,6 +34,32 @@ const loyaltyTransactionBridge = defineModule({
       effects: [...(loyaltyOrderFunctionSpecs['order.reversePortion']?.effects ?? [])],
       agent: true,
       handler: (ctx, args) => ctx.tx((tx) => reverseOrderLoyaltyPortion(tx, args, { inTransaction: true })),
+    }),
+    applyPosReward: defineFn({
+      input: { orderId: 'id', programId: 'id', rewardId: 'id' },
+      effects: [
+        ...(loyaltyPosFunctionSpecs.applyReward?.effects ?? []),
+        ...(loyaltyOrderFunctionSpecs.applyReward?.effects ?? []),
+      ],
+      agent: true,
+      handler: (ctx, args) =>
+        ctx.tx(async (tx) => {
+          const order = await posLoyaltyOrderSnapshot(tx, String(args.orderId))
+          if (!order) return { ok: false }
+          const applied = await applyLoyaltyOrderReward(
+            tx,
+            { order, programId: args.programId, rewardId: args.rewardId },
+            { inTransaction: true },
+          )
+          if (applied.ok !== true) return applied
+          const materialized = await materializePosLoyaltyReward(
+            tx,
+            String(args.orderId),
+            String(args.programId),
+            applied.reward as Row,
+          )
+          return (materialized as Row).ok === true ? applied : materialized
+        }),
     }),
   },
 })
@@ -548,7 +578,7 @@ test('loyalty HTTP E2E: tier window, stable earn-group priority and redeem cap a
 })
 
 test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the adapter', async (t) => {
-  const { e2e, call } = await bootLoyalty(t, true)
+  const { e2e, call } = await bootLoyalty(t, true, loyaltyTransactionDeployment)
   for (const [id, code, name, accountType] of [
     ['revenue', '5111', 'Doanh thu', 'income'],
     ['receivable', '131', 'Phải thu khách hàng', 'asset_receivable'],
@@ -603,6 +633,27 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
   await saveProgram(call, { id: 'pos-program', appliesOn: 'current', availableSale: false })
   await saveRule(call, { id: 'pos-rule', programId: 'pos-program', pointAmount: '5' })
   await saveReward(call, { id: 'pos-reward', programId: 'pos-program', requiredPoints: '5' })
+  await call<Row>('pos.createOrder', {
+    id: 'pos-bridge',
+    uuid: 'pos-bridge',
+    sessionId: 'session',
+    partnerId: 'customer',
+  })
+  await call<Row>('pos.addLine', {
+    id: 'pos-bridge-line',
+    orderId: 'pos-bridge',
+    productId: 'fruit-box',
+    productUomId: 'unit',
+    qty: '1',
+    priceUnit: '100',
+  })
+  const bridged = await call<Row>('loyalty_transaction_bridge_test.applyPosReward', {
+    orderId: 'pos-bridge',
+    programId: 'pos-program',
+    rewardId: 'pos-reward',
+  })
+  assert.equal(bridged.ok, true)
+  assert.equal(String((await call<Row>('pos.getOrder', { id: 'pos-bridge' })).amountTotal), '90')
   await call<Row>('pos.createOrder', {
     id: 'pos-loyalty',
     uuid: 'pos-loyalty',
