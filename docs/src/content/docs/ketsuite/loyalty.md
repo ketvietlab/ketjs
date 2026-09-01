@@ -20,8 +20,8 @@ such as a program name or reward description remain user data and are not transl
 
 ## Accounting and concurrency invariants
 
-- A wallet balance changes only through an immutable ledger entry. Earn, redeem, adjustment,
-  expiry and reversal remain distinct operations.
+- A wallet balance changes only through an immutable ledger entry. Earn, issue, redeem, refund,
+  adjustment, expiry and reversal remain distinct operations.
 - `sourceKey` is unique inside a company, so retrying a command cannot duplicate a ledger effect.
 - A draft Sale/POS order reserves points. Removing the reward or cancelling a draft releases the
   reservation; confirmation/payment settles it.
@@ -37,6 +37,19 @@ Sale and POS lines carry `lineKind=product|shipping|reward` plus Loyalty applica
 point-cost metadata. POS accounting uses the signed line subtotal, so a negative reward line reduces
 revenue rather than creating an unbalanced entry.
 
+Gift-card and eWallet money is not a reward discount. A currency wallet uses a dedicated
+stored-value reservation keyed by the caller's source identity. Capture reserves value;
+successful settlement finalizes one debit; cancellation releases the reservation; a
+refund appends a credit; expiry appends a debit for the remaining unreserved balance.
+The generated wallet code is only an opaque authority alias. A channel that accepts a
+customer-facing token owns its hash, pepper and masked presentation outside Loyalty and
+must never store the raw token in a wallet, ledger entry or command result.
+
+The Loyalty balance is the instrument subledger, while Account owns the financial
+liability. A composing module commits the wallet transition with its operational state
+and supplies the matching Account move/payment source. It must reconcile those two
+authorities; neither one silently repairs the other.
+
 ## Public function boundary
 
 The stable functions are:
@@ -48,6 +61,7 @@ The stable functions are:
 - `loyalty.wallet.get/adjust`
 - `loyalty.membership.refresh/getSummary`
 - `loyalty.order.finalize/reverse`
+- `loyalty.storedValue.open/issue/reserve/finalize/release/refund/expire`
 
 Sale and POS adapters expose the same actions with an `orderId` input. The portal derives its partner
 from the signed-in session and never accepts a caller-supplied actor.

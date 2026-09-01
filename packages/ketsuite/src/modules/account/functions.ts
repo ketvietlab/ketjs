@@ -78,6 +78,7 @@ export const TAX_USES = ['sale', 'purchase', 'none'] as const
 export const TAX_AMOUNT_TYPES = ['fixed', 'percent', 'division'] as const
 export const PAYMENT_TYPES = ['outbound', 'inbound'] as const
 export const PARTNER_TYPES = ['customer', 'supplier'] as const
+export const PAYMENT_SETTLEMENT_KINDS = ['liquidity', 'stored_value'] as const
 export const PAYMENT_TERM_VALUES = ['percent', 'fixed'] as const
 export const PAYMENT_TERM_DELAY_TYPES = [
   'days_after',
@@ -135,6 +136,8 @@ const REFUSALS = {
   journalMustBePurchase: 'a vendor document requires a purchase journal',
   journalLiquidityMissing: 'payment journal needs a default liquidity account',
   journalNotLiquidity: 'payments require a bank or cash journal',
+  journalNotStoredValue: 'stored value settlements require a general journal',
+  journalStoredValueAccount: 'stored value settlements require a liability default account',
 
   taxMissing: 'tax does not exist',
   taxUseUnsupported: 'unsupported tax use',
@@ -175,6 +178,9 @@ const REFUSALS = {
   paymentTypeUnsupported: 'payment type must be inbound or outbound',
   paymentIdReused: 'a different payment already uses this id',
   partnerTypeUnsupported: 'partner type must be customer or supplier',
+  paymentSettlementKindUnsupported: 'settlement kind must be liquidity or stored value',
+  storedValueOperationUnsupported: 'stored value balance operation must be issue or expire',
+  storedValueCounterpart: 'stored value issue needs an asset counterpart and expiry needs income',
   amountPositive: 'payment amount must be positive',
   destinationMissing: 'destination account does not exist',
   destinationMustBeReceivable: 'a customer payment must settle a receivable account',
@@ -2739,6 +2745,150 @@ export const functions: Record<string, FnSpec> = {
       return ctx.db.all(paginate(q, args.limit, args.offset))
     },
   }),
+  /**
+   * Post the two ledger events that change stored-value liability without a sale.
+   *
+   * Issuing value increases the liability against an asset/clearing account;
+   * expiry releases it to income. Redemption and customer refund are settlements
+   * of a receivable and therefore use `registerPayment` with `stored_value`.
+   */
+  postStoredValueBalance: defineFn({
+    input: {
+      id: 'id',
+      operation: 'text',
+      journalId: 'id',
+      liabilityAccountId: 'id',
+      counterpartAccountId: 'id',
+      amount: 'decimal',
+      partnerId: 'id?',
+      date: 'datetime?',
+      accountingDate: 'date?',
+      documentDate: 'date?',
+      reference: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', moveId: 'id?', operation: 'text?', amount: 'decimal?', errors: 'json?' },
+    effects: [
+      'read:account.Journal',
+      'read:account.Account',
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:account.PeriodPolicy',
+      'read:company.Company',
+      'read:partner.Partner',
+      'write:account.Journal',
+      'write:account.Move',
+      'write:account.MoveLine',
+      'write:account.PeriodPolicy',
+      'write:account.AuditEvent',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const operation = String(args.operation)
+      if (!['issue', 'expire'].includes(operation))
+        return invalid('operation', 'storedValueOperationUnsupported')
+      const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
+      if (!journal || String(journal.type) !== 'general') return invalid('journalId', 'journalNotStoredValue')
+      const [liability, counterpart] = await Promise.all([
+        accountOf(ctx, args.liabilityAccountId),
+        accountOf(ctx, args.counterpartAccountId),
+      ])
+      if (!liability || !String(liability.accountType).startsWith('liability'))
+        return invalid('liabilityAccountId', 'journalStoredValueAccount')
+      const counterpartType = String(counterpart?.accountType ?? '')
+      if (
+        !counterpart ||
+        (operation === 'issue' && !counterpartType.startsWith('asset')) ||
+        (operation === 'expire' && !counterpartType.startsWith('income'))
+      )
+        return invalid('counterpartAccountId', 'storedValueCounterpart')
+      if (args.partnerId && !(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
+        return invalid('partnerId', 'partnerMissing')
+      const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
+      const { currency, scale, timezone } = await ledgerOf(ctx)
+      let amount: bigint
+      try {
+        amount = moneyMinor(args.amount, scale)
+      } catch {
+        return invalid('amount', 'moneyExactString')
+      }
+      if (amount <= 0n) return invalid('amount', 'amountPositive')
+      const amountText = minorText(amount, scale)
+      const zero = minorText(0n, scale)
+      const date = instantText(args.date ?? existing?.date ?? today())
+      let accountingDate: string
+      let documentDate: string
+      try {
+        accountingDate = accountingDateText(args.accountingDate ?? existing?.accountingDate ?? date, timezone)
+        documentDate = accountingDateText(
+          args.documentDate ?? existing?.documentDate ?? accountingDate,
+          timezone,
+        )
+      } catch {
+        return invalid('accountingDate', 'accountingDateInvalid')
+      }
+      const increasing = operation === 'issue'
+      const line = (id: string, account: Row, debitSide: boolean, sequence: number): Row => ({
+        id,
+        moveId: args.id,
+        name: `account.stored_value.${operation}`,
+        accountId: account.id,
+        partnerId: args.partnerId ?? null,
+        productId: null,
+        productUomId: null,
+        quantity: '1',
+        priceUnit: amountText,
+        discount: '0',
+        taxId: null,
+        debit: debitSide ? amountText : zero,
+        credit: debitSide ? zero : amountText,
+        balance: debitSide ? amountText : minorText(-amount, scale),
+        dateMaturity: null,
+        displayType: null,
+        reconciled: false,
+        amountResidual: account.reconcile === true ? amountText : zero,
+        sequence,
+      })
+      try {
+        await ctx.tx(async (tx) => {
+          await insertDraftMove(tx, {
+            move: {
+              id: args.id,
+              name: String(args.id),
+              ref: args.reference ?? null,
+              date,
+              accountingDate,
+              documentDate,
+              moveType: 'entry',
+              state: 'draft',
+              journalId: args.journalId,
+              partnerId: args.partnerId ?? null,
+              invoiceDate: null,
+              invoiceDateDue: null,
+              paymentTermId: null,
+              paymentState: 'paid',
+              currency,
+              amountUntaxed: amountText,
+              amountTax: zero,
+              amountTotal: amountText,
+              postedAt: null,
+              revision: 0,
+            },
+            lines: [
+              line(`${String(args.id)}:counterpart`, counterpart, increasing, 10),
+              line(`${String(args.id)}:liability`, liability, !increasing, 20),
+            ],
+          })
+        })
+      } catch (error) {
+        return refused('id', error)
+      }
+      const posted = await postMoveById(ctx, args.id)
+      if (posted.ok !== true) return posted
+      return { ok: true, id: args.id, moveId: args.id, operation, amount: amountText }
+    },
+  }),
+
   registerPayment: defineFn({
     input: {
       id: 'id',
@@ -2754,6 +2904,7 @@ export const functions: Record<string, FnSpec> = {
       documentDate: 'date?',
       memo: 'text?',
       paymentReference: 'text?',
+      settlementKind: 'text?',
       reconcileLineId: 'id?',
       invoiceId: 'id?',
       expectedRevision: 'int?',
@@ -2783,6 +2934,9 @@ export const functions: Record<string, FnSpec> = {
         return invalid('paymentType', 'paymentTypeUnsupported')
       if (!PARTNER_TYPES.includes(args.partnerType as never))
         return invalid('partnerType', 'partnerTypeUnsupported')
+      const settlementKind = String(args.settlementKind ?? 'liquidity')
+      if (!PAYMENT_SETTLEMENT_KINDS.includes(settlementKind as never))
+        return invalid('settlementKind', 'paymentSettlementKindUnsupported')
       const { currency, scale, timezone } = await ledgerOf(ctx)
       let amount: bigint
       try {
@@ -2793,7 +2947,15 @@ export const functions: Record<string, FnSpec> = {
       if (amount <= 0n) return invalid('amount', 'amountPositive')
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0]
       if (!journal?.defaultAccountId) return invalid('journalId', 'journalLiquidityMissing')
-      if (!['bank', 'cash'].includes(String(journal.type))) return invalid('journalId', 'journalNotLiquidity')
+      const settlementAccount = await accountOf(ctx, journal.defaultAccountId)
+      if (settlementKind === 'liquidity') {
+        if (!['bank', 'cash'].includes(String(journal.type)))
+          return invalid('journalId', 'journalNotLiquidity')
+      } else {
+        if (String(journal.type) !== 'general') return invalid('journalId', 'journalNotStoredValue')
+        if (!String(settlementAccount?.accountType ?? '').startsWith('liability'))
+          return invalid('journalId', 'journalStoredValueAccount')
+      }
       const destination = await accountOf(ctx, args.destinationAccountId)
       if (!destination) return invalid('destinationAccountId', 'destinationMissing')
       const forCustomer = args.partnerType === 'customer'
@@ -2831,6 +2993,7 @@ export const functions: Record<string, FnSpec> = {
           String(existing.documentDate ?? accountingDate) !== documentDate ||
           String(existing.memo ?? '') !== String(args.memo ?? '') ||
           String(existing.paymentReference ?? '') !== String(args.paymentReference ?? '') ||
+          String(existing.settlementKind ?? 'liquidity') !== settlementKind ||
           String(existing.currency) !== currency)
       )
         return invalid('id', 'paymentIdReused')
@@ -2962,6 +3125,7 @@ export const functions: Record<string, FnSpec> = {
             documentDate,
             memo: args.memo ?? null,
             paymentReference: args.paymentReference ?? null,
+            settlementKind,
             state: 'in_process',
             currency,
             moneyPolicyVersion: MONEY_POLICY_VERSION,
@@ -2987,6 +3151,7 @@ export const functions: Record<string, FnSpec> = {
                 'documentDate',
                 'memo',
                 'paymentReference',
+                'settlementKind',
                 'currency',
                 'moneyPolicyVersion',
                 'moveId',

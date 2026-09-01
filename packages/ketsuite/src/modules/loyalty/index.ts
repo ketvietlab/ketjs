@@ -7,6 +7,7 @@ import { models } from './models.ts'
 import { orderFunctions } from './order-functions.ts'
 import { relations } from './relations.ts'
 import { statsFunctions } from './stats.ts'
+import { storedValueFunctions } from './stored-value.ts'
 
 export default defineModule({
   name: 'loyalty',
@@ -23,6 +24,7 @@ export default defineModule({
     ...membershipFunctions,
     ...maintenanceFunctions,
     ...statsFunctions,
+    ...storedValueFunctions,
   },
   jobs,
   messages,

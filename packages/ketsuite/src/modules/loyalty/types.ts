@@ -18,7 +18,7 @@ export const REWARD_TYPES = ['discount', 'product', 'shipping'] as const
 export const DISCOUNT_MODES = ['percent', 'per_point', 'per_order'] as const
 export const DISCOUNT_APPLICABILITY = ['order', 'cheapest', 'specific'] as const
 export const WALLET_UNITS = ['points', 'currency'] as const
-export const LEDGER_OPERATIONS = ['earn', 'redeem', 'adjust', 'expire', 'reverse'] as const
+export const LEDGER_OPERATIONS = ['earn', 'issue', 'redeem', 'refund', 'adjust', 'expire', 'reverse'] as const
 export const APPLICATION_STATES = ['draft', 'reserved', 'finalized', 'reversed'] as const
 export const RESERVATION_STATES = ['reserved', 'finalized', 'released'] as const
 
