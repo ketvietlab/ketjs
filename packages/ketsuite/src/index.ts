@@ -129,6 +129,12 @@ export {
 } from './modules/loyalty/order-functions.ts'
 export { default as loyaltySale } from './modules/loyalty_sale/index.ts'
 export { default as loyaltyPos } from './modules/loyalty_pos/index.ts'
+export {
+  functions as loyaltyPosFunctionSpecs,
+  materializePosLoyaltyReward,
+  posSnapshot as posLoyaltyOrderSnapshot,
+  preflightOrder as preflightPosLoyaltyOrder,
+} from './modules/loyalty_pos/functions.ts'
 export { default as loyaltyBackend } from './modules/loyalty_backend/index.ts'
 export { default as crm } from './modules/crm/index.ts'
 export { default as crmStaffChannel } from './modules/crm_staff_channel/index.ts'
