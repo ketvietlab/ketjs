@@ -163,6 +163,15 @@ const CHROME: ListChrome = {
     ],
   },
   pager: { from: 1, to: 30, total: 84, prev: null, next: '/admin/pages?page=2' },
+  tailMenus: [
+    {
+      id: 'assignee',
+      label: 'Người phụ trách',
+      icon: 'users',
+      keep: { view: 'list' },
+      items: [{ id: 'me', label: 'Tôi', path: '?assignee=me' }],
+    },
+  ],
   views: [
     { id: 'list', label: 'Danh sách', icon: 'list', path: '?view=list', active: true },
     { id: 'kanban', label: 'Thẻ', icon: 'layout-grid', path: '?view=kanban', active: false },
