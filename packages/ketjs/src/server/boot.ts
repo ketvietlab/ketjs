@@ -114,6 +114,29 @@ export type ServeContext = {
       correlationId?: string | null
     },
   ) => Promise<unknown>
+  /**
+   * Call inside exactly one company after this route has authenticated an
+   * external credential that is bound to that company.
+   *
+   * This is intentionally separate from `callUnchecked`: provider callbacks
+   * arrive without a staff session, so their request scope cannot select the
+   * legal entity. The company id must come from verified credential material,
+   * never from an unsigned path, query, header, or body field alone. The call
+   * remains in the request's tenant and cannot widen to another company.
+   */
+  callUncheckedForVerifiedCompany: (
+    name: string,
+    input: Record<string, unknown>,
+    companyId: string,
+    url: URL,
+    req: IncomingMessage,
+    options?: {
+      idempotencyKey?: string | null
+      idempotencyNamespace?: string | null
+      idempotencyDigest?: string | null
+      correlationId?: string | null
+    },
+  ) => Promise<unknown>
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
   /** Composed modules' stylesheets for this tenant, in dependency order. */
@@ -627,6 +650,35 @@ export async function bootDeployment(
               adapter: t.adapter,
               manifest: t.live,
               scope,
+              actor,
+              idempotencyKey: options?.idempotencyKey,
+              idempotencyNamespace: options?.idempotencyNamespace,
+              idempotencyDigest: options?.idempotencyDigest,
+              correlationId: options?.correlationId,
+              queueNotify: config.queueNotify,
+            })
+          ).value,
+      )
+    },
+    callUncheckedForVerifiedCompany: async (name, input, companyId, url, req, options) => {
+      const company = companyId.trim()
+      if (!company)
+        throw new KetError({
+          code: 'E_VERIFIED_COMPANY_REQUIRED',
+          module: 'server',
+          message: 'a verified company is required for company-scoped dispatch',
+          hint: 'authenticate the external credential and derive one company before dispatching the function',
+        })
+      const actor = await actorOf(url, req)
+      return tenants.ofRequest(
+        url,
+        req,
+        async (t) =>
+          (
+            await callFn(name, input, {
+              adapter: t.adapter,
+              manifest: t.live,
+              scope: { company, companies: [company], branch: null, branches: null },
               actor,
               idempotencyKey: options?.idempotencyKey,
               idempotencyNamespace: options?.idempotencyNamespace,
