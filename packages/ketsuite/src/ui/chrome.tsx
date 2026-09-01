@@ -44,6 +44,7 @@ export const HOOKS = [
   'pager',
   'pager-range',
   'pager-step',
+  'chrome-tail-menu',
   'view-switch',
   'view-kind',
 ] as const
@@ -90,6 +91,12 @@ export type SearchMenu = {
   }
 }
 
+/** A compact resource filter that belongs beside paging and view controls. */
+export type TailMenu = SearchMenu & {
+  /** Query state a GET submit must retain. Menu item links remain caller-owned. */
+  keep?: Record<string, string | string[]>
+}
+
 export type ListChrome = {
   /** Optional visual treatment for catalogue topbars or in-page command bars. */
   layout?: 'catalogue' | 'command'
@@ -106,6 +113,8 @@ export type ListChrome = {
     menus?: SearchMenu[]
   } | null
   pager?: Pager | null
+  /** Resource-specific filters rendered after paging, outside the global search. */
+  tailMenus?: TailMenu[]
   views?: ViewKind[]
 }
 
@@ -114,6 +123,26 @@ const pagerLabel = (pager: Pager): string =>
 
 const GLOBAL_FILTER_ID = 'backend-global-filter'
 type SearchConfig = NonNullable<ListChrome['search']>
+
+const queryFields = (keep: Record<string, string | string[]> = {}): TemplateResult => (
+  <>
+    {each(
+      Object.entries(keep),
+      ([key]) => key,
+      ([key, value]) => (
+        <>
+          {each(
+            Array.isArray(value) ? value : [value],
+            (item, index) => `${key}:${index}:${item}`,
+            (item) => (
+              <input type="hidden" name={key} value={item} autocomplete="off" />
+            ),
+          )}
+        </>
+      ),
+    )}
+  </>
+)
 
 const searchForm = (
   _: Translator,
@@ -129,21 +158,7 @@ const searchForm = (
   >
     <div data-ui="chrome-search-query">
       <span data-ui="chrome-search-icon">{icon('search')}</span>
-      {each(
-        Object.entries(search.keep ?? {}),
-        ([key]) => key,
-        ([key, value]) => (
-          <>
-            {each(
-              Array.isArray(value) ? value : [value],
-              (item, index) => `${key}:${index}:${item}`,
-              (item) => (
-                <input type="hidden" name={key} value={item} autocomplete="off" />
-              ),
-            )}
-          </>
-        ),
-      )}
+      {queryFields(search.keep)}
       {each(
         search.facets ?? [],
         (facet) => facet.label,
@@ -394,6 +409,17 @@ const chromeTail = (_: Translator, chrome: ListChrome): TemplateResult => (
         {pagerStep('prev', chrome.pager.prev, _('backend.chrome.previous'))}
         {pagerStep('next', chrome.pager.next, _('backend.chrome.next'))}
       </div>
+    )}
+
+    {each(
+      chrome.tailMenus ?? [],
+      (menu) => menu.id,
+      (menu) => (
+        <form data-ui="chrome-tail-menu" method="get" autocomplete="off">
+          {queryFields(menu.keep)}
+          {searchMenu(menu)}
+        </form>
+      ),
     )}
 
     {(chrome.views ?? []).length > 1 && (

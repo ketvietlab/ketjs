@@ -161,3 +161,36 @@ test('chrome: searching keeps the rest of the URL, because a GET form replaces a
     'without this, searching while looking at the cards throws you back to the list',
   )
 })
+
+test('chrome: resource menus sit after paging and before the product-style view switch', () => {
+  const html = render({
+    search: { name: 'q', value: '', placeholder: 'Tìm' },
+    pager: { from: 1, to: 30, total: 84, prev: null, next: '/p?page=2' },
+    tailMenus: [
+      {
+        id: 'assignee',
+        label: 'Người phụ trách',
+        icon: 'users',
+        keep: { view: 'kanban', bucket: 'due' },
+        search: {
+          name: 'assigneeQ',
+          placeholder: 'Tìm người phụ trách',
+          submitLabel: 'Tìm',
+        },
+        items: [{ id: 'me', label: 'Tôi', path: '?assignee=me' }],
+      },
+    ],
+    views: [
+      { id: 'list', label: 'Danh sách', icon: 'list', path: '?view=list', active: false },
+      { id: 'kanban', label: 'Thẻ', icon: 'layout-grid', path: '?view=kanban', active: true },
+    ],
+  })
+  assert.match(html, /data-ui="pager"[\s\S]*data-ui="chrome-tail-menu"[\s\S]*data-ui="view-switch"/)
+  assert.match(html, /name="view" value="kanban"/)
+  assert.match(html, /name="bucket" value="due"/)
+  assert.equal(
+    (html.match(/data-ui="search-menu"/g) ?? []).length,
+    1,
+    'the assignee control is no longer duplicated inside global search',
+  )
+})
