@@ -97,6 +97,7 @@ Route factories receive live runtime services:
 | `scopeOf(url, request)` | Company and branch scope resolved from the session or development shim. |
 | `call(name, input, url, request)` | Function call carrying tenant, session, permissions, actor, and scope. |
 | `callUnchecked(...)` | Internal authorization bootstrap only; deliberately easy to audit by name. |
+| `callUncheckedForVerifiedCompany(...)` | Exact-company function dispatch after an external credential has cryptographically authenticated that company. |
 | `sessionsOf(url, request)` | Session manager for the request's tenant, or `null`. |
 | `storageOf(url, request)` | Tenant-namespaced blob storage. |
 | `translate(locale)` | Translator for the composed message catalogue. |
@@ -106,6 +107,11 @@ Route factories receive live runtime services:
 
 Do not cache `live()` or a tenant-specific service globally. Which modules, sessions, and storage
 apply can change per request.
+
+Provider callbacks may arrive without a staff session even though their durable records are company-scoped.
+Authenticate the exact request bytes first, bind the credential to one company, and only then use
+`callUncheckedForVerifiedCompany()`. The method keeps the existing tenant lease and constructs an exact
+single-company scope; it does not make a path, query, header, or unsigned body company claim trustworthy.
 
 ## Response helpers
 

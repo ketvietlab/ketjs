@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import {
   bootDeployment,
   callFn,
@@ -167,7 +168,19 @@ const app = defineDeployment({
   modules: [books],
   headless: true,
   serve: {
-    routes: (ctx) => ({ '/entries': async (url, req) => json(await ctx.call('books.list', {}, url, req)) }),
+    routes: (ctx) => ({
+      '/entries': async (url, req) => json(await ctx.call('books.list', {}, url, req)),
+      '/verified-company/{companyId}': async (url, req, params) =>
+        json(
+          await ctx.callUncheckedForVerifiedCompany(
+            'books.add',
+            { id: url.searchParams.get('id'), memo: 'verified callback' },
+            params.companyId,
+            url,
+            req,
+          ),
+        ),
+    }),
   },
 })
 
@@ -192,4 +205,32 @@ test('multi-company: the server reads both headers, and the active company joins
   }).then((r) => r.json())
   assert.deepEqual(ids(many), ['a1', 'g1'])
   await b.close()
+})
+
+test('multi-company: verified callback dispatch ignores request headers and selects one company', async () => {
+  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }, port: 0 })
+  try {
+    const at = `http://127.0.0.1:${b.port}`
+    const callbackId = `callback-${randomUUID()}`
+    const dispatched = await fetch(`${at}/verified-company/globex?id=${callbackId}`, {
+      headers: {
+        'x-ket-company': 'acme',
+        'x-ket-companies': 'acme,initech',
+      },
+    })
+    assert.equal(dispatched.status, 200, await dispatched.text())
+
+    const acme = await fetch(`${at}/entries`, { headers: { 'x-ket-company': 'acme' } }).then((r) => r.json())
+    const globex = await fetch(`${at}/entries`, { headers: { 'x-ket-company': 'globex' } }).then((r) =>
+      r.json(),
+    )
+    const initech = await fetch(`${at}/entries`, { headers: { 'x-ket-company': 'initech' } }).then((r) =>
+      r.json(),
+    )
+    assert.equal(ids(acme).includes(callbackId), false)
+    assert.equal(ids(globex).includes(callbackId), true)
+    assert.equal(ids(initech).includes(callbackId), false)
+  } finally {
+    await b.close()
+  }
 })
