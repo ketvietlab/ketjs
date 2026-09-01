@@ -26,6 +26,19 @@ const effectsOf = (...specs: Array<FnSpec | undefined>): string[] => [
   ...new Set(specs.flatMap((spec) => spec?.effects ?? [])),
 ]
 
+class VersionConflict extends Error {}
+
+const compareAndSetOrThrow = async (
+  ctx: Ctx,
+  model: string,
+  where: Input,
+  expected: Input,
+  patch: Input,
+): Promise<void> => {
+  const result = await ctx.db.compareAndSet(model, where, expected, patch)
+  if (!('dryRun' in result) && !result.matched) throw new VersionConflict()
+}
+
 /**
  * Rows by id, asked for by id.
  *
@@ -131,12 +144,17 @@ const executeLines = async (
   const moves = await pickingMoves(ctx, heldPicking.id)
   const completed: Row[] = []
   const quantities: Array<{ moveLineId: string; quantity: number }> = []
+  const totals = new Map<string, number>()
   for (let index = 0; index < rawLines.length; index++) {
     const line = rawLines[index] as Input
     if (!decimal(line.quantity))
       return invalid(`lines.${index}.quantity`, 'stock_staff_channel.error.quantity')
     const move = chooseMove(moves, line)
     if (!move) return invalid(`lines.${index}.moveId`, 'stock_staff_channel.error.executionLine')
+    const total = (totals.get(String(move.id)) ?? 0) + Number(line.quantity)
+    if (total > Number(move.productUomQty) + 0.000001)
+      return invalid(`lines.${index}.quantity`, 'stock_staff_channel.error.quantityExceedsDemand')
+    totals.set(String(move.id), total)
     if (line.productId && line.productId !== move.productId)
       return invalid(`lines.${index}.productId`, 'stock_staff_channel.error.executionLine')
     const destinationId = String(line.destinationLocationId ?? move.locationDestId)
@@ -145,6 +163,9 @@ const executeLines = async (
     const existing = line.moveLineId
       ? (await ours(ctx, 'stock.MoveLine', { id: line.moveLineId, moveId: move.id }))[0]
       : null
+    if (line.moveLineId && !existing) {
+      return invalid(`lines.${index}.moveLineId`, 'stock_staff_channel.error.executionLine')
+    }
     const sourceId = String(line.sourceLocationId ?? existing?.locationId ?? move.locationId)
     if (sourceId !== String(existing?.locationId ?? move.locationId))
       return invalid(`lines.${index}.sourceLocationId`, 'stock_staff_channel.error.source')
@@ -373,7 +394,7 @@ export const functions: Record<string, FnSpec> = {
       if (await activeClaim(ctx, held.id)) return invalid('pickingId', 'stock_staff_channel.error.claimed')
       if (!['assigned', 'partially_available', 'confirmed', 'done'].includes(String(held.state)))
         return invalid('pickingId', 'stock_staff_channel.error.claimState')
-      await ctx.db.insert('stock_staff_channel.PickingClaim', {
+      const inserted = await ctx.db.insertIfAbsent('stock_staff_channel.PickingClaim', {
         id,
         pickingId: held.id,
         actorUserId: actor(ctx),
@@ -386,7 +407,10 @@ export const functions: Record<string, FnSpec> = {
         releasedAt: null,
         version: 1,
       })
-      return { ok: true, claimId: id }
+      if ('dryRun' in inserted || inserted.inserted) return { ok: true, claimId: id }
+      const winner = (await ours(ctx, 'stock_staff_channel.PickingClaim', { id }))[0]
+      if (winner) return { ok: true, claimId: String(winner.id) }
+      return invalid('pickingId', 'stock_staff_channel.error.claimed')
     },
   }),
 
@@ -504,6 +528,35 @@ export const functions: Record<string, FnSpec> = {
             : 'internal'
       const reverseType = types.find((row) => row.code === reverseCode) ?? sourceType
       if (!reverseType) return invalid('sourcePickingId', 'stock_staff_channel.error.returnType')
+      const sourceMoves = await pickingMoves(ctx, source.id)
+      const sourceLines: Row[] = []
+      for (const move of sourceMoves)
+        sourceLines.push(...(await ours(ctx, 'stock.MoveLine', { moveId: move.id })))
+      const sourceByLine = new Map(sourceLines.map((line) => [String(line.id), line]))
+      const moveById = new Map(sourceMoves.map((move) => [String(move.id), move]))
+      const returnedByLine = new Map<string, number>()
+      for (let index = 0; index < args.lines.length; index++) {
+        const line = args.lines[index] as Input
+        if (!decimal(line.quantity) || Number(line.quantity) <= 0)
+          return invalid(`lines.${index}.quantity`, 'stock_staff_channel.error.quantity')
+        const sourceLine = sourceByLine.get(String(line.sourceMoveLineId))
+        const sourceMove = sourceLine ? moveById.get(String(sourceLine.moveId)) : null
+        if (!sourceLine || !sourceMove)
+          return invalid(`lines.${index}.sourceMoveLineId`, 'stock_staff_channel.error.executionLine')
+        if (String(line.productId) !== String(sourceMove.productId))
+          return invalid(`lines.${index}.productId`, 'stock_staff_channel.error.executionLine')
+        if (
+          String(line.sourceLocationId) !== String(source.locationDestId) ||
+          String(line.destinationLocationId) !== String(source.locationId)
+        )
+          return invalid(`lines.${index}.sourceLocationId`, 'stock_staff_channel.error.source')
+        const returned = (returnedByLine.get(String(sourceLine.id)) ?? 0) + Number(line.quantity)
+        if (returned > Number(sourceLine.quantity) + 0.000001)
+          return invalid(`lines.${index}.quantity`, 'stock_staff_channel.error.quantityExceedsDelivered')
+        if (String(line.lotId ?? '') !== String(sourceLine.lotId ?? ''))
+          return invalid(`lines.${index}.lotId`, 'stock_staff_channel.error.executionLine')
+        returnedByLine.set(String(sourceLine.id), returned)
+      }
       const created = (await stockFunctions.createPicking!.handler(ctx, {
         id: args.returnPickingId,
         name: `${String(source.name)} RETURN`,
@@ -519,33 +572,26 @@ export const functions: Record<string, FnSpec> = {
         const line = args.lines[index] as Input
         if (!decimal(line.quantity))
           return invalid(`lines.${index}.quantity`, 'stock_staff_channel.error.quantity')
-        if (
-          String(line.sourceLocationId) !== String(source.locationDestId) ||
-          String(line.destinationLocationId) !== String(source.locationId)
-        )
-          return invalid(`lines.${index}.sourceLocationId`, 'stock_staff_channel.error.source')
+        const sourceLine = sourceByLine.get(String(line.sourceMoveLineId))!
         const moveId = durableId('staff_wret_move', args.returnPickingId, index)
         const added = (await stockFunctions.addMove!.handler(ctx, {
           id: moveId,
           name: `Return ${String(line.productId)}`,
           pickingId: args.returnPickingId,
           productId: line.productId,
-          productUomId:
-            (await ours(ctx, 'stock.MoveLine', { id: line.sourceMoveLineId }))[0]?.productUomId ??
-            (await pickingMoves(ctx, source.id)).find((row) => row.productId === line.productId)
-              ?.productUomId,
+          productUomId: sourceLine.productUomId,
           productUomQty: String(line.quantity),
           locationId: source.locationDestId,
           locationDestId: source.locationId,
         })) as Row
         if (added.ok !== true) return invalid(`lines.${index}`, 'stock_staff_channel.error.executionLine')
         completed.push({
-          moveLineId: durableId('staff_wret_line', args.returnPickingId, index),
           sourceMoveLineId: String(line.sourceMoveLineId),
           productId: String(line.productId),
           quantity: String(line.quantity),
           sourceLocationId: String(source.locationDestId),
           destinationLocationId: String(source.locationId),
+          ...(line.lotId ? { lotId: String(line.lotId) } : {}),
         })
       }
       await stockFunctions.confirmPicking!.handler(ctx, { id: args.returnPickingId })
@@ -624,48 +670,79 @@ export const functions: Record<string, FnSpec> = {
       const moves = await pickingMoves(ctx, session.pickingId)
       const move = product ? moves.find((row) => row.productId === product.id) : null
       if (!product || !move) {
-        await ctx.db.update(
-          'stock_staff_channel.ScanSession',
-          { id: session.id },
-          {
-            version: Number(session.version) + 1,
-            updatedAt: now(),
-            feedbackKind: 'error',
-            feedbackReason: 'PRODUCT_NOT_EXPECTED',
-            feedbackAnnounce: 'Scanned product is not expected on this transfer.',
-          },
-        )
+        try {
+          await ctx.tx(async (tx) =>
+            compareAndSetOrThrow(
+              tx,
+              'stock_staff_channel.ScanSession',
+              { id: session.id },
+              { version: session.version },
+              {
+                version: Number(session.version) + 1,
+                updatedAt: now(),
+                feedbackKind: 'error',
+                feedbackReason: 'PRODUCT_NOT_EXPECTED',
+                feedbackAnnounce: 'Scanned product is not expected on this transfer.',
+              },
+            ),
+          )
+        } catch (error) {
+          if (error instanceof VersionConflict)
+            return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
+          throw error
+        }
         // A rejected barcode is still a successfully recorded scan outcome. The
         // caller needs the advanced session version and feedback to recover; a
         // 422 here would strand it on the stale version we just invalidated.
         return { ok: true }
       }
       const id = durableId('staff_wscan_event', session.id, args.idempotencyKey)
-      await ctx.tx(async (tx) => {
-        await tx.db.insert('stock_staff_channel.ScanEvent', {
-          id,
-          sessionId: session.id,
-          actorUserId: actor(ctx),
-          moveId: move.id,
-          productId: product.id,
-          barcodeFingerprint: digest(scan),
-          quantity: '1',
-          occurredAt: now(),
-          idempotencyKey: args.idempotencyKey,
-          sessionVersion: Number(session.version) + 1,
+      let replayedEventId: string | null = null
+      try {
+        await ctx.tx(async (tx) => {
+          const inserted = await tx.db.insertIfAbsent('stock_staff_channel.ScanEvent', {
+            id,
+            sessionId: session.id,
+            actorUserId: actor(ctx),
+            moveId: move.id,
+            productId: product.id,
+            barcodeFingerprint: digest(scan),
+            quantity: '1',
+            occurredAt: now(),
+            idempotencyKey: args.idempotencyKey,
+            sessionVersion: Number(session.version) + 1,
+          })
+          if (!('dryRun' in inserted) && !inserted.inserted) {
+            const replay = (
+              await ours(tx, 'stock_staff_channel.ScanEvent', {
+                sessionId: session.id,
+                idempotencyKey: args.idempotencyKey,
+              })
+            )[0]
+            replayedEventId = replay?.id ? String(replay.id) : null
+            if (!replayedEventId) throw new VersionConflict()
+            return
+          }
+          await compareAndSetOrThrow(
+            tx,
+            'stock_staff_channel.ScanSession',
+            { id: session.id },
+            { version: session.version },
+            {
+              version: Number(session.version) + 1,
+              updatedAt: now(),
+              feedbackKind: 'success',
+              feedbackReason: 'PRODUCT_SCANNED',
+              feedbackAnnounce: 'Product scan accepted.',
+            },
+          )
         })
-        await tx.db.update(
-          'stock_staff_channel.ScanSession',
-          { id: session.id },
-          {
-            version: Number(session.version) + 1,
-            updatedAt: now(),
-            feedbackKind: 'success',
-            feedbackReason: 'PRODUCT_SCANNED',
-            feedbackAnnounce: 'Product scan accepted.',
-          },
-        )
-      })
+      } catch (error) {
+        if (error instanceof VersionConflict)
+          return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
+        throw error
+      }
+      if (replayedEventId) return { ok: true, id: replayedEventId }
       return { ok: true, id }
     },
   }),
@@ -684,18 +761,28 @@ export const functions: Record<string, FnSpec> = {
         return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
       if (!['active', 'paused', 'cancelled'].includes(String(args.targetState)))
         return invalid('targetState', 'stock_staff_channel.error.scanState')
-      await ctx.db.update(
-        'stock_staff_channel.ScanSession',
-        { id: session.id },
-        {
-          state: args.targetState,
-          version: Number(session.version) + 1,
-          updatedAt: now(),
-          feedbackKind: 'neutral',
-          feedbackReason: `SESSION_${String(args.targetState).toUpperCase()}`,
-          feedbackAnnounce: `Scan session ${String(args.targetState)}.`,
-        },
-      )
+      try {
+        await ctx.tx(async (tx) =>
+          compareAndSetOrThrow(
+            tx,
+            'stock_staff_channel.ScanSession',
+            { id: session.id },
+            { version: session.version },
+            {
+              state: args.targetState,
+              version: Number(session.version) + 1,
+              updatedAt: now(),
+              feedbackKind: 'neutral',
+              feedbackReason: `SESSION_${String(args.targetState).toUpperCase()}`,
+              feedbackAnnounce: `Scan session ${String(args.targetState)}.`,
+            },
+          ),
+        )
+      } catch (error) {
+        if (error instanceof VersionConflict)
+          return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
+        throw error
+      }
       return { ok: true, id: session.id }
     },
   }),
@@ -788,38 +875,59 @@ export const functions: Record<string, FnSpec> = {
         })
       ).sort((left, right) => String(left.id).localeCompare(String(right.id)))
       const positions = quants.length ? quants : [{ id: 'empty', lotId: null, quantity: '0' }]
-      await ctx.tx(async (tx) => {
-        await tx.db.insert('stock_staff_channel.CountAttempt', {
-          id: args.attemptId,
-          sessionId: session.id,
-          actorUserId: actor(ctx),
-          state: 'claimed',
-          deviceRef: args.deviceRef ?? null,
-          leaseExpiresAt: future(15),
-          submittedAt: null,
-          version: 1,
-        })
-        for (let index = 0; index < positions.length; index++) {
-          const quant = positions[index]!
-          await tx.db.insert('stock_staff_channel.CountLine', {
-            id: durableId('staff_wcount_line', args.attemptId, quant.id, index),
-            attemptId: args.attemptId,
-            productId: session.productId,
-            locationId: session.locationId,
-            lotId: quant.lotId ?? null,
-            productUomId: template.uomId,
-            systemQuantity: String(quant.quantity ?? 0),
-            isCounted: false,
-            countedQuantity: null,
+      let winningAttemptId: string | null = null
+      try {
+        await ctx.tx(async (tx) => {
+          const inserted = await tx.db.insertIfAbsent('stock_staff_channel.CountAttempt', {
+            id: args.attemptId,
+            sessionId: session.id,
+            actorUserId: actor(ctx),
+            state: 'claimed',
+            deviceRef: args.deviceRef ?? null,
+            leaseExpiresAt: future(15),
+            submittedAt: null,
             version: 1,
           })
-        }
-        await tx.db.update(
-          'stock_staff_channel.CountSession',
-          { id: session.id },
-          { state: 'in_progress', version: Number(session.version) + 1 },
-        )
-      })
+          if (!('dryRun' in inserted) && !inserted.inserted) {
+            const winner = (
+              await ours(tx, 'stock_staff_channel.CountAttempt', {
+                sessionId: session.id,
+                actorUserId: actor(ctx),
+              })
+            )[0]
+            winningAttemptId = winner?.id ? String(winner.id) : null
+            if (!winningAttemptId) throw new VersionConflict()
+            return
+          }
+          for (let index = 0; index < positions.length; index++) {
+            const quant = positions[index]!
+            await tx.db.insert('stock_staff_channel.CountLine', {
+              id: durableId('staff_wcount_line', args.attemptId, quant.id, index),
+              attemptId: args.attemptId,
+              productId: session.productId,
+              locationId: session.locationId,
+              lotId: quant.lotId ?? null,
+              productUomId: template.uomId,
+              systemQuantity: String(quant.quantity ?? 0),
+              isCounted: false,
+              countedQuantity: null,
+              version: 1,
+            })
+          }
+          await compareAndSetOrThrow(
+            tx,
+            'stock_staff_channel.CountSession',
+            { id: session.id },
+            { version: session.version },
+            { state: 'in_progress', version: Number(session.version) + 1 },
+          )
+        })
+      } catch (error) {
+        if (error instanceof VersionConflict)
+          return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
+        throw error
+      }
+      if (winningAttemptId) return { ok: true, attemptId: winningAttemptId }
       return { ok: true, attemptId: args.attemptId }
     },
   }),
@@ -837,16 +945,26 @@ export const functions: Record<string, FnSpec> = {
       if (Number(attempt.version) !== Number(args.expectedVersion))
         return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
       if (attempt.state === 'submitted') return invalid('state', 'stock_staff_channel.error.countState')
-      await ctx.db.update(
-        'stock_staff_channel.CountAttempt',
-        { id: attempt.id },
-        {
-          state: 'in_progress',
-          deviceRef: args.deviceRef ?? attempt.deviceRef,
-          leaseExpiresAt: future(15),
-          version: Number(attempt.version) + 1,
-        },
-      )
+      try {
+        await ctx.tx(async (tx) =>
+          compareAndSetOrThrow(
+            tx,
+            'stock_staff_channel.CountAttempt',
+            { id: attempt.id },
+            { version: attempt.version },
+            {
+              state: 'in_progress',
+              deviceRef: args.deviceRef ?? attempt.deviceRef,
+              leaseExpiresAt: future(15),
+              version: Number(attempt.version) + 1,
+            },
+          ),
+        )
+      } catch (error) {
+        if (error instanceof VersionConflict)
+          return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
+        throw error
+      }
       return { ok: true, attemptId: attempt.id }
     },
   }),
@@ -871,18 +989,28 @@ export const functions: Record<string, FnSpec> = {
       if (Number(line.version) !== Number(args.expectedVersion))
         return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
       if (!decimal(args.quantity)) return invalid('quantity', 'stock_staff_channel.error.quantity')
-      await ctx.tx(async (tx) => {
-        await tx.db.update(
-          'stock_staff_channel.CountLine',
-          { id: line.id },
-          { isCounted: true, countedQuantity: String(args.quantity), version: Number(line.version) + 1 },
-        )
-        await tx.db.update(
-          'stock_staff_channel.CountAttempt',
-          { id: attempt.id },
-          { state: 'in_progress', leaseExpiresAt: future(15), version: Number(attempt.version) + 1 },
-        )
-      })
+      try {
+        await ctx.tx(async (tx) => {
+          await compareAndSetOrThrow(
+            tx,
+            'stock_staff_channel.CountLine',
+            { id: line.id },
+            { version: line.version },
+            { isCounted: true, countedQuantity: String(args.quantity), version: Number(line.version) + 1 },
+          )
+          await compareAndSetOrThrow(
+            tx,
+            'stock_staff_channel.CountAttempt',
+            { id: attempt.id },
+            { version: attempt.version },
+            { state: 'in_progress', leaseExpiresAt: future(15), version: Number(attempt.version) + 1 },
+          )
+        })
+      } catch (error) {
+        if (error instanceof VersionConflict)
+          return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
+        throw error
+      }
       return { ok: true, lineId: line.id }
     },
   }),
@@ -911,27 +1039,37 @@ export const functions: Record<string, FnSpec> = {
       const session = (await ours(ctx, 'stock_staff_channel.CountSession', { id: attempt.sessionId }))[0]!
       const completed = Number(session.completedAttemptCount) + 1
       const state = completed >= Number(session.requiredAttemptCount) ? 'review_ready' : 'in_progress'
-      await ctx.tx(async (tx) => {
-        await tx.db.update(
-          'stock_staff_channel.CountAttempt',
-          { id: attempt.id },
-          {
-            state: 'submitted',
-            submittedAt: now(),
-            leaseExpiresAt: null,
-            version: Number(attempt.version) + 1,
-          },
-        )
-        await tx.db.update(
-          'stock_staff_channel.CountSession',
-          { id: session.id },
-          {
-            state,
-            completedAttemptCount: completed,
-            version: Number(session.version) + 1,
-          },
-        )
-      })
+      try {
+        await ctx.tx(async (tx) => {
+          await compareAndSetOrThrow(
+            tx,
+            'stock_staff_channel.CountAttempt',
+            { id: attempt.id },
+            { version: attempt.version },
+            {
+              state: 'submitted',
+              submittedAt: now(),
+              leaseExpiresAt: null,
+              version: Number(attempt.version) + 1,
+            },
+          )
+          await compareAndSetOrThrow(
+            tx,
+            'stock_staff_channel.CountSession',
+            { id: session.id },
+            { version: session.version },
+            {
+              state,
+              completedAttemptCount: completed,
+              version: Number(session.version) + 1,
+            },
+          )
+        })
+      } catch (error) {
+        if (error instanceof VersionConflict)
+          return invalid('expectedVersion', 'stock_staff_channel.error.versionConflict')
+        throw error
+      }
       return { ok: true, attemptId: attempt.id }
     },
   }),

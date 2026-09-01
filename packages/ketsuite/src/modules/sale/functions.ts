@@ -544,7 +544,7 @@ export const functions: Record<string, FnSpec> = {
       if (existing) return { ok: true, id: args.id, name: existing.name }
       if (!(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
         return invalid('partnerId', 'customer does not exist')
-      if (!(await ctx.db.select('stock.Warehouse', { id: args.warehouseId }))[0])
+      if (!(await ours(ctx, 'stock.Warehouse', { id: args.warehouseId }))[0])
         return invalid('warehouseId', 'warehouse does not exist')
       if (args.pricelistId && !(await ctx.db.select('pricing.Pricelist', { id: args.pricelistId }))[0])
         return invalid('pricelistId', 'pricelist does not exist')
@@ -767,7 +767,7 @@ export const functions: Record<string, FnSpec> = {
             throw new SaleRefused(invalid('partnerId', 'customer does not exist'))
           if (!(await tx.db.select('partner.Role', { partnerId: args.partnerId, role: 'customer' }))[0])
             throw new SaleRefused(invalid('partnerId', 'partner is not an active customer'))
-          if (!(await tx.db.select('stock.Warehouse', { id: args.warehouseId }))[0])
+          if (!(await ours(tx, 'stock.Warehouse', { id: args.warehouseId }))[0])
             throw new SaleRefused(invalid('warehouseId', 'warehouse does not exist'))
 
           await tx.db.update(
