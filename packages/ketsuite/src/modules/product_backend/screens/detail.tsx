@@ -107,6 +107,8 @@ export const productDetailScreen = (
     stockEnabled?: boolean
     errors?: string[]
     editor?: JSXChild
+    /** Actions contributed through the public Product Template extension joint. */
+    actions?: JSXChild
     /**
      * Relation pickers, built by the route because they need a request to reach
      * their joint. Absent ones fall back to the plain select beside them, so this
@@ -522,6 +524,7 @@ export const productDetailScreen = (
               }),
             ]
           : []),
+        ...(management.actions ? [management.actions] : []),
         <RecordMore
           label={_('product_backend.action.more')}
           body={<FormCluster label={_('product_backend.action.more')} forms={[archiveAction]} />}
