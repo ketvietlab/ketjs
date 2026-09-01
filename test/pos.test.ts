@@ -91,6 +91,18 @@ test('pos: stock moves are indexed by their originating order line', () => {
   assert.ok(indexes.some((index) => index.fields.join(',') === 'companyId,posLineId'))
 })
 
+test('pos: optional loyalty integration fields belong to the core order schema', () => {
+  const order = manifest.models['pos.Order']!
+  const line = manifest.models['pos.OrderLine']!
+  assert.equal(order.fields.loyaltyState?.base, 'text')
+  assert.equal(order.fields.loyaltyPointsEarned?.base, 'decimal')
+  assert.equal(order.fields.loyaltyPointsSpent?.base, 'decimal')
+  assert.equal(line.fields.lineKind?.base, 'text')
+  assert.equal(line.fields.loyaltyApplicationId?.base, 'text')
+  assert.equal(line.fields.loyaltyRewardId?.base, 'text')
+  assert.equal(line.fields.loyaltyPointsCost?.base, 'decimal')
+})
+
 async function boot() {
   const adapter = sqliteAdapter()
   await adapter.open()
