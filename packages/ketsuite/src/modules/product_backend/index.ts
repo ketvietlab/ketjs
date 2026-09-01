@@ -30,6 +30,9 @@ export default defineModule({
   routes,
   menus,
   joints: {
+    /** Presentation-only entries owned by modules that add product operations. */
+    'catalogue.actions': { props: { locale: 'text?' }, multiple: true },
+    'template.actions': { props: { templateId: 'id', locale: 'text?' }, multiple: true },
     'template.media': { props: { templateId: 'id' } },
     'variant.media': { props: { productId: 'id' } },
     'template.collaboration': {
