@@ -137,7 +137,7 @@ test('stored value: issue, reserve, POS settlement, finalize and expiry use cano
       id: 'wallet',
       programId: 'gift-program',
       partnerId: 'customer',
-      expiresAt: '2026-09-30T00:00:00.000Z',
+      expiresAt: '2099-09-30T00:00:00.000Z',
     })
     assert.equal(opened.ok, true, JSON.stringify(opened.errors))
     assert.match(String((opened as Row).code), /^VALUE-[0-9A-F]{20}$/u)
@@ -258,13 +258,16 @@ test('stored value: issue, reserve, POS settlement, finalize and expiry use cano
 
 test('stored value: expiry releases liability and fails closed while a reservation exists', async () => {
   const adapter = await boot()
+  const expiresAt = '2099-09-01T23:59:59.999Z'
+  const expiryAt = '2099-09-02T00:00:00.000Z'
   try {
-    await value(adapter, 'loyalty.storedValue.open', {
+    const opened = await value(adapter, 'loyalty.storedValue.open', {
       id: 'expired-wallet',
       programId: 'gift-program',
-      expiresAt: '2026-09-01T23:59:59.999Z',
+      expiresAt,
     })
-    await value(adapter, 'loyalty.storedValue.issue', {
+    assert.equal(opened.ok, true, JSON.stringify(opened.errors))
+    const issued = await value(adapter, 'loyalty.storedValue.issue', {
       id: 'expired-wallet:issue',
       walletId: 'expired-wallet',
       amount: '50',
@@ -272,22 +275,23 @@ test('stored value: expiry releases liability and fails closed while a reservati
       sourceId: 'stored-value:issue:expired',
       sourceKey: 'expired-wallet:issue',
     })
+    assert.equal(issued.ok, true, JSON.stringify(issued.errors))
     const expired = await value(adapter, 'loyalty.storedValue.expire', {
       id: 'expired-wallet:expiry',
       walletId: 'expired-wallet',
       sourceType: 'maintenance',
-      sourceId: '2026-09-02',
+      sourceId: '2099-09-02',
       sourceKey: 'expired-wallet:expiry',
-      at: '2026-09-02T00:00:00.000Z',
+      at: expiryAt,
     })
     assert.equal(expired.ok, true, JSON.stringify(expired.errors))
     const expiryReplay = await value(adapter, 'loyalty.storedValue.expire', {
       id: 'expired-wallet:expiry',
       walletId: 'expired-wallet',
       sourceType: 'maintenance',
-      sourceId: '2026-09-02',
+      sourceId: '2099-09-02',
       sourceKey: 'expired-wallet:expiry',
-      at: '2026-09-02T00:00:00.000Z',
+      at: expiryAt,
     })
     assert.equal(expiryReplay.ok, true, JSON.stringify(expiryReplay.errors))
     assert.equal((expiryReplay.entry as Row).id, 'expired-wallet:expiry')
