@@ -60,6 +60,10 @@ The report includes every composed module, even one with no functions, and recor
 HTTP/internal, anonymous, provision-only, cross-company, replay-safe, agent-published, and projected. It is a
 composition report, not a grant: only live KetSuite Role/Grant/Assignment rows decide what a staff user may call.
 
+The accepted [permission bundles and scoped roles RFC](/architecture/permission-bundles-rfc/) defines how an
+application must classify that exact inventory before implementing bundles or scoped assignment. A new function
+never inherits access from its name or from an existing manager-style role.
+
 An anonymous provider callback that owns a cryptographic company binding may use
 `ctx.callUncheckedForVerifiedCompany()` after signature verification. Derive the company from signed
 credential material and verify the exact request bytes before dispatch. The helper deliberately creates one

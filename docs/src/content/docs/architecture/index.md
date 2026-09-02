@@ -12,6 +12,7 @@ building a feature.
 | Need | Read | Expected use |
 | --- | --- | --- |
 | Understand an accepted invariant or its trade-off | [Architecture decisions](/architecture/decisions/) | Preserve it, or write a superseding decision that explains why it changes. |
+| Implement explicit bundles, role templates, or scoped assignments | [Permission bundles and scoped roles RFC](/architecture/permission-bundles-rfc/) | Preserve the accepted compatibility, scope, provenance, and fail-closed contract. |
 | Check whether a design area is deliberately unfinished | [Open questions](/architecture/open-questions/) | Keep the uncertainty explicit instead of treating a proposal as a contract. |
 | Reproduce a performance claim | [Performance benchmarks](/operations/benchmarks/) | Run the documented workload and compare like-for-like evidence. |
 | Implement a framework capability | [KetJS framework guide](/ketjs/) | Follow the public contracts and task sequence. |
