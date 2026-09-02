@@ -5,6 +5,7 @@ import type {
   CompiledRoleTemplate,
   KetModule,
   Manifest,
+  ModulePermissionsDef,
   PermissionCatalogue,
   PermissionExemptionReason,
   PermissionFunctionDef,
@@ -53,6 +54,7 @@ const bundleOwner = (key: string): string => key.split('.')[0] ?? ''
 export type CompilePermissionOptions = {
   requireCoverage?: boolean
   roleTemplates?: Record<string, RoleTemplateDef>
+  moduleDeclarations?: Record<string, ModulePermissionsDef>
 }
 
 /** Validate and compile the exact permission graph for one composed deployment. */
@@ -62,9 +64,26 @@ export function compilePermissionBundles(
   options: CompilePermissionOptions = {},
 ): PermissionCatalogue {
   const diag = new Diagnostics()
-  const declarations = new Map(
-    modules.filter((module) => module.permissions).map((module) => [module.name, module]),
-  )
+  const declarations = new Map<string, KetModule>()
+  const modulesByName = new Map(modules.map((module) => [module.name, module]))
+  for (const module of modules) {
+    const external = options.moduleDeclarations?.[module.name]
+    if (module.permissions && external)
+      diag.add({
+        code: 'E_PERMISSION_CATALOG_INVALID',
+        module: module.name,
+        message: `module "${module.name}" has both embedded and deployment permission declarations`,
+      })
+    const permissions = module.permissions ?? external
+    if (permissions) declarations.set(module.name, { ...module, permissions })
+  }
+  for (const name of Object.keys(options.moduleDeclarations ?? {}))
+    if (!modulesByName.has(name))
+      diag.add({
+        code: 'E_PERMISSION_CATALOG_INVALID',
+        module: name,
+        message: `permission declaration references module "${name}" outside this deployment`,
+      })
   const moduleMeta: PermissionCatalogue['modules'] = {}
   const rawBundles = new Map<
     string,
@@ -270,7 +289,7 @@ export function compilePermissionBundles(
       })
     }
     for (const module of modules)
-      if (module.kind !== 'theme' && !module.permissions)
+      if (module.kind !== 'theme' && !declarations.has(module.name))
         diag.add({
           code: 'E_PERMISSION_CATALOG_INVALID',
           module: module.name,

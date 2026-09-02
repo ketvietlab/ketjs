@@ -21,7 +21,7 @@ company, branch, bundle, or permission.
 | --- | --- | --- |
 | Function capability | One qualified `fnKey` enforced by `ctx.call()` | Function-owning module |
 | Function classification | Exact risk, bundle membership, owner, and policy metadata for one function revision | Function-owning module |
-| Permission bundle | Stable semantic set of classified functions and included bundles | Module manifest |
+| Permission bundle | Stable semantic set of classified functions and included bundles | Module or reviewed package catalogue |
 | Job-role template | Versioned product role composed from public bundle keys | Product deployment |
 | Role | Tenant row created from a managed template or maintained as custom | Tenant authorization data |
 | Scoped assignment | User-to-role edge for tenant, company, or branch scope | Tenant authorization data |
@@ -96,6 +96,11 @@ export const permissions = {
 Bundle keys use `{module}.{capability}` and describe a bounded business capability. `manager`, `all`,
 and wildcard capability names are invalid. Adding a function never changes an existing bundle unless the
 same review explicitly adds that exact function key to the declaration.
+
+The same declaration may be embedded in its module or supplied through `deployment.permissions.modules`.
+Deployment catalogues are intended for reviewed package/product baselines such as KetSuite and private
+verticals. They may only name modules actually composed by that deployment, cannot override an embedded
+declaration, and remain subject to every exact-key, ownership, graph, and coverage rule above.
 
 A module may include a bundle owned by a declared dependency. It may not classify another module's
 function or include an undeclared/private dependency. Compilation operates on the composed deployment,
