@@ -668,6 +668,8 @@ export const authorizationFunctions: Record<string, FnSpec> = {
           validPreview.managedAdded.length === 0 &&
           validPreview.managedRemoved.length === 0
         ) {
+          if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
+            abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
           const result = {
             ok: true,
             roleId,
@@ -826,6 +828,8 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         )
         const assignmentId = String(held?.id ?? args.id)
         if (held) {
+          if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
+            abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
           const result = {
             ok: true,
             id: assignmentId,
@@ -907,6 +911,8 @@ export const authorizationFunctions: Record<string, FnSpec> = {
           from(A).where(eq(A.userId, args.userId), eq(A.roleId, args.roleId), eq(A.scopeKey, args.scopeKey)),
         )
         if (!before) {
+          if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
+            abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
           const result = {
             ok: true,
             removed: 0,
@@ -1109,6 +1115,8 @@ export const authorizationFunctions: Record<string, FnSpec> = {
           (target.superuserExpiresAt ? new Date(String(target.superuserExpiresAt)).toISOString() : null) ===
             after.superuserExpiresAt
         if (unchanged) {
+          if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
+            abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
           const result = {
             ok: true,
             userId: String(args.userId),
