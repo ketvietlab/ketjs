@@ -13,7 +13,14 @@ import type { ResolvedModuleInfo } from './kernel/modules.ts'
 import { diffManifests, formatDiff } from './kernel/diff.ts'
 import { generateDts } from './codegen/dts.ts'
 import { agentDescriptor } from './agent/capabilities.ts'
-import { reachOf, functionsOf, formatReach, formatInventory, grantsOfRole } from './agent/permissions.ts'
+import {
+  reachOf,
+  functionsOf,
+  formatReach,
+  formatInventory,
+  grantsOfRole,
+  permissionInventory,
+} from './agent/permissions.ts'
 import { readConfig, sqliteStore } from './server/config.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
 import { migrateOne, migrateFleet, formatFleet, verifyPhysicalSchema } from './data/fleet.ts'
@@ -180,6 +187,8 @@ const HELP = `ket — zero-dependency fullstack framework
     --grant a,b,c           …or what a role granted exactly these can reach
     --module NAME           …or what granting one module's whole surface reaches
     --role NAME             …or what a role in the database actually grants
+    --json                  machine-readable module/function inventory
+    --all                   with --json, inventory every deployment
   ket migrate [--deployment X]     plan migrations (add --allow-destructive to permit data loss)
     --all                   …or apply them to every tenant database (add --dry-run)
   ket schema verify [--deployment X]  compare the physical database, migration marker, and manifest
@@ -593,11 +602,27 @@ try {
     writeFileSync(out, generateDts(m))
     console.log(`wrote ${out}`)
   } else if (cmd === 'permissions') {
-    const [, m] = pickDeployment(ws)
     const module = opt('module')
     const grant = opt('grant')
     const role = opt('role')
-    if (role) {
+    if (flag('json')) {
+      if (module || grant || role)
+        throw new Error('permissions --json cannot be combined with --module, --grant or --role')
+      if (flag('all')) {
+        if (opt('deployment'))
+          throw new Error('permissions --json accepts either --deployment NAME or --all, not both')
+        const deployments = Object.entries(ws.deployments)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([name, manifest]) => ({ name, inventory: permissionInventory(manifest) }))
+        console.log(JSON.stringify({ version: 1, deployments }, null, 2))
+      } else {
+        const [name, manifest] = pickDeployment(ws)
+        console.log(JSON.stringify({ name, inventory: permissionInventory(manifest) }, null, 2))
+      }
+    } else if (flag('all')) {
+      throw new Error('permissions --all requires --json')
+    } else if (role) {
+      const [, m] = pickDeployment(ws)
       // The one form that reads the database: a role is data, and what it grants is
       // a fact about a deployment rather than about the code.
       const spec = pickSpec(specs)
@@ -610,8 +635,11 @@ try {
       } finally {
         await adapter.close()
       }
-    } else if (module) console.log(formatReach(reachOf(m, functionsOf(m, module))))
-    else if (grant)
+    } else if (module) {
+      const [, m] = pickDeployment(ws)
+      console.log(formatReach(reachOf(m, functionsOf(m, module))))
+    } else if (grant) {
+      const [, m] = pickDeployment(ws)
       console.log(
         formatReach(
           reachOf(
@@ -623,7 +651,10 @@ try {
           ),
         ),
       )
-    else console.log(formatInventory(m))
+    } else {
+      const [, m] = pickDeployment(ws)
+      console.log(formatInventory(m))
+    }
   } else if (cmd === 'agent') {
     const [, m] = pickDeployment(ws)
     console.log(JSON.stringify(agentDescriptor(m), null, 2))

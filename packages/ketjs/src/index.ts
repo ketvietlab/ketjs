@@ -327,8 +327,21 @@ export type {
   IntrinsicProps,
 } from '@ketvietlab/ketjs-view'
 export { createTheme } from './theme/render.ts'
-export { reachOf, functionsOf, formatReach, formatInventory } from './agent/permissions.ts'
-export type { Reach, GrantedFn, ModelReach } from './agent/permissions.ts'
+export {
+  reachOf,
+  functionsOf,
+  formatReach,
+  formatInventory,
+  permissionInventory,
+} from './agent/permissions.ts'
+export type {
+  Reach,
+  GrantedFn,
+  ModelReach,
+  PermissionInventory,
+  PermissionModuleInventory,
+  PermissionFunctionInventory,
+} from './agent/permissions.ts'
 export { compileKtl } from './theme/ktl/compile.ts'
 export { loadTemplates } from './theme/templates.ts'
 export { createJoints } from './theme/joints.ts'

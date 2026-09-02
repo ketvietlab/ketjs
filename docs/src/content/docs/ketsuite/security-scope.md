@@ -55,6 +55,11 @@ Prefer `ctx.call()` from a route. Every use of `ctx.callUnchecked()` needs a vis
 Channel API uses it behind its own authentication, CSRF, realm, capability, and contract checks; staff
 backend routes do not need that bypass.
 
+Use `permissionInventory(manifest)` or `ket permissions --json` for machine-readable authorization review.
+The report includes every composed module, even one with no functions, and records whether each function is
+HTTP/internal, anonymous, provision-only, cross-company, replay-safe, agent-published, and projected. It is a
+composition report, not a grant: only live KetSuite Role/Grant/Assignment rows decide what a staff user may call.
+
 An anonymous provider callback that owns a cryptographic company binding may use
 `ctx.callUncheckedForVerifiedCompany()` after signature verification. Derive the company from signed
 credential material and verify the exact request bytes before dispatch. The helper deliberately creates one
@@ -94,6 +99,7 @@ content.
 ## Review checklist
 
 - Which identity plane calls this code: staff, customer, anonymous, worker, or internal service?
+- Does the machine-readable permission inventory classify every composed module and callable function?
 - Which company, branch, tenant, site, or realm selects the data?
 - Are all resources present in `effects`, including reads used only for validation?
 - Does the route use `ctx.call()` unless it owns an explicit replacement authorization boundary?

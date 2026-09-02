@@ -30,5 +30,6 @@ export default defineModule({
 export { hashPassword, verifyPassword, needsRehash } from './password.ts'
 export { routes } from './routes.ts'
 export { loginScreen } from './login.ts'
-export { permittedFor } from './roles.ts'
+export { legacyPermissionCatalogue, legacyPresetFunctions, permittedFor } from './roles.ts'
+export type { LegacyPermissionCatalogueEntry, LegacyPermissionTask } from './roles.ts'
 export { resolveUserSession } from './session-context.ts'
