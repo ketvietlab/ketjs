@@ -628,7 +628,7 @@ export const models: Record<string, ModelDef> = {
       uomId: 'ref:uom.Unit?',
       description: 'text',
       /** Charge type to preserve when the line is materialised. */
-      chargeType: 'text',
+      chargeType: 'text?',
       /** `external_stock` lines are completed only by a deployment connector. */
       fulfillmentKind: 'text?',
       quantity: 'decimal',
