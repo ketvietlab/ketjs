@@ -122,14 +122,25 @@ const renderUser = async (
     oneTimeLink?: string | null
     integration?: Parameters<typeof userFormScreen>[2]['integration']
     values?: UserFormValues
+    scopedRoleValues?: Parameters<typeof userFormScreen>[2]['scopedRoleValues']
+    scopedRoleOperationId?: string
     returnTo?: string
   } = {},
 ) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
-  const [row, options, sessions] = await Promise.all([
+  const [row, options, sessions, effectiveAccess] = await Promise.all([
     userOf(ctx, url, req, id),
     accessOptions(ctx, url, req),
     sessionRows(ctx, url, req, id),
+    ctx.call('user.effectiveAccess', { userId: id }, url, req) as Promise<{
+      revision: number
+      functions: Array<{
+        key: string
+        risk?: string | null
+        paths?: Array<{ scopeKey: string; roleId: string; sourceKind: string; bundlePath?: string[] }>
+      }>
+      issues: Array<{ code: string }>
+    }>,
   ])
   if (!row) return text(_('user_backend.error.notFound'), { status: 404 })
   const returnTo = safeUserReturnTo(url, state.returnTo ?? url.searchParams.get('returnTo'))
@@ -164,6 +175,14 @@ const renderUser = async (
             returnTo,
           ),
           rolesAction: withUserReturnTo(url, `/admin/users/${encodeURIComponent(row.id)}/roles`, returnTo),
+          scopedRolesAction: withUserReturnTo(
+            url,
+            `/admin/users/${encodeURIComponent(row.id)}/scoped-roles`,
+            returnTo,
+          ),
+          effectiveAccess,
+          scopedRoleOperationId: state.scopedRoleOperationId ?? randomUUID(),
+          scopedRoleValues: state.scopedRoleValues,
           tokenAction: withUserReturnTo(url, `/admin/users/${encodeURIComponent(row.id)}/token`, returnTo),
           sessionAction: (session) =>
             withUserReturnTo(
@@ -214,7 +233,10 @@ const renderRole = async (
   state: { errors?: string[]; values?: RoleFormValues } = {},
 ) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
-  const row = (await ctx.call('user.getRole', { id }, url, req)) as RoleRow | null
+  const [row, authorizationState] = await Promise.all([
+    ctx.call('user.getRole', { id }, url, req) as Promise<RoleRow | null>,
+    ctx.call('user.authorizationState', {}, url, req) as Promise<{ revision: number }>,
+  ])
   if (!row) return text(_('user_backend.error.roleNotFound'), { status: 404 })
   return adminPage(ctx, url, req, {
     title: state.values?.name ?? row.name,
@@ -228,8 +250,18 @@ const renderRole = async (
           mode: 'detail',
           action: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}`),
           cancelHref: inLocale(url, '/admin/roles'),
-          permissionsAction: inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}/permissions`),
-          permissions: await permissionGroups(ctx, url, req, row.grants ?? []),
+          permissionsAction:
+            row.mode === 'managed'
+              ? undefined
+              : inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}/permissions`),
+          permissions:
+            row.mode === 'managed' ? undefined : await permissionGroups(ctx, url, req, row.grants ?? []),
+          cloneAction:
+            row.mode === 'managed'
+              ? inLocale(url, `/admin/roles/${encodeURIComponent(row.id)}/clone`)
+              : undefined,
+          cloneId: row.mode === 'managed' ? randomUUID() : undefined,
+          authorizationRevision: authorizationState.revision,
           errors: state.errors,
         },
         frame,
@@ -535,6 +567,52 @@ export const routes: Record<string, RouteEntry> = {
       return seeOther(userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))))
     },
 
+  '/admin/users/{id}/scoped-roles':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
+      const row = await userOf(ctx, url, req, params.id)
+      if (!row)
+        return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.notFound'), { status: 404 })
+      const form = await readForm(req)
+      if (form.action !== 'assign') return text('invalid action', { status: 400 })
+      const effective = (await ctx.call('user.effectiveAccess', { userId: params.id }, url, req)) as {
+        revision: number
+      }
+      const operationId = validCreateId(form.id) ? form.id : randomUUID()
+      const result = await ctx.call(
+        'user.assignScopedRole',
+        {
+          id: operationId,
+          userId: params.id,
+          roleId: form.roleId ?? '',
+          scopeKind: form.scopeKind ?? 'tenant',
+          companyId: form.companyId || null,
+          branchId: form.branchId || null,
+          expectedAuthorizationRevision: Number(form.expectedAuthorizationRevision ?? effective.revision),
+          idempotencyKey: form.idempotencyKey ?? form.id ?? randomUUID(),
+          reason: form.reason ?? '',
+        },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok)
+        return renderUser(ctx, url, req, params.id, {
+          errors: translatedErrors(ctx, url, req, result),
+          scopedRoleOperationId: operationId,
+          scopedRoleValues: {
+            roleId: form.roleId,
+            scopeKind: form.scopeKind,
+            companyId: form.companyId,
+            branchId: form.branchId,
+            reason: form.reason,
+          },
+          returnTo: safeUserReturnTo(url, url.searchParams.get('returnTo')),
+        })
+      return seeOther(userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))))
+    },
+
   '/admin/users/{id}/token':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
@@ -700,6 +778,34 @@ export const routes: Record<string, RouteEntry> = {
         : renderRole(ctx, url, req, params.id, {
             errors: translatedErrors(ctx, url, req, result),
             values: form,
+          })
+    },
+
+  '/admin/roles/{id}/clone':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
+      const form = await readForm(req)
+      if (form.action !== 'clone') return text('invalid action', { status: 400 })
+      const id = validCreateId(form.id) ? form.id : randomUUID()
+      const result = await ctx.call(
+        'user.cloneManagedRole',
+        {
+          id,
+          sourceRoleId: params.id,
+          name: form.name ?? '',
+          expectedAuthorizationRevision: Number(form.expectedAuthorizationRevision ?? 0),
+          idempotencyKey: form.idempotencyKey ?? id,
+          reason: form.reason ?? '',
+        },
+        url,
+        req,
+      )
+      return (result as { ok?: boolean }).ok
+        ? seeOther(inLocale(url, `/admin/roles/${encodeURIComponent(id)}`))
+        : renderRole(ctx, url, req, params.id, {
+            errors: translatedErrors(ctx, url, req, result),
           })
     },
 

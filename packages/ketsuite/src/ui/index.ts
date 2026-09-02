@@ -14,7 +14,13 @@
 // public components. New shared UI must enter through that public contract.
 
 export * as designSystem from '@ketvietlab/design-system'
-export { FormPage, LinkButton, ListPage, Tabs as CollectionTabs } from '@ketvietlab/design-system'
+export {
+  Disclosure,
+  FormPage,
+  LinkButton,
+  ListPage,
+  Tabs as CollectionTabs,
+} from '@ketvietlab/design-system'
 export type {
   FormPageProps,
   FormPageSlots,
@@ -55,7 +61,15 @@ export {
 export type { Tone } from './primitives.tsx'
 export { notice, emptyState, errorState, loadingState } from './state.tsx'
 export type { NoticeTone } from './state.tsx'
-export { stack, columns, section, surface, cardGrid, contentCard, metric } from './surfaces.tsx'
+export {
+  stack,
+  columns,
+  section,
+  surface,
+  cardGrid,
+  contentCard,
+  metric,
+} from './surfaces.tsx'
 export { dataTable, visibleColumns } from './table.tsx'
 export type { Cell, Column, DataTable, TableGroup, TableSelection } from './table.tsx'
 export { scheduleBoard } from './schedule.tsx'

@@ -15,7 +15,14 @@ export type UserRow = {
   superuser: boolean
   memberships?: Array<{ companyId: string }>
   branchMemberships?: Array<{ branchId: string }>
-  assignments?: Array<{ roleId: string }>
+  assignments?: Array<{
+    id?: string
+    roleId: string
+    scopeKind?: string | null
+    companyId?: string | null
+    branchId?: string | null
+    scopeKey?: string | null
+  }>
 }
 
 export type SessionRow = {
@@ -31,7 +38,20 @@ export type RoleRow = {
   id: string
   name: string
   description?: string | null
+  mode?: string | null
+  templateKey?: string | null
+  templateVersion?: number | null
+  templateDigest?: string | null
+  revision?: number | null
+  assignmentCount?: number
+  healthIssues?: string[]
   grants?: Array<{ fnKey: string }>
+  grantSources?: Array<{
+    fnKey: string
+    sourceKind: string
+    sourceKey: string
+    sourceVersion?: number | null
+  }>
 }
 
 export type PermissionRow = {

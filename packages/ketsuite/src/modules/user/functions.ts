@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone, like, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, needsRehash, verifyPassword } from './password.ts'
+import { advanceAuthorizationRevision, recordAuthorizationAudit } from './authorization.ts'
 import { roleFunctions } from './roles.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
@@ -44,12 +45,18 @@ const audit = async (
 
 const superuser = async (ctx: Ctx, userId: string): Promise<boolean> => {
   const U = ctx.table('user.User')
-  return Boolean(await ctx.db.one(from(U).where(eq(U.id, userId), eq(U.active, true), eq(U.superuser, true))))
+  const row = await ctx.db.one(from(U).where(eq(U.id, userId), eq(U.active, true), eq(U.superuser, true)))
+  if (!row) return false
+  return !row.superuserExpiresAt || timestampMs(row.superuserExpiresAt) > Date.now()
 }
 
 const liveSuperusers = async (ctx: Ctx): Promise<number> => {
   const U = ctx.table('user.User')
-  return ctx.db.count(from(U).where(eq(U.active, true), eq(U.superuser, true), eq(U.accessKind, 'internal')))
+  const rows = await ctx.db.all(
+    from(U).where(eq(U.active, true), eq(U.superuser, true), eq(U.accessKind, 'internal')),
+  )
+  return rows.filter((row) => !row.superuserExpiresAt || timestampMs(row.superuserExpiresAt) > Date.now())
+    .length
 }
 
 const lockSecurityGuard = async (ctx: Ctx, id: string): Promise<void> => {
@@ -60,6 +67,12 @@ const lockSecurityGuard = async (ctx: Ctx, id: string): Promise<void> => {
 }
 
 const lockLastSuperuser = (ctx: Ctx): Promise<void> => lockSecurityGuard(ctx, 'last-superuser')
+
+const AUTHORIZATION_SCOPE_EFFECTS = [
+  'read:user.AuthorizationRevision',
+  'write:user.AuthorizationRevision',
+  'write:user.SecurityAudit',
+]
 
 const throttleIds = (login: string, networkFingerprint: string): string[] => [
   `login:${digest(login)}`,
@@ -733,6 +746,7 @@ export const functions: Record<string, FnSpec> = {
       'write:user.Membership',
       'read:user.BranchMembership',
       'write:user.BranchMembership',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
     ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
@@ -750,13 +764,14 @@ export const functions: Record<string, FnSpec> = {
         const M = tx.table('user.Membership')
         const existing = await tx.db.one(from(M).where(eq(M.userId, a.userId), eq(M.companyId, a.companyId)))
         const membershipId = String(existing?.id ?? a.id)
-        if (!existing)
-          await tx.db.insertIfAbsent('user.Membership', {
-            id: membershipId,
-            userId: a.userId,
-            companyId: a.companyId,
-          })
-        await tx.db.insertIfAbsent('user.BranchMembership', {
+        const membership = existing
+          ? null
+          : await tx.db.insertIfAbsent('user.Membership', {
+              id: membershipId,
+              userId: a.userId,
+              companyId: a.companyId,
+            })
+        const branchMembership = await tx.db.insertIfAbsent('user.BranchMembership', {
           id: `root:${a.userId}:${root.id}`,
           userId: a.userId,
           branchId: root.id,
@@ -765,6 +780,25 @@ export const functions: Record<string, FnSpec> = {
         if (!heldUser.defaultCompanyId) patch.defaultCompanyId = a.companyId
         if (!heldUser.defaultBranchId || !heldUser.defaultCompanyId) patch.defaultBranchId = root.id
         if (Object.keys(patch).length) await tx.db.update('user.User', { id: a.userId }, patch)
+        const changed =
+          Boolean(membership && ('dryRun' in membership || membership.inserted)) ||
+          'dryRun' in branchMembership ||
+          branchMembership.inserted ||
+          Object.keys(patch).length > 0
+        if (changed) {
+          const revision = await advanceAuthorizationRevision(tx)
+          await recordAuthorizationAudit(tx, {
+            event: 'authorization.scope.company-granted',
+            targetKind: 'user',
+            targetId: String(a.userId),
+            scopeKey: `company:${String(a.companyId)}`,
+            source: 'membership',
+            reason: 'legacy company membership compatibility',
+            before: { membership: existing?.id ?? null },
+            after: { membershipId, rootBranchId: root.id, defaults: patch },
+            revision,
+          })
+        }
         return { ok: true, id: membershipId }
       })
     },
@@ -780,6 +814,7 @@ export const functions: Record<string, FnSpec> = {
       'read:user.BranchMembership',
       'write:user.BranchMembership',
       'read:company.Branch',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
     ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
@@ -790,14 +825,31 @@ export const functions: Record<string, FnSpec> = {
       return ctx.tx(async (tx) => {
         const B = tx.table('company.Branch')
         const branchIds = (await tx.db.all(from(B).where(eq(B.companyId, a.companyId)))).map((row) => row.id)
+        let branchChanges = 0
         if (branchIds.length) {
           const BM = tx.table('user.BranchMembership')
-          await tx.db.del(deleteFrom(BM).where(eq(BM.userId, a.userId), inArray(BM.branchId, branchIds)))
+          branchChanges = (
+            await tx.db.del(deleteFrom(BM).where(eq(BM.userId, a.userId), inArray(BM.branchId, branchIds)))
+          ).changes
         }
         const M = tx.table('user.Membership')
         const { changes } = await tx.db.del(
           deleteFrom(M).where(eq(M.userId, a.userId), eq(M.companyId, a.companyId)),
         )
+        if (changes || branchChanges) {
+          const revision = await advanceAuthorizationRevision(tx)
+          await recordAuthorizationAudit(tx, {
+            event: 'authorization.scope.company-revoked',
+            targetKind: 'user',
+            targetId: String(a.userId),
+            scopeKey: `company:${String(a.companyId)}`,
+            source: 'membership',
+            reason: 'legacy company membership compatibility',
+            before: { membership: changes, branchMemberships: branchChanges },
+            after: null,
+            revision,
+          })
+        }
         return { ok: true, removed: changes }
       })
     },
@@ -812,6 +864,7 @@ export const functions: Record<string, FnSpec> = {
       'read:user.BranchMembership',
       'write:user.BranchMembership',
       'read:company.Branch',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
     ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
@@ -824,33 +877,73 @@ export const functions: Record<string, FnSpec> = {
       const M = ctx.table('user.Membership')
       if (!(await ctx.db.one(from(M).where(eq(M.userId, a.userId), eq(M.companyId, branch.companyId)))))
         return invalid([issue('branchId', 'user.error.branchCompanyMembership')])
-      const inserted = await ctx.db.insertIfAbsent('user.BranchMembership', {
-        id: a.id,
-        userId: a.userId,
-        branchId: a.branchId,
+      return ctx.tx(async (tx) => {
+        const inserted = await tx.db.insertIfAbsent('user.BranchMembership', {
+          id: a.id,
+          userId: a.userId,
+          branchId: a.branchId,
+        })
+        if (!('dryRun' in inserted) && !inserted.inserted) {
+          const BM = tx.table('user.BranchMembership')
+          const held = await tx.db.one(from(BM).where(eq(BM.userId, a.userId), eq(BM.branchId, a.branchId)))
+          return { ok: true, id: held?.id }
+        }
+        const revision = await advanceAuthorizationRevision(tx)
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.scope.branch-granted',
+          targetKind: 'user',
+          targetId: String(a.userId),
+          scopeKey: `branch:${String(branch.companyId)}:${String(a.branchId)}`,
+          source: 'branch-membership',
+          reason: 'legacy branch membership compatibility',
+          before: null,
+          after: { id: a.id, branchId: a.branchId },
+          revision,
+        })
+        return { ok: true, id: a.id }
       })
-      if ('dryRun' in inserted || inserted.inserted) return { ok: true, id: a.id }
-      const BM = ctx.table('user.BranchMembership')
-      const held = await ctx.db.one(from(BM).where(eq(BM.userId, a.userId), eq(BM.branchId, a.branchId)))
-      return { ok: true, id: held?.id }
     },
   }),
 
   revokeBranch: defineFn({
     input: { userId: 'id', branchId: 'id' },
     output: { ok: 'bool', removed: 'int?', errors: 'json?' },
-    effects: ['read:user.User', 'read:user.BranchMembership', 'write:user.BranchMembership'],
+    effects: [
+      'read:user.User',
+      'read:user.BranchMembership',
+      'write:user.BranchMembership',
+      'read:company.Branch',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
+    ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
       const user = await ctx.db.one(from(U).where(eq(U.id, a.userId)))
       if (user?.active === true && user.defaultBranchId === a.branchId)
         return invalid([issue('branchId', 'user.error.defaultBranchRevoke')])
-      const BM = ctx.table('user.BranchMembership')
-      const { changes } = await ctx.db.del(
-        deleteFrom(BM).where(eq(BM.userId, a.userId), eq(BM.branchId, a.branchId)),
-      )
-      return { ok: true, removed: changes }
+      return ctx.tx(async (tx) => {
+        const BM = tx.table('user.BranchMembership')
+        const B = tx.table('company.Branch')
+        const branch = await tx.db.one(from(B).where(eq(B.id, a.branchId)))
+        const { changes } = await tx.db.del(
+          deleteFrom(BM).where(eq(BM.userId, a.userId), eq(BM.branchId, a.branchId)),
+        )
+        if (changes) {
+          const revision = await advanceAuthorizationRevision(tx)
+          await recordAuthorizationAudit(tx, {
+            event: 'authorization.scope.branch-revoked',
+            targetKind: 'user',
+            targetId: String(a.userId),
+            scopeKey: `branch:${String(branch?.companyId ?? 'unknown')}:${String(a.branchId)}`,
+            source: 'branch-membership',
+            reason: 'legacy branch membership compatibility',
+            before: { branchId: a.branchId },
+            after: null,
+            revision,
+          })
+        }
+        return { ok: true, removed: changes }
+      })
     },
   }),
 
@@ -863,6 +956,7 @@ export const functions: Record<string, FnSpec> = {
       'read:user.Membership',
       'read:user.BranchMembership',
       'read:company.Branch',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
     ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
@@ -877,12 +971,32 @@ export const functions: Record<string, FnSpec> = {
       if (!membership) return invalid([issue('companyId', 'user.error.companyMembership')])
       if (!branchMembership || branch?.companyId !== a.companyId)
         return invalid([issue('branchId', 'user.error.branchMembership')])
-      await ctx.db.update(
-        'user.User',
-        { id: a.userId },
-        { defaultCompanyId: a.companyId, defaultBranchId: a.branchId },
-      )
-      return { ok: true }
+      const U = ctx.table('user.User')
+      const user = await ctx.db.one(from(U).where(eq(U.id, a.userId)))
+      if (user?.defaultCompanyId === a.companyId && user?.defaultBranchId === a.branchId) return { ok: true }
+      return ctx.tx(async (tx) => {
+        await tx.db.update(
+          'user.User',
+          { id: a.userId },
+          { defaultCompanyId: a.companyId, defaultBranchId: a.branchId },
+        )
+        const revision = await advanceAuthorizationRevision(tx)
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.scope.default-context-changed',
+          targetKind: 'user',
+          targetId: String(a.userId),
+          scopeKey: `branch:${String(a.companyId)}:${String(a.branchId)}`,
+          source: 'default-context',
+          reason: 'legacy default context compatibility',
+          before: {
+            companyId: user?.defaultCompanyId ?? null,
+            branchId: user?.defaultBranchId ?? null,
+          },
+          after: { companyId: a.companyId, branchId: a.branchId },
+          revision,
+        })
+        return { ok: true }
+      })
     },
   }),
 

@@ -12,13 +12,20 @@ import type { KetModule, Manifest, ComposedModel } from '../types.ts'
 import { ambiguousRoutes, parseRoutePattern } from './routes.ts'
 import type { RoutePattern } from './routes.ts'
 import { tableNameFor } from '../data/migrate.ts'
+import { compilePermissionBundles } from './permissions.ts'
+import type { RoleTemplateDef } from '../types.ts'
 
 const qualify = (mod: string, name: string) => `${mod}.${name}`
 const jointKey = (mod: string, name: string) => `${mod}:${name}`
 
 export function compose(
   modules: KetModule[],
-  opts: { requiredRegions?: string[]; headless?: boolean } = {},
+  opts: {
+    requiredRegions?: string[]
+    headless?: boolean
+    requirePermissionCoverage?: boolean
+    roleTemplates?: Record<string, RoleTemplateDef>
+  } = {},
 ): Manifest {
   const diag = new Diagnostics()
   const order = topoSort(modules)
@@ -33,6 +40,16 @@ export function compose(
     joints: {},
     fills: [],
     functions: {},
+    permissions: {
+      version: 1,
+      digest: '',
+      coverageRequired: false,
+      modules: {},
+      bundles: {},
+      functions: {},
+      exemptions: {},
+      roleTemplates: {},
+    },
     jobs: {},
     views: {},
     reports: {},
@@ -653,6 +670,11 @@ export function compose(
       }
     }
   }
+
+  manifest.permissions = compilePermissionBundles(order, manifest, {
+    requireCoverage: opts.requirePermissionCoverage,
+    roleTemplates: opts.roleTemplates,
+  })
 
   // --- printable reports ---------------------------------------------------
   for (const m of order) {

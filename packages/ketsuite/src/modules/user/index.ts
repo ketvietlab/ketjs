@@ -32,4 +32,15 @@ export { routes } from './routes.ts'
 export { loginScreen } from './login.ts'
 export { legacyPermissionCatalogue, legacyPresetFunctions, permittedFor } from './roles.ts'
 export type { LegacyPermissionCatalogueEntry, LegacyPermissionTask } from './roles.ts'
+export {
+  effectiveFunctionKeys,
+  normalizeAssignmentScope,
+  resolveEffectivePermissions,
+} from './authorization.ts'
+export type {
+  AssignmentScope,
+  EffectiveAccess,
+  EffectivePermission,
+  EffectivePermissionPath,
+} from './authorization.ts'
 export { resolveUserSession } from './session-context.ts'
