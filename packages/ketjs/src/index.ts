@@ -23,8 +23,22 @@ export type {
   HttpRouteContract,
   JsonSchema,
   Manifest,
+  ModulePermissionsDef,
+  PermissionBundleDef,
+  PermissionCatalogue,
+  PermissionExemptionDef,
+  PermissionExemptionReason,
+  PermissionFunctionDef,
+  PermissionLabels,
+  PermissionPosture,
+  PermissionRisk,
+  RoleTemplateDef,
+  CompiledPermissionBundle,
+  CompiledRoleTemplate,
 } from './types.ts'
 export { compose } from './kernel/compose.ts'
+export { compilePermissionBundles, permissionDigest } from './kernel/permissions.ts'
+export type { CompilePermissionOptions } from './kernel/permissions.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
 export { buildMenu, activeMenuRoot } from './kernel/menu.ts'
 export type { MenuNode, MenuOptions } from './kernel/menu.ts'
@@ -42,6 +56,8 @@ export { KetError, Diagnostics } from './kernel/errors.ts'
 export { isDateText } from './kernel/types.ts'
 
 export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server/fn.ts'
+export { enforcePolicy } from './server/policy.ts'
+export type { PolicyDecision, PolicyDenialEvidence } from './server/policy.ts'
 export { project } from './server/project.ts'
 export { createKetServer } from './server/http.ts'
 export { bootDeployment, serveDeployment } from './server/boot.ts'

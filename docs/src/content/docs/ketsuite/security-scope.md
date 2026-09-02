@@ -13,11 +13,18 @@ On each authenticated request, KetSuite rebuilds the user's session context from
 contains the last selection, not authoritative company or branch membership. Revoking a grant or
 archiving a company therefore takes effect on the next request across every process.
 
-The app resolves function permissions through `user.permitted`:
+The app resolves function permissions through the same live resolver exposed by `user.permitted` and
+`user.effectiveAccess`:
 
-- a superuser receives the unrestricted marker;
-- another staff user receives the qualified function names granted through roles;
+- a live, unexpired superuser receives the unrestricted marker;
+- another staff user receives exact qualified function names from applicable tenant/company/branch assignments;
+- managed templates are accepted only when their version and digest match the composed deployment;
+- the explanation projection carries role, source, scope, bundle path, risk, and repair issues;
 - `ctx.call()` applies that permission set together with declared effects and scope.
+
+Zitadel and other IdPs authenticate a subject. They do not choose a KetSuite company, branch, role, bundle,
+or function permission. Those decisions come only from local live authorization rows and the immutable
+deployment catalog.
 
 Never treat a hidden menu or missing button as authorization. Routes must call an authorized function,
 and functions must declare effects for every resource they touch.
@@ -60,9 +67,15 @@ The report includes every composed module, even one with no functions, and recor
 HTTP/internal, anonymous, provision-only, cross-company, replay-safe, agent-published, and projected. It is a
 composition report, not a grant: only live KetSuite Role/Grant/Assignment rows decide what a staff user may call.
 
-The accepted [permission bundles and scoped roles RFC](/architecture/permission-bundles-rfc/) defines how an
-application must classify that exact inventory before implementing bundles or scoped assignment. A new function
-never inherits access from its name or from an existing manager-style role.
+The implemented [permission bundles and scoped roles RFC](/architecture/permission-bundles-rfc/) defines how an
+application classifies that exact inventory, composes versioned templates, and assigns roles by scope. Enable
+`permissions.requireCoverage` at the deployment boundary to fail composition when any function or module
+posture is missing. A new function never inherits access from its name or from an existing manager-style role.
+
+Capability grants do not replace record-specific policy. Domain functions call `enforcePolicy()` with a stable
+qualified policy key after capability authorization and before the sensitive transition. A denial uses a stable
+code and emits only sanitized evidence. This keeps maker-checker, ownership, lifecycle, and threshold rules with
+the domain that owns the record without forking the user resolver.
 
 An anonymous provider callback that owns a cryptographic company binding may use
 `ctx.callUncheckedForVerifiedCompany()` after signature verification. Derive the company from signed

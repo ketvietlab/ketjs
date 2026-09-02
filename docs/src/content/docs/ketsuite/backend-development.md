@@ -79,8 +79,9 @@ Screens should compose components rather than authoring raw tags or new `data-ui
 `tools/ui-audit.ts` protects that contract so markup and styles do not drift across dozens of screens.
 Run `npm run design:system` to inspect every public specimen at `http://127.0.0.1:4100/`.
 
-The kit includes list chrome, tables, cards, record workspaces, forms, actions, tabs, notices, empty
-and error states, media and attachment panels, date pickers, calendars, and scheduling primitives.
+The kit includes list chrome, tables, cards, record workspaces, forms, actions, tabs, progressive
+`Disclosure` for secondary detail, notices, empty and error states, media and attachment panels, date
+pickers, calendars, and scheduling primitives.
 Prefer PascalCase exports in TSX where available.
 
 Keep list state in the URL: search terms, filters, grouping, page, view, visible columns, archived state,

@@ -25,7 +25,15 @@ test('user detail uses FormPage with access body and one-third security/session 
         superuser: false,
         memberships: [{ companyId: 'acme' }],
         branchMemberships: [{ branchId: 'root:acme' }],
-        assignments: [{ roleId: 'manager' }],
+        assignments: [
+          {
+            id: 'assignment-1',
+            roleId: 'manager',
+            scopeKind: 'company',
+            companyId: 'acme',
+            scopeKey: 'company:acme',
+          },
+        ],
       },
       {
         mode: 'detail',
@@ -37,6 +45,33 @@ test('user detail uses FormPage with access body and one-third security/session 
         companiesAction: '/admin/users/user%2Fa/companies?lang=en',
         branchesAction: '/admin/users/user%2Fa/branches?lang=en',
         rolesAction: '/admin/users/user%2Fa/roles?lang=en',
+        scopedRolesAction: '/admin/users/user%2Fa/scoped-roles?lang=en',
+        scopedRoleOperationId: 'assignment-operation-1',
+        scopedRoleValues: {
+          roleId: 'manager',
+          scopeKind: 'branch',
+          companyId: 'acme',
+          branchId: 'root:acme',
+          reason: 'Temporary coverage',
+        },
+        effectiveAccess: {
+          revision: 7,
+          functions: [
+            {
+              key: 'sale.listOrders',
+              risk: 'read',
+              paths: [
+                {
+                  scopeKey: 'company:acme',
+                  roleId: 'manager',
+                  sourceKind: 'managed-template',
+                  bundlePath: ['sale.orders-read'],
+                },
+              ],
+            },
+          ],
+          issues: [],
+        },
         tokenAction: '/admin/users/user%2Fa/token?lang=en',
         sessionAction: (row) => `/admin/users/user%2Fa/sessions/${row.id}?lang=en`,
         sessions: [
@@ -56,6 +91,19 @@ test('user detail uses FormPage with access body and one-third security/session 
   assert.match(html, /form="user-record-form"/)
   assert.match(html, /name="action" value="save"/)
   assert.match(html, /action="\/admin\/users\/user%2Fa\/companies\?lang=en"/)
+  assert.match(html, /action="\/admin\/users\/user%2Fa\/scoped-roles\?lang=en"/)
+  assert.match(html, /name="scopeKind"/)
+  assert.match(html, /name="idempotencyKey" value="assignment-operation-1"/)
+  assert.match(html, /name="expectedAuthorizationRevision" value="7"/)
+  assert.match(html, /company:acme/)
+  assert.match(html, /sale\.listOrders/)
+  assert.match(html, /managed-template/)
+  assert.match(html, /sale\.orders-read/)
+  assert.match(html, /data-ui="disclosure"/)
+  assert.match(html, /name="scopeKind"[\s\S]*?<option value="branch" selected/)
+  assert.match(html, /name="companyId"[\s\S]*?<option value="acme" selected/)
+  assert.match(html, /name="branchId"[\s\S]*?<option value="root:acme" selected/)
+  assert.match(html, /Temporary coverage/)
   assert.match(html, /action="\/admin\/users\/user%2Fa\/sessions\/session-1\?lang=en"/)
   assert.match(html, /name="action" value="revoke"/)
   assert.doesNotMatch(html, /data-ui="modal-layer"/)

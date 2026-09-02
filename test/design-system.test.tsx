@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   DataTable,
+  Disclosure,
   Field,
   FormPage,
   HOOKS,
@@ -114,6 +115,16 @@ test('design system: controls preserve their native semantics and accessible sta
   assert.match(field, /for="slug"/)
   assert.match(field, /aria-invalid="true"/)
   assert.match(field, /aria-describedby="slug-help slug-error"/)
+
+  const disclosure = renderToString(
+    <Disclosure summary="Permission provenance" body="Managed template sales.viewer" open />,
+  )
+  assert.match(disclosure, /^<details/)
+  assert.match(disclosure, / open/)
+  assert.match(
+    disclosure,
+    /<summary data-ui="disclosure-summary">[\s\S]*?Permission provenance[\s\S]*?<\/summary>/,
+  )
 })
 
 test('design system: generic patterns need no translator or KetSuite domain', () => {

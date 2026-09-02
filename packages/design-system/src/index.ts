@@ -16,7 +16,7 @@ export type { NavItemProps, TabItem } from './primitives/navigation.tsx'
 export { Progress } from './primitives/progress.tsx'
 export type { ProgressTone } from './primitives/progress.tsx'
 
-export { ContentCard, Grid, Inline, Metric, Section, Stack, Surface } from './layouts/index.tsx'
+export { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from './layouts/index.tsx'
 export { AppShell, Page, PageHeader, RecordPage, RecordSection } from './layouts/shell.tsx'
 
 export { DataTable } from './patterns/data-table.tsx'

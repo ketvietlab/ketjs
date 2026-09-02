@@ -5,10 +5,10 @@ description: Accepted contract for explicit function classification, permission 
 
 # Permission bundles and scoped roles RFC
 
-Status: **accepted contract; implementation is intentionally deferred**. This RFC defines the public
-KetJS boundary for USR-002 and USR-003. It does not change the current `Role`, `Grant`, `Assignment`,
-or effective permission resolver. Implementation starts only after an application has reviewed an exact
-function taxonomy and migration evidence contract.
+Status: **implemented framework; product rollout remains application-owned**. The generic declaration,
+compiler, scoped resolver, managed-role persistence, audit, policy seam, and administration workflow landed
+under USR-006 through USR-011. Applications still own exact bundle contents, role templates, migration
+evidence, pilot selection, and production activation.
 
 The design keeps the existing qualified function key as the smallest enforcement unit. Bundles make
 those keys reviewable and reusable; job-role templates compose bundles; assignments decide where a role
@@ -242,13 +242,18 @@ their invariants.
 | Operation | Contract |
 | --- | --- |
 | `compilePermissionBundles` | Validate deployment graph and produce immutable catalog/digest |
+| `permissionBundleCatalogue` | Return the immutable composed catalog used by administration tooling |
+| `authorizationState` | Return the tenant authorization revision used by CAS workflows |
 | `previewRoleTemplate` | Return source-aware added/removed/high-risk function diff without writes |
 | `applyRoleTemplate` | CAS template version/digest and update only managed grant sources in one transaction |
-| `saveCustomRole` | Create/update a custom role and custom grant sources |
+| `saveRole`, `grantFunction`, `revokeFunction` | Maintain custom roles and sources through the compatibility API |
+| `cloneManagedRole` | Copy effective grants into a custom role and sever the managed link explicitly |
 | `assignScopedRole` | Validate live membership and insert the normalized scoped edge idempotently |
 | `unassignScopedRole` | Remove one exact scoped edge and bump authorization revision |
 | `resolveEffectivePermissions` | Re-read user, membership, assignment, role, sources, and compiled catalog |
-| `explainEffectivePermissions` | Return sanitized provenance paths for the active context |
+| `effectiveAccess` | Return sanitized provenance paths and health issues for the active context |
+| `setBreakGlass` | Activate or revoke audited, owner-bound, expiring superuser access |
+| `listAuthorizationAudit` | Return a bounded audit projection without raw metadata or secrets |
 | `recordAuthorizationAudit` | Append the security event inside the mutation transaction |
 
 Every mutation takes an idempotency key, actor, reason, and expected authorization or role revision.
@@ -299,6 +304,11 @@ SQLite uses a table rebuild when adding non-null/check constraints; PostgreSQL a
 backfills, validates constraints, and then marks them non-null. Both adapters use the same normalized
 `scopeKey` and source digest. Schema down-migration is not the tenant rollback mechanism: rollback restores
 the captured authorization rows in a new transaction and records a new audit revision.
+
+Replacing the legacy unique `(userId, roleId)` index with `(userId, roleId, scopeKey)` is an explicit index
+transition in KetJS migration tooling. The migration requires destructive-operation acknowledgement because it
+drops a uniqueness constraint, although it preserves every role, grant, and assignment row. Product rollout
+must backfill `scopeKey = tenant` and verify duplicates before enabling scoped administration for a tenant.
 
 Legacy `Role`, `Grant`, and unscoped `Assignment` calls remain meaningful during the compatibility window.
 They create or read `legacy-direct` sources and tenant scope. Application migration must prove no unintended

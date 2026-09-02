@@ -4,6 +4,7 @@ import {
   badge,
   button,
   DefinitionList,
+  Disclosure,
   FormCluster,
   FormPage,
   linkButton,
@@ -21,6 +22,14 @@ import type { SessionRow, UserRow } from './types.ts'
 
 export type UserFormValues = Partial<UserRow> & { id?: string }
 
+export type ScopedRoleFormValues = {
+  roleId?: string
+  scopeKind?: string
+  companyId?: string
+  branchId?: string
+  reason?: string
+}
+
 export type UserFormScreenOptions = {
   mode: 'create' | 'detail'
   action: string
@@ -31,6 +40,18 @@ export type UserFormScreenOptions = {
   companiesAction?: string
   branchesAction?: string
   rolesAction?: string
+  scopedRolesAction?: string
+  scopedRoleOperationId?: string
+  scopedRoleValues?: ScopedRoleFormValues
+  effectiveAccess?: {
+    revision: number
+    functions: Array<{
+      key: string
+      risk?: string | null
+      paths?: Array<{ scopeKey: string; roleId: string; sourceKind: string; bundlePath?: string[] }>
+    }>
+    issues: Array<{ code: string }>
+  }
   tokenAction?: string
   sessionAction?: (row: SessionRow) => string
   sessions?: readonly SessionRow[]
@@ -84,6 +105,7 @@ export const userFormScreen = (
   const companies = new Set(values.memberships?.map((item) => item.companyId) ?? [])
   const branches = new Set(values.branchMemberships?.map((item) => item.branchId) ?? [])
   const roles = new Set(values.assignments?.map((item) => item.roleId) ?? [])
+  const roleLabels = new Map(options.roles.map((role) => [role.value, role.label]))
   const secret = options.oneTimeLink ? (
     <>
       <Notice
@@ -138,18 +160,120 @@ export const userFormScreen = (
           />,
           <Surface
             body={
-              <RecordForm
-                action={options.rolesAction}
-                hidden={{ action: 'save' }}
-                submit={_('user_backend.action.saveRoles')}
-                submitVariant="secondary"
-                fields={options.roles.map((role) => ({
-                  name: `role.${role.value}`,
-                  label: role.label,
-                  type: 'checkbox' as const,
-                  value: roles.has(role.value),
-                }))}
-              />
+              options.scopedRolesAction ? (
+                stack([
+                  <DefinitionList
+                    title={_('user_backend.access.assignments')}
+                    items={[
+                      ...(values.assignments ?? []).map((assignment) => ({
+                        key: assignment.id ?? `${assignment.roleId}:${assignment.scopeKey ?? 'tenant'}`,
+                        term: roleLabels.get(assignment.roleId) ?? assignment.roleId,
+                        value: assignment.scopeKey ?? 'tenant',
+                      })),
+                      {
+                        key: 'effective',
+                        term: _('user_backend.access.effective'),
+                        value: `${String(options.effectiveAccess?.functions.length ?? 0)} · r${String(options.effectiveAccess?.revision ?? 0)}`,
+                      },
+                    ]}
+                  />,
+                  <RecordForm
+                    action={options.scopedRolesAction}
+                    hidden={{
+                      action: 'assign',
+                      id: options.scopedRoleOperationId ?? '',
+                      idempotencyKey: options.scopedRoleOperationId ?? '',
+                      expectedAuthorizationRevision: String(options.effectiveAccess?.revision ?? 0),
+                    }}
+                    submit={_('user_backend.action.assignScopedRole')}
+                    submitVariant="secondary"
+                    fields={[
+                      {
+                        name: 'roleId',
+                        label: _('user_backend.field.role'),
+                        type: 'select' as const,
+                        required: true,
+                        value: options.scopedRoleValues?.roleId,
+                        options: options.roles,
+                      },
+                      {
+                        name: 'scopeKind',
+                        label: _('user_backend.field.scope'),
+                        type: 'select' as const,
+                        required: true,
+                        value: options.scopedRoleValues?.scopeKind ?? 'tenant',
+                        options: ['tenant', 'company', 'branch'].map((value) => ({
+                          value,
+                          label: _(`user_backend.scope.${value}`),
+                        })),
+                      },
+                      {
+                        name: 'companyId',
+                        label: _('user_backend.field.company'),
+                        type: 'select' as const,
+                        value: options.scopedRoleValues?.companyId,
+                        options: [{ value: '', label: '—' }, ...options.companies],
+                      },
+                      {
+                        name: 'branchId',
+                        label: _('user_backend.field.branch'),
+                        type: 'select' as const,
+                        value: options.scopedRoleValues?.branchId,
+                        options: [{ value: '', label: '—' }, ...options.branches],
+                      },
+                      {
+                        name: 'reason',
+                        label: _('user_backend.field.reason'),
+                        type: 'textarea' as const,
+                        required: true,
+                        span: 'full' as const,
+                        value: options.scopedRoleValues?.reason,
+                      },
+                    ]}
+                  />,
+                  <Disclosure
+                    summary={_('user_backend.access.effectiveDetails')}
+                    body={
+                      <DefinitionList
+                        title={_('user_backend.access.effectiveDetails')}
+                        items={[
+                          ...(options.effectiveAccess?.functions ?? []).map((permission) => ({
+                            key: permission.key,
+                            term: permission.key,
+                            value: [
+                              permission.risk ?? '—',
+                              ...(permission.paths ?? []).map(
+                                (path) =>
+                                  `${path.scopeKey} · ${path.roleId} · ${path.sourceKind}${
+                                    path.bundlePath?.length ? ` · ${path.bundlePath.join(' → ')}` : ''
+                                  }`,
+                              ),
+                            ].join(' | '),
+                          })),
+                          ...(options.effectiveAccess?.issues ?? []).map((accessIssue, index) => ({
+                            key: `issue:${String(index)}`,
+                            term: _('user_backend.access.issue'),
+                            value: accessIssue.code,
+                          })),
+                        ]}
+                      />
+                    }
+                  />,
+                ])
+              ) : (
+                <RecordForm
+                  action={options.rolesAction}
+                  hidden={{ action: 'save' }}
+                  submit={_('user_backend.action.saveRoles')}
+                  submitVariant="secondary"
+                  fields={options.roles.map((role) => ({
+                    name: `role.${role.value}`,
+                    label: role.label,
+                    type: 'checkbox' as const,
+                    value: roles.has(role.value),
+                  }))}
+                />
+              )
             }
           />,
         ])}
