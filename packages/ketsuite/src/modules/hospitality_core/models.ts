@@ -370,7 +370,7 @@ export const models: Record<string, ModelDef> = {
     fields: {
       id: 'id',
       propertyId: 'ref:hospitality_core.Property',
-      chargeType: 'text',
+      chargeType: 'text?',
       name: 'text',
       amount: 'decimal',
       description: 'text?',
@@ -627,6 +627,10 @@ export const models: Record<string, ModelDef> = {
       productId: 'ref:product.Product',
       uomId: 'ref:uom.Unit?',
       description: 'text',
+      /** Charge type to preserve when the line is materialised. */
+      chargeType: 'text',
+      /** `external_stock` lines are completed only by a deployment connector. */
+      fulfillmentKind: 'text?',
       quantity: 'decimal',
       unitPrice: 'decimal',
       recurrence: 'text',
@@ -654,6 +658,8 @@ export const models: Record<string, ModelDef> = {
       uomId: 'ref:uom.Unit?',
       description: 'text',
       type: 'text',
+      /** Fulfilment boundary used before this charge was posted. */
+      fulfillmentKind: 'text?',
       quantity: 'decimal',
       unitPrice: 'decimal',
       amount: 'decimal',
