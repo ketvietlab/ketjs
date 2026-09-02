@@ -8,7 +8,7 @@ import type {
 type CatalogueSource = {
   posture: PermissionPosture
   bundles: string[]
-  functions: Record<string, [PermissionRisk, string, string?]>
+  functions: Record<string, [PermissionRisk, string | string[], string?]>
   exemptions: Record<string, [PermissionExemptionReason, string]>
 }
 
@@ -699,44 +699,56 @@ const sources = {
   },
   pos: {
     posture: 'permission-bearing',
-    bundles: ['approve', 'configure', 'operate', 'sensitive', 'view'],
+    bundles: [
+      'cash-control',
+      'configure',
+      'order-operate',
+      'reconcile',
+      'refund',
+      'sensitive',
+      'shift-approve',
+      'shift-operate',
+      'tender',
+      'view',
+      'void',
+    ],
     functions: {
-      addLine: ['operate', 'operate'],
-      addPayment: ['operate', 'operate'],
-      approveSessionVariance: ['approve', 'approve', 'pos.domain-policy'],
-      cancelOrder: ['approve', 'approve', 'pos.domain-policy'],
-      closeSession: ['approve', 'approve', 'pos.domain-policy'],
-      createExchange: ['operate', 'operate'],
-      createOrder: ['operate', 'operate'],
+      addLine: ['operate', 'order-operate'],
+      addPayment: ['operate', 'tender'],
+      approveSessionVariance: ['approve', 'shift-approve', 'pos.domain-policy'],
+      cancelOrder: ['approve', 'void', 'pos.domain-policy'],
+      closeSession: ['approve', 'shift-approve', 'pos.domain-policy'],
+      createExchange: ['operate', 'order-operate'],
+      createOrder: ['operate', 'order-operate'],
       createSession: ['configure', 'configure', 'pos.configuration-audit'],
       getLineTrackingAvailability: ['read', 'view'],
       getOrder: ['read', 'view'],
       getReceipt: ['read', 'view'],
       getReturnEligibility: ['read', 'view'],
       getSession: ['read', 'view'],
-      linkPaymentMethod: ['operate', 'operate'],
+      linkPaymentMethod: ['configure', 'configure', 'pos.configuration-audit'],
       listAuditEvents: ['sensitive', 'sensitive', 'pos.sensitive-data'],
       listConfigs: ['read', 'view'],
       listOrders: ['read', 'view'],
       listPaymentMethods: ['read', 'view'],
       listSessions: ['read', 'view'],
-      openSession: ['operate', 'operate'],
+      openSession: ['operate', 'shift-operate'],
       operationsReport: ['sensitive', 'sensitive', 'pos.sensitive-data'],
-      paymentMethodAvailable: ['operate', 'operate'],
-      recordCashMovement: ['operate', 'operate'],
-      recountSession: ['operate', 'operate'],
-      refundOrder: ['approve', 'approve', 'pos.domain-policy'],
-      removeLine: ['operate', 'operate'],
-      reorderLines: ['operate', 'operate'],
-      reverseCashMovement: ['approve', 'approve', 'pos.domain-policy'],
+      paymentMethodAvailable: ['operate', 'tender'],
+      recordCashMovement: ['operate', 'cash-control', 'pos.cash-control-policy'],
+      recountSession: ['operate', 'shift-operate'],
+      refundOrder: ['approve', 'refund', 'pos.domain-policy'],
+      removeLine: ['operate', 'order-operate'],
+      reorderLines: ['operate', 'order-operate'],
+      reverseCashMovement: ['approve', 'cash-control', 'pos.cash-control-policy'],
       saveConfig: ['configure', 'configure', 'pos.configuration-audit'],
-      savePaymentMethod: ['operate', 'operate'],
+      savePaymentMethod: ['configure', 'configure', 'pos.configuration-audit'],
       setLineLotSelections: ['configure', 'configure', 'pos.configuration-audit'],
-      startClosing: ['operate', 'operate'],
-      updateLine: ['operate', 'operate'],
-      updateOrder: ['operate', 'operate'],
-      validateOrder: ['approve', 'approve', 'pos.domain-policy'],
-      voidPayment: ['approve', 'approve', 'pos.domain-policy'],
+      startClosing: ['operate', 'shift-operate'],
+      updateLine: ['operate', 'order-operate'],
+      updateOrder: ['operate', 'order-operate'],
+      validateOrder: ['approve', 'reconcile', 'pos.domain-policy'],
+      voidPayment: ['approve', 'void', 'pos.domain-policy'],
     },
     exemptions: {
       lockProviderPayment: ['internal-route', 'pos.trusted-route-worker-or-service'],
@@ -1188,12 +1200,20 @@ const sources = {
 
 const capabilityLabels: Record<string, { en: string; vi: string }> = {
   approve: { en: 'Approve', vi: 'Phê duyệt' },
+  'cash-control': { en: 'Cash control', vi: 'Kiểm soát tiền mặt' },
   configure: { en: 'Configure', vi: 'Cấu hình' },
+  'order-operate': { en: 'Operate orders', vi: 'Vận hành đơn hàng' },
   operate: { en: 'Operate', vi: 'Vận hành' },
+  reconcile: { en: 'Reconcile', vi: 'Đối soát' },
+  refund: { en: 'Refund', vi: 'Hoàn tiền' },
   report: { en: 'Reports', vi: 'Báo cáo' },
   security: { en: 'Security', vi: 'Bảo mật' },
   sensitive: { en: 'Sensitive data', vi: 'Dữ liệu nhạy cảm' },
+  'shift-approve': { en: 'Approve shifts', vi: 'Duyệt ca' },
+  'shift-operate': { en: 'Operate shifts', vi: 'Vận hành ca' },
+  tender: { en: 'Take payment', vi: 'Nhận thanh toán' },
   view: { en: 'View', vi: 'Xem' },
+  void: { en: 'Void', vi: 'Hủy thanh toán' },
 }
 
 /** Exact Wave 2 declarations for public KetSuite modules in production product deployments. */
@@ -1219,11 +1239,13 @@ export const ketsuitePermissionModules = Object.fromEntries(
         }),
       ),
       functions: Object.fromEntries(
-        Object.entries(source.functions).map(([action, [risk, capability, policy]]) => [
+        Object.entries(source.functions).map(([action, [risk, capabilities, policy]]) => [
           `${module}.${action}`,
           {
             risk,
-            bundles: [`${module}.${capability}`],
+            bundles: (Array.isArray(capabilities) ? capabilities : [capabilities]).map(
+              (capability) => `${module}.${capability}`,
+            ),
             owner: module,
             ...(policy ? { policy } : {}),
           },
