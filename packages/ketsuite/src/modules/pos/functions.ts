@@ -135,7 +135,7 @@ const aggregateDecimal = (value: unknown): string => String(value ?? '0')
 
 type RevisionClaim = { ok: true; order: Row; revision: number } | ReturnType<typeof invalid>
 type ProviderFinalizationClaim =
-  | { ok: true; order: Row; revision: number; leaseToken: string }
+  | { ok: true; order: Row; revision: number; leases: Array<{ id: string; token: string }> }
   | ReturnType<typeof invalid>
 const PROVIDER_FINALIZATION_LEASE_MS = 5 * 60_000
 
@@ -330,7 +330,6 @@ async function providerSettlementReplay(ctx: Ctx, args: Row): Promise<Row | null
     String(existing.providerAttemptId ?? '') === attemptId &&
     String(existing.reference ?? '') === String(args.providerReference ?? '').trim() &&
     currentOrder.currency === String(args.currency) &&
-    String(currentOrder.paymentLockId ?? '') === attemptId &&
     lock?.orderId === args.orderId &&
     lock.paymentMethodId === args.paymentMethodId &&
     n(lock.amount) === n(args.amount) &&
@@ -348,10 +347,47 @@ async function providerSettlementReplay(ctx: Ctx, args: Row): Promise<Row | null
     : invalid('id', 'provider tender id is already used by a different settlement')
 }
 
+async function providerFinalizationLocks(
+  ctx: Ctx,
+  order: Row,
+): Promise<{ ok: true; locks: Row[] } | ReturnType<typeof invalid>> {
+  const [locks, payments] = await Promise.all([
+    ctx.db.select('pos.ProviderPaymentLock', { orderId: order.id }),
+    ctx.db.select('pos.Payment', { orderId: order.id }),
+  ])
+  const captured = payments.filter(
+    (payment) =>
+      payment.kind === 'provider' &&
+      (payment.state ?? 'captured') === 'captured' &&
+      payment.reversalOfId == null,
+  )
+  const active = locks
+    .filter((lock) => !['released', 'reversed'].includes(String(lock.state)))
+    .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+  if (active.some((lock) => !['settled', 'finalizing'].includes(String(lock.state))))
+    return invalid('paymentLockId', 'external payment is still pending reconciliation')
+  if (captured.length !== active.length)
+    return invalid('paymentLockId', 'external payment membership is incomplete')
+  for (const lock of active) {
+    const payment = captured.find(
+      (candidate) => String(candidate.providerAttemptId ?? '') === String(lock.id),
+    )
+    if (
+      !payment ||
+      lock.orderId !== order.id ||
+      lock.paymentMethodId !== payment.paymentMethodId ||
+      n(lock.amount) !== n(payment.appliedAmount ?? payment.amount) ||
+      lock.currency !== order.currency ||
+      lock.settledPaymentId !== payment.id
+    )
+      return invalid('paymentLockId', 'external payment membership is inconsistent')
+  }
+  return { ok: true, locks: active }
+}
+
 async function claimProviderFinalization(
   ctx: Ctx,
   id: unknown,
-  providerAttemptId: string,
   expectedRevision?: unknown,
 ): Promise<ProviderFinalizationClaim> {
   return (await atomic(ctx, async (tx) => {
@@ -359,26 +395,17 @@ async function claimProviderFinalization(
     if (!order) return invalid('orderId', 'order does not exist')
     if (order.state !== 'draft') return invalid('state', 'only a draft order can be finalized')
     const current = n(order.revision)
-    const reservation = (await tx.db.select('pos.ProviderPaymentLock', { id: providerAttemptId }))[0]
-    const payment = (await tx.db.select('pos.Payment', { providerAttemptId }))[0]
-    if (
-      String(order.paymentLockId ?? '') !== providerAttemptId ||
-      !reservation ||
-      !['settled', 'finalizing'].includes(String(reservation.state)) ||
-      reservation.orderId !== order.id ||
-      reservation.paymentMethodId !== order.paymentLockMethodId ||
-      n(reservation.amount) !== n(order.paymentLockAmount) ||
-      reservation.currency !== order.currency ||
-      reservation.settledPaymentId !== payment?.id ||
-      payment?.orderId !== order.id ||
-      payment.paymentMethodId !== reservation.paymentMethodId ||
-      payment.kind !== 'provider' ||
-      payment.state !== 'captured' ||
-      payment.reversalOfId != null
-    )
-      return invalid('paymentLockId', 'external payment is still pending reconciliation')
-    if (reservation.state === 'finalizing') {
-      const leaseAge = Date.now() - Date.parse(String(reservation.updatedAt ?? ''))
+    const membership = await providerFinalizationLocks(tx, order)
+    if (membership.ok !== true) return membership
+    if (!membership.locks.length) return invalid('paymentLockId', 'provider payment lock is missing')
+    const finalizing = membership.locks.filter((lock) => lock.state === 'finalizing')
+    if (finalizing.length) {
+      if (finalizing.length !== membership.locks.length)
+        return invalid('paymentLockId', 'external payment finalization membership is inconsistent')
+      const previousToken = String(finalizing[0]!.updatedAt ?? '')
+      if (finalizing.some((lock) => String(lock.updatedAt ?? '') !== previousToken))
+        return invalid('paymentLockId', 'external payment finalization membership is inconsistent')
+      const leaseAge = Date.now() - Date.parse(previousToken)
       if (!Number.isFinite(leaseAge) || leaseAge < PROVIDER_FINALIZATION_LEASE_MS)
         return invalid('paymentLockId', 'external payment finalization is already in progress')
       if (
@@ -386,28 +413,37 @@ async function claimProviderFinalization(
         ![current, Math.max(0, current - 1)].includes(n(expectedRevision))
       )
         return invalid('expectedRevision', 'the order changed; reload it before continuing')
-      const leaseToken = now()
-      const resumed = await tx.db.compareAndSet(
-        'pos.ProviderPaymentLock',
-        { id: providerAttemptId },
-        { state: 'finalizing', updatedAt: reservation.updatedAt },
-        { updatedAt: leaseToken },
-      )
-      if (!('dryRun' in resumed) && !resumed.matched)
-        return invalid('paymentLockId', 'external payment finalization recovery was already claimed')
-      return { ok: true, order, revision: current, leaseToken }
+      const token = now()
+      for (const lock of finalizing) {
+        const resumed = await tx.db.compareAndSet(
+          'pos.ProviderPaymentLock',
+          { id: lock.id },
+          { state: 'finalizing', updatedAt: previousToken },
+          { updatedAt: token },
+        )
+        if (!('dryRun' in resumed) && !resumed.matched)
+          return invalid('paymentLockId', 'external payment finalization recovery was already claimed')
+      }
+      return {
+        ok: true,
+        order,
+        revision: current,
+        leases: finalizing.map((lock) => ({ id: String(lock.id), token })),
+      }
     }
     if (expectedRevision !== undefined && n(expectedRevision) !== current)
       return invalid('expectedRevision', 'the order changed; reload it before continuing')
-    const leaseToken = now()
-    const lockChanged = await tx.db.compareAndSet(
-      'pos.ProviderPaymentLock',
-      { id: providerAttemptId },
-      { state: 'settled' },
-      { state: 'finalizing', updatedAt: leaseToken },
-    )
-    if (!('dryRun' in lockChanged) && !lockChanged.matched)
-      return invalid('paymentLockId', 'external payment reconciliation changed before finalization')
+    const token = now()
+    for (const lock of membership.locks) {
+      const lockChanged = await tx.db.compareAndSet(
+        'pos.ProviderPaymentLock',
+        { id: lock.id },
+        { state: 'settled' },
+        { state: 'finalizing', updatedAt: token },
+      )
+      if (!('dryRun' in lockChanged) && !lockChanged.matched)
+        return invalid('paymentLockId', 'external payment reconciliation changed before finalization')
+    }
     const orderChanged = await tx.db.compareAndSet(
       'pos.Order',
       { id: order.id },
@@ -416,7 +452,12 @@ async function claimProviderFinalization(
     )
     if (!('dryRun' in orderChanged) && !orderChanged.matched)
       return invalid('expectedRevision', 'the order changed; reload it before continuing')
-    return { ok: true, order, revision: current + 1, leaseToken }
+    return {
+      ok: true,
+      order,
+      revision: current + 1,
+      leases: membership.locks.map((lock) => ({ id: String(lock.id), token })),
+    }
   })) as ProviderFinalizationClaim
 }
 
@@ -2776,7 +2817,7 @@ export const functions: Record<string, FnSpec> = {
             return invalid('providerAttemptId', 'provider attempt is bound to another payment intent')
           if (!['locked', 'settled', 'finalizing', 'finalized'].includes(String(reservation.state)))
             return invalid('providerAttemptId', 'provider attempt can no longer lock this order')
-          if (String(order.paymentLockId ?? '') !== attemptId)
+          if (reservation.state === 'locked' && String(order.paymentLockId ?? '') !== attemptId)
             return invalid('providerAttemptId', 'provider attempt lock membership is inconsistent')
           return {
             ok: true,
@@ -2788,9 +2829,11 @@ export const functions: Record<string, FnSpec> = {
           }
         }
         if (order.state !== 'draft') return invalid('orderId', 'only a draft order can be locked')
-        if (order.paymentLockId) {
-          return invalid('providerAttemptId', 'order is already locked by another payment attempt')
-        }
+        const unresolved = (await tx.db.select('pos.ProviderPaymentLock', { orderId: order.id })).find(
+          (lock) => ['locked', 'needs_review', 'reversing', 'finalizing'].includes(String(lock.state)),
+        )
+        if (unresolved)
+          return invalid('providerAttemptId', 'order has an unresolved external payment attempt')
         const linked = (
           await tx.db.select('pos.ConfigPaymentMethod', {
             configId: order.configId,
@@ -2808,8 +2851,8 @@ export const functions: Record<string, FnSpec> = {
           Math.abs(n(order.amountTotal)) -
             captured.reduce((sum, payment) => sum + Math.abs(n(payment.appliedAmount ?? payment.amount)), 0),
         )
-        if (remaining <= 0.000001 || Math.abs(Math.abs(amount) - remaining) > 0.000001)
-          return invalid('amount', 'provider attempt must cover the exact remaining payable')
+        if (remaining <= 0.000001 || Math.abs(amount) > remaining + 0.000001)
+          return invalid('amount', 'provider attempt exceeds the remaining payable')
         const createdAt = now()
         const inserted = await tx.db.insertIfAbsent('pos.ProviderPaymentLock', {
           id: attemptId,
@@ -2832,7 +2875,7 @@ export const functions: Record<string, FnSpec> = {
             n(winner.amount) === amount &&
             winner.currency === order.currency &&
             ['locked', 'settled', 'finalizing', 'finalized'].includes(String(winner.state)) &&
-            String(currentOrder?.paymentLockId ?? '') === attemptId
+            (winner.state !== 'locked' || String(currentOrder?.paymentLockId ?? '') === attemptId)
           return same
             ? {
                 ok: true,
@@ -3001,8 +3044,8 @@ export const functions: Record<string, FnSpec> = {
             captured.reduce((sum, payment) => sum + Math.abs(n(payment.appliedAmount ?? payment.amount)), 0),
         )
         if (remaining <= 0.000001) return invalid('amount', 'the order is already fully covered')
-        if (Math.abs(Math.abs(amount) - remaining) > 0.000001)
-          return invalid('amount', 'provider settlement must equal the locked remaining payable')
+        if (Math.abs(amount) > remaining + 0.000001)
+          return invalid('amount', 'provider settlement exceeds the remaining payable')
         const claim = await claimDraftRevision(tx, args.orderId, args.expectedRevision)
         if (claim.ok !== true) {
           const converged = await providerSettlementReplay(tx, args)
@@ -3072,11 +3115,10 @@ export const functions: Record<string, FnSpec> = {
         const payment = (await tx.db.select('pos.Payment', { providerAttemptId: attemptId }))[0]
         if (
           order.state !== 'draft' ||
-          String(order.paymentLockId ?? '') !== attemptId ||
           !reservation ||
           reservation.orderId !== order.id ||
-          reservation.paymentMethodId !== order.paymentLockMethodId ||
-          n(reservation.amount) !== n(order.paymentLockAmount) ||
+          reservation.paymentMethodId !== payment?.paymentMethodId ||
+          n(reservation.amount) !== n(payment?.appliedAmount ?? payment?.amount) ||
           reservation.currency !== order.currency ||
           reservation.settledPaymentId !== payment?.id ||
           payment?.orderId !== order.id ||
@@ -3186,7 +3228,7 @@ export const functions: Record<string, FnSpec> = {
             original.state === 'reversed' &&
             reservation?.state === 'reversed' &&
             reservation.reversalPaymentId === existing.id &&
-            order.paymentLockId == null
+            String(order.paymentLockId ?? '') !== attemptId
           return same
             ? {
                 ok: true,
@@ -3199,9 +3241,16 @@ export const functions: Record<string, FnSpec> = {
         }
         if (order.state !== 'draft')
           return invalid('orderId', 'only a captured tender on a draft order can be compensated')
+        const otherUnresolved = (
+          await tx.db.select('pos.ProviderPaymentLock', { orderId: args.orderId })
+        ).find(
+          (lock) =>
+            String(lock.id) !== attemptId &&
+            ['locked', 'needs_review', 'reversing', 'finalizing'].includes(String(lock.state)),
+        )
         if (
           original.state !== 'captured' ||
-          String(order.paymentLockId ?? '') !== attemptId ||
+          otherUnresolved ||
           reservation?.orderId !== args.orderId ||
           reservation.paymentMethodId !== original.paymentMethodId ||
           n(reservation.amount) !== amount ||
@@ -3235,11 +3284,12 @@ export const functions: Record<string, FnSpec> = {
           paymentDate: now(),
         })
         await tx.db.update('pos.Payment', { id: original.id }, { state: 'reversed' })
-        await tx.db.update(
-          'pos.Order',
-          { id: args.orderId },
-          { paymentLockId: null, paymentLockMethodId: null, paymentLockAmount: null },
-        )
+        if (String(order.paymentLockId ?? '') === attemptId)
+          await tx.db.update(
+            'pos.Order',
+            { id: args.orderId },
+            { paymentLockId: null, paymentLockMethodId: null, paymentLockAmount: null },
+          )
         await tx.db.update(
           'pos.ProviderPaymentLock',
           { id: attemptId },
@@ -3356,30 +3406,8 @@ export const functions: Record<string, FnSpec> = {
           revision: n(order.revision),
         }
       if (order.state !== 'draft') return invalid('state', 'only a new order can be paid')
-      const providerAttemptId = order.paymentLockId ? String(order.paymentLockId) : null
-      if (providerAttemptId) {
-        const settled = (
-          await ctx.db.select('pos.Payment', {
-            providerAttemptId: order.paymentLockId,
-          })
-        )[0]
-        const reservation = (await ctx.db.select('pos.ProviderPaymentLock', { id: order.paymentLockId }))[0]
-        if (
-          settled?.kind !== 'provider' ||
-          settled.state !== 'captured' ||
-          settled.reversalOfId != null ||
-          settled.orderId !== order.id ||
-          settled.paymentMethodId !== order.paymentLockMethodId ||
-          n(settled.appliedAmount ?? settled.amount) !== n(order.paymentLockAmount) ||
-          reservation?.orderId !== order.id ||
-          reservation.paymentMethodId !== order.paymentLockMethodId ||
-          n(reservation.amount) !== n(order.paymentLockAmount) ||
-          reservation.currency !== order.currency ||
-          !['settled', 'finalizing'].includes(String(reservation.state)) ||
-          reservation.settledPaymentId !== settled.id
-        )
-          return invalid('paymentLockId', 'external payment is still pending reconciliation')
-      }
+      const providerMembership = await providerFinalizationLocks(ctx, order)
+      if (providerMembership.ok !== true) return providerMembership
       if (order.exchangeRole === 'replacement') {
         const exchange = order.exchangeId
           ? (await ctx.db.select('pos.Exchange', { id: order.exchangeId }))[0]
@@ -3468,11 +3496,14 @@ export const functions: Record<string, FnSpec> = {
           goods.push({ ...line, tracking })
         }
       }
-      const claim = providerAttemptId
-        ? await claimProviderFinalization(ctx, args.id, providerAttemptId, args.expectedRevision)
+      const claim = providerMembership.locks.length
+        ? await claimProviderFinalization(ctx, args.id, args.expectedRevision)
         : await claimDraftRevision(ctx, args.id, args.expectedRevision)
       if (claim.ok !== true) return claim
-      const providerLeaseToken = 'leaseToken' in claim ? claim.leaseToken : null
+      const providerLeases = ('leases' in claim ? claim.leases : []) as Array<{
+        id: string
+        token: string
+      }>
       let finalizationCommitted = false
       try {
         const partner = order.partnerId
@@ -3630,11 +3661,11 @@ export const functions: Record<string, FnSpec> = {
             )
               throw new Error('receipt identity is already bound to different content')
           }
-          if (providerAttemptId) {
+          for (const lease of providerLeases) {
             const finalized = await tx.db.compareAndSet(
               'pos.ProviderPaymentLock',
-              { id: providerAttemptId },
-              { state: 'finalizing', updatedAt: providerLeaseToken },
+              { id: lease.id },
+              { state: 'finalizing', updatedAt: lease.token },
               { state: 'finalized', updatedAt: now() },
             )
             if (!('dryRun' in finalized) && !finalized.matched)
@@ -3682,14 +3713,14 @@ export const functions: Record<string, FnSpec> = {
           receiptId,
         }
       } finally {
-        if (providerAttemptId && !finalizationCommitted) {
-          await ctx.db.compareAndSet(
-            'pos.ProviderPaymentLock',
-            { id: providerAttemptId },
-            { state: 'finalizing', updatedAt: providerLeaseToken },
-            { state: 'needs_review', updatedAt: now() },
-          )
-        }
+        if (!finalizationCommitted)
+          for (const lease of providerLeases)
+            await ctx.db.compareAndSet(
+              'pos.ProviderPaymentLock',
+              { id: lease.id },
+              { state: 'finalizing', updatedAt: lease.token },
+              { state: 'needs_review', updatedAt: now() },
+            )
       }
     },
   }),

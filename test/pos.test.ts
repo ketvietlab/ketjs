@@ -1564,6 +1564,27 @@ test('pos: provider locks preserve split tenders and compensation is append-only
       { id: 'shop:rail', configId: 'shop', paymentMethodId: 'rail-method' },
       adapter,
     )
+    await call(
+      'account.saveJournal',
+      {
+        id: 'rail-journal-2',
+        name: 'Rail 2',
+        code: 'RAI2',
+        type: 'bank',
+        defaultAccountId: 'rail-bank',
+      },
+      adapter,
+    )
+    await call(
+      'pos.savePaymentMethod',
+      { id: 'rail-method-2', name: 'Payment rail 2', journalId: 'rail-journal-2', isCash: false },
+      adapter,
+    )
+    await call(
+      'pos.linkPaymentMethod',
+      { id: 'shop:rail-2', configId: 'shop', paymentMethodId: 'rail-method-2' },
+      adapter,
+    )
     await call('pos.createSession', { id: 'rail-shift', configId: 'shop', userId: 'cashier' }, adapter)
     await call('pos.openSession', { id: 'rail-shift', expectedRevision: 0 }, adapter)
 
@@ -1640,6 +1661,118 @@ test('pos: provider locks preserve split tenders and compensation is append-only
       )
     ).value as Row
     assert.equal(voidAfterRelease.ok, true, JSON.stringify(voidAfterRelease))
+
+    await call('pos.createOrder', { id: 'rail-multi-sale', sessionId: 'rail-shift' }, adapter)
+    await call(
+      'pos.addLine',
+      {
+        id: 'rail-multi-sale:line',
+        orderId: 'rail-multi-sale',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      },
+      adapter,
+    )
+    const firstLock = (
+      await call(
+        'pos.lockProviderPayment',
+        {
+          orderId: 'rail-multi-sale',
+          paymentMethodId: 'rail-method',
+          amount: '40',
+          providerAttemptId: 'multi-attempt-1',
+          expectedRevision: 1,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(firstLock.ok, true, JSON.stringify(firstLock))
+    const firstSettlement = (
+      await call(
+        'pos.settleProviderPayment',
+        {
+          id: 'rail-multi-sale:payment-1',
+          orderId: 'rail-multi-sale',
+          paymentMethodId: 'rail-method',
+          amount: '40',
+          currency: 'VND',
+          providerAttemptId: 'multi-attempt-1',
+          providerReference: 'multi-reference-1',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(firstSettlement.ok, true, JSON.stringify(firstSettlement))
+    const secondLock = (
+      await call(
+        'pos.lockProviderPayment',
+        {
+          orderId: 'rail-multi-sale',
+          paymentMethodId: 'rail-method-2',
+          amount: '59',
+          providerAttemptId: 'multi-attempt-2',
+          expectedRevision: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(secondLock.ok, true, JSON.stringify(secondLock))
+    const firstReplay = (
+      await call(
+        'pos.settleProviderPayment',
+        {
+          id: 'rail-multi-sale:payment-1',
+          orderId: 'rail-multi-sale',
+          paymentMethodId: 'rail-method',
+          amount: '40',
+          currency: 'VND',
+          providerAttemptId: 'multi-attempt-1',
+          providerReference: 'multi-reference-1',
+          expectedRevision: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(firstReplay.ok, true, JSON.stringify(firstReplay))
+    assert.equal(firstReplay.id, firstSettlement.id)
+    const secondSettlement = (
+      await call(
+        'pos.settleProviderPayment',
+        {
+          id: 'rail-multi-sale:payment-2',
+          orderId: 'rail-multi-sale',
+          paymentMethodId: 'rail-method-2',
+          amount: '59',
+          currency: 'VND',
+          providerAttemptId: 'multi-attempt-2',
+          providerReference: 'multi-reference-2',
+          expectedRevision: 4,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(secondSettlement.ok, true, JSON.stringify(secondSettlement))
+    const multiFinalized = (
+      await call('pos.validateOrder', { id: 'rail-multi-sale', expectedRevision: 5 }, adapter)
+    ).value as Row
+    assert.equal(multiFinalized.ok, true, JSON.stringify(multiFinalized))
+    const multiOrder = (await call('pos.getOrder', { id: 'rail-multi-sale' }, adapter)).value as Row
+    assert.equal(multiOrder.state, 'paid')
+    assert.equal(multiOrder.amountPaid, '99')
+    const multiLocks = await adapter.all(
+      'SELECT id, state FROM pos_provider_payment_lock WHERE "orderId" = ? ORDER BY id',
+      ['rail-multi-sale'],
+    )
+    assert.deepEqual(
+      multiLocks.map((lock) => ({ id: lock.id, state: lock.state })),
+      [
+        { id: 'multi-attempt-1', state: 'finalized' },
+        { id: 'multi-attempt-2', state: 'finalized' },
+      ],
+    )
 
     await call('pos.createOrder', { id: 'rail-repair-sale', sessionId: 'rail-shift' }, adapter)
     await call(
