@@ -47,6 +47,10 @@ export const models: Record<string, ModelDef> = {
        * a query rather than in institutional memory.
        */
       superuser: 'bool',
+      /** Break-glass governance; null expiry remains bootstrap compatibility only. */
+      superuserOwner: 'text?',
+      superuserReason: 'text?',
+      superuserExpiresAt: 'datetime?',
       active: 'bool',
     },
     indexes: { login: { fields: ['login'], unique: true } },
@@ -68,6 +72,13 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       name: 'text',
       description: 'text?',
+      /** Nullable only for rows created before the managed-role migration. */
+      mode: 'text?',
+      templateKey: 'text?',
+      templateVersion: 'int?',
+      templateDigest: 'text?',
+      /** CAS boundary for role and template mutations. */
+      revision: 'int?',
     },
     indexes: { name: { fields: ['name'], unique: true } },
   },
@@ -84,6 +95,25 @@ export const models: Record<string, ModelDef> = {
     indexes: { role_function: { fields: ['roleId', 'fnKey'], unique: true } },
   },
 
+  /** Provenance edges whose union is materialized in Grant for request-time enforcement. */
+  GrantSource: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      roleId: 'ref:user.Role',
+      fnKey: 'text',
+      sourceKind: 'text',
+      sourceKey: 'text',
+      sourceVersion: 'int?',
+    },
+    indexes: {
+      role_function_source: {
+        fields: ['roleId', 'fnKey', 'sourceKind', 'sourceKey'],
+        unique: true,
+      },
+    },
+  },
+
   /** One row per (user, role). A user's permissions are the union of their roles. */
   Assignment: {
     scope: 'shared',
@@ -91,8 +121,30 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       userId: 'ref:user.User',
       roleId: 'ref:user.Role',
+      scopeKind: 'text?',
+      companyId: 'ref:company.Company?',
+      branchId: 'ref:company.Branch?',
+      /** Non-null for all new rows; legacy null is interpreted as tenant during compatibility. */
+      scopeKey: 'text?',
     },
-    indexes: { user_role: { fields: ['userId', 'roleId'], unique: true } },
+    indexes: { user_role_scope: { fields: ['userId', 'roleId', 'scopeKey'], unique: true } },
+  },
+
+  /** Monotonic tenant authorization revision used for CAS and future cache invalidation. */
+  AuthorizationRevision: {
+    scope: 'shared',
+    fields: { id: 'id', revision: 'int', updatedAt: 'datetime' },
+  },
+
+  /** Durable idempotency record for authorization mutations. */
+  AuthorizationOperation: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      digest: 'text',
+      result: 'json?',
+      completedAt: 'datetime?',
+    },
   },
 
   /**
@@ -164,6 +216,17 @@ export const models: Record<string, ModelDef> = {
       occurredAt: 'datetime',
       networkFingerprint: 'text?',
       metadata: 'json?',
+      /** Local user id or an explicit system principal; never a raw IdP subject. */
+      actorKey: 'text?',
+      targetKind: 'text?',
+      targetId: 'text?',
+      scopeKey: 'text?',
+      source: 'text?',
+      reason: 'text?',
+      beforeDigest: 'text?',
+      afterDigest: 'text?',
+      authorizationRevision: 'int?',
+      outcome: 'text?',
     },
   },
 

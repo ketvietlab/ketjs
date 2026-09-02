@@ -6,7 +6,7 @@ import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
 import { NavList, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
-import { ContentCard, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
+import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
 import { AppShell, Page, PageHeader, RecordPage, RecordSection } from '../layouts/shell.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
@@ -300,6 +300,25 @@ export const componentGroups: readonly ComponentGroup[] = [
                 actions={<Button label="Open cohort" size="compact" />}
               />,
             ]}
+          />
+        ),
+      },
+      {
+        id: 'disclosure',
+        name: 'Disclosure',
+        description: 'Secondary detail stays available without dominating the primary workflow.',
+        render: () => (
+          <Disclosure
+            summary="Permission provenance"
+            body={
+              <Stack
+                gap="compact"
+                items={[
+                  <Code value="sales.order.approve" context="managed-template" />,
+                  <Code value="sales.order.read" context="managed-template" />,
+                ]}
+              />
+            }
           />
         ),
       },

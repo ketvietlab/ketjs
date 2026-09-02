@@ -25,7 +25,7 @@ Source chính:
 Cụm này cung cấp:
 
 - tài khoản nội bộ với login chuẩn hóa, password hash nullable và access realm rõ ràng;
-- Role/Grant phẳng, cộng dồn theo function, cùng preset User/Manager theo module;
+- managed/custom Role, source-aware Grant và assignment theo tenant/company/branch;
 - session được xác thực lại ở mỗi request bằng `securityVersion` và membership live;
 - đổi mật khẩu bản thân, thu hồi session và last-superuser guard;
 - invitation 144 giờ, reset 4 giờ, token digest-only và single-use bằng CAS;
@@ -40,6 +40,10 @@ trong phạm vi. OAuth/OIDC backend realm được triển khai ở module KetSu
 được mô tả tại [OAuth and OIDC](../oauth-oidc/). `portal`/`public` đã là access
 kind hợp lệ nhưng không được đăng nhập vào backend realm.
 
+Zitadel or another external IdP is an authentication authority only. KetSuite maps a verified external
+identity to a local `user.User`, then resolves company membership, branch membership, scoped roles, bundles,
+and exact function grants from KetSuite rows. IdP role/group claims are never an authorization source.
+
 ## Kiến trúc
 
 ```mermaid
@@ -47,13 +51,17 @@ kind hợp lệ nhưng không được đăng nhập vào backend realm.
 flowchart LR
   subgraph Identity["Identity domain · user"]
     U["User<br/>login · passwordHash?<br/>accessKind · securityVersion"]
-    A["Assignment<br/>UNIQUE user + role"]
-    R["Role<br/>UNIQUE name"]
+    A["Assignment<br/>UNIQUE user + role + scope"]
+    R["Role<br/>managed or custom<br/>template version + digest"]
+    GS["GrantSource<br/>managed-template · custom · legacy-direct"]
     G["Grant<br/>UNIQUE role + function"]
+    AR["AuthorizationRevision<br/>tenant CAS"]
     M["Company Membership"]
     BM["Branch Membership"]
 
-    U --> A --> R --> G
+    U --> A --> R --> GS --> G
+    AR --> A
+    AR --> GS
     U --> M
     U --> BM
   end
@@ -93,6 +101,7 @@ flowchart LR
 | `lastLoginAt` | lần đăng nhập backend thành công gần nhất |
 | `active` | archive vô hiệu hóa từ request kế tiếp |
 | `superuser` | bypass allow-list; luôn bảo vệ superuser hoạt động cuối cùng |
+| `superuserOwner` / `superuserReason` / `superuserExpiresAt` | break-glass owner, reason, and expiry; null expiry is bootstrap compatibility only |
 
 Không function output nào khai báo `passwordHash`, nên projection của engine không
 thể trả hash ra HTTP hoặc agent tool ngay cả khi handler vô tình giữ cả row.
@@ -198,37 +207,45 @@ cấp số nhân. Public response giống nhau cho login không tồn tại, sai
 tài khoản không thuộc backend realm.
 
 `SecurityAudit` ghi login success/failure, password change, reset/invitation,
-session revoke và context switch. Audit chỉ chứa event, user/actor, fingerprint,
-timestamp và metadata không bí mật; password, raw token và password hash không
-được ghi.
+session revoke, context switch, role/grant/template/assignment mutation và break-glass.
+Authorization events record actor key, target, source, scope, reason, before/after digest and monotonic
+authorization revision in the same transaction. Bounded audit output omits free-form metadata; password, raw
+token, password hash and raw external subjects are never returned.
 
-## Role, Grant và preset
+## Permission bundles, roles, and scoped assignments
 
-Quyền tiếp tục là allow-list theo function:
+The runtime authorization unit remains the exact qualified function key. Modules declare stable bilingual
+bundles and classify each grantable function with a risk and owner. A deployment composes those bundles into
+versioned job-role templates. No action-name regex or IdP claim contributes to a new managed role.
 
-- Role không implied Role khác;
-- nhiều Role cộng dồn bằng hợp của Grant;
-- `(roleId, fnKey)` và `(userId, roleId)` unique ở PostgreSQL;
-- `insertIfAbsent` làm grant/assignment idempotent khi cạnh tranh;
-- permission catalogue nhóm function thành `read`, `operate`, `manage` theo module;
-- UI chỉ hiển thị module và tác vụ đã dịch, không bắt nhập raw function key;
-- preset User/Manager tạo Role/Grant bình thường và vẫn chỉnh sửa được sau đó.
+`Role.mode` distinguishes managed and custom rows. Managed roles carry `templateKey`, version, and digest;
+they are read-only in the ordinary role editor. `GrantSource` records whether a materialized `Grant` came
+from a managed template, tenant customization, or the compatibility path. Template upgrades replace only
+their own source edges, preserve custom sources, preview effective and provenance changes, and use role plus
+authorization revision CAS. Cloning a managed role creates an explicitly custom role and severs the link.
 
-`legacyPermissionCatalogue(manifest)` và `legacyPresetFunctions(manifest, module, level)` xuất đúng projection
-hiện tại cho inventory/migration tooling. Tên `legacy` là chủ ý: đây là compatibility evidence cho heuristic
-User/Manager hiện hành, không phải API để role mới tiếp tục phụ thuộc vào tên action. Cả UI catalogue và
-`applyPreset` gọi cùng helper nên audit không cần copy regex sang application repository.
+Assignments normalize one of these scopes:
 
-The accepted [permission bundles and scoped roles RFC](/architecture/permission-bundles-rfc/) defines the
-replacement contract. It preserves these flat rows during a compatibility window, adds exact function
-classification and source provenance, and puts tenant/company/branch scope on assignments. This page continues
-to describe current runtime behavior until the implementation and tenant migration gates are complete.
+| Scope | Effective boundary |
+| --- | --- |
+| `tenant` | Every current company membership, within its current valid branch context |
+| `company:{companyId}` | Only the named live company membership |
+| `branch:{companyId}:{branchId}` | Only that live branch inside that company |
 
-Superuser là escape hatch duy nhất khỏi allow-list. Chỉ superuser được tạo/elevate
-superuser khác và không thể archive/hạ quyền superuser hoạt động cuối cùng. Các
-mutation có thể làm mất superuser lấy cùng một `SecurityGuard` row lock trong
-transaction, nên hai pod vô hiệu hóa hai admin đồng thời vẫn để lại đúng một
-superuser hoạt động.
+The resolver re-reads user state, membership, assignment, role, grant, source, and compiled template health on
+every request. Missing company context, revoked membership, a stale managed template, or an unknown function
+fails closed. The `effectiveAccess` projection returns the same final set used by enforcement plus its scoped
+assignment, role, source, and bundle paths. Its query count is bounded independently of the number of grants.
+
+Legacy custom Role/Grant and unscoped Assignment calls remain compatible. Their sources are treated as
+`legacy-direct`, and old assignments resolve as tenant scope. `legacyPermissionCatalogue()` and
+`legacyPresetFunctions()` remain migration evidence only; product role templates must use exact bundle
+declarations. See the [permission bundles and scoped roles RFC](/architecture/permission-bundles-rfc/).
+
+Superuser remains the only escape hatch from the allow-list. Permanent null-expiry rows are reserved for
+bootstrap compatibility. Operational elevation uses `setBreakGlass`, requires a live superuser actor, reason,
+owner, future expiry, authorization CAS, idempotency, and an audit event. Expired break-glass access fails closed
+without waiting for a session refresh.
 
 ## Provisioning lần đầu
 
@@ -287,9 +304,15 @@ literal vào shell history như ví dụ minh họa.
 |---|---|---|
 | `user.listUsers` / `getUser` | HTTP | User projection an toàn, membership, role và trạng thái credential |
 | `user.createUser` / `saveUser` / `archiveUser` | HTTP | Quản trị lifecycle và security-version rotation |
-| `user.listRoles` / `saveRole` | HTTP | Role phẳng |
-| `user.grantFunction` / `assignRole` | HTTP | Edge idempotent, concurrency-safe |
-| `user.permissionCatalogue` / `applyPreset` | HTTP | UI theo module/tác vụ và preset User/Manager |
+| `user.listRoles` / `getRole` / `saveRole` | HTTP | Managed/custom role, health, assignment count and compatibility editing |
+| `user.permissionBundleCatalogue` / `authorizationState` | HTTP | Compiled catalog/digest and CAS revision |
+| `user.previewRoleTemplate` / `applyRoleTemplate` / `cloneManagedRole` | HTTP | Versioned managed-role workflow with source-aware diff |
+| `user.assignScopedRole` / `unassignScopedRole` | HTTP | Idempotent tenant/company/branch assignment |
+| `user.effectiveAccess` | HTTP | Final enforced functions with scoped provenance and health issues |
+| `user.listAuthorizationAudit` | HTTP | Bounded digest-only authorization audit projection |
+| `user.setBreakGlass` | HTTP | Audited owner/reason/expiry superuser activation or revocation |
+| `user.grantFunction` / `assignRole` | HTTP | Custom/legacy compatibility edges |
+| `user.permissionCatalogue` / `applyPreset` | HTTP | Legacy migration UI and User/Manager evidence |
 | `user.authenticate` | internal | Backend authentication sau trusted `/login` |
 | `user.setPassword` | internal | Đổi mật khẩu actor-bound sau trusted profile route |
 | `user.issueAuthToken` | internal | Phát hành secret một lần cho admin/Mail joint |

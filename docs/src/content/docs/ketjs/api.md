@@ -33,6 +33,7 @@ dependencies and its browser-facing entrypoint avoids Node APIs.
 | `defineDeployment`, `defineWorkspace` | Declare immutable deployments and the repository workspace. |
 | `resolveWorkspace` | Resolve string module references from configured roots. |
 | `compose`, `composeWorkspace` | Build checked manifests for one deployment or a workspace. |
+| `compilePermissionBundles`, `permissionDigest` | Validate and deterministically digest exact bundle classifications and role templates. |
 | `explainWorkspace` | Render a workspace composition summary. |
 | `validateLayout`, `formatLayoutErrors` | Validate placement and extension relationships. |
 | `diffManifests`, `formatDiff` | Compare manifest contracts. |
@@ -40,12 +41,17 @@ dependencies and its browser-facing entrypoint avoids Node APIs.
 
 Primary types include `Manifest`, `Module`, `Theme`, `Model`, `DeploymentDeclaration`, `DeploymentSpec`,
 `WorkspaceDeclaration`, `ResolvedWorkspace`, `Placement`, and `LayoutError`.
+Permission types include `ModulePermissionsDef`, `PermissionBundleDef`, `PermissionFunctionDef`,
+`PermissionExemptionDef`, `PermissionRisk`, `PermissionPosture`, `RoleTemplateDef`,
+`PermissionCatalogue`, `CompiledPermissionBundle`, `CompiledRoleTemplate`, and
+`CompilePermissionOptions`.
 
 ### Operations and HTTP
 
 | API | Purpose |
 | --- | --- |
 | `defineFn`, `registerFunctions`, `callFn` | Declare, register, and execute effect-checked functions. |
+| `enforcePolicy` | Apply one stable domain policy decision and emit sanitized denial evidence. |
 | `project` | Apply output projection rules. |
 | `defineJob`, `registerJobs` | Declare and register durable job handlers. |
 | `createKetServer` | Create the low-level HTTP server from composed runtime services. |
@@ -60,7 +66,8 @@ Primary types include `Manifest`, `Module`, `Theme`, `Model`, `DeploymentDeclara
 | `assertForm`, `invalidForm`, `FormValidationError` | Enforce form schemas and produce structured HTTP 422 failures. |
 | `issuesFromFieldErrors` | Bridge changeset field errors into the shared validation issue contract. |
 
-Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `Job`, `JobContext`, `ServeSpec`,
+Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision`,
+`PolicyDenialEvidence`, `Job`, `JobContext`, `ServeSpec`,
 `ServeContext`, `BootedDeployment`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
 `RouteResult`. `ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
 

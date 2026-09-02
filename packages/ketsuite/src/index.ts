@@ -404,6 +404,17 @@ export { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES, SPRINT_STATES } from './modules
 export type { DependencyRelation, IssuePriority, SprintState } from './modules/flow/types.ts'
 export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
 export { legacyPermissionCatalogue, legacyPresetFunctions, permittedFor } from './modules/user/roles.ts'
+export {
+  effectiveFunctionKeys,
+  normalizeAssignmentScope,
+  resolveEffectivePermissions,
+} from './modules/user/authorization.ts'
+export type {
+  AssignmentScope,
+  EffectiveAccess,
+  EffectivePermission,
+  EffectivePermissionPath,
+} from './modules/user/authorization.ts'
 export type {
   LegacyPermissionCatalogueEntry,
   LegacyPermissionTask,

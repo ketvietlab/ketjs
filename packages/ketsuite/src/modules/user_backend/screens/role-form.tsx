@@ -1,7 +1,9 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
+  badge,
   button,
+  DefinitionList,
   FormCluster,
   FormPage,
   linkButton,
@@ -21,18 +23,28 @@ export type RoleFormScreenOptions = {
   action: string
   cancelHref: string
   permissionsAction?: string
+  cloneAction?: string
+  cloneId?: string
+  authorizationRevision?: number
   permissions?: readonly PermissionRow[]
   errors?: readonly string[]
 }
 
 export const roleIdentityFields = (_: Translator, values: RoleFormValues): FormField[] => [
-  { name: 'name', label: _('user_backend.field.name'), value: values.name, required: true },
+  {
+    name: 'name',
+    label: _('user_backend.field.name'),
+    value: values.name,
+    required: true,
+    disabled: values.mode === 'managed',
+  },
   {
     name: 'description',
     label: _('user_backend.field.description'),
     value: values.description,
     type: 'textarea',
     span: 'full',
+    disabled: values.mode === 'managed',
   },
 ]
 
@@ -57,15 +69,30 @@ export const roleScreen = (
       scope="role-form-page"
       title={title}
       description={_('user_backend.roles.subtitle')}
+      status={
+        create
+          ? undefined
+          : values.mode === 'managed'
+            ? badge(
+                `${_('user_backend.role.managed')} · v${String(values.templateVersion ?? '—')}`,
+                'positive',
+                'managed',
+              )
+            : badge(_('user_backend.role.custom'), 'neutral', 'custom')
+      }
       actions={
         <FormCluster
           forms={[
-            button({
-              label: _('user_backend.action.save'),
-              type: 'submit',
-              form: formId,
-              variant: 'primary',
-            }),
+            ...(values.mode === 'managed'
+              ? []
+              : [
+                  button({
+                    label: _('user_backend.action.save'),
+                    type: 'submit',
+                    form: formId,
+                    variant: 'primary',
+                  }),
+                ]),
             linkButton({
               label: _('user_backend.action.cancel'),
               href: options.cancelHref,
@@ -95,6 +122,70 @@ export const roleScreen = (
             />
           }
         />,
+        ...(!create && values.grantSources?.length
+          ? [
+              <Section
+                title={_('user_backend.roles.provenance')}
+                description={_('user_backend.roles.provenanceHint')}
+                body={
+                  <Surface
+                    body={
+                      <DefinitionList
+                        title={_('user_backend.roles.provenance')}
+                        items={values.grantSources.map((source, index) => ({
+                          key: `${source.fnKey}:${source.sourceKind}:${source.sourceKey}:${String(index)}`,
+                          term: source.fnKey,
+                          value: `${source.sourceKind} · ${source.sourceKey}${
+                            source.sourceVersion == null ? '' : ` · v${String(source.sourceVersion)}`
+                          }`,
+                        }))}
+                      />
+                    }
+                  />
+                }
+              />,
+            ]
+          : []),
+        ...(!create && values.mode === 'managed' && options.cloneAction && options.cloneId
+          ? [
+              <Section
+                title={_('user_backend.roles.clone')}
+                description={_('user_backend.roles.cloneHint')}
+                body={
+                  <Surface
+                    body={
+                      <RecordForm
+                        action={options.cloneAction}
+                        hidden={{
+                          action: 'clone',
+                          id: options.cloneId,
+                          expectedAuthorizationRevision: String(options.authorizationRevision ?? 0),
+                          idempotencyKey: options.cloneId,
+                        }}
+                        submit={_('user_backend.action.cloneRole')}
+                        submitVariant="secondary"
+                        fields={[
+                          {
+                            name: 'name',
+                            label: _('user_backend.field.name'),
+                            required: true,
+                            value: `${String(values.name ?? values.id ?? '')} · ${_('user_backend.role.custom')}`,
+                          },
+                          {
+                            name: 'reason',
+                            label: _('user_backend.field.reason'),
+                            type: 'textarea' as const,
+                            required: true,
+                            span: 'full' as const,
+                          },
+                        ]}
+                      />
+                    }
+                  />
+                }
+              />,
+            ]
+          : []),
         ...(!create && permissionsAction
           ? [...groups.entries()].map(([moduleName, items]) => (
               <Section

@@ -323,6 +323,85 @@ export type ModuleMeta = {
   category?: string
 }
 
+export type PermissionRisk = 'read' | 'operate' | 'approve' | 'configure' | 'sensitive' | 'security'
+
+export type PermissionPosture =
+  | 'permission-bearing'
+  | 'projection/bridge'
+  | 'session/device'
+  | 'internal/headless'
+
+export type PermissionLabels = { en: string; vi: string }
+
+export type PermissionBundleDef = {
+  labels: PermissionLabels
+  summary?: PermissionLabels
+  includes?: string[]
+}
+
+export type PermissionFunctionDef = {
+  risk: PermissionRisk
+  bundles: string[]
+  owner: string
+  policy?: string
+}
+
+export type PermissionExemptionReason =
+  | 'anonymous'
+  | 'bootstrap-only'
+  | 'internal-route'
+  | 'worker'
+  | 'service-boundary'
+  | 'projection-only'
+  | 'non-grantable'
+
+export type PermissionExemptionDef = {
+  reason: PermissionExemptionReason
+  authority: string
+}
+
+export type ModulePermissionsDef = {
+  posture: PermissionPosture
+  owner: string
+  bundles: Record<string, PermissionBundleDef>
+  functions: Record<string, PermissionFunctionDef>
+  exemptions: Record<string, PermissionExemptionDef>
+}
+
+export type RoleTemplateDef = {
+  version: number
+  labels: PermissionLabels
+  summary?: PermissionLabels
+  bundles: string[]
+}
+
+export type CompiledPermissionBundle = PermissionBundleDef & {
+  key: string
+  owner: string
+  includes: string[]
+  directFunctions: string[]
+  functions: string[]
+}
+
+export type CompiledRoleTemplate = RoleTemplateDef & {
+  key: string
+  bundles: string[]
+  functions: string[]
+  functionPaths: Record<string, string[][]>
+  digest: string
+}
+
+export type PermissionCatalogue = {
+  version: 1
+  digest: string
+  coverageRequired: boolean
+  modules: Record<string, { posture: PermissionPosture; owner: string }>
+  bundles: Record<string, CompiledPermissionBundle>
+  functions: Record<string, PermissionFunctionDef>
+  exemptions: Record<string, PermissionExemptionDef & { owner: string }>
+  roleTemplates: Record<string, CompiledRoleTemplate>
+}
+
 export type ModuleSpec = ModuleMeta & {
   kind?: 'module' | 'theme'
   name: string
@@ -349,6 +428,8 @@ export type ModuleSpec = ModuleMeta & {
    */
   omits?: string[]
   functions?: Record<string, FnSpec>
+  /** Exact permission classification owned by this module. */
+  permissions?: ModulePermissionsDef
   jobs?: Record<string, JobSpec>
   views?: Record<string, ViewDef>
   reports?: Record<string, ReportDef>
@@ -408,6 +489,7 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly omits: readonly string[]
   readonly fills: Record<string, string>
   readonly functions: Record<string, FnSpec>
+  readonly permissions: ModulePermissionsDef | null
   readonly jobs: Record<string, JobSpec>
   readonly views: Record<string, ViewDef>
   readonly reports: Record<string, ReportDef>
@@ -439,6 +521,7 @@ export type Manifest = {
   >
   fills: Array<{ joint: string; by: string; template: string }>
   functions: Record<string, FnMeta>
+  permissions: PermissionCatalogue
   jobs: Record<string, JobMeta>
   views: Record<string, ViewDef & { by: string }>
   reports: Record<string, ComposedReport>

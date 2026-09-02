@@ -7,6 +7,9 @@ export const HOOKS = [
   'inline',
   'grid',
   'surface',
+  'disclosure',
+  'disclosure-summary',
+  'disclosure-body',
   'section',
   'section-head',
   'section-eyebrow',
@@ -71,6 +74,14 @@ export const Surface = (props: {
   <div data-ui="surface" data-tone={props.tone ?? 'default'} data-padding={props.padding ?? 'default'}>
     {props.body}
   </div>
+)
+
+/** Native, keyboard-accessible progressive disclosure for dense secondary detail. */
+export const Disclosure = (props: { summary: string; body: JSXChild; open?: boolean }): TemplateResult => (
+  <details data-ui="disclosure" open={props.open === true ? true : undefined}>
+    <summary data-ui="disclosure-summary">{props.summary}</summary>
+    <div data-ui="disclosure-body">{props.body}</div>
+  </details>
 )
 
 export const Section = (props: {

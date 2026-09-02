@@ -18,13 +18,19 @@ export const relations: Record<string, Record<string, RelationDef>> = {
   },
   'user.Role': {
     grants: { hasMany: 'user.Grant', by: 'roleId' },
+    grantSources: { hasMany: 'user.GrantSource', by: 'roleId' },
   },
   'user.Grant': {
+    role: { belongsTo: 'user.Role', by: 'roleId' },
+  },
+  'user.GrantSource': {
     role: { belongsTo: 'user.Role', by: 'roleId' },
   },
   'user.Assignment': {
     user: { belongsTo: 'user.User', by: 'userId' },
     role: { belongsTo: 'user.Role', by: 'roleId' },
+    company: { belongsTo: 'company.Company', by: 'companyId' },
+    branch: { belongsTo: 'company.Branch', by: 'branchId' },
   },
   'user.AuthToken': {
     user: { belongsTo: 'user.User', by: 'userId' },
