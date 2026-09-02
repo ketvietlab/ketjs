@@ -17,7 +17,7 @@ test('public production permission catalogue covers every function owned by its 
 
   assert.equal(ketsuitePermissionModuleNames.length, 59)
   assert.equal(Object.keys(manifest.permissions.modules).length, 59)
-  assert.equal(Object.keys(manifest.permissions.bundles).length, 127)
+  assert.equal(Object.keys(manifest.permissions.bundles).length, 133)
   assert.equal(Object.keys(manifest.permissions.functions).length, 698)
   assert.equal(Object.keys(manifest.permissions.exemptions).length, 70)
 
@@ -43,4 +43,15 @@ test('public catalogue separates identity administration from sensitive inspecti
     owner: 'user',
     policy: 'user.sensitive-data',
   })
+})
+
+test('public catalogue keeps ordinary POS operation below cash, refund, void, and configuration authority', () => {
+  const declaration = ketsuitePermissionModules.pos
+  assert.deepEqual(declaration?.functions['pos.createOrder']?.bundles, ['pos.order-operate'])
+  assert.deepEqual(declaration?.functions['pos.addPayment']?.bundles, ['pos.tender'])
+  assert.deepEqual(declaration?.functions['pos.refundOrder']?.bundles, ['pos.refund'])
+  assert.deepEqual(declaration?.functions['pos.voidPayment']?.bundles, ['pos.void'])
+  assert.deepEqual(declaration?.functions['pos.recordCashMovement']?.bundles, ['pos.cash-control'])
+  assert.deepEqual(declaration?.functions['pos.validateOrder']?.bundles, ['pos.reconcile'])
+  assert.deepEqual(declaration?.functions['pos.saveConfig']?.bundles, ['pos.configure'])
 })
