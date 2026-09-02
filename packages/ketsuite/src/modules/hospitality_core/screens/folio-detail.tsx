@@ -24,6 +24,8 @@ import {
   workflowTone,
 } from './shared.tsx'
 
+const MANUAL_CHARGE_TYPES = CHARGE_TYPES.filter((type) => type !== 'minibar')
+
 export const folioDetailScreen = (
   _: Translator,
   folio: FolioRow,
@@ -157,7 +159,7 @@ export const folioDetailScreen = (
                         type: 'select',
                         required: true,
                         value: 'service',
-                        options: CHARGE_TYPES.map((type) => ({
+                        options: MANUAL_CHARGE_TYPES.map((type) => ({
                           value: type,
                           label: _(`hospitality_core.charge.${type}`),
                         })),

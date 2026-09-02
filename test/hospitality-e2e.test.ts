@@ -1002,8 +1002,8 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
       id: 'e2e-manual-charge',
       lang: 'vi',
       stayId: 'booking-1:stay',
-      description: 'Nước suối minibar',
-      type: 'minibar',
+      description: 'Dịch vụ spa',
+      type: 'spa',
       quantity: '2',
       unitPrice: '10',
     }),
@@ -1026,7 +1026,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const correctedFolio = await e2e.client.get(chargeVoided.headers.get('location')!)
   const correctedFolioHtml = await correctedFolio.text()
   assert.match(correctedFolioHtml, /Đã hủy khoản phí/)
-  assert.match(correctedFolioHtml, /Nước suối minibar/)
+  assert.match(correctedFolioHtml, /Dịch vụ spa/)
   assert.doesNotMatch(correctedFolioHtml, /hospitality_core\./)
   assert.equal(await e2e.drainJobs(), 1)
 

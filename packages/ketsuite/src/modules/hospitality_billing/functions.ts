@@ -210,6 +210,7 @@ export const functions: Record<string, FnSpec> = {
       ...FOLIO_EFFECTS,
       'read:hospitality_billing.ChargeRule',
       'read:hospitality_billing.FolioBill',
+      'read:account.Journal',
       'read:account.Move',
       'read:account.MoveLine',
     ],
@@ -224,6 +225,26 @@ export const functions: Record<string, FnSpec> = {
       const bill =
         (await ctx.db.select('hospitality_billing.FolioBill', { folioId: args.folioId }))[0] ?? null
       const move = bill ? await one(ctx, 'account.Move', bill.moveId) : null
+      const missingRules = [...new Set(charges.map((row) => String(row.type)))].filter(
+        (type) => !rules.has(type),
+      )
+      const J = ctx.table('account.Journal')
+      const saleJournal = move
+        ? null
+        : await ctx.db.one(from(J).where(eq(J.type, 'sale')).orderBy(asc(J.code)))
+      const blockers = move
+        ? []
+        : [
+            ...(String(folio.state) !== 'closed'
+              ? [{ code: 'folio_open', params: { state: String(folio.state) } }]
+              : []),
+            ...(!charges.length ? [{ code: 'folio_without_charges' }] : []),
+            ...(missingRules.length
+              ? [{ code: 'charge_rule_missing', params: { types: missingRules } }]
+              : []),
+            ...(!saleJournal ? [{ code: 'journal_missing' }] : []),
+            ...(!folio.partnerId ? [{ code: 'folio_without_guest' }] : []),
+          ]
 
       // What is owed comes from the receivable line, not from the folio total:
       // once an invoice exists the ledger is the record, and a payment is only
@@ -242,7 +263,8 @@ export const functions: Record<string, FnSpec> = {
         chargeCount: charges.length,
         // Named so a screen can say which decision is missing rather than only
         // that something is.
-        missingRules: [...new Set(charges.map((row) => String(row.type)))].filter((type) => !rules.has(type)),
+        missingRules,
+        blockers,
         moveId: move ? String(move.id) : null,
         moveName: move ? String(move.name) : null,
         moveState: move ? String(move.state) : null,

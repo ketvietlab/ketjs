@@ -45,14 +45,27 @@ export type ChargeRuleRow = {
 
 export type ChoiceRow = { id: string; name: string }
 
+export type BillingBlocker = {
+  code:
+    | 'folio_open'
+    | 'folio_without_charges'
+    | 'charge_rule_missing'
+    | 'journal_missing'
+    | 'folio_without_guest'
+  params?: { types?: string[]; state?: string }
+  repairHref: string
+}
+
 export type FolioBillingRow = {
   folioId: string
   folioCode: string
   guest: string | null
   closedAt: string | null
+  folioState: string
   folioTotal: string
   chargeCount: number
   missingRules: string[]
+  blockers: BillingBlocker[]
   moveId: string | null
   moveName: string | null
   amountTotal: string | null
@@ -62,6 +75,14 @@ export type FolioBillingRow = {
 
 export const chargeName = (_: Translator, type: string): string =>
   (CHARGE_TYPES as readonly string[]).includes(type) ? _(`hospitality_billing.chargeType.${type}`) : type
+
+const blockerLabel = (_: Translator, blocker: BillingBlocker): string => {
+  if (blocker.code === 'charge_rule_missing')
+    return _(`hospitality_billing.blocker.${blocker.code}`, {
+      types: (blocker.params?.types ?? []).map((type) => chargeName(_, type)).join(', '),
+    })
+  return _(`hospitality_billing.blocker.${blocker.code}`)
+}
 
 export const feedback = (_: Translator, state?: string | null): TemplateResult | null => {
   if (state === 'saved')
@@ -158,12 +179,18 @@ export const folioColumns = (_: Translator): Column<FolioBillingRow>[] => [
     key: 'state',
     label: _('hospitality_billing.col.state'),
     cell: (row) => {
-      if (row.missingRules.length)
-        return badge(
-          _('hospitality_billing.state.blocked', {
-            types: row.missingRules.map((type) => chargeName(_, type)).join(', '),
-          }),
-          'danger',
+      if (row.blockers.length)
+        return stack(
+          row.blockers.map((blocker) =>
+            stack([
+              badge(blockerLabel(_, blocker), 'danger'),
+              linkButton({
+                label: _('hospitality_billing.blocker.repair'),
+                href: blocker.repairHref,
+                variant: 'secondary',
+              }),
+            ]),
+          ),
         )
       if (!row.moveId) return badge(_('hospitality_billing.state.unbilled'), 'neutral')
       if (row.paymentState === 'paid') return badge(_('hospitality_billing.state.paid'), 'positive')
@@ -202,6 +229,8 @@ export const folioColumns = (_: Translator): Column<FolioBillingRow>[] => [
             },
           ]}
         />
+      ) : row.blockers.length ? (
+        '—'
       ) : (
         <RecordForm
           action="/admin/hospitality/billing"
