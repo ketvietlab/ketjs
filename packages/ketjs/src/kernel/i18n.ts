@@ -55,12 +55,56 @@ const PLACEHOLDER = /\{(\w+)\}/g
 export const PSEUDO_LOCALE = 'qps'
 const pseudo = (s: string): string => `⟦${s.replace(/[aeiouAEIOU]/g, (c) => c + c.toLowerCase())}⟧`
 
+const pluralRulesByLocale = new Map<string, Intl.PluralRules>()
+const dateTimeFormats = new Map<string, Intl.DateTimeFormat>()
+
+const intlLocale = (locale: string): string => (locale === PSEUDO_LOCALE ? 'en' : locale)
+
+const pluralRulesFor = (locale: string): Intl.PluralRules => {
+  const key = intlLocale(locale)
+  let rules = pluralRulesByLocale.get(key)
+  if (!rules) {
+    rules = new Intl.PluralRules(key)
+    pluralRulesByLocale.set(key, rules)
+  }
+  return rules
+}
+
+const dateTimeOptionsKey = (options: Intl.DateTimeFormatOptions): string =>
+  JSON.stringify(
+    Object.entries(options)
+      .filter(([, value]) => value !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right)),
+  )
+
+/**
+ * A shared date/time formatter for server rendering and timezone calculations.
+ *
+ * ECMA-402 formatters are immutable after construction, expensive to create and
+ * cheap to reuse. Canonicalizing the option entries means callers get the same
+ * formatter even when equivalent object literals list their properties in a
+ * different order.
+ */
+export function dateTimeFormatter(
+  locale: string,
+  options: Intl.DateTimeFormatOptions = {},
+): Intl.DateTimeFormat {
+  const resolvedLocale = intlLocale(locale)
+  const key = `${resolvedLocale}\0${dateTimeOptionsKey(options)}`
+  let formatter = dateTimeFormats.get(key)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(resolvedLocale, options)
+    dateTimeFormats.set(key, formatter)
+  }
+  return formatter
+}
+
 export function translator(manifest: Manifest, locale: string, o: TranslateOptions = {}): Translator {
   const fallback = o.fallback ?? 'vi'
   const catalogs = manifest.messages ?? {}
   const primary = catalogs[locale] ?? {}
   const secondary = catalogs[fallback] ?? {}
-  const plural = new Intl.PluralRules(locale === PSEUDO_LOCALE ? 'en' : locale)
+  const plural = pluralRulesFor(locale)
 
   const resolve = (key: string): { message: Message | undefined; exact: boolean } => {
     if (key in primary) return { message: primary[key], exact: true }

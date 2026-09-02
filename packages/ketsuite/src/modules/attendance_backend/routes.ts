@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { page, sha256, text, withHeaders } from '@ketvietlab/ketjs'
+import { dateTimeFormatter, page, sha256, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
@@ -32,7 +32,7 @@ const kioskPage = async (ctx: ServeContext, url: URL, req: Req, title: string, b
   })
 const currentMonth = (timezone = 'UTC') => {
   try {
-    const parts = new Intl.DateTimeFormat('en', {
+    const parts = dateTimeFormatter('en', {
       timeZone: timezone,
       year: 'numeric',
       month: '2-digit',

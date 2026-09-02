@@ -8,6 +8,7 @@ import {
   DatePicker,
   DefinitionList,
   emptyState,
+  formatDateTime,
   formatMoney,
   FormCluster,
   Framed,
@@ -48,6 +49,7 @@ export {
   DatePicker,
   DefinitionList,
   emptyState,
+  formatDateTime,
   formatMoney,
   FormCluster,
   Framed,
@@ -736,14 +738,14 @@ export const cleaningTone = (state: string): 'positive' | 'warning' | 'danger' |
 }
 
 export const dateTime = (value: string, locale: string, timezone: string): string =>
-  new Intl.DateTimeFormat(locale, {
+  formatDateTime(locale, new Date(value), {
     timeZone: timezone,
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).format(new Date(value))
+  })
 
 export const guestName = (row: { partnerId: string; partner?: { name?: string } | null }): string =>
   row.partner?.name ?? row.partnerId
@@ -1867,9 +1869,10 @@ export const nightAuditColumns = (_: Translator, locale: string): Array<Column<N
     key: 'date',
     label: _('hospitality_core.nightAudit.col.date'),
     cell: (row) =>
-      new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
-        new Date(`${row.auditDate}T12:00:00Z`),
-      ),
+      formatDateTime(locale, new Date(`${row.auditDate}T12:00:00Z`), {
+        dateStyle: 'medium',
+        timeZone: 'UTC',
+      }),
     kind: 'date',
     priority: 'primary',
   },
@@ -1988,9 +1991,11 @@ export const stayNoticeColumns = (
     key: 'due',
     label: _('hospitality_core.stayNotice.col.due'),
     cell: (row) =>
-      new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: timezone }).format(
-        new Date(row.dueAt),
-      ),
+      formatDateTime(locale, new Date(row.dueAt), {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: timezone,
+      }),
     priority: 'secondary',
     kind: 'date',
   },

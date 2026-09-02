@@ -104,6 +104,7 @@ export { readForm, seeOther } from './forms.ts'
 export {
   backendPage,
   shell,
+  formatDateTime,
   formatMoney,
   Framed,
   listChrome,

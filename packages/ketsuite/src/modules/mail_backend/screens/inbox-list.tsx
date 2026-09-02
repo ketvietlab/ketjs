@@ -1,6 +1,14 @@
 import type { Row, Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { ContentCard, emptyState, ListPage, RecordForm, shell, stack } from '../../../ui/index.ts'
+import {
+  ContentCard,
+  emptyState,
+  formatDateTime,
+  ListPage,
+  RecordForm,
+  shell,
+  stack,
+} from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 export type InboxScreenOptions = {
@@ -24,7 +32,18 @@ export const inboxScreen = (_: Translator, frame: Frame, options: InboxScreenOpt
               options.rows.map((row) => (
                 <ContentCard
                   title={String(row.subject || _('mail_backend.inbox.message'))}
-                  summary={`${String(row.kind)} · ${new Date(String(row.createdAt)).toLocaleString()}`}
+                  summary={`${String(row.kind)} · ${formatDateTime(
+                    _.locale,
+                    new Date(String(row.createdAt)),
+                    {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: 'numeric',
+                      second: 'numeric',
+                    },
+                  )}`}
                   body={String(row.body)}
                   actions={
                     <RecordForm

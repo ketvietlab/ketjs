@@ -105,6 +105,7 @@ const rangeOf = (view, cursor) => {
 export function createCalendarView(runtime, props, seed = {}) {
   const { each, html, signal } = runtime
   const labels = labelsOf(props)
+  const eventTimeFormatter = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' })
   const view = signal(seed.view ?? props.view ?? 'agenda')
   const cursor = signal(seed.cursor ?? localDate())
   const status = signal(seed.status ?? 'loading')
@@ -193,7 +194,7 @@ export function createCalendarView(runtime, props, seed = {}) {
 
   const eventCard = (entry) => html`<article data-ui="calendar-event" data-all-day=${entry.allDay}>
     <strong data-ui="calendar-event-title">${entry.name}</strong>
-    <span data-ui="calendar-event-time">${entry.allDay ? labels.allDay : `${new Date(entry.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–${new Date(entry.stopAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}</span>
+    <span data-ui="calendar-event-time">${entry.allDay ? labels.allDay : `${eventTimeFormatter.format(new Date(entry.startAt))}–${eventTimeFormatter.format(new Date(entry.stopAt))}`}</span>
     ${entry.location ? html`<span data-ui="calendar-event-location">${entry.location}</span>` : ''}
     <span data-ui="calendar-event-organizer">${labels.organizer}: ${entry.organizerName}</span>
   </article>`

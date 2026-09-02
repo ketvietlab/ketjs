@@ -11,6 +11,7 @@
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import { formatDateTime } from './format.ts'
 
 export const HOOKS = [
   'gantt',
@@ -98,7 +99,7 @@ const months = (from: number, to: number, locale: string): Band[] => {
       key: String(day),
       x: (day - from) * LAYOUT.dayWidth,
       width: (to - day + 1) * LAYOUT.dayWidth,
-      label: date.toLocaleDateString(locale, { month: 'short', year: 'numeric', timeZone: 'UTC' }),
+      label: formatDateTime(locale, date, { month: 'short', year: 'numeric', timeZone: 'UTC' }),
     })
   }
   return bands

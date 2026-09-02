@@ -36,7 +36,7 @@ export { Pipeline } from '@ketvietlab/design-system'
 export type { PipelineStep } from '@ketvietlab/design-system'
 
 export { icon, hasIcon } from './icons.ts'
-export { formatMoney } from './format.ts'
+export { formatDateTime, formatMoney } from './format.ts'
 export { button, linkButton, iconButton, actionGroup } from './actions.tsx'
 export type { ActionVariant, ActionSize, ButtonSpec, LinkButtonSpec } from './actions.tsx'
 export {

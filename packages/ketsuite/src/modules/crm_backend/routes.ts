@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { encodeListState, parseListState, table, text } from '@ketvietlab/ketjs'
 import type { ListState, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
-import { formatMoney } from '../../ui/index.ts'
+import { formatDateTime, formatMoney } from '../../ui/index.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { choices, adminPage, inLocale, localeQuery, optional, timezoneOf } from '../backend/screen.ts'
@@ -368,12 +368,12 @@ const dayLabel = (locale: string, value: unknown): string => {
   if (!raw) return ''
   const at = new Date(`${raw.slice(0, 10)}T00:00:00.000Z`)
   if (Number.isNaN(at.getTime())) return raw
-  return new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : locale, {
+  return formatDateTime(locale === 'vi' ? 'vi-VN' : locale, at, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     timeZone: 'UTC',
-  }).format(at)
+  })
 }
 
 /**
