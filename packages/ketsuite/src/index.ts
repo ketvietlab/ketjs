@@ -403,7 +403,11 @@ export { default as flowBackend } from './modules/flow_backend/index.ts'
 export { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES, SPRINT_STATES } from './modules/flow/types.ts'
 export type { DependencyRelation, IssuePriority, SprintState } from './modules/flow/types.ts'
 export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
-export { permittedFor } from './modules/user/roles.ts'
+export { legacyPermissionCatalogue, legacyPresetFunctions, permittedFor } from './modules/user/roles.ts'
+export type {
+  LegacyPermissionCatalogueEntry,
+  LegacyPermissionTask,
+} from './modules/user/roles.ts'
 export { resolveUserSession } from './modules/user/session-context.ts'
 export {
   discoverOidc,
