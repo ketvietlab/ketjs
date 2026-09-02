@@ -19,6 +19,8 @@
     "test:group": "npm run build --silent && node tools/ci-test-groups.mjs run",
     "test:group:built": "node tools/ci-test-groups.mjs run",
     "test:groups": "node tools/ci-test-groups.mjs list",
+    "test:permission-coverage": "npm run build --silent && npm run test:permission-coverage:built",
+    "test:permission-coverage:built": "node --test .build/test/permission-bundles.test.js .build/test/ketsuite-permission-catalogue.test.js",
     "bench": "npm run build --silent && node .build/bench/view.bench.js && node .build/bench/domain.bench.js && node .build/bench/collaboration.bench.js",
     "bench:i18n": "npm run build --silent && node .build/bench/i18n.bench.js",
     "bench:modules": "npm run build --silent && node .build/bench/module-path.bench.js",
