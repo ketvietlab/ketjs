@@ -5,6 +5,11 @@
 // suite ever needs something deeper, so does everyone else — and it should be
 // exported rather than smuggled. The dependency audit enforces exactly that.
 
+export {
+  ketsuitePermissionModuleNames,
+  ketsuitePermissionModules,
+} from './permission-catalogue.ts'
+
 // website vertical
 export { default as channelApi } from './modules/channel_api/index.ts'
 export {
