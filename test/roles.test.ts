@@ -140,10 +140,12 @@ test('legacy presets: exported audit helpers are the exact current User/Manager 
   const ordinary = legacyPresetFunctions(manifest, 'user', 'user')
   assert.equal(ordinary.includes('user.listUsers'), true)
   assert.equal(ordinary.includes('user.createUser'), false)
+  assert.equal(ordinary.includes('user.cloneManagedRole'), false)
   assert.equal(ordinary.includes('user.issueAuthToken'), false)
 
   const manager = legacyPresetFunctions(manifest, 'user', 'manager')
   assert.equal(manager.includes('user.createUser'), true)
+  assert.equal(manager.includes('user.cloneManagedRole'), true)
   assert.equal(manager.includes('user.issueAuthToken'), true)
   assert.deepEqual(legacyPresetFunctions(manifest, 'oauth', 'user'), [])
   assert.throws(() => legacyPresetFunctions(manifest, 'missing', 'user'), /no module "missing"/)

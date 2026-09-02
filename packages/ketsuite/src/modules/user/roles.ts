@@ -37,7 +37,7 @@ export type LegacyPermissionCatalogueEntry = {
 
 const legacyReadAction = /^(list|get|count|report|forecast|permitted)/
 const legacyManageAction =
-  /^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply|manage|publish|rollback)/
+  /^(save|create|clone|archive|grant|revoke|assign|unassign|set|issue|apply|manage|publish|rollback)/
 
 const legacyTaskOf = (key: string): LegacyPermissionTask => {
   const action = key.split('.').at(-1) ?? key
