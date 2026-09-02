@@ -49,6 +49,27 @@ constructed a new `Intl.NumberFormat` on every interpolation. Cached, it dropped
 137 ms. The first comparison was also unfair — the Liquid template had no filter at
 all — which is why the table above pins the filter implementation for everyone.
 
+## Localization hot paths
+
+Measured on 2026-09-02 with Node 24.14.1 on Apple Silicon. The benchmark uses the public translation,
+date formatter and timezone bucket APIs. It warms each path before timing and verifies that every loop
+produces a value.
+
+| operation | before cache | cached | improvement |
+|---|---:|---:|---:|
+| format one localized date/time | 26,900/s | 725,000/s | 27.0× |
+| bucket one datetime in an IANA timezone | 13,200/s | 527,000/s | 39.9× |
+
+The bucket matters beyond a helper microbenchmark: SQLite registers it as `ket_date_bucket`, so the old
+path constructed two `Intl.DateTimeFormat` objects for every row in a date-grouping query while holding
+the synchronous SQLite connection. Ten thousand rows spent about 758 ms in bucketing alone; the cached
+path takes about 19 ms on the same machine. PostgreSQL continues to use `DATE_TRUNC` and is unaffected.
+
+The same run reports 20.9 million plain translations/s, 4.3 million placeholder translations/s and
+1.9 million plural translations/s. Reproduce all five paths with `npm run bench:i18n`. These are local
+regression baselines, not request-capacity claims; a real request also performs routing, authorization,
+data access and rendering.
+
 ## Query building
 
 Same query (two conditions, order, limit), SQL text and parameters generated

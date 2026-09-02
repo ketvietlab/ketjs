@@ -20,6 +20,7 @@
     "test:group:built": "node tools/ci-test-groups.mjs run",
     "test:groups": "node tools/ci-test-groups.mjs list",
     "bench": "npm run build --silent && node .build/bench/view.bench.js && node .build/bench/domain.bench.js && node .build/bench/collaboration.bench.js",
+    "bench:i18n": "npm run build --silent && node .build/bench/i18n.bench.js",
     "bench:modules": "npm run build --silent && node .build/bench/module-path.bench.js",
     "bench:collaboration": "npm run build --silent && node .build/bench/collaboration.bench.js",
     "e2e:collaboration": "npm run build --silent && node .build/tools/collaboration-browser-e2e.js",

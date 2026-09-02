@@ -574,18 +574,47 @@ export async function bootDeployment(
     config.fallbackLocale,
   ])
 
+  const requestLocales = new WeakMap<
+    IncomingMessage,
+    { query: string | null; header: string; locale: string }
+  >()
+
   const localeOf = (url: URL, req: IncomingMessage): string => {
-    const asked = [
-      url.searchParams.get('lang'),
-      ...((req.headers['accept-language'] as string | undefined) ?? '')
-        .split(',')
-        .map((part) => part.split(';')[0]?.trim())
-        .flatMap((tag) => (tag ? [tag, tag.split('-')[0] as string] : [])),
-    ]
-    return asked.find((l) => l && known.has(l)) ?? config.defaultLocale
+    const query = url.searchParams.get('lang')
+    const header = (req.headers['accept-language'] as string | undefined) ?? ''
+    const held = requestLocales.get(req)
+    if (held?.query === query && held.header === header) return held.locale
+
+    let locale = query && known.has(query) ? query : null
+    if (!locale) {
+      for (const part of header.split(',')) {
+        const tag = part.split(';')[0]?.trim()
+        if (!tag) continue
+        if (known.has(tag)) {
+          locale = tag
+          break
+        }
+        const base = tag.split('-')[0]
+        if (base && known.has(base)) {
+          locale = base
+          break
+        }
+      }
+    }
+
+    const resolved = locale ?? config.defaultLocale
+    requestLocales.set(req, { query, header, locale: resolved })
+    return resolved
   }
 
-  const translate = (locale: string) => translator(manifest, locale, { fallback: config.fallbackLocale })
+  const translators = new Map<string, Translator>()
+  const translate = (locale: string): Translator => {
+    const cached = translators.get(locale)
+    if (cached) return cached
+    const made = Object.freeze(translator(manifest, locale, { fallback: config.fallbackLocale }))
+    if (known.has(locale)) translators.set(locale, made)
+    return made
+  }
 
   /**
    * Every composed module's stylesheets, in dependency order, so a module that

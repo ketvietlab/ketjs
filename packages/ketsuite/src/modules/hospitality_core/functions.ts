@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
+import { asc, defineFn, eq, from, inArray, isTimezone as isKetTimezone } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { resolveAddress, validateAddress } from '../address/format.ts'
 import { addCalendarDays, dateKeyIn } from './calendar.ts'
@@ -60,14 +60,7 @@ const normalized = <T extends Record<string, unknown>>(
   values: T,
 ): Record<string, unknown> & T => ({ ...raw, ...values })
 const isClock = (value: unknown): boolean => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(value))
-const isTimezone = (value: unknown): boolean => {
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: String(value) }).format()
-    return true
-  } catch {
-    return false
-  }
-}
+const isTimezone = (value: unknown): boolean => isKetTimezone(String(value))
 const countryCodeOf = (value: unknown): string => {
   const country = cleanText(value)
   if (/^vi(?:ệ|e)t\s*nam$/iu.test(country)) return 'VN'

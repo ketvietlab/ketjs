@@ -1,4 +1,4 @@
-import { KetError } from '@ketvietlab/ketjs'
+import { dateTimeFormatter, isTimezone, KetError } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { RECURRENCE_FREQUENCIES, WEEKDAYS } from './types.ts'
 
@@ -6,17 +6,10 @@ const calendarError = (code: string, message: string): never => {
   throw new KetError({ code, module: 'calendar', message })
 }
 
-export const validTimezone = (timezone: string): boolean => {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date())
-    return true
-  } catch {
-    return false
-  }
-}
+export const validTimezone = (timezone: string): boolean => isTimezone(timezone)
 
 export const datePartsIn = (instant: string | Date, timezone: string) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  const parts = dateTimeFormatter('en-CA', {
     timeZone: timezone,
     year: 'numeric',
     month: '2-digit',

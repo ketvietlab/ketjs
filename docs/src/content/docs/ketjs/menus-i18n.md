@@ -138,6 +138,33 @@ The translator exposes:
 An unresolved key renders as the key rather than becoming blank. Missing translations fall back and
 may be observed without breaking the build.
 
+`Intl.PluralRules` instances are shared by locale. A running deployment also reuses one translator
+per shipped locale, so route and screen composition may call `ServeContext.translate(locale)` without
+reconstructing the plural engine. The deployment freezes these cached translators so one request cannot
+change an instance that a later request will reuse.
+
+## Date and time formatting
+
+Use the shared formatter when a server-rendered list formats dates repeatedly:
+
+```ts
+// File: src/modules/example/screens/orders.ts
+import { dateTimeFormatter } from '@ketvietlab/ketjs'
+
+const formatter = dateTimeFormatter(locale, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: company.timezone,
+})
+
+const labels = orders.map((order) => formatter.format(new Date(order.createdAt)))
+```
+
+Equivalent option objects resolve to the same immutable `Intl.DateTimeFormat` instance, regardless of
+property order. The pseudo-locale uses English's Intl rules while translated copy still expands. Prefer
+binding the formatter before a large loop; repeated `dateTimeFormatter()` calls are safe and cached but
+still have to canonicalize the options.
+
 ## KTL translation
 
 When the theme runtime has a translator, KTL exposes it as the `_` filter:
@@ -186,7 +213,8 @@ KET_FALLBACK_LOCALE=en
 
 Applications may resolve request locale through their route/session design. `ServeContext.localeOf()`
 returns the locale selected by the running app, and `ServeContext.translate(locale)` returns its
-translator.
+translator. The server memoizes locale resolution for repeated calls with the same request/query/header
+and checks a valid `?lang=` before parsing `Accept-Language`.
 
 Keep locale preference separate from tenant and company identity. A user may change language without
 changing the database or legal entity in scope.

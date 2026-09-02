@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, dataTable, emptyState, RecordActions } from '../../../ui/index.ts'
+import { badge, dataTable, emptyState, formatDateTime, RecordActions } from '../../../ui/index.ts'
 import type { SessionRow } from './types.ts'
 
 export const sessionsScreen = (
@@ -17,7 +17,15 @@ export const sessionsScreen = (
           {
             key: 'created',
             label: _('user_backend.sessions.created'),
-            cell: (row) => new Date(row.createdAt).toLocaleString(),
+            cell: (row) =>
+              formatDateTime(_.locale, new Date(row.createdAt), {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                second: 'numeric',
+              }),
           },
           {
             key: 'context',

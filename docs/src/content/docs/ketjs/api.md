@@ -128,7 +128,7 @@ include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `Tr
 | API | Purpose |
 | --- | --- |
 | `buildMenu`, `activeMenuRoot` | Resolve visible menu trees and the active root section. |
-| `translator`, `missingMessages`, `formatMissing`, `PSEUDO_LOCALE` | Translate catalogs and audit missing messages. |
+| `translator`, `missingMessages`, `formatMissing`, `dateTimeFormatter`, `PSEUDO_LOCALE` | Translate catalogs, reuse Intl date/time formatters, and audit missing messages. |
 | `createTheme`, `compileKtl`, `loadTemplates`, `createJoints` | Compile and execute the theme boundary. |
 | `makeDrop`, `makeDrops`, `sealScope` | Expose controlled view-model values to KTL. |
 | `tokensToCss`, `scopedCss` | Convert design tokens into layered and scoped CSS. |
