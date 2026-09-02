@@ -111,6 +111,11 @@ export const business = defineDeployment({
 })
 ```
 
+As an alternative to embedding `permissions` in each module object, a package may export exact declarations
+and bind them through `permissions.modules`. This keeps a reviewed product baseline centralized without
+mutating reusable module objects. A deployment cannot supply an overlay for a module that already embeds a
+declaration.
+
 Composition stores the deterministic catalog and digest in `manifest.permissions`. See the
 [permission bundles and scoped roles RFC](/architecture/permission-bundles-rfc/) for validation,
 persistence, and rollout invariants.

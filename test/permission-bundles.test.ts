@@ -84,6 +84,36 @@ test('permission coverage fails closed for a new function', () => {
   )
 })
 
+test('deployment-owned catalogues classify composed modules without mutating their manifests', () => {
+  const permissions = sales.permissions!
+  const plainSales = { ...sales, permissions: null }
+  const manifest = compose([plainSales], {
+    requirePermissionCoverage: true,
+    modulePermissionDeclarations: { sales: permissions! },
+  })
+  assert.deepEqual(manifest.permissions.bundles['sales.operate']?.functions, ['sales.list', 'sales.save'])
+  assert.equal(plainSales.permissions, null)
+})
+
+test('deployment permission catalogues reject missing and duplicate module authority', () => {
+  const permissions = sales.permissions!
+  const plainSales = { ...sales, permissions: null }
+  assert.throws(
+    () =>
+      compose([plainSales], {
+        modulePermissionDeclarations: { missing: permissions! },
+      }),
+    (error) => hasDiagnostic(error, 'E_PERMISSION_CATALOG_INVALID'),
+  )
+  assert.throws(
+    () =>
+      compose([sales], {
+        modulePermissionDeclarations: { sales: permissions! },
+      }),
+    (error) => hasDiagnostic(error, 'E_PERMISSION_CATALOG_INVALID'),
+  )
+})
+
 test('permission bundles reject cycles and duplicate includes', () => {
   const broken = defineModule({
     name: 'sales',

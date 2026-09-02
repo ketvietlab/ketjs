@@ -8,7 +8,7 @@
 import { topoSort } from './graph.ts'
 import { Diagnostics } from './errors.ts'
 import { parseType } from './types.ts'
-import type { KetModule, Manifest, ComposedModel } from '../types.ts'
+import type { KetModule, Manifest, ComposedModel, ModulePermissionsDef } from '../types.ts'
 import { ambiguousRoutes, parseRoutePattern } from './routes.ts'
 import type { RoutePattern } from './routes.ts'
 import { tableNameFor } from '../data/migrate.ts'
@@ -25,6 +25,7 @@ export function compose(
     headless?: boolean
     requirePermissionCoverage?: boolean
     roleTemplates?: Record<string, RoleTemplateDef>
+    modulePermissionDeclarations?: Record<string, ModulePermissionsDef>
   } = {},
 ): Manifest {
   const diag = new Diagnostics()
@@ -674,6 +675,7 @@ export function compose(
   manifest.permissions = compilePermissionBundles(order, manifest, {
     requireCoverage: opts.requirePermissionCoverage,
     roleTemplates: opts.roleTemplates,
+    moduleDeclarations: opts.modulePermissionDeclarations,
   })
 
   // --- printable reports ---------------------------------------------------

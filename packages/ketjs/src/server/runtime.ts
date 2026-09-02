@@ -33,6 +33,7 @@ export async function bootRuntime(
     requiredRegions: spec.requires ?? [],
     headless: spec.headless ?? false,
     requirePermissionCoverage: spec.permissions?.requireCoverage,
+    modulePermissionDeclarations: spec.permissions?.modules,
     roleTemplates: spec.permissions?.roleTemplates,
   })
   // Asset URLs carry their file's digest from here on, so a browser and
