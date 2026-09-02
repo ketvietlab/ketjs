@@ -17,7 +17,7 @@ test('public production permission catalogue covers every function owned by its 
 
   assert.equal(ketsuitePermissionModuleNames.length, 59)
   assert.equal(Object.keys(manifest.permissions.modules).length, 59)
-  assert.equal(Object.keys(manifest.permissions.bundles).length, 133)
+  assert.equal(Object.keys(manifest.permissions.bundles).length, 140)
   assert.equal(Object.keys(manifest.permissions.functions).length, 698)
   assert.equal(Object.keys(manifest.permissions.exemptions).length, 70)
 
@@ -54,4 +54,22 @@ test('public catalogue keeps ordinary POS operation below cash, refund, void, an
   assert.deepEqual(declaration?.functions['pos.recordCashMovement']?.bundles, ['pos.cash-control'])
   assert.deepEqual(declaration?.functions['pos.validateOrder']?.bundles, ['pos.reconcile'])
   assert.deepEqual(declaration?.functions['pos.saveConfig']?.bundles, ['pos.configure'])
+})
+
+test('public catalogue keeps quotation work separate from confirmation, cancellation, invoicing, and reporting', () => {
+  const declaration = ketsuitePermissionModules.sale
+  assert.deepEqual(declaration?.functions['sale.saveDraft']?.bundles, ['sale.quote-operate'])
+  assert.deepEqual(declaration?.functions['sale.confirmOrder']?.bundles, ['sale.confirm'])
+  assert.deepEqual(declaration?.functions['sale.cancelOrder']?.bundles, ['sale.cancel'])
+  assert.deepEqual(declaration?.functions['sale.createInvoice']?.bundles, ['sale.invoice'])
+  assert.deepEqual(declaration?.functions['sale.getSalesOrderReport']?.bundles, ['sale.report'])
+})
+
+test('public catalogue separates CRM agent work from assignment, merge, analytics, and configuration', () => {
+  const declaration = ketsuitePermissionModules.crm
+  assert.deepEqual(declaration?.functions['crm.case.save']?.bundles, ['crm.agent-operate'])
+  assert.deepEqual(declaration?.functions['crm.case.reassign']?.bundles, ['crm.assignment'])
+  assert.deepEqual(declaration?.functions['crm.case.merge']?.bundles, ['crm.merge'])
+  assert.deepEqual(declaration?.functions['crm.enrichment.preview']?.bundles, ['crm.analytics'])
+  assert.deepEqual(declaration?.functions['crm.assignmentRule.save']?.bundles, ['crm.configure'])
 })
