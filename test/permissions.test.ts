@@ -7,6 +7,7 @@ import {
   functionsOf,
   formatReach,
   formatInventory,
+  permissionInventory,
   from,
 } from '@ketvietlab/ketjs'
 import type { Ctx } from '@ketvietlab/ketjs'
@@ -128,4 +129,87 @@ test('report: the inventory counts what cannot be stated at field level', () => 
   const out = formatInventory(manifest)
   assert.match(out, /4 function\(s\); 3 return an undeclared shape/)
   assert.match(out, /cross-company/)
+})
+
+test('inventory: machine-readable output includes zero-function modules and every security marker', () => {
+  const operations = defineModule({
+    name: 'operations',
+    depends: ['shop'],
+    functions: {
+      status: { anonymous: true, effects: [], output: { ok: 'bool' }, handler: () => ({ ok: true }) },
+      rotate: { exposure: 'internal', effects: ['write:shop.Order'], handler: () => null },
+      bootstrap: { exposure: 'internal', provision: true, effects: [], handler: () => null },
+    },
+  })
+  const empty = defineModule({ name: 'empty' })
+  const inventory = permissionInventory(compose([shop, operations, empty], { headless: true }))
+
+  assert.deepEqual(
+    inventory.modules.map((module) => [module.name, module.functions.length]),
+    [
+      ['empty', 0],
+      ['operations', 3],
+      ['shop', 4],
+    ],
+  )
+  assert.deepEqual(inventory.totals, {
+    modules: 3,
+    functions: 7,
+    grantable: 4,
+    anonymous: 1,
+    internal: 2,
+    provision: 1,
+    unprojected: 5,
+  })
+  assert.deepEqual(inventory.modules.find((module) => module.name === 'operations')?.functions, [
+    {
+      key: 'operations.bootstrap',
+      module: 'operations',
+      exposure: 'internal',
+      anonymous: false,
+      provision: true,
+      grantable: false,
+      effects: [],
+      crossCompany: false,
+      idempotent: false,
+      dryRun: true,
+      agent: false,
+      input: {},
+      output: {},
+    },
+    {
+      key: 'operations.rotate',
+      module: 'operations',
+      exposure: 'internal',
+      anonymous: false,
+      provision: false,
+      grantable: false,
+      effects: ['write:shop.Order'],
+      crossCompany: false,
+      idempotent: false,
+      dryRun: true,
+      agent: false,
+      input: {},
+      output: {},
+    },
+    {
+      key: 'operations.status',
+      module: 'operations',
+      exposure: 'http',
+      anonymous: true,
+      provision: false,
+      grantable: false,
+      effects: [],
+      crossCompany: false,
+      idempotent: false,
+      dryRun: true,
+      agent: false,
+      input: {},
+      output: { ok: 'bool' },
+    },
+  ])
+  assert.equal(
+    JSON.stringify(permissionInventory(compose([shop, operations, empty], { headless: true }))),
+    JSON.stringify(inventory),
+  )
 })

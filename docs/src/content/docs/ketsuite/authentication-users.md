@@ -214,6 +214,11 @@ Quyền tiếp tục là allow-list theo function:
 - UI chỉ hiển thị module và tác vụ đã dịch, không bắt nhập raw function key;
 - preset User/Manager tạo Role/Grant bình thường và vẫn chỉnh sửa được sau đó.
 
+`legacyPermissionCatalogue(manifest)` và `legacyPresetFunctions(manifest, module, level)` xuất đúng projection
+hiện tại cho inventory/migration tooling. Tên `legacy` là chủ ý: đây là compatibility evidence cho heuristic
+User/Manager hiện hành, không phải API để role mới tiếp tục phụ thuộc vào tên action. Cả UI catalogue và
+`applyPreset` gọi cùng helper nên audit không cần copy regex sang application repository.
+
 Superuser là escape hatch duy nhất khỏi allow-list. Chỉ superuser được tạo/elevate
 superuser khác và không thể archive/hạ quyền superuser hoạt động cuối cùng. Các
 mutation có thể làm mất superuser lấy cùng một `SecurityGuard` row lock trong

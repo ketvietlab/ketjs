@@ -7,13 +7,65 @@
 // the table is used.
 
 import { asc, defineFn, deleteFrom, eq, from, inArray } from '@ketvietlab/ketjs'
-import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Manifest } from '@ketvietlab/ketjs'
 
 const error = (field: string, code: string, params?: Record<string, unknown>) => ({
   field,
   code,
   ...(params ? { params } : {}),
 })
+
+export type LegacyPermissionTask = 'read' | 'operate' | 'manage'
+export type LegacyPermissionCatalogueEntry = {
+  key: string
+  module: string
+  task: LegacyPermissionTask
+}
+
+const legacyReadAction = /^(list|get|count|report|forecast|permitted)/
+const legacyManageAction =
+  /^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply|manage|publish|rollback)/
+
+const legacyTaskOf = (key: string): LegacyPermissionTask => {
+  const action = key.split('.').at(-1) ?? key
+  if (legacyReadAction.test(action)) return 'read'
+  if (legacyManageAction.test(action)) return 'manage'
+  return 'operate'
+}
+
+/** Exact projection used by the current permission screen. Kept public for migration inventory only. */
+export const legacyPermissionCatalogue = (manifest: Manifest): LegacyPermissionCatalogueEntry[] =>
+  Object.entries(manifest.functions)
+    .filter(([, fn]) => fn.exposure !== 'internal' && fn.provision !== true && !fn.anonymous)
+    .map(([key]) => ({ key, module: key.split('.')[0] ?? '', task: legacyTaskOf(key) }))
+    .sort(
+      (left, right) =>
+        left.module.localeCompare(right.module) ||
+        left.task.localeCompare(right.task) ||
+        left.key.localeCompare(right.key),
+    )
+
+/** Exact function set granted by the current module User/Manager preset heuristic. */
+export const legacyPresetFunctions = (
+  manifest: Manifest,
+  moduleName: string,
+  level: 'user' | 'manager',
+): string[] => {
+  if (!manifest.modules[moduleName]) throw new Error(`no module "${moduleName}" in the manifest`)
+  return Object.entries(manifest.functions)
+    .filter(([key, fn]) => {
+      if (!key.startsWith(`${moduleName}.`) || fn.anonymous) return false
+      if (fn.exposure === 'internal') return level === 'manager' && key === 'user.issueAuthToken'
+      if (level === 'manager') return true
+      // OAuth's public/self-service calls are anonymous-by-contract and already
+      // available to a signed-in user. Provider and foreign identity rows are
+      // administration data, so the ordinary User preset grants none of them.
+      if (moduleName === 'oauth') return false
+      return !legacyManageAction.test(key.split('.').at(-1) ?? key)
+    })
+    .map(([key]) => key)
+    .sort()
+}
 
 /**
  * Every function key this user may call, across all their roles.
@@ -45,24 +97,7 @@ export const roleFunctions: Record<string, FnSpec> = {
     input: {},
     output: { key: 'text', module: 'text', task: 'text' },
     effects: [],
-    handler: (ctx: Ctx) =>
-      Object.entries(ctx.manifest.functions)
-        .filter(([, fn]) => fn.exposure !== 'internal' && fn.provision !== true && !fn.anonymous)
-        .map(([key]) => {
-          const action = key.split('.').at(-1) ?? key
-          const task = /^(list|get|count|report|forecast|permitted)/.test(action)
-            ? 'read'
-            : /^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply|manage|publish|rollback)/.test(
-                  action,
-                )
-              ? 'manage'
-              : 'operate'
-          return { key, module: key.split('.')[0] ?? '', task }
-        })
-        .sort(
-          (a, b) =>
-            a.module.localeCompare(b.module) || a.task.localeCompare(b.task) || a.key.localeCompare(b.key),
-        ),
+    handler: (ctx: Ctx) => legacyPermissionCatalogue(ctx.manifest),
   }),
 
   applyPreset: defineFn({
@@ -88,21 +123,7 @@ export const roleFunctions: Record<string, FnSpec> = {
         name: `${moduleName} · ${level === 'manager' ? 'Manager' : 'User'}`,
         description: `preset:${moduleName}:${level}`,
       })
-      const keys = Object.entries(ctx.manifest.functions)
-        .filter(([key, fn]) => {
-          if (!key.startsWith(`${moduleName}.`) || fn.anonymous) return false
-          if (fn.exposure === 'internal') return level === 'manager' && key === 'user.issueAuthToken'
-          if (level === 'manager') return true
-          const action = key.split('.').at(-1) ?? key
-          // OAuth's public/self-service calls are anonymous-by-contract and already
-          // available to a signed-in user. Provider and foreign identity rows are
-          // administration data, so the ordinary User preset grants none of them.
-          if (moduleName === 'oauth') return false
-          return !/^(save|create|archive|grant|revoke|assign|unassign|set|issue|apply|manage|publish|rollback)/.test(
-            action,
-          )
-        })
-        .map(([key]) => key)
+      const keys = legacyPresetFunctions(ctx.manifest, moduleName, level as 'user' | 'manager')
       let granted = 0
       for (const key of keys) {
         const result = await ctx.db.insertIfAbsent('user.Grant', {
