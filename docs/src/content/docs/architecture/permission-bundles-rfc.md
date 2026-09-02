@@ -128,6 +128,17 @@ Provision functions must be internal, explicitly marked `provision`, and exempt 
 Anonymous functions must name their cryptographic, customer-realm, or public authority. Internal functions
 must name the trusted route, worker, joint, or service boundary that calls them.
 
+### Required CI coverage
+
+The stable `permission coverage` check runs on every pull request to a protected production branch. It
+compiles the generic permission contract and the complete public KetSuite production catalogue; it is not
+path-filtered by module or test group. A pull request cannot merge when a production function is missing an
+exact bundle classification or exemption, when a declaration is stale, or when the bundle graph is invalid.
+
+Application repositories must expose the same stable check for their composed production deployments and
+make it a required branch check. Deferred deployments remain outside the active catalogue until their
+documented re-entry gate, but shared modules used by active deployments remain covered.
+
 ### Bundle graph
 
 The compiler builds one directed graph per composed deployment. It rejects:
