@@ -27,6 +27,13 @@ export const messages: Record<string, Record<string, Message>> = {
     'state.owing': 'Còn nợ',
     'state.paid': 'Đã thu đủ',
 
+    'blocker.folio_open': 'Hồ sơ còn mở',
+    'blocker.folio_without_charges': 'Chưa có khoản phí',
+    'blocker.charge_rule_missing': 'Thiếu quy tắc cho {types}',
+    'blocker.journal_missing': 'Thiếu sổ nhật ký bán hàng',
+    'blocker.folio_without_guest': 'Chưa chọn người thanh toán',
+    'blocker.repair': 'Mở chỗ sửa',
+
     'action.invoice': 'Xuất hoá đơn',
     'action.recordPayment': 'Ghi nhận thu tiền',
     'action.invoiceAll': 'Xuất hoá đơn cho tất cả hồ sơ đã đóng',
@@ -113,6 +120,13 @@ export const messages: Record<string, Record<string, Message>> = {
     'state.unbilled': 'Not invoiced',
     'state.owing': 'Owing',
     'state.paid': 'Paid',
+
+    'blocker.folio_open': 'Folio is still open',
+    'blocker.folio_without_charges': 'No charge has been posted',
+    'blocker.charge_rule_missing': 'No billing rule for {types}',
+    'blocker.journal_missing': 'No sales journal is configured',
+    'blocker.folio_without_guest': 'No payer is selected',
+    'blocker.repair': 'Open fix',
 
     'action.invoice': 'Invoice',
     'action.recordPayment': 'Record payment',

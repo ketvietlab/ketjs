@@ -39,7 +39,7 @@ export const billingScreen = (
           }),
       // A hotel closes folios all night with nobody at the desk. One press bills
       // everything that is only waiting for one.
-      rows.some((row) => !row.moveId && !row.missingRules.length) ? (
+      rows.some((row) => !row.moveId && !row.blockers.length) ? (
         <RecordForm
           action="/admin/hospitality/billing"
           method="post"

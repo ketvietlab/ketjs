@@ -30,6 +30,85 @@ test('Hospitality collection and form adapters use public page contracts', () =>
   assert.match(renderToString(BillingListFrame(props)), /data-ui="list-page"/)
 })
 
+test('Hospitality billing blockers link directly to their repair surfaces and suppress invoice actions', () => {
+  const html = renderToString(
+    billingScreens.billingScreen(
+      translate,
+      [
+        {
+          folioId: 'folio-1',
+          folioCode: 'FOL-001',
+          guest: null,
+          closedAt: null,
+          folioState: 'open',
+          folioTotal: '0',
+          chargeCount: 0,
+          missingRules: [],
+          blockers: [
+            {
+              code: 'folio_open',
+              repairHref: '/admin/hospitality/stays/stay-1',
+            },
+            {
+              code: 'folio_without_charges',
+              repairHref: '/admin/hospitality/folios/folio-1',
+            },
+            {
+              code: 'journal_missing',
+              repairHref: '/admin/accounting/journals/new',
+            },
+            {
+              code: 'folio_without_guest',
+              repairHref: '/admin/hospitality/reservations/reservation-1',
+            },
+          ],
+          moveId: null,
+          moveName: null,
+          amountTotal: null,
+          amountDue: null,
+          paymentState: null,
+        },
+      ],
+      {},
+    ),
+  )
+
+  assert.match(html, /hospitality_billing\.blocker\.folio_open/)
+  assert.match(html, /href="\/admin\/hospitality\/stays\/stay-1"/)
+  assert.match(html, /href="\/admin\/hospitality\/folios\/folio-1"/)
+  assert.match(html, /href="\/admin\/accounting\/journals\/new"/)
+  assert.match(html, /href="\/admin\/hospitality\/reservations\/reservation-1"/)
+  assert.doesNotMatch(html, /hospitality_billing\.action\.invoice(?:All)?</)
+})
+
+test('Hospitality manual folio form cannot bypass stock fulfilment for minibar', () => {
+  const html = renderToString(
+    coreScreens.folioDetailScreen(
+      translate,
+      {
+        id: 'folio-1',
+        code: 'FOL-001',
+        propertyId: 'hotel',
+        partnerId: 'guest',
+        state: 'open',
+        amountTotal: '0',
+        version: 0,
+        openedAt: '2026-09-02T00:00:00.000Z',
+        partner: { name: 'Synthetic Guest' },
+        stays: [],
+        charges: [],
+      },
+      'vi',
+      'Asia/Ho_Chi_Minh',
+      {},
+      'charge-1',
+    ),
+  )
+
+  assert.match(html, /value="spa"/)
+  assert.doesNotMatch(html, /value="minibar"/)
+})
+
 test('Hospitality primary create actions stay in the ListPage title row', () => {
   const properties = renderToString(
     propertiesScreen(translate, [], { rooms: 0, available: 0, attention: 0 }, 'vi', {}),

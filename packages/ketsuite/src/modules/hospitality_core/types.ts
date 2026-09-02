@@ -82,6 +82,14 @@ export const CHARGE_TYPES = [
   'cancellation',
   'discount',
 ] as const
+/**
+ * How a product-backed charge is fulfilled before it becomes active.
+ *
+ * `external_stock` deliberately names a boundary rather than a module: a
+ * private deployment connector may use a remote stock authority without
+ * making the public hospitality module depend on that datastore.
+ */
+export const CHARGE_FULFILLMENT_KINDS = ['none', 'external_stock'] as const
 export const PROPERTY_CHARGE_TYPES = ['parking', 'city_tax', 'internet', 'resort_fee', 'other'] as const
 export const EXTRA_RECURRENCES = ['once', 'per_night', 'per_unit'] as const
 export const DOCUMENT_TYPES = ['cccd', 'cmnd', 'passport', 'other'] as const
@@ -114,6 +122,7 @@ export type FolioState = (typeof FOLIO_STATES)[number]
 export type AssignmentState = (typeof ASSIGNMENT_STATES)[number]
 export type BookingProvider = (typeof BOOKING_PROVIDERS)[number]
 export type ChargeType = (typeof CHARGE_TYPES)[number]
+export type ChargeFulfillmentKind = (typeof CHARGE_FULFILLMENT_KINDS)[number]
 export type PropertyChargeType = (typeof PROPERTY_CHARGE_TYPES)[number]
 export type ExtraRecurrence = (typeof EXTRA_RECURRENCES)[number]
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]

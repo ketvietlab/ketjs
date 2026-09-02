@@ -60,6 +60,24 @@ async function boot(): Promise<Adapter> {
     adapter,
   )
   await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Nguyễn An' }, adapter)
+  await call('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' }, adapter)
+  await call(
+    'product.saveTemplate',
+    {
+      id: 'water-template',
+      name: 'Water',
+      type: 'goods',
+      uomId: 'unit',
+      listPrice: '50',
+      saleOk: true,
+    },
+    adapter,
+  )
+  await call(
+    'product.saveVariant',
+    { id: 'water', templateId: 'water-template', defaultCode: 'WATER', combinationKey: '' },
+    adapter,
+  )
 
   for (const [id, code, name, accountType] of [
     ['receivable', '131', 'Phải thu khách hàng', 'asset_receivable'],
@@ -211,6 +229,9 @@ test('hospitality billing: folio charges remain exact beyond JavaScript safe int
         folioId,
         description: 'Large exact charge',
         type: 'minibar',
+        productId: 'water',
+        uomId: 'unit',
+        fulfillmentKind: 'external_stock',
         quantity: '1',
         unitPrice: '9007199254740993',
       },
@@ -257,6 +278,9 @@ test('hospitality billing: a charge nobody has classified is refused, not filed 
         folioId,
         description: 'Minibar',
         type: 'minibar',
+        productId: 'water',
+        uomId: 'unit',
+        fulfillmentKind: 'external_stock',
         quantity: '2',
         unitPrice: '50',
       },
@@ -359,7 +383,31 @@ test('hospitality billing: an open folio is not invoiced, because it can still t
     const refused = await value('hospitality_billing.invoiceFolio', { folioId }, adapter)
     assert.equal(refused.ok, false)
     assert.equal((refused.errors as Row[])[0]!.code, 'folio_not_closed')
+    const readiness = await value('hospitality_billing.getFolioBilling', { folioId }, adapter)
+    assert.deepEqual(
+      (readiness.blockers as Row[]).map((blocker) => blocker.code),
+      ['folio_open'],
+    )
     assert.equal((await adapter.all('SELECT id FROM account_move')).length, 0)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality billing: readiness reports every repairable invoice blocker without provider data', async () => {
+  const adapter = await boot()
+  try {
+    const folioId = await stayed(adapter)
+    await adapter.run('DELETE FROM hospitality_core_charge WHERE "folioId" = ?', [folioId])
+    await adapter.run('UPDATE hospitality_core_folio SET "amountTotal" = 0 WHERE id = ?', [folioId])
+    await adapter.run("DELETE FROM account_journal WHERE type = 'sale'")
+
+    const readiness = await value('hospitality_billing.getFolioBilling', { folioId }, adapter)
+    assert.deepEqual(
+      (readiness.blockers as Row[]).map((blocker) => blocker.code),
+      ['folio_without_charges', 'journal_missing'],
+    )
+    assert.equal(JSON.stringify(readiness).includes('Nguyễn An'), false)
   } finally {
     await adapter.close()
   }

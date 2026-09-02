@@ -179,7 +179,7 @@ export const routes: Record<string, RouteEntry> = {
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
 
-      const folios = (await ctx.call('hospitality_core.listFolios', { state: 'closed' }, url, req)) as Row[]
+      const folios = (await ctx.call('hospitality_core.listFolios', {}, url, req)) as Row[]
       const rows: FolioBillingRow[] = []
       for (const folio of folios) {
         const billing = (await ctx.call(
@@ -189,6 +189,18 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )) as Row | null
         if (!billing) continue
+        const stays = (folio.stays as Row[] | null) ?? []
+        const firstStay = stays[0]
+        const firstReservationId = firstStay?.reservationId ? String(firstStay.reservationId) : null
+        const repairHref = (code: string): string => {
+          if (code === 'charge_rule_missing') return '/admin/hospitality/billing/rules'
+          if (code === 'journal_missing') return '/admin/accounting/journals/new'
+          if (code === 'folio_open' && firstStay)
+            return `/admin/hospitality/stays/${encodeURIComponent(String(firstStay.id))}`
+          if (code === 'folio_without_guest' && firstReservationId)
+            return `/admin/hospitality/reservations/${encodeURIComponent(firstReservationId)}`
+          return `/admin/hospitality/folios/${encodeURIComponent(String(folio.id))}`
+        }
         rows.push({
           folioId: String(folio.id),
           folioCode: String(folio.code ?? folio.id),
@@ -196,9 +208,17 @@ export const routes: Record<string, RouteEntry> = {
             ? String((folio.partner as { name?: unknown }).name)
             : null,
           closedAt: folio.closedAt ? String(folio.closedAt) : null,
+          folioState: String(billing.folioState),
           folioTotal: String(billing.folioTotal),
           chargeCount: Number(billing.chargeCount),
           missingRules: (billing.missingRules as string[]) ?? [],
+          blockers: ((billing.blockers as Row[]) ?? []).map((blocker) => ({
+            code: String(blocker.code) as FolioBillingRow['blockers'][number]['code'],
+            ...(blocker.params
+              ? { params: blocker.params as FolioBillingRow['blockers'][number]['params'] }
+              : {}),
+            repairHref: repairHref(String(blocker.code)),
+          })),
           moveId: billing.moveId ? String(billing.moveId) : null,
           moveName: billing.moveName ? String(billing.moveName) : null,
           amountTotal: billing.amountTotal ? String(billing.amountTotal) : null,
