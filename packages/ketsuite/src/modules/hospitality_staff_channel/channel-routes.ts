@@ -6,6 +6,7 @@
 // final authority. Commands without a matching atomic domain function are
 // rejected and never advertised as a successful operation.
 
+import { dateTimeFormatter } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
 import {
@@ -470,7 +471,7 @@ const pageRows = <T>(rows: T[], cursor: string | null, limit: number) => {
   return { items, nextCursor: offset + limit < rows.length ? cursorOf(offset + limit) : null }
 }
 const localDateAt = (value: Date, timezone: string): string =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  dateTimeFormatter('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(value)
     .replaceAll('/', '-')
 const localDate = (timezone: string): string => localDateAt(new Date(), timezone)

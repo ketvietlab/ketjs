@@ -1,12 +1,10 @@
-import { dateBucket, isDateText } from '@ketvietlab/ketjs'
+import { dateBucket, isDateText, isTimezone } from '@ketvietlab/ketjs'
 
 export const DEFAULT_ACCOUNTING_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
 export const assertAccountingTimezone = (value: unknown): string => {
   const timezone = String(value ?? '').trim()
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: timezone }).format()
-  } catch {
+  if (!isTimezone(timezone)) {
     throw new RangeError(`invalid IANA accounting timezone: ${timezone || '(empty)'}`)
   }
   return timezone

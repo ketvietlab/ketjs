@@ -5,6 +5,7 @@ import {
   defineModule,
   defineTheme,
   createTheme,
+  dateTimeFormatter,
   translator,
   missingMessages,
   formatMissing,
@@ -116,4 +117,16 @@ test('i18n: has() and resolves() answer different questions', () => {
   assert.equal(pseudo.has('shop.greeting'), false)
   assert.equal(pseudo.resolves('shop.greeting'), true)
   assert.match(pseudo('shop.greeting', { name: 'D' }), /^⟦.*⟧$/)
+})
+
+test('i18n: equivalent date/time options reuse one formatter', () => {
+  const first = dateTimeFormatter('vi', { timeZone: 'UTC', month: '2-digit', year: 'numeric' })
+  const reordered = dateTimeFormatter('vi', { year: 'numeric', month: '2-digit', timeZone: 'UTC' })
+  assert.strictEqual(first, reordered)
+  assert.equal(
+    dateTimeFormatter(PSEUDO_LOCALE, { timeZone: 'UTC', year: 'numeric' }).format(
+      new Date('2026-09-02T00:00:00Z'),
+    ),
+    '2026',
+  )
 })

@@ -2,6 +2,7 @@ import {
   addCalendarDays,
   dateKeyIn,
   emptyState,
+  formatDateTime,
   type Frame,
   Framed,
   providerName,
@@ -36,12 +37,12 @@ export const tapeChartScreen = (
     const value = new Date(`${key}T12:00:00Z`)
     return {
       key,
-      label: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'short' }).format(value),
-      detail: new Intl.DateTimeFormat(locale, {
+      label: formatDateTime(locale, value, { timeZone: 'UTC', weekday: 'short' }),
+      detail: formatDateTime(locale, value, {
         timeZone: 'UTC',
         day: '2-digit',
         month: '2-digit',
-      }).format(value),
+      }),
       today: key === nowKey,
     }
   })

@@ -186,6 +186,11 @@ palette slot rather than a colour: the client reads `--admin-chart-N` off the do
 when it mounts, so `tokens.css` stays the only place a chart hue is named and a
 colour-scheme change is re-read rather than baked in.
 
+The same rule applies to server-rendered tables. Use `formatMoney(_, value, currency)` for business
+amounts and `formatDateTime(_.locale, instant, options)` for instants. Both reuse immutable Intl
+formatters; constructing `Intl.NumberFormat` or `Intl.DateTimeFormat` inside a column `cell` callback
+makes formatter setup scale with the row count.
+
 Pair the canvas with `Chart`, whose legend carries the same numbers as real text. A
 canvas has no text in it, so a reader without the bundle, a screen reader, and a printed
 page all get nothing from it — the legend is what makes the chart optional rather than

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { text } from '@ketvietlab/ketjs'
+import { dateTimeFormatter, text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, Translator } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { receiveAttachment } from '../storage/routes.ts'
@@ -391,7 +391,7 @@ const optionalInteger = (value: string | undefined): number | undefined =>
 
 const localDateTime = (value: Date, timezone: string): string => {
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en', {
+    dateTimeFormatter('en', {
       timeZone: timezone,
       hourCycle: 'h23',
       hour: '2-digit',

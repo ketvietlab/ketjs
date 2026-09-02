@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { fragment, json, NAVIGATION_TYPE, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
-import { backendPage, modalWorkspace } from '../../ui/index.ts'
+import { backendPage, formatDateTime, modalWorkspace } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import {
   forecastScreen,
@@ -151,10 +151,10 @@ const dateTimeLabel = (value: unknown, lang: string): string => {
   const date = new Date(raw)
   return Number.isNaN(date.getTime())
     ? raw
-    : new Intl.DateTimeFormat(lang === 'vi' ? 'vi-VN' : 'en-US', {
+    : formatDateTime(lang === 'vi' ? 'vi-VN' : 'en-US', date, {
         dateStyle: 'short',
         timeStyle: 'short',
-      }).format(date)
+      })
 }
 
 const common = async (ctx: ServeContext, url: URL, req: Req) => {

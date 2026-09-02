@@ -28,7 +28,13 @@ export { compose } from './kernel/compose.ts'
 export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
 export { buildMenu, activeMenuRoot } from './kernel/menu.ts'
 export type { MenuNode, MenuOptions } from './kernel/menu.ts'
-export { translator, missingMessages, formatMissing, PSEUDO_LOCALE } from './kernel/i18n.ts'
+export {
+  translator,
+  missingMessages,
+  formatMissing,
+  dateTimeFormatter,
+  PSEUDO_LOCALE,
+} from './kernel/i18n.ts'
 export type { Translator, Message, Catalog, Messages } from './kernel/i18n.ts'
 export type { Placement, LayoutError } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
