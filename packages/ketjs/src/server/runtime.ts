@@ -32,6 +32,8 @@ export async function bootRuntime(
   const manifest = compose(modules, {
     requiredRegions: spec.requires ?? [],
     headless: spec.headless ?? false,
+    requirePermissionCoverage: spec.permissions?.requireCoverage,
+    roleTemplates: spec.permissions?.roleTemplates,
   })
   // Asset URLs carry their file's digest from here on, so a browser and
   // anything in front of it may keep them until the bytes change.

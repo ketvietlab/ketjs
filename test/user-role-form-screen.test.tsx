@@ -58,3 +58,42 @@ test('role create preserves stable identity and rejected values without permissi
   assert.match(html, /data-ui="form-errors" role="alert"/)
   assert.doesNotMatch(html, /name="permission\./)
 })
+
+test('managed role is read-only, shows provenance, and offers an explicit custom clone', () => {
+  const html = renderToString(
+    roleScreen(
+      translate,
+      {
+        id: 'sale-operator',
+        name: 'Sales operator',
+        description: 'Standard role',
+        mode: 'managed',
+        templateVersion: 3,
+        grantSources: [
+          {
+            fnKey: 'sale.listOrders',
+            sourceKind: 'managed-template',
+            sourceKey: 'sale.operator',
+            sourceVersion: 3,
+          },
+        ],
+      },
+      {
+        mode: 'detail',
+        action: '/admin/roles/sale-operator?lang=en',
+        cancelHref: '/admin/roles?lang=en',
+        cloneAction: '/admin/roles/sale-operator/clone?lang=en',
+        cloneId: 'clone-id',
+        authorizationRevision: 9,
+      },
+    ),
+  )
+  assert.match(html, /v3/)
+  assert.match(html, /name="name"[^>]*disabled/)
+  assert.match(html, /sale\.listOrders/)
+  assert.match(html, /managed-template · sale\.operator · v3/)
+  assert.match(html, /action="\/admin\/roles\/sale-operator\/clone\?lang=en"/)
+  assert.match(html, /name="expectedAuthorizationRevision" value="9"/)
+  assert.doesNotMatch(html, /form="role-record-form"/)
+  assert.doesNotMatch(html, /name="permission\./)
+})

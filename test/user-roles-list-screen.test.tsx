@@ -20,6 +20,10 @@ test('roles list uses ListPage with row navigation and collection actions', () =
             id: 'manager/a',
             name: 'Manager',
             description: 'Operational manager',
+            mode: 'managed',
+            templateVersion: 2,
+            assignmentCount: 4,
+            healthIssues: ['stale-managed-role'],
             detailHref: '/admin/roles/manager%2Fa?lang=en',
           },
         ],
@@ -32,5 +36,8 @@ test('roles list uses ListPage with row navigation and collection actions', () =
   assert.match(html, /data-row-href="\/admin\/roles\/manager%2Fa\?lang=en"/)
   assert.match(html, /href="\/admin\/roles\/new\?lang=en"/)
   assert.match(html, /href="\/admin\/permission-presets\?lang=en"/)
+  assert.match(html, /v2/)
+  assert.match(html, />4</)
+  assert.match(html, /user_backend\.health\.stale-managed-role/)
   assert.doesNotMatch(html, /data-ui="form-page"/)
 })

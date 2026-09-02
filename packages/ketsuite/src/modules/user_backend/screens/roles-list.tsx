@@ -21,9 +21,30 @@ export const roleListColumns = (_: Translator): Array<Column<RoleListRow>> => [
     cell: (row) => row.name,
   },
   {
+    key: 'mode',
+    label: _('user_backend.field.roleMode'),
+    cell: (row) =>
+      row.mode === 'managed'
+        ? `${_('user_backend.role.managed')} · v${String(row.templateVersion ?? '—')}`
+        : _('user_backend.role.custom'),
+  },
+  {
     key: 'description',
     label: _('user_backend.field.description'),
     cell: (row) => row.description || '—',
+  },
+  {
+    key: 'assignments',
+    label: _('user_backend.access.assignments'),
+    cell: (row) => String(row.assignmentCount ?? 0),
+  },
+  {
+    key: 'health',
+    label: _('user_backend.access.health'),
+    cell: (row) =>
+      row.healthIssues?.length
+        ? row.healthIssues.map((issue) => _(`user_backend.health.${issue}`)).join(', ')
+        : _('user_backend.health.healthy'),
   },
 ]
 

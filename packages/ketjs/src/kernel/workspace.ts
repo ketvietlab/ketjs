@@ -14,7 +14,7 @@ import { compose } from './compose.ts'
 import { Diagnostics } from './errors.ts'
 import { schemaFromManifest } from '../data/migrate.ts'
 import type { Column, Index, Schema } from '../data/migrate.ts'
-import type { KetModule, Manifest } from '../types.ts'
+import type { KetModule, Manifest, RoleTemplateDef } from '../types.ts'
 import type { ServeSpec } from '../server/boot.ts'
 
 export type WorkerSpec = {
@@ -37,6 +37,8 @@ export type DeploymentSpec = {
   requires?: string[]
   /** A deployment that exposes functions but renders no pages: no theme, no region contract. */
   headless?: boolean
+  /** Require exact function coverage and compile product-owned managed role templates. */
+  permissions?: { requireCoverage?: boolean; roleTemplates?: Record<string, RoleTemplateDef> }
   /** How the deployment runs: pages, routes, assets, datastore. Absent means it is never served. */
   serve?: ServeSpec
   /** Same deployment and manifest, a separate production process role. */
@@ -127,6 +129,8 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
       manifests[deployment.name] = compose(mods, {
         requiredRegions: deployment.requires ?? [],
         headless: deployment.headless ?? false,
+        requirePermissionCoverage: deployment.permissions?.requireCoverage,
+        roleTemplates: deployment.permissions?.roleTemplates,
       })
     } catch (e) {
       diag.add({
