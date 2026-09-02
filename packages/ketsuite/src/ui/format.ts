@@ -1,3 +1,4 @@
+import { dateTimeFormatter } from '@ketvietlab/ketjs'
 import type { Translator } from '@ketvietlab/ketjs'
 
 const DEFAULT_CURRENCY = 'VND'
@@ -57,3 +58,10 @@ export const formatMoney = (
   const format = formatter.format as unknown as (amount: string | number | bigint) => string
   return format(typeof value === 'number' && Object.is(value, -0) ? 0 : (value as string | number | bigint))
 }
+
+/** Format one instant through the shared ECMA-402 formatter cache. */
+export const formatDateTime = (
+  locale: string,
+  value: Date | number,
+  options: Intl.DateTimeFormatOptions = {},
+): string => dateTimeFormatter(localeCode(locale), options).format(value)

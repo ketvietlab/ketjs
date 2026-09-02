@@ -130,6 +130,7 @@ const upload = async (request, file, messageId) => {
 export function createChatterView(runtime, props, seed = {}) {
   const { each, html, signal } = runtime
   const labels = labelsOf(props)
+  const messageDateFormatter = new Intl.DateTimeFormat(localeOf(props))
   const status = signal(seed.status ?? 'loading')
   const busy = signal(false)
   const composerKind = signal(seed.composerKind ?? null)
@@ -281,7 +282,7 @@ export function createChatterView(runtime, props, seed = {}) {
           (message) => html`<article data-ui="chatter-message" data-kind=${message.kind}>
             <header data-ui="chatter-message-head">
               <strong data-ui="chatter-author">${message.authorName || labels.system}</strong>
-              <time data-ui="chatter-time" datetime=${message.createdAt}>${new Date(message.createdAt).toLocaleString(localeOf(props))}</time>
+              <time data-ui="chatter-time" datetime=${message.createdAt}>${messageDateFormatter.format(new Date(message.createdAt))}</time>
             </header>
             <p data-ui="chatter-message-body">${message.body}</p>
             ${

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { compose, translator } from '@ketvietlab/ketjs'
 import { renderToString } from '@ketvietlab/ketjs-view'
-import backend, { formatMoney } from '@ketvietlab/ketsuite/backend'
+import backend, { formatDateTime, formatMoney } from '@ketvietlab/ketsuite/backend'
 import { customerInvoicesListScreen } from '../packages/ketsuite/src/modules/account_backend/screens/customer-invoices-list.tsx'
 import { roomTypesScreen } from '../packages/ketsuite/src/modules/hospitality_core/screens/index.ts'
 import { ordersScreen as posOrdersScreen } from '../packages/ketsuite/src/modules/pos_backend/screens.tsx'
@@ -25,6 +25,16 @@ test('money format: keeps missing and invalid business data visible', () => {
   assert.equal(formatMoney(vi, null, 'VND'), '—')
   assert.equal(formatMoney(vi, 'pending', 'VND'), 'pending')
   assert.match(formatMoney(vi, 1500, 'not-a-currency'), /^1\.500\s₫$/u)
+})
+
+test('date/time format: follows the active locale and reuses the shared formatter path', () => {
+  const at = new Date('2026-09-02T09:23:45Z')
+  const options = { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' } as const
+  const viDate = formatDateTime('vi', at, options)
+  const enDate = formatDateTime('en', at, options)
+  assert.equal(viDate, new Intl.DateTimeFormat('vi', options).format(at))
+  assert.equal(enDate, new Intl.DateTimeFormat('en', options).format(at))
+  assert.notEqual(viDate, enDate)
 })
 
 test('money format: every money-bearing backend module renders formatted list values', () => {

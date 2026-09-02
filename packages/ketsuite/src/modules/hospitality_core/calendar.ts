@@ -1,9 +1,11 @@
 // Calendar dates belong to the property's timezone, not the server process.
 // These helpers use Intl only, so they work in both Node and the browser build.
 
+import { dateTimeFormatter } from '@ketvietlab/ketjs'
+
 const partsIn = (value: Date, timezone: string, time: boolean): Record<string, string> =>
   Object.fromEntries(
-    new Intl.DateTimeFormat('en', {
+    dateTimeFormatter('en', {
       timeZone: timezone,
       year: 'numeric',
       month: '2-digit',

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { asc, defineFn, defineJob, desc, eq, from } from '@ketvietlab/ketjs'
+import { asc, dateTimeFormatter, defineFn, defineJob, desc, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, JobContext, JobSpec, Row } from '@ketvietlab/ketjs'
 import { addCalendarDays, dateKeyIn, zonedDateTime } from './calendar.ts'
 import { STAY_NOTICE_CHANNELS, STAY_NOTICE_REASONS } from './types.ts'
@@ -48,7 +48,7 @@ export const stayNoticeDueAt = (checkInValue: unknown, timezone: string): string
   const checkIn = new Date(String(checkInValue ?? ''))
   if (!Number.isFinite(checkIn.getTime())) throw new Error('stay notice check-in is invalid')
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en', {
+    dateTimeFormatter('en', {
       timeZone: timezone,
       year: 'numeric',
       month: '2-digit',

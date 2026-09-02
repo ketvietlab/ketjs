@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { defineFn, desc, eq, from, gte, localDateTimeToUtc, lt } from '@ketvietlab/ketjs'
+import { dateTimeFormatter, defineFn, desc, eq, from, gte, localDateTimeToUtc, lt } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, verifyPassword } from '../user/password.ts'
 
@@ -40,7 +40,7 @@ const policyFor = async (ctx: Ctx): Promise<Row> =>
   }
 
 const currentMonth = (timezone: string): string => {
-  const parts = new Intl.DateTimeFormat('en', {
+  const parts = dateTimeFormatter('en', {
     timeZone: timezone,
     year: 'numeric',
     month: '2-digit',
@@ -52,7 +52,7 @@ const currentMonth = (timezone: string): string => {
 }
 
 const currentDate = (timezone: string): string => {
-  const parts = new Intl.DateTimeFormat('en', {
+  const parts = dateTimeFormatter('en', {
     timeZone: timezone,
     year: 'numeric',
     month: '2-digit',

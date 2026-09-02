@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import { asc, defineFn, eq, from, isTimezone } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
@@ -9,15 +9,7 @@ const issue = (field: string, code: string, params?: Record<string, unknown>): I
 })
 const invalid = (errors: Issue[]) => ({ ok: false, errors })
 const clean = (value: unknown): string => String(value ?? '').trim()
-const validTimezone = (value: string): boolean => {
-  if (!value) return true
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: value }).format()
-    return true
-  } catch {
-    return false
-  }
-}
+const validTimezone = (value: string): boolean => !value || isTimezone(value)
 
 const companyParentIssue = async (ctx: Ctx, id: string, parentId?: unknown): Promise<Issue | null> => {
   if (!parentId) return null

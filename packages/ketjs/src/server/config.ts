@@ -10,6 +10,7 @@
 // hands `openStore` in. The fence is the reason, and the fence is checked.
 
 import { sqliteAdapter } from '../data/sqlite.ts'
+import { isTimezone } from '../data/time.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Adapter } from '../types.ts'
 
@@ -53,9 +54,7 @@ export function readConfig(
   defaults: Partial<RuntimeConfig> = {},
 ): RuntimeConfig {
   const defaultTimezone = env.KET_TIMEZONE ?? defaults.defaultTimezone ?? 'UTC'
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: defaultTimezone }).format()
-  } catch {
+  if (!isTimezone(defaultTimezone)) {
     throw new KetError({
       code: 'E_TIMEZONE_CONFIG',
       message: `KET_TIMEZONE must be an IANA timezone, got "${defaultTimezone}"`,

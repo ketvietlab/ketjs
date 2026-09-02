@@ -1522,6 +1522,7 @@ export default defineModule({
           : null
         const grouped = url.searchParams.get('group') === 'type'
         const needle = search?.toLocaleLowerCase()
+        const translate = needle ? ctx.translate(ctx.localeOf(url, req)) : null
         const matching = all.filter((row) => {
           const active = row.active === true
           if (status === 'active' && !active) return false
@@ -1534,9 +1535,7 @@ export default defineModule({
             return false
           return (
             !needle ||
-            `${String(row.code)} ${accountName(ctx.translate(ctx.localeOf(url, req)), row)}`
-              .toLocaleLowerCase()
-              .includes(needle)
+            `${String(row.code)} ${accountName(translate!, row)}`.toLocaleLowerCase().includes(needle)
           )
         })
         const rows = grouped ? matching : matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
