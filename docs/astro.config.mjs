@@ -168,6 +168,10 @@ export default defineConfig({
               items: [
                 { label: 'How to use design records', slug: 'architecture' },
                 { label: 'Architecture decisions', slug: 'architecture/decisions' },
+                {
+                  label: 'Permission bundles and scoped roles RFC',
+                  slug: 'architecture/permission-bundles-rfc',
+                },
                 { label: 'Open questions', slug: 'architecture/open-questions' },
               ],
             },
