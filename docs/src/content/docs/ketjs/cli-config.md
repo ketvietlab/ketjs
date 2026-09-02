@@ -31,6 +31,7 @@ before invoking them.
 | `ket types --deployment NAME` | Generate `.ket/types.d.ts` from the manifest. |
 | `ket agent --deployment NAME` | Print the machine-readable agent capability descriptor. |
 | `ket permissions` | List grantable functions and the data/effect reach of a grant set, module, or stored role. |
+| `ket permissions --json [--all]` | Emit a deterministic module/function inventory for one or every deployment. |
 
 Run `ket check` in CI before migrations or deployment. It catches dependency, extension, layout, route,
 queue, theme, model, and function-contract conflicts without starting a server.
@@ -40,7 +41,14 @@ queue, theme, model, and function-contract conflicts without starting a server.
 ket check --workspace dist/ket.workspace.js
 ket workspace --workspace dist/ket.workspace.js
 ket permissions --deployment backoffice --grant order.list,order.create
+ket permissions --json --all --workspace dist/ket.workspace.js
 ```
+
+The JSON permission inventory is read-only and contains composition metadata only: module name/version and
+function exposure, anonymous/provision flags, effects, input/output declarations, and replay/agent markers. It
+includes modules with zero functions so CI can distinguish an intentionally non-callable module from a missing
+module. It never serializes handlers, application rows, credentials, or process environment. Use `--deployment`
+for one deployment or `--all` for the complete workspace; those selectors are mutually exclusive.
 
 ## Compare manifests
 

@@ -11,6 +11,7 @@ import {
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
 import type { Ctx } from '@ketvietlab/ketjs'
+import { legacyPermissionCatalogue, legacyPresetFunctions } from '@ketvietlab/ketsuite'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 /**
@@ -110,6 +111,43 @@ test('allow: an empty list is a real restriction, not a missing one', async () =
 })
 
 // ── the role model, and the whole thing running ──────────────────────────────
+
+test('legacy presets: exported audit helpers are the exact current User/Manager projection', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const catalogue = legacyPermissionCatalogue(manifest)
+
+  assert.equal(
+    catalogue.some((entry) => entry.key === 'user.issueAuthToken'),
+    false,
+  )
+  assert.deepEqual(
+    catalogue.find((entry) => entry.key === 'user.listUsers'),
+    {
+      key: 'user.listUsers',
+      module: 'user',
+      task: 'read',
+    },
+  )
+  assert.deepEqual(
+    catalogue.find((entry) => entry.key === 'user.createUser'),
+    {
+      key: 'user.createUser',
+      module: 'user',
+      task: 'manage',
+    },
+  )
+
+  const ordinary = legacyPresetFunctions(manifest, 'user', 'user')
+  assert.equal(ordinary.includes('user.listUsers'), true)
+  assert.equal(ordinary.includes('user.createUser'), false)
+  assert.equal(ordinary.includes('user.issueAuthToken'), false)
+
+  const manager = legacyPresetFunctions(manifest, 'user', 'manager')
+  assert.equal(manager.includes('user.createUser'), true)
+  assert.equal(manager.includes('user.issueAuthToken'), true)
+  assert.deepEqual(legacyPresetFunctions(manifest, 'oauth', 'user'), [])
+  assert.throws(() => legacyPresetFunctions(manifest, 'missing', 'user'), /no module "missing"/)
+})
 
 const setup = async () => {
   const b = await bootDeployment(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'shared' }, port: 0 })
