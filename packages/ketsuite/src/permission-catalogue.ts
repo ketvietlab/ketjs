@@ -423,7 +423,7 @@ const sources = {
       listPropertyCharges: ['read', 'view'],
       listRatePlans: ['read', ['view', 'reservation-input', 'revenue-operate']],
       listReservations: ['read', ['view', 'night-audit', 'reservation-input', 'revenue-operate']],
-      listRooms: ['read', ['view', 'revenue-operate']],
+      listRooms: ['read', ['view', 'housekeeping-supervise', 'revenue-operate']],
       listRoomTypes: ['read', ['view', 'reservation-input', 'revenue-operate']],
       listServiceCharges: ['read', 'view'],
       listServiceProducts: ['read', 'view'],
