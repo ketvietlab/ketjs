@@ -132,6 +132,8 @@ export const leavesListScreen = (
     _,
     _('hr_backend.leaves.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('hr_backend.leaves.title')}
       description={_('hr_backend.leaves.subtitle')}
       actions={frame.extras?.['topbar.end'] !== undefined ? inline([frame.extras['topbar.end']]) : undefined}

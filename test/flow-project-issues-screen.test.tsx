@@ -84,7 +84,7 @@ test('flow project issues: ListPage is collection-only and preserves list state,
     html,
     /href="\/admin\/flow\/projects\/platform\/issues\?filter=priority%3Ahigh&amp;lang=vi&amp;create=1"/,
   )
-  assert.match(textContent, /data-ui="list-page-status">Nền tảng nội bộ: 1/)
+  assert.match(textContent, /data-ui="list-page-footer">Nền tảng nội bộ: 1/)
   assert.match(html, /name="q"[^>]*value="login"/)
   assert.match(html, /name="lang" value="vi"/)
   assert.match(html, /href="\/admin\/flow\/issues\/issue-login\?lang=vi"/)

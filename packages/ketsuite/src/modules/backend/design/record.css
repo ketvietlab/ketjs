@@ -21,9 +21,42 @@
       "record-body";
     grid-template-columns: minmax(0, 1fr);
   }
-  /* `Framed` keeps the operational workspace contract. Rich screens already
-     render their own RecordWorkspace; flatten only the generic wrapper in that
-     case so no duplicate sheet or compact heading appears. */
+  /* Compatibility records keep their richer identity while the canonical page
+     supplies location and company context. Flatten the outer record body and
+     suppress only its duplicate heading. */
+  [data-ui="form-page"]:has(
+      > [data-ui="form-page-layout"] > [data-ui="form-page-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="form-page-header"] {
+    display: none;
+  }
+  [data-ui="form-page"]:has(
+      > [data-ui="form-page-layout"] > [data-ui="form-page-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="form-page-layout"],
+  [data-ui="form-page"]:has(
+      > [data-ui="form-page-layout"] > [data-ui="form-page-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="form-page-layout"]
+    > [data-ui="form-page-body"] {
+    display: contents;
+  }
+
+  /* Analytical lists can carry the existing summary workspace as their result
+     body. Its identity replaces the list heading; the context strip remains. */
+  [data-ui="list-page"]:has(> [data-ui="list-page-body"] > [data-ui="record-workspace"])
+    > [data-ui="list-page-header"] {
+    display: none;
+  }
+  [data-ui="list-page"][data-variant="operational"]:has(
+      > [data-ui="list-page-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="list-page-body"] {
+    padding-inline: 0;
+  }
+
+  /* Legacy page-frame nesting uses the same flattening rule until every rich
+     record has moved its summary and tabs directly onto RecordPage. */
   [data-ui="record-workspace"][data-page-frame="true"]:has(
     > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
   ),

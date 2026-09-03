@@ -95,6 +95,8 @@ export const locationCreateScreen = (
     _,
     _('stock_backend.location.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="location-create"
       title={_('stock_backend.location.create.title')}
       description={_('stock_backend.location.create.hint')}

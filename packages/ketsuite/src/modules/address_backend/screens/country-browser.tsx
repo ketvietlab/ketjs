@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  Framed,
+  ListScreen,
   inline,
   linkButton,
   Metric,
@@ -35,7 +35,7 @@ export const countryScreen = (
     ? localized(`/admin/addresses/${countryCode}`, locale)
     : localized('/admin/addresses', locale)
   return (
-    <Framed
+    <ListScreen
       translator={_}
       title={countryName}
       frame={frame}

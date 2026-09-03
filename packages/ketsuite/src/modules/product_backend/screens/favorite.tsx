@@ -57,6 +57,8 @@ export const favoriteScreen = (
     _,
     _('product_backend.favorite.create'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="product-favorite-create"
       title={_('product_backend.favorite.create')}
       actions={

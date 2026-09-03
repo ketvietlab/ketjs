@@ -66,6 +66,8 @@ export const stockRoutesListScreen = (
     _,
     _('stock_backend.routes'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('stock_backend.stockRoute.list.title')}
       description={_('stock_backend.stockRoute.list.subtitle')}
       actions={inline([

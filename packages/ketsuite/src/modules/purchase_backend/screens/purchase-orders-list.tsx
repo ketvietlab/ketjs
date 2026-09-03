@@ -24,6 +24,8 @@ export const purchaseOrdersListScreen = (
     _,
     _('purchase_backend.orders.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('purchase_backend.orders.title')}
       controls={
         options.frame.chrome

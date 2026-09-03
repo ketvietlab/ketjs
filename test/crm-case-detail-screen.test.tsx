@@ -116,7 +116,8 @@ test('crm case detail: remains a specialized record workspace with all business 
   const rendered = renderToString(caseDetailScreen(translate, {}, row, options))
 
   assert.match(rendered, /data-ui="record-workspace"/)
-  assert.doesNotMatch(rendered, /data-ui="form-page"/)
+  assert.match(rendered, /data-ui="form-page"[^>]*data-pattern="record"/)
+  assert.match(rendered, /data-ui="form-page-context"[\s\S]*data-ui="breadcrumbs"/)
   assert.match(rendered, /Cơ hội Denim Việt/)
   assert.match(rendered, /Denim Việt · Đề xuất/)
   assert.match(rendered, /Đang mở/)

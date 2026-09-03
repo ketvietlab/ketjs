@@ -32,6 +32,8 @@ export const pricelistsScreen = (
     _,
     _('pricing_backend.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('pricing_backend.title')}
       description={_('pricing_backend.subtitle')}
       actions={inline([

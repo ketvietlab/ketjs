@@ -180,6 +180,8 @@ export const moveDetailScreen = (_: Translator, options: MoveDetailScreenOptions
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-move-detail-form-page"
       title={title}
       description={String(move.ref ?? move.partnerId ?? '') || undefined}

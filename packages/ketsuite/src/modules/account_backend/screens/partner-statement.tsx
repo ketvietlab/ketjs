@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  Framed,
+  ListScreen,
   icon,
   linkButton,
   RecordForm,
@@ -117,7 +117,7 @@ export const partnerLedgerScreen = (
   )
 
   return (
-    <Framed
+    <ListScreen
       translator={_}
       title={_('account_backend.partnerStatement.title')}
       frame={options.frame}

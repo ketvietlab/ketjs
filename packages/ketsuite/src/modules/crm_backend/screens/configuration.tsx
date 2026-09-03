@@ -62,6 +62,8 @@ export const configurationScreen = (
     _,
     _('crm_backend.configuration.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('crm_backend.configuration.title')}
       actions={linkButton({
         href: createHref,

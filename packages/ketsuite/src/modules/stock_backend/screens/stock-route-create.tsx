@@ -71,6 +71,8 @@ export const stockRouteCreateScreen = (
     _,
     _('stock_backend.stockRoute.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="stock-route-create"
       title={_('stock_backend.stockRoute.create.title')}
       description={_('stock_backend.stockRoute.create.hint')}

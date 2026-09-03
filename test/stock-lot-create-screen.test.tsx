@@ -57,5 +57,6 @@ test('stock lot create: renders the complete create form in a compact FormPage',
   assert.match(html, /name="note"[^>]*data-ui="form-control"|data-ui="form-control"[^>]*name="note"/)
   assert.doesNotMatch(html, /data-ui="form-actions"/)
   assert.doesNotMatch(html, /data-ui="form-page-aside"|data-ui="chatter"/)
-  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="form-page-back"|data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="form-page-back"/)
+  assert.match(html, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
 })

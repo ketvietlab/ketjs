@@ -92,7 +92,7 @@
     min-width: 0;
   }
 
-  :where([data-kv-design-system]) [data-ui="record-page"] {
+  :where([data-kv-design-system]) [data-ui="record-canvas"] {
     min-width: 0;
     padding: 1.375rem var(--kv-page-padding-x) var(--kv-space-12);
   }
@@ -142,7 +142,7 @@
     }
 
     :where([data-kv-design-system]) [data-ui="page"],
-    :where([data-kv-design-system]) [data-ui="record-page"] {
+    :where([data-kv-design-system]) [data-ui="record-canvas"] {
       padding-inline: var(--kv-space-4);
     }
 

@@ -9,6 +9,8 @@ import { HOOKS as shellHooks } from '../layouts/shell.tsx'
 import { HOOKS as tableHooks } from '../patterns/data-table.tsx'
 import { HOOKS as listPageHooks } from '../patterns/list-page.tsx'
 import { HOOKS as formPageHooks } from '../patterns/form-page.tsx'
+import { HOOKS as dashboardPageHooks } from '../patterns/dashboard-page.tsx'
+import { HOOKS as boardPageHooks } from '../patterns/board-page.tsx'
 import { HOOKS as modalHooks } from '../patterns/modal-sheet.tsx'
 import { HOOKS as pipelineHooks } from '../patterns/pipeline.tsx'
 import { HOOKS as formHooks } from '../patterns/record-form.tsx'
@@ -25,6 +27,8 @@ const GROUPS = {
   table: tableHooks,
   listPage: listPageHooks,
   formPage: formPageHooks,
+  dashboardPage: dashboardPageHooks,
+  boardPage: boardPageHooks,
   modal: modalHooks,
   pipeline: pipelineHooks,
   form: formHooks,

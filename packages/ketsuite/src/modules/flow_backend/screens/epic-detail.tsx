@@ -48,6 +48,8 @@ export const epicDetailScreen = (
 
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="flow-epic-detail-form-page"
       title={title}
       description={options.projectName}

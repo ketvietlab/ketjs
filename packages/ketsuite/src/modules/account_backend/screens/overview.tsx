@@ -23,14 +23,14 @@ import {
   Chart,
   dataTable,
   DatePicker,
+  DashboardPage,
   Delta,
   emptyState,
   formatMoney,
-  Framed,
   icon,
   Metric,
-  RecordWorkspace,
   Section,
+  shell,
   stack,
   Surface,
   Tabs,
@@ -300,173 +300,170 @@ export const accountingOverviewScreen = (
   const receivable = options.openItems.receivable as Row
   const payable = options.openItems.payable as Row
 
-  return (
-    <Framed
-      translator={_}
-      title={_('account_backend.overview.title')}
+  return shell(
+    _,
+    _('account_backend.overview.title'),
+    <DashboardPage
+      variant="operational"
       frame={options.frame}
-      body={
-        <RecordWorkspace
-          kicker={_('account_backend.dashboard.kicker')}
-          title={_('account_backend.overview.title')}
-          subtitle={`${_('account_backend.overview.subtitle')} · ${options.standard}`}
-          imageFallback={icon('banknote')}
-          body={stack(
-            [
-              <Section
-                title={_('account_backend.overview.period')}
-                description={_('account_backend.overview.periodHint')}
+      eyebrow={_('account_backend.dashboard.kicker')}
+      title={_('account_backend.overview.title')}
+      description={`${_('account_backend.overview.subtitle')} · ${options.standard}`}
+      body={stack(
+        [
+          <Section
+            title={_('account_backend.overview.period')}
+            description={_('account_backend.overview.periodHint')}
+            body={
+              <Surface
+                padding="compact"
+                body={stack([
+                  <Tabs label={_('account_backend.overview.period')} items={presets(_, options)} wrap />,
+                  // A year is offered even when the ledger covers only one:
+                  // 2026 means the whole year, which asks something the
+                  // month in progress does not, and there is no other way
+                  // to ask it in one click.
+                  <Tabs label={_('account_backend.overview.byYear')} items={years(_, options)} wrap />,
+                  // The date fields belong to a year and appear with one.
+                  //
+                  // A relative window is already exact — "the last 30 days"
+                  // has nothing left to narrow, and a pair of dates sitting
+                  // under it invited the reader to edit numbers that the
+                  // next click would overwrite. A year is the coarse frame
+                  // that does have something inside it worth narrowing, and
+                  // a typed range is what narrowing it produces, so the
+                  // fields stay while that range is what is showing.
+                  ...(refinable(options.preset)
+                    ? [
+                        <DatePicker
+                          action={options.action}
+                          hidden={options.hidden}
+                          label={_('account_backend.overview.custom')}
+                          fields={options.fields}
+                          submit={_('account_backend.action.calculate')}
+                        />,
+                      ]
+                    : []),
+                ])}
+              />
+            }
+          />,
+          <Section
+            title={_('account_backend.overview.headline')}
+            description={_('account_backend.overview.headlineHint')}
+            body={kpis(_, options)}
+          />,
+          <Section
+            title={_('account_backend.overview.revenueTrend')}
+            description={_('account_backend.overview.revenueTrendHint')}
+            body={
+              <Surface
                 body={
-                  <Surface
-                    padding="compact"
-                    body={stack([
-                      <Tabs label={_('account_backend.overview.period')} items={presets(_, options)} wrap />,
-                      // A year is offered even when the ledger covers only one:
-                      // 2026 means the whole year, which asks something the
-                      // month in progress does not, and there is no other way
-                      // to ask it in one click.
-                      <Tabs label={_('account_backend.overview.byYear')} items={years(_, options)} wrap />,
-                      // The date fields belong to a year and appear with one.
-                      //
-                      // A relative window is already exact — "the last 30 days"
-                      // has nothing left to narrow, and a pair of dates sitting
-                      // under it invited the reader to edit numbers that the
-                      // next click would overwrite. A year is the coarse frame
-                      // that does have something inside it worth narrowing, and
-                      // a typed range is what narrowing it produces, so the
-                      // fields stay while that range is what is showing.
-                      ...(refinable(options.preset)
-                        ? [
-                            <DatePicker
-                              action={options.action}
-                              hidden={options.hidden}
-                              label={_('account_backend.overview.custom')}
-                              fields={options.fields}
-                              submit={_('account_backend.action.calculate')}
-                            />,
-                          ]
-                        : []),
-                    ])}
+                  <Chart
+                    plot={options.revenue.plot}
+                    keys={options.revenue.keys}
+                    kind="line"
+                    empty={_('account_backend.overview.noRevenue')}
                   />
                 }
-              />,
-              <Section
-                title={_('account_backend.overview.headline')}
-                description={_('account_backend.overview.headlineHint')}
-                body={kpis(_, options)}
-              />,
-              <Section
-                title={_('account_backend.overview.revenueTrend')}
-                description={_('account_backend.overview.revenueTrendHint')}
-                body={
-                  <Surface
-                    body={
-                      <Chart
-                        plot={options.revenue.plot}
-                        keys={options.revenue.keys}
-                        kind="line"
-                        empty={_('account_backend.overview.noRevenue')}
-                      />
-                    }
-                  />
-                }
-              />,
-              // Where the money came from and where it went, side by side:
-              // the two are read against each other, and stacked they were a
-              // scroll apart.
-              columns([
-                <Section
-                  title={_('account_backend.overview.mix')}
-                  description={`${_('account_backend.overview.revenue')}: ${money(options.current.revenue)}`}
+              />
+            }
+          />,
+          // Where the money came from and where it went, side by side:
+          // the two are read against each other, and stacked they were a
+          // scroll apart.
+          columns([
+            <Section
+              title={_('account_backend.overview.mix')}
+              description={`${_('account_backend.overview.revenue')}: ${money(options.current.revenue)}`}
+              body={
+                <Surface
                   body={
-                    <Surface
-                      body={
-                        <Chart
-                          plot={options.mix.plot}
-                          keys={options.mix.keys}
-                          kind="doughnut"
-                          empty={_('account_backend.overview.noRevenue')}
-                        />
-                      }
+                    <Chart
+                      plot={options.mix.plot}
+                      keys={options.mix.keys}
+                      kind="doughnut"
+                      empty={_('account_backend.overview.noRevenue')}
                     />
                   }
-                />,
-                <Section
-                  title={_('account_backend.overview.expenses')}
-                  description={`${_('account_backend.overview.totalExpense')}: ${money(
-                    options.current.expense,
-                  )} · ${_('account_backend.overview.grossMargin')}: ${ratioText(
-                    _,
-                    options.current.grossMargin,
-                  )} (${_('account_backend.overview.previous')}: ${ratioText(_, options.previous.grossMargin)})`}
-                  body={<Surface body={expenses(_, options)} />}
-                />,
-              ]),
-              <Section
-                title={_('account_backend.overview.receivable')}
-                description={aging(receivable)}
-                body={
-                  <Surface
-                    padding="none"
-                    body={owed(
-                      _,
-                      receivable,
-                      options.currency,
-                      _('account_backend.overview.noReceivable'),
-                      options.partnerHref,
-                    )}
-                  />
-                }
-              />,
-              <Section
-                title={_('account_backend.overview.payable')}
-                description={aging(payable)}
-                body={
-                  <Surface
-                    padding="none"
-                    body={owed(
-                      _,
-                      payable,
-                      options.currency,
-                      _('account_backend.overview.noPayable'),
-                      options.partnerHref,
-                    )}
-                  />
-                }
-              />,
-              <Section
-                title={_('account_backend.overview.cashFlow')}
-                description={_('account_backend.overview.cashFlowHint')}
-                body={
-                  <Surface
-                    padding="none"
-                    body={dataTable(_, {
-                      rows: cashRows,
-                      id: (row) => row.id,
-                      columns: [
-                        {
-                          key: 'label',
-                          label: _('account_backend.overview.movement'),
-                          priority: 'primary',
-                          cell: (row) => row.label,
-                        },
-                        {
-                          key: 'amount',
-                          label: _('account_backend.field.balance'),
-                          align: 'end',
-                          kind: 'currency',
-                          cell: (row) => money(row.amount),
-                        },
-                      ],
-                    })}
-                  />
-                }
-              />,
-            ],
-            'loose',
-          )}
-        />
-      }
-    />
+                />
+              }
+            />,
+            <Section
+              title={_('account_backend.overview.expenses')}
+              description={`${_('account_backend.overview.totalExpense')}: ${money(
+                options.current.expense,
+              )} · ${_('account_backend.overview.grossMargin')}: ${ratioText(
+                _,
+                options.current.grossMargin,
+              )} (${_('account_backend.overview.previous')}: ${ratioText(_, options.previous.grossMargin)})`}
+              body={<Surface body={expenses(_, options)} />}
+            />,
+          ]),
+          <Section
+            title={_('account_backend.overview.receivable')}
+            description={aging(receivable)}
+            body={
+              <Surface
+                padding="none"
+                body={owed(
+                  _,
+                  receivable,
+                  options.currency,
+                  _('account_backend.overview.noReceivable'),
+                  options.partnerHref,
+                )}
+              />
+            }
+          />,
+          <Section
+            title={_('account_backend.overview.payable')}
+            description={aging(payable)}
+            body={
+              <Surface
+                padding="none"
+                body={owed(
+                  _,
+                  payable,
+                  options.currency,
+                  _('account_backend.overview.noPayable'),
+                  options.partnerHref,
+                )}
+              />
+            }
+          />,
+          <Section
+            title={_('account_backend.overview.cashFlow')}
+            description={_('account_backend.overview.cashFlowHint')}
+            body={
+              <Surface
+                padding="none"
+                body={dataTable(_, {
+                  rows: cashRows,
+                  id: (row) => row.id,
+                  columns: [
+                    {
+                      key: 'label',
+                      label: _('account_backend.overview.movement'),
+                      priority: 'primary',
+                      cell: (row) => row.label,
+                    },
+                    {
+                      key: 'amount',
+                      label: _('account_backend.field.balance'),
+                      align: 'end',
+                      kind: 'currency',
+                      cell: (row) => money(row.amount),
+                    },
+                  ],
+                })}
+              />
+            }
+          />,
+        ],
+        'loose',
+      )}
+    />,
+    { ...options.frame, topbar: false },
   )
 }

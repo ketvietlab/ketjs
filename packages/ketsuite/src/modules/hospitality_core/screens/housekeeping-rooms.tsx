@@ -4,7 +4,7 @@ import {
   dataTable,
   emptyState,
   type Frame,
-  Framed,
+  WorkspaceScreen,
   housekeepingRoomColumns,
   Metric,
   type PropertyRow,
@@ -47,7 +47,7 @@ export const housekeepingRoomsScreen = (
   ]
 
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('hospitality_core.screen.housekeepingRooms.title')}
       frame={frame}

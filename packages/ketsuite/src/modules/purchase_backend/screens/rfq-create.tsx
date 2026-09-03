@@ -28,6 +28,8 @@ export const rfqCreateScreen = (_: Translator, options: RfqCreateScreenOptions):
     _,
     _('purchase_backend.action.createRfq'),
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="purchase-rfq-create-form-page"
       title={_('purchase_backend.action.createRfq')}
       description={_('purchase_backend.rfqs.title')}

@@ -72,6 +72,8 @@ export const contextScreen = (_: Translator, frame: Frame, options: ContextScree
     _,
     _('company_backend.context.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="working-context-page"
       title={_('company_backend.context.title')}
       description={_('company_backend.context.writeHint')}

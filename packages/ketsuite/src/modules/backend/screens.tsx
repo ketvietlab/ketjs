@@ -12,7 +12,7 @@
 
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import { badge, code, dataTable, emptyState, Framed } from '../../ui/index.ts'
+import { badge, code, dataTable, emptyState, ListScreen } from '../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../ui/index.ts'
 
 export type PageRow = { id: string; path: string; title: string; published: boolean }
@@ -70,7 +70,7 @@ export const pagesScreen = (
   frame: Frame = {},
   table: Partial<DataTable<PageRow>> = {},
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('backend.pages.title')}
     frame={frame}

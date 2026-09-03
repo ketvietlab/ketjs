@@ -110,6 +110,8 @@ export const pageDetailScreen = (
   )
   const pageView = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="flow-page-detail-form-page"
       title={String(page.title ?? '')}
       description={String(page.projectName ?? '')}

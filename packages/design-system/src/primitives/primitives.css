@@ -100,7 +100,9 @@
   }
 
   :where([data-kv-design-system]) [data-ui="action-label"] {
+    min-width: 0;
     overflow: hidden;
+    line-height: var(--kv-leading-normal);
     text-overflow: ellipsis;
   }
 

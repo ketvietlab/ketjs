@@ -4,11 +4,16 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
+import {
+  ListPage as DesignSystemListPage,
+  RecordPage as DesignSystemRecordPage,
+  WorkspacePage as DesignSystemWorkspacePage,
+} from '@ketvietlab/design-system'
 import { sidebar, sidebarMain } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
-import { recordWorkspace } from './record.tsx'
+import { pageContextFromFrame } from './navigation.tsx'
 
 export const HOOKS = [
   'shell',
@@ -143,7 +148,7 @@ export const backendPage = async (
  * RecordWorkspace nested in the body keeps its own record header; the
  * compatibility heading is flattened for that case in record.css.
  */
-export const framedPage = (options: {
+export type OperationalScreenOptions = {
   translator: Translator
   title: string
   frame: Frame
@@ -170,37 +175,83 @@ export const framedPage = (options: {
    * row out entirely.
    */
   actions?: JSXChild
-}): TemplateResult => {
-  const actions =
-    options.frame.extras?.['topbar.end'] !== undefined || options.actions !== undefined ? (
-      <>
-        {options.frame.extras?.['topbar.end'] ?? ''}
-        {options.actions ?? ''}
-      </>
-    ) : undefined
-  return shell(
-    options.translator,
-    options.title,
-    recordWorkspace({
-      pageFrame: true,
-      title: options.title,
-      subtitle: options.subtitle ?? null,
-      imageFallback: '',
-      controller:
-        options.frame.chrome || actions !== undefined ? (
-          <>
-            {options.frame.chrome
-              ? listChrome(options.translator, options.title, options.frame.chrome, false)
-              : ''}
-            {actions ?? ''}
-          </>
-        ) : undefined,
-      body: options.body,
-      aside: options.aside,
-      asideLabel: options.asideLabel ?? null,
-    }),
-    { ...options.frame, titled: false, topbar: false },
+}
+
+const operationalActions = (options: OperationalScreenOptions): JSXChild | undefined =>
+  options.frame.extras?.['topbar.end'] !== undefined || options.actions !== undefined ? (
+    <>
+      {options.actions ?? ''}
+      {options.frame.extras?.['topbar.end'] ?? ''}
+    </>
+  ) : undefined
+
+const operationalShell = (options: OperationalScreenOptions, body: TemplateResult): TemplateResult =>
+  shell(options.translator, options.title, body, { ...options.frame, titled: false, topbar: false })
+
+export const listScreen = (options: OperationalScreenOptions): TemplateResult =>
+  operationalShell(
+    options,
+    <DesignSystemListPage
+      variant="operational"
+      context={pageContextFromFrame(options.title, options.frame)}
+      eyebrow={options.kicker}
+      title={options.title}
+      description={options.subtitle}
+      actions={operationalActions(options)}
+      controls={
+        options.frame.chrome
+          ? listChrome(options.translator, options.title, options.frame.chrome, false)
+          : undefined
+      }
+      body={options.body}
+    />,
   )
+
+export const recordScreen = (options: OperationalScreenOptions): TemplateResult =>
+  operationalShell(
+    options,
+    <DesignSystemRecordPage
+      variant="operational"
+      context={pageContextFromFrame(options.title, options.frame)}
+      title={options.title}
+      description={options.subtitle}
+      actions={operationalActions(options)}
+      controller={
+        options.frame.chrome
+          ? listChrome(options.translator, options.title, options.frame.chrome, false)
+          : undefined
+      }
+      body={options.body}
+      aside={options.aside}
+      asideLabel={options.asideLabel}
+    />,
+  )
+
+export const workspaceScreen = (
+  options: OperationalScreenOptions & { layout?: 'flow' | 'canvas' },
+): TemplateResult =>
+  operationalShell(
+    options,
+    <DesignSystemWorkspacePage
+      variant="operational"
+      layout={options.layout ?? 'flow'}
+      context={pageContextFromFrame(options.title, options.frame)}
+      eyebrow={options.kicker}
+      title={options.title}
+      description={options.subtitle}
+      actions={operationalActions(options)}
+      controls={
+        options.frame.chrome
+          ? listChrome(options.translator, options.title, options.frame.chrome, false)
+          : undefined
+      }
+      body={options.body}
+    />,
+  )
+
+/** @deprecated Select ListScreen, RecordScreen or WorkspaceScreen. */
+export const framedPage = (options: OperationalScreenOptions): TemplateResult => {
+  return workspaceScreen(options)
 }
 
 export const definitionList = (options: {

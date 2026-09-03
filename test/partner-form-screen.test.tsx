@@ -69,7 +69,8 @@ test('partner create: uses the lightweight FormPage header and external primary 
   assert.match(html, /name="phone"[^>]*type="tel"|type="tel"[^>]*name="phone"/)
   assert.doesNotMatch(html, /data-ui="record-workspace"/)
   assert.doesNotMatch(html, /data-ui="record-thumbnail"|data-ui="record-kicker"/)
-  assert.doesNotMatch(html, /data-ui="form-page-back"|data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="form-page-back"/)
+  assert.match(html, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.doesNotMatch(html, /data-ui="form-page-aside"/)
 })
 
@@ -119,5 +120,6 @@ test('partner edit: connects Chatter in the rail and keeps save beside the compa
   assert.doesNotMatch(html, /Thông tin nhanh/)
   assert.doesNotMatch(html, /data-ui="record-workspace"/)
   assert.doesNotMatch(html, /data-ui="record-thumbnail"|data-ui="record-kicker"/)
-  assert.doesNotMatch(html, /data-ui="form-page-back"|data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="form-page-back"/)
+  assert.match(html, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
 })

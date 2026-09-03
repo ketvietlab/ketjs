@@ -41,6 +41,8 @@ export const outboxScreen = (_: Translator, frame: Frame, options: OutboxScreenO
     _,
     _('mail_transport_backend.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('mail_transport_backend.title')}
       description={_('mail_transport_backend.subtitle')}
       actions={frame.extras?.['topbar.end']}

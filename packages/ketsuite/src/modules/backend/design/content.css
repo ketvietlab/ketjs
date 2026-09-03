@@ -208,12 +208,114 @@
     color: var(--admin-ink);
     font-weight: 600;
   }
+
+  /* A quiet context strip keeps location and company visible without competing
+     with the page title below it. It is a navigation surface, not another card. */
+  [data-ui="page-context"] {
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap-md);
+  }
+
+  [data-ui="page-context-trail"] {
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  [data-ui="page-context-trail"] [data-ui="breadcrumbs"] ol {
+    flex-wrap: nowrap;
+  }
+
+  [data-ui="page-context-trail"] [data-ui="breadcrumb"] {
+    min-inline-size: 0;
+    white-space: nowrap;
+  }
+
+  [data-ui="page-context-trail"] [data-ui="breadcrumb"]:last-child {
+    overflow: hidden;
+  }
+
+  [data-ui="page-context-trail"] [data-ui="breadcrumb"]:last-child > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-ui="page-context-viewer"] {
+    display: inline-flex;
+    min-inline-size: 0;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+    text-decoration: none;
+  }
+
+  a[data-ui="page-context-viewer"]:hover {
+    color: var(--admin-ink);
+  }
+
+  [data-ui="page-context-icon"] {
+    display: grid;
+    inline-size: 1rem;
+    block-size: 1rem;
+    flex: 0 0 auto;
+    place-items: center;
+    color: var(--admin-ink-muted);
+  }
+
+  [data-ui="page-context-icon"] > [data-ui="icon"] {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  [data-ui="page-context-copy"] {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="page-context-company"] {
+    overflow: hidden;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui="page-context-branch"] {
+    color: var(--admin-ink-muted);
+    white-space: nowrap;
+  }
+
+  [data-ui="page-context-branch"]::before {
+    margin-inline-end: var(--admin-gap-xs);
+    content: "·";
+  }
   [data-ui="tabs"] {
     display: flex;
     min-inline-size: 0;
     gap: var(--admin-gap-xs);
     overflow-x: auto;
     border-block-end: 1px solid var(--admin-line);
+  }
+
+  @media (max-width: 47.9375rem) {
+    [data-ui="page-context"] {
+      gap: var(--admin-gap-sm);
+    }
+
+    [data-ui="page-context-viewer"] {
+      max-inline-size: 9rem;
+      min-block-size: 2.75rem;
+    }
+
+    [data-ui="page-context-branch"] {
+      display: none;
+    }
   }
   /* A filter row shows every choice at once, on as many lines as that takes. */
   [data-ui="tabs"][data-wrap="true"] {

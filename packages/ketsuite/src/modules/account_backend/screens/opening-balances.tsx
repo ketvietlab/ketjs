@@ -7,7 +7,7 @@ import {
   emptyState,
   FormPage,
   formatMoney,
-  Framed,
+  RecordScreen,
   icon,
   LinkButton,
   ListPage,
@@ -39,6 +39,8 @@ export const openingBalancesListScreen = (
     _,
     _('account_backend.opening.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.opening.title')}
       description={_('account_backend.opening.subtitle')}
       actions={
@@ -105,6 +107,8 @@ export const openingBalanceImportScreen = (
     _,
     _('account_backend.opening.create'),
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="opening-balance-import"
       title={_('account_backend.opening.create')}
       description={_('account_backend.opening.createHint')}
@@ -139,7 +143,7 @@ export const openingBalanceDetailScreen = (
     errors?: string[]
   },
 ): TemplateResult => (
-  <Framed
+  <RecordScreen
     translator={_}
     title={`${_('account_backend.opening.batch')} ${String(options.batch.accountingDate)}`}
     frame={options.frame}

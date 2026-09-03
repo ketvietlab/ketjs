@@ -95,6 +95,8 @@ export const journalEntriesListScreen = (
     _,
     _('account_backend.entries.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.entries.title')}
       description={_('account_backend.entry.subtitle')}
       actions={inline([
