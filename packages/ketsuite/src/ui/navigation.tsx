@@ -1,13 +1,29 @@
-// Navigation below the app shell. The current list screens intentionally do not
-// use breadcrumbs, but deeper ERP records still need a canonical component rather
-// than forty hand-written trails or tab bars.
+// Navigation below the app shell. Operational collection and form workspaces
+// share one canonical location trail instead of hand-writing breadcrumbs or
+// organisation context in every module.
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
+import type { MenuNode } from '@ketvietlab/ketjs'
+import { icon } from './icons.ts'
+import type { Viewer } from './nav.tsx'
 
-export const HOOKS = ['breadcrumbs', 'breadcrumb', 'tabs', 'tab'] as const
+export const HOOKS = [
+  'breadcrumbs',
+  'breadcrumb',
+  'page-context',
+  'page-context-trail',
+  'page-context-viewer',
+  'page-context-icon',
+  'page-context-copy',
+  'page-context-company',
+  'page-context-branch',
+  'tabs',
+  'tab',
+] as const
 
 export type Breadcrumb = { label: string; href?: string | null }
+export type PageContextFrame = { menu?: MenuNode[]; viewer?: Viewer | null }
 export type Tab = {
   id: string
   label: string
@@ -37,6 +53,64 @@ export const breadcrumbs = (o: { label: string; items: readonly Breadcrumb[] }):
     </ol>
   </nav>
 )
+
+const viewerContext = (viewer: Viewer): TemplateResult => {
+  const company = viewer.companyName ?? viewer.company
+  const content = (
+    <>
+      <span data-ui="page-context-icon">{icon('building-2')}</span>
+      <span data-ui="page-context-copy">
+        {!!company && <span data-ui="page-context-company">{company}</span>}
+        {!!viewer.branchName && <span data-ui="page-context-branch">{viewer.branchName}</span>}
+      </span>
+    </>
+  )
+  return viewer.contextPath ? (
+    <a data-ui="page-context-viewer" href={viewer.contextPath}>
+      {content}
+    </a>
+  ) : (
+    <span data-ui="page-context-viewer">{content}</span>
+  )
+}
+
+/**
+ * Page-level navigation on the left and the live organisation context on the
+ * right. It is deliberately independent from ListPage so record and reporting
+ * workspaces can opt into the same strip later.
+ */
+export const pageContext = (o: {
+  label: string
+  items: readonly Breadcrumb[]
+  viewer?: Viewer | null
+}): TemplateResult => (
+  <div data-ui="page-context">
+    <div data-ui="page-context-trail">{breadcrumbs({ label: o.label, items: o.items })}</div>
+    {!!o.viewer &&
+      !!(o.viewer.companyName ?? o.viewer.company ?? o.viewer.branchName) &&
+      viewerContext(o.viewer)}
+  </div>
+)
+
+const activeTrail = (nodes: readonly MenuNode[]): MenuNode[] => {
+  const node = nodes.find((candidate) => candidate.active)
+  if (!node) return []
+  return [node, ...activeTrail(node.children)]
+}
+
+/**
+ * Turn the authoritative application frame into the location strip shared by
+ * collection and form workspaces. Dynamic pages keep the nearest registered
+ * menu branch and append their concrete record title.
+ */
+export const pageContextFromFrame = (title: string, frame: PageContextFrame): TemplateResult => {
+  const items = activeTrail(frame.menu ?? []).map((node) => ({
+    label: node.label,
+    href: node.path,
+  }))
+  if (items.length === 0 || items.at(-1)?.label !== title) items.push({ label: title, href: null })
+  return pageContext({ label: title, items, viewer: frame.viewer })
+}
 
 /**
  * One row of mutually exclusive links, one of them current.

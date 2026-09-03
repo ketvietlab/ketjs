@@ -190,6 +190,8 @@ export const stockRouteDetailScreen = (
   )
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="stock-route-form-page"
       title={options.route.name}
       description={`${_('stock_backend.field.sequence')}: ${options.route.sequence}`}

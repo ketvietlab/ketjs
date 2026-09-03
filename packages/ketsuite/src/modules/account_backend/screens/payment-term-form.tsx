@@ -105,6 +105,8 @@ export const paymentTermFormScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-payment-term-form-page"
       title={title}
       description={options.editing ? String(options.editing.name) : _('account_backend.term.create.hint')}
@@ -170,6 +172,8 @@ export const paymentTermLineFormScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-payment-term-line-form-page"
       title={title}
       description={_('account_backend.term.line.create.hint')}

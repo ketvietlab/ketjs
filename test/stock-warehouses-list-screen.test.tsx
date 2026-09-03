@@ -70,7 +70,7 @@ test('stock warehouses list: keeps columns and search in the ListPage hierarchy'
   )
   assert.match(
     html,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?Kho đang dùng: 8[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?Kho đang dùng: 8/,
   )
   assert.match(html, /data-col="name"[\s\S]*?Kho trung tâm/)
   assert.match(html, /data-col="code"[\s\S]*?data-ui="code"[\s\S]*?KTT/)

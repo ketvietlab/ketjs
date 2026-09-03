@@ -73,7 +73,7 @@ test('flow all pages: ListPage preserves cross-project identity, list state and 
   assert.match(html, /data-ui="list-page"/)
   assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="form-page"|livedoc\.editor/)
   assert.match(textContent, /data-ui="list-page-title">All docs/)
-  assert.match(textContent, /data-ui="list-page-status">All docs: 2/)
+  assert.match(textContent, /data-ui="list-page-footer">All docs: 2/)
   assert.match(html, /name="q"[^>]*value="guide"/)
   assert.match(html, /name="lang" value="en"/)
   assert.match(html, /name="filter" value="project:platform"/)

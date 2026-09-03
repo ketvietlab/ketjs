@@ -95,6 +95,8 @@ export const warehouseCreateScreen = (
     _,
     _('stock_backend.warehouse.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="warehouse-create"
       title={_('stock_backend.warehouse.create.title')}
       description={_('stock_backend.warehouse.create.hint')}

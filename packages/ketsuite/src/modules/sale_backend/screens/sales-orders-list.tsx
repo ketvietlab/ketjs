@@ -129,6 +129,8 @@ export const salesOrdersListScreen = (
     _,
     _('sale_backend.orders.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('sale_backend.orderList.title')}
       description={_('sale_backend.orderList.subtitle')}
       actions={

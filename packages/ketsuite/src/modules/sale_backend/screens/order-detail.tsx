@@ -346,6 +346,8 @@ export const orderDetailScreen = (
   const documentKind = state === 'sale' ? _('sale_backend.order.kicker') : _('sale_backend.quotation.kicker')
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="sale-order-form-page"
       title={String(order.name)}
       description={`${documentKind} · ${String(order.partnerName ?? order.partnerId)}`}

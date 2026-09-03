@@ -231,6 +231,8 @@ export const companyFormScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="company-form-page"
       title={title}
       description={

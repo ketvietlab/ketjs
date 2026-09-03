@@ -57,6 +57,12 @@
     margin-inline-start: auto;
   }
 
+  [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-chrome"][data-layout="command"]
+    [data-ui="chrome-lead"]:empty {
+    display: none;
+  }
+
   [data-ui="topbar"]:has([data-ui="list-chrome"][data-layout="catalogue"]) {
     display: block;
     padding: var(--admin-gap-lg);
@@ -791,6 +797,17 @@
     overflow-x: auto;
   }
 
+  [data-ui="content"]:has(
+    > :is(
+        [data-ui="list-page"][data-variant="operational"],
+        [data-ui="form-page"][data-variant="operational"],
+        [data-ui="dashboard-page"][data-variant="operational"],
+        [data-ui="board-page"][data-variant="operational"]
+      )
+  ) {
+    padding: 0;
+  }
+
   [data-ui="content"]:has(> [data-ui="record-workspace"]) {
     padding: 1.375rem 1.75rem 3rem;
   }
@@ -823,6 +840,14 @@
     border-radius: 0;
     border-block-start: 0;
     border-inline: 0;
+    box-shadow: none;
+  }
+
+  [data-ui="content"]
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="table-scroll"]:not([data-gutter="compact"]) {
+    border: 1px solid var(--admin-table-line);
+    border-radius: var(--admin-radius) var(--admin-radius) 0 0;
     box-shadow: none;
   }
 

@@ -99,6 +99,8 @@ export const casesListScreen = (
     _,
     _('crm_backend.cases.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('crm_backend.cases.title')}
       actions={
         hasActions

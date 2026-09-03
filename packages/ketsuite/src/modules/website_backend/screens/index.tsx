@@ -5,7 +5,7 @@ import {
   code,
   dataTable,
   emptyState,
-  Framed,
+  RecordScreen,
   inline,
   linkButton,
   Notice,
@@ -497,7 +497,7 @@ export const previewScreen = (
   frame: Frame,
   basePath = '/admin/website/pages',
 ): TemplateResult => (
-  <Framed
+  <RecordScreen
     translator={_}
     title={_('website_backend.preview.title')}
     frame={frame}

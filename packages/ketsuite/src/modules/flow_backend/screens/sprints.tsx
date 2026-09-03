@@ -2,7 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   dataTable,
-  Framed,
+  ListScreen,
   LinkButton,
   modalForm,
   modalWorkspace,
@@ -43,7 +43,7 @@ export type SprintsScreenOptions = {
 
 export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScreenOptions): TemplateResult => {
   const workspace = (
-    <Framed
+    <ListScreen
       translator={_}
       title={options.projectName}
       subtitle={_('flow_backend.menu.sprints')}

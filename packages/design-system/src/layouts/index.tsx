@@ -31,7 +31,7 @@ export const HOOKS = [
   'metric-detail',
 ] as const
 
-export { AppShell, Page, PageHeader, RecordPage, RecordSection } from './shell.tsx'
+export { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from './shell.tsx'
 
 const Items = (props: { items: readonly JSXChild[] }): TemplateResult => (
   <>

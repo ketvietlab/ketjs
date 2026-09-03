@@ -108,6 +108,8 @@ export const accountsListScreen = (_: Translator, options: AccountsListScreenOpt
     _,
     _('account_backend.accounts.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.accounts.title')}
       description={_('account_backend.account.subtitle')}
       actions={inline([

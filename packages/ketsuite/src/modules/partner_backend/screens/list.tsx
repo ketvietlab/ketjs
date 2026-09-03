@@ -80,6 +80,8 @@ export const partnersScreen = (
     _,
     _('partner_backend.screen.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('partner_backend.screen.title')}
       description={_('partner_backend.screen.description')}
       actions={

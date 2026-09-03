@@ -116,6 +116,8 @@ export const replenishmentListScreen = (
     _,
     _('stock_backend.replenishment'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('stock_backend.replenishment.title')}
       description={_('stock_backend.replenishment.subtitle')}
       actions={inline([

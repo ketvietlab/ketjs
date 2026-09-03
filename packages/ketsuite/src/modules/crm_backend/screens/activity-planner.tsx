@@ -142,6 +142,8 @@ export const plannerScreen = (
     _,
     _('crm_backend.planner.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('crm_backend.planner.title')}
       actions={
         options.tab === 'mine'

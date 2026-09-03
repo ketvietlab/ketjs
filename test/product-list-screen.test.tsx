@@ -66,6 +66,15 @@ test('product list: follows the design-system list hierarchy without a duplicate
       rows,
       'list',
       {
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+          contextPath: '/admin/context?lang=vi',
+        },
         chrome: {
           layout: 'catalogue',
           section: 'Sản phẩm',
@@ -91,6 +100,12 @@ test('product list: follows the design-system list hierarchy without a duplicate
 
   assert.equal(html.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.equal(html.match(/data-ui="topbar"/g), null)
+  assert.match(html, /data-ui="list-page" data-variant="operational"/)
+  assert.match(
+    html,
+    /data-ui="list-page-context"[\s\S]*?Sản phẩm[\s\S]*?Danh mục sản phẩm[\s\S]*?data-ui="page-context-viewer" href="\/admin\/context\?lang=vi"/,
+  )
+  assert.match(html, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
   assert.match(html, /data-ui="list-page-description"/)
   assert.match(
     html,
@@ -103,14 +118,17 @@ test('product list: follows the design-system list hierarchy without a duplicate
   assert.match(html, /href="\/admin\/product\/templates\/new\?lang=vi"/)
   assert.match(
     html,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?24 sản phẩm[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
   )
+  assert.doesNotMatch(html, /data-ui="list-page-status"/)
+  assert.match(html, /data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[^>]*>[\s\S]*?24 sản phẩm/)
   const controls = html.slice(
     html.indexOf('data-ui="list-page-controls"'),
     html.indexOf('data-ui="list-page-body"'),
   )
   assert.doesNotMatch(controls, /data-ui="bulk-form"/)
   assert.match(html, /data-col="name"[\s\S]*?data-ui="thumbnail"[\s\S]*?Áo khoác gió vận hành/)
+  assert.match(html, /data-col="listPrice"[^>]*data-priority="primary"/)
   assert.match(html, /href="\/admin\/product\/templates\/ao-khoac-gio\?lang=vi"/)
 })
 

@@ -49,8 +49,9 @@ test('purchase overview stays specialized: preserves workflow counts, locale lin
     ),
   )
 
-  assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(html, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
+  assert.match(html, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="record-workspace"/)
   assert.match(html, /data-ui="notice" data-tone="warning"/)
   assert.match(html, /Cần cấu hình: nhà cung cấp\./)
   assert.match(html, /href="\/admin\/partner\/partners"/)

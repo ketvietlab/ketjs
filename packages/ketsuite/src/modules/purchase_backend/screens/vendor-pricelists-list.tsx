@@ -107,6 +107,8 @@ export const vendorPricelistsListScreen = (
     _,
     _('purchase_backend.pricelists.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('purchase_backend.pricelists.title')}
       actions={inline([
         <LinkButton

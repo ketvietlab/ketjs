@@ -1,4 +1,9 @@
 @layer ket.app {
+  :where([data-kv-design-system])
+    :is([data-ui="list-page"], [data-ui="form-page"], [data-ui="dashboard-page"], [data-ui="board-page"]) {
+    --kv-page-title-size: 1.5rem;
+  }
+
   :where([data-kv-design-system]) [data-ui="list-page"] {
     display: grid;
     min-width: 0;
@@ -12,7 +17,9 @@
   }
 
   :where([data-kv-design-system]) [data-ui="list-page-heading"] {
+    display: grid;
     min-width: 0;
+    gap: var(--kv-space-1);
   }
 
   :where([data-kv-design-system]) [data-ui="list-page-title-row"] {
@@ -24,7 +31,7 @@
   }
 
   :where([data-kv-design-system]) [data-ui="list-page-eyebrow"] {
-    margin: 0 0 var(--kv-space-1-5);
+    margin: 0;
     color: var(--kv-accent);
     font-size: var(--kv-text-2xs);
     font-weight: var(--kv-weight-bold);
@@ -36,7 +43,7 @@
   :where([data-kv-design-system]) [data-ui="list-page-title"] {
     margin: 0;
     color: var(--kv-text-main);
-    font-size: var(--kv-text-2xl);
+    font-size: var(--kv-page-title-size);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: -0.025em;
     line-height: var(--kv-leading-tight);
@@ -44,7 +51,7 @@
 
   :where([data-kv-design-system]) [data-ui="list-page-description"] {
     max-width: 48rem;
-    margin: var(--kv-space-2) 0 0;
+    margin: 0;
     color: var(--kv-text-muted);
     font-size: var(--kv-text-sm);
     line-height: var(--kv-leading-normal);
@@ -95,6 +102,98 @@
     border-top: 1px solid var(--kv-panel-divider);
     color: var(--kv-text-muted);
     font-size: var(--kv-text-xs);
+  }
+
+  /* Application collections opt into the full operational workspace. This keeps
+     context, identity, command bar and results in distinct horizontal bands so
+     dense records remain the visual focus. */
+  :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0 0 var(--kv-space-10);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-header"] {
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-title-row"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--kv-space-5);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-actions"] {
+    justify-content: flex-end;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-toolbar"] {
+    padding: var(--kv-space-3) var(--kv-page-padding-x) var(--kv-space-2-5);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-controls"] {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-body"] {
+    padding-top: var(--kv-space-2);
+    padding-inline: var(--kv-page-padding-x);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-footer"] {
+    margin: var(--kv-space-3) var(--kv-page-padding-x) 0;
+    padding: var(--kv-space-2-5) var(--kv-space-3);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-body"]:has(> [data-ui="table-scroll"])
+    > [data-ui="table-scroll"] {
+    border-radius: var(--kv-radius-md) var(--kv-radius-md) 0 0;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-body"]:has(> [data-ui="table-scroll"])
+    + [data-ui="list-page-footer"] {
+    margin-top: -1px;
+    border-radius: 0 0 var(--kv-radius-md) var(--kv-radius-md);
   }
 
   /* Lists are page regions, not cards. More capable application tables may add
@@ -342,6 +441,118 @@
       min-width: 0;
       flex-basis: 15rem;
     }
+
+    :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] {
+      padding: 0 0 var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-heading"] {
+      display: flex;
+      flex-direction: column;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-title-row"] {
+      display: contents;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-title"] {
+      order: 1;
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-description"] {
+      order: 2;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"],
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"]
+      > [data-ui="inline"] {
+      width: 100%;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"] {
+      order: 3;
+      margin-top: var(--kv-space-2);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"]
+      [data-ui="action"][data-variant="primary"] {
+      min-height: 2.75rem;
+      flex: 1 1 auto;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-toolbar"] {
+      padding: var(--kv-space-3) var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      :is([data-ui="list-page-body"], [data-ui="list-page-footer"]) {
+      margin-inline: var(--kv-space-4);
+      padding-inline: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-footer"] {
+      padding: var(--kv-space-2-5) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] [data-ui="table"] {
+      min-width: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table"]
+      :is(th, td):is([data-priority="secondary"], [data-priority="tertiary"]) {
+      display: none;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table"]
+      :is(th, td)[data-priority="primary"][data-align="end"] {
+      width: 7rem;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table"]
+      :is([data-ui="col"], [data-ui="cell"]) {
+      padding-inline: var(--kv-space-2);
+    }
   }
 
   /* A process read left to right. The rail is drawn as two half-lines per step
@@ -513,6 +724,333 @@
 }
 
 @layer ket.app {
+  /* Boards spend their space on the operational surface. Context, identity and
+     global controls stay in compact horizontal bands; the specialised board
+     owns its internal columns, timeline and scrolling behavior. */
+  :where([data-kv-design-system]) [data-ui="board-page"] {
+    display: grid;
+    min-width: 0;
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="board-page"][data-variant="operational"]
+    [data-ui="board-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-header"] {
+    display: grid;
+    min-width: 0;
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="board-page"][data-variant="operational"]
+    [data-ui="board-page-header"] {
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-eyebrow"] {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0.07em;
+    line-height: var(--kv-leading-normal);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-title-row"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: -0.025em;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-description"] {
+    max-width: 56rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-subline"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-status"],
+  :where([data-kv-design-system]) [data-ui="board-page-meta"] {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-actions"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-toolbar"] {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    padding: var(--kv-space-3) var(--kv-page-padding-x) var(--kv-space-2-5);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-controls"] {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-body"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-4);
+    padding: var(--kv-space-4) var(--kv-page-padding-x) var(--kv-space-8);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-body"] > [data-ui="stack"] {
+    gap: var(--kv-space-4);
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system])
+      [data-ui="board-page"][data-variant="operational"]
+      [data-ui="board-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-title-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-title"] {
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-toolbar"],
+    :where([data-kv-design-system]) [data-ui="board-page-body"] {
+      padding-inline: var(--kv-space-4);
+    }
+  }
+}
+
+@layer ket.app {
+  /* Dashboards are working canvases, not records. Their context and identity use
+     the same quiet bands as lists and forms; KPI, workflow and analytical blocks
+     then share one uninterrupted canvas below. */
+  :where([data-kv-design-system]) [data-ui="dashboard-page"] {
+    display: grid;
+    min-width: 0;
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0 0 var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="dashboard-page"][data-variant="operational"]
+    [data-ui="dashboard-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-header"] {
+    display: grid;
+    min-width: 0;
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="dashboard-page"][data-variant="operational"]
+    [data-ui="dashboard-page-header"] {
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-eyebrow"] {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0.07em;
+    line-height: var(--kv-leading-normal);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-title-row"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: -0.025em;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-description"] {
+    max-width: 56rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-subline"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-status"],
+  :where([data-kv-design-system]) [data-ui="dashboard-page-meta"] {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-body"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-6);
+    padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-body"] > [data-ui="stack"] {
+    gap: var(--kv-space-6);
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="dashboard-page"][data-variant="operational"] {
+      padding-bottom: var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="dashboard-page"][data-variant="operational"]
+      [data-ui="dashboard-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-title-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-title"] {
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] > [data-ui="inline"] {
+      width: 100%;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="dashboard-page-actions"]
+      [data-ui="action"][data-variant="primary"] {
+      min-height: 2.75rem;
+      flex: 1 1 auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-body"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-8);
+    }
+  }
+}
+
+@layer ket.app {
   /* Operational forms read like one working sheet: identity and the primary
      decision stay together, sections use rhythm instead of card nesting, and
      durable context occupies a quiet rail when there is room. */
@@ -522,12 +1060,37 @@
     background: var(--kv-page-bg);
   }
 
+  /* Operational forms share the same quiet location band as collections. The
+     form title remains compact: business fields, not chrome, own the viewport. */
+  :where([data-kv-design-system]) [data-ui="form-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0 0 var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="form-page"][data-variant="operational"]
+    [data-ui="form-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-panel-bg);
+  }
+
   :where([data-kv-design-system]) [data-ui="form-page-header"] {
     display: grid;
     min-width: 0;
     gap: var(--kv-space-2);
     padding: var(--kv-space-4) var(--kv-page-padding-x);
     border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="form-page"][data-variant="operational"]
+    [data-ui="form-page-header"] {
+    background: var(--kv-panel-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-title-row"] {
@@ -539,14 +1102,16 @@
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-heading"] {
+    display: grid;
     min-width: 0;
+    gap: var(--kv-space-1);
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-title"] {
     margin: 0;
     overflow-wrap: anywhere;
     color: var(--kv-text-main);
-    font-size: var(--kv-text-xl);
+    font-size: var(--kv-page-title-size);
     font-weight: var(--kv-weight-semibold);
     letter-spacing: -0.025em;
     line-height: var(--kv-leading-tight);
@@ -564,7 +1129,6 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--kv-space-2);
-    margin-top: var(--kv-space-1-5);
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-description"] {
@@ -750,6 +1314,17 @@
   }
 
   @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="form-page"][data-variant="operational"] {
+      padding-bottom: var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="form-page"][data-variant="operational"]
+      [data-ui="form-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
     :where([data-kv-design-system]) [data-ui="form-page-header"] {
       padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
     }

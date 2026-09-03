@@ -102,6 +102,8 @@ export const accountingTermsScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="partner-accounting-terms-form-page"
       title={title}
       description={_('account_partner_backend.section.hint')}

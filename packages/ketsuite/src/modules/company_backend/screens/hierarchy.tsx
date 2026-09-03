@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, code, dataTable, emptyState, Framed, inline, LinkButton } from '../../../ui/index.ts'
+import { badge, code, dataTable, emptyState, ListScreen, inline, LinkButton } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 import type { CompanyRow } from './types.ts'
 
@@ -21,7 +21,7 @@ export const hierarchyScreen = (
   frame: Frame,
   options: HierarchyScreenOptions,
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('company_backend.hierarchy.title')}
     subtitle={`${_('company_backend.screen.title')}: ${String(options.rows.length)}`}

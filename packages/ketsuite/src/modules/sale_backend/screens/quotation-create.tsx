@@ -23,6 +23,8 @@ export const quotationCreateScreen = (
     _,
     _('sale_backend.quotation.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="sale-quotation-create-form-page"
       title={_('sale_backend.quotation.create.title')}
       description={_('sale_backend.quotation.create.hint')}

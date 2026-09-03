@@ -7,7 +7,7 @@ import {
   ContentCard,
   dataTable,
   emptyState,
-  Framed,
+  RecordScreen,
   linkButton,
   ListPage,
   RecordActions,
@@ -29,6 +29,8 @@ export const reportsScreen = (
     _,
     _('report_backend.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('report_backend.title')}
       actions={frame.extras?.['topbar.end']}
       status={`${_('report_backend.title')}: ${String(reports.length)}`}
@@ -107,7 +109,7 @@ export const reportEditorScreen = (
 ): TemplateResult => {
   const form = 'report-source'
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={_(options.title)}
       frame={frame}

@@ -71,6 +71,8 @@ export const providersScreen = (
     _,
     _('oauth_backend.providers.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('oauth_backend.providers.title')}
       description={_('oauth_backend.providers.subtitle')}
       actions={inline([
@@ -268,6 +270,8 @@ export const providerFormScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="oauth-provider-form"
       title={title}
       description={_('oauth_backend.configuration.hint')}
@@ -379,6 +383,8 @@ export const identitiesScreen = (
     _,
     _('oauth_backend.identities.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('oauth_backend.identities.title')}
       description={_('oauth_backend.identities.subtitle')}
       actions={inline([
@@ -457,6 +463,8 @@ export const identityFormScreen = (
     _,
     _('oauth_backend.identities.link'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="oauth-identity-form"
       title={_('oauth_backend.identities.link')}
       description={_('oauth_backend.identities.linkHint')}
@@ -532,6 +540,8 @@ export const linkProviderScreen = (
     _,
     _('oauth_backend.link.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="oauth-link-provider"
       title={_('oauth_backend.link.title')}
       description={_('oauth_backend.link.hint')}

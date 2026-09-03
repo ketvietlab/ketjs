@@ -10,7 +10,7 @@ import {
   formatMoney,
   FormCluster,
   type Frame,
-  Framed,
+  WorkspaceScreen,
   Metric,
   propertyChargeColumns,
   type PropertyChargeRow,
@@ -62,7 +62,7 @@ export const servicesScreen = (
     }))
 
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('hospitality_core.screen.services.title')}
       frame={frame}

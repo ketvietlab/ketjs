@@ -8,7 +8,7 @@ import {
   formatMoney,
   FormCluster,
   type Frame,
-  Framed,
+  WorkspaceScreen,
   Metric,
   nightAuditColumns,
   nightAuditFeedback,
@@ -37,7 +37,7 @@ export const nightAuditScreen = (
 ): TemplateResult => {
   if (!data.propertyId)
     return (
-      <Framed
+      <WorkspaceScreen
         translator={_}
         title={_('hospitality_core.screen.nightAudit.title')}
         frame={frame}
@@ -49,7 +49,7 @@ export const nightAuditScreen = (
     )
   const lang: Record<string, string> = { lang: locale }
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('hospitality_core.screen.nightAudit.title')}
       frame={frame}

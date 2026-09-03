@@ -404,8 +404,9 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(buildingDetailHtml, /River Tower/)
   assert.doesNotMatch(
     buildingDetailHtml,
-    /Building record|data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/,
+    /Building record|data-ui="record-thumbnail"|data-ui="record-kicker"/,
   )
+  assert.match(buildingDetailHtml, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.doesNotMatch(buildingDetailHtml, /hospitality_core\./)
 
   const buildingUpdated = await e2e.client.post(
@@ -430,8 +431,9 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(floorDetailHtml, /River Wing/)
   assert.doesNotMatch(
     floorDetailHtml,
-    /Hồ sơ tầng|data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"|hospitality_core\./,
+    /Hồ sơ tầng|data-ui="record-thumbnail"|data-ui="record-kicker"|hospitality_core\./,
   )
+  assert.match(floorDetailHtml, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
 
   const floorUpdated = await e2e.client.post(
     `${floorDetailPath}?lang=vi`,

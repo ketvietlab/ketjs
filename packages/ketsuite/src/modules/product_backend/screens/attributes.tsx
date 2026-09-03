@@ -6,7 +6,7 @@ import {
   CardGrid,
   ContentCard,
   emptyState,
-  Framed,
+  ListScreen,
   icon,
   inline,
   RecordForm,
@@ -142,7 +142,7 @@ export const attributesScreen = (
   )
 
   return (
-    <Framed
+    <ListScreen
       translator={_}
       title={_('product_backend.attributes.title')}
       frame={frame}

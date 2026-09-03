@@ -54,6 +54,8 @@ export const bomCreateScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="manufacturing-bom-create-form-page"
       title={title}
       actions={

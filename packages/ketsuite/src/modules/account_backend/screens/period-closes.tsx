@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  Framed,
+  RecordScreen,
   icon,
   ListPage,
   RecordForm,
@@ -47,6 +47,8 @@ export const periodClosesListScreen = (
     _,
     _('account_backend.close.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.close.title')}
       description={_('account_backend.close.subtitle')}
       status={`${_('account_backend.close.summary')}: ${String(options.rows.length)}`}
@@ -121,7 +123,7 @@ export const periodCloseDetailScreen = (
   _: Translator,
   options: { frame: Frame; period: Row; steps: Row[]; action: string; errors?: string[] },
 ): TemplateResult => (
-  <Framed
+  <RecordScreen
     translator={_}
     title={`${_('account_backend.close.period')} ${String(options.period.periodKey)}`}
     frame={options.frame}

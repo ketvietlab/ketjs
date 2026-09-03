@@ -33,6 +33,8 @@ export const taxFormScreen = (_: Translator, options: TaxFormScreenOptions): Tem
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-tax-form-page"
       title={title}
       description={editing ? String(editing.name) : _('account_backend.tax.create.hint')}

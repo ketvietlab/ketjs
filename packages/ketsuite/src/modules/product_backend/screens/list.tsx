@@ -14,6 +14,7 @@ import {
   LinkButton,
   ListPage,
   listChrome,
+  PageContext,
   shell,
   thumbnail,
 } from '../../../ui/index.ts'
@@ -114,6 +115,7 @@ export const templateColumns = (_: Translator): Array<Column<TemplateRow>> => [
     cell: (r) => formatMoney(_, r.listPrice),
     align: 'end',
     kind: 'currency',
+    priority: 'primary',
   },
   {
     key: 'variants',
@@ -178,6 +180,14 @@ export const productsScreen = (
     _,
     _('product_backend.screen.title'),
     <ListPage
+      variant="operational"
+      context={
+        <PageContext
+          label={_('product_backend.screen.title')}
+          items={[{ label: _('product_backend.menu.app') }, { label: _('product_backend.screen.title') }]}
+          viewer={frame.viewer}
+        />
+      }
       title={_('product_backend.screen.title')}
       description={_('product_backend.screen.description')}
       actions={
@@ -191,6 +201,7 @@ export const productsScreen = (
                   label={frame.chrome.create.label}
                   href={frame.chrome.create.path}
                   variant="primary"
+                  leading={icon('plus')}
                 />
               ) : (
                 ''
@@ -217,7 +228,6 @@ export const productsScreen = (
             )
           : undefined
       }
-      status={_('product_backend.screen.results', { count: total })}
       body={
         rows.length === 0 && !table.groups?.length
           ? emptyState(_('product_backend.screen.empty.message'), _('product_backend.screen.empty.hint'))
@@ -231,6 +241,7 @@ export const productsScreen = (
                 ...table,
               })
       }
+      footer={_('product_backend.screen.results', { count: total })}
     />,
     { ...frame, chrome: null, topbar: false },
   )

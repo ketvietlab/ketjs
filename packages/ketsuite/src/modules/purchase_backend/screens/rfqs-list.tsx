@@ -40,6 +40,8 @@ export const rfqsListScreen = (_: Translator, options: RfqsListScreenOptions): T
     _,
     _('purchase_backend.rfqs.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('purchase_backend.rfqs.title')}
       actions={inline([
         <LinkButton

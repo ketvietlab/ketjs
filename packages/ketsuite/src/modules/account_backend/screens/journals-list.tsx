@@ -110,6 +110,8 @@ export const journalsListScreen = (_: Translator, options: JournalsListScreenOpt
     _,
     _('account_backend.journals.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.journals.title')}
       description={_('account_backend.journal.subtitle')}
       actions={inline([

@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { CardGrid, Framed, icon, Metric, stack } from '../../../ui/index.ts'
+import { BoardPage, CardGrid, icon, listChrome, Metric, shell, stack } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 /** One figure above the board. `icon` is a glyph name, not markup: screens own markup. */
@@ -25,34 +25,43 @@ export const pipelineScreen = (
   frame: Frame,
   board: JSXChild,
   figures: readonly PipelineFigure[] = [],
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('crm_backend.pipeline.title')}
-    subtitle={_('crm_backend.pipeline.subtitle')}
-    frame={frame}
-    body={stack(
-      [
-        ...(figures.length
-          ? [
-              <CardGrid
-                items={figures}
-                id={(figure: PipelineFigure) => figure.id}
-                card={(figure: PipelineFigure) => (
-                  <Metric
-                    label={figure.label}
-                    value={figure.value}
-                    detail={figure.detail ?? null}
-                    icon={icon(figure.icon)}
-                    tone="money"
-                  />
-                )}
-              />,
-            ]
-          : []),
-        board,
-      ],
-      'compact',
-    )}
-  />
-)
+): TemplateResult => {
+  const title = _('crm_backend.pipeline.title')
+  return shell(
+    _,
+    title,
+    <BoardPage
+      variant="operational"
+      frame={frame}
+      title={title}
+      description={_('crm_backend.pipeline.subtitle')}
+      controls={
+        frame.chrome ? listChrome(_, title, { ...frame.chrome, layout: 'command' }, false) : undefined
+      }
+      body={stack(
+        [
+          ...(figures.length
+            ? [
+                <CardGrid
+                  items={figures}
+                  id={(figure: PipelineFigure) => figure.id}
+                  card={(figure: PipelineFigure) => (
+                    <Metric
+                      label={figure.label}
+                      value={figure.value}
+                      detail={figure.detail ?? null}
+                      icon={icon(figure.icon)}
+                      tone="money"
+                    />
+                  )}
+                />,
+              ]
+            : []),
+          board,
+        ],
+        'compact',
+      )}
+    />,
+    { ...frame, chrome: null, topbar: false },
+  )
+}

@@ -76,6 +76,8 @@ export const locationsListScreen = (
     _,
     _('stock_backend.locations'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('stock_backend.location.title')}
       description={_('stock_backend.location.subtitle')}
       actions={inline([

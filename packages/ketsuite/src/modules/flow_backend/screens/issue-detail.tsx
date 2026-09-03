@@ -202,6 +202,8 @@ export const issueDetailScreen = (
 
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="flow-issue-detail-form-page"
       title={String(row.title)}
       description={String(row.projectName ?? '') || undefined}
