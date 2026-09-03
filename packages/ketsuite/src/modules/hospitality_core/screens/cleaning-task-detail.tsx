@@ -25,12 +25,17 @@ export const cleaningTaskDetailScreen = (
   frame: Frame,
   status?: string | null,
   errors: readonly string[] = [],
+  permissions: { start: boolean; complete: boolean; cancel: boolean } = {
+    start: true,
+    complete: true,
+    cancel: true,
+  },
 ): TemplateResult => {
   const action = `/admin/hospitality/housekeeping/tasks/${encodeURIComponent(task.id)}?lang=${encodeURIComponent(locale)}`
   const room = task.room?.name ?? task.room?.code ?? task.roomId
   const actions: TemplateResult[] = []
 
-  if (task.state === 'todo')
+  if (task.state === 'todo' && permissions.start)
     actions.push(
       <Section
         title={_('hospitality_core.housekeeping.action.start')}
@@ -55,7 +60,7 @@ export const cleaningTaskDetailScreen = (
       />,
     )
 
-  if (task.state === 'in_progress')
+  if (task.state === 'in_progress' && permissions.complete)
     actions.push(
       <Section
         title={_('hospitality_core.housekeeping.action.complete')}
@@ -73,7 +78,7 @@ export const cleaningTaskDetailScreen = (
       />,
     )
 
-  if (task.state === 'todo' || task.state === 'in_progress')
+  if ((task.state === 'todo' || task.state === 'in_progress') && permissions.cancel)
     actions.push(
       <Section
         title={_('hospitality_core.housekeeping.action.cancel')}

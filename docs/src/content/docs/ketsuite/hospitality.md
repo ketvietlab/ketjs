@@ -23,6 +23,7 @@ the focused bundles grant the same exact function keys without widening an exist
 | `night-audit` | Read operational stays and folios, preview/request night audit, and mark no-show | charge entry, payment, invoice, accounting posting |
 | `revenue-operate` | Read inventory and reservations; maintain rates, restrictions, allotment, and cancellation policy | charge entry, folio payment, guest documents |
 | `compliance-operate` | Read and progress stay-notice submissions | folios, charges, guest documents, reservation mutation |
+| `property-reference` | Read property identity and timezone needed by a focused workflow | room, guest, folio, charge, and configuration mutation |
 
 A housekeeping supervisor role normally composes both housekeeping bundles. Product deployments remain
 responsible for mapping these bundles to managed roles and for adding private OTA permissions. Assignment

@@ -17,7 +17,7 @@ test('public production permission catalogue covers every function owned by its 
 
   assert.equal(ketsuitePermissionModuleNames.length, 59)
   assert.equal(Object.keys(manifest.permissions.modules).length, 59)
-  assert.equal(Object.keys(manifest.permissions.bundles).length, 146)
+  assert.equal(Object.keys(manifest.permissions.bundles).length, 147)
   assert.equal(Object.keys(manifest.permissions.functions).length, 698)
   assert.equal(Object.keys(manifest.permissions.exemptions).length, 70)
 
@@ -101,6 +101,18 @@ test('public catalogue exposes least-privilege Hospitality job bundles without r
     'hospitality_core.approve',
     'hospitality_core.compliance-operate',
   ])
+  assert.deepEqual(declaration?.functions['hospitality_core.listProperties']?.bundles, [
+    'hospitality_core.view',
+    'hospitality_core.night-audit',
+    'hospitality_core.property-reference',
+    'hospitality_core.reservation-input',
+    'hospitality_core.revenue-operate',
+  ])
+  assert.ok(
+    declaration?.functions['hospitality_core.listRooms']?.bundles.includes(
+      'hospitality_core.housekeeping-supervise',
+    ),
+  )
 
   assert.equal(
     declaration?.functions['hospitality_core.listGuestDocuments']?.bundles.includes(

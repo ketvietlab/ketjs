@@ -300,3 +300,101 @@ test('Hospitality split collections keep context mounted under URL-owned create 
   assert.match(billingOpen, /data-route-modal="true"/)
   assert.match(billingOpen, /aria-labelledby="hospitality-charge-rule-save-title"/)
 })
+
+test('Hospitality focused roles render only actions present in their exact allow-list', () => {
+  const housekeepingQueue = renderToString(
+    coreScreens.cleaningTasksScreen(
+      translate,
+      {
+        rows: [],
+        properties: [],
+        propertyId: 'hotel',
+        state: 'all',
+        rooms: [{ id: '101', code: '101', name: 'Room 101', status: 'available' }] as never,
+        summary: { todo: 0, inProgress: 0, done: 0, cancelled: 0 },
+        id: 'task',
+        code: 'HK-001',
+      },
+      'vi',
+      'Asia/Ho_Chi_Minh',
+      {},
+      null,
+      undefined,
+      false,
+    ),
+  )
+  assert.doesNotMatch(housekeepingQueue, /href="[^"]*create=1"/)
+
+  const housekeeping = renderToString(
+    coreScreens.cleaningTaskDetailScreen(
+      translate,
+      {
+        id: 'task-1',
+        code: 'HK-001',
+        propertyId: 'hotel',
+        roomId: '101',
+        taskType: 'daily_clean',
+        priority: 'normal',
+        state: 'todo',
+        requestedAt: '2026-09-03T00:00:00.000Z',
+        room: { id: '101', code: '101', name: 'Room 101' },
+      } as never,
+      'vi',
+      'Asia/Ho_Chi_Minh',
+      {},
+      null,
+      [],
+      { start: true, complete: true, cancel: false },
+    ),
+  )
+  assert.match(housekeeping, /hospitality_core\.housekeeping\.action\.start</)
+  assert.doesNotMatch(housekeeping, /hospitality_core\.housekeeping\.action\.cancel</)
+
+  const reservation = renderToString(
+    coreScreens.reservationDetailScreen(
+      translate,
+      {
+        id: 'reservation-1',
+        code: 'RES-001',
+        propertyId: 'hotel',
+        partnerId: 'guest',
+        roomTypeId: 'deluxe',
+        provider: 'direct',
+        state: 'confirmed',
+        checkIn: '2026-09-03T07:00:00.000Z',
+        checkOut: '2026-09-04T05:00:00.000Z',
+        adults: 1,
+        children: 0,
+        rate: 100,
+      } as never,
+      [],
+      [{ id: 'deluxe', name: 'Deluxe' }],
+      [{ id: 'guest', name: 'Guest' }],
+      {
+        partnerId: 'guest',
+        roomTypeId: 'deluxe',
+        checkIn: '2026-09-03T14:00',
+        checkOut: '2026-09-04T12:00',
+        adults: 1,
+        children: 0,
+        rate: '100',
+      },
+      '2026-09-04T12:00',
+      'vi',
+      'Asia/Ho_Chi_Minh',
+      {},
+      null,
+      [],
+      {
+        amend: true,
+        checkIn: false,
+        adjustDeparture: false,
+        checkOut: false,
+        cancel: false,
+        noShow: false,
+      },
+    ),
+  )
+  assert.match(reservation, /hospitality_core\.reservation\.action\.amend</)
+  assert.doesNotMatch(reservation, /hospitality_core\.reservation\.action\.(?:cancel|checkIn|noShow)</)
+})
