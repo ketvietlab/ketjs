@@ -104,7 +104,7 @@ test('partner list: follows the shared ListPage hierarchy and keeps directory ta
   )
   assert.match(
     html,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?24 đối tác[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-layout="command"/,
+    /data-ui="list-page-controls"[\s\S]*?data-layout="command"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?24 đối tác/,
   )
   assert.match(html, /data-ui="tabs"[\s\S]*?Khách hàng[\s\S]*?18/)
   assert.match(html, /data-ui="person"[\s\S]*?Công ty Minh An/)
