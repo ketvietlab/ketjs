@@ -5,7 +5,7 @@ import {
   type FolioBillingRow,
   folioColumns,
   type Frame,
-  Framed,
+  ListScreen,
   linkButton,
   RecordForm,
   stack,
@@ -19,7 +19,7 @@ export const billingScreen = (
   frame: Frame,
   state?: string | null,
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('hospitality_billing.screen.title')}
     subtitle={_('hospitality_billing.screen.subtitle')}

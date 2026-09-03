@@ -88,6 +88,8 @@ export const accountDefaultsScreen = (
     _,
     _('account_backend.defaults.title'),
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-defaults-form-page"
       title={_('account_backend.defaults.title')}
       description={_('account_backend.defaults.subtitle')}

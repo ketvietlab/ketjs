@@ -91,6 +91,8 @@ export const pickingTypesListScreen = (
     _,
     _('stock_backend.pickingTypes'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('stock_backend.pickingType.title')}
       description={_('stock_backend.pickingType.subtitle')}
       actions={inline([

@@ -16,18 +16,26 @@
 export * as designSystem from '@ketvietlab/design-system'
 export {
   Disclosure,
-  FormPage,
   LinkButton,
-  ListPage,
   Tabs as CollectionTabs,
 } from '@ketvietlab/design-system'
 export type {
-  FormPageProps,
   FormPageSlots,
   LinkButtonProps,
-  ListPageProps,
   TabItem as CollectionTabItem,
 } from '@ketvietlab/design-system'
+export { FormPage } from './form-page.tsx'
+export type { FormPageProps } from './form-page.tsx'
+export { RecordPage } from './record-page.tsx'
+export type { RecordPageProps } from './record-page.tsx'
+export { WorkspacePage } from './workspace-page.tsx'
+export type { WorkspacePageProps } from './workspace-page.tsx'
+export { DashboardPage } from './dashboard-page.tsx'
+export type { DashboardPageProps } from './dashboard-page.tsx'
+export { BoardPage } from './board-page.tsx'
+export type { BoardPageProps } from './board-page.tsx'
+export { ListPage } from './list-page.tsx'
+export type { ListPageProps } from './list-page.tsx'
 
 /**
  * Public components a screen uses directly, with no compatibility copy here.
@@ -99,7 +107,7 @@ export { authTokenScreen, loginScreen } from './auth.tsx'
 export type { FormField, FormOption, RecordFormOptions } from './form.tsx'
 export { datePicker } from './date-picker.tsx'
 export type { DatePickerField, DatePickerOptions } from './date-picker.tsx'
-export { breadcrumbs, tabs } from './navigation.tsx'
+export { breadcrumbs, pageContext, tabs } from './navigation.tsx'
 export type { Breadcrumb, Tab } from './navigation.tsx'
 export { recordWorkspace, recordToggle } from './record.tsx'
 export {
@@ -130,7 +138,16 @@ export type {
   SearchMenuItem,
   TailMenu,
 } from './chrome.tsx'
-export { backendPage, shell, framedPage, definitionList } from './layout.tsx'
+export {
+  backendPage,
+  shell,
+  framedPage,
+  listScreen,
+  recordScreen,
+  workspaceScreen,
+  definitionList,
+} from './layout.tsx'
+export type { OperationalScreenOptions } from './layout.tsx'
 export type { Extras, Frame } from './layout.tsx'
 export { HOOKS, OWNERS } from './hooks.ts'
 export { mailContractCases } from './mail.ts'
@@ -160,6 +177,7 @@ export type { PartnerFact } from './partner.tsx'
  * object where it wants a list. `backend-ui.test.ts` checks the arity.
  */
 export { framedPage as Framed } from './layout.tsx'
+export { listScreen as ListScreen, recordScreen as RecordScreen, workspaceScreen as WorkspaceScreen } from './layout.tsx'
 export { section as Section, surface as Surface, contentCard as ContentCard } from './surfaces.tsx'
 export { cardGrid as CardGrid, metric as Metric } from './surfaces.tsx'
 export { recordForm as RecordForm, formCluster as FormCluster } from './form.tsx'
@@ -174,7 +192,7 @@ export {
   recordMore as RecordMore,
 } from './record-detail.tsx'
 export { notice as Notice } from './state.tsx'
-export { breadcrumbs as Breadcrumbs, tabs as Tabs } from './navigation.tsx'
+export { breadcrumbs as Breadcrumbs, pageContext as PageContext, tabs as Tabs } from './navigation.tsx'
 export { modalSheet as ModalSheet } from './modal.tsx'
 export { modalForm as ModalForm } from './modal.tsx'
 export { datePicker as DatePicker } from './date-picker.tsx'

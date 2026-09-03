@@ -53,6 +53,8 @@ export const rolesScreen = (_: Translator, frame: Frame, options: RolesListScree
     _,
     _('user_backend.roles.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('user_backend.roles.title')}
       description={_('user_backend.roles.subtitle')}
       actions={inline([

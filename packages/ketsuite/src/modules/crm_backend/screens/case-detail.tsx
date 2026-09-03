@@ -7,11 +7,11 @@ import {
   dataTable,
   DefinitionList,
   emptyState,
-  Framed,
   icon,
   linkButton,
   RecordActions,
   RecordForm,
+  RecordScreen,
   RecordWorkspace,
   Section,
   stack,
@@ -60,7 +60,7 @@ const state = (_: Translator, value: unknown) => {
 }
 
 export const permissionScreen = (_: Translator, frame: Frame): TemplateResult => (
-  <Framed
+  <RecordScreen
     translator={_}
     title={_('crm_backend.permission.title')}
     frame={frame}
@@ -621,7 +621,7 @@ export const caseDetailScreen = (
       : []),
   ]
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={String(row.name)}
       frame={frame}

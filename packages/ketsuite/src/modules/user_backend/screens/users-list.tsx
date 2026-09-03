@@ -69,6 +69,8 @@ export const usersScreen = (_: Translator, frame: Frame, options: UsersListScree
     _,
     _('user_backend.users.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('user_backend.users.title')}
       description={_('user_backend.users.subtitle')}
       actions={inline([

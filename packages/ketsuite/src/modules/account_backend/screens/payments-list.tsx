@@ -108,6 +108,8 @@ export const paymentsListScreen = (_: Translator, options: PaymentsListScreenOpt
     _,
     _('account_backend.payments.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.payments.title')}
       description={_('account_backend.payment.subtitle')}
       actions={inline([

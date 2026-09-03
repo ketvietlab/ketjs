@@ -25,6 +25,8 @@ export const newPartnerScreen = (
     _,
     _('partner_backend.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       title={_('partner_backend.create.title')}
       description={_('partner_backend.create.subtitle')}
       actions={

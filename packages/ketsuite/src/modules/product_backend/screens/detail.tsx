@@ -534,6 +534,8 @@ export const productDetailScreen = (
   )
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="product-form-page"
       title={row.name}
       description={subtitle}
