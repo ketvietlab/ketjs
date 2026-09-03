@@ -108,6 +108,11 @@ test('public catalogue exposes least-privilege Hospitality job bundles without r
     'hospitality_core.reservation-input',
     'hospitality_core.revenue-operate',
   ])
+  assert.ok(
+    declaration?.functions['hospitality_core.listRooms']?.bundles.includes(
+      'hospitality_core.housekeeping-supervise',
+    ),
+  )
 
   assert.equal(
     declaration?.functions['hospitality_core.listGuestDocuments']?.bundles.includes(
