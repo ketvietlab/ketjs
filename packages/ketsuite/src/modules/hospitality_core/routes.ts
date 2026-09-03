@@ -132,7 +132,16 @@ const renderReservationDetail = async (
     req,
   )) as ReservationDetail | null
   if (!reservation) return text('Not found', { status: 404 })
-  if (reservation.stayId) {
+  const permissions = {
+    amend: await ctx.allows('hospitality_core.amendReservation', url, req),
+    checkIn: await ctx.allows('hospitality_core.checkIn', url, req),
+    adjustDeparture: await ctx.allows('hospitality_core.adjustStayDeparture', url, req),
+    checkOut: await ctx.allows('hospitality_core.checkOut', url, req),
+    cancel: await ctx.allows('hospitality_core.cancelReservation', url, req),
+    noShow: await ctx.allows('hospitality_core.markNoShow', url, req),
+    readStay: await ctx.allows('hospitality_core.getStay', url, req),
+  }
+  if (reservation.stayId && permissions.readStay) {
     reservation.stay = (await ctx.call(
       'hospitality_core.getStay',
       { id: reservation.stayId },
@@ -142,7 +151,7 @@ const renderReservationDetail = async (
   }
   const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
   const [allRooms, roomTypes, partners] = (await Promise.all([
-    reservation.state === 'confirmed'
+    reservation.state === 'confirmed' && permissions.checkIn
       ? ctx.call(
           'hospitality_core.listRooms',
           { propertyId: reservation.propertyId, status: 'available' },
@@ -182,6 +191,7 @@ const renderReservationDetail = async (
         frame,
         url.searchParams.get('status'),
         errors,
+        permissions,
       ),
   })
 }
@@ -269,11 +279,25 @@ const renderCleaningTaskDetail = async (
   const timezone = await propertyTimezone(ctx, task.propertyId, url, req)
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
+  const permissions = {
+    start: await ctx.allows('hospitality_core.startCleaningTask', url, req),
+    complete: await ctx.allows('hospitality_core.completeCleaningTask', url, req),
+    cancel: await ctx.allows('hospitality_core.cancelCleaningTask', url, req),
+  }
   return adminPage(ctx, url, req, {
     title: _('hospitality_core.housekeeping.detail.title', { code: task.code }),
     translate: false,
     body: (_, frame) =>
-      cleaningTaskDetailScreen(_, task, lang, timezone, frame, url.searchParams.get('status'), errors),
+      cleaningTaskDetailScreen(
+        _,
+        task,
+        lang,
+        timezone,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+        permissions,
+      ),
   })
 }
 
@@ -2432,6 +2456,7 @@ export const routes: Record<string, RouteEntry> = {
       const state = CLEANING_TASK_STATES.includes(requestedState as (typeof CLEANING_TASK_STATES)[number])
         ? requestedState!
         : 'all'
+      const canCreate = await ctx.allows('hospitality_core.createCleaningTask', url, req)
       const [rows, rooms, summary] = propertyId
         ? ((await Promise.all([
             ctx.call(
@@ -2440,7 +2465,9 @@ export const routes: Record<string, RouteEntry> = {
               url,
               req,
             ),
-            ctx.call('hospitality_core.listRooms', { propertyId }, url, req),
+            canCreate
+              ? ctx.call('hospitality_core.listRooms', { propertyId }, url, req)
+              : Promise.resolve([]),
             ctx.call('hospitality_core.cleaningTaskSummary', { propertyId }, url, req),
           ])) as [CleaningTaskRow[], RoomRow[], CleaningTaskSummary])
         : [[], [], { todo: 0, inProgress: 0, done: 0, cancelled: 0 }]
@@ -2468,14 +2495,17 @@ export const routes: Record<string, RouteEntry> = {
             timezone,
             frame,
             url.searchParams.get('status'),
-            {
-              open: url.searchParams.get('create') === '1',
-              createHref: modalHref(url, true),
-              closeHref: modalHref(url, false, ['room']),
-              action: modalAction(url),
-              errors: modalErrors(url, _),
-              values: modalValues(url, ['roomId', 'taskType', 'priority', 'assigneeId', 'notes']),
-            },
+            canCreate
+              ? {
+                  open: url.searchParams.get('create') === '1',
+                  createHref: modalHref(url, true),
+                  closeHref: modalHref(url, false, ['room']),
+                  action: modalAction(url),
+                  errors: modalErrors(url, _),
+                  values: modalValues(url, ['roomId', 'taskType', 'priority', 'assigneeId', 'notes']),
+                }
+              : undefined,
+            canCreate,
           ),
       })
     },
