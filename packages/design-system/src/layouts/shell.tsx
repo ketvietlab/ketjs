@@ -12,7 +12,7 @@ export const HOOKS = [
   'page-description',
   'page-actions',
   'page-body',
-  'record-page',
+  'record-canvas',
   'record-content',
   'record-section',
   'record-section-title',
@@ -61,8 +61,8 @@ export const Page = (props: {
   </section>
 )
 
-export const RecordPage = (props: { body: JSXChild }): TemplateResult => (
-  <div data-ui="record-page">
+export const RecordCanvas = (props: { body: JSXChild }): TemplateResult => (
+  <div data-ui="record-canvas">
     <div data-ui="record-content">{props.body}</div>
   </div>
 )

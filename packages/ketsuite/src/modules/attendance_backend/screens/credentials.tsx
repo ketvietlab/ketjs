@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   CardGrid,
   ContentCard,
-  Framed,
+  WorkspaceScreen,
   LinkButton,
   ModalSheet,
   Notice,
@@ -60,7 +60,7 @@ export const credentialScreen = (
 ): TemplateResult => {
   const issues = (['kiosk', 'pin', 'qr'] as const).filter((issue) => options.actions[issue])
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('attendance_backend.credentials.title')}
       subtitle={_('attendance_backend.credentials.subtitle')}

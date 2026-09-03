@@ -66,6 +66,8 @@ export const invoicingPoliciesListScreen = (
     _,
     _('sale_backend.policies.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('sale_backend.policies.title')}
       description={_('sale_backend.policy.subtitle')}
       actions={inline([

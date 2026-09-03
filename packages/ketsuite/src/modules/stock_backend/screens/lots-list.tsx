@@ -74,6 +74,8 @@ export const lotsListScreen = (
     _,
     _('stock_backend.lots'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('stock_backend.lot.list.title')}
       description={_('stock_backend.lot.list.subtitle')}
       actions={inline([

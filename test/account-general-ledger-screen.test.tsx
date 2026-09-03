@@ -65,7 +65,9 @@ test('general ledger stays specialized and reports full-result totals above a pa
   )
 
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.match(html, /data-ui="list-page"[^>]*data-pattern="list"/)
+  assert.match(html, /data-ui="list-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
   assert.match(html, /data-ui="record-fact-value">42</)
   assert.match(html, /125[,.]000[\s\S]*Total debit/)
   assert.match(html, /250[,.]000[\s\S]*Total credit/)

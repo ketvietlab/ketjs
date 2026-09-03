@@ -68,9 +68,9 @@ test('flow project pages: specialized tree keeps hierarchy, identity, counts and
   )
   const textContent = html.replace(/<!--k\[?-->/g, '')
 
-  assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
-  assert.match(textContent, /data-ui="record-heading">Internal platform/)
+  assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
+  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
+  assert.match(textContent, /data-ui="list-page-title">Internal platform/)
   assert.match(textContent, /Documents/)
   assert.match(html, /href="\/admin\/flow\/projects\/platform\/pages\?q=guide&amp;lang=en&amp;create=1"/)
   assert.match(html, /data-ui="doc-tree"/)
@@ -107,7 +107,7 @@ test('flow project pages: two-field create action is a URL-owned modal retaining
     ),
   )
 
-  assert.match(html, /data-ui="record-workspace"/)
+  assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
   assert.match(html, /data-ui="doc-tree"/)
   assert.match(html, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(html, /id="flow-project-page-create-form"/)

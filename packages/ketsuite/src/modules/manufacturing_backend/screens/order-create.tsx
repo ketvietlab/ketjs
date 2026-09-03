@@ -24,6 +24,8 @@ export const orderCreateScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="manufacturing-order-create-form-page"
       title={title}
       actions={

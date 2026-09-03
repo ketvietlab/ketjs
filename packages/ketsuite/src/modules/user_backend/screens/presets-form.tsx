@@ -19,6 +19,8 @@ export const presetsScreen = (_: Translator, frame: Frame, options: PresetsScree
     _,
     _('user_backend.presets.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="permission-preset-page"
       title={_('user_backend.presets.title')}
       description={_('user_backend.presets.hint')}

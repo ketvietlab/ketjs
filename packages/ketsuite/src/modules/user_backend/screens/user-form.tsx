@@ -316,6 +316,8 @@ export const userFormScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="user-form-page"
       title={title}
       description={

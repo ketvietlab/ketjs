@@ -77,6 +77,8 @@ export const lotCreateScreen = (
     _,
     _('stock_backend.lot.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="lot-create"
       title={_('stock_backend.lot.create.title')}
       description={_('stock_backend.lot.create.hint')}

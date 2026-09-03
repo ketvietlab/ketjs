@@ -98,6 +98,8 @@ export const transfersListScreen = (
     _,
     _('stock_backend.transfers'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('stock_backend.transfer.list.title')}
       description={_('stock_backend.transfer.list.subtitle')}
       actions={inline([

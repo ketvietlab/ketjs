@@ -64,6 +64,8 @@ export const accountFormScreen = (_: Translator, options: AccountFormScreenOptio
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-chart-form-page"
       title={title}
       description={

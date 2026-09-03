@@ -2,15 +2,16 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   CardGrid,
+  DashboardPage,
   dataTable,
   emptyState,
   formatMoney,
-  Framed,
   icon,
   linkButton,
   Metric,
   Pipeline,
   Section,
+  shell,
   stack,
   Surface,
 } from '../../../ui/index.ts'
@@ -88,12 +89,14 @@ export const overviewScreen = (
       tone: 'warning' as const,
     },
   ]
-  return (
-    <Framed
-      translator={_}
-      title={_('sale_backend.dashboard.title')}
-      subtitle={_('sale_backend.dashboard.subtitle')}
+  return shell(
+    _,
+    _('sale_backend.dashboard.title'),
+    <DashboardPage
+      variant="operational"
       frame={o.frame}
+      title={_('sale_backend.dashboard.title')}
+      description={_('sale_backend.dashboard.subtitle')}
       actions={linkButton({
         label: _('sale_backend.action.create'),
         href: newQuotation,
@@ -158,6 +161,7 @@ export const overviewScreen = (
         ],
         'loose',
       )}
-    />
+    />,
+    { ...o.frame, topbar: false },
   )
 }

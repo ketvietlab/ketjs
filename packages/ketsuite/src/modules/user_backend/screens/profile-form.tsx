@@ -35,6 +35,8 @@ export const profileScreen = (
     _,
     _('user_backend.profile.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="profile-form-page"
       title={_('user_backend.profile.title')}
       description={`${row.name} · ${row.login}`}

@@ -25,6 +25,8 @@ export const ListScreenFrame = ({
     _,
     title,
     <ListPage
+      variant="operational"
+      frame={frame}
       title={title}
       description={subtitle ?? undefined}
       actions={
@@ -49,6 +51,8 @@ export const FormScreenFrame = ({
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       title={title}
       description={subtitle ?? undefined}
       actions={frame.extras?.['topbar.end']}

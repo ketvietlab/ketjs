@@ -24,6 +24,8 @@ export const ListScreenFrame = ({
     _,
     title,
     <ListPage
+      variant="operational"
+      frame={frame}
       title={title}
       description={subtitle ?? undefined}
       actions={

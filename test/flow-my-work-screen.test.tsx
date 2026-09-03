@@ -95,7 +95,7 @@ test('flow cross-project issues: uses ListPage and keeps summary, list state and
 
   assert.equal(rendered.match(/data-ui="list-page-title"/g)?.length, 1)
   assert.doesNotMatch(rendered, /data-ui="record-workspace"|data-ui="form-page"/)
-  assert.match(textContent, /data-ui="list-page-status">Việc của tôi: 5/)
+  assert.match(textContent, /data-ui="list-page-footer">Việc của tôi: 5/)
   assert.match(rendered, /name="q"[^>]*value="đăng nhập"/)
   assert.match(rendered, /name="lang" value="vi"/)
   assert.match(rendered, /name="view" value="mine"/)

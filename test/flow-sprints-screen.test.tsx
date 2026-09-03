@@ -27,7 +27,8 @@ test('sprint collection remains specialized and opens short creation in a modal'
   assert.match(closed, /data-ui="table"/)
   assert.match(closed, /name="action" value="start"/)
   assert.match(closed, /name="idempotencyKey" value="transition-key"/)
-  assert.doesNotMatch(closed, /data-ui="modal-layer"|data-ui="list-page"|data-ui="form-page"/)
+  assert.match(closed, /data-ui="list-page"[^>]*data-variant="operational"/)
+  assert.doesNotMatch(closed, /data-ui="modal-layer"|data-ui="form-page"/)
 
   const open = renderToString(
     sprintsScreen(

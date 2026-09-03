@@ -67,7 +67,7 @@ test('stock lots list: follows ListPage hierarchy and sends creation to the loca
     /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"[\s\S]*?href="\/admin\/stock\/lots\/new\?lang=vi"/,
   )
   assert.match(html, /data-variant="primary"/)
-  assert.match(html, /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?Tổng số: 18/)
+  assert.match(html, /data-ui="list-page-footer"[\s\S]*?Tổng số: 18/)
   assert.match(html, /data-col="name"[\s\S]*?DENIM-2026-08/)
   assert.match(html, /href="\/admin\/stock\/lots\/lot-denim-2026\?lang=vi"/)
   assert.doesNotMatch(html, /lot-create-form/)

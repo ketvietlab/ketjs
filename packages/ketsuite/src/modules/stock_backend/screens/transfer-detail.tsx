@@ -144,6 +144,8 @@ export const transferDetailScreen = (
     .join(' · ')
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="stock-transfer-form-page"
       title={transfer.name}
       description={description}

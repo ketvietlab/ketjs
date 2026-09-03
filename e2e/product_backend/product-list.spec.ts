@@ -22,10 +22,17 @@ test.beforeEach(async ({ page }) => login(page))
 test('search, pagination, columns, view switching and record navigation work', async ({ page }) => {
   await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
   await expect(page.getByRole('heading', { name: 'Danh mục sản phẩm' })).toBeVisible()
-  await expect(page.locator('[data-ui="chrome-create"]')).toHaveAttribute(
+  await expect(page.locator('[data-ui="list-page-actions"] [data-ui="action"]')).toHaveAttribute(
     'href',
     /\/admin\/product\/templates\/new/,
   )
+  await expect(page.locator('[data-ui="list-page"]')).toHaveAttribute('data-variant', 'operational')
+  await expect(page.locator('[data-ui="list-page-context"]')).toContainText(/Sản phẩm\s*Danh mục sản phẩm/)
+  await expect(page.locator('[data-ui="page-context-viewer"]')).toHaveAttribute(
+    'href',
+    /^\/admin\/context(?:\?|$)/,
+  )
+  await expect(page.locator('[data-ui="list-page-footer"]')).toContainText('sản phẩm')
 
   await page.getByRole('link', { name: 'Trang sau' }).click()
   await expect(page).toHaveURL(/page=2/)
@@ -45,7 +52,7 @@ test('search, pagination, columns, view switching and record navigation work', a
   await inlineSearch.fill('Áo khoác')
   await inlineSearch.press('Enter')
   await expect(page).toHaveURL(/q=%C3%81o(?:\+|%20)kho%C3%A1c/)
-  await expect(page.getByRole('link', { name: 'Áo khoác vận hành KETSUITE' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Áo khoác vận hành KETSUITE' }).first()).toBeVisible()
 
   await page.goto('/admin/product/templates?lang=vi&view=list&cols=id')
   await page.locator('[data-ui="col-config-open"]').click()
@@ -181,16 +188,22 @@ for (const viewport of [
       const metrics = await page.evaluate(() => ({
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: window.innerWidth,
+        contentPadding: getComputedStyle(document.querySelector<HTMLElement>('[data-ui="content"]')!).padding,
         main: (() => {
           const box = document.querySelector<HTMLElement>('[data-ui="main"]')?.getBoundingClientRect()
           return box ? { left: box.left } : null
         })(),
         create: (() => {
           const box = document
-            .querySelector<HTMLElement>('[data-ui="chrome-create"]')
+            .querySelector<HTMLElement>('[data-ui="list-page-actions"] [data-ui="action"]')
             ?.getBoundingClientRect()
           return box ? { left: box.left, height: box.height } : null
         })(),
+        visibleSecondaryCells: [
+          ...document.querySelectorAll<HTMLElement>(
+            '[data-ui="table"] :is(th, td)[data-priority="secondary"]',
+          ),
+        ].filter((cell) => getComputedStyle(cell).display !== 'none').length,
         iconSizes: [
           ...document.querySelectorAll<HTMLElement>(
             '[data-ui="view-kind"] [data-ui="icon"], [data-ui="col-config-open"] [data-ui="icon"]',
@@ -207,6 +220,7 @@ for (const viewport of [
           document.querySelector<HTMLElement>('[data-ui="row"]')?.getBoundingClientRect().height ?? null,
       }))
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
+      expect(metrics.contentPadding).toBe('0px')
       expect(metrics.main).not.toBeNull()
       expect(metrics.create).not.toBeNull()
       expect(metrics.create!.left - metrics.main!.left).toBeGreaterThanOrEqual(12)
@@ -215,9 +229,25 @@ for (const viewport of [
       if (view === 'list') {
         expect(metrics.tableHeader).toBe('rgb(40, 45, 52)')
         expect(metrics.rowHeight).toBeCloseTo(52, 0)
+        if (viewport.name === 'mobile') expect(metrics.visibleSecondaryCells).toBe(0)
       }
       await page.screenshot({ path: join(artifacts, `${view}-${viewport.name}.png`), fullPage: true })
     }
+  })
+}
+
+for (const viewport of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+] as const) {
+  test(`renders the operational catalogue in light theme on ${viewport.name}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/admin/product/templates?lang=vi&view=list')
+    await expect(page.locator('[data-ui="list-page"]')).toHaveAttribute('data-variant', 'operational')
+    await expect(page.locator('[data-ui="list-page-context"]')).toBeVisible()
+    await expect(page.locator('[data-ui="list-page-footer"]')).toBeVisible()
+    await page.screenshot({ path: join(artifacts, `list-light-${viewport.name}.png`), fullPage: true })
   })
 }
 

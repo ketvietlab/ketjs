@@ -112,6 +112,8 @@ export const orderScreen = (
   }
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="manufacturing-order-execution-form-page"
       title={String(row.name)}
       description={_('manufacturing_backend.orders.detail')}

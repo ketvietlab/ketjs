@@ -71,6 +71,8 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
     _,
     options.projectName,
     <ListPage
+      variant="operational"
+      frame={frame}
       title={options.projectName}
       description={_('flow_backend.issues.subtitle')}
       actions={
