@@ -9,6 +9,27 @@ KetSuite Hospitality keeps reservations, stays, operational folios, and guest ch
 `hospitality_core` module. A folio is the operational source of truth for what a guest owes. Accounting
 may invoice a closed folio, but it does not own or rewrite the underlying stay activity.
 
+## Least-privilege permission bundles
+
+Deployments can compose managed job roles from these focused `hospitality_core` bundles. The original
+`view`, `operate`, `approve`, `configure`, and `sensitive` bundles remain available for compatibility;
+the focused bundles grant the same exact function keys without widening an existing role.
+
+| Bundle | Intended authority | Deliberately excluded |
+|---|---|---|
+| `reservation-input` | Quote, create, amend, and read reservations and availability | cancellation approval, stay operations, folios, guest documents |
+| `housekeeping-attend` | Read cleaning work in the effective assignment scope, start it, and complete it | guest documents, reservations, folios, charges, room-status override |
+| `housekeeping-supervise` | Create or cancel cleaning work, inspect room context, and set room status | folios, charges, guest documents |
+| `night-audit` | Read operational stays and folios, preview/request night audit, and mark no-show | charge entry, payment, invoice, accounting posting |
+| `revenue-operate` | Read inventory and reservations; maintain rates, restrictions, allotment, and cancellation policy | charge entry, folio payment, guest documents |
+| `compliance-operate` | Read and progress stay-notice submissions | folios, charges, guest documents, reservation mutation |
+
+A housekeeping supervisor role normally composes both housekeeping bundles. Product deployments remain
+responsible for mapping these bundles to managed roles and for adding private OTA permissions. Assignment
+scope continues to use the shared tenant, company, and branch authorization model; a deployment-specific
+property guard is a separate record-access concern. Temporary elevation must use the audited, owner-bound,
+expiring break-glass path rather than adding a broad permanent bundle.
+
 ## Charge contract
 
 Every charge records an immutable business description, type, quantity, unit price, amount, and an

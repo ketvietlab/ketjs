@@ -17,7 +17,7 @@ test('public production permission catalogue covers every function owned by its 
 
   assert.equal(ketsuitePermissionModuleNames.length, 59)
   assert.equal(Object.keys(manifest.permissions.modules).length, 59)
-  assert.equal(Object.keys(manifest.permissions.bundles).length, 140)
+  assert.equal(Object.keys(manifest.permissions.bundles).length, 146)
   assert.equal(Object.keys(manifest.permissions.functions).length, 698)
   assert.equal(Object.keys(manifest.permissions.exemptions).length, 70)
 
@@ -72,4 +72,46 @@ test('public catalogue separates CRM agent work from assignment, merge, analytic
   assert.deepEqual(declaration?.functions['crm.case.merge']?.bundles, ['crm.merge'])
   assert.deepEqual(declaration?.functions['crm.enrichment.preview']?.bundles, ['crm.analytics'])
   assert.deepEqual(declaration?.functions['crm.assignmentRule.save']?.bundles, ['crm.configure'])
+})
+
+test('public catalogue exposes least-privilege Hospitality job bundles without removing legacy grants', () => {
+  const declaration = ketsuitePermissionModules.hospitality_core
+
+  assert.deepEqual(declaration?.functions['hospitality_core.startCleaningTask']?.bundles, [
+    'hospitality_core.operate',
+    'hospitality_core.housekeeping-attend',
+  ])
+  assert.deepEqual(declaration?.functions['hospitality_core.setRoomStatus']?.bundles, [
+    'hospitality_core.configure',
+    'hospitality_core.housekeeping-supervise',
+  ])
+  assert.deepEqual(declaration?.functions['hospitality_core.requestNightAudit']?.bundles, [
+    'hospitality_core.sensitive',
+    'hospitality_core.night-audit',
+  ])
+  assert.deepEqual(declaration?.functions['hospitality_core.createReservation']?.bundles, [
+    'hospitality_core.operate',
+    'hospitality_core.reservation-input',
+  ])
+  assert.deepEqual(declaration?.functions['hospitality_core.setInventoryRange']?.bundles, [
+    'hospitality_core.configure',
+    'hospitality_core.revenue-operate',
+  ])
+  assert.deepEqual(declaration?.functions['hospitality_core.confirmStayNotice']?.bundles, [
+    'hospitality_core.approve',
+    'hospitality_core.compliance-operate',
+  ])
+
+  assert.equal(
+    declaration?.functions['hospitality_core.listGuestDocuments']?.bundles.includes(
+      'hospitality_core.housekeeping-attend',
+    ),
+    false,
+  )
+  assert.equal(
+    declaration?.functions['hospitality_core.addCharge']?.bundles.includes(
+      'hospitality_core.revenue-operate',
+    ),
+    false,
+  )
 })
