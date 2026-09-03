@@ -78,7 +78,32 @@ test('Hospitality billing blockers link directly to their repair surfaces and su
   assert.match(html, /href="\/admin\/hospitality\/folios\/folio-1"/)
   assert.match(html, /href="\/admin\/accounting\/journals\/new"/)
   assert.match(html, /href="\/admin\/hospitality\/reservations\/reservation-1"/)
+  assert.match(html, /data-col="folioCode"[\s\S]*data-col="state"[\s\S]*data-col="guest"/)
   assert.doesNotMatch(html, /hospitality_billing\.action\.invoice(?:All)?</)
+})
+
+test('Hospitality services show one useful prerequisite state instead of duplicate empty cards', () => {
+  const html = renderToString(
+    coreScreens.servicesScreen(
+      translate,
+      {
+        properties: [{ id: 'hotel', name: 'Hotel' }],
+        propertyId: 'hotel',
+        products: [],
+        targets: [],
+        propertyCharges: [],
+        extraLines: [],
+        charges: [],
+        ids: { propertyCharge: 'fee-1', extraLine: 'extra-1', requestKey: 'request-1' },
+      },
+      'vi',
+      'Asia/Ho_Chi_Minh',
+      {},
+    ),
+  )
+
+  assert.match(html, /hospitality_core\.services\.empty\.catalogue/)
+  assert.doesNotMatch(html, /hospitality_core\.services\.empty\.intentions/)
 })
 
 test('Hospitality manual folio form cannot bypass stock fulfilment for minibar', () => {

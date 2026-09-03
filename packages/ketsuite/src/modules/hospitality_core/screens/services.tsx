@@ -253,10 +253,12 @@ export const servicesScreen = (
         />,
         data.extraLines.length
           ? dataTable(_, { columns: extraLineColumns(_), rows: data.extraLines, id: (row) => row.id })
-          : emptyState(
-              _('hospitality_core.services.empty.intentions'),
-              _('hospitality_core.services.empty.intentionsHint'),
-            ),
+          : data.targets.length && data.products.length
+            ? emptyState(
+                _('hospitality_core.services.empty.intentions'),
+                _('hospitality_core.services.empty.intentionsHint'),
+              )
+            : null,
         <Section
           title={_('hospitality_core.services.section.post')}
           description={_('hospitality_core.services.section.postHint')}
