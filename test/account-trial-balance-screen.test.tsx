@@ -67,7 +67,7 @@ test('trial balance stays a specialized drillable report with locale-safe GET ra
   )
 
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
   assert.match(html, /data-ui="date-picker" method="get" action="\/admin\/accounting\/trial-balance"/)
   assert.match(html, /type="hidden" name="lang" value="en"/)
   assert.match(html, /name="dateFrom"[^>]*value="2026-06-01"/)

@@ -74,7 +74,7 @@ test('flow all epics route: ListPage preserves stable cross-project paging, loca
     /data-ui="record-workspace"|data-ui="form-page"|data-ui="modal-layer"|livedoc\.editor/,
   )
   assert.match(firstText, /data-ui="list-page-title">All epics/)
-  assert.match(firstText, /data-ui="list-page-status">All epics: 52/)
+  assert.match(firstText, /data-ui="list-page-footer">All epics: 52/)
   assert.match(firstHtml, /name="q"[^>]*value="Release"/)
   assert.match(firstHtml, /name="filter" value="project:platform"/)
   assert.match(firstHtml, /name="group" value="project"/)

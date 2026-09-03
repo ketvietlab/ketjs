@@ -105,7 +105,7 @@ test('stock operation types list: preserves columns, summaries, search and pager
   assert.match(html, /data-ui="pager-step" data-dir="next" href="\/vi\/admin\/stock\/picking-types\?page=2"/)
   assert.match(
     html,
-    /data-ui="list-page-status"[\s\S]*?Luồng nhập: 1[\s\S]*?Luồng xuất: 1[\s\S]*?Luồng nội bộ: 1/,
+    /data-ui="list-page-footer"[\s\S]*?Luồng nhập: 1[\s\S]*?Luồng xuất: 1[\s\S]*?Luồng nội bộ: 1/,
   )
   assert.match(html, /data-col="name"[\s\S]*?Nhập kho chính/)
   assert.match(html, /data-col="code"[\s\S]*?Nhập kho/)

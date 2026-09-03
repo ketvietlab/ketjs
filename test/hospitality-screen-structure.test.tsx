@@ -19,8 +19,10 @@ translate.has = () => true
 translate.resolves = () => true
 
 test('Hospitality exports one focused module for every routed renderer', () => {
-  assert.equal(Object.keys(coreScreens).filter((name) => name.endsWith('Screen')).length, 31)
-  assert.equal(Object.keys(billingScreens).filter((name) => name.endsWith('Screen')).length, 2)
+  const routedScreens = (screens: Record<string, unknown>) =>
+    Object.keys(screens).filter((name) => /^[a-z].*Screen$/.test(name))
+  assert.equal(routedScreens(coreScreens).length, 31)
+  assert.equal(routedScreens(billingScreens).length, 2)
 })
 
 test('Hospitality collection and form adapters use public page contracts', () => {

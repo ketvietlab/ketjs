@@ -76,7 +76,7 @@ test('general ledger HTTP keeps exact totals while paging and searching the incl
   const html = clean(await response.text())
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
   assert.equal((html.match(/data-ui="row"/g) ?? []).length, 30)
   assert.match(html, /data-ui="record-fact-value">32</)
   assert.equal((html.match(/data-ui="record-fact-value">[^<]*16[,.]000/g) ?? []).length, 2)

@@ -76,7 +76,7 @@ test('stock routes list: keeps localized create, search and row navigation in Li
   assert.match(html, /data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"/)
   assert.match(
     html,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?Tổng tuyến: 12[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?Tổng tuyến: 12/,
   )
   assert.match(html, /data-col="name"[\s\S]*?Nhận hàng hai bước/)
   assert.match(html, /data-col="sequence"[\s\S]*?>10</)
