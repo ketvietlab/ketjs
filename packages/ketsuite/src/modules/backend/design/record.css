@@ -25,9 +25,8 @@
      supplies location and company context. Flatten the outer record body and
      suppress only its duplicate heading. */
   [data-ui="form-page"]:has(
-      > [data-ui="form-page-layout"] > [data-ui="form-page-body"] > [data-ui="record-workspace"]
-    )
-    > [data-ui="form-page-header"] {
+    > [data-ui="form-page-layout"] > [data-ui="form-page-body"] > [data-ui="record-workspace"]
+  ) > [data-ui="form-page-header"] {
     display: none;
   }
   [data-ui="form-page"]:has(
@@ -45,7 +44,7 @@
   /* Analytical lists can carry the existing summary workspace as their result
      body. Its identity replaces the list heading; the context strip remains. */
   [data-ui="list-page"]:has(> [data-ui="list-page-body"] > [data-ui="record-workspace"])
-    > [data-ui="list-page-header"] {
+  > [data-ui="list-page-header"] {
     display: none;
   }
   [data-ui="list-page"][data-variant="operational"]:has(

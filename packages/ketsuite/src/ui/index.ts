@@ -177,7 +177,11 @@ export type { PartnerFact } from './partner.tsx'
  * object where it wants a list. `backend-ui.test.ts` checks the arity.
  */
 export { framedPage as Framed } from './layout.tsx'
-export { listScreen as ListScreen, recordScreen as RecordScreen, workspaceScreen as WorkspaceScreen } from './layout.tsx'
+export {
+  listScreen as ListScreen,
+  recordScreen as RecordScreen,
+  workspaceScreen as WorkspaceScreen,
+} from './layout.tsx'
 export { section as Section, surface as Surface, contentCard as ContentCard } from './surfaces.tsx'
 export { cardGrid as CardGrid, metric as Metric } from './surfaces.tsx'
 export { recordForm as RecordForm, formCluster as FormCluster } from './form.tsx'
