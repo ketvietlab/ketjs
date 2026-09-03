@@ -50,6 +50,13 @@ const core = defineModule({
       }),
     },
   },
+  routes: {
+    '/permission-probe': (ctx) => async (url, req) =>
+      json({
+        open: await ctx.allows('core.open', url, req),
+        grant: await ctx.allows('core.grant', url, req),
+      }),
+  },
 })
 
 const boot = async () => {
@@ -152,6 +159,26 @@ test('permissions: granting in one tenant does not leak into the other', async (
   const other = await post(booted.port, 't1', 'core.open', cookie.t1)
   assert.equal(other.status, 400)
   assert.equal(((await other.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
+})
+
+test('permissions: trusted routes can render only actions in the request allow-list', async (t) => {
+  const { booted, cookie } = await boot()
+  t.after(() => booted.close())
+
+  const before = await fetch(`http://127.0.0.1:${booted.port}/permission-probe`, {
+    headers: { 'x-tenant': 't1', cookie: cookie.t1 },
+  })
+  assert.deepEqual(await before.json(), { open: false, grant: true })
+
+  await post(booted.port, 't1', 'core.grant', cookie.t1, {
+    id: 'g3',
+    userId: 'u1',
+    fn: 'core.open',
+  })
+  const after = await fetch(`http://127.0.0.1:${booted.port}/permission-probe`, {
+    headers: { 'x-tenant': 't1', cookie: cookie.t1 },
+  })
+  assert.deepEqual(await after.json(), { open: true, grant: true })
 })
 
 test('permissions: a custom audience receives only its deployment-scoped function grants', async (t) => {
