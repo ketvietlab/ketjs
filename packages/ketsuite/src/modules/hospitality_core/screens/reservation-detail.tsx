@@ -38,6 +38,21 @@ export const reservationDetailScreen = (
   frame: Frame,
   status?: string | null,
   errors: readonly string[] = [],
+  permissions: {
+    amend: boolean
+    checkIn: boolean
+    adjustDeparture: boolean
+    checkOut: boolean
+    cancel: boolean
+    noShow: boolean
+  } = {
+    amend: true,
+    checkIn: true,
+    adjustDeparture: true,
+    checkOut: true,
+    cancel: true,
+    noShow: true,
+  },
 ): TemplateResult => {
   const guest = guestName(reservation)
   const room = reservation.stay?.currentRoom
@@ -45,7 +60,7 @@ export const reservationDetailScreen = (
   const action = `/admin/hospitality/reservations/${encodeURIComponent(reservation.id)}?lang=${encodeURIComponent(locale)}`
   const actions: TemplateResult[] = []
 
-  if (reservation.state === 'confirmed' && reservation.provider === 'direct') {
+  if (reservation.state === 'confirmed' && reservation.provider === 'direct' && permissions.amend) {
     actions.push(
       <Section
         title={_('hospitality_core.reservation.action.amend')}
@@ -118,7 +133,7 @@ export const reservationDetailScreen = (
     )
   }
 
-  if (reservation.state === 'confirmed' && reservation.stayId) {
+  if (reservation.state === 'confirmed' && reservation.stayId && permissions.checkIn) {
     actions.push(
       <Section
         title={_('hospitality_core.reservation.action.checkIn')}
@@ -156,48 +171,55 @@ export const reservationDetailScreen = (
   }
 
   if (reservation.state === 'checked_in' && reservation.stayId) {
-    actions.push(
-      <Section
-        title={_('hospitality_core.reservation.action.adjustDeparture')}
-        description={_('hospitality_core.reservation.action.adjustDepartureHint')}
-        body={
-          <RecordForm
-            action={action}
-            method="post"
-            submit={_('hospitality_core.reservation.action.adjustDeparture')}
-            submitVariant="secondary"
-            hidden={{ operation: 'adjust-departure', lang: locale }}
-            fields={[
-              {
-                name: 'checkOut',
-                label: _('hospitality_core.col.checkOut'),
-                type: 'datetime-local',
-                value: departure,
-                required: true,
-              },
-            ]}
-          />
-        }
-      />,
-      <Section
-        title={_('hospitality_core.reservation.action.checkOut')}
-        description={_('hospitality_core.reservation.action.checkOutHint')}
-        body={
-          <RecordForm
-            action={action}
-            method="post"
-            submit={_('hospitality_core.reservation.action.checkOut')}
-            submitVariant="primary"
-            hidden={{ operation: 'check-out', lang: locale }}
-            fields={[]}
-          />
-        }
-      />,
-    )
+    if (permissions.adjustDeparture)
+      actions.push(
+        <Section
+          title={_('hospitality_core.reservation.action.adjustDeparture')}
+          description={_('hospitality_core.reservation.action.adjustDepartureHint')}
+          body={
+            <RecordForm
+              action={action}
+              method="post"
+              submit={_('hospitality_core.reservation.action.adjustDeparture')}
+              submitVariant="secondary"
+              hidden={{ operation: 'adjust-departure', lang: locale }}
+              fields={[
+                {
+                  name: 'checkOut',
+                  label: _('hospitality_core.col.checkOut'),
+                  type: 'datetime-local',
+                  value: departure,
+                  required: true,
+                },
+              ]}
+            />
+          }
+        />,
+      )
+    if (permissions.checkOut)
+      actions.push(
+        <Section
+          title={_('hospitality_core.reservation.action.checkOut')}
+          description={_('hospitality_core.reservation.action.checkOutHint')}
+          body={
+            <RecordForm
+              action={action}
+              method="post"
+              submit={_('hospitality_core.reservation.action.checkOut')}
+              submitVariant="primary"
+              hidden={{ operation: 'check-out', lang: locale }}
+              fields={[]}
+            />
+          }
+        />,
+      )
   }
 
-  if (reservation.state === 'draft' || reservation.state === 'confirmed') {
-    if (reservation.state === 'confirmed')
+  if (
+    (reservation.state === 'draft' || reservation.state === 'confirmed') &&
+    (permissions.cancel || permissions.noShow)
+  ) {
+    if (reservation.state === 'confirmed' && permissions.noShow)
       actions.push(
         <Section
           title={_('hospitality_core.reservation.action.noShow')}
@@ -222,29 +244,30 @@ export const reservationDetailScreen = (
           }
         />,
       )
-    actions.push(
-      <Section
-        title={_('hospitality_core.reservation.action.cancel')}
-        description={_('hospitality_core.reservation.action.cancelHint')}
-        body={
-          <RecordForm
-            action={action}
-            method="post"
-            submit={_('hospitality_core.reservation.action.cancel')}
-            submitVariant="destructive"
-            hidden={{ operation: 'cancel', lang: locale }}
-            fields={[
-              {
-                name: 'reason',
-                label: _('hospitality_core.reservation.field.cancelReason'),
-                type: 'textarea',
-                help: _('hospitality_core.reservation.field.cancelReasonHint'),
-              },
-            ]}
-          />
-        }
-      />,
-    )
+    if (permissions.cancel)
+      actions.push(
+        <Section
+          title={_('hospitality_core.reservation.action.cancel')}
+          description={_('hospitality_core.reservation.action.cancelHint')}
+          body={
+            <RecordForm
+              action={action}
+              method="post"
+              submit={_('hospitality_core.reservation.action.cancel')}
+              submitVariant="destructive"
+              hidden={{ operation: 'cancel', lang: locale }}
+              fields={[
+                {
+                  name: 'reason',
+                  label: _('hospitality_core.reservation.field.cancelReason'),
+                  type: 'textarea',
+                  help: _('hospitality_core.reservation.field.cancelReasonHint'),
+                },
+              ]}
+            />
+          }
+        />,
+      )
   }
 
   return (

@@ -47,6 +47,7 @@ export const cleaningTasksScreen = (
     errors?: readonly string[]
     values?: Record<string, string>
   },
+  canCreate = true,
 ): TemplateResult => {
   const visibleRows = data.state === 'all' ? data.rows : data.rows.filter((row) => row.state === data.state)
   const query = new URLSearchParams({ lang: locale })
@@ -74,7 +75,7 @@ export const cleaningTasksScreen = (
       title={_('hospitality_core.screen.cleaningTasks.title')}
       frame={frame}
       actions={
-        data.rooms.length
+        canCreate && data.rooms.length
           ? linkButton({
               label: _('hospitality_core.housekeeping.action.create'),
               href: modal?.createHref ?? '/admin/hospitality/housekeeping?create=1',
@@ -158,7 +159,7 @@ export const cleaningTasksScreen = (
       ])}
     />
   )
-  if (!modal?.open || !data.rooms.length) return list
+  if (!canCreate || !modal?.open || !data.rooms.length) return list
   return modalWorkspace(
     list,
     modalForm({

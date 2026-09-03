@@ -137,6 +137,8 @@ export type ServeContext = {
       correlationId?: string | null
     },
   ) => Promise<unknown>
+  /** Whether this request's effective allow-list contains one exact function key. */
+  allows: (name: string, url: URL, req: IncomingMessage) => Promise<boolean>
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
   /** Composed modules' stylesheets for this tenant, in dependency order. */
@@ -665,6 +667,10 @@ export async function bootDeployment(
             (allow === null || allow.includes(report.source)),
         ),
       )
+    },
+    allows: async (name, url, req) => {
+      const allow = await allowFor(url, req)
+      return allow === null || allow.includes(name)
     },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
     callUnchecked: async (name, input, url, req, options) => {
