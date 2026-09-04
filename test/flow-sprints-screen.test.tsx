@@ -19,6 +19,7 @@ const options = {
   closeHref: '/admin/flow/projects/platform/sprints?lang=en',
   recordId: 'draft-id',
   idempotencyKey: 'draft-key',
+  closeSprintHref: () => '#',
   transitionKey: () => 'transition-key',
 }
 

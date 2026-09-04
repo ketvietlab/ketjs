@@ -2058,25 +2058,17 @@ export const routes: Record<string, RouteEntry> = {
           return seeOther(projectEpicCreateFailureHref(url, projectId, values, errorsOf(result, _)))
         } else return text('invalid action', { status: 400 })
       }
+      // `epic.list` counts and sizes each epic itself now, so the screen no
+      // longer makes one `issue.list` per epic to learn a number the domain
+      // already has. The project scoping that comment used to explain lives in
+      // `epicTotals`, which reads by project — `epicId` is a plain reference,
+      // so counting by it alone would fold in another project's issues.
       const epics = (await ctx.call('flow.epic.list', { projectId }, url, req)) as AnyRow[]
-      const withCounts = await Promise.all(
-        epics.map(async (epic) => {
-          // Scoped to the project as well as the epic: `epicId` is a plain
-          // reference, so counting by it alone would fold in any issue that
-          // named this epic from another project.
-          const found = (await ctx.call(
-            'flow.issue.list',
-            { projectId, epicId: epic.id, limit: 1 },
-            url,
-            req,
-          )) as AnyRow
-          return {
-            ...epic,
-            totalCount: Number(found.total ?? 0),
-            issuesHref: issuesFilteredBy(projectId, 'epicId', String(epic.id)),
-          }
-        }),
-      )
+      const withCounts = epics.map((epic) => ({
+        ...epic,
+        totalCount: Number(epic.total ?? 0),
+        issuesHref: issuesFilteredBy(projectId, 'epicId', String(epic.id)),
+      }))
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
@@ -2319,7 +2311,15 @@ export const routes: Record<string, RouteEntry> = {
           // and dropping the result reported those refusals as a success.
           const changed = (await ctx.call(
             form.action === 'start' ? 'flow.sprint.start' : 'flow.sprint.close',
-            { id: form.id ?? '', idempotencyKey: form.idempotencyKey || randomUUID() },
+            {
+              id: form.id ?? '',
+              // `carry` is what the dialog sends; without it, closing leaves the
+              // unfinished work where it is, exactly as it always has.
+              ...(form.action === 'close' && form.carry === '1'
+                ? { carry: true, ...(form.carryTo ? { carryTo: form.carryTo } : {}) }
+                : {}),
+              idempotencyKey: form.idempotencyKey || randomUUID(),
+            },
             url,
             req,
           )) as AnyRow
@@ -2347,6 +2347,11 @@ export const routes: Record<string, RouteEntry> = {
         } else return text('invalid action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const sprints = (await ctx.call('flow.sprint.list', { projectId }, url, req)) as AnyRow[]
+      const closeId = url.searchParams.get('close') ?? ''
+      const closingSprint = closeId
+        ? sprints.find((row) => String(row.id) === closeId && row.state === 'active')
+        : undefined
+      const carryKey = url.searchParams.get('carryKey') || randomUUID()
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
@@ -2359,6 +2364,22 @@ export const routes: Record<string, RouteEntry> = {
           sprintsScreen(_, frame, {
             projectName: String(project.name),
             sprints,
+            closeSprintHref: (sprint: AnyRow) => {
+              const target = new URL(url)
+              target.searchParams.set('close', String(sprint.id))
+              target.searchParams.delete('create')
+              return `${target.pathname}${target.search}`
+            },
+            closing: closingSprint
+              ? {
+                  sprint: closingSprint,
+                  // Somewhere open, in the same project, that is not this one.
+                  targets: sprints.filter(
+                    (row) => String(row.id) !== String(closingSprint.id) && row.state !== 'closed',
+                  ),
+                  idempotencyKey: carryKey,
+                }
+              : undefined,
             action,
             createHref: inLocale(url, `${endpoint}?dialog=create`),
             closeHref: inLocale(url, endpoint),

@@ -945,28 +945,84 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
     if (!existing) await followIssue(tx, threadId, tx.actor)
     const assignee = values.assigneeUserId
     if (assignee) await followIssue(tx, threadId, assignee)
-    // Only when it actually changed hands: a system entry on every title edit
-    // is noise, and the timeline is the one place that has to stay readable.
-    if (assignee && String(assignee) !== String(existing?.assigneeUserId ?? '')) {
+    // Only what actually moved: a system entry on every title edit is noise,
+    // and the timeline is the one place that has to stay readable.
+    const handedOver =
+      assignee && String(assignee) !== String(existing?.assigneeUserId ?? '')
+        ? [
+            {
+              field: 'assigneeUserId',
+              ...(existing?.assigneeUserId ? { oldValue: String(existing.assigneeUserId) } : {}),
+              newValue: String(assignee),
+            },
+          ]
+        : []
+    const rescheduled = existing
+      ? [
+          ...moved('dueDate', existing.dueDate, values.dueDate),
+          ...moved('priority', existing.priority, values.priority),
+        ]
+      : []
+    if (handedOver.length || rescheduled.length)
       await postMessage(tx, {
         id: `${input.id}:assigned:${nextVersion}`,
         threadId,
         authorUserId: tx.actor ?? undefined,
         kind: 'system',
         // A message key, resolved by whoever renders the timeline — the same
-        // arrangement crm_backend's `entryBody` already reads.
-        body: 'flow.timeline.assigned',
-        tracking: [
-          {
-            field: 'assigneeUserId',
-            ...(existing?.assigneeUserId ? { oldValue: String(existing.assigneeUserId) } : {}),
-            newValue: String(assignee),
-          },
-        ],
+        // arrangement crm_backend's `entryBody` already reads. Handing an issue
+        // over keeps its own key, because that is the entry people look for.
+        body: rescheduled.length && !handedOver.length ? 'flow.timeline.changed' : 'flow.timeline.assigned',
+        tracking: [...handedOver, ...rescheduled],
       })
-    }
     return { ok: true, id: input.id, version: nextVersion }
   })
+}
+
+/**
+ * One system entry per command, carrying every tracked field that moved.
+ *
+ * The timeline used to record exactly one thing — who an issue was handed to —
+ * so "who put this in Done, and when" had no answer anywhere in the system. The
+ * fields tracked are the ones a person asks about afterwards: the column, the
+ * deadline, the priority and the sprint. Title and description are deliberately
+ * out: an entry per keystroke is what makes a timeline unreadable, and both
+ * already have their own history in the Live Doc.
+ *
+ * One message rather than one per field, because a single edit that moved three
+ * of them is one thing that happened.
+ */
+async function trackIssueChange(
+  tx: Ctx,
+  input: {
+    issueId: string
+    threadId: unknown
+    version: number
+    body: string
+    changes: Array<{ field: string; oldValue?: string; newValue?: string }>
+  },
+): Promise<void> {
+  if (!input.changes.length || !input.threadId) return
+  await postMessage(tx, {
+    id: `${input.issueId}:changed:${input.version}`,
+    threadId: String(input.threadId),
+    authorUserId: tx.actor ?? undefined,
+    kind: 'system',
+    body: input.body,
+    tracking: input.changes,
+  })
+}
+
+/** A change worth an entry, or nothing when the value did not actually move. */
+const moved = (
+  field: string,
+  before: unknown,
+  after: unknown,
+): Array<{ field: string; oldValue?: string; newValue?: string }> => {
+  const from = before == null || before === '' ? '' : String(before)
+  const to = after == null || after === '' ? '' : String(after)
+  if (from === to) return []
+  return [{ field, ...(from ? { oldValue: from } : {}), ...(to ? { newValue: to } : {}) }]
 }
 
 async function ensureIssueThread(ctx: Ctx, issueId: string, title: string, createdAt: string): Promise<Row> {
@@ -1027,6 +1083,13 @@ export async function moveIssue(
     )
     if (!('dryRun' in changed) && !changed.matched)
       return invalid(issue('version', 'flow.error.conflict', { current: held.version }))
+    await trackIssueChange(tx, {
+      issueId: input.id,
+      threadId: held.threadId,
+      version: n(held.version) + 1,
+      body: 'flow.timeline.moved',
+      changes: moved('columnId', held.columnId, input.columnId),
+    })
     return { ok: true, id: input.id, version: n(held.version) + 1 }
   })
 }
@@ -1054,6 +1117,13 @@ export async function assignSprint(
     )
     if (!('dryRun' in changed) && !changed.matched)
       return invalid(issue('version', 'flow.error.conflict', { current: held.version }))
+    await trackIssueChange(tx, {
+      issueId: input.id,
+      threadId: held.threadId,
+      version: n(held.version) + 1,
+      body: 'flow.timeline.sprint',
+      changes: moved('sprintId', held.sprintId, sprint ? sprint.id : null),
+    })
     return { ok: true, id: input.id, version: n(held.version) + 1 }
   })
 }
@@ -1294,9 +1364,100 @@ export async function startSprint(
   })
 }
 
+/**
+ * What a sprint is carrying, and how much of it is finished — see FLW-021.
+ *
+ * `estimate` has been stored, shown on the form and shown in the summary since
+ * the module was written, and added up nowhere: a sprint had no total and there
+ * was no velocity to read. Counted per sprint in two grouped passes rather than
+ * one query per sprint.
+ */
+export async function sprintTotals(
+  ctx: Ctx,
+  projectId: string,
+): Promise<
+  Map<string, { total: number; done: number; unfinished: number; estimate: number; estimateDone: number }>
+> {
+  const tally = new Map<
+    string,
+    { total: number; done: number; unfinished: number; estimate: number; estimateDone: number }
+  >()
+  const terminal = new Set(
+    (await ctx.db.select('flow.Column', { projectId, terminalState: true, active: true })).map((row) =>
+      String(row.id),
+    ),
+  )
+  // One read of the project's live issues that carry a sprint. Estimates are
+  // decimals, which no `count` adds up, so the sum happens here — over the
+  // sprint members only, not over the project.
+  const I = ctx.table('flow.Issue')
+  const rows = await ctx.db.all(
+    from(I).where(eq(I.projectId, projectId), eq(I.active, true), isNotNull(I.sprintId)),
+  )
+  for (const row of rows) {
+    const key = String(row.sprintId)
+    const at = tally.get(key) ?? { total: 0, done: 0, unfinished: 0, estimate: 0, estimateDone: 0 }
+    const finished = terminal.has(String(row.columnId))
+    at.total += 1
+    at.estimate += n(row.estimate)
+    if (finished) {
+      at.done += 1
+      at.estimateDone += n(row.estimate)
+    } else at.unfinished += 1
+    tally.set(key, at)
+  }
+  return tally
+}
+
+/** The same reading for epics, which have the same missing total. */
+export async function epicTotals(
+  ctx: Ctx,
+  projectId: string,
+): Promise<Map<string, { total: number; done: number; estimate: number; estimateDone: number }>> {
+  const tally = new Map<string, { total: number; done: number; estimate: number; estimateDone: number }>()
+  const terminal = new Set(
+    (await ctx.db.select('flow.Column', { projectId, terminalState: true, active: true })).map((row) =>
+      String(row.id),
+    ),
+  )
+  const I = ctx.table('flow.Issue')
+  const rows = await ctx.db.all(
+    from(I).where(eq(I.projectId, projectId), eq(I.active, true), isNotNull(I.epicId)),
+  )
+  for (const row of rows) {
+    const key = String(row.epicId)
+    const at = tally.get(key) ?? { total: 0, done: 0, estimate: 0, estimateDone: 0 }
+    at.total += 1
+    at.estimate += n(row.estimate)
+    if (terminal.has(String(row.columnId))) {
+      at.done += 1
+      at.estimateDone += n(row.estimate)
+    }
+    tally.set(key, at)
+  }
+  return tally
+}
+
+/**
+ * Close a sprint, and say what happens to the work that did not finish.
+ *
+ * Closing used to change one column and stop. The issues stayed in a sprint
+ * nobody would look at again, and moving them was one screen each — the step
+ * every sprint process has, done by hand.
+ *
+ * `carryTo` names where the unfinished work goes: another sprint of the same
+ * project that is still open, or `null` to take it out of the sprint entirely.
+ * Omitting it leaves the work where it is, which is what closing has always
+ * done, so no existing caller changes behaviour.
+ *
+ * The carry is not compare-and-set. A sprint close is a deliberate act on the
+ * whole set, and failing it because one issue was edited a second ago would be
+ * the wrong answer; the version still moves, so anyone with that issue open
+ * gets the conflict on their own next save.
+ */
 export async function closeSprint(
   ctx: Ctx,
-  input: { id: string; idempotencyKey: string },
+  input: { id: string; carryTo?: string | null; idempotencyKey: string },
 ): Promise<FlowResult> {
   if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
   if (!commandKey(input.idempotencyKey))
@@ -1305,8 +1466,46 @@ export async function closeSprint(
     const held = (await tx.db.select('flow.Sprint', { id: input.id }))[0]
     if (!held) return invalid(issue('id', 'flow.error.notFound'))
     if (held.state !== 'active') return invalid(issue('id', 'flow.error.invalidSprintState'))
+    let carried = 0
+    if (input.carryTo !== undefined) {
+      const target = input.carryTo ? (await tx.db.select('flow.Sprint', { id: input.carryTo }))[0] : null
+      if (input.carryTo) {
+        if (!target || String(target.projectId) !== String(held.projectId))
+          return invalid(issue('carryTo', 'flow.error.sprintProjectMismatch'))
+        if (target.state === 'closed') return invalid(issue('carryTo', 'flow.error.sprintClosed'))
+        if (String(target.id) === String(held.id))
+          return invalid(issue('carryTo', 'flow.error.invalidSprintState'))
+      }
+      const terminal = new Set(
+        (
+          await tx.db.select('flow.Column', {
+            projectId: held.projectId,
+            terminalState: true,
+            active: true,
+          })
+        ).map((row) => String(row.id)),
+      )
+      const members = await tx.db.select('flow.Issue', { sprintId: input.id, active: true })
+      const timestamp = now()
+      for (const row of members) {
+        if (terminal.has(String(row.columnId))) continue
+        await tx.db.update(
+          'flow.Issue',
+          { id: row.id },
+          { sprintId: target ? target.id : null, version: n(row.version) + 1, updatedAt: timestamp },
+        )
+        await trackIssueChange(tx, {
+          issueId: String(row.id),
+          threadId: row.threadId,
+          version: n(row.version) + 1,
+          body: 'flow.timeline.sprint',
+          changes: moved('sprintId', row.sprintId, target ? target.id : null),
+        })
+        carried += 1
+      }
+    }
     await tx.db.update('flow.Sprint', { id: input.id }, { state: 'closed' })
-    return { ok: true, id: input.id }
+    return { ok: true, id: input.id, carried }
   })
 }
 

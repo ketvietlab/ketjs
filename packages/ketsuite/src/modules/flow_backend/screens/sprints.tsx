@@ -39,6 +39,9 @@ export type SprintsScreenOptions = {
   recordId: string
   idempotencyKey: string
   transitionKey: (sprint: AnyRow) => string
+  /** The sprint whose close dialog is open, and where its unfinished work can go. */
+  closing?: { sprint: AnyRow; targets: readonly AnyRow[]; idempotencyKey: string }
+  closeSprintHref: (sprint: AnyRow) => string
 }
 
 export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScreenOptions): TemplateResult => {
@@ -90,6 +93,22 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
                     cell: (row) => when(row.endDate),
                   },
                   {
+                    key: 'progress',
+                    label: _('flow_backend.sprints.progress'),
+                    cell: (row) => `${String(row.done ?? 0)} / ${String(row.total ?? 0)}`,
+                  },
+                  {
+                    // `estimate` has been stored and shown per issue since the
+                    // module was written and added up nowhere, so a sprint had
+                    // no size and there was no velocity to read.
+                    key: 'estimate',
+                    label: _('flow_backend.sprints.estimate'),
+                    cell: (row) =>
+                      Number(row.estimate ?? 0)
+                        ? `${String(row.estimateDone ?? 0)} / ${String(row.estimate ?? 0)}`
+                        : '—',
+                  },
+                  {
                     key: 'actions',
                     label: '',
                     align: 'end',
@@ -116,6 +135,25 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
                         '—'
                       ),
                   },
+                  {
+                    key: 'closing',
+                    label: '',
+                    align: 'end',
+                    // Closing an active sprint asks first, because the answer to
+                    // "what happens to what did not finish" used to be "nothing,
+                    // move them one at a time".
+                    cell: (row) =>
+                      row.state === 'active' && Number(row.unfinished ?? 0) ? (
+                        <LinkButton
+                          label={_('flow_backend.sprints.closeWith')}
+                          href={options.closeSprintHref(row)}
+                          variant="tertiary"
+                          size="compact"
+                        />
+                      ) : (
+                        ''
+                      ),
+                  },
                 ],
               })
             : empty(_)}
@@ -123,6 +161,57 @@ export const sprintsScreen = (_: Translator, frame: Frame, options: SprintsScree
       }
     />
   )
+  if (options.closing) {
+    const { sprint, targets } = options.closing
+    return modalWorkspace(
+      workspace,
+      modalForm({
+        id: 'flow-sprint-close',
+        title: _('flow_backend.sprints.closeTitle'),
+        description: _('flow_backend.sprints.closeHint', {
+          count: Number(sprint.unfinished ?? 0),
+          name: String(sprint.name ?? ''),
+        }),
+        closeHref: options.closeHref,
+        closeLabel: _('flow_backend.action.cancel'),
+        form: {
+          id: 'flow-sprint-close-form',
+          scope: 'flow-sprint-close',
+          action: options.action,
+          submit: _('flow_backend.action.close'),
+          submitVariant: 'primary',
+          cancelHref: options.closeHref,
+          cancelLabel: _('flow_backend.action.cancel'),
+          hidden: {
+            action: 'close',
+            id: String(sprint.id),
+            carry: '1',
+            idempotencyKey: options.closing.idempotencyKey,
+          },
+          fields: [
+            {
+              name: 'carryTo',
+              label: _('flow_backend.sprints.carryTo'),
+              type: 'select',
+              value: '',
+              // The empty option is not "no answer": it takes the work out of
+              // every sprint, which is a real choice and the only one available
+              // when the project has no other open sprint.
+              options: [
+                { value: '', label: _('flow_backend.sprints.carryToBacklog') },
+                ...targets.map((target) => ({
+                  value: String(target.id),
+                  label: String(target.name ?? ''),
+                })),
+              ],
+              span: 'full',
+            },
+          ],
+          errors: options.errors,
+        },
+      }),
+    )
+  }
   if (!options.createOpen) return workspace
   return modalWorkspace(
     workspace,

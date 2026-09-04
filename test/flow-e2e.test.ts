@@ -172,7 +172,12 @@ test('flow headless E2E: project, board, sprint and dependency lifecycle', async
     const detail = await call<Row>('flow.issue.get', { id: 'issue-1' })
     assert.equal(detail.title, 'Ship the feature')
     assert.equal(detail.columnName, 'Done')
-    assert.equal((detail.comments as Row[]).length, 1)
+    // The timeline is the comment and the moves, in one list: this issue was
+    // dragged to Done and then commented on, and both are things that happened.
+    const timeline = detail.comments as Row[]
+    assert.deepEqual(timeline.map((entry) => String(entry.kind)).sort(), ['comment', 'system'])
+    const moveEntry = timeline.find((entry) => String(entry.kind) === 'system')!
+    assert.equal(String(moveEntry.body), 'flow.timeline.moved')
     assert.equal((detail.dependencies as Row[]).length, 1)
 
     const list = await call<Row>('flow.issue.list', { projectId: 'proj1' })

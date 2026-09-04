@@ -4,6 +4,8 @@ import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   actorRequired,
   addComment,
+  epicTotals,
+  sprintTotals,
   archiveIssue,
   restoreIssue,
   startFollowing,
@@ -54,6 +56,27 @@ const flowReadEffects = [
   'read:user.User',
   'read:mail.Thread',
   'read:mail.Message',
+] as const
+
+/**
+ * What writing one system entry to an issue's thread costs in effects.
+ *
+ * `postMessage` resolves the author, addresses the followers and writes the
+ * notification, so a command that leaves a timeline entry touches the same mail
+ * tables a comment does. Named here because three commands now do it.
+ */
+const timelineEntryEffects = [
+  'read:mail.Thread',
+  'read:mail.Follower',
+  'write:mail.Follower',
+  'read:mail.FollowerSubtype',
+  'write:mail.FollowerSubtype',
+  'read:mail.Subtype',
+  'write:mail.Message',
+  'write:mail.TrackingValue',
+  'write:mail.Notification',
+  'read:user.User',
+  'read:partner.Partner',
 ] as const
 
 const issueWriteEffects = [
@@ -507,16 +530,28 @@ export const functions: Record<string, FnSpec> = {
       previewText: 'text?',
       contentAttachmentId: 'id?',
       active: 'bool',
+      total: 'int',
+      done: 'int',
+      estimate: 'decimal',
+      estimateDone: 'decimal',
     },
-    effects: ['read:flow.Epic'],
+    effects: ['read:flow.Epic', 'read:flow.Issue', 'read:flow.Column'],
     agent: true,
     handler: async (ctx, args) => {
       const where: Row = { projectId: args.projectId }
       if (args.id) where.id = args.id
       if (args.includeArchived !== true) where.active = true
-      const rows = await ctx.db.select('flow.Epic', where)
+      const [rows, totals] = await Promise.all([
+        ctx.db.select('flow.Epic', where),
+        epicTotals(ctx, String(args.projectId)),
+      ])
       const needle = normalized(args.search)
-      const filtered = rows.filter((row) => !needle || normalized(row.title).includes(needle))
+      const filtered = rows
+        .filter((row) => !needle || normalized(row.title).includes(needle))
+        .map((row) => ({
+          ...row,
+          ...(totals.get(String(row.id)) ?? { total: 0, done: 0, estimate: 0, estimateDone: 0 }),
+        }))
       return args.id ? filtered : filtered.slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
     },
   }),
@@ -783,12 +818,46 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * The project's sprints with what each is carrying — see sprintTotals.
+   *
+   * The totals live here rather than behind a key of their own because every
+   * caller that wants a sprint wants to know how big it is, and the screen that
+   * closes one needs the unfinished count before it can offer anywhere to put it.
+   */
   'sprint.list': defineFn({
     input: { projectId: 'id' },
-    output: { id: 'id', projectId: 'id', name: 'text', startDate: 'date?', endDate: 'date?', state: 'text' },
-    effects: ['read:flow.Sprint'],
+    output: {
+      id: 'id',
+      projectId: 'id',
+      name: 'text',
+      startDate: 'date?',
+      endDate: 'date?',
+      state: 'text',
+      total: 'int',
+      done: 'int',
+      unfinished: 'int',
+      estimate: 'decimal',
+      estimateDone: 'decimal',
+    },
+    effects: ['read:flow.Sprint', 'read:flow.Issue', 'read:flow.Column'],
     agent: true,
-    handler: (ctx, args) => ctx.db.select('flow.Sprint', { projectId: args.projectId }),
+    handler: async (ctx, args) => {
+      const [rows, totals] = await Promise.all([
+        ctx.db.select('flow.Sprint', { projectId: args.projectId }),
+        sprintTotals(ctx, String(args.projectId)),
+      ])
+      return rows.map((row) => ({
+        ...row,
+        ...(totals.get(String(row.id)) ?? {
+          total: 0,
+          done: 0,
+          unfinished: 0,
+          estimate: 0,
+          estimateDone: 0,
+        }),
+      }))
+    },
   }),
 
   'sprint.save': defineFn({
@@ -835,14 +904,35 @@ export const functions: Record<string, FnSpec> = {
       startSprint(ctx, { id: String(args.id), idempotencyKey: String(args.idempotencyKey) }),
   }),
 
+  /**
+   * Close it, and decide what happens to the work that did not finish.
+   *
+   * `carryTo` is absent by default, which is exactly what closing used to do —
+   * so nothing that calls this today behaves differently.
+   */
   'sprint.close': defineFn({
-    input: { id: 'id', idempotencyKey: 'text' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Sprint', 'write:flow.Sprint'],
+    input: { id: 'id', carryTo: 'id?', carry: 'bool?', idempotencyKey: 'text' },
+    output: { ok: 'bool', id: 'id?', carried: 'int?', errors: 'json?' },
+    effects: [
+      'read:flow.Sprint',
+      'write:flow.Sprint',
+      'read:flow.Issue',
+      'write:flow.Issue',
+      'read:flow.Column',
+      ...timelineEntryEffects,
+    ],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
-      closeSprint(ctx, { id: String(args.id), idempotencyKey: String(args.idempotencyKey) }),
+      closeSprint(ctx, {
+        id: String(args.id),
+        // Three answers, not two: leave it (omit), move it (an id), or take it
+        // out of every sprint (`carry: true` with no target).
+        ...(args.carryTo || args.carry === true
+          ? { carryTo: args.carryTo ? String(args.carryTo) : null }
+          : {}),
+        idempotencyKey: String(args.idempotencyKey),
+      }),
   }),
 
   /**
@@ -1073,7 +1163,15 @@ export const functions: Record<string, FnSpec> = {
   'issue.move': defineFn({
     input: { id: 'id', columnId: 'id', expectedVersion: 'int', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
-    effects: ['read:flow.Issue', 'write:flow.Issue', 'read:flow.Column', 'read:flow.IssueDependency'],
+    // The move leaves a timeline entry now — "who put this in Done, and when"
+    // is the question the cluster could not answer — so it writes to the thread.
+    effects: [
+      'read:flow.Issue',
+      'write:flow.Issue',
+      'read:flow.Column',
+      'read:flow.IssueDependency',
+      ...timelineEntryEffects,
+    ],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -1088,7 +1186,7 @@ export const functions: Record<string, FnSpec> = {
   'issue.assignSprint': defineFn({
     input: { id: 'id', sprintId: 'id?', expectedVersion: 'int', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
-    effects: ['read:flow.Issue', 'write:flow.Issue', 'read:flow.Sprint'],
+    effects: ['read:flow.Issue', 'write:flow.Issue', 'read:flow.Sprint', ...timelineEntryEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
