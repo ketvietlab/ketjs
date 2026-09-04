@@ -142,7 +142,8 @@ test('permissions: the resolver answers from the tenant the request named', asyn
   assert.equal(allowed.status, 200)
 
   const refused = await post(booted.port, 't2', 'core.open', cookie.t2)
-  assert.equal(refused.status, 400)
+  // 403 rather than 400: the request was well formed, the grant was not there.
+  assert.equal(refused.status, 403)
   assert.equal(((await refused.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
 
   // And it really was the request's own url/req that arrived, not an invented one.
@@ -158,7 +159,7 @@ test('permissions: granting in one tenant does not leak into the other', async (
   assert.equal((await post(booted.port, 't2', 'core.open', cookie.t2)).status, 200)
 
   const other = await post(booted.port, 't1', 'core.open', cookie.t1)
-  assert.equal(other.status, 400)
+  assert.equal(other.status, 403)
   assert.equal(((await other.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
 })
 
@@ -226,13 +227,13 @@ test('permissions: a custom audience receives only its deployment-scoped functio
   const nullGrant = await fetch(`http://127.0.0.1:${booted.port}/api/pos/v1/probe`, {
     headers: { ...headers, 'x-null-grant': '1' },
   })
-  assert.equal(nullGrant.status, 400)
+  assert.equal(nullGrant.status, 403)
   assert.equal(((await nullGrant.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
   const bypass = await fetch(`http://127.0.0.1:${booted.port}/_ket/fn/core.open`, {
     method: 'POST',
     headers,
     body: '{}',
   })
-  assert.equal(bypass.status, 400)
+  assert.equal(bypass.status, 403)
   assert.equal(((await bypass.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
 })
