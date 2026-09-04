@@ -43,6 +43,15 @@ export type WorkerSpec = {
  */
 export type NavigationSpec = {
   home?: ReadonlyArray<{ needs: string; path: string }>
+  /**
+   * Function keys that mark a viewer as inspecting rather than operating.
+   *
+   * `MenuDef.for` narrows a sidebar to the work a person does, which is exactly
+   * wrong for an auditor: their work is looking, and looking is what `for` does
+   * not describe. Anyone who may call one of these keeps the whole permitted
+   * tree. A function key again, for the same reason `home` uses one.
+   */
+  audit?: readonly string[]
 }
 
 export type DeploymentSpec = {
@@ -119,6 +128,10 @@ export function defineDeployment(spec: DeploymentDeclaration): DeploymentDeclara
   const pageRegion = spec.serve?.pages?.region
   if (pageRegion && !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(pageRegion))
     throw new Error(`deployment "${spec.name}" declares invalid page region "${pageRegion}"`)
+  for (const key of spec.navigation?.audit ?? []) {
+    if (!/^[a-z][a-z0-9_]*\.[A-Za-z][A-Za-z0-9_.]*$/.test(key))
+      throw new Error(`deployment "${spec.name}" has invalid navigation.audit condition "${key}"`)
+  }
   for (const entry of spec.navigation?.home ?? []) {
     if (!/^[a-z][a-z0-9_]*\.[A-Za-z][A-Za-z0-9_.]*$/.test(entry.needs))
       throw new Error(`deployment "${spec.name}" has invalid navigation.home condition "${entry.needs}"`)
@@ -184,6 +197,16 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
     // A landing page that names a function this build does not serve, or a path
     // nothing routes, fails quietly at runtime: the viewer simply falls through to
     // the old first-path behaviour and nobody is told why.
+    for (const key of deployment.navigation?.audit ?? []) {
+      const manifest = manifests[deployment.name] as Manifest
+      if (!manifest.functions[key])
+        diag.add({
+          code: 'E_DEPLOYMENT_NAVIGATION_AUDIT_UNKNOWN_FUNCTION',
+          module: deployment.name,
+          message: `deployment "${deployment.name}" treats "${key}" as an inspection capability, but that function is not in this build`,
+          hint: 'name a function the composed modules serve, or drop the key',
+        })
+    }
     for (const entry of deployment.navigation?.home ?? []) {
       const manifest = manifests[deployment.name] as Manifest
       if (!manifest.functions[entry.needs])

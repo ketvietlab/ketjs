@@ -86,6 +86,7 @@ const node = (id: string, label: string, over: Partial<MenuNode> = {}): MenuNode
   path: null,
   icon: null,
   active: false,
+  secondary: false,
   children: [],
   ...over,
 })

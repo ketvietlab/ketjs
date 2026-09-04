@@ -18,6 +18,11 @@ export type MenuNode = {
   icon: string | null
   /** True for the node whose path is showing, and for every heading above it. */
   active: boolean
+  /**
+   * True when this viewer may open the entry but the entry is not their work.
+   * The shell leaves these out of the main list; search still finds them.
+   */
+  secondary: boolean
   children: MenuNode[]
 }
 
@@ -35,6 +40,15 @@ export type MenuOptions = {
    * does, so filtering never orphans a leaf from the words above it.
    */
   q?: string
+  /**
+   * Mark entries this viewer may open but does not work on. Off by default:
+   * a caller that does not ask for the distinction gets the tree it always got.
+   *
+   * A viewer nothing is primary for keeps the whole permitted tree. An empty
+   * sidebar reads as a broken deployment, and telling a night auditor their
+   * work is nowhere is worse than showing them one screen too many.
+   */
+  intent?: boolean
 }
 
 export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
@@ -50,6 +64,13 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
   // build at all, or it is and this viewer may not call it.
   const permitted = (def: MenuDef): boolean =>
     !def.needs || (!!manifest.functions[def.needs] && (!o.allow || o.allow.includes(def.needs)))
+
+  // `for` is about this viewer, not about this build: an entry naming a write
+  // the deployment does not compose is a declaration to fix, not a reason to
+  // demote the entry for everyone.
+  let applyIntent = o.intent === true
+  const intended = (def: MenuDef): boolean =>
+    !applyIntent || !def.for?.length || def.for.some((key) => !o.allow || o.allow.includes(key))
 
   const label = (def: MenuDef & { by: string }): string => {
     const key = `${def.by}.${def.label}`
@@ -97,11 +118,29 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
       // arrives without the words that explain where it lives.
       if (needle && !children.length && !matches(label(def))) continue
       const active = (def.path !== undefined && def.path === activePath) || children.some((c) => c.active)
-      out.push({ id, label: label(def), path: def.path ?? null, icon: def.icon ?? null, active, children })
+      // A heading is secondary only when everything under it is: a group holding
+      // one entry that is someone's work still belongs in their sidebar.
+      const secondary = children.length ? children.every((c) => c.secondary) : !intended(def)
+      out.push({
+        id,
+        label: label(def),
+        path: def.path ?? null,
+        icon: def.icon ?? null,
+        active,
+        secondary,
+        children,
+      })
     }
     return out
   }
 
+  const tree = build(undefined, 0)
+  // Nobody gets an empty sidebar. If no entry claims this viewer, the distinction
+  // told us nothing about them and the permitted tree is the honest answer.
+  const anyPrimary = (nodes: MenuNode[]): boolean =>
+    nodes.some((node) => !node.secondary || anyPrimary(node.children))
+  if (!applyIntent || anyPrimary(tree)) return tree
+  applyIntent = false
   return build(undefined, 0)
 }
 

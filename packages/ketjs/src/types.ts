@@ -121,6 +121,20 @@ export type MenuDef = {
   path?: string
   /** A function key the viewer must be permitted to call for this to appear. */
   needs?: string
+  /**
+   * Function keys that mean "this surface is your work", as opposed to `needs`,
+   * which only means "opening it will not 401".
+   *
+   * The distinction matters because a read capability is often granted so some
+   * other screen can resolve a dropdown, and the menu then reads that grant as an
+   * invitation. Declaring the writes a person would perform here says who the
+   * surface is for. Anyone permitted but not intended keeps the entry — it moves
+   * out of the main list and stays reachable by search and by link.
+   *
+   * Absent means the entry is primary for everyone `needs` admits, which is what
+   * every entry did before this existed.
+   */
+  for?: readonly string[]
   /** Lower sorts first. Ties fall back to the label. */
   sequence?: number
   /**

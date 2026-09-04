@@ -201,3 +201,110 @@ test('menu: the sidebar search keeps a branch that matches anywhere along it', (
     'an empty search is not a search',
   )
 })
+
+/**
+ * A module where reading and writing are separate capabilities, which is the
+ * situation `for` exists for: the read is granted widely so other screens can
+ * resolve names, and the write says whose surface this actually is.
+ */
+const hotel = defineModule({
+  name: 'hotel',
+  functions: {
+    listRooms: { effects: [], handler: () => [] },
+    listProperties: { effects: [], handler: () => [] },
+    saveProperty: { effects: ['write'], handler: () => [] },
+    completeCleaning: { effects: ['write'], handler: () => [] },
+  },
+  menus: {
+    hotel: { label: 'Hotel' },
+    'hotel.cleaning': {
+      parent: 'hotel',
+      label: 'Cleaning',
+      path: '/admin/hotel/cleaning',
+      needs: 'hotel.listRooms',
+      for: ['hotel.completeCleaning'],
+    },
+    'hotel.properties': {
+      parent: 'hotel',
+      label: 'Properties',
+      path: '/admin/hotel/properties',
+      needs: 'hotel.listProperties',
+      for: ['hotel.saveProperty'],
+    },
+  },
+})
+
+const hotelManifest = () => compose([hotel])
+
+test('intent: a surface someone may read but does not work on leaves the main list', () => {
+  const tree = buildMenu(hotelManifest(), {
+    // A housekeeper: they may read the property list so a room picker can name
+    // the building, and that is the whole of their interest in it.
+    allow: ['hotel.listRooms', 'hotel.listProperties', 'hotel.completeCleaning'],
+    intent: true,
+  })
+  const items = tree[0]!.children
+  assert.deepEqual(
+    items.filter((item) => !item.secondary).map((item) => item.path),
+    ['/admin/hotel/cleaning'],
+  )
+  assert.ok(
+    items.some((item) => item.path === '/admin/hotel/properties' && item.secondary),
+    'the property list stays in the tree so search can still find it',
+  )
+})
+
+test('intent: a heading follows its children out of the main list', () => {
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties', 'hotel.completeCleaning'],
+    intent: true,
+  })
+  assert.equal(tree[0]!.secondary, false, 'a group holding live work stays')
+
+  const readerOnly = buildMenu(hotelManifest(), {
+    allow: ['hotel.listProperties'],
+    intent: true,
+  })
+  assert.equal(
+    readerOnly[0]!.children.every((child) => child.secondary),
+    false,
+    'a viewer nothing claims keeps the permitted tree rather than an empty sidebar',
+  )
+})
+
+test('intent: nobody is left with an empty sidebar', () => {
+  // This viewer may open both screens and works on neither. Narrowing would
+  // leave them nothing, which reads as a broken deployment rather than as a
+  // deployment that has nothing for them.
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties'],
+    intent: true,
+  })
+  assert.deepEqual(
+    tree[0]!.children.map((child) => child.secondary),
+    [false, false],
+  )
+})
+
+test('intent: an entry that declares nothing is everyone’s, as it was before', () => {
+  const legacy = defineModule({
+    name: 'legacy',
+    functions: { list: { effects: [], handler: () => [] } },
+    menus: {
+      legacy: { label: 'Legacy' },
+      'legacy.list': { parent: 'legacy', label: 'List', path: '/admin/legacy', needs: 'legacy.list' },
+    },
+  })
+  const tree = buildMenu(compose([legacy]), { allow: ['legacy.list'], intent: true })
+  assert.equal(tree[0]!.children[0]!.secondary, false)
+})
+
+test('intent: off by default, so a caller that does not ask keeps the whole tree', () => {
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties', 'hotel.completeCleaning'],
+  })
+  assert.equal(
+    tree[0]!.children.every((child) => child.secondary === false),
+    true,
+  )
+})
