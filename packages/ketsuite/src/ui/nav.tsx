@@ -152,8 +152,20 @@ export const navGroup = (o: { label: string; items: readonly MenuNode[] }): Temp
   </>
 )
 
+/**
+ * The main list carries the work; everything else stays one search away.
+ *
+ * A surface a viewer may open but does not work on is still theirs to reach —
+ * by search, by link, by a button on the screen that needs it. Leaving it in the
+ * sidebar is what turns a receptionist's navigation into a table of contents for
+ * the whole product.
+ */
+const working = (nodes: readonly MenuNode[]): MenuNode[] =>
+  nodes.filter((node) => !node.secondary).map((node) => ({ ...node, children: working(node.children) }))
+
 export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateResult => {
-  const { menu, navItems } = options
+  const { navItems } = options
+  const menu = working(options.menu)
   const app = menu.find((item) => item.active) ?? menu[0] ?? null
   return (
     <>

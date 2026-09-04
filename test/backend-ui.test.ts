@@ -106,6 +106,7 @@ const node = (id: string, over: Partial<MenuNode> = {}): MenuNode => ({
   path: null,
   icon: null,
   active: false,
+  secondary: false,
   children: [],
   ...over,
 })
@@ -1583,8 +1584,17 @@ const landingMenu: MenuNode[] = [
     path: null,
     icon: null,
     active: false,
+    secondary: false,
     children: [
-      { id: 'partners', label: 'Partners', path: '/admin/partners', icon: null, active: false, children: [] },
+      {
+        id: 'partners',
+        label: 'Partners',
+        path: '/admin/partners',
+        icon: null,
+        active: false,
+        secondary: false,
+        children: [],
+      },
     ],
   },
 ]
@@ -1651,6 +1661,7 @@ test('backend root opens the first screen contributed by this deployment', async
       path: null,
       icon: null,
       active: false,
+      secondary: false,
       children: [
         {
           id: 'partners',
@@ -1658,6 +1669,7 @@ test('backend root opens the first screen contributed by this deployment', async
           path: '/admin/partners',
           icon: null,
           active: false,
+          secondary: false,
           children: [],
         },
       ],

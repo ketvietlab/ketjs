@@ -656,8 +656,22 @@ export async function bootDeployment(
       // The sidebar's search is in the URL like every other list's, so a filtered
       // menu is a link and the back button walks out of it.
       const q = url.searchParams.get('menu')?.trim() || undefined
+      // Someone who may call an inspection capability is looking, not working, and
+      // `for` describes work. Narrowing their sidebar would hide the very thing
+      // they were let in to see.
+      const inspecting = allow !== null && (spec.navigation?.audit ?? []).some((key) => allow.includes(key))
       return tenants.ofRequest(url, req, async (t) =>
-        buildMenu(t.live, { allow, translate: (k) => _(k), locale: _.locale, active: url.pathname, q }),
+        buildMenu(t.live, {
+          allow,
+          translate: (k) => _(k),
+          locale: _.locale,
+          active: url.pathname,
+          q,
+          // Searching is how someone reaches a surface that is not their daily
+          // work, so the search results are the permitted tree, not the narrowed
+          // one. Hiding what a person typed the name of would be a bug.
+          intent: !inspecting && !q,
+        }),
       )
     },
     reportsOf: async (url, req, target) => {

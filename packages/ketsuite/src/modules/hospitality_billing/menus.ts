@@ -12,6 +12,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.billing',
     path: '/admin/hospitality/billing',
     needs: 'hospitality_billing.getFolioBilling',
+    for: ['hospitality_billing.recordFolioPayment', 'hospitality_billing.invoiceFolio'],
     sequence: 56,
   },
   'hospitality.billingRules': {
@@ -19,6 +20,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.chargeRules',
     path: '/admin/hospitality/billing/rules',
     needs: 'hospitality_billing.listChargeRules',
+    for: ['hospitality_billing.saveChargeRule'],
     sequence: 40,
   },
 }
