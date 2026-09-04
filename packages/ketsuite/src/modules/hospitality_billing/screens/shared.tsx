@@ -167,17 +167,12 @@ export const folioColumns = (_: Translator): Column<FolioBillingRow>[] => [
     key: 'folioCode',
     label: _('hospitality_billing.col.folio'),
     cell: (row) => row.folioCode,
-  },
-  { key: 'guest', label: _('hospitality_billing.col.guest'), cell: (row) => row.guest ?? '—' },
-  {
-    key: 'folioTotal',
-    label: _('hospitality_billing.col.charges'),
-    align: 'end',
-    cell: (row) => row.folioTotal,
+    priority: 'primary',
   },
   {
     key: 'state',
     label: _('hospitality_billing.col.state'),
+    priority: 'primary',
     cell: (row) => {
       if (row.blockers.length)
         return stack(
@@ -196,6 +191,13 @@ export const folioColumns = (_: Translator): Column<FolioBillingRow>[] => [
       if (row.paymentState === 'paid') return badge(_('hospitality_billing.state.paid'), 'positive')
       return badge(_('hospitality_billing.state.owing'), 'warning')
     },
+  },
+  { key: 'guest', label: _('hospitality_billing.col.guest'), cell: (row) => row.guest ?? '—' },
+  {
+    key: 'folioTotal',
+    label: _('hospitality_billing.col.charges'),
+    align: 'end',
+    cell: (row) => row.folioTotal,
   },
   {
     key: 'moveName',
