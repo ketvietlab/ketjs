@@ -106,6 +106,8 @@ for (const kind of kinds)
               if (record) await expect(body.locator('input')).toBeDisabled()
             }
             if (!record && ['baseline', 'validation', 'readonly'].includes(state)) {
+              await expect(body.getByText('REC-001', { exact: true })).toBeVisible()
+              await expect(body.getByText('REC-002', { exact: true })).toBeVisible()
               await expect(body.locator('[data-ui="table-scroll"]')).toHaveCSS(
                 'background-color',
                 theme === 'light' ? working : 'rgba(0, 0, 0, 0)',
@@ -126,10 +128,13 @@ for (const kind of kinds)
                       cell.getBoundingClientRect(),
                     )
                     const previous = rows[index - 1]?.getBoundingClientRect()
-                    return (previous && previous.bottom > bounds.top + 1) ||
+                    return bounds.height < 16 ||
+                      (previous && previous.bottom > bounds.top + 1) ||
                       cells.some(
                         (cell, i) =>
-                          cell.bottom > bounds.bottom + 1 || (i > 0 && cells[i - 1].bottom > cell.top + 1),
+                          cell.height < 16 ||
+                          cell.bottom > bounds.bottom + 1 ||
+                          (i > 0 && cells[i - 1].bottom > cell.top + 1),
                       )
                       ? [row.textContent]
                       : []
