@@ -97,13 +97,14 @@ export {
 } from './server/respond.ts'
 export type { Html, ResponseBody, RouteResult } from './server/respond.ts'
 export { readConfig, sqliteStore } from './server/config.ts'
-export type { RuntimeConfig, OpenStore } from './server/config.ts'
+export type { RuntimeConfig, OpenStore, PublicStorageConfig } from './server/config.ts'
 export {
   storageFromConfig,
   localStorage,
   s3Storage,
   namespacedStorage,
   effectStorage,
+  withPublicStorage,
 } from './server/storage/index.ts'
 export { signRequest, presignUrl, sha256 } from './server/storage/index.ts'
 export type { Storage, Stored, OpenStorage, S3StorageOptions, StorageEffect } from './server/storage/index.ts'

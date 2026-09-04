@@ -172,12 +172,27 @@ Never reuse `KET_SECRET` as a webhook or provider secret.
 | `KET_STORAGE` | `local` | `local` or `s3`. |
 | `KET_STORAGE_DIR` | `.ket/storage` | Local storage directory. |
 | `KET_UPLOAD_MAX` | `26214400` | Maximum upload size in bytes. |
-| `KET_S3_ENDPOINT` | provider default | Optional S3-compatible endpoint. |
+| `KET_S3_ENDPOINT` | unset | Required S3-compatible endpoint when `KET_STORAGE=s3`. |
 | `KET_S3_REGION` | `us-east-1` | S3 signing region. |
 | `KET_S3_BUCKET` | unset | S3 bucket name. |
 | `KET_S3_KEY` | unset | S3 access-key ID. |
 | `KET_S3_SECRET` | unset | S3 secret access key. |
 | `KET_S3_PATH_STYLE` | disabled | Set to a non-zero value for path-style requests. |
+| `KET_STORAGE_PUBLIC_DIR` | unset | Opt into a second local backend; must not overlap `KET_STORAGE_DIR`. |
+| `KET_S3_PUBLIC_BUCKET` | unset | Opt into a second S3 bucket; the original `KET_S3_BUCKET` remains private/default. |
+| `KET_S3_PUBLIC_KEY` | unset | Public-bucket access-key ID; required for the second S3 backend. |
+| `KET_S3_PUBLIC_SECRET` | unset | Public-bucket secret; required, never inherited from the private backend. |
+| `KET_S3_PUBLIC_ENDPOINT` | `KET_S3_ENDPOINT` | Optional separate public-bucket endpoint. |
+| `KET_S3_PUBLIC_REGION` | `KET_S3_REGION` | Optional separate public-bucket signing region. |
+| `KET_S3_PUBLIC_PATH_STYLE` | `KET_S3_PATH_STYLE` | Optional public-bucket addressing override; `0` disables path-style. |
+| `KET_STORAGE_PUBLIC_URL` | unset | Optional unsigned HTTP(S) base URL for the public bucket/directory, without credentials, query, or fragment. |
+
+Leave all public-backend variables unset for the existing single-backend behavior. Public S3 variables
+require `KET_STORAGE=s3`; public local-directory configuration requires `KET_STORAGE=local`. A public
+URL alone cannot expose the private backend. Configure matching backends for serve and worker roles;
+the public backend does not provision access policies or a CDN. See
+[optional private and public buckets](/ketjs/integrations/#optional-private-and-public-buckets) for
+attachment publication, migration, and deletion semantics.
 
 ## Programmatic configuration
 

@@ -10,6 +10,10 @@ export type Stored = {
 
 export type Storage = {
   name: string
+  /** Optional publication backend. Root operations always remain private/default. */
+  public?: Storage
+  /** Only a deliberately public backend may expose an unsigned delivery URL. */
+  publicUrl?: (key: string) => string
   put(key: string, body: AsyncIterable<Uint8Array>, options: { type: string; size?: number }): Promise<Stored>
   get(key: string): Promise<{ body: AsyncIterable<Uint8Array>; meta: Stored } | null>
   head(key: string): Promise<Stored | null>
@@ -37,6 +41,15 @@ export function effectStorage(storage: Storage, effects: readonly string[], oper
   }
   return {
     name: storage.name,
+    ...(storage.public ? { public: effectStorage(storage.public, effects, operation) } : {}),
+    ...(storage.publicUrl
+      ? {
+          publicUrl(key: string) {
+            need('storage:read')
+            return storage.publicUrl!(key)
+          },
+        }
+      : {}),
     put(key, body, options) {
       need('storage:write')
       return storage.put(key, body, options)
@@ -85,6 +98,8 @@ export function namespacedStorage(storage: Storage, namespace: string): Storage 
   const strip = (key: string) => key.slice(prefix.length)
   return {
     name: `${storage.name}:${safe}`,
+    ...(storage.public ? { public: namespacedStorage(storage.public, namespace) } : {}),
+    ...(storage.publicUrl ? { publicUrl: (key: string) => storage.publicUrl!(keyOf(key)) } : {}),
     put: (key, body, options) => storage.put(keyOf(key), body, options).then((meta) => ({ ...meta, key })),
     async get(key) {
       const found = await storage.get(keyOf(key))
@@ -107,4 +122,58 @@ export function namespacedStorage(storage: Storage, namespace: string): Storage 
     },
     signedUrl: (key, options) => storage.signedUrl(keyOf(key), options),
   }
+}
+
+/** Compose two backends without changing existing private-only callers. */
+export function withPublicStorage(
+  privateStorage: Storage,
+  publicStorage: Storage,
+  options: { baseUrl?: string | null } = {},
+): Storage {
+  if (
+    privateStorage === publicStorage ||
+    privateStorage.public ||
+    publicStorage.public ||
+    privateStorage.publicUrl
+  )
+    throw new KetError({
+      code: 'E_STORAGE_CONFIG',
+      message: 'private and public storage must be distinct leaf backends',
+    })
+  let base: URL | undefined
+  if (options.baseUrl != null) {
+    try {
+      base = new URL(options.baseUrl)
+      if (
+        !['http:', 'https:'].includes(base.protocol) ||
+        base.username ||
+        base.password ||
+        base.search ||
+        base.hash
+      )
+        throw new Error('unsafe URL')
+      if (!base.pathname.endsWith('/')) base.pathname += '/'
+    } catch {
+      throw new KetError({
+        code: 'E_STORAGE_CONFIG',
+        message: 'public storage URL must be HTTP(S) without credentials, query or fragment',
+      })
+    }
+  }
+  const delegate = (storage: Storage): Storage => ({
+    name: storage.name,
+    put: (key, body, o) => storage.put(key, body, o),
+    get: (key) => storage.get(key),
+    head: (key) => storage.head(key),
+    remove: (key) => storage.remove(key),
+    list: (prefix, o) => storage.list(prefix, o),
+    signedUrl: (key, o) => storage.signedUrl(key, o),
+    ...(storage.publicUrl ? { publicUrl: (key: string) => storage.publicUrl!(key) } : {}),
+  })
+  const published = delegate(publicStorage)
+  if (base) {
+    const prefix = base.href
+    published.publicUrl = (key) => prefix + storageKey(key).split('/').map(encodeURIComponent).join('/')
+  }
+  return { ...delegate(privateStorage), public: published }
 }

@@ -1,7 +1,8 @@
 import { deleteFrom, defineFn, eq, from, KetError } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { inlineTypes } from './policy.ts'
 
-const output = {
+const input = {
   id: 'id',
   name: 'text',
   resModel: 'text?',
@@ -16,6 +17,7 @@ const output = {
   public: 'bool',
   createdAt: 'datetime',
 }
+const output = { ...input, publicStoreKey: 'text?' }
 
 const invalid = (message: string): never => {
   throw new KetError({ code: 'E_ATTACHMENT_INVALID', message })
@@ -23,9 +25,9 @@ const invalid = (message: string): never => {
 
 export const functions: Record<string, FnSpec> = {
   createAttachment: defineFn({
-    input: output,
+    input: { ...input, publishCopy: 'bool?' },
     output,
-    effects: ['write:storage.Attachment'],
+    effects: ['write:storage.Attachment', 'enqueue:storage.publish'],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -58,8 +60,18 @@ export const functions: Record<string, FnSpec> = {
         // URL the checks ran against are not always the same string.
         if (target) args.url = target.href
       }
-      await ctx.db.insert('storage.Attachment', args as Row)
-      return args
+      // Publication is worker-owned, never a client-selected bucket/key. The
+      // job is committed with authorized metadata, not before its permission check.
+      if (args.publicStoreKey != null) invalid('publicStoreKey is managed by the publication worker')
+      const { publishCopy, ...record } = args
+      if (publishCopy === true && (args.public !== true || args.kind !== 'stored'))
+        invalid('only a public stored attachment can request a publication copy')
+      await ctx.tx(async (tx) => {
+        await tx.db.insert('storage.Attachment', record as Row)
+        if (publishCopy === true && inlineTypes.has(String(args.mimetype)))
+          await tx.jobs.enqueue('storage.publish', { id: args.id }, { uniqueKey: `attachment:${args.id}` })
+      })
+      return record
     },
   }),
 
