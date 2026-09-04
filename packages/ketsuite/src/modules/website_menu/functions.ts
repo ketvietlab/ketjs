@@ -17,6 +17,14 @@ const validHref = (value: unknown): boolean => {
   }
 }
 
+/**
+ * How many ancestors an item may have. A menu deeper than this is a site map,
+ * and the limit is also what bounds the ancestor walk below.
+ */
+const MAX_MENU_ANCESTORS = 100
+
+const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+
 export const functions: Record<string, FnSpec> = {
   listMenu: defineFn({
     input: { siteId: 'id?' },
@@ -38,14 +46,42 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (ctx.actor && (!args.siteId || !(await canManageStructure(ctx, args.siteId))))
-        return { ok: false, errors: [{ field: 'siteId', message: 'website.error.forbidden' }] }
+        return invalid('siteId', 'website.error.forbidden')
       const existing = (await ctx.db.select('website_menu.MenuItem', { id: args.id }))[0]
       if (existing && existing.siteId !== (args.siteId ?? null))
-        return { ok: false, errors: [{ field: 'id', message: 'website.error.immutableOwnership' }] }
-      if (args.parentId) {
+        return invalid('id', 'website.error.immutableOwnership')
+      if (args.parentId != null) {
+        // The parent the caller named is the only one this edit is answerable
+        // for: it must exist and belong to the same site.
         const parent = (await ctx.db.select('website_menu.MenuItem', { id: args.parentId }))[0]
-        if (!parent || parent.siteId !== (args.siteId ?? null) || parent.id === args.id)
-          return { ok: false, errors: [{ field: 'parentId', message: 'website.error.invalidParent' }] }
+        if (!parent || parent.siteId !== (args.siteId ?? null))
+          return invalid('parentId', 'website.error.invalidParent')
+        if (parent.id === args.id) return invalid('parentId', 'website_menu.error.menuCycle')
+
+        // The rest of the chain is walked for one reason only: to see whether
+        // this edit would close a loop back to this item. Making A a child of B
+        // and then B a child of A used to produce a cycle that only the renderer
+        // would discover.
+        //
+        // Damage further up is deliberately not this edit's problem. Menus can
+        // hold chains broken by the orphaning delete this module used to allow,
+        // and rejecting an edit because of a missing row two levels above would
+        // report `parentId` as invalid while naming a parent that is fine — with
+        // nothing pointing at the row that actually needs repair. A chain that is
+        // already broken, or already looping above, cannot close a loop through
+        // this item either, so the walk stops instead of refusing.
+        const seen = new Set<string>()
+        let cursor: unknown = parent.parentId ?? null
+        for (let ancestors = 2; cursor != null; ancestors += 1) {
+          const key = String(cursor)
+          if (key === String(args.id)) return invalid('parentId', 'website_menu.error.menuCycle')
+          if (seen.has(key)) break
+          seen.add(key)
+          if (ancestors > MAX_MENU_ANCESTORS) return invalid('parentId', 'website_menu.error.menuTooDeep')
+          const ancestor = (await ctx.db.select('website_menu.MenuItem', { id: cursor }))[0]
+          if (!ancestor) break
+          cursor = ancestor.parentId ?? null
+        }
       }
       let cs = ctx
         .change('website_menu.MenuItem', args, existing)
@@ -66,11 +102,17 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const row = (await ctx.db.select('website_menu.MenuItem', { id: args.id }))[0]
-      if (!row) return { changes: 0 }
+      if (!row) return { ok: true, id: args.id }
       if (ctx.actor && (!row.siteId || !(await canManageStructure(ctx, row.siteId))))
-        return { ok: false, errors: [{ field: 'siteId', message: 'website.error.forbidden' }] }
+        return invalid('siteId', 'website.error.forbidden')
+      // Deleting a parent used to leave its children pointing at a row that no
+      // longer exists. website.deleteTerm refuses the same way rather than
+      // silently rehoming a subtree the editor cannot see.
+      const children = await ctx.db.select('website_menu.MenuItem', { parentId: args.id })
+      if (children.length) return invalid('id', 'website_menu.error.menuInUse')
       const M = ctx.table('website_menu.MenuItem')
-      return ctx.db.del(deleteFrom(M).where(eq(M.id, args.id)))
+      await ctx.db.del(deleteFrom(M).where(eq(M.id, args.id)))
+      return { ok: true, id: args.id }
     },
   }),
 }
