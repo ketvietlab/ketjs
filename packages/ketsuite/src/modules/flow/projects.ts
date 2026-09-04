@@ -18,6 +18,23 @@ import type { Ctx } from '@ketvietlab/ketjs'
  * the board and the sub-task progress already use — a project does not carry a
  * status of its own to read instead.
  */
+/**
+ * The projects the caller has work in, as a set of ids.
+ *
+ * The screen used to infer this from a page of the caller's two hundred most
+ * recently updated issues, so anyone with more than that lost projects from
+ * their own tab with nothing on screen to say a project was missing. One
+ * grouped query answers the question the tab is actually asking, at any size.
+ */
+export async function projectsWithMyWork(ctx: Ctx): Promise<Set<string>> {
+  if (!ctx.actor) return new Set()
+  const I = ctx.table('flow.Issue')
+  const groups = await ctx.db.group(
+    from(I).where(eq(I.assigneeUserId, ctx.actor)).groupBy({ col: I.projectId! }),
+  )
+  return new Set(groups.map((group) => String(group.key[0] ?? '')))
+}
+
 export type ProjectStats = { total: number; done: number }
 
 export async function projectStats(ctx: Ctx, projectIds: string[]): Promise<Map<string, ProjectStats>> {

@@ -367,6 +367,78 @@ export async function listPages(
   return rows.map((row) => serialize(row, children.get(String(row.id)) ?? 0))
 }
 
+/**
+ * Every project's pages as one paged answer, with the project each belongs to.
+ *
+ * The route used to ask `page.list` for 500 rows, slice a page out of them and
+ * print the slice's length as the total — so a company with more than 500
+ * documents was told it had 500. It then resolved project names through
+ * `project.list`, which caps at 200, so a page in the 201st project by name
+ * showed no project at all.
+ *
+ * Both figures are read here instead: the count is a count, the page is a page,
+ * and the names are looked up for the rows actually returned. That is the same
+ * correction `epic.listAll` made, done without pulling every row into memory
+ * first — a wiki can be large, and a screen that shows fifty rows should not
+ * cost every row in the company.
+ */
+export async function listAllPages(
+  ctx: Ctx,
+  args: { search?: string | null; cursor?: number; limit?: number },
+): Promise<{ rows: Array<PageRow & { projectName: string }>; total: number }> {
+  const P = ctx.table('flow.Page')
+  const needle = String(args.search ?? '').trim()
+  const query = from(P)
+    .where(
+      eq(P.active, true),
+      ...(needle
+        ? [
+            or(
+              ilike(P.title, `%${wildcard(needle)}%`, true),
+              ilike(P.previewText, `%${wildcard(needle)}%`, true),
+            ),
+          ]
+        : []),
+    )
+    .orderBy(desc(P.updatedAt), asc(P.id))
+  const cursor = Math.max(0, n(args.cursor ?? 0))
+  const limit = Math.max(1, Math.min(200, n(args.limit ?? 50)))
+  const [total, rows] = await Promise.all([
+    ctx.db.count(query),
+    ctx.db.all(query.limit(limit).offset(cursor)),
+  ])
+  // Names for the rows on this page only, in one read — not for every project
+  // that exists, and not one call per row.
+  const projectIds = [...new Set(rows.map((row) => String(row.projectId)))]
+  const PR = ctx.table('flow.Project')
+  const projects = projectIds.length ? await ctx.db.all(from(PR).where(inArray(PR.id, projectIds))) : []
+  const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
+  // Child counts over the branch as it really is, the same reading listPages makes.
+  const children = new Map<string, number>()
+  if (rows.length) {
+    const parents = await ctx.db.all(
+      from(P).where(
+        eq(P.active, true),
+        inArray(
+          P.parentPageId,
+          rows.map((row) => String(row.id)),
+        ),
+      ),
+    )
+    for (const row of parents) {
+      const key = String(row.parentPageId)
+      children.set(key, (children.get(key) ?? 0) + 1)
+    }
+  }
+  return {
+    rows: rows.map((row) => ({
+      ...serialize(row, children.get(String(row.id)) ?? 0),
+      projectName: named.get(String(row.projectId)) ?? '',
+    })),
+    total,
+  }
+}
+
 export type PageDetail = PageRow & {
   projectName: string
   /** Root to this page, so the screen can draw a breadcrumb without walking again. */

@@ -359,7 +359,11 @@ const crossProjectIssues =
     if (req.method !== 'GET') return text('GET', { status: 405 })
     const spec = issueListSearch(table(ctx.manifest, 'flow.Issue'))
     const state = parseListState(spec, url).state
-    const timezone = 'UTC'
+    // No timezone from here. The day boundary belongs to the company, and
+    // `issueQuery` resolves it once for the list, the groups and the figures
+    // alike — a route that named its own would be a second place to get it
+    // wrong, which is how this was UTC for everyone.
+    const timezone = ''
     const grouped = state.groupBy.length > 0
     const cursor = (state.page - 1) * LIST_PAGE_SIZE
     const scoped = options.mine ? { mine: true } : {}
@@ -385,13 +389,15 @@ const crossProjectIssues =
       : []
     // The figures beside the list, over the same filter the list is showing —
     // counted, not listed, so a thousand issues cost four counts.
-    const today = new Date().toISOString().slice(0, 10)
     const buckets = (await ctx.call(
       'flow.issue.buckets',
-      { ...scoped, listState: state, today },
+      { ...scoped, listState: state },
       url,
       req,
     )) as AnyRow
+    // Taken from the answer rather than computed again here, so every later use
+    // of "today" on this screen is the same day the counts used.
+    const today = String(buckets.today ?? '')
     const mineCount = options.mine
       ? Number(buckets.total ?? 0)
       : Number(
@@ -458,6 +464,10 @@ const crossProjectIssues =
           working: Number(buckets.working ?? 0),
           mine: mineCount,
           late: ((late.rows as AnyRow[]) ?? []).slice(0, 5),
+          // The domain reports a filter that stopped short; nothing read it
+          // until now, so the reader was handed a partial answer with a pager
+          // that claimed it was the whole one.
+          filterTruncated: result.fieldFilterTruncated === true,
           tab: at,
           locale: localeQuery(url),
           tabs: [
@@ -1167,15 +1177,15 @@ export const routes: Record<string, RouteEntry> = {
       const counted = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
 
       const tab = url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
-      const mine = (await ctx.call(
-        'flow.issue.list',
-        { mine: true, listState: emptyIssueListState(), limit: 200 },
-        url,
-        req,
-      )) as AnyRow
-      const mineProjects = new Set(((mine.rows as AnyRow[]) ?? []).map((issue) => String(issue.projectId)))
+      // Asked as "which projects", not as "the two hundred issues I touched
+      // most recently" — that page silently dropped projects from the tab of
+      // anyone carrying more work than it held. See projectsWithMyWork.
       const rows =
-        tab === 'mine' ? counted.filter((project) => mineProjects.has(String(project.id))) : counted
+        tab === 'mine'
+          ? ((await ctx.call('flow.project.list', { mine: true }, url, req)) as AnyRow[]).map(
+              (project) => counted.find((row) => String(row.id) === String(project.id)) ?? project,
+            )
+          : counted
 
       const recent = (await ctx.call(
         'flow.issue.list',
@@ -1435,7 +1445,11 @@ export const routes: Record<string, RouteEntry> = {
       const listUrl = new URL(projectIssuesCollection(url, projectId), url)
       const parsed = parseListState(spec, listUrl)
       const state = parsed.state
-      const timezone = 'UTC'
+      // No timezone from here. The day boundary belongs to the company, and
+      // `issueQuery` resolves it once for the list, the groups and the figures
+      // alike — a route that named its own would be a second place to get it
+      // wrong, which is how this was UTC for everyone.
+      const timezone = ''
       const grouped = state.groupBy.length > 0
       const cursor = (state.page - 1) * LIST_PAGE_SIZE
       const result = (await ctx.call(
@@ -1485,6 +1499,7 @@ export const routes: Record<string, RouteEntry> = {
             total: Number(result.total ?? 0),
             createHref: projectIssueCreateHref(url, projectId),
             locale: localeQuery(url),
+            filterTruncated: result.fieldFilterTruncated === true,
           })
           if (url.searchParams.get('create') !== '1') return workspace
           const errors = url.searchParams.getAll('error')
@@ -1693,18 +1708,18 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const search = url.searchParams.get('q') ?? ''
-      const pages = (await ctx.call('flow.page.list', { search, limit: 500 }, url, req)) as AnyRow[]
-      // The project each page belongs to, batched — there is no JOIN, so the
-      // names come back in one `inArray` read rather than one call per row.
-      const projects = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
-      const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
-      const namedPages = pages.map((page) => ({
-        ...page,
-        projectName: named.get(String(page.projectId)) ?? '',
-      }))
       const currentPage = Math.max(1, Number(url.searchParams.get('page') ?? 1) || 1)
       const cursor = (currentPage - 1) * LIST_PAGE_SIZE
-      const rows = namedPages.slice(cursor, cursor + LIST_PAGE_SIZE)
+      // Paged and counted where the data is. Slicing a 500-row read here printed
+      // that slice's length as the total, and resolving names through the
+      // 200-row `project.list` left later projects blank — see FLW-010.
+      const result = (await ctx.call(
+        'flow.page.listAll',
+        { search, cursor, limit: LIST_PAGE_SIZE },
+        url,
+        req,
+      )) as { rows: AnyRow[]; total: number }
+      const rows = result.rows ?? []
       const pageHref = (page: number): string => {
         const target = new URL(url)
         if (page <= 1) target.searchParams.delete('page')
@@ -1723,16 +1738,16 @@ export const routes: Record<string, RouteEntry> = {
             },
             pager: {
               from: rows.length ? cursor + 1 : 0,
-              to: Math.min(cursor + rows.length, namedPages.length),
-              total: namedPages.length,
+              to: Math.min(cursor + rows.length, result.total),
+              total: result.total,
               prev: currentPage > 1 ? pageHref(currentPage - 1) : null,
-              next: cursor + rows.length < namedPages.length ? pageHref(currentPage + 1) : null,
+              next: cursor + rows.length < result.total ? pageHref(currentPage + 1) : null,
             },
           }
           return allPagesScreen(t, frame, {
             title: t('flow_backend.pages.allTitle'),
             pages: rows,
-            total: namedPages.length,
+            total: result.total,
             locale: localeQuery(url),
           })
         },

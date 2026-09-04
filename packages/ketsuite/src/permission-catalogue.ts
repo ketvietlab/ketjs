@@ -374,6 +374,7 @@ const sources = {
       'page.editContent': ['operate', 'author'],
       'page.get': ['read', 'view'],
       'page.list': ['read', 'view'],
+      'page.listAll': ['read', 'view'],
       // Re-parenting moves a whole branch of the wiki, not one record.
       'page.move': ['configure', 'configure', 'flow.domain-policy'],
       'page.reorder': ['operate', 'operate'],

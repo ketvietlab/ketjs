@@ -24,9 +24,16 @@ const messages: Record<string, string> = {
   'backend.table.columns': 'Cột',
   'backend.table.selectAll': 'Chọn tất cả',
   'backend.table.selectRow': 'Chọn dòng',
+  'flow_backend.issues.filterTruncatedTitle': 'Kết quả chưa đầy đủ',
+  'flow_backend.issues.filterTruncatedBody': 'Bộ lọc dừng ở {count} công việc khớp.',
 }
 
-const translate = ((key: string) => messages[key] ?? key) as Translator
+// Substituting like the real translator does, so a screen that forgets to pass
+// a parameter shows `{count}` here too rather than quietly reading fine.
+const translate = ((key: string, params?: Record<string, unknown>) =>
+  (messages[key] ?? key).replace(/\{(\w+)\}/g, (whole, name) =>
+    params && name in params ? String(params[name]) : whole,
+  )) as Translator
 translate.locale = 'vi'
 translate.has = (key) => key in messages
 translate.resolves = translate.has
@@ -149,4 +156,29 @@ test('flow project issue create: URL-owned modal retains rejected values, return
   assert.match(html, /<option value="doing" selected="true">/)
   assert.match(html, /<option value="high" selected="true">/)
   assert.match(html, /Tiêu đề là bắt buộc/)
+})
+
+test('flow project issues: a truncated custom-field filter is said on the screen, not only in the answer', () => {
+  // The domain has reported this since the filter was written; nothing read it,
+  // so a partial result arrived with a pager that called it the whole thing.
+  const render = (filterTruncated: boolean) =>
+    renderToString(
+      issuesScreen(
+        translate,
+        { chrome: { pager: { from: 1, to: 1, total: 1 } } },
+        {
+          projectName: 'Nền tảng nội bộ',
+          rows: [{ id: 'issue-login', title: 'Hoàn thiện đăng nhập' }],
+          total: 1,
+          createHref: '',
+          filterTruncated,
+        },
+      ),
+    )
+
+  const warned = render(true).replace(/<!--k\[?-->/g, '')
+  assert.match(warned, /Kết quả chưa đầy đủ/)
+  // The number is the cap the domain actually applied, not a sentence about it.
+  assert.match(warned, /900/)
+  assert.doesNotMatch(render(false).replace(/<!--k\[?-->/g, ''), /Kết quả chưa đầy đủ/)
 })

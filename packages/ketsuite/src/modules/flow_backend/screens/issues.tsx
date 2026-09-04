@@ -11,11 +11,13 @@ import {
   modalForm,
   Progress,
   shell,
+  stack,
 } from '../../../ui/index.ts'
 import type { FormField, Frame, TableGroup } from '../../../ui/index.ts'
+import { FIELD_FILTER_MATCHES } from '../../flow/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
-import { priorityBadge, when } from './shared.tsx'
+import { filterTruncatedNotice, priorityBadge, when } from './shared.tsx'
 
 export type ProjectIssuesOptions = {
   projectName: string
@@ -26,6 +28,8 @@ export type ProjectIssuesOptions = {
   total: number
   createHref: string
   locale?: string
+  /** Set when a custom-field filter stopped short — see filterTruncatedNotice. */
+  filterTruncated?: boolean
 }
 
 export type IssueCreateModalOptions = {
@@ -108,7 +112,8 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
           : undefined
       }
       status={`${options.projectName}: ${String(options.total)}`}
-      body={
+      body={stack([
+        options.filterTruncated ? filterTruncatedNotice(_, FIELD_FILTER_MATCHES) : null,
         options.rows.length || groups.length
           ? dataTable(_, {
               rows: options.rows,
@@ -181,8 +186,8 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
                 },
               ],
             })
-          : emptyState(_('flow_backend.empty.title'), _('flow_backend.empty.hint'))
-      }
+          : emptyState(_('flow_backend.empty.title'), _('flow_backend.empty.hint')),
+      ])}
     />,
     { ...frame, chrome: null, topbar: false },
   )
