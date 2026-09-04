@@ -29,10 +29,11 @@ CRM — and Website composes them through optional bridge modules.
 the module declares the fields, it also owns writing them: `website.saveEntry` deliberately does not,
 so SEO validation does not end up inside the content module.
 
-:::caution[Blocked on the storefront page scope]
-Of the four fields, only `noindex` has a consumer today: the sitemap below. See
-[The storefront page scope](#the-storefront-page-scope) for why, and for what else it blocks.
-:::
+The head metadata travels with the page it describes: `website.getEntryByPath` returns a `meta`
+object and the storefront hands it to the theme, which is what the `website:page.head` fill
+interpolates. `meta` carries an **allowlist** — `metaDescription`, `canonical`, `noindex`, `ogImage` —
+rather than the row, because a theme is untrusted presentation and modules extend `website.Entry` for
+their own purposes. A field that was never set is absent rather than sent as null.
 
 ```ts
 // File: examples/website/seo.ts
@@ -276,26 +277,20 @@ so accepting only `true`/`1` told a visitor who had ticked the box that they mus
 
 ## The storefront page scope
 
-One framework gap currently blocks two module features, so it is worth stating once.
+`packages/ketjs/src/server/boot.ts` builds the scope a theme renders a public page against: `site`,
+`locale`, `page`, `meta` and `sections`. Joint fills and island props are projected from that scope,
+so anything a module wants on a public page has to be in it.
 
-`packages/ketjs/src/server/boot.ts` builds the scope a theme renders a public page against, and that
-scope is `site`, `locale`, `page`, `meta` and `sections` — with `meta` hardcoded to `{}`. Joint fills
-and island props are projected from that scope, so anything a module wants to put on a public page has
-to be in it.
+`meta` used to be hardcoded to `{}`, which silently disabled the head tags. It now passes through
+whatever the page resolver returns. The framework does not name the fields — the module that owns
+them decides what is public — so this closed the SEO half without teaching `boot.ts` about
+`website_seo`.
 
-What that blocks today:
-
-| Feature | Symptom |
-| --- | --- |
-| `website_seo` head tags | The `website:page.head` fill interpolates `meta.*`, which is always empty, so `metaDescription`, `canonical` and `ogImage` are stored and read back but never rendered. |
-| `website_search` box | The island declares a `label` prop that is never in scope, so it always shows its fallback, and its form action is a hardcoded `/tim-kiem` rather than a path the site chooses. There is also nowhere for it to post: no surface renders results. |
-
-The query layer for search exists and is tested — `searchPublished` and `countSearchPublished` — so
-the missing half is the public surface, not the behaviour behind it.
-
-Widening the page scope is a framework change affecting every theme, so it belongs in its own review
-rather than inside a module change. Until then, treat both features as "stored and queryable, not yet
-rendered", and do not document them as end-to-end.
+**Still open: the search box.** `website_search` declares a `label` prop that is never in scope, so it
+always shows its fallback, and its form action is a hardcoded `/tim-kiem` rather than a path the site
+chooses. There is also nowhere for it to post — no surface renders results. The query layer exists and
+is tested (`searchPublished`, `countSearchPublished`), so what is missing is the public surface, not
+the behaviour behind it. That needs a decision about where results live before it needs code.
 
 ## Testing
 

@@ -396,3 +396,65 @@ test('seo: a scheduled republish does not remove a page from the sitemap', async
     ['/gioi-thieu'],
   )
 })
+
+test('seo: the metadata reaches the page that describes it', async () => {
+  const { db } = await boot()
+  await seedSite(db)
+  await call(db, 'website_seo.saveEntrySeo', {
+    entryId: 'e1',
+    metaDescription: 'Trà và gốm thủ công.',
+    canonical: '/gioi-thieu',
+    ogImage: '/anh/tra.jpg',
+  })
+
+  // The public reader is what the storefront calls to build a page, so this is
+  // the hop that was missing: the fields were stored and read back, but the
+  // theme was handed an empty meta and the head fill had nothing to render.
+  const page = (await call(db, 'website.getEntryByPath', {
+    siteId: 'site1',
+    path: '/gioi-thieu',
+  })) as { meta: Record<string, unknown> }
+
+  // One rule, no exceptions: a field that was never set is absent rather than
+  // sent as null, and the head fill treats absent and false alike.
+  assert.deepEqual(page.meta, {
+    metaDescription: 'Trà và gốm thủ công.',
+    canonical: '/gioi-thieu',
+    ogImage: '/anh/tra.jpg',
+  })
+
+  // Setting the flag makes it travel.
+  await call(db, 'website_seo.saveEntrySeo', { entryId: 'e1', noindex: true })
+  const delisted = (await call(db, 'website.getEntryByPath', {
+    siteId: 'site1',
+    path: '/gioi-thieu',
+  })) as { meta: Record<string, unknown> }
+  assert.equal(delisted.meta.noindex, true)
+  assert.equal(delisted.meta.metaDescription, 'Trà và gốm thủ công.', 'and the rest survives')
+})
+
+test('seo: a page with no metadata carries an empty meta', async () => {
+  const { db } = await boot()
+  await seedSite(db)
+  const page = (await call(db, 'website.getEntryByPath', {
+    siteId: 'site1',
+    path: '/gioi-thieu',
+  })) as { meta: Record<string, unknown> }
+  assert.deepEqual(page.meta, {}, 'nothing to say is said as nothing, not as four nulls')
+})
+
+test('seo: only the declared public fields travel to the theme', async () => {
+  const { db } = await boot()
+  await seedSite(db)
+  await call(db, 'website_seo.saveEntrySeo', { entryId: 'e1', metaDescription: 'Mô tả.' })
+  const page = (await call(db, 'website.getEntryByPath', {
+    siteId: 'site1',
+    path: '/gioi-thieu',
+  })) as { meta: Record<string, unknown> }
+
+  // A theme is untrusted presentation. Handing it the row would publish
+  // whatever the next module adds to an Entry.
+  for (const internal of ['authorId', 'currentRevisionId', 'publishedRevisionId', 'status', 'siteId']) {
+    assert.ok(!(internal in page.meta), `${internal} must not reach the theme`)
+  }
+})

@@ -88,6 +88,22 @@ const validSlug = (value: unknown): boolean => {
 }
 const forbidden = () => invalid('siteId', 'website.error.forbidden')
 
+/**
+ * What a public page may put in its <head>.
+ *
+ * An allowlist rather than "every column that is not core": modules extend
+ * website.Entry for their own purposes, and handing a row wholesale to a theme
+ * would publish whatever the next one adds. Naming them means a new field is
+ * public only when someone says so.
+ */
+const PUBLIC_META_FIELDS = ['metaDescription', 'canonical', 'noindex', 'ogImage'] as const
+
+const publicMeta = (row: Row): Record<string, unknown> => {
+  const meta: Record<string, unknown> = {}
+  for (const field of PUBLIC_META_FIELDS) if (row[field] != null) meta[field] = row[field]
+  return meta
+}
+
 const siteById = async (ctx: Ctx, id: unknown): Promise<Row | null> => {
   const Site = ctx.table('website.Site')
   return ctx.db.one(from(Site).where(eq(Site.id, id)))
@@ -546,6 +562,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       excerpt: 'text?',
       layout: 'json',
       fields: 'json?',
+      meta: 'json?',
       published: 'bool?',
     },
     effects: ['read:website.Site', 'read:website.Entry', 'read:website.EntryRevision', 'read:website.Page'],
@@ -578,6 +595,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
             excerpt: revision.excerpt ?? null,
             layout: revision.layout,
             fields: revision.fields,
+            // The head metadata travels with the page it describes. Without it
+            // the storefront handed the theme an empty meta, so the fields
+            // website_seo declares were stored and never rendered.
+            meta: publicMeta(entry),
           }
       }
       return null

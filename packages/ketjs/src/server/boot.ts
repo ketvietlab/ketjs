@@ -1004,6 +1004,7 @@ export async function bootDeployment(
               id: string
               title: string
               layout: unknown
+              meta?: Record<string, unknown> | null
             } | null
             if (!row) {
               const _ = translate(locale)
@@ -1018,7 +1019,10 @@ export async function bootDeployment(
               site,
               locale,
               page: { id: row.id, path: url.pathname, title: row.title },
-              meta: {},
+              // Whatever the resolver says describes this page. The framework
+              // does not name the fields — a module owns them and decides what
+              // is public; this only stops hardcoding the answer to "nothing".
+              meta: row.meta ?? {},
               sections: typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
             }
           },
