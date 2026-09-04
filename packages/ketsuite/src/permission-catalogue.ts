@@ -1184,6 +1184,14 @@ const sources = {
     functions: {},
     exemptions: {},
   },
+  website_form_mail: {
+    posture: 'projection/bridge',
+    bundles: ['operate'],
+    functions: {
+      notifySubmission: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
   website_seo: {
     posture: 'permission-bearing',
     bundles: ['configure', 'view'],
