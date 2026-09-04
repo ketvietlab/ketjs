@@ -1250,6 +1250,7 @@ const sources = {
       revokeCustomerSession: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       revokeCustomerTokenGrant: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       rotateCustomerTokenGrant: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+      countSearchPublished: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       searchPublished: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       startCustomerSession: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       updateCustomerProfile: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],

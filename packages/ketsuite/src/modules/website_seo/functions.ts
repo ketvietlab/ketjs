@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import { asc, defineFn, eq, from, isNotNull, ne } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canAccessSite, canManageStructure } from '../website/access.ts'
 import { isReservedPath, reservedPrefixes, safeOgImage, sameSiteCanonical } from './projection.ts'
@@ -149,19 +149,25 @@ export const functions: Record<string, FnSpec> = {
       // The publication filter belongs in the query, not after it. Applied as a
       // plain LIMIT over a path ordering, a site with enough drafts sorting
       // first returned an empty sitemap while its published pages existed.
+      //
+      // The condition is "has a published revision and is not in trash", not
+      // status === 'published': scheduling a later republish moves an entry to
+      // 'scheduled' while the revision already out there stays live, and a
+      // status filter would delist a page a visitor can still open.
       const Entry = ctx.table('website.Entry')
       const rows = await ctx.db.all(
         from(Entry)
-          .where(eq(Entry.siteId, args.siteId), eq(Entry.status, 'published'))
+          .where(
+            eq(Entry.siteId, args.siteId),
+            isNotNull(Entry.publishedRevisionId),
+            ne(Entry.status, 'trash'),
+          )
           .orderBy(asc(Entry.path))
           .limit(MAX_SITEMAP_URLS),
       )
       const prefixes = reservedPrefixes(Object.keys(ctx.manifest.routes ?? {}))
       return rows
-        .filter(
-          (row) =>
-            !!row.publishedRevisionId && row.noindex !== true && !isReservedPath(String(row.path), prefixes),
-        )
+        .filter((row) => row.noindex !== true && !isReservedPath(String(row.path), prefixes))
         .map((row) => ({ path: String(row.path), lastModified: row.publishedAt ?? null }))
     },
   }),
