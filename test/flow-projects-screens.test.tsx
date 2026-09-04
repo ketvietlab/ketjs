@@ -112,6 +112,8 @@ test('flow project create: uses FormPage and preserves values, errors, return st
         action: '/admin/flow/projects/new?lang=vi',
         cancelHref: '/admin/flow/projects?tab=mine&lang=vi',
         returnTo: '/admin/flow/projects?tab=mine&lang=vi',
+        recordId: 'project-ops',
+        idempotencyKey: 'create-project-ops',
         errors: ['Cần nhập ít nhất một trạng thái'],
         fields: [
           { name: 'key', label: 'Mã', value: 'OPS', required: true },
@@ -153,4 +155,8 @@ test('flow project create: uses FormPage and preserves values, errors, return st
   assert.match(rendered, /value="custom" selected/)
   assert.match(rendered, /Cần nhập ít nhất một trạng thái/)
   assert.match(rendered, /type="submit"[^>]*form="flow-project-create-form"/)
+  // A resubmitted form has to land on the same project: `project.save` upserts by
+  // id, so the record id and the idempotency key belong in the rendered form.
+  assert.match(rendered, /name="id" value="project-ops"/)
+  assert.match(rendered, /name="idempotencyKey" value="create-project-ops"/)
 })
