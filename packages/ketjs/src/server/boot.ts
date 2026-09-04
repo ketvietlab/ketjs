@@ -37,7 +37,7 @@ import type { RuntimeConfig, OpenStore } from './config.ts'
 import { namespacedStorage, storageFromConfig } from './storage/index.ts'
 import type { OpenStorage, Storage } from './storage/index.ts'
 import type { OpenTransport } from './transport/index.ts'
-import type { DeploymentSpec } from '../kernel/workspace.ts'
+import type { DeploymentSpec, NavigationSpec } from '../kernel/workspace.ts'
 import type { Translator } from '../kernel/i18n.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
@@ -139,6 +139,9 @@ export type ServeContext = {
   ) => Promise<unknown>
   /** Whether this request's effective allow-list contains one exact function key. */
   allows: (name: string, url: URL, req: IncomingMessage) => Promise<boolean>
+
+  /** What this deployment declared its navigation to mean. Null when it declared nothing. */
+  navigation: NavigationSpec | null
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
   /** Composed modules' stylesheets for this tenant, in dependency order. */
@@ -668,6 +671,7 @@ export async function bootDeployment(
         ),
       )
     },
+    navigation: spec.navigation ?? null,
     allows: async (name, url, req) => {
       const allow = await allowFor(url, req)
       return allow === null || allow.includes(name)
