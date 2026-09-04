@@ -87,6 +87,121 @@ async function boot() {
   return adapter
 }
 
+test('sale: external commercial orders cannot generate stock or invoices through native commands', async (t) => {
+  const adapter = await boot()
+  t.after(() => adapter.close())
+  await call('sale.createOrder', { id: 'outside', partnerId: 'customer', warehouseId: 'wh' }, adapter)
+  await call(
+    'sale.addLine',
+    {
+      id: 'outside:line',
+      orderId: 'outside',
+      productId: 'goods-1',
+      productUomQty: '4',
+      productUomId: 'unit',
+    },
+    adapter,
+  )
+  await adapter.run(
+    `UPDATE sale_order SET "orderAuthority" = 'external', "stockAuthority" = 'external',
+    "invoiceAuthority" = 'disabled', "executionPolicyVersion" = 'external-v1' WHERE id = ?`,
+    ['outside'],
+  )
+  const before = await adapter.all('SELECT * FROM stock_move')
+  for (const [name, args] of [
+    ['sale.confirmOrder', { id: 'outside' }],
+    ['sale.sendQuotation', { id: 'outside' }],
+    ['sale.cancelOrder', { id: 'outside' }],
+    ['sale.removeLine', { id: 'outside:line' }],
+    [
+      'sale.addLine',
+      {
+        id: 'outside:new',
+        orderId: 'outside',
+        productId: 'goods-1',
+        productUomQty: '1',
+        productUomId: 'unit',
+      },
+    ],
+    [
+      'sale.saveDraft',
+      {
+        id: 'outside',
+        partnerId: 'customer',
+        warehouseId: 'wh',
+        expectedRevision: 1,
+        lines: [{ id: 'outside:line', productId: 'goods-1', productUomQty: '1', productUomId: 'unit' }],
+      },
+    ],
+  ] as const)
+    assert.equal(((await call(name, args, adapter)).value as Row).ok, false, name)
+  await adapter.run("UPDATE sale_order SET state = 'sale' WHERE id = ?", ['outside'])
+  await adapter.run('UPDATE sale_order_line SET "qtyDelivered" = ? WHERE id = ?', ['3', 'outside:line'])
+  const sync = (await call('sale.syncDeliveries', { id: 'outside' }, adapter)).value as Row
+  assert.equal(sync.ok, true)
+  assert.equal(sync.invoiceStatus, 'no')
+  assert.equal(
+    (await adapter.all('SELECT "qtyDelivered" FROM sale_order_line WHERE id = ?', ['outside:line']))[0]
+      ?.qtyDelivered,
+    '3',
+  )
+  const invoice = (
+    await call(
+      'sale.createInvoice',
+      {
+        id: 'outside:invoice',
+        orderId: 'outside',
+        journalId: 'sales-journal',
+        revenueAccountId: 'revenue',
+        receivableAccountId: 'receivable',
+      },
+      adapter,
+    )
+  ).value as Row
+  assert.equal(invoice.ok, false)
+  assert.equal(
+    ((await call('sale.lockOrder', { id: 'outside', locked: false }, adapter)).value as Row).ok,
+    false,
+  )
+  await adapter.run("UPDATE sale_order SET state = 'cancel' WHERE id = ?", ['outside'])
+  assert.equal(((await call('sale.resetOrder', { id: 'outside' }, adapter)).value as Row).ok, false)
+  assert.deepEqual(await adapter.all('SELECT * FROM stock_move'), before)
+  assert.deepEqual(await adapter.all('SELECT * FROM account_move'), [])
+  assert.deepEqual(await adapter.all('SELECT * FROM sale_order_lifecycle_event'), [])
+})
+
+test('sale: locally managed orders can be confirmed with external stock and disabled invoicing', async (t) => {
+  const adapter = await boot()
+  t.after(() => adapter.close())
+  await call('sale.createOrder', { id: 'outsourced', partnerId: 'customer', warehouseId: 'wh' }, adapter)
+  await call(
+    'sale.addLine',
+    {
+      id: 'outsourced:line',
+      orderId: 'outsourced',
+      productId: 'goods-1',
+      productUomQty: '2',
+      productUomId: 'unit',
+    },
+    adapter,
+  )
+  await adapter.run(
+    `UPDATE sale_order SET "orderAuthority" = 'local', "stockAuthority" = 'external',
+    "invoiceAuthority" = 'disabled' WHERE id = ?`,
+    ['outsourced'],
+  )
+  const before = await adapter.all('SELECT * FROM stock_move')
+  const confirmed = (await call('sale.confirmOrder', { id: 'outsourced' }, adapter)).value as Row
+  assert.equal(confirmed.ok, true)
+  assert.equal(confirmed.pickingId, undefined)
+  assert.deepEqual(await adapter.all('SELECT * FROM stock_move'), before)
+  assert.equal(
+    (await adapter.all('SELECT "invoiceStatus" FROM sale_order WHERE id = ?', ['outsourced']))[0]
+      ?.invoiceStatus,
+    'no',
+  )
+})
+
 test('sale: quotation pricing, confirmation and delivery integrate with Stock', async () => {
   const adapter = await boot()
   try {
