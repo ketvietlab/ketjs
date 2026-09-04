@@ -353,6 +353,11 @@ const sources = {
       'field.archive': ['configure', 'configure', 'flow.configuration-audit'],
       'field.list': ['read', 'view'],
       'field.save': ['configure', 'configure', 'flow.configuration-audit'],
+      // Taking work out of every figure the project reports, and putting it
+      // back. Ordinary work rather than configuration: cancelling your own task
+      // is not a decision about how the project is run.
+      'issue.archive': ['operate', 'operate'],
+      'issue.restore': ['operate', 'operate'],
       'issue.assignSprint': ['operate', 'operate'],
       'issue.buckets': ['read', 'view'],
       'issue.comment': ['operate', 'operate'],
@@ -366,6 +371,7 @@ const sources = {
       'issue.move': ['operate', 'operate'],
       'issue.options': ['read', 'view'],
       'issue.save': ['operate', 'operate'],
+      'issue.follow': ['operate', 'operate'],
       'issue.unfollow': ['operate', 'operate'],
       'issueType.archive': ['configure', 'configure', 'flow.configuration-audit'],
       'issueType.list': ['read', 'view'],

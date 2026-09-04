@@ -1,9 +1,12 @@
-import { deleteFrom, defineFn, eq } from '@ketvietlab/ketjs'
+import { deleteFrom, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
 import { FIELD_KINDS } from './types.ts'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   actorRequired,
   addComment,
+  archiveIssue,
+  restoreIssue,
+  startFollowing,
   stopFollowing,
   addDependency,
   assignSprint,
@@ -842,12 +845,40 @@ export const functions: Record<string, FnSpec> = {
       closeSprint(ctx, { id: String(args.id), idempotencyKey: String(args.idempotencyKey) }),
   }),
 
+  /**
+   * Every tag, with how much work in the company carries it.
+   *
+   * The count is here rather than on the screen because of what archiving a tag
+   * does: it deletes every `IssueTag` row for it, across every project, and
+   * cannot be undone. The block that offers that button sits inside a *project's*
+   * settings — so the number is the only thing that says how far the button
+   * reaches. One grouped query, not one count per tag.
+   */
   'tag.list': defineFn({
     input: { search: 'text?', limit: 'int?', includeArchived: 'bool?' },
-    output: { id: 'id', name: 'text', color: 'text?', active: 'bool' },
-    effects: ['read:flow.Tag'],
+    output: { id: 'id', name: 'text', color: 'text?', active: 'bool', usage: 'int' },
+    effects: ['read:flow.Tag', 'read:flow.IssueTag'],
     agent: true,
-    handler: (ctx, args) => optionRows(ctx, 'flow.Tag', args),
+    handler: async (ctx, args) => {
+      const rows = await optionRows(ctx, 'flow.Tag', args)
+      if (!rows.length) return rows
+      const IT = ctx.table('flow.IssueTag')
+      // Every row, archived issues included, because that is what `tag.archive`
+      // deletes. A count that quietly skipped archived work would understate
+      // exactly the thing the reader is about to lose.
+      const groups = await ctx.db.group(
+        from(IT)
+          .where(
+            inArray(
+              IT.tagId!,
+              rows.map((row) => String(row.id)),
+            ),
+          )
+          .groupBy({ col: IT.tagId! }),
+      )
+      const counted = new Map(groups.map((group) => [String(group.key[0] ?? ''), n(group.count)]))
+      return rows.map((row) => ({ ...row, usage: counted.get(String(row.id)) ?? 0 }))
+    },
   }),
 
   'tag.save': defineFn({
@@ -1101,6 +1132,62 @@ export const functions: Record<string, FnSpec> = {
    * else in this module hands out subscriptions, and this is the only way to
    * give one back.
    */
+  /**
+   * Off the board, without claiming it was finished — see archiveIssue.
+   *
+   * Its own key rather than a flag on `issue.save`: taking work out of every
+   * figure the project reports is a different act from editing a field, and the
+   * catalogue can price it separately.
+   */
+  'issue.archive': defineFn({
+    input: { id: 'id', expectedVersion: 'int', idempotencyKey: 'text' },
+    output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
+    effects: ['read:flow.Issue', 'write:flow.Issue'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      archiveIssue(ctx, {
+        id: String(args.id),
+        expectedVersion: n(args.expectedVersion),
+        idempotencyKey: String(args.idempotencyKey),
+      }),
+  }),
+
+  'issue.restore': defineFn({
+    input: { id: 'id', expectedVersion: 'int', idempotencyKey: 'text' },
+    output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
+    effects: ['read:flow.Issue', 'write:flow.Issue'],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      restoreIssue(ctx, {
+        id: String(args.id),
+        expectedVersion: n(args.expectedVersion),
+        idempotencyKey: String(args.idempotencyKey),
+      }),
+  }),
+
+  /** The door `issue.unfollow` never had a pair for — see startFollowing. */
+  'issue.follow': defineFn({
+    input: { issueId: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:flow.Issue',
+      'read:user.User',
+      'read:mail.Thread',
+      'read:partner.Partner',
+      'read:mail.Follower',
+      'write:mail.Follower',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      startFollowing(ctx, {
+        issueId: String(args.issueId),
+        idempotencyKey: String(args.idempotencyKey),
+      }),
+  }),
+
   'issue.unfollow': defineFn({
     input: { issueId: 'id', idempotencyKey: 'text' },
     output: { ok: 'bool', removed: 'int?', errors: 'json?' },
