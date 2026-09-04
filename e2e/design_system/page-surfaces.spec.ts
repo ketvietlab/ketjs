@@ -60,7 +60,7 @@ for (const kind of kinds)
             await expect(header).toHaveCSS('padding-top', '16px')
             await expect(header).toHaveCSS('padding-left', width === 390 ? '16px' : '28px')
             await expect(header.locator('h1')).toHaveCSS('font-size', width === 390 ? '16px' : '24px')
-            if (!workspace) await expect(body).toHaveCSS('background-color', working)
+            if (!workspace) await expect(body).toHaveCSS('background-color', ground)
             else {
               await expect(main.locator('[data-pattern]')).toHaveCSS('background-color', ground)
               if (!canvas) await expect(body).toHaveCSS('background-color', ground)
@@ -110,6 +110,33 @@ for (const kind of kinds)
                 'background-color',
                 theme === 'light' ? working : 'rgba(0, 0, 0, 0)',
               )
+            }
+            for (const surface of await body.locator('[data-ui="surface"]').all())
+              await expect(surface).toHaveCSS(
+                'background-color',
+                theme === 'light' ? working : 'rgb(29, 34, 40)',
+              )
+            if (width === 390) {
+              const overlaps = await body.locator('[data-responsive="stack"]').evaluateAll((tables) =>
+                tables.flatMap((table) => {
+                  const rows = [...table.querySelectorAll('[data-ui="row"]')]
+                  return rows.flatMap((row, index) => {
+                    const bounds = row.getBoundingClientRect()
+                    const cells = [...row.querySelectorAll('[data-ui="cell"]')].map((cell) =>
+                      cell.getBoundingClientRect(),
+                    )
+                    const previous = rows[index - 1]?.getBoundingClientRect()
+                    return (previous && previous.bottom > bounds.top + 1) ||
+                      cells.some(
+                        (cell, i) =>
+                          cell.bottom > bounds.bottom + 1 || (i > 0 && cells[i - 1].bottom > cell.top + 1),
+                      )
+                      ? [row.textContent]
+                      : []
+                  })
+                }),
+              )
+              expect(overlaps).toEqual([])
             }
             const geometry = await page.evaluate((hook) => {
               const main = document.querySelector('[data-ui="app-main"]')!

@@ -91,8 +91,8 @@ a module-local query-string convention.
 ### Page surface hierarchy
 
 All three canonical patterns share component-owned surface roles. A light operational page uses a
-quiet grey context/identity band and controls, white record/list working regions, and a grey contextual rail.
-Workspaces instead keep a grey page canvas between independent white cards, surfaces and tables.
+quiet grey context/identity band, controls and page canvas. White belongs to independent cards,
+tables and content/form sections, not a full-width page body or an entire right-hand column.
 `ListPage`, `RecordPage`, and `WorkspacePage` keep their existing header measurements and structure;
 do not implement the hierarchy with a route-local background override or another whole-page card.
 
@@ -100,11 +100,16 @@ do not implement the hierarchy with a route-local background override or another
 | --- | --- |
 | Context and identity header | `--kv-page-chrome-bg`: page grey in light, existing panel tone in dark |
 | Controls and record tabs | `--kv-page-bg`: continuous quiet navigation band |
-| List and record content | `--kv-page-content-bg`: white in light, existing canvas tone in dark |
+| List and record content canvas | `--kv-page-content-bg` aliases `--kv-page-bg`; the space around content stays grey in light |
 | Workspace canvas, both flow and spatial | `--kv-page-bg`: keep the gaps grey; cards, table surfaces and timelines remain independent objects |
-| Workspace content blocks | Existing `Surface`, `ContentCard`, `Metric` and table tokens own the white fill; never wrap the whole workspace in one white surface |
+| Content blocks in every page pattern | Existing `Surface`, `ContentCard`, `Metric` and table tokens own the white fill; compose `Surface` + `Section` for each content/form group, never wrap the whole page in one white surface |
 | Tables | `--kv-table-bg`: opaque white in light; transparent in dark, preserving row hover/selection |
 | Sidebar and record rail | Existing sidebar / subtle panel tokens, separated with low-contrast borders |
+
+For narrow tables, use `DataTable responsive="stack"`: labelled cells stack at 768px and below,
+and row/cell heights grow with their contents. The default `responsive="scroll"` preserves the
+wide table, suitable for spatial schedules and inventory grids. Do not duplicate mobile table CSS
+in consumer modules. Browser coverage must assert cell/row bounds as well as page overflow.
 
 These roles alias the existing palette; they do not add brand colours or change the dark palette.
 `FormPage`, `DashboardPage`, and `BoardPage` are compatibility adapters for the same surface rules, not
