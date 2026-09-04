@@ -23,8 +23,17 @@ import {
   startSprint,
 } from './operations.ts'
 import { emptyIssueListState } from './search.ts'
-import { projectStateOf, projectStats } from './projects.ts'
-import { archivePage, listPages, movePage, pageDetail, reorderPage, restorePage, savePage } from './pages.ts'
+import { projectsWithMyWork, projectStateOf, projectStats } from './projects.ts'
+import {
+  archivePage,
+  listAllPages,
+  listPages,
+  movePage,
+  pageDetail,
+  reorderPage,
+  restorePage,
+  savePage,
+} from './pages.ts'
 
 const flowReadEffects = [
   'read:flow.Project',
@@ -147,11 +156,22 @@ const saveEntity = (
 
 export const functions: Record<string, FnSpec> = {
   'project.list': defineFn({
-    input: { search: 'text?', limit: 'int?', includeArchived: 'bool?' },
+    input: {
+      search: 'text?',
+      limit: 'int?',
+      includeArchived: 'bool?',
+      /** Only projects the caller has an issue in — see the note on projectsWithMyWork. */
+      mine: 'bool?',
+    },
     output: { id: 'id', key: 'text', name: 'text', description: 'text?', active: 'bool' },
-    effects: ['read:flow.Project'],
+    effects: ['read:flow.Project', 'read:flow.Issue'],
     agent: true,
-    handler: (ctx, args) => optionRows(ctx, 'flow.Project', args),
+    handler: async (ctx, args) => {
+      const rows = await optionRows(ctx, 'flow.Project', args)
+      if (args.mine !== true) return rows
+      const mine = await projectsWithMyWork(ctx)
+      return rows.filter((row) => mine.has(String(row.id)))
+    },
   }),
 
   /**
@@ -628,6 +648,26 @@ export const functions: Record<string, FnSpec> = {
       }),
   }),
 
+  /**
+   * Every project's pages, paged and counted — see listAllPages.
+   *
+   * `page.list` answers "this project's tree" and stays that. This answers
+   * "every document there is", a different question needing a different shape:
+   * a total the pager can trust, and the project name beside each row.
+   */
+  'page.listAll': defineFn({
+    input: { search: 'text?', cursor: 'int?', limit: 'int?' },
+    output: { rows: 'json', total: 'int' },
+    effects: ['read:flow.Page', 'read:flow.Project'],
+    agent: true,
+    handler: (ctx, args) =>
+      listAllPages(ctx, {
+        search: args.search == null ? null : String(args.search),
+        cursor: args.cursor == null ? undefined : n(args.cursor),
+        limit: args.limit == null ? undefined : n(args.limit),
+      }),
+  }),
+
   'page.get': defineFn({
     input: { id: 'id' },
     output: { value: 'json?' },
@@ -868,7 +908,7 @@ export const functions: Record<string, FnSpec> = {
       timezone: 'text?',
     },
     output: { rows: 'json', total: 'int', nextCursor: 'text?', fieldFilterTruncated: 'bool?' },
-    effects: [...flowReadEffects],
+    effects: [...flowReadEffects, 'read:company.Company'],
     agent: true,
     handler: (ctx, args) => listIssues(ctx, args),
   }),
@@ -888,16 +928,31 @@ export const functions: Record<string, FnSpec> = {
       mine: 'bool?',
       includeArchived: 'bool?',
       listState: 'json',
+      /** Optional: the company's own civil date when the caller names none. */
+      today: 'text?',
+    },
+    output: {
+      total: 'int',
+      done: 'int',
+      overdue: 'int',
+      waiting: 'int',
+      working: 'int',
       today: 'text',
     },
-    output: { total: 'int', done: 'int', overdue: 'int', waiting: 'int', working: 'int' },
     // The same `issueQuery` `issue.list` and `issue.group` run, so the same
     // `flow.IssueFieldValue` read whenever the state carries a `field:<code>`
     // rule — see resolveFieldFilters. A capability nobody declares is one
     // nobody reviewed, and this one was missing while the other two had it.
-    effects: ['read:flow.Issue', 'read:flow.Column', 'read:flow.FieldDef', 'read:flow.IssueFieldValue'],
+    effects: [
+      'read:flow.Issue',
+      'read:flow.Column',
+      'read:flow.FieldDef',
+      'read:flow.IssueFieldValue',
+      // Where the company keeps its calendar — see businessTimezone.
+      'read:company.Company',
+    ],
     agent: true,
-    handler: (ctx, args) => issueBuckets(ctx, args, String(args.today)),
+    handler: (ctx, args) => issueBuckets(ctx, args, args.today == null ? undefined : String(args.today)),
   }),
 
   'issue.group': defineFn({
@@ -915,7 +970,7 @@ export const functions: Record<string, FnSpec> = {
       limit: 'int?',
       offset: 'int?',
     },
-    effects: [...flowReadEffects],
+    effects: [...flowReadEffects, 'read:company.Company'],
     agent: true,
     handler: (ctx, args) => groupIssues(ctx, args),
   }),
@@ -1108,7 +1163,7 @@ export const functions: Record<string, FnSpec> = {
   'issue.options': defineFn({
     input: { search: 'text?', limit: 'int?', projectId: 'id?', excludeId: 'id?' },
     output: { id: 'id', title: 'text', columnName: 'text?' },
-    effects: [...flowReadEffects],
+    effects: [...flowReadEffects, 'read:company.Company'],
     agent: true,
     handler: async (ctx, args) => {
       const found = await listIssues(ctx, {

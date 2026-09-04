@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
+import { tableNameFor } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
+import { FIELD_FILTER_MATCHES } from '../packages/ketsuite/src/modules/flow/index.ts'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
@@ -174,4 +176,87 @@ test('flow project issues: URL-owned create modal preserves list state, validati
     method: 'PUT',
   })
   assert.equal(refused.status, 405)
+})
+
+test('flow project issues route: a filter that stopped short reaches the screen as a warning', async (t) => {
+  const { app, call } = await boot(t)
+  await call('flow.field.save', {
+    id: 'field-environment',
+    projectId: 'platform',
+    code: 'environment',
+    name: 'Environment',
+    kind: 'select',
+    config: { options: [{ code: 'prod', label: 'Production' }] },
+    idempotencyKey: 'field-environment',
+  })
+  // One row past the cap, inserted straight into the store: the point is what
+  // the route does with a truncated answer, not what nine hundred saves do.
+  const count = FIELD_FILTER_MATCHES + 1
+  await app.fixture.withTenant('', async ({ adapter }) => {
+    const insert = async (model: string, columns: readonly string[], rows: readonly unknown[][]) => {
+      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${columns
+        .map((name) => adapter.quoteIdent(name))
+        .join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`
+      for (const row of rows) await adapter.run(sql, row as never[])
+    }
+    const stamp = '2026-09-05T00:00:00.000Z'
+    await insert(
+      'flow.Issue',
+      [
+        'companyId',
+        'id',
+        'projectId',
+        'columnId',
+        'title',
+        'priority',
+        'threadId',
+        'active',
+        'version',
+        'createdAt',
+        'updatedAt',
+      ],
+      Array.from({ length: count }, (_, index) => [
+        'acme',
+        `bulk-${index}`,
+        'platform',
+        'todo',
+        `Bulk ${index}`,
+        'normal',
+        `thread:flow.Issue:bulk-${index}`,
+        1,
+        1,
+        stamp,
+        stamp,
+      ]),
+    )
+    await insert(
+      'flow.IssueFieldValue',
+      ['companyId', 'id', 'issueId', 'fieldId', 'value'],
+      Array.from({ length: count }, (_, index) => [
+        'acme',
+        `bulk-value-${index}`,
+        `bulk-${index}`,
+        'field-environment',
+        'prod',
+      ]),
+    )
+  })
+
+  // A filter travels in the URL as one base64url token — the same encoding the
+  // screens produce, so this is the request a reader would actually send.
+  const token = Buffer.from(
+    JSON.stringify({ kind: 'rule', field: 'field:environment', operator: 'equals', value: 'prod' }),
+    'utf8',
+  ).toString('base64url')
+  const filtered = new URLSearchParams({ lang: 'en', filter: token })
+  const warned = await (
+    await app.client.get(`/admin/flow/projects/platform/issues?${filtered.toString()}`)
+  ).text()
+  assert.match(warned, /data-ui="notice" data-tone="warning"/)
+  assert.match(warned, /This result is incomplete/)
+
+  // The same screen without the field rule says nothing, so the warning is
+  // about the filter rather than about the size of the project.
+  const quiet = await (await app.client.get('/admin/flow/projects/platform/issues?lang=en')).text()
+  assert.doesNotMatch(quiet, /This result is incomplete/)
 })
