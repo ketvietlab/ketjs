@@ -141,7 +141,10 @@ test("user-auth-e2e: self-service cannot revoke another user's session", async (
       body: 'action=revoke',
     },
   )
-  assert.equal(denied.status, 400)
+  // 403, not 400: the operator's request was well formed and their permissions
+  // were not. A monitor that cannot tell those apart cannot tell an attack from a
+  // typo.
+  assert.equal(denied.status, 403)
   assert.equal((await e2e.client.get('/whoami')).status, 200)
 })
 
