@@ -22,6 +22,7 @@ import {
   canPublishEntry,
 } from './access.ts'
 import { ensureCustomerRealm } from './customer.ts'
+import { isReservedPath, reservedPrefixes } from './paths.ts'
 
 const SITE_ROLES = new Set(['administrator', 'editor', 'author', 'contributor'])
 const MAX_JSON_BYTES = 512 * 1024
@@ -166,24 +167,43 @@ const searchMatches = async (
   // Publicly readable is "has a published revision and is not in trash", not
   // status === 'published': scheduling a later republish moves an entry to
   // 'scheduled' while the revision already out there stays live, and filtering
-  // on the status would silently drop content a visitor can still open.
+  // on the status would silently drop content a visitor can still open. This is
+  // the same gate getEntryByPath applies, so a result is always openable.
+  //
+  // A page under a namespace the deployment serves is not openable — a module
+  // route answers that path first — so it is not offered here either, the way
+  // the sitemap does not list it.
+  const prefixes = reservedPrefixes(Object.keys(ctx.manifest.routes ?? {}))
   const Entry = ctx.table('website.Entry')
-  const candidates = await ctx.db.all(
+  // One row past the window, so a site with exactly SEARCH_SCAN_LIMIT entries
+  // is reported as a complete answer rather than a capped one.
+  const scanned = await ctx.db.all(
     from(Entry)
       .where(eq(Entry.siteId, siteId), isNotNull(Entry.publishedRevisionId), ne(Entry.status, 'trash'))
       .orderBy(desc(Entry.publishedAt))
-      .limit(SEARCH_SCAN_LIMIT),
+      .limit(SEARCH_SCAN_LIMIT + 1),
   )
-  const entries = candidates
-  if (!candidates.length) return { matches: [], capped: entries.length >= SEARCH_SCAN_LIMIT }
+  const capped = scanned.length > SEARCH_SCAN_LIMIT
+  const candidates = scanned
+    .slice(0, SEARCH_SCAN_LIMIT)
+    .filter((entry) => !isReservedPath(String(entry.path), prefixes))
+  if (!candidates.length) return { matches: [], capped }
 
+  // Only the four fields the match and the result actually use. A revision also
+  // carries layout and fields, which saveEntry allows up to half a megabyte
+  // each; reading whole rows for a window this size made one anonymous request
+  // for a single result cost hundreds of megabytes.
   const Revision = ctx.table('website.EntryRevision')
   const revisions = new Map<string, Row>()
   // Batched in chunks so the parameter list stays bounded on every adapter.
   for (let i = 0; i < candidates.length; i += 200) {
     const ids = candidates.slice(i, i + 200).map((entry) => entry.publishedRevisionId)
-    for (const revision of await ctx.db.all(from(Revision).where(inArray(Revision.id, ids))))
-      revisions.set(String(revision.id), revision)
+    const rows = await ctx.db.all(
+      from(Revision)
+        .select(Revision.id, Revision.entryId, Revision.title, Revision.excerpt)
+        .where(inArray(Revision.id, ids)),
+    )
+    for (const revision of rows) revisions.set(String(revision.id), revision)
   }
 
   const matches: Array<Record<string, unknown>> = []
@@ -202,7 +222,7 @@ const searchMatches = async (
     })
     if (matches.length >= need) break
   }
-  return { matches, capped: entries.length >= SEARCH_SCAN_LIMIT }
+  return { matches, capped }
 }
 
 export const cmsFunctions: Record<string, FnSpec> = {
@@ -528,7 +548,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       fields: 'json?',
       published: 'bool?',
     },
-    effects: ['read:website.Entry', 'read:website.EntryRevision', 'read:website.Page'],
+    effects: ['read:website.Site', 'read:website.Entry', 'read:website.EntryRevision', 'read:website.Page'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const path = cleanPath(args.path)
@@ -537,6 +557,13 @@ export const cmsFunctions: Record<string, FnSpec> = {
         const Page = ctx.table('website.Page')
         return ctx.db.one(from(Page).where(eq(Page.path, path), eq(Page.published, true)))
       }
+      // A site that is not being served publicly serves nothing. resolveSite
+      // already refuses one, so the storefront never arrives here for it — but
+      // this function takes a siteId from its caller, and without the check an
+      // anonymous caller naming a site being prepared could read it a page at
+      // a time while the sitemap and search both refuse to list it.
+      const Site = ctx.table('website.Site')
+      if (!(await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true))))) return null
       const Entry = ctx.table('website.Entry')
       const entry = await ctx.db.one(from(Entry).where(eq(Entry.siteId, args.siteId), eq(Entry.path, path)))
       if (entry?.publishedRevisionId && entry.status !== 'trash') {
