@@ -32,6 +32,9 @@ export const SALE_STATES = ['draft', 'sent', 'sale', 'cancel'] as const
 export const SALE_INVOICE_STATUSES = ['upselling', 'invoiced', 'to invoice', 'no'] as const
 export const INVOICE_POLICIES = ['order', 'delivery'] as const
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+const externalOrder = (order: Row | undefined) =>
+  order?.orderAuthority != null && order.orderAuthority !== 'local'
+const authorityRefusal = () => invalid('orderAuthority', 'this order is managed by an external system')
 const n = (value: unknown) => Number(value ?? 0)
 const quantityRound = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 const quantityText = (value: number) => String(quantityRound(value))
@@ -186,6 +189,7 @@ async function invoiceLinesOf(ctx: Ctx, lineIds: string[]): Promise<Row[]> {
 async function statusOf(ctx: Ctx, orderId: unknown) {
   const order = (await ours(ctx, 'sale.Order', { id: orderId }))[0]
   if (order?.state !== 'sale') return 'no'
+  if (order.invoiceAuthority != null && order.invoiceAuthority !== 'local') return 'no'
   let billable = 0,
     invoiced = 0,
     ordered = 0
@@ -274,6 +278,9 @@ const claimRevision = async (ctx: Ctx, order: Row, expectedRevision?: unknown): 
 async function confirm(ctx: Ctx, id: unknown, expectedRevision?: unknown) {
   const order = (await ours(ctx, 'sale.Order', { id }))[0]
   if (!order) return invalid('id', 'sales order does not exist')
+  if (externalOrder(order)) return authorityRefusal()
+  if (order.stockAuthority != null && !['local', 'external'].includes(String(order.stockAuthority)))
+    return invalid('stockAuthority', 'unknown stock authority')
   if (expectedRevision !== undefined && n(order.revision) !== n(expectedRevision))
     return invalid('expectedRevision', 'sales order changed')
   if (order.state === 'sale') {
@@ -300,7 +307,7 @@ async function confirm(ctx: Ctx, id: unknown, expectedRevision?: unknown) {
       const current = (await ours(tx, 'sale.Order', { id }))[0]
       if (!current || !(await claimRevision(tx, current, expectedRevision)))
         throw new SaleRefused(invalid('expectedRevision', 'sales order changed'))
-      if (goods.length) {
+      if (goods.length && current.stockAuthority !== 'external') {
         pickingId = `${String(id)}:delivery`
         const created = (await stockFunctions.createPicking!.handler(tx, {
           id: pickingId,
@@ -620,6 +627,7 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ours(ctx, 'sale.Order', { id: args.orderId }))[0]
+      if (externalOrder(order)) return authorityRefusal()
       if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
         return invalid('orderId', 'lines can only be added to an unlocked quotation')
       if (compareDecimals(args.productUomQty, '0') <= 0)
@@ -744,6 +752,7 @@ export const functions: Record<string, FnSpec> = {
       try {
         await ctx.tx(async (tx) => {
           let order = (await ours(tx, 'sale.Order', { id: args.id }))[0]
+          if (externalOrder(order)) throw new SaleRefused(authorityRefusal())
           if (args.create && order) return
           if (!order) {
             if (!args.create) throw new SaleRefused(invalid('id', 'sales order does not exist'))
@@ -822,6 +831,7 @@ export const functions: Record<string, FnSpec> = {
       const line = (await ours(ctx, 'sale.OrderLine', { id: args.id }))[0]
       if (!line) return { ok: true, id: args.id }
       const order = (await ours(ctx, 'sale.Order', { id: line.orderId }))[0]
+      if (externalOrder(order)) return authorityRefusal()
       if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
         return invalid('id', 'lines can only be removed from an unlocked quotation')
       const L = ctx.table('sale.OrderLine')
@@ -844,6 +854,7 @@ export const functions: Record<string, FnSpec> = {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'sales order does not exist')
       if (order.state !== 'cancel') return invalid('state', 'only a cancelled order can return to draft')
+      if (externalOrder(order)) return authorityRefusal()
       await ctx.db.update(
         'sale.Order',
         { id: args.id },
@@ -862,6 +873,7 @@ export const functions: Record<string, FnSpec> = {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (!order || !['draft', 'sent'].includes(String(order.state)))
         return invalid('state', 'only a draft quotation can be sent')
+      if (externalOrder(order)) return authorityRefusal()
       await ctx.db.update('sale.Order', { id: args.id }, { state: 'sent', revision: n(order.revision) + 1 })
       return { ok: true, id: args.id }
     },
@@ -891,8 +903,12 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      if (!(await ours(ctx, 'sale.Order', { id: args.id }))[0])
-        return invalid('id', 'sales order does not exist')
+      const held = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
+      if (!held) return invalid('id', 'sales order does not exist')
+      if (held.stockAuthority === 'external')
+        return { ok: true, id: args.id, invoiceStatus: await statusOf(ctx, args.id) }
+      if (held.stockAuthority != null && held.stockAuthority !== 'local')
+        return invalid('stockAuthority', 'unknown stock authority')
       for (const line of await ours(ctx, 'sale.OrderLine', { orderId: args.id })) {
         const moves = await ctx.db.select('stock.Move', { saleLineId: line.id, state: 'done' })
         await ctx.db.update(
@@ -948,6 +964,8 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ours(ctx, 'sale.Order', { id: args.orderId }))[0]
       if (order?.state !== 'sale') return invalid('orderId', 'only a confirmed sales order can be invoiced')
+      if (order.invoiceAuthority != null && order.invoiceAuthority !== 'local')
+        return invalid('invoiceAuthority', 'invoicing is disabled for this order')
       const existing = (await ctx.db.select('account.Move', { id: args.id }))[0]
       if (existing) return { ok: true, id: args.id, amountTotal: existing.amountTotal }
       const journal = (await ctx.db.select('account.Journal', { id: args.journalId }))[0],
@@ -1158,6 +1176,7 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ours(ctx, 'sale.Order', { id: args.id }))[0]
       if (order?.state !== 'sale') return invalid('state', 'only a sales order can be locked')
+      if (externalOrder(order)) return authorityRefusal()
       await ctx.db.update(
         'sale.Order',
         { id: args.id },
@@ -1188,6 +1207,7 @@ export const functions: Record<string, FnSpec> = {
       if (!order) return invalid('id', 'sales order does not exist')
       if (args.expectedRevision !== undefined && n(order.revision) !== n(args.expectedRevision))
         return invalid('expectedRevision', 'sales order changed')
+      if (externalOrder(order)) return authorityRefusal()
       if (order.state === 'cancel') return { ok: true, id: args.id }
       try {
         await ctx.tx(async (tx) => {

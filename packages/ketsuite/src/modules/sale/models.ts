@@ -22,6 +22,16 @@ export const models: Record<string, ModelDef> = {
       amountTax: 'decimal',
       amountTotal: 'decimal',
       notes: 'text?',
+      // Pinned by trusted integrations, never accepted by ordinary order-edit inputs.
+      // Null preserves native behavior for existing orders. A later company setting
+      // must not turn an externally fulfilled commercial order into stock/accounting work.
+      orderAuthority: 'text?',
+      stockAuthority: 'text?',
+      invoiceAuthority: 'text?',
+      executionPolicyVersion: 'text?',
+      // Provider-level shipping/discount/rounding difference; informational only,
+      // never a stock line or a tax/accounting classification.
+      externalAmountAdjustment: 'decimal?',
       revision: 'int?',
     },
     indexes: {
