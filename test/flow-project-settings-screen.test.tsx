@@ -26,6 +26,9 @@ const options = {
   editFieldHref: () => '#',
   editTagHref: () => '#',
   brief: 'Project brief',
+  profile: [{ name: 'name', label: 'Name', value: 'Platform' }],
+  archived: false,
+  tagUsage: {},
 }
 
 test('project settings keeps specialized collections and opens short editors in a modal', () => {

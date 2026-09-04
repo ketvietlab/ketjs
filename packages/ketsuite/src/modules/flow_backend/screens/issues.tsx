@@ -30,6 +30,13 @@ export type ProjectIssuesOptions = {
   locale?: string
   /** Set when a custom-field filter stopped short — see filterTruncatedNotice. */
   filterTruncated?: boolean
+  /**
+   * Where to go to see archived issues, and whether they are already showing.
+   * `Issue.active` was filterable long before anything could write it; now that
+   * archiving exists, the list needs a door to what it hides.
+   */
+  archivedHref?: string
+  showingArchived?: boolean
 }
 
 export type IssueCreateModalOptions = {
@@ -69,7 +76,7 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
   const groups = options.groups ?? []
   const fields = options.fields ?? []
   const locale = options.locale ?? ''
-  const hasActions = options.createHref || frame.extras?.['topbar.end'] !== undefined
+  const hasActions = options.createHref || options.archivedHref || frame.extras?.['topbar.end'] !== undefined
 
   return shell(
     _,
@@ -82,6 +89,19 @@ export const issuesScreen = (_: Translator, frame: Frame, options: ProjectIssues
       actions={
         hasActions
           ? inline([
+              options.archivedHref ? (
+                <LinkButton
+                  label={_(
+                    options.showingArchived
+                      ? 'flow_backend.issue.hideArchived'
+                      : 'flow_backend.issue.showArchived',
+                  )}
+                  href={options.archivedHref}
+                  variant="secondary"
+                />
+              ) : (
+                ''
+              ),
               options.createHref ? (
                 <LinkButton
                   label={_('flow_backend.action.create')}

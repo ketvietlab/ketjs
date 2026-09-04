@@ -55,3 +55,72 @@ test('project settings route preserves stable rejected modal state and explicit 
   assert.match(rejectedHtml, /data-ui="form-errors" role="alert"/)
   assert.equal((await app.client.post(path, new URLSearchParams({ action: 'unknown' }), post)).status, 400)
 })
+
+test('project settings route edits the project record and archives it', async (t) => {
+  const app = await boot(t)
+  const path = '/admin/flow/projects/platform/settings?lang=en'
+  const opened = await (await app.client.get(path)).text()
+  // The three fields only the create form has ever offered.
+  assert.match(opened, /name="name"[^>]*value="Platform"/)
+  assert.match(opened, /name="key"[^>]*value="PLAT"/)
+  assert.match(opened, /value="archiveProject"/)
+
+  const renamed = await app.client.request(path, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({
+      action: 'saveProject',
+      name: 'Internal platform',
+      key: 'PLAT',
+      description: 'What we build on.',
+      idempotencyKey: 'settings-profile-1',
+    }),
+  })
+  assert.equal(renamed.status, 303)
+  assert.match(await (await app.client.get(path)).text(), /name="name"[^>]*value="Internal platform"/)
+
+  const archived = await app.client.request(path, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({ action: 'archiveProject' }),
+  })
+  assert.equal(archived.status, 303)
+  // Off the ordinary list, and findable in the tab that says so.
+  const list = '/admin/flow/projects?lang=en'
+  assert.doesNotMatch(await (await app.client.get(list)).text(), /Internal platform/)
+  assert.match(await (await app.client.get(`${list}&archived=1`)).text(), /Internal platform/)
+
+  const restored = await app.client.request(path, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({ action: 'restoreProject' }),
+  })
+  assert.equal(restored.status, 303)
+  assert.match(await (await app.client.get(list)).text(), /Internal platform/)
+})
+
+test('project settings route says how far the tag buttons reach before they are pressed', async (t) => {
+  const app = await boot(t)
+  const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+    (await app.client.call<T>(name, input)).value
+  await call('flow.column.save', {
+    values: { id: 'todo', projectId: 'platform', code: 'todo', name: 'To do', sequence: 10 },
+    idempotencyKey: 'column-todo',
+  })
+  await call('flow.tag.save', { id: 'tech-debt', name: 'tech debt' })
+  for (const id of ['issue-a', 'issue-b'])
+    await call('flow.issue.save', {
+      id,
+      projectId: 'platform',
+      columnId: 'todo',
+      title: id,
+      tagIds: ['tech-debt'],
+      idempotencyKey: `issue-${id}`,
+    })
+
+  const html = await (await app.client.get('/admin/flow/projects/platform/settings?lang=en')).text()
+  // Tags are company-scope by design; this block is inside one project's
+  // settings, so the reach of the button has to be on screen beside it.
+  assert.match(html, /Tags belong to the company, not to this project/)
+  assert.match(html, /2 issues/)
+})

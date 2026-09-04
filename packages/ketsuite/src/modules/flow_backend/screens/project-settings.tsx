@@ -40,6 +40,20 @@ export type SettingsScreenOptions = {
   editTagHref: (row: AnyRow) => string
   editor?: SettingsEditor
   brief: JSXChild
+  /** Name, key and description — the fields only the create form ever offered. */
+  profile: FormField[]
+  profileErrors?: readonly string[]
+  /** Whether this project is archived, so the button offers the other direction. */
+  archived: boolean
+  /**
+   * How many issues in the company carry each tag.
+   *
+   * Tags are company-scope by design (FLW-DEC-006) and this block sits in a
+   * *project's* settings, beside three blocks that really are the project's.
+   * The count is what makes the difference visible before somebody archives a
+   * tag here and clears it from every project at once.
+   */
+  tagUsage: Record<string, number>
 }
 
 const editAction = (_: Translator, href: string): TemplateResult => (
@@ -74,6 +88,34 @@ export const settingsScreen = (
       title={projectName}
       frame={frame}
       body={stack([
+        <Section
+          title={_('flow_backend.settings.profile')}
+          description={_('flow_backend.settings.profileHint')}
+          body={stack([
+            <RecordForm
+              action={options.endpoint}
+              hidden={{ action: 'saveProject' }}
+              fields={options.profile}
+              errors={options.profileErrors}
+              submit={_('flow_backend.action.save')}
+              submitVariant="primary"
+            />,
+            // Archiving a project is not deleting it, and it is reversible from
+            // the same button — which is why the list needs a way to show
+            // archived projects, and why this is not a destructive-only action.
+            <RecordForm
+              action={options.endpoint}
+              hidden={{ action: options.archived ? 'restoreProject' : 'archiveProject' }}
+              fields={[]}
+              submit={_(
+                options.archived ? 'flow_backend.action.restore' : 'flow_backend.settings.archiveProject',
+              )}
+              submitVariant={options.archived ? 'secondary' : 'destructive'}
+              submitSize="compact"
+              layout="inline"
+            />,
+          ])}
+        />,
         <Section title={_('flow_backend.settings.brief')} body={options.brief} />,
         <Section
           title={_('flow_backend.settings.columns')}
@@ -229,6 +271,7 @@ export const settingsScreen = (
         />,
         <Section
           title={_('flow_backend.settings.tags')}
+          description={_('flow_backend.settings.tagsScope')}
           actions={createAction(_, options.createHref.tag)}
           body={
             options.tags.length
@@ -241,6 +284,14 @@ export const settingsScreen = (
                       label: _('flow_backend.field.name'),
                       priority: 'primary',
                       cell: (row) => String(row.name),
+                    },
+                    {
+                      key: 'usage',
+                      label: _('flow_backend.settings.tagUsage'),
+                      cell: (row) =>
+                        _('flow_backend.settings.tagUsageCount', {
+                          count: options.tagUsage[String(row.id)] ?? 0,
+                        }),
                     },
                     {
                       key: 'edit',

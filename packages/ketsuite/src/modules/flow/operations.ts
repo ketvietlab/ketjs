@@ -1163,6 +1163,87 @@ export async function addComment(
  * Answers ok when there was nothing to remove, because "I do not want these"
  * is satisfied either way.
  */
+/**
+ * Take an issue off the board without pretending it was finished.
+ *
+ * `Issue.active` has been in the model and in four indexes since Flow was
+ * written, `issue.list` has taken `includeArchived`, and nothing has ever
+ * written `false` — so the only way to clear a cancelled task was to drop it in
+ * the done column, which made every progress figure lie about it.
+ *
+ * Under compare-and-set, unlike `page.archive`: an issue carries a version
+ * because two people work the same one, and archiving from a stale screen is
+ * exactly the kind of mistake that guard exists for.
+ *
+ * What archiving is *not*: it is not completion and it is not deletion.
+ * Dependencies stay, so an archived blocker still blocks — silently unblocking
+ * work is the worst way to clear a blocker (FLW-DEC-011). Sub-tasks keep their
+ * parent, so restoring a parent restores the branch as it was.
+ */
+export async function archiveIssue(
+  ctx: Ctx,
+  input: { id: string; expectedVersion: number; idempotencyKey: string },
+): Promise<FlowResult> {
+  return setIssueActive(ctx, input, false)
+}
+
+/**
+ * Put it back, exactly where it was.
+ *
+ * Unlike `page.restore` this needs no reparenting rule: a sub-task of an
+ * archived parent is still listed on every board and list of its own, so it
+ * cannot come back invisible the way a page under an archived page would.
+ */
+export async function restoreIssue(
+  ctx: Ctx,
+  input: { id: string; expectedVersion: number; idempotencyKey: string },
+): Promise<FlowResult> {
+  return setIssueActive(ctx, input, true)
+}
+
+async function setIssueActive(
+  ctx: Ctx,
+  input: { id: string; expectedVersion: number; idempotencyKey: string },
+  active: boolean,
+): Promise<FlowResult> {
+  if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
+  if (!commandKey(input.idempotencyKey))
+    return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
+  return ctx.tx(async (tx) => {
+    const held = (await tx.db.select('flow.Issue', { id: input.id }))[0]
+    if (!held) return invalid(issue('id', 'flow.error.notFound'))
+    // Already where the caller wants it: say so rather than burning a version.
+    if (Boolean(held.active) === active) return { ok: true, id: input.id, version: n(held.version) }
+    if (n(held.version) !== input.expectedVersion)
+      return invalid(issue('version', 'flow.error.conflict', { current: held.version }))
+    const version = n(held.version) + 1
+    await tx.db.update('flow.Issue', { id: input.id }, { active, version, updatedAt: now() })
+    return { ok: true, id: input.id, version }
+  })
+}
+
+/**
+ * Follow an issue on purpose, rather than by being assigned it, commenting on
+ * it or being named in it.
+ *
+ * Those three are how everybody who follows an issue got there, and `unfollow`
+ * was the only door in the other direction. Somebody who wanted to watch
+ * another person's work had to comment on it — which is noise in the timeline —
+ * or ask to be mentioned.
+ */
+export async function startFollowing(
+  ctx: Ctx,
+  input: { issueId: string; idempotencyKey: string },
+): Promise<FlowResult> {
+  if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
+  if (!commandKey(input.idempotencyKey))
+    return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
+  const held = (await ctx.db.select('flow.Issue', { id: input.issueId }))[0]
+  if (!held) return invalid(issue('issueId', 'flow.error.notFound'))
+  await followIssue(ctx, held.threadId, ctx.actor)
+  return { ok: true, id: input.issueId }
+}
+
 export async function stopFollowing(
   ctx: Ctx,
   input: { issueId: string; idempotencyKey: string },
