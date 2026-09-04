@@ -84,7 +84,7 @@ const boot = async (t: TestContext) => {
   return e2e
 }
 
-test('staff quality channel preserves canonical photo evidence through submission', async (t) => {
+const preservesPhotoEvidence = async (t: TestContext, submissionKeys: readonly string[]) => {
   const e2e = await boot(t)
   assert.equal((await e2e.client.get(`/api/staff/v1/quality/checks/${requirementId}`)).status, 401)
   await e2e.client.login({ login: 'quality-user', password: 'correct horse battery' })
@@ -152,8 +152,9 @@ test('staff quality channel preserves canonical photo evidence through submissio
     ],
   })
   const submissions = await Promise.all(
-    ['quality-submit-1', 'quality-submit-racing'].map((key) =>
-      e2e.client.request(`/api/staff/v1/quality/checks/${requirementId}/submit`, {
+    submissionKeys.map(async (key) => ({
+      key,
+      response: await e2e.client.request(`/api/staff/v1/quality/checks/${requirementId}/submit`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -163,10 +164,13 @@ test('staff quality channel preserves canonical photo evidence through submissio
         },
         body: submitBody,
       }),
-    ),
+    })),
   )
-  assert.deepEqual(submissions.map((response) => response.status).sort(), [200, 409])
-  const submit = submissions.find((response) => response.status === 200)!
+  assert.deepEqual(submissions.map(({ response }) => response.status).sort(), [200, 409])
+  const { key: successfulKey, response: submit } = submissions.find(
+    ({ response }) => response.status === 200,
+  )!
+  const { key: conflictingKey } = submissions.find(({ response }) => response.status === 409)!
   const completed = (await submit.json()) as Envelope<Row>
   assert.equal(completed.data.state, 'passed')
   assert.equal((completed.data.attempt as Row).outcome, 'passed')
@@ -176,7 +180,9 @@ test('staff quality channel preserves canonical photo evidence through submissio
   assert.equal((canonical.data.attempts as Row[]).length, 1)
 
   // Two different keys racing is a conflict; the same key arriving twice is one
-  // command. Submitting moves the check version and the route derives the
+  // command. Either request can win, regardless of its position in Promise.all.
+  // Replay the successful request's key, not the first key in the input array.
+  // Submitting moves the check version and the route derives the
   // revision it sends from live state, so a replay both fails the precondition
   // and hashes differently under its own key — it used to be answered
   // `idempotencyConflict`, telling a caller its own successful submission had
@@ -186,7 +192,7 @@ test('staff quality channel preserves canonical photo evidence through submissio
     headers: {
       'content-type': 'application/json',
       'x-csrf-token': bootstrap.data.csrfToken,
-      'idempotency-key': 'quality-submit-1',
+      'idempotency-key': successfulKey,
       'if-match': `"${String(uploaded.data.expectedCheckVersion)}"`,
     },
     body: submitBody,
@@ -195,6 +201,21 @@ test('staff quality channel preserves canonical photo evidence through submissio
   const replayed = (await retried.json()) as Envelope<Row>
   assert.equal((replayed.data.attempt as Row).publicId, (completed.data.attempt as Row).publicId)
   assert.equal(replayed.data.state, 'passed')
+  const conflictingRetry = await e2e.client.request(`/api/staff/v1/quality/checks/${requirementId}/submit`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-csrf-token': bootstrap.data.csrfToken,
+      'idempotency-key': conflictingKey,
+      'if-match': `"${String(uploaded.data.expectedCheckVersion)}"`,
+    },
+    body: submitBody,
+  })
+  assert.equal(conflictingRetry.status, 409)
+  assert.equal(
+    ((await conflictingRetry.json()) as Envelope<null>).error?.code,
+    'quality_staff_channel.versionConflict',
+  )
   assert.equal(
     (
       (await e2e.client.json<Envelope<Row>>(`/api/staff/v1/quality/checks/${requirementId}`)).data
@@ -225,4 +246,12 @@ test('staff quality channel preserves canonical photo evidence through submissio
   })
   assert.equal(photoRetry.status, 200, await photoRetry.clone().text())
   assert.equal(((await photoRetry.json()) as Envelope<Row>).data.uploadPublicId, uploaded.data.uploadPublicId)
-})
+}
+
+for (const submissionKeys of [
+  ['quality-submit-1', 'quality-submit-racing'],
+  ['quality-submit-racing', 'quality-submit-1'],
+]) {
+  test(`staff quality channel preserves canonical photo evidence through submission (${submissionKeys[0]} first)`, (t) =>
+    preservesPhotoEvidence(t, submissionKeys))
+}
