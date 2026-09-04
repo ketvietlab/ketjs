@@ -84,7 +84,7 @@ test('partner statement HTTP keeps exact totals while paging, searching, and fil
   const html = clean(await response.text())
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
   assert.equal((html.match(/data-ui="row"/g) ?? []).length, 30)
   assert.equal((html.match(/data-ui="record-fact-value">[^<]*32[,.]000/g) ?? []).length, 2)
   assert.match(html, /data-ui="pager-range">1-30 \/ 32</)

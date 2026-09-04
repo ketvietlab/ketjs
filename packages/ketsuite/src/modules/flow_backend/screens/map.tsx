@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { Framed, inline, linkButton } from '../../../ui/index.ts'
+import { WorkspaceScreen, inline, linkButton } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 export type EpicMapScreenOptions = {
@@ -13,7 +13,8 @@ export type EpicMapScreenOptions = {
 
 /** The dependency atlas remains the workspace; its frame only restores identity and escape paths. */
 export const mapScreen = (_: Translator, frame: Frame, options: EpicMapScreenOptions): TemplateResult => (
-  <Framed
+  <WorkspaceScreen
+    layout="canvas"
     translator={_}
     title={options.epicTitle}
     subtitle={options.projectName}

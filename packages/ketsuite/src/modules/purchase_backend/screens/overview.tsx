@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { CardGrid, ContentCard, Framed, inline, linkButton, Metric, stack } from '../../../ui/index.ts'
+import { CardGrid, DashboardPage, linkButton, Metric, shell, stack } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import { missingSetup } from './shared.tsx'
@@ -29,20 +29,20 @@ export const purchaseOverviewScreen = (
   setup?: PurchaseOverviewSetup,
 ): TemplateResult => {
   const count = (states: string[]) => orders.filter((row) => states.includes(String(row.state))).length
-  return (
-    <Framed
-      translator={_}
-      title={_('purchase_backend.dashboard.title')}
+  return shell(
+    _,
+    _('purchase_backend.dashboard.title'),
+    <DashboardPage
+      variant="operational"
       frame={frame}
+      title={_('purchase_backend.dashboard.title')}
+      actions={linkButton({
+        label: _('purchase_backend.action.createRfq'),
+        href: localized('/admin/purchase/rfqs/new', locale),
+        variant: 'primary',
+      })}
       body={stack([
         setup ? missingSetup(_, setup) : null,
-        inline([
-          linkButton({
-            label: _('purchase_backend.action.createRfq'),
-            href: localized('/admin/purchase/rfqs/new', locale),
-            variant: 'primary',
-          }),
-        ]),
         <CardGrid
           items={[
             {
@@ -77,15 +77,10 @@ export const purchaseOverviewScreen = (
             },
           ]}
           id={(item) => item.id}
-          card={(item) => (
-            <ContentCard
-              title={item.title}
-              href={item.href}
-              body={<Metric label={_('purchase_backend.dashboard.records')} value={String(item.value)} />}
-            />
-          )}
+          card={(item) => <Metric label={item.title} value={String(item.value)} href={item.href} />}
         />,
       ])}
-    />
+    />,
+    { ...frame, topbar: false },
   )
 }

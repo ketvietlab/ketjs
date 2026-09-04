@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { emptyState, Framed, stack } from '../../../ui/index.ts'
+import { emptyState, ListScreen, stack } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 import { stockRowsTable } from './shared.tsx'
 import type { StockRow } from './shared.tsx'
@@ -14,7 +14,7 @@ export const stockScreen = (
   additions: readonly JSXChild[] = [],
   showEmpty = true,
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={title}
     frame={frame}

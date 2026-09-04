@@ -40,6 +40,8 @@ export const vendorPricelistCreateScreen = (
     _,
     _('purchase_backend.action.addVendorPrice'),
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="purchase-vendor-pricelist-create"
       title={_('purchase_backend.action.addVendorPrice')}
       description={_('purchase_backend.pricelists.title')}

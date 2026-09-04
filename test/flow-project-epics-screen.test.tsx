@@ -60,10 +60,11 @@ test('flow project epics: specialized cards preserve project identity, backlog p
   const html = renderToString(epicsScreen(translate, {}, options))
   const textContent = html.replace(/<!--k\[?-->/g, '')
 
-  assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
-  assert.match(textContent, /data-ui="record-heading">Internal platform/)
-  assert.match(textContent, /data-ui="record-subtitle">Epics/)
+  assert.match(html, /data-ui="board-page"[^>]*data-variant="operational"/)
+  assert.match(html, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="modal-layer"/)
+  assert.match(textContent, /data-ui="board-page-title">Internal platform/)
+  assert.match(textContent, /data-ui="board-page-eyebrow">Epics/)
   assert.match(html, /data-ui="kanban"/)
   assert.match(html, /data-ui="kanban-card" data-interactive="true"/)
   assert.match(html, /href="\/admin\/flow\/epics\/release-one\?lang=en"/)
@@ -93,7 +94,7 @@ test('flow project epics: rejected two-field create stays in its URL-owned modal
     ),
   )
 
-  assert.match(html, /data-ui="record-workspace"/)
+  assert.match(html, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.match(html, /data-ui="kanban"/)
   assert.match(html, /data-ui="modal-layer" data-route-modal="true"/)
   assert.match(html, /id="flow-project-epic-create-form"/)

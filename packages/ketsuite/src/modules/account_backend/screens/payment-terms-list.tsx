@@ -161,6 +161,8 @@ export const paymentTermsListScreen = (
     _,
     _('account_backend.terms.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.terms.title')}
       description={_('account_backend.term.subtitle')}
       actions={inline([

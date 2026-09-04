@@ -65,6 +65,8 @@ export const companiesListScreen = (
     _,
     _('company_backend.screen.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('company_backend.screen.title')}
       description={_('company_backend.screen.subtitle')}
       actions={inline([

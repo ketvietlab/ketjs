@@ -108,7 +108,7 @@ test('sales quotations list: preserves state, columns, reports and ListPage cont
   assert.match(html, /href="\/admin\/sales\/quotations\/new\?state=draft&amp;lang=vi"/)
   assert.match(
     html,
-    /Tổng báo giá: 18 · Bản nháp: 1 · Đã gửi: 1 · Đã huỷ: 1[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?Tổng báo giá: 18 · Bản nháp: 1 · Đã gửi: 1 · Đã huỷ: 1/,
   )
   assert.match(html, /data-col="name"[\s\S]*?S00001/)
   assert.match(html, /data-col="customer"[\s\S]*?Khách hàng Minh Anh/)

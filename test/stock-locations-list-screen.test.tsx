@@ -79,7 +79,7 @@ test('stock locations list: keeps hierarchy, columns, search and pager in ListPa
   assert.match(html, /data-ui="list-page-actions"[\s\S]*?href="\/admin\/stock\/locations\/new\?lang=vi"/)
   assert.match(
     html,
-    /data-ui="list-page-toolbar"[\s\S]*?Cây vị trí: 24[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?Cây vị trí: 24/,
   )
   assert.match(html, /Kho trung tâm \/ Tồn kho \/ Kệ A-01/)
   assert.match(html, /data-col="usage"[\s\S]*?Nội bộ/)

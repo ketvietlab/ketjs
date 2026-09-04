@@ -131,10 +131,11 @@ test('flow epic dependency map: exact lookup, complete graph, locale, compatibil
   const textContent = html.replace(/<!--k\[?-->/g, '')
 
   assert.equal(response.status, 200)
-  assert.match(html, /data-ui="record-workspace"/)
+  assert.match(html, /data-ui="board-page"[^>]*data-pattern="workspace"/)
+  assert.match(html, /data-ui="board-page-context"[\s\S]*data-ui="breadcrumbs"/)
   assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
   assert.match(html, /data-island="flow.map"/)
-  assert.match(textContent, /data-ui="record-heading">Epic 081/)
+  assert.match(textContent, /data-ui="board-page-title">Epic 081/)
   assert.match(textContent, /Internal platform/)
   assert.equal(html.match(/data-ui="flow-map-node"/g)?.length, 201)
   assert.equal(html.match(/data-ui="flow-map-edge"/g)?.length, 1)

@@ -21,6 +21,8 @@ export const inboundScreen = (_: Translator, frame: Frame, options: InboundScree
     _,
     _('mail_inbound_backend.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('mail_inbound_backend.title')}
       description={_('mail_inbound_backend.subtitle')}
       actions={frame.extras?.['topbar.end']}

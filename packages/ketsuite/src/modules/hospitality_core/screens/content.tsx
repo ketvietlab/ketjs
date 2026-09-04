@@ -7,7 +7,7 @@ import {
   emptyState,
   FormCluster,
   type Frame,
-  Framed,
+  WorkspaceScreen,
   MediaPanel,
   Metric,
   type PropertyRow,
@@ -52,7 +52,7 @@ export const contentScreen = (
   const suffix = query ? `?${query}` : ''
 
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('hospitality_core.screen.content.title')}
       frame={frame}

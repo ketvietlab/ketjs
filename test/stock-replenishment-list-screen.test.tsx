@@ -78,7 +78,7 @@ test('stock replenishment list: preserves operational columns and actions in Lis
   assert.match(html, /href="\/admin\/stock\/replenishment\/new\?lang=vi"/)
   assert.match(
     html,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?Tổng quy tắc: 14[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?Tổng quy tắc: 14/,
   )
   assert.match(html, /data-col="product"[\s\S]*?Vải denim xanh/)
   assert.match(html, /data-col="location"[\s\S]*?Kho trung tâm · Tồn kho/)

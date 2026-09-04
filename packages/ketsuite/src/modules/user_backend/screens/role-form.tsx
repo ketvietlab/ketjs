@@ -66,6 +66,8 @@ export const roleScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="role-form-page"
       title={title}
       description={_('user_backend.roles.subtitle')}

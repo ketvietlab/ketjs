@@ -128,6 +128,8 @@ export const vendorBillsListScreen = (
     _,
     _('account_backend.vendorBills.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.vendorBills.title')}
       description={_('account_backend.vendorBill.subtitle')}
       actions={inline([

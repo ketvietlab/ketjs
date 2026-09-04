@@ -127,7 +127,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   )
   assert.match(
     partnerList,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?2 đối tác[\s\S]*?data-ui="list-page-controls"/,
+    /data-ui="list-page-controls"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?2 đối tác/,
   )
   assert.match(partnerList, /data-ui="search-menu"/)
   assert.match(partnerList, /data-ui="select-all"/)

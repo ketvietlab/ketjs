@@ -61,6 +61,8 @@ export const journalFormScreen = (_: Translator, options: JournalFormScreenOptio
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-journal-form-page"
       title={title}
       description={

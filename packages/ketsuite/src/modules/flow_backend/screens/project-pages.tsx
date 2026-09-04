@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { DocTree, Framed, LinkButton, modalForm, modalWorkspace, Section } from '../../../ui/index.ts'
+import { DocTree, ListScreen, LinkButton, modalForm, modalWorkspace, Section } from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
@@ -68,7 +68,7 @@ export const pagesScreen = (
   options: ProjectPagesScreenOptions,
 ): TemplateResult => {
   const workspace = (
-    <Framed
+    <ListScreen
       translator={_}
       title={options.projectName}
       subtitle={_('flow_backend.pages.title')}

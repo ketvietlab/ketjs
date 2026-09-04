@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  Framed,
+  WorkspaceScreen,
   RecordActions,
   RecordForm,
   Section,
@@ -41,7 +41,7 @@ export const rosterScreen = (
   const roster = options.rows[0]
   const shifts = (roster?.shifts as R[] | undefined) ?? []
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('hr_backend.roster.title')}
       frame={frame}

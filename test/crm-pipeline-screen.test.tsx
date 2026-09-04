@@ -86,7 +86,10 @@ test('crm pipeline: keeps specialized chrome, figures and the route-owned board 
     ),
   )
 
-  assert.match(rendered, /data-ui="record-workspace"/)
+  assert.match(rendered, /data-ui="board-page"[^>]*data-variant="operational"/)
+  assert.match(rendered, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(rendered, /data-ui="board-page-toolbar"/)
+  assert.doesNotMatch(rendered, /data-ui="record-workspace"/)
   assert.match(rendered, /data-ui="chrome-search-input"[^>]*name="q"[^>]*value="May mặc"/)
   assert.match(rendered, /type="hidden"[^>]*name="teamId"[^>]*value="north"/)
   assert.match(rendered, /type="hidden"[^>]*name="mine"[^>]*value="1"/)
@@ -106,6 +109,7 @@ test('crm pipeline: keeps specialized chrome, figures and the route-owned board 
 test('crm pipeline: leaves the board available when summary permission hides figures', () => {
   const rendered = renderToString(pipelineScreen(translate, {}, board))
 
+  assert.match(rendered, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(rendered, /data-ui="metric"/)
   assert.match(rendered, /data-island="crm.pipeline"/)
   assert.match(rendered, /data-empty-label="Chưa có lead hoặc cơ hội"/)

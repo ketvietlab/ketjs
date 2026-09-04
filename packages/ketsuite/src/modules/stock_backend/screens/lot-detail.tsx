@@ -138,6 +138,8 @@ export const lotDetailScreen = (
   const description = `${options.lot.productLabel}${options.lot.ref ? ` · ${options.lot.ref}` : ''}`
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="stock-lot-form-page"
       title={options.lot.name}
       description={description}

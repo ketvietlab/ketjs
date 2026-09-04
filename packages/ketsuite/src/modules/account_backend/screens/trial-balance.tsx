@@ -6,7 +6,7 @@ import {
   DatePicker,
   emptyState,
   formatMoney,
-  Framed,
+  ListScreen,
   icon,
   linkButton,
   Notice,
@@ -93,7 +93,7 @@ export const trialBalanceScreen = (_: Translator, options: TrialBalanceScreenOpt
   )
 
   return (
-    <Framed
+    <ListScreen
       translator={_}
       title={_('account_backend.trialBalance.title')}
       frame={options.frame}

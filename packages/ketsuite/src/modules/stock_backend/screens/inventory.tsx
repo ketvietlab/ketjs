@@ -5,7 +5,7 @@ import {
   code,
   dataTable,
   emptyState,
-  Framed,
+  RecordScreen,
   icon,
   linkButton,
   Notice,
@@ -170,7 +170,7 @@ export const inventoryScreen = (
   )
 
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={_('stock_backend.inventory')}
       frame={frame}

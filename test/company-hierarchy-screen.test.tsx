@@ -40,5 +40,6 @@ test('company hierarchy remains specialized with encoded rows, lifecycle state a
   assert.match(html, /data-tone="neutral" data-value="archived"/)
   assert.match(html, /href="\/admin\/companies\?lang=en"/)
   assert.match(html, /href="\/admin\/companies\/new\?lang=en"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
+  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"/)
 })

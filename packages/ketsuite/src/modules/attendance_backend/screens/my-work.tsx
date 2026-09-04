@@ -5,7 +5,7 @@ import {
   dataTable,
   DefinitionList,
   emptyState,
-  Framed,
+  WorkspaceScreen,
   inline,
   LinkButton,
   modalForm,
@@ -134,7 +134,7 @@ export const myWorkScreen = (
 ): TemplateResult => {
   const onClock = options.clock.onClock === true
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('attendance_backend.my.title')}
       frame={frame}

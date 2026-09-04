@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { Framed, Section } from '../../../ui/index.ts'
+import { BoardPage, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 export const boardScreen = (
@@ -8,11 +8,8 @@ export const boardScreen = (
   frame: Frame,
   projectName: string,
   board: JSXChild,
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={projectName}
-    frame={frame}
-    body={<Section title={projectName} body={board} />}
-  />
-)
+): TemplateResult =>
+  shell(_, projectName, <BoardPage variant="operational" frame={frame} title={projectName} body={board} />, {
+    ...frame,
+    topbar: false,
+  })

@@ -277,6 +277,8 @@ export const purchaseOrderDetailScreen = (
   const bills = order.bills ?? []
   const page = (
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="purchase-order-form-page"
       title={String(order.name)}
       description={description}

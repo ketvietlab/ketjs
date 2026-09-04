@@ -7,10 +7,11 @@ import {
   actionGroup,
   ContentCard,
   dataTable,
+  DashboardPage,
   DefinitionList,
   Delta,
   emptyState,
-  Framed,
+  ListScreen,
   icon,
   linkButton,
   Metric,
@@ -18,10 +19,13 @@ import {
   RecordActions,
   RecordForm,
   RecordWorkspace,
+  RecordScreen,
   Section,
+  shell,
   stack,
   Surface,
   Tabs,
+  WorkspaceScreen,
 } from '../../../ui/index.ts'
 import type { FormField, Frame, Tone } from '../../../ui/index.ts'
 import { selectionLabel } from '../../backend/screen.ts'
@@ -161,56 +165,54 @@ export const dashboardScreen = (
   _: Translator,
   frame: Frame,
   stats: { programs: number; wallets: number; members: number; ledger: number },
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('loyalty_backend.dashboard.title')}
-    frame={frame}
-    body={stack([
-      <CardGrid
-        items={[
-          {
-            id: 'programs',
-            title: _('loyalty_backend.menu.programs'),
-            value: stats.programs,
-            href: '/admin/loyalty/programs',
-          },
-          {
-            id: 'wallets',
-            title: _('loyalty_backend.menu.wallets'),
-            value: stats.wallets,
-            href: '/admin/loyalty/wallets',
-          },
-          {
-            id: 'members',
-            title: _('loyalty_backend.menu.memberships'),
-            value: stats.members,
-            href: '/admin/loyalty/memberships',
-          },
-          {
-            id: 'ledger',
-            title: _('loyalty_backend.menu.ledger'),
-            value: stats.ledger,
-            href: '/admin/loyalty/ledger',
-          },
-        ]}
-        id={(item) => item.id}
-        card={(item) => (
-          <ContentCard
-            title={item.title}
-            href={item.href}
-            body={<Metric label={_('loyalty_backend.dashboard.records')} value={String(item.value)} />}
-          />
-        )}
-      />,
-      <Notice
-        title={_('loyalty_backend.dashboard.ledgerTitle')}
-        message={_('loyalty_backend.dashboard.ledgerHint')}
-        tone="info"
-      />,
-    ])}
-  />
-)
+): TemplateResult =>
+  shell(
+    _,
+    _('loyalty_backend.dashboard.title'),
+    <DashboardPage
+      variant="operational"
+      frame={frame}
+      title={_('loyalty_backend.dashboard.title')}
+      body={stack([
+        <CardGrid
+          items={[
+            {
+              id: 'programs',
+              title: _('loyalty_backend.menu.programs'),
+              value: stats.programs,
+              href: '/admin/loyalty/programs',
+            },
+            {
+              id: 'wallets',
+              title: _('loyalty_backend.menu.wallets'),
+              value: stats.wallets,
+              href: '/admin/loyalty/wallets',
+            },
+            {
+              id: 'members',
+              title: _('loyalty_backend.menu.memberships'),
+              value: stats.members,
+              href: '/admin/loyalty/memberships',
+            },
+            {
+              id: 'ledger',
+              title: _('loyalty_backend.menu.ledger'),
+              value: stats.ledger,
+              href: '/admin/loyalty/ledger',
+            },
+          ]}
+          id={(item) => item.id}
+          card={(item) => <Metric label={item.title} value={String(item.value)} href={item.href} />}
+        />,
+        <Notice
+          title={_('loyalty_backend.dashboard.ledgerTitle')}
+          message={_('loyalty_backend.dashboard.ledgerHint')}
+          tone="info"
+        />,
+      ])}
+    />,
+    { ...frame, topbar: false },
+  )
 
 /**
  * The programs, and where each one stands today.
@@ -1023,7 +1025,7 @@ export const membershipsScreen = (
   configFields: FormField[],
   errors: string[] = [],
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('loyalty_backend.memberships.title')}
     subtitle={_('loyalty_backend.memberships.hint')}
@@ -1195,7 +1197,7 @@ export const orderLoyaltyScreen = (
   const programs = (options.result.programs as AnyRow[] | undefined) ?? []
   const action = `/admin/loyalty/orders/${options.channel}/${options.orderId}`
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={_('loyalty_backend.order.title', { order: options.orderName })}
       frame={frame}
@@ -1313,7 +1315,7 @@ export const portalScreen = (_: Translator, frame: Frame, summary: AnyRow): Temp
   const wallets = (summary.wallets as AnyRow[] | undefined) ?? []
   const ledger = (summary.ledger as AnyRow[] | undefined) ?? []
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('loyalty_backend.portal.title')}
       frame={frame}

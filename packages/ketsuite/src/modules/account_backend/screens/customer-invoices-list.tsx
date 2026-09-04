@@ -133,6 +133,8 @@ export const customerInvoicesListScreen = (
     _,
     _('account_backend.customerInvoices.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.customerInvoices.title')}
       description={_('account_backend.customerInvoice.subtitle')}
       actions={inline([

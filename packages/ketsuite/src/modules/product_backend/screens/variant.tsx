@@ -139,6 +139,8 @@ export const variantScreen = (
   const archived = row.active === false
   const page = (
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="product-variant-form-page"
       title={title}
       description={subtitle}

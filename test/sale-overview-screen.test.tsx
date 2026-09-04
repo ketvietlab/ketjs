@@ -78,8 +78,9 @@ test('sales overview: remains a specialized KPI, pipeline and recent-work dashbo
     }),
   )
 
-  assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(html, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
+  assert.match(html, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="record-workspace"/)
   assert.match(html, /Tổng quan bán hàng/)
   assert.match(html, /href="\/admin\/sales\/quotations\/new\?lang=vi"/)
   assert.match(html, /href="\/admin\/sales\/quotations\?lang=vi&amp;state=draft"/)

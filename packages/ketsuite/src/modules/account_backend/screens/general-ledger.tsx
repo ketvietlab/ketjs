@@ -5,7 +5,7 @@ import {
   dataTable,
   emptyState,
   formatMoney,
-  Framed,
+  ListScreen,
   icon,
   linkButton,
   RecordForm,
@@ -99,7 +99,7 @@ export const generalLedgerScreen = (_: Translator, options: GeneralLedgerScreenO
   )
 
   return (
-    <Framed
+    <ListScreen
       translator={_}
       title={_('account_backend.generalLedger.title')}
       frame={options.frame}

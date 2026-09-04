@@ -23,6 +23,8 @@ export const transferCreateScreen = (
     _,
     _('stock_backend.transfer.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="transfer-create"
       title={_('stock_backend.transfer.create.title')}
       description={_('stock_backend.transfer.create.hint')}

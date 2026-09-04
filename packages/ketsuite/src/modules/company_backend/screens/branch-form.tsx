@@ -87,6 +87,8 @@ export const branchFormScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="branch-form-page"
       title={title}
       description={`${company.name} · ${company.code} · ${_('company_backend.branch.operational')}`}

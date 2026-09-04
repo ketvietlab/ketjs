@@ -59,7 +59,7 @@ test('trial balance HTTP includes the full end day, sorts accounts and preserves
   const html = await response.text()
   assert.equal(response.status, 200)
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
   assert.match(html, /data-ui="date-picker" method="get" action="\/admin\/accounting\/trial-balance"/)
   assert.match(html, /type="hidden" name="lang" value="vi"/)
   assert.match(html, /name="dateFrom"[^>]*value="2026-06-30"/)

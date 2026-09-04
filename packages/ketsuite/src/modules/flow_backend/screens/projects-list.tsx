@@ -99,6 +99,8 @@ export const projectsListScreen = (
     _,
     title,
     <ListPage
+      variant="operational"
+      frame={frame}
       title={title}
       description={_('flow_backend.projects.subtitle')}
       actions={

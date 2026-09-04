@@ -27,6 +27,8 @@ export const replenishmentCreateScreen = (
     _,
     _('stock_backend.replenishment.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="stock-replenishment-create"
       title={_('stock_backend.replenishment.create.title')}
       description={_('stock_backend.replenishment.create.hint')}

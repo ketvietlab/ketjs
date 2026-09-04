@@ -3,7 +3,7 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   dataTable,
   emptyState,
-  Framed,
+  RecordScreen,
   LinkButton,
   Notice,
   RecordActions,
@@ -40,7 +40,7 @@ export const periodScreen = (
   const entries = (options.period?.entries as R[] | undefined) ?? []
   const state = String(options.period?.state ?? '')
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={_('attendance_backend.admin.title')}
       subtitle={_('attendance_backend.admin.subtitle')}

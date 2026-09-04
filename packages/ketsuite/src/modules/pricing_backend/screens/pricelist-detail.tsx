@@ -45,6 +45,8 @@ export const pricelistDetailScreen = (
     _,
     String(row.name ?? row.id ?? ''),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="pricelist-detail-page"
       title={String(row.name ?? row.id ?? '')}
       description={String(row.currency ?? '')}

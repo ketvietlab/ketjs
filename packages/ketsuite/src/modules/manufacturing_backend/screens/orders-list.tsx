@@ -66,6 +66,8 @@ export const ordersListScreen = (
     _,
     _('manufacturing_backend.orders.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('manufacturing_backend.orders.title')}
       actions={inline([
         <LinkButton

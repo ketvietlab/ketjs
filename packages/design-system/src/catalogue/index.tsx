@@ -7,8 +7,10 @@ import { Field } from '../primitives/field.tsx'
 import { NavList, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
 import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
-import { AppShell, Page, PageHeader, RecordPage, RecordSection } from '../layouts/shell.tsx'
+import { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from '../layouts/shell.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
+import { BoardPage } from '../patterns/board-page.tsx'
+import { DashboardPage } from '../patterns/dashboard-page.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
 import { FormPage } from '../patterns/form-page.tsx'
 import { ModalSheet } from '../patterns/modal-sheet.tsx'
@@ -383,7 +385,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         description:
           'Sections use separators and spacing instead of a rounded container around the whole record.',
         render: () => (
-          <RecordPage
+          <RecordCanvas
             body={
               <>
                 <PageHeader
@@ -468,6 +470,8 @@ export const componentGroups: readonly ComponentGroup[] = [
           'The canonical collection hierarchy: identity, actions, URL-driven controls, result context and records.',
         render: () => (
           <ListPage
+            variant="operational"
+            context="Sales / Sales orders"
             eyebrow="Sales"
             title="Sales orders"
             description="Review demand, fulfillment and payment state from one operational list."
@@ -504,6 +508,88 @@ export const componentGroups: readonly ComponentGroup[] = [
                     cell: (row) => <Badge label={row.state} tone={toneOf(row.state)} />,
                     kind: 'status',
                   },
+                ]}
+              />
+            }
+          />
+        ),
+      },
+      {
+        id: 'dashboard-page',
+        name: 'Dashboard page',
+        description:
+          'The canonical overview hierarchy: durable context, compact identity, primary action and an uninterrupted analytical canvas.',
+        render: () => (
+          <DashboardPage
+            variant="operational"
+            context="Sales / Overview"
+            eyebrow="Commercial workspace"
+            title="Sales overview"
+            description="Follow demand, confirmed revenue and the work waiting for the team."
+            actions={<Button label="Create quotation" variant="primary" />}
+            body={
+              <Stack
+                gap="loose"
+                items={[
+                  <Grid
+                    columns={4}
+                    items={[
+                      <Metric label="Quotations" value={24} detail="5 new today" />,
+                      <Metric label="Sent" value={9} detail="Awaiting a reply" tone="info" />,
+                      <Metric label="Confirmed" value={18} detail="82,000,000 ₫" tone="positive" />,
+                      <Metric label="To invoice" value={6} detail="Needs attention" tone="warning" />,
+                    ]}
+                  />,
+                  <Section
+                    title="Sales flow"
+                    description="From quotation through to invoicing"
+                    body={
+                      <Pipeline
+                        label="Sales flow"
+                        steps={[
+                          { id: 'draft', label: 'Quotation', value: 24 },
+                          { id: 'sent', label: 'Sent', value: 9, tone: 'info' },
+                          { id: 'confirmed', label: 'Confirmed', value: 18, tone: 'positive' },
+                          { id: 'invoice', label: 'To invoice', value: 6, tone: 'warning' },
+                        ]}
+                      />
+                    }
+                  />,
+                ]}
+              />
+            }
+          />
+        ),
+      },
+      {
+        id: 'board-page',
+        name: 'Board page',
+        description:
+          'The canonical horizontal workspace: durable context, compact identity, global controls and an uninterrupted board canvas.',
+        render: () => (
+          <BoardPage
+            variant="operational"
+            context="CRM / Pipeline"
+            eyebrow="Pipeline"
+            title="Sales opportunities"
+            description="Move active opportunities through the sales process."
+            actions={<Button label="Create opportunity" variant="primary" />}
+            controls={
+              <ActionGroup
+                label="Board controls"
+                actions={[
+                  <LinkButton label="My opportunities" href="#board-page" size="compact" />,
+                  <LinkButton label="All teams" href="#board-page" size="compact" variant="tertiary" />,
+                ]}
+              />
+            }
+            body={
+              <Grid
+                columns={3}
+                items={[
+                  <ContentCard title="Qualified" meta="8 opportunities" body="125,000,000 ₫" />,
+                  <ContentCard title="Proposal" meta="5 opportunities" body="94,000,000 ₫" />,
+                  <ContentCard title="Negotiation" meta="3 opportunities" body="62,000,000 ₫" />,
                 ]}
               />
             }
@@ -558,6 +644,8 @@ export const componentGroups: readonly ComponentGroup[] = [
           'The canonical form hierarchy: record identity and decision first, a stable form column, then durable context.',
         render: () => (
           <FormPage
+            variant="operational"
+            context="Customers / Mùa Hạ Riverside"
             title="Mùa Hạ Riverside"
             description="Customer · CUS-0042"
             status={<Badge label="Active" tone="positive" />}
