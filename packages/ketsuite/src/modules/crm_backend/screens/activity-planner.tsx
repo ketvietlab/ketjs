@@ -145,6 +145,7 @@ export const plannerScreen = (
       variant="operational"
       frame={frame}
       title={_('crm_backend.planner.title')}
+      description={_('crm_backend.planner.subtitle')}
       actions={
         options.tab === 'mine'
           ? linkButton({
