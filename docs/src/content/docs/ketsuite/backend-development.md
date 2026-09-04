@@ -88,6 +88,49 @@ Keep list state in the URL: search terms, filters, grouping, page, view, visible
 and locale should survive a copied link. Reuse the backend paging and search helpers instead of creating
 a module-local query-string convention.
 
+### Page surface hierarchy
+
+All three canonical patterns share component-owned surface roles. A light operational page uses a
+quiet grey context/identity band, controls and page canvas. White belongs to independent cards,
+tables and content/form sections, not a full-width page body or an entire right-hand column.
+`ListPage`, `RecordPage`, and `WorkspacePage` keep their existing header measurements and structure;
+do not implement the hierarchy with a route-local background override or another whole-page card.
+
+| Region | Token / behavior |
+| --- | --- |
+| Context and identity header | `--kv-page-chrome-bg`: page grey in light, existing panel tone in dark |
+| Controls and record tabs | `--kv-page-bg`: continuous quiet navigation band |
+| List and record content canvas | `--kv-page-content-bg` aliases `--kv-page-bg`; the space around content stays grey in light |
+| Workspace canvas, both flow and spatial | `--kv-page-bg`: keep the gaps grey; cards, table surfaces and timelines remain independent objects |
+| Content blocks in every page pattern | Existing `Surface`, `ContentCard`, `Metric` and table tokens own the white fill; compose `Surface` + `Section` for each content/form group, never wrap the whole page in one white surface |
+| Tables | `--kv-table-bg`: opaque white in light; transparent in dark, preserving row hover/selection |
+| Sidebar and record rail | Existing sidebar / subtle panel tokens, separated with low-contrast borders |
+
+For narrow tables, use `DataTable responsive="stack"`: labelled cells stack at 768px and below,
+and row/cell heights grow with their contents. The default `responsive="scroll"` preserves the
+wide table, suitable for spatial schedules and inventory grids. Do not duplicate mobile table CSS
+in consumer modules. Browser coverage must assert cell/row bounds as well as page overflow.
+
+These roles alias the existing palette; they do not add brand colours or change the dark palette.
+`FormPage`, `DashboardPage`, and `BoardPage` are compatibility adapters for the same surface rules, not
+additional page patterns. Do not add new consumers of those adapters.
+
+Open the catalogue's **Review page surfaces** link, or
+`http://127.0.0.1:4100/surfaces?kind=record&theme=light&lang=vi` to inspect a full-page specimen.
+The permalink supports `kind=list|record|flow|canvas`, `lang=en|vi`, `theme=light|dark`, and
+`state=baseline|loading|empty|error|validation|readonly`. Record tabs preserve page padding; optional
+rails and controls can be hidden without leaving empty chrome. Compatibility specimens are available
+as `form-compat`, `dashboard-compat`, and `board-compat` for migration regression checks.
+
+Run targeted component and surface browser coverage when changing these roles:
+
+```sh
+# Run from: ketjs repository root
+npm run build --silent
+node --test .build/test/design-system.test.js
+npm --prefix e2e run test:design-system -- page-surfaces.spec.ts
+```
+
 ### List page layout
 
 Use the design system's `ListPage` as the baseline for an operational collection. The screen provides
