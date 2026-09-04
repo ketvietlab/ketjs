@@ -44,6 +44,14 @@ export type DataTable<R> = {
   shown?: readonly string[]
   colsHref?: (keys: readonly string[]) => string
   groups?: readonly TableGroup<R>[]
+  /**
+   * What a narrow screen does with columns that do not fit. `scroll` keeps the
+   * row horizontal and moves it sideways. `stack` gives each row its own block
+   * and labels every cell, which is the only one of the two that lets a reader
+   * see a value they never scrolled to. The design system styles both; this is
+   * the application table that decides which a screen asks for.
+   */
+  responsive?: 'scroll' | 'stack'
 }
 
 export type TableGroup<R> = {
@@ -130,7 +138,11 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
   const columns = visibleColumns(table)
   const configurable = !!table.colsHref && table.columns.some((column) => column.optional)
   return (
-    <div data-ui="table-scroll" data-gutter={table.gutter ?? null}>
+    <div
+      data-ui="table-scroll"
+      data-gutter={table.gutter ?? null}
+      data-responsive={table.responsive ?? 'scroll'}
+    >
       <table data-ui="table">
         {!!table.caption && <caption data-ui="table-caption">{table.caption}</caption>}
         <thead>
@@ -223,6 +235,7 @@ const rowViews = <R,>(
               data-align={column.align ?? 'start'}
               data-kind={column.kind ?? 'text'}
               data-priority={column.priority ?? 'secondary'}
+              data-label={table.responsive === 'stack' ? column.label : null}
             >
               {table.rowHref && table.rowLink !== false && column === columns[0] ? (
                 <a data-ui="row-link" href={table.rowHref(row)}>

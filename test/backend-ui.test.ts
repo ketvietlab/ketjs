@@ -799,6 +799,27 @@ const STYLESHEETS = [
 
 const ADMIN_CSS = ADMIN_STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
 
+test('backend content: a breadcrumb that has to shrink clips instead of overprinting', () => {
+  // `nowrap` text in a shrinkable flex item keeps its full width and paints over
+  // whatever sits beside it. Clipping only the last crumb left every ancestor
+  // free to do exactly that, which is what long Vietnamese labels did.
+  const trail = ADMIN_CSS.match(
+    /\[data-ui="page-context-trail"\] \[data-ui="breadcrumb"\]\s*\{([^}]+)\}/,
+  )?.[1]
+  assert.match(trail ?? '', /overflow: hidden/, 'every crumb clips, not only the last one')
+  assert.match(trail ?? '', /white-space: nowrap/)
+  assert.match(
+    ADMIN_CSS,
+    /\[data-ui="page-context-trail"\] \[data-ui="breadcrumb"\] > :where\(a, span\)\s*\{[^}]*text-overflow: ellipsis/,
+    'a clipped crumb says it was clipped',
+  )
+  assert.match(
+    ADMIN_CSS,
+    /\[data-ui="page-context-trail"\] \[data-ui="breadcrumb"\]:not\(:last-child\)::after\s*\{[^}]*flex: 0 0 auto/,
+    'the separator is not what gives way',
+  )
+})
+
 test('backend content lets operational page patterns own their spacing', () => {
   assert.match(
     ADMIN_CSS,
