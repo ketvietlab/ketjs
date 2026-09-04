@@ -133,7 +133,10 @@ test('design system: light page surfaces use component roles without changing th
     assert.match(rule ?? '', /background: var\(--kv-page-content-bg\)/, `${kind}-body`)
   }
   assert.match(patterns, /\[data-ui="form-page-aside"\]\s*\{[^}]*background: var\(--kv-panel-bg-subtle\)/)
-  assert.doesNotMatch(patterns, /\[data-ui="form-page-body"\] \[data-ui="surface"\]\s*\{[^}]*background: transparent/)
+  assert.doesNotMatch(
+    patterns,
+    /\[data-ui="form-page-body"\] \[data-ui="surface"\]\s*\{[^}]*background: transparent/,
+  )
 })
 
 test('design system: workspace canvas stays grey between independent white surfaces', () => {
