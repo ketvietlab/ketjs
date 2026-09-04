@@ -12,7 +12,12 @@ const login = async (page: Page, lang: 'vi' | 'en' = 'vi') => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('website-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  // Landing on /admin means landing wherever /admin sends you: it 303s to the
+  // first screen the deployment contributes, so the suite cannot assert which
+  // one without breaking every time a module is added. Every other e2e login
+  // helper in this repository already matches a subpath; this one did not, and
+  // went red when hospitality began sorting first.
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -22,7 +27,7 @@ test.beforeEach(async ({ page }) => login(page))
 test('keeps pages and posts separate while creating, revising and publishing', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Website', exact: true }).first()).toBeVisible()
   await page.goto('/admin/website/pages/new?site=hospitality-site&lang=vi')
-  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Trang mới' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Trang mới' })).toBeVisible()
   await expect(page.locator('select[name="type"]')).toHaveCount(0)
   await page.locator('input[name="title"]').fill('Câu chuyện của Mây')
   await page.locator('input[name="slug"]').fill('cau-chuyen')
@@ -41,11 +46,11 @@ test('keeps pages and posts separate while creating, revising and publishing', a
   await page.getByRole('button', { name: 'Xuất bản ngay' }).click()
   await expect(page.getByText('Đã xuất bản', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Revision' }).click()
-  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Lịch sử phiên bản' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Lịch sử phiên bản' })).toBeVisible()
   await expect(page.locator('[data-ui="row"]')).toHaveCount(1)
 
   await page.goto('/admin/website/posts/new?site=hospitality-site&lang=vi')
-  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Bài viết mới' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Bài viết mới' })).toBeVisible()
   await page.locator('input[name="title"]').fill('Tin mới từ Mây')
   await page.locator('input[name="slug"]').fill('tin-moi')
   await page.locator('input[name="path"]').fill('/tin-moi')
@@ -114,7 +119,7 @@ test('creates a schema-backed form and keeps the English backend translated', as
   await expect(page.getByText('Đăng ký nhận tin')).toBeVisible()
 
   await page.goto('/admin/website/sites?lang=en')
-  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Sites' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Create site' })).toBeVisible()
   await expect(page.locator('body')).not.toContainText('website_backend.')
 })
@@ -256,7 +261,11 @@ test('customer Channel API supports isolated browser and bearer sessions', async
     headers: { Authorization: `Bearer ${token.accessToken}` },
     data: { host: '127.0.0.1' },
   })
-  expect(genericTransport.status()).toBe(400)
+  // 403, not 400: statusForError maps E_FN_NOT_PERMITTED deliberately, because a
+  // client and a monitor both need to tell a missing grant from a malformed body.
+  // The property under test is unchanged — a customer bearer token cannot reach
+  // the generic function transport.
+  expect(genericTransport.status()).toBe(403)
   expect((await genericTransport.json()).code).toBe('E_FN_NOT_PERMITTED')
 
   const refreshed = await page.request.post('/api/customer/v1/auth/token/refresh', {
@@ -282,7 +291,7 @@ test('customer Channel API supports isolated browser and bearer sessions', async
 
   // The customer cookie coexists with, but never replaces, the backend admin session.
   await page.goto('/admin/website/sites?lang=en')
-  await expect(page.locator('[data-ui="record-heading"]', { hasText: 'Sites' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Sites' })).toBeVisible()
 })
 
 test('captures every website backend screen and the KTL storefront', async ({ page }) => {
