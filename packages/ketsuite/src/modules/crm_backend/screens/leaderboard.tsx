@@ -112,6 +112,7 @@ export const leaderboardScreen = (
       variant="operational"
       frame={frame}
       title={title}
+      description={_('crm_backend.leaderboard.subtitle')}
       actions={inline([refresh, frame.extras?.['topbar.end'] ?? ''])}
       controls={
         frame.chrome
