@@ -891,11 +891,12 @@
 @layer ket.app {
   /* Dashboards are working canvases, not records. Their context and identity use
      the same quiet bands as lists and forms; KPI, workflow and analytical blocks
-     then share one uninterrupted canvas below. */
+     own their surfaces on the grey page canvas below. Never paint the whole
+     workspace white: the gaps must separate independent cards and tables. */
   :where([data-kv-design-system]) [data-ui="dashboard-page"] {
     display: grid;
     min-width: 0;
-    background: var(--kv-page-content-bg);
+    background: var(--kv-page-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="dashboard-page"][data-variant="operational"] {
@@ -999,7 +1000,7 @@
     min-width: 0;
     gap: var(--kv-space-6);
     padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
-    background: var(--kv-page-content-bg);
+    background: var(--kv-page-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="dashboard-page-toolbar"] {

@@ -128,11 +128,25 @@ test('design system: light page surfaces use component roles without changing th
       assert.match(rule ?? '', /background: var\(--kv-page-chrome-bg\)/, `${kind}-${region}`)
     }
   }
-  for (const kind of ['form-page', 'dashboard-page']) {
+  for (const kind of ['form-page']) {
     const rule = patterns.match(new RegExp(`\\[data-ui="${kind}-body"\\]\\s*\\{([^}]+)\\}`))?.[1]
     assert.match(rule ?? '', /background: var\(--kv-page-content-bg\)/, `${kind}-body`)
   }
   assert.match(patterns, /\[data-ui="form-page-aside"\]\s*\{[^}]*background: var\(--kv-panel-bg-subtle\)/)
+})
+
+test('design system: workspace canvas stays grey between independent white surfaces', () => {
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const layouts = readFileSync('packages/design-system/src/layouts/layouts.css', 'utf8')
+  for (const hook of ['dashboard-page', 'dashboard-page-body', 'board-page']) {
+    const rule = patterns.match(new RegExp(`\\[data-ui="${hook}"\\]\\s*\\{([^}]+)\\}`))?.[1]
+    assert.match(rule ?? '', /background: var\(--kv-page-bg\)/, hook)
+    assert.doesNotMatch(rule ?? '', /background: var\(--kv-page-content-bg\)/, hook)
+  }
+  for (const hook of ['surface', 'content-card', 'metric']) {
+    const rule = layouts.match(new RegExp(`\\[data-ui="${hook}"\\]\\s*\\{([^}]+)\\}`))?.[1]
+    assert.match(rule ?? '', /background: var\(--kv-panel-bg\)/, hook)
+  }
 })
 
 test('design system: FormPage does not nest a second main landmark inside AppShell', () => {

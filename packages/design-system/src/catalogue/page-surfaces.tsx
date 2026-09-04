@@ -1,6 +1,6 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { AppShell, RecordSection } from '../layouts/shell.tsx'
-import { Grid, Inline, Metric, Stack } from '../layouts/index.tsx'
+import { Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
 import { ActionGroup, Button, LinkButton } from '../primitives/actions.tsx'
 import { Field } from '../primitives/field.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
@@ -154,7 +154,7 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
             <Metric label={labels.activity} value="12" />,
           ]}
         />,
-        table,
+        <Surface body={<Section title={labels.details} body={table} />} />,
       ]}
     />
   )
