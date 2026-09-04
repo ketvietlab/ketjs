@@ -1,6 +1,14 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { DocTree, ListScreen, LinkButton, modalForm, modalWorkspace, Section } from '../../../ui/index.ts'
+import {
+  DocTree,
+  inline,
+  ListScreen,
+  LinkButton,
+  modalForm,
+  modalWorkspace,
+  Section,
+} from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
@@ -45,6 +53,9 @@ export type ProjectPagesScreenOptions = {
   projectName: string
   pages: readonly AnyRow[]
   createHref: string
+  /** Where to go to see archived documents, and whether they are showing. */
+  archivedHref?: string
+  showingArchived?: boolean
   createFields: FormField[]
   createAction: string
   closeHref: string
@@ -73,9 +84,20 @@ export const pagesScreen = (
       title={options.projectName}
       subtitle={_('flow_backend.pages.title')}
       frame={frame}
-      actions={
-        <LinkButton label={_('flow_backend.pages.create')} href={options.createHref} variant="primary" />
-      }
+      actions={inline([
+        options.archivedHref ? (
+          <LinkButton
+            label={_(
+              options.showingArchived ? 'flow_backend.issue.hideArchived' : 'flow_backend.pages.showArchived',
+            )}
+            href={options.archivedHref}
+            variant="secondary"
+          />
+        ) : (
+          ''
+        ),
+        <LinkButton label={_('flow_backend.pages.create')} href={options.createHref} variant="primary" />,
+      ])}
       body={
         options.pages.length ? (
           <Section

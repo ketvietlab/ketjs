@@ -12,6 +12,7 @@ import {
   linkButton,
   modalForm,
   modalWorkspace,
+  Notice,
   Progress,
   RecordForm,
   Section,
@@ -30,6 +31,8 @@ export type IssueDetailControls = {
   epic?: JSXChild
   tags?: JSXChild
   dependencyTarget?: JSXChild
+  /** A picker of issues that already exist, for putting one under this one. */
+  subtaskTarget?: JSXChild
 }
 
 export type IssueDetailOptions = {
@@ -232,6 +235,17 @@ export const issueDetailScreen = (
               href: dialogHref('assignSprint'),
               variant: 'secondary',
             }),
+            // The one way out of the board that is not "done". Destructive in
+            // tone because it removes the issue from every figure the project
+            // reports — but it is reversible, and the button says which way.
+            button({
+              label: _(row.active === false ? 'flow_backend.action.restore' : 'flow_backend.action.archive'),
+              type: 'submit',
+              form: formId,
+              name: 'action',
+              value: row.active === false ? 'restore' : 'archive',
+              variant: row.active === false ? 'secondary' : 'destructive',
+            }),
           ]}
         />,
         frame.extras?.['topbar.end'] ?? '',
@@ -261,6 +275,13 @@ export const issueDetailScreen = (
       ])}
       slots={{ header: 'flow.issue-header', body: 'flow.issue-body' }}
       body={stack([
+        row.active === false ? (
+          <Notice
+            tone="warning"
+            title={_('flow_backend.issue.archivedTitle')}
+            message={_('flow_backend.issue.archivedBody')}
+          />
+        ) : null,
         <DefinitionList title={_('flow_backend.issue.summary')} items={summary} />,
         <Surface
           body={
@@ -361,6 +382,26 @@ export const issueDetailScreen = (
               submit={_('flow_backend.subtasks.add')}
               submitVariant="secondary"
             />,
+            // Creating a sub-task was the only way to get one. Work that already
+            // exists — filed before anyone knew it belonged under something —
+            // had no way in, and the route said so: "parent has no screen yet".
+            controls.subtaskTarget ? (
+              <RecordForm
+                action={endpoint}
+                hidden={{ action: 'attachSubtask' }}
+                fields={[
+                  {
+                    name: 'childId',
+                    label: _('flow_backend.subtasks.attachField'),
+                    required: true,
+                    control: controls.subtaskTarget,
+                  },
+                ]}
+                errors={errorsFor('attachSubtask')}
+                submit={_('flow_backend.subtasks.attach')}
+                submitVariant="secondary"
+              />
+            ) : null,
           ])}
         />,
         <Section
@@ -459,17 +500,19 @@ export const issueDetailScreen = (
             row.following ? _('flow_backend.comments.followingHint') : _('flow_backend.comments.quietHint')
           }
           actions={
-            row.following ? (
-              <RecordForm
-                action={endpoint}
-                hidden={{ action: 'unfollow' }}
-                fields={[]}
-                submit={_('flow_backend.action.unfollow')}
-                submitVariant="secondary"
-                submitSize="compact"
-                layout="inline"
-              />
-            ) : undefined
+            // Both directions, always one of them. Following used to happen only
+            // by being assigned, commenting or being named, and `unfollow` was
+            // the only deliberate move — so watching somebody else's work meant
+            // commenting on it.
+            <RecordForm
+              action={endpoint}
+              hidden={{ action: row.following ? 'unfollow' : 'follow' }}
+              fields={[]}
+              submit={_(row.following ? 'flow_backend.action.unfollow' : 'flow_backend.action.follow')}
+              submitVariant="secondary"
+              submitSize="compact"
+              layout="inline"
+            />
           }
           body={stack([
             <RecordForm

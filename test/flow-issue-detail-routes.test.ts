@@ -167,3 +167,110 @@ test('flow issue detail route: FormPage preserves live collaboration, localized 
   const refused = await app.client.request(detail, { method: 'PUT' })
   assert.equal(refused.status, 405)
 })
+
+test('flow issue detail route: archive and restore are one button, under the version on screen', async (t) => {
+  const { app, call } = await boot(t)
+  const detail = '/admin/flow/issues/issue-login?lang=en'
+  const held = (await call<Row>('flow.issue.get', { id: 'issue-login' })) as Row
+
+  const live = await (await app.client.get(detail)).text()
+  assert.match(live, /value="archive"/)
+  assert.doesNotMatch(live, /This issue is archived/)
+
+  const archived = await app.client.request(detail, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({
+      action: 'archive',
+      expectedVersion: String(held.version),
+      idempotencyKey: 'route-archive-1',
+    }),
+  })
+  assert.equal(archived.status, 303)
+
+  // The page still opens — archiving is not deleting — and says what it means.
+  const after = await (await app.client.get(detail)).text()
+  assert.match(after, /This issue is archived/)
+  assert.match(after, /value="restore"/)
+  assert.doesNotMatch(after, /value="archive"/)
+
+  // And it is out of the list until the list is asked for it.
+  const list = '/admin/flow/projects/platform/issues?lang=en'
+  assert.doesNotMatch(await (await app.client.get(list)).text(), /Finish login/)
+  assert.match(await (await app.client.get(`${list}&archived=1`)).text(), /Finish login/)
+
+  const back = (await call<Row>('flow.issue.get', { id: 'issue-login' })) as Row
+  const restored = await app.client.request(detail, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({
+      action: 'restore',
+      expectedVersion: String(back.version),
+      idempotencyKey: 'route-restore-1',
+    }),
+  })
+  assert.equal(restored.status, 303)
+  assert.match(await (await app.client.get(list)).text(), /Finish login/)
+})
+
+test('flow issue detail route: following is a button in both directions', async (t) => {
+  const { app, call } = await boot(t)
+  const detail = '/admin/flow/issues/issue-login?lang=en'
+  const following = async () =>
+    Boolean(((await call<Row>('flow.issue.get', { id: 'issue-login' })) as Row).following)
+
+  // The assignee already follows, so the screen offers the way out first.
+  assert.equal(await following(), true)
+  assert.match(await (await app.client.get(detail)).text(), /value="unfollow"/)
+
+  const left = await app.client.request(detail, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({ action: 'unfollow', idempotencyKey: 'route-unfollow-1' }),
+  })
+  assert.equal(left.status, 303)
+  assert.equal(await following(), false)
+  assert.match(await (await app.client.get(detail)).text(), /value="follow"/)
+
+  const rejoined = await app.client.request(detail, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({ action: 'follow', idempotencyKey: 'route-follow-1' }),
+  })
+  assert.equal(rejoined.status, 303)
+  assert.equal(await following(), true)
+})
+
+test('flow issue detail route: an issue that already exists can be put under another', async (t) => {
+  const { app, call } = await boot(t)
+  await call('flow.issue.save', {
+    id: 'issue-migration',
+    projectId: 'platform',
+    columnId: 'todo',
+    title: 'Write the migration',
+    idempotencyKey: 'issue-migration',
+  })
+  const child = (await call<Row>('flow.issue.get', { id: 'issue-migration' })) as Row
+  const detail = '/admin/flow/issues/issue-login?lang=en'
+
+  const attached = await app.client.request(detail, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({
+      action: 'attachSubtask',
+      childId: 'issue-migration',
+      childVersion: String(child.version),
+      idempotencyKey: 'route-attach-1',
+    }),
+  })
+  assert.equal(attached.status, 303)
+  const parent = (await call<Row>('flow.issue.get', { id: 'issue-login' })) as Row
+  assert.deepEqual(
+    (parent.children as Row[]).map((row) => String(row.id)),
+    ['issue-migration'],
+  )
+  // Nothing else about it moved: attaching is not editing.
+  const moved = (await call<Row>('flow.issue.get', { id: 'issue-migration' })) as Row
+  assert.equal(String(moved.title), 'Write the migration')
+  assert.equal(String(moved.columnId), 'todo')
+})

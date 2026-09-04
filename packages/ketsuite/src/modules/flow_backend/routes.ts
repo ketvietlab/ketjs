@@ -289,6 +289,21 @@ const permitted = async (
 }
 
 /** True once the caller has passed a read permission check for this issue. */
+/**
+ * The same list with archived issues shown, or hidden again.
+ *
+ * `parseListState` already reads `archived=1` and `issueQuery` already honours
+ * it — the only thing missing was a link, which is why a state the model has
+ * carried since the beginning was unreachable from any screen.
+ */
+const archivedHref = (url: URL): string => {
+  const target = new URL(url)
+  if (target.searchParams.get('archived') === '1') target.searchParams.delete('archived')
+  else target.searchParams.set('archived', '1')
+  target.searchParams.delete('page')
+  return `${target.pathname}${target.search}`
+}
+
 const readable = (ctx: ServeContext, url: URL, req: IncomingMessage, issueId: string) =>
   permitted(ctx, 'flow.issue.get', url, req, issueId)
 
@@ -1001,9 +1016,48 @@ export const routes: Record<string, RouteEntry> = {
             url,
             req,
           )) as AnyRow
+        } else if (action === 'follow') {
+          if (!(await readable(ctx, url, req, issueId))) return text('not found', { status: 404 })
+          result = (await ctx.call('flow.issue.follow', { issueId, idempotencyKey }, url, req)) as AnyRow
         } else if (action === 'unfollow') {
           if (!(await readable(ctx, url, req, issueId))) return text('not found', { status: 404 })
           result = (await ctx.call('flow.issue.unfollow', { issueId, idempotencyKey }, url, req)) as AnyRow
+        } else if (action === 'archive' || action === 'restore') {
+          // Under the same version the form was rendered with: archiving is a
+          // write like any other, and a stale screen must not take work out of
+          // the project's figures behind a second reader's back.
+          result = (await ctx.call(
+            action === 'archive' ? 'flow.issue.archive' : 'flow.issue.restore',
+            {
+              id: issueId,
+              expectedVersion: Number(form.expectedVersion ?? 0),
+              idempotencyKey,
+            },
+            url,
+            req,
+          )) as AnyRow
+        } else if (action === 'attachSubtask') {
+          const parent = (await readable(ctx, url, req, issueId)) as Row | null
+          if (!parent) return text('not found', { status: 404 })
+          const child = (await readable(ctx, url, req, form.childId ?? '')) as Row | null
+          if (!child) return text('not found', { status: 404 })
+          // An issue that already exists, put under this one. Everything else
+          // about it is left alone — `issue.save` keeps what it is not told —
+          // and the domain refuses another project or a cycle.
+          result = (await ctx.call(
+            'flow.issue.save',
+            {
+              id: String(child.id),
+              projectId: child.projectId,
+              columnId: child.columnId,
+              title: String(child.title),
+              parentIssueId: issueId,
+              expectedVersion: Number(form.childVersion ?? child.version ?? 0),
+              idempotencyKey,
+            },
+            url,
+            req,
+          )) as AnyRow
         } else if (action === 'addDependency') {
           result = (await ctx.call(
             'flow.issue.dependency.add',
@@ -1128,6 +1182,16 @@ export const routes: Record<string, RouteEntry> = {
           excludeId: issueId,
           required: true,
         }),
+        // Scoped to the same project and excluding this issue. A cycle or a
+        // cross-project parent is refused by `saveIssue`, which is where that
+        // rule belongs — this only keeps the obvious mistake out of the picker.
+        subtaskTarget: await issueControl(ctx, url, req, _, {
+          id: 'issue-subtask',
+          name: 'childId',
+          projectId: String(issue.projectId),
+          excludeId: issueId,
+          required: true,
+        }),
       }
       return adminPage(ctx, url, req, {
         title: String(issue.title),
@@ -1166,7 +1230,13 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
 
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const all = (await ctx.call('flow.project.list', { limit: 200 }, url, req)) as AnyRow[]
+      const showArchived = url.searchParams.get('archived') === '1'
+      const all = (await ctx.call(
+        'flow.project.list',
+        { limit: 200, includeArchived: showArchived },
+        url,
+        req,
+      )) as AnyRow[]
       const stats = (await ctx.call(
         'flow.project.stats',
         { projectIds: all.map((project) => String(project.id)) },
@@ -1176,7 +1246,7 @@ export const routes: Record<string, RouteEntry> = {
       const statsBy = new Map(stats.map((row) => [String(row.id), row]))
       const counted = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
 
-      const tab = url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
+      const tab = showArchived ? 'archived' : url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
       // Asked as "which projects", not as "the two hundred issues I touched
       // most recently" — that page silently dropped projects from the tab of
       // anyone carrying more work than it held. See projectsWithMyWork.
@@ -1185,7 +1255,9 @@ export const routes: Record<string, RouteEntry> = {
           ? ((await ctx.call('flow.project.list', { mine: true }, url, req)) as AnyRow[]).map(
               (project) => counted.find((row) => String(row.id) === String(project.id)) ?? project,
             )
-          : counted
+          : tab === 'archived'
+            ? counted.filter((project) => project.active === false)
+            : counted
 
       const recent = (await ctx.call(
         'flow.issue.list',
@@ -1217,6 +1289,13 @@ export const routes: Record<string, RouteEntry> = {
                 id: 'mine',
                 label: _('flow_backend.projects.tabMine'),
                 href: '/admin/flow/projects?tab=mine',
+              },
+              // A third tab rather than a toggle: archived projects are a place
+              // you go, not a filter you leave on by accident.
+              {
+                id: 'archived',
+                label: _('flow_backend.projects.tabArchived'),
+                href: '/admin/flow/projects?archived=1',
               },
             ],
             createHref: projectCreateHref(url),
@@ -1500,6 +1579,8 @@ export const routes: Record<string, RouteEntry> = {
             createHref: projectIssueCreateHref(url, projectId),
             locale: localeQuery(url),
             filterTruncated: result.fieldFilterTruncated === true,
+            archivedHref: archivedHref(url),
+            showingArchived: state.includeArchived,
           })
           if (url.searchParams.get('create') !== '1') return workspace
           const errors = url.searchParams.getAll('error')
@@ -1560,9 +1641,13 @@ export const routes: Record<string, RouteEntry> = {
       }
       const project = (await ctx.call('flow.project.get', { id: projectId }, url, req)) as AnyRow | null
       if (!project) return text('not found', { status: 404 })
+      // `page.list` has taken `includeArchived` since it was written and no
+      // route ever passed it, so an archived document was gone from every
+      // screen — including the one that could have brought it back.
+      const showArchived = url.searchParams.get('archived') === '1'
       const pages = (await ctx.call(
         'flow.page.list',
-        { projectId, search: url.searchParams.get('q') ?? '' },
+        { projectId, search: url.searchParams.get('q') ?? '', includeArchived: showArchived },
         url,
         req,
       )) as AnyRow[]
@@ -1581,6 +1666,8 @@ export const routes: Record<string, RouteEntry> = {
               parentPageId: url.searchParams.get('parentPageId') ?? '',
             }),
             createAction: projectPageCreateHref(url, projectId),
+            archivedHref: archivedHref(url),
+            showingArchived: showArchived,
             closeHref: projectPagesCollection(url, projectId),
             locale: localeQuery(url),
             createOpen: url.searchParams.get('create') === '1',
@@ -1831,6 +1918,13 @@ export const routes: Record<string, RouteEntry> = {
               inLocale(url, `/admin/flow/projects/${encodeURIComponent(String(current.projectId))}/pages`),
             )
           errors = { action: 'archive', messages: errorsOf(result, _) }
+        } else if (form.action === 'restore') {
+          // Back to this page rather than to the list: the reader wants to see
+          // that it came back, and `page.restore` may have moved it to the root
+          // to keep it from returning under a parent that is still archived.
+          const result = (await ctx.call('flow.page.restore', { id: pageId }, url, req)) as AnyRow
+          if (result.ok) return seeOther(inLocale(url, `/admin/flow/pages/${encodeURIComponent(pageId)}`))
+          errors = { action: 'restore', messages: errorsOf(result, _) }
         }
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const held = (await ctx.call('flow.page.get', { id: pageId }, url, req)) as { value: AnyRow | null }
@@ -2279,6 +2373,7 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       // Two independent halves on one screen, so two error sinks: a duplicate
       // tag name reported above the columns form reads as a broken column.
+      let projectErrors: string[] = []
       let columnErrors: string[] = []
       let typeErrors: string[] = []
       let fieldErrors: string[] = []
@@ -2289,7 +2384,48 @@ export const routes: Record<string, RouteEntry> = {
       const action = inLocale(url, endpoint)
       if (req.method === 'POST') {
         const form = await readForm(req)
-        if (form.action === 'archiveColumn') {
+        if (form.action === 'saveProject') {
+          // `project.save` has always taken these three and only the create
+          // route ever called it, so a project named wrong stayed named wrong.
+          const saved = (await ctx.call(
+            'flow.project.save',
+            {
+              values: {
+                id: projectId,
+                key: form.key ?? '',
+                name: form.name ?? '',
+                description: form.description || null,
+              },
+              idempotencyKey: form.idempotencyKey || `${projectId}:profile:${randomUUID()}`,
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (saved.ok) return seeOther(inLocale(url, endpoint))
+          projectErrors = errorsOf(saved, _)
+          submitted = form
+        } else if (form.action === 'archiveProject' || form.action === 'restoreProject') {
+          const active = form.action === 'restoreProject'
+          const saved = (await ctx.call(
+            'flow.project.save',
+            {
+              values: {
+                id: projectId,
+                key: String(project.key ?? ''),
+                name: String(project.name ?? ''),
+                active,
+              },
+              idempotencyKey: `${projectId}:active:${active ? 'on' : 'off'}`,
+            },
+            url,
+            req,
+          )) as AnyRow
+          // Back to the project list when it leaves, and to its own settings
+          // when it comes back — in both cases where the reader can see it.
+          if (saved.ok) return seeOther(inLocale(url, active ? endpoint : '/admin/flow/projects'))
+          projectErrors = errorsOf(saved, _)
+          submitted = form
+        } else if (form.action === 'archiveColumn') {
           // `column.archive` refuses a column that still holds active issues,
           // which is the whole point of the check — reporting that refusal as
           // a success left the column on screen with no explanation.
@@ -2567,6 +2703,34 @@ export const routes: Record<string, RouteEntry> = {
         body: (_, frame) =>
           settingsScreen(_, frame, String(project.name), {
             brief,
+            // The record itself, which only the create form has ever offered:
+            // a project typed wrong was typed wrong for good.
+            profile: [
+              {
+                name: 'name',
+                label: _('flow_backend.field.name'),
+                required: true,
+                value: String(project.name ?? ''),
+                span: 'full',
+              },
+              {
+                name: 'key',
+                label: _('flow_backend.field.key'),
+                required: true,
+                value: String(project.key ?? ''),
+              },
+              {
+                name: 'description',
+                label: _('flow_backend.field.description'),
+                value: String(project.description ?? ''),
+                span: 'full',
+              },
+            ],
+            archived: project.active === false,
+            profileErrors: projectErrors.length ? projectErrors : undefined,
+            tagUsage: Object.fromEntries(
+              tags.map((tag) => [String(tag.id), Number((tag as AnyRow).usage ?? 0)]),
+            ),
             endpoint: action,
             columns,
             tags,

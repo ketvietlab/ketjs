@@ -23,7 +23,7 @@ import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
 import { empty } from './shared.tsx'
 
-export type PageDetailAction = 'save' | 'addChild' | 'move' | 'orderUp' | 'orderDown' | 'archive'
+export type PageDetailAction = 'save' | 'addChild' | 'move' | 'orderUp' | 'orderDown' | 'archive' | 'restore'
 
 export type PageDetailScreenOptions = {
   page: AnyRow
@@ -97,13 +97,17 @@ export const pageDetailScreen = (
       layout="inline"
     />
   )
+  // Both directions from one place. `page.restore` has always existed and has
+  // always handled the archived-parent case; no screen ever offered it, so
+  // pressing Archive was how a document left every screen for good.
+  const archived = page.active === false
   const archive = (
     <RecordForm
       action={endpoint}
-      hidden={{ action: 'archive' }}
+      hidden={{ action: archived ? 'restore' : 'archive' }}
       fields={[]}
-      submit={_('flow_backend.action.archive')}
-      submitVariant="destructive"
+      submit={_(archived ? 'flow_backend.action.restore' : 'flow_backend.action.archive')}
+      submitVariant={archived ? 'secondary' : 'destructive'}
       submitSize="compact"
       layout="inline"
     />

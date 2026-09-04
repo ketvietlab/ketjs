@@ -229,3 +229,36 @@ test('flow page detail route: FormPage preserves Live Doc, modal sub-actions and
   const activePages = await call<Row[]>('flow.page.list', { projectId: 'platform' })
   assert.ok(!activePages.some((row) => row.id === 'setup'))
 })
+
+test('flow page detail route: an archived document is reachable and can come back', async (t) => {
+  const { app, call } = await boot(t)
+  const detail = '/admin/flow/pages/setup?lang=en'
+  const list = '/admin/flow/projects/platform/pages?lang=en'
+
+  assert.match(await (await app.client.get(detail)).text(), /value="archive"/)
+  const archived = await app.client.request(detail, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({ action: 'archive' }),
+  })
+  assert.equal(archived.status, 303)
+
+  // Gone from the tree, but the tree offers the way to look at what it hides.
+  const live = await (await app.client.get(list)).text()
+  assert.doesNotMatch(live, /Local setup/)
+  assert.match(live, /Show archived documents/)
+  assert.match(await (await app.client.get(`${list}&archived=1`)).text(), /Local setup/)
+
+  // `page.restore` has existed since the module was written; nothing called it.
+  assert.match(await (await app.client.get(detail)).text(), /value="restore"/)
+  const restored = await app.client.request(detail, {
+    ...post,
+    method: 'POST',
+    body: new URLSearchParams({ action: 'restore' }),
+  })
+  assert.equal(restored.status, 303)
+  assert.match(await (await app.client.get(list)).text(), /Local setup/)
+  const back = (await call<{ value: Row | null }>('flow.page.get', { id: 'setup' })).value!
+  assert.equal(back.active, true)
+  assert.equal(back.parentPageId, 'guide', 'a live parent keeps its branch')
+})
