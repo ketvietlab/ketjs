@@ -33,6 +33,8 @@ import { join, isAbsolute } from 'node:path'
 import { html, each } from '@ketvietlab/ketjs-view'
 import { sqliteStore } from './config.ts'
 import { bootRuntime } from './runtime.ts'
+import { traceOf } from './log/index.ts'
+import type { Logger, OpenLog } from './log/index.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
 import { namespacedStorage, storageFromConfig } from './storage/index.ts'
 import type { OpenStorage, Storage } from './storage/index.ts'
@@ -236,6 +238,14 @@ export type ServeSpec = {
   openStorage?: OpenStorage
   /** Inject a deployment-owned outbound provider for durable worker jobs. */
   openTransport?: OpenTransport
+  /**
+   * Send operational records somewhere the framework does not know how to reach.
+   *
+   * The built-ins need nothing but Node, so anything requiring a client library
+   * belongs here rather than in the framework — the same fence as `openStore`.
+   * Level filtering and redaction are applied around whatever this returns.
+   */
+  openLog?: OpenLog
   /** Version and maintenance policy published by profile bootstrap routes. */
   clientCompatibility?: ClientCompatibilityPolicy
   /** Backing store for the built-in resumable stream transport. */
@@ -302,6 +312,14 @@ export type BootedDeployment = {
   config: RuntimeConfig
   /** Writers for the same store served by the authorized stream endpoint. */
   streams: Streams
+  /**
+   * This deployment's logger, carrying its name and process role.
+   *
+   * A host that calls functions in process — a seeding script, a test harness —
+   * narrows it with `child` and hands it to `callFn`, so those calls are recorded
+   * the same way a served one is instead of silently escaping the pipeline.
+   */
+  logger: Logger
   port: number
   banner: () => Promise<string>
   close: () => Promise<void>
@@ -312,6 +330,8 @@ export type BootDeploymentOptions = {
   port?: number
   /** Boot progress. Long-running serve keeps its banner separate. */
   log?: (line: string) => void
+  /** Redirect this process's operational records, without editing the spec. */
+  openLog?: OpenLog
 }
 
 /**
@@ -324,7 +344,10 @@ export async function bootDeployment(
 ): Promise<BootedDeployment> {
   const serve = spec.serve ?? {}
   const log = o.log ?? console.log
-  const { config, modules, manifest } = await bootRuntime(spec, o)
+  // `o.log` above is the boot-progress printer this function has always taken;
+  // `logSink` is the deployment's operational sink. Different things, and the
+  // older name is public API, so the new one is the one that gets qualified.
+  const { config, modules, manifest, log: logSink, logger } = await bootRuntime(spec, o)
   const baseStorage = await (serve.openStorage ?? storageFromConfig)(config)
   const storages = new Map<string, Storage>()
   const storageFor = (key: string): Storage => {
@@ -634,6 +657,24 @@ export async function bootDeployment(
       (href) => html`<link rel="stylesheet" href=${href}>`,
     )}`
 
+  /**
+   * The context a call's records carry.
+   *
+   * Correlation and actor are hashed here rather than by the sink, so a raw value
+   * never becomes a record in the first place: the framework does not export those,
+   * and a log aggregator is an export.
+   */
+  const callLog = (tenant: string, scope: Scope, actor: string | null, correlationId?: string | null) =>
+    logger.child({
+      // The tenant the lease already resolved, rather than resolving it a second
+      // time: `keyOf` throws for a host this deployment does not serve, and a
+      // logger must never be the thing that decides a request fails.
+      tenant: tenant || null,
+      trace: traceOf(correlationId, config.secret),
+      actor: traceOf(actor, config.secret),
+      company: scope.company,
+    })
+
   const ctx: ServeContext = {
     manifest,
     deploymentName: spec.name,
@@ -711,6 +752,7 @@ export async function bootDeployment(
               idempotencyDigest: options?.idempotencyDigest,
               correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              log: callLog(t.key, scope, actor, options?.correlationId),
             })
           ).value,
       )
@@ -725,6 +767,7 @@ export async function bootDeployment(
           hint: 'authenticate the external credential and derive one company before dispatching the function',
         })
       const actor = await actorOf(url, req)
+      const verifiedScope: Scope = { company, companies: [company], branch: null, branches: null }
       return tenants.ofRequest(
         url,
         req,
@@ -733,13 +776,14 @@ export async function bootDeployment(
             await callFn(name, input, {
               adapter: t.adapter,
               manifest: t.live,
-              scope: { company, companies: [company], branch: null, branches: null },
+              scope: verifiedScope,
               actor,
               idempotencyKey: options?.idempotencyKey,
               idempotencyNamespace: options?.idempotencyNamespace,
               idempotencyDigest: options?.idempotencyDigest,
               correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              log: callLog(t.key, verifiedScope, actor, options?.correlationId),
             })
           ).value,
       )
@@ -766,6 +810,7 @@ export async function bootDeployment(
               idempotencyDigest: options?.idempotencyDigest,
               correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              log: callLog(t.key, scope, actor, options?.correlationId),
             })
           ).value,
       )
@@ -930,6 +975,7 @@ export async function bootDeployment(
   const server = await createKetServer({
     manifest,
     adapter,
+    log: logger,
     ...(serve.streamStore ? { streamStore: serve.streamStore } : {}),
     ...(serve.resolveStream
       ? { resolveStream: (id, url, req) => serve.resolveStream!(ctx, id, url, req) }
@@ -1117,8 +1163,24 @@ export async function bootDeployment(
     await server.close()
     if (adapter) await adapter.close()
     await tenants.close()
+    // Last, and after everything that might still have something to say. A buffered
+    // sink that is closed first loses precisely the records describing the shutdown.
+    logger.info('shutdown')
+    await logSink.flush?.()
+    await logSink.close?.()
   }
-  return { name: spec.name, manifest, adapter, tenants, config, streams: server.streams, port, banner, close }
+  return {
+    name: spec.name,
+    manifest,
+    adapter,
+    tenants,
+    config,
+    streams: server.streams,
+    logger,
+    port,
+    banner,
+    close,
+  }
 }
 
 /** bootDeployment, plus the banner and the signal handling a long-running process wants. */

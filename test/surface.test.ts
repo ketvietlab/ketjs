@@ -169,7 +169,7 @@ const app = defineDeployment({
 })
 
 test('serving: a module route answers, its asset is served, its stylesheet is linked', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   assert.equal((await fetch(`${at}/skin`)).status, 200)
   assert.equal((await fetch(`${at}/_ket/asset/skin/extra.css`)).status, 200)
@@ -184,7 +184,7 @@ test('serving: a module route answers, its asset is served, its stylesheet is li
 })
 
 test('serving: dynamic segments are decoded and a static route wins over a parameter', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   assert.match(await fetch(`${at}/catalog/%C3%A1o-thun`).then((r) => r.text()), /áo-thun/)
   assert.match(await fetch(`${at}/catalog/new`).then((r) => r.text()), /new product/)
@@ -192,7 +192,7 @@ test('serving: dynamic segments are decoded and a static route wins over a param
 })
 
 test('serving: a static handler must not be talked out of its own directory', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   for (const attack of [
     '/_ket/asset/skin/%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd',
@@ -208,7 +208,7 @@ test('serving: a static handler must not be talked out of its own directory', as
 })
 
 test('serving: a versioned asset may be kept, an unversioned one must be revalidated', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   try {
     const body = await (await fetch(`${at}/skin`)).text()
@@ -235,7 +235,7 @@ test('serving: a versioned asset may be kept, an unversioned one must be revalid
 })
 
 test('serving: a module publishes a directory, but only the asset types in it', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   try {
     // Whatever else shares the directory is not an asset. Served as
@@ -265,7 +265,7 @@ test('serving: a module publishes a directory, but only the asset types in it', 
 })
 
 test('serving: binary assets survive the trip, which a string-typed body would not', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const r = await fetch(`http://127.0.0.1:${b.port}/_ket/asset/skin/logo.svg`)
   assert.equal(r.status, 200)
   assert.match(r.headers.get('content-type') ?? '', /image\/svg\+xml/)

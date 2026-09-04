@@ -27,6 +27,7 @@ type Attachment = { id: string; storeKey: string; publicStoreKey?: string | null
 test('split attachments: worker publishes isolated projections; private copies and unsafe content never use the public backend', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ket-public-module-'))
   const env = {
+    KET_LOG: 'null',
     KET_SQLITE: join(dir, 'app.db'),
     KET_STORAGE_DIR: join(dir, 'private'),
     KET_STORAGE_PUBLIC_DIR: join(dir, 'public'),
@@ -134,7 +135,7 @@ test('split attachments: failed publication is retryable and does not break the 
       openStorage: () => withPublicStorage(privateStore, unstable),
     },
   })
-  const env = { KET_SQLITE: join(dir, 'app.db'), KET_COMPANY: 'acme' }
+  const env = { KET_LOG: 'null', KET_SQLITE: join(dir, 'app.db'), KET_COMPANY: 'acme' }
   let server: Awaited<ReturnType<typeof bootDeployment>> | undefined
   let worker: Awaited<ReturnType<typeof bootWorker>> | undefined
   try {
@@ -170,7 +171,12 @@ test('split attachments: failed publication is retryable and does not break the 
 
 test('split attachments: opt-in sweep backfills multiple pages; disabling split storage preserves downloads', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ket-public-backfill-'))
-  const env = { KET_SQLITE: join(dir, 'app.db'), KET_STORAGE_DIR: join(dir, 'private'), KET_COMPANY: 'acme' }
+  const env = {
+    KET_LOG: 'null',
+    KET_SQLITE: join(dir, 'app.db'),
+    KET_STORAGE_DIR: join(dir, 'private'),
+    KET_COMPANY: 'acme',
+  }
   const splitEnv = {
     ...env,
     KET_STORAGE_PUBLIC_DIR: join(dir, 'public'),
@@ -267,7 +273,7 @@ test('split attachments: deletion during publication cannot resurrect a public c
     worker: { queues: { maintenance: 1 } },
     serve: { openStorage: () => withPublicStorage(privateStore, racing) },
   })
-  const env = { KET_SQLITE: join(dir, 'app.db'), KET_COMPANY: 'acme' }
+  const env = { KET_LOG: 'null', KET_SQLITE: join(dir, 'app.db'), KET_COMPANY: 'acme' }
   let server: Awaited<ReturnType<typeof bootDeployment>> | undefined
   let worker: Awaited<ReturnType<typeof bootWorker>> | undefined
   try {
@@ -318,7 +324,7 @@ test('split attachments: large downloads sign the selected backend without cachi
       openStorage: () => withPublicStorage(signed(privateStore, 'private'), signed(publicStore, 'public')),
     },
   })
-  const env = { KET_SQLITE: join(dir, 'app.db'), KET_COMPANY: 'acme' }
+  const env = { KET_LOG: 'null', KET_SQLITE: join(dir, 'app.db'), KET_COMPANY: 'acme' }
   let server: Awaited<ReturnType<typeof bootDeployment>> | undefined
   let worker: Awaited<ReturnType<typeof bootWorker>> | undefined
   try {
@@ -356,6 +362,7 @@ test('split attachments: large downloads sign the selected backend without cachi
 test('split attachments: anonymous requests and jobs in another company cannot publish private attachments', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ket-public-auth-'))
   const env = {
+    KET_LOG: 'null',
     KET_SQLITE: join(dir, 'app.db'),
     KET_STORAGE_DIR: join(dir, 'private'),
     KET_STORAGE_PUBLIC_DIR: join(dir, 'public'),

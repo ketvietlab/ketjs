@@ -185,7 +185,10 @@ const app = defineDeployment({
 })
 
 test('multi-company: the server reads both headers, and the active company joins the set', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }, port: 0 })
+  const b = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    port: 0,
+  })
   const at = `http://127.0.0.1:${b.port}`
   const post = (company: string, id: string) =>
     fetch(`${at}/_ket/fn/books.add`, {
@@ -208,7 +211,10 @@ test('multi-company: the server reads both headers, and the active company joins
 })
 
 test('multi-company: verified callback dispatch ignores request headers and selects one company', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }, port: 0 })
+  const b = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    port: 0,
+  })
   try {
     const at = `http://127.0.0.1:${b.port}`
     const callbackId = `callback-${randomUUID()}`

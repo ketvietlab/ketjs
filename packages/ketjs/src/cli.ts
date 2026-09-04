@@ -476,7 +476,8 @@ try {
       throw new Error('ket provision reads input only from stdin; pass --input - so secrets never enter argv')
     const spec = pickSpec(specs)
     if (!spec.serve) throw new Error(`deployment "${spec.name}" declares no serve block`)
-    const runtime = await bootRuntime(spec, { env: process.env })
+    // No socket is opened here, so the records are a command's, not a server's.
+    const runtime = await bootRuntime(spec, { env: process.env, role: 'cli' })
     const meta = runtime.manifest.functions[fnKey]
     if (!meta) throw new Error(`unknown function "${fnKey}"`)
     if (!meta.provision || meta.exposure !== 'internal')

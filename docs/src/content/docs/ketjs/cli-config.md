@@ -186,6 +186,11 @@ Never reuse `KET_SECRET` as a webhook or provider secret.
 | `KET_S3_PUBLIC_REGION` | `KET_S3_REGION` | Optional separate public-bucket signing region. |
 | `KET_S3_PUBLIC_PATH_STYLE` | `KET_S3_PATH_STYLE` | Optional public-bucket addressing override; `0` disables path-style. |
 | `KET_STORAGE_PUBLIC_URL` | unset | Optional unsigned HTTP(S) base URL for the public bucket/directory, without credentials, query, or fragment. |
+| `KET_LOG` | `auto` | Operational sink: `auto`, `console`, `pretty`, `file` or `null`. `auto` reads a terminal as `pretty`. |
+| `KET_LOG_LEVEL` | `info` | Lowest level kept: `debug`, `info`, `warn` or `error`. |
+| `KET_LOG_STREAM` | `stderr` | Which stream records go to. stdout carries command output; keep logs off it. |
+| `KET_LOG_DIR` | `.ket/log` | Directory for `KET_LOG=file`. |
+| `KET_LOG_BUFFER` | `10000` | Records a batching driver may hold before it drops and reports the gap. |
 
 Leave all public-backend variables unset for the existing single-backend behavior. Public S3 variables
 require `KET_STORAGE=s3`; public local-directory configuration requires `KET_STORAGE=local`. A public
@@ -193,6 +198,10 @@ URL alone cannot expose the private backend. Configure matching backends for ser
 the public backend does not provision access policies or a CDN. See
 [optional private and public buckets](/ketjs/integrations/#optional-private-and-public-buckets) for
 attachment publication, migration, and deletion semantics.
+
+Log variables are validated on boot, so a misspelt driver fails with `E_LOG_CONFIG` rather than at
+the first record. See [operational logging](/ketjs/logging/) for the driver contract, the event
+catalogue, and what is redacted.
 
 ## Programmatic configuration
 

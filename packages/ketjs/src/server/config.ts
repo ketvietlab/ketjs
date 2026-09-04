@@ -12,6 +12,8 @@
 import { sqliteAdapter } from '../data/sqlite.ts'
 import { isTimezone } from '../data/time.ts'
 import { KetError } from '../kernel/errors.ts'
+import { isLogDriverName, isLogLevel } from './log/types.ts'
+import type { LogDriverName, LogLevel } from './log/types.ts'
 import type { Adapter } from '../types.ts'
 
 export type PublicStorageConfig =
@@ -62,6 +64,17 @@ export type RuntimeConfig = {
   s3PathStyle: boolean
   /** Optional second backend; the legacy storage configuration remains private/default. */
   publicStorage?: PublicStorageConfig
+  /** Which built-in sink to open. `auto` reads columns to a terminal and NDJSON to a pipe. */
+  logDriver: LogDriverName
+  logLevel: LogLevel
+  /**
+   * Which stream a log goes to. stderr, because stdout carries the answer a
+   * command was run for and a log line interleaved into it breaks the pipe.
+   */
+  logStream: 'stdout' | 'stderr'
+  logDir: string
+  /** Records a batching driver may hold before it starts dropping and says so. */
+  logBuffer: number
 }
 
 export function readConfig(
@@ -80,6 +93,30 @@ export function readConfig(
     throw new KetError({
       code: 'E_STORAGE_CONFIG',
       message: `KET_STORAGE must be local or s3, got "${storageKind}"`,
+    })
+  const logDriver = env.KET_LOG ?? defaults.logDriver ?? 'auto'
+  if (!isLogDriverName(logDriver))
+    throw new KetError({
+      code: 'E_LOG_CONFIG',
+      message: `KET_LOG must be one of auto, console, pretty, file, null; got "${logDriver}"`,
+    })
+  const logLevel = env.KET_LOG_LEVEL ?? defaults.logLevel ?? 'info'
+  if (!isLogLevel(logLevel))
+    throw new KetError({
+      code: 'E_LOG_CONFIG',
+      message: `KET_LOG_LEVEL must be one of debug, info, warn, error; got "${logLevel}"`,
+    })
+  const logStream = env.KET_LOG_STREAM ?? defaults.logStream ?? 'stderr'
+  if (logStream !== 'stdout' && logStream !== 'stderr')
+    throw new KetError({
+      code: 'E_LOG_CONFIG',
+      message: `KET_LOG_STREAM must be stdout or stderr, got "${logStream}"`,
+    })
+  const logBuffer = Number(env.KET_LOG_BUFFER ?? defaults.logBuffer ?? 10_000)
+  if (!Number.isSafeInteger(logBuffer) || logBuffer < 1)
+    throw new KetError({
+      code: 'E_LOG_CONFIG',
+      message: `KET_LOG_BUFFER must be a positive integer, got "${env.KET_LOG_BUFFER ?? logBuffer}"`,
     })
   const uploadMax = Number(env.KET_UPLOAD_MAX ?? defaults.uploadMax ?? 25 * 1024 * 1024)
   if (!Number.isSafeInteger(uploadMax) || uploadMax < 1)
@@ -150,6 +187,11 @@ export function readConfig(
     s3PathStyle:
       env.KET_S3_PATH_STYLE === undefined ? (defaults.s3PathStyle ?? false) : env.KET_S3_PATH_STYLE !== '0',
     ...(publicStorage ? { publicStorage } : {}),
+    logDriver,
+    logLevel,
+    logStream,
+    logDir: env.KET_LOG_DIR ?? defaults.logDir ?? '.ket/log',
+    logBuffer,
   }
 }
 

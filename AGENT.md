@@ -39,6 +39,7 @@
 | Workspaces, application composition, lifecycle, modules, discovery | `docs/src/content/docs/ketjs/{workspaces,app-lifecycle,modules,module-discovery}.md` |
 | Models, scopes, queries, changesets, functions, effects, migrations | `docs/src/content/docs/ketjs/{models,data,functions,migrations}.md` |
 | HTTP, OpenAPI, sessions, tenants, jobs, storage, transports, streams | `docs/src/content/docs/ketjs/{http,openapi,sessions-tenants,jobs,integrations}.md` |
+| Operational logging, log drivers, event catalogue, redaction | `docs/src/content/docs/ketjs/logging.md` |
 | Forms, rendering, islands, themes, menus, localization, reports | `docs/src/content/docs/ketjs/{form-validation,rendering,themes,menus-i18n,reports}.md` |
 | Testing, CLI, configuration, deployment, releases, public API | `docs/src/content/docs/ketjs/{testing,cli-config,deployment,releasing,api}.md` |
 | KetSuite overview, first application, composition, module ownership | `docs/src/content/docs/ketsuite/{index,quick-start,architecture,module-development}.md` |

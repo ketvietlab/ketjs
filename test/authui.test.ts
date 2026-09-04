@@ -11,7 +11,10 @@ import { ketsuite } from '../apps/ketsuite/deployment.ts'
  * fetch() gets a status, because a redirect to HTML is a useless answer to it.
  */
 const setup = async () => {
-  const b = await bootDeployment(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'x' }, port: 0 })
+  const b = await bootDeployment(ketsuite, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_SECRET: 'x' },
+    port: 0,
+  })
   const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   await callFn('partner.savePartner', { id: 'p1', kind: 'company', name: 'Acme JSC' }, o)
   await callFn('company.saveCompany', { id: 'acme', partnerId: 'p1', currency: 'VND' }, o)
