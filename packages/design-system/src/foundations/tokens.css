@@ -253,6 +253,10 @@
     --kv-z-toast: 200;
 
     /* Component roles. */
+    /* Light pages separate quiet navigation chrome from the white working
+       sheet. Dark mode keeps its existing panel/header and canvas hierarchy. */
+    --kv-page-chrome-bg: light-dark(var(--kv-page-bg), var(--kv-panel-bg));
+    --kv-page-content-bg: light-dark(var(--kv-panel-bg), var(--kv-page-bg));
     --kv-action-primary-bg: var(--kv-accent);
     --kv-action-primary-hover: var(--kv-accent-hover);
     --kv-action-primary-active: var(--kv-accent-active);
@@ -268,7 +272,7 @@
     --kv-input-ring: var(--kv-focus-ring);
     --kv-field-bg: var(--kv-input-bg);
     --kv-field-border: var(--kv-input-border);
-    --kv-table-bg: transparent;
+    --kv-table-bg: light-dark(var(--kv-panel-bg), transparent);
     --kv-table-header-bg: light-dark(#efedee, #282d34);
     --kv-table-header-text: light-dark(#5a5c5e, #9da4af);
     --kv-table-row-bg: transparent;

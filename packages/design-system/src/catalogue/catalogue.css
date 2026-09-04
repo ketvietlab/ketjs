@@ -1,4 +1,11 @@
 @layer ket.app {
+  body:has([data-ui="catalogue-surface-preview"]) {
+    margin: 0;
+  }
+
+  [data-ui="catalogue-surface-preview"] {
+    min-width: 0;
+  }
   body:has([data-ui="catalogue"]) {
     margin: 0;
     background: var(--kv-color-canvas);
