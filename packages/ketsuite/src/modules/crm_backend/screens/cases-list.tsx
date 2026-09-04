@@ -102,6 +102,7 @@ export const casesListScreen = (
       variant="operational"
       frame={frame}
       title={_('crm_backend.cases.title')}
+      description={_('crm_backend.cases.subtitle')}
       actions={
         hasActions
           ? inline([
