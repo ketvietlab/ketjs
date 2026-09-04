@@ -31,6 +31,7 @@
     "bench:hospitality": "npm run build --silent && node .build/bench/hospitality.bench.js",
     "bench:identity": "npm run build --silent && node .build/bench/identity-partner.bench.js",
     "bench:loyalty": "npm run build --silent && node .build/bench/loyalty.bench.js",
+    "bench:flow": "npm run build --silent && node .build/bench/flow.bench.js",
     "bench:crm": "npm run build --silent && node .build/bench/crm.bench.js",
     "bench:company-identity": "npm run build --silent && node .build/bench/identity-company.bench.js",
     "bench:user-auth": "npm run build --silent && node .build/bench/identity-auth.bench.js",

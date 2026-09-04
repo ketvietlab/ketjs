@@ -21,6 +21,9 @@ const vi = {
   'gantt.title': 'Tiến độ theo thời gian',
   'gantt.hint':
     'Mỗi công việc là một thanh từ ngày bắt đầu tới hạn chót. Không có hạn chót thì vẽ thành một điểm.',
+  'gantt.partialTitle': 'Biểu đồ đang hiện phần đầu',
+  'gantt.partialBody':
+    'Biểu đồ đọc tối đa {scanned} công việc; dự án này có {total}. Sắp theo ngày bắt đầu cần toàn bộ dòng trong tay, nên phần còn lại được bỏ qua thay vì đọc hết. Thu hẹp dự án hoặc dùng màn Danh sách để xem đủ.',
   'gantt.today': 'Hôm nay',
   'gantt.inferred': 'Ngày bắt đầu lấy theo ngày tạo',
   'menu.issues': 'Công việc',
@@ -237,6 +240,9 @@ const en: Record<keyof typeof vi, Message> = {
   'gantt.title': 'Timeline',
   'gantt.hint':
     'Each issue is a bar from its start to its due date. Without a due date it is drawn as a point.',
+  'gantt.partialTitle': 'This timeline is a first slice',
+  'gantt.partialBody':
+    'The chart reads at most {scanned} issues; this project holds {total}. Sorting by start date needs every row in hand, so the rest is left out rather than read. Narrow the project or use the backlog to see the whole of it.',
   'gantt.today': 'Today',
   'gantt.inferred': 'Start taken from the day it was created',
   'menu.issues': 'Issues',
