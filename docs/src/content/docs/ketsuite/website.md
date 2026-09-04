@@ -19,6 +19,7 @@ CRM — and Website composes them through optional bridge modules.
 - `website_seo`: per-entry metadata, and the public `robots.txt` and `sitemap.xml` projection.
 - `website_search`: the search box a theme can place, over published entries.
 - `website_form`: versioned public forms and their submissions.
+- `website_form_mail`: optional bridge that tells a form's owner a request arrived.
 - `website_retail`, `website_hospitality`, `crm_website`: optional bridges to the owning domain.
 
 ## SEO and the public projection
@@ -125,6 +126,44 @@ the damage, report `parentId` as invalid while naming a parent that is perfectly
 nothing that needs repair. A chain that is already broken, or already looping above, cannot close a
 loop through this item either, so the walk stops rather than refusing. Existing orphans are therefore
 harmless, and the delete guard stops new ones appearing.
+
+## Telling an operator a request arrived
+
+`mail_transport` already owns the outbox — `Delivery`, retry, dead-letter, provider events — so
+`website_form` keeps no delivery state of its own and no second ledger appears. `website_form_mail` is
+only the bridge, and `website_form_mail.notifySubmission` queues one notification per submission,
+keyed by the submission id so a retry sends nothing new.
+
+### The notification carries nothing the visitor wrote
+
+The mail says which form, on which site, when, and where to open it. That is a deliberate boundary,
+not a default nobody chose:
+
+- **A `Delivery` stores an immutable body snapshot.** Mailing the payload would persist contact data a
+  second time, in another module, in a row that cannot be edited or purged — while the submission
+  itself is under a retention policy that promises exactly that. The purge gate could never close.
+- **`Form.notifyTo` is checked for the shape of an email address and nothing else.** Anyone who may
+  edit a form may point it anywhere. With a bare notification, doing so leaks that a form was
+  submitted; with the payload, it is a standing export of everyone's contact details.
+- **The consent notice does not mention an email copy**, and under the versioning contract above,
+  changing it to say so would invalidate every page currently open.
+
+Two independent guards hold the line. The bridge builds its context **from** an allowlist rather than
+filtering a record **into** one — `SAFE_KEYS` is `siteTitle`, `formName`, `submissionId`, `receivedAt`
+and `adminUrl` — so a field added to a form tomorrow cannot appear. And `mail_transport` refuses to
+save a template that references a key outside its own allowlist, before any mail can be queued
+against it.
+
+Widening this later is additive: a template may ask for more once `SAFE_KEYS` grows. Narrowing it is
+not — mail that has been sent cannot be recalled from a mailbox, a forward, or a provider's storage.
+
+### Triggering is explicit
+
+`notifySubmission` takes the `submissionId`, the `templateId` and the `baseUrl` the link is built
+from, the same shape `calendar_mail_transport.sendInvitations` uses. It is not called from
+`submitForm`: `website_form` must not depend on `mail_transport`, and the framework has no commit hook
+that would let the bridge observe a write without that dependency. Outbox administration also
+requires a signed-in user, which an anonymous submission does not have.
 
 ## Public site search
 
