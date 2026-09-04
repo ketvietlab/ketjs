@@ -2,7 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { globSync, readFileSync } from 'node:fs'
 import { html as html2, renderToString } from '@ketvietlab/ketjs-view'
-import { buildMenu, compose, document as ketDocument, translator } from '@ketvietlab/ketjs'
+import {
+  buildMenu,
+  compose,
+  document as ketDocument,
+  statusForError,
+  translator,
+  wantsHtml,
+} from '@ketvietlab/ketjs'
 import { LAYER_ORDER_CSS } from '@ketvietlab/ketjs/theme'
 import { HOOKS as PUBLIC_HOOKS } from '@ketvietlab/design-system'
 import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
@@ -1701,4 +1708,29 @@ test('backend root opens the first screen contributed by this deployment', async
 
   assert.equal(result.status, 303)
   assert.equal(result.headers?.location, '/admin/partners')
+})
+
+test('permission failure answers 403, not 400', () => {
+  // A monitor cannot tell a missing grant from a malformed body when both are 400,
+  // and neither can a client deciding whether to retry or to ask for access.
+  assert.equal(statusForError('E_FN_NOT_PERMITTED'), 403)
+  assert.equal(statusForError('E_NOT_FOUND'), 404)
+  assert.equal(statusForError('E_UNKNOWN_FUNCTION'), 404)
+  assert.equal(statusForError('E_PAYLOAD_TOO_LARGE'), 413)
+  assert.equal(statusForError('E_INVALID_JSON_BODY'), 400)
+})
+
+test('a browser navigating gets the page; a client calling gets the JSON', () => {
+  const browser = { headers: { accept: 'text/html,application/xhtml+xml' } } as never
+  const api = { headers: { accept: 'application/json' } } as never
+  const fragment = {
+    headers: { accept: 'text/html', 'x-ket-navigation': '1' },
+  } as never
+  assert.equal(wantsHtml(browser), true)
+  assert.equal(wantsHtml(api), false)
+  assert.equal(
+    wantsHtml(fragment),
+    false,
+    'a fragment request is answered by the caller, not replaced with a whole document',
+  )
 })

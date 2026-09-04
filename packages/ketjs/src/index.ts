@@ -60,7 +60,7 @@ export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server
 export { enforcePolicy } from './server/policy.ts'
 export type { PolicyDecision, PolicyDenialEvidence } from './server/policy.ts'
 export { project } from './server/project.ts'
-export { createKetServer } from './server/http.ts'
+export { createKetServer, statusForError, wantsHtml } from './server/http.ts'
 export { bootDeployment, serveDeployment } from './server/boot.ts'
 export type {
   ServeSpec,

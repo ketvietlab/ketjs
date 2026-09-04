@@ -30,7 +30,7 @@ import { createAdapterPool } from '../data/pool.ts'
 import type { SessionContext, Sessions, SessionOptions, SessionRecord } from './session.ts'
 import { document, json, text, withHeaders } from './respond.ts'
 import { join, isAbsolute } from 'node:path'
-import { html, each } from '@ketvietlab/ketjs-view'
+import { html, each, renderToString } from '@ketvietlab/ketjs-view'
 import { sqliteStore } from './config.ts'
 import { bootRuntime } from './runtime.ts'
 import { traceOf } from './log/index.ts'
@@ -1007,6 +1007,77 @@ export async function bootDeployment(
           resolveDatastore: (url: URL, req: IncomingMessage) => tenants.keyOf(url, req),
         }
       : {}),
+    /**
+     * The page a person gets when the answer is no.
+     *
+     * A permission failure used to hand a browser the same JSON a client gets:
+     * a code, a function key and a hint about a CLI, on a bare page with no way
+     * back. That is a fine answer for a program and a dead end for a person, and
+     * the person is the one who arrived by clicking something.
+     *
+     * The markup uses the same `data-ui` hooks the design system already styles,
+     * and loads the deployment's own stylesheets, so this is the product's error
+     * screen rather than a second visual language living in the framework.
+     */
+    renderErrorPage: async ({ code, status, url, req }) => {
+      const _ = translate(localeOf(url, req))
+      const text = (key: string, fallback: string): string => {
+        const found = _(key)
+        return found && found !== key ? found : fallback
+      }
+      const kind = code === 'E_FN_NOT_PERMITTED' ? 'forbidden' : status === 404 ? 'missing' : 'failed'
+      const copy = {
+        forbidden: {
+          title: text('backend.error.forbidden.title', 'Bạn không có quyền mở màn hình này'),
+          message: text(
+            'backend.error.forbidden.message',
+            'Tài khoản của bạn không được cấp quyền cho màn hình này. Nếu đây là việc bạn cần làm, hãy đề nghị quản trị viên cấp thêm quyền.',
+          ),
+        },
+        missing: {
+          title: text('backend.error.missing.title', 'Không tìm thấy màn hình này'),
+          message: text(
+            'backend.error.missing.message',
+            'Đường dẫn này không còn tồn tại, hoặc chưa bao giờ tồn tại trong bản triển khai đang chạy.',
+          ),
+        },
+        failed: {
+          title: text('backend.error.failed.title', 'Màn hình này không mở được'),
+          message: text(
+            'backend.error.failed.message',
+            'Đã có lỗi khi dựng màn hình. Thử lại; nếu vẫn vậy, gửi mã lỗi bên dưới cho người phụ trách hệ thống.',
+          ),
+        },
+      }[kind]
+      const back = text('backend.error.back', 'Quay lại trang đầu')
+      // Only hooks the design system already declares and styles. The one rule
+      // below centres the block on an otherwise empty page, and is inline because
+      // an error page has to render even when a stylesheet is what went wrong.
+      const head = html`${await styles(req)}<style>
+        .ket-error-page {
+          display: grid;
+          min-block-size: 100dvh;
+          place-items: center;
+          padding: 2rem;
+        }
+      </style>`
+      const body = html`<main class="ket-error-page">
+        <div data-ui="error" role="alert">
+          <p data-ui="error-code">${code}</p>
+          <p data-ui="error-message">${copy.title}</p>
+          <p data-ui="error-hint">${copy.message}</p>
+          <p>
+            <a data-ui="action" data-variant="primary" data-size="default" href="/admin">
+              <span data-ui="action-label">${back}</span>
+            </a>
+          </p>
+        </div>
+      </main>`
+      // Same shape every other document takes: doctype, then the rendered tree.
+      return `<!doctype html>${renderToString(
+        ctx.document({ lang: localeOf(url, req), title: copy.title, head, body }),
+      )}`
+    },
     resolveLocale: localeOf,
     resolveScope: scopeOf,
     resolveAllow: allowFor,

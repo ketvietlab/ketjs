@@ -170,7 +170,7 @@ test('identity engine: a trusted request identity uses the normal actor, scope a
       headers: { ...signed, 'content-type': 'application/json' },
       body: '{}',
     })
-    assert.equal(denied.status, 400)
+    assert.equal(denied.status, 403)
     assert.equal(((await denied.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
   } finally {
     await booted.close()
