@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test, type TestContext } from 'node:test'
 import {
+  bootDeployment,
   bufferedLog,
+  callFn,
   CORE_EVENTS,
   createLogger,
   defineDeployment,
@@ -352,4 +354,56 @@ test('a worker reports its jobs on the deployment sink, not on stdout', async (t
   assert.equal(typeof completed.durationMs, 'number')
   assert.equal(completed.fields?.queue, 'default')
   assert.equal(completed.fields?.attempt, 1)
+})
+
+test('a buffer whose sink throws does not take the process down with it', async () => {
+  const broken: LogDriver = {
+    name: 'broken',
+    write() {
+      throw new Error('the collector is down')
+    },
+  }
+  // 10ms, so the timer — not flush() — is what performs the drain. A throw there is
+  // an uncaught exception, and no wrapper placed outside this driver can catch it,
+  // because the timer calls the sink directly rather than through that wrapper.
+  const driver = bufferedLog(broken, { everyMs: 10, batch: 1 })
+  driver.write([record()])
+  await new Promise((resolve) => setTimeout(resolve, 40))
+  await assert.doesNotReject(() => driver.flush!())
+  await driver.close?.()
+})
+
+test('a sink that throws cannot fail work that already succeeded', async (t) => {
+  const booted = await bootDeployment(app, {
+    env: { KET_SQLITE: ':memory:' },
+    port: 0,
+    log: () => {},
+    openLog: () => ({
+      name: 'broken',
+      write() {
+        throw new Error('the collector is down')
+      },
+    }),
+  })
+  t.after(() => booted.close())
+
+  // The record for a successful call is emitted after the handler returned and
+  // after any idempotency key was marked done. A sink allowed to throw there would
+  // report a failure for work that is already committed.
+  const result = await booted.tenants.with('', (tenant) =>
+    callFn(
+      'observed.ok',
+      {},
+      {
+        adapter: tenant.adapter,
+        manifest: tenant.live,
+        log: booted.logger,
+      },
+    ),
+  )
+  assert.deepEqual(result.value, { done: true })
+
+  const served = await fetch(`http://127.0.0.1:${booted.port}/fine/1`)
+  assert.equal(served.status, 200)
+  assert.equal(await served.text(), '1')
 })
