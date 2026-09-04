@@ -145,6 +145,8 @@ export const employeeFormScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="hr-employee-form-page"
       title={title}
       description={_('hr_backend.employees.formHint')}

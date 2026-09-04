@@ -5,14 +5,17 @@ import {
   CardGrid,
   ContentCard,
   dataTable,
+  DashboardPage,
   emptyState,
   formatMoney,
-  Framed,
+  ListScreen,
   linkButton,
   Metric,
   RecordActions,
   RecordForm,
+  RecordScreen,
   Section,
+  shell,
   stack,
   Surface,
 } from '../../ui/index.ts'
@@ -42,11 +45,13 @@ export const dashboard = (
     ),
     scale,
   )
-  return (
-    <Framed
-      translator={_}
-      title={_('pos_backend.dashboard.title')}
+  return shell(
+    _,
+    _('pos_backend.dashboard.title'),
+    <DashboardPage
+      variant="operational"
       frame={frame}
+      title={_('pos_backend.dashboard.title')}
       body={
         <CardGrid
           items={[
@@ -76,16 +81,11 @@ export const dashboard = (
             },
           ]}
           id={(item) => item.id}
-          card={(item) => (
-            <ContentCard
-              title={item.title}
-              href={item.href}
-              body={<Metric label={item.title} value={String(item.value)} />}
-            />
-          )}
+          card={(item) => <Metric label={item.title} value={String(item.value)} href={item.href} />}
         />
       }
-    />
+    />,
+    { ...frame, topbar: false },
   )
 }
 
@@ -95,7 +95,7 @@ export const configsScreen = (
   rows: AnyRow[],
   fields: FormField[],
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('pos_backend.configs.title')}
     frame={frame}
@@ -147,7 +147,7 @@ export const methodsScreen = (
   fields: FormField[],
   linkFields: FormField[],
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('pos_backend.methods.title')}
     frame={frame}
@@ -208,7 +208,7 @@ export const sessionsScreen = (
   rows: AnyRow[],
   fields: FormField[],
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('pos_backend.sessions.title')}
     frame={frame}
@@ -281,7 +281,7 @@ export const sessionDetail = (
   if (state === 'opened')
     actions.push({ value: 'closing', label: _('pos_backend.action.startClosing'), variant: 'primary' })
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={String(session.name)}
       frame={frame}
@@ -377,7 +377,7 @@ const orderTable = (_: Translator, rows: AnyRow[]) =>
   })
 
 export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('pos_backend.orders.title')}
     frame={frame}
@@ -393,7 +393,7 @@ export const registerScreen = (
   createFields: FormField[],
   actionPath: string,
 ): TemplateResult => (
-  <Framed
+  <RecordScreen
     translator={_}
     title={_('pos_backend.register.title')}
     frame={frame}
@@ -437,7 +437,7 @@ export const orderDetail = (
   if (['paid', 'done'].includes(String(order.state)) && !order.isRefund)
     actions.push({ value: 'refund', label: _('pos_backend.action.refund') })
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={String(order.posReference)}
       frame={frame}

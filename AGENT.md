@@ -18,6 +18,15 @@
 - Every design-system component or visual-state change requires contract/unit coverage plus browser E2E at desktop and mobile widths. Read the generated visual evidence before handoff and never commit that evidence.
 - When touching legacy KetSuite UI, bring the affected surface onto the design-system contract within the same change; unrelated screens do not require a big-bang migration.
 
+### Mandatory KetSuite page design
+
+- Every routed KetSuite administration screen must use exactly one canonical full-page pattern: `ListPage` for collections and result sets, `RecordPage` for create/edit/detail/workflow around one durable subject, or `WorkspacePage` for dashboards and operational surfaces. Use `layout="canvas"` only for horizontally spatial work such as boards, maps, timelines, floor plans, and KDS. Do not introduce another full-page pattern.
+- `FormPage`, `DashboardPage`, and `BoardPage` are compatibility adapters only. Do not add new consumers. `Framed` is deprecated and must not appear in production screen code.
+- Application screens must use the KetSuite page boundary so navigation and organisation context come from `Frame`. Every operational page must render one breadcrumb/company context band and one identity header. Disable the shell topbar when the page owns that identity; never render duplicate page titles or rebuild breadcrumbs inside a module.
+- Canonical page titles are 24px on desktop and 16px at the compact breakpoint, with tight `1.2` line height. Descriptions use normal `1.45` line height. Title-to-description spacing is the heading's 4px gap; do not add per-pattern title, subtitle, eyebrow, or subline margins.
+- Canonical page headers use `var(--kv-space-4) var(--kv-page-padding-x)` on desktop and `var(--kv-space-4) var(--kv-space-4) var(--kv-space-3)` at the compact breakpoint. The application `[data-ui="content"]` must not add padding around these patterns. A dense operational list body begins with `var(--kv-space-2)` top padding.
+- These measurements belong to `packages/design-system`; modules must not override them locally. Any intentional change must update all canonical patterns, their compatibility adapters, contract tests, catalogue specimens, desktop/mobile browser coverage, and affected locales in the same change.
+
 ## Documentation index
 
 | Change area | Documentation owner |

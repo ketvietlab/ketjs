@@ -733,7 +733,7 @@ export const routes: Record<string, RouteEntry> = {
               ...frame,
               chrome: {
                 create: {
-                  label: _('product_backend.action.create'),
+                  label: _('product_backend.create.title'),
                   path: inLocale(url, '/admin/product/templates/new'),
                 },
                 selection,

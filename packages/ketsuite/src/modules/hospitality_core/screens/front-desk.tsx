@@ -3,7 +3,7 @@ import {
   dataTable,
   emptyState,
   type Frame,
-  Framed,
+  WorkspaceScreen,
   Metric,
   Section,
   setupAction,
@@ -24,7 +24,7 @@ export const frontDeskScreen = (
   frame: Frame,
   configured = true,
 ): TemplateResult => (
-  <Framed
+  <WorkspaceScreen
     translator={_}
     title={_('hospitality_core.screen.frontDesk.title')}
     frame={frame}

@@ -1,7 +1,7 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
-  Framed,
+  BoardPage,
   KanbanCard,
   KanbanGrid,
   LinkButton,
@@ -10,7 +10,7 @@ import {
   modalWorkspace,
   Notice,
   RecordForm,
-  Section,
+  shell,
   stack,
 } from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
@@ -68,68 +68,65 @@ export const epicsScreen = (
 ): TemplateResult => {
   const locale = options.locale ?? ''
   const collection = options.epics.length ? (
-    <Section
-      title={_('flow_backend.menu.epics')}
-      body={
-        <KanbanGrid
-          rows={options.epics}
-          id={(epic) => String(epic.id)}
-          card={(epic) => {
-            const id = encodeURIComponent(String(epic.id))
-            const projectId = encodeURIComponent(String(epic.projectId))
-            const count = _('flow_backend.epics.issueCount', {
-              count: Number(epic.totalCount ?? 0),
-            })
-            return (
-              <KanbanCard
-                key={String(epic.id)}
-                title={String(epic.title ?? '')}
-                href={localized(`/admin/flow/epics/${id}`, locale)}
-                meta={
-                  epic.issuesHref
-                    ? linkButton({
-                        href: localized(String(epic.issuesHref), locale),
-                        label: count,
-                        variant: 'tertiary',
-                        size: 'compact',
-                      })
-                    : count
-                }
-                actions={stack(
-                  [
-                    linkButton({
-                      href: localized(`/admin/flow/projects/${projectId}/epics/${id}/map`, locale),
-                      label: _('flow_backend.epics.map'),
-                      variant: 'tertiary',
-                      size: 'compact',
-                    }),
-                    <RecordForm
-                      action={options.action}
-                      hidden={{ action: 'archive', id: String(epic.id) }}
-                      fields={[]}
-                      submit={_('flow_backend.action.archive')}
-                      submitVariant="destructive"
-                      submitSize="compact"
-                      layout="inline"
-                    />,
-                  ],
-                  'compact',
-                )}
-              />
-            )
-          }}
-        />
-      }
+    <KanbanGrid
+      rows={options.epics}
+      id={(epic) => String(epic.id)}
+      card={(epic) => {
+        const id = encodeURIComponent(String(epic.id))
+        const projectId = encodeURIComponent(String(epic.projectId))
+        const count = _('flow_backend.epics.issueCount', {
+          count: Number(epic.totalCount ?? 0),
+        })
+        return (
+          <KanbanCard
+            key={String(epic.id)}
+            title={String(epic.title ?? '')}
+            href={localized(`/admin/flow/epics/${id}`, locale)}
+            meta={
+              epic.issuesHref
+                ? linkButton({
+                    href: localized(String(epic.issuesHref), locale),
+                    label: count,
+                    variant: 'tertiary',
+                    size: 'compact',
+                  })
+                : count
+            }
+            actions={stack(
+              [
+                linkButton({
+                  href: localized(`/admin/flow/projects/${projectId}/epics/${id}/map`, locale),
+                  label: _('flow_backend.epics.map'),
+                  variant: 'tertiary',
+                  size: 'compact',
+                }),
+                <RecordForm
+                  action={options.action}
+                  hidden={{ action: 'archive', id: String(epic.id) }}
+                  fields={[]}
+                  submit={_('flow_backend.action.archive')}
+                  submitVariant="destructive"
+                  submitSize="compact"
+                  layout="inline"
+                />,
+              ],
+              'compact',
+            )}
+          />
+        )
+      }}
     />
   ) : (
     empty(_)
   )
-  const workspace = (
-    <Framed
-      translator={_}
-      title={options.projectName}
-      subtitle={_('flow_backend.menu.epics')}
+  const workspace = shell(
+    _,
+    options.projectName,
+    <BoardPage
+      variant="operational"
       frame={frame}
+      eyebrow={_('flow_backend.menu.epics')}
+      title={options.projectName}
       actions={
         <LinkButton label={_('flow_backend.action.create')} href={options.createHref} variant="primary" />
       }
@@ -143,7 +140,8 @@ export const epicsScreen = (
         ) : null,
         collection,
       ])}
-    />
+    />,
+    { ...frame, topbar: false },
   )
   if (!options.createOpen) return workspace
   return modalWorkspace(

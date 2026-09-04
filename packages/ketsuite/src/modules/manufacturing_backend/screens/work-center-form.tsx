@@ -105,6 +105,8 @@ export const workCenterFormScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="manufacturing-work-center-form-page"
       title={title}
       actions={

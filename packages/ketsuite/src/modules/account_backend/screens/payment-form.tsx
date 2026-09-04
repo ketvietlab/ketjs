@@ -20,6 +20,8 @@ export const paymentFormScreen = (_: Translator, options: PaymentFormScreenOptio
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-payment-form-page"
       title={title}
       description={_('account_backend.payment.create.hint')}

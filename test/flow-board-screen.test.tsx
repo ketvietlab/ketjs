@@ -18,7 +18,7 @@ translate.locale = 'vi'
 translate.has = (key) => key in messages
 translate.resolves = translate.has
 
-test('flow board: remains a focused specialized workspace around the kanban island', () => {
+test('flow board: uses the horizontal workspace around the kanban island', () => {
   const board = html`<ket-island
     data-island="flow.board"
     data-lang="vi"
@@ -26,9 +26,9 @@ test('flow board: remains a focused specialized workspace around the kanban isla
   ><section data-ui="flow-board"><div data-ui="flow-board-columns"></div></section></ket-island>`
   const rendered = renderToString(boardScreen(translate, {}, 'Nền tảng nội bộ', board))
 
-  assert.match(rendered, /data-ui="record-workspace"/)
-  assert.doesNotMatch(rendered, /data-ui="list-page"|data-ui="form-page"/)
-  assert.match(rendered, /data-ui="section"/)
+  assert.match(rendered, /data-ui="board-page"[^>]*data-variant="operational"/)
+  assert.match(rendered, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.doesNotMatch(rendered, /data-ui="record-workspace"|data-ui="section"/)
   assert.match(rendered, /Nền tảng nội bộ/)
   assert.match(rendered, /data-island="flow.board"/)
   assert.match(rendered, /data-ui="flow-board"/)

@@ -49,6 +49,8 @@ export const bomsListScreen = (
     _,
     _('manufacturing_backend.boms.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('manufacturing_backend.boms.title')}
       actions={inline([
         <LinkButton

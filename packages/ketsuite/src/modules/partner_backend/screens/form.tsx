@@ -185,6 +185,8 @@ export const partnerFormScreen = (
     _,
     row.name,
     <FormPage
+      variant="operational"
+      frame={frame}
       title={row.name}
       description={row.ref || _(`partner.kind.${row.kind}`)}
       status={status}

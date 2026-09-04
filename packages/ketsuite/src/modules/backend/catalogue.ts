@@ -13,7 +13,7 @@ import {
   datePicker,
   emptyState,
   errorState,
-  Framed,
+  RecordScreen,
   icon,
   iconButton,
   inline,
@@ -269,7 +269,7 @@ export const CASES: Array<{
     label: 'Workspace — không lồng layout',
     note: 'Màn hình đã có identity riêng giữ đúng một sheet khi đi qua framed layout dùng chung.',
     render: (_) =>
-      Framed({
+      RecordScreen({
         translator: _,
         title: 'Chi tiết sản phẩm',
         frame: { menu: MENU },

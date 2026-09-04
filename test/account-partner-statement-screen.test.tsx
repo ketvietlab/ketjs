@@ -70,7 +70,7 @@ test('partner statement stays specialized and reports full-result totals above a
   )
 
   assert.match(html, /data-ui="record-workspace"/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
+  assert.doesNotMatch(html, /data-ui="form-page"|data-ui="modal-layer"|mail\.chatter/)
   assert.match(html, /250[,.]000[\s\S]*Total debit/)
   assert.match(html, /50[,.]000[\s\S]*Total credit/)
   assert.match(html, /200[,.]000[\s\S]*Residual/)

@@ -102,6 +102,8 @@ export const workCentersListScreen = (
     _,
     _('manufacturing_backend.workCenters.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('manufacturing_backend.workCenters.title')}
       actions={inline([
         <LinkButton

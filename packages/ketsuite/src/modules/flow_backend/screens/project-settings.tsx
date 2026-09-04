@@ -2,7 +2,7 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   dataTable,
-  Framed,
+  WorkspaceScreen,
   LinkButton,
   modalForm,
   modalWorkspace,
@@ -69,7 +69,7 @@ export const settingsScreen = (
   options: SettingsScreenOptions,
 ): TemplateResult => {
   const workspace = (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={projectName}
       frame={frame}

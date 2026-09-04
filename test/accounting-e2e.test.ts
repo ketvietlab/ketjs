@@ -149,7 +149,7 @@ test('e2e accounting: invoice, payment reconciliation and reports cross real HTT
       assert.match(html, /&quot;listFunction&quot;:&quot;account\.listAccounts&quot;/, path)
     }
     if (path === '/admin/accounting') {
-      assert.match(html, /data-ui="record-workspace"/)
+      assert.match(html, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
       // The overview reports the ledger now; the card grid that used to be here
       // only counted the lists the sidebar already links to.
       assert.match(html, /Chỉ số chính/)
@@ -789,7 +789,7 @@ test('e2e accounting: the overview reports posted moves, and never a draft', asy
 
   await call('account.postMove', { id: 'invoice-overview' })
   const posted = await read()
-  assert.match(posted, /data-ui="record-workspace"/)
+  assert.match(posted, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(posted, /data-ui="list-page"|data-ui="form-page"/)
   assert.match(posted, /data-ui="date-picker" method="get" action="\/admin\/accounting"/)
   assert.match(posted, /name="lang" value="vi"/)

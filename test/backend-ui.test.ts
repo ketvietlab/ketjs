@@ -34,7 +34,7 @@ import {
   emptyState,
   errorState,
   formCluster,
-  Framed,
+  RecordScreen,
   HOOKS,
   hasIcon,
   icon,
@@ -53,6 +53,7 @@ import {
   modalSheet,
   mediaPanel,
   notice,
+  pageContext,
   pagesScreen,
   person,
   recordList,
@@ -72,8 +73,13 @@ import {
   surface,
   tabs,
   tag,
+  WorkspaceScreen,
 } from '@ketvietlab/ketsuite/backend'
 import type { ListChrome, PageRow } from '@ketvietlab/ketsuite/backend'
+import { DashboardPage as KetSuiteDashboardPage } from '../packages/ketsuite/src/ui/dashboard-page.tsx'
+import { BoardPage as KetSuiteBoardPage } from '../packages/ketsuite/src/ui/board-page.tsx'
+import { FormPage as KetSuiteFormPage } from '../packages/ketsuite/src/ui/form-page.tsx'
+import { ListPage as KetSuiteListPage } from '../packages/ketsuite/src/ui/list-page.tsx'
 
 /**
  * The design team writes CSS against these attributes.
@@ -179,6 +185,146 @@ const CHROME: ListChrome = {
 }
 
 const _ = translator(compose([backend], { headless: true }), 'vi')
+
+test('KetSuite ListPage derives breadcrumbs and company context from its frame', () => {
+  const output = renderToString(
+    KetSuiteListPage({
+      variant: 'operational',
+      frame: {
+        menu: [
+          node('flow', {
+            label: 'Flow',
+            path: '/admin/flow/projects',
+            active: true,
+            children: [
+              node('project-issues', {
+                label: 'Công việc',
+                path: '/admin/flow/projects/north-star/issues',
+                active: true,
+              }),
+            ],
+          }),
+        ],
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+          contextPath: '/admin/context',
+        },
+      },
+      title: 'Dự án Sao Bắc',
+      body: 'Danh sách công việc',
+    }),
+  )
+
+  assert.match(output, /data-ui="list-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(output, /href="\/admin\/flow\/projects"[^>]*>[\s\S]*?Flow/)
+  assert.match(output, /Công việc[\s\S]*?aria-current="page"[^>]*>[\s\S]*?Dự án Sao Bắc/)
+  assert.match(output, /data-ui="page-context-viewer" href="\/admin\/context"/)
+  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+})
+
+test('KetSuite FormPage derives its operational topbar from the application frame', () => {
+  const output = renderToString(
+    KetSuiteFormPage({
+      variant: 'operational',
+      frame: {
+        menu: [
+          node('accounting', {
+            label: 'Kế toán',
+            path: '/admin/accounting',
+            active: true,
+            children: [
+              node('accounts', {
+                label: 'Hệ thống tài khoản',
+                path: '/admin/accounting/accounts',
+                active: true,
+              }),
+            ],
+          }),
+        ],
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+        },
+      },
+      title: 'Tạo tài khoản',
+      body: 'Các trường tài khoản',
+    }),
+  )
+
+  assert.match(output, /data-ui="form-page"[^>]*data-variant="operational"/)
+  assert.match(output, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(output, /Kế toán[\s\S]*?Hệ thống tài khoản[\s\S]*?Tạo tài khoản/)
+  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+})
+
+test('KetSuite DashboardPage derives context and preserves extension actions', () => {
+  const output = renderToString(
+    KetSuiteDashboardPage({
+      variant: 'operational',
+      frame: {
+        menu: [node('sales', { label: 'Bán hàng', path: '/admin/sales', active: true })],
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+        },
+        extras: { 'topbar.end': 'Extension action' },
+      },
+      title: 'Tổng quan bán hàng',
+      actions: 'Tạo báo giá',
+      body: 'Chỉ số bán hàng',
+    }),
+  )
+
+  assert.match(output, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
+  assert.match(output, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(output, /Bán hàng[\s\S]*?Tổng quan bán hàng/)
+  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.match(output, /data-ui="dashboard-page-actions"[\s\S]*?Tạo báo giá[\s\S]*?Extension action/)
+})
+
+test('KetSuite BoardPage derives context and preserves extension actions', () => {
+  const output = renderToString(
+    KetSuiteBoardPage({
+      variant: 'operational',
+      frame: {
+        menu: [node('pipeline', { label: 'CRM', path: '/admin/crm/pipeline', active: true })],
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+        },
+        extras: { 'topbar.end': 'Extension action' },
+      },
+      title: 'Pipeline bán hàng',
+      actions: 'Tạo cơ hội',
+      controls: 'Lọc theo đội',
+      body: 'Các cột cơ hội',
+    }),
+  )
+
+  assert.match(output, /data-ui="board-page"[^>]*data-variant="operational"/)
+  assert.match(output, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(output, /CRM[\s\S]*?Pipeline bán hàng/)
+  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.match(output, /data-ui="board-page-actions"[\s\S]*?Tạo cơ hội[\s\S]*?Extension action/)
+  assert.match(output, /data-ui="board-page-toolbar"[\s\S]*?Lọc theo đội/)
+})
 
 const componentContract = [
   qrCode([[true]], 'QR code'),
@@ -553,6 +699,19 @@ const everything = [
       { id: 'last30', label: '30 ngày qua', href: '?period=last30', active: true },
     ],
   }),
+  pageContext({
+    label: 'Vị trí trang',
+    items: [{ label: 'Sản phẩm' }, { label: 'Danh mục sản phẩm' }],
+    viewer: {
+      name: 'Nguyễn Quản Trị',
+      company: 'ket-viet',
+      companies: ['ket-viet'],
+      companyName: 'Công ty Kết Việt',
+      branch: 'hcm',
+      branchName: 'Chi nhánh Hồ Chí Minh',
+      contextPath: '/admin/context',
+    },
+  }),
   // A chart is two halves: the canvas the island mounts, and the legend that
   // carries the same numbers as text. Rendered here with a stand-in for the
   // plot, because the island needs a request and this contract needs neither.
@@ -638,6 +797,13 @@ const STYLESHEETS = [
 ]
 
 const ADMIN_CSS = ADMIN_STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
+
+test('backend content lets operational page patterns own their spacing', () => {
+  assert.match(
+    ADMIN_CSS,
+    /\[data-ui="content"\]:has\([\s\S]*?\[data-ui="list-page"\]\[data-variant="operational"\][\s\S]*?\[data-ui="form-page"\]\[data-variant="operational"\][\s\S]*?\[data-ui="dashboard-page"\]\[data-variant="operational"\][\s\S]*?\[data-ui="board-page"\]\[data-variant="operational"\][\s\S]*?padding: 0/,
+  )
+})
 
 /** And the ones a module owns for its own island. */
 const MODULE_STYLESHEETS = [
@@ -937,14 +1103,14 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
 })
 
-test('backend layout: framed screens use the compact page header and flatten around rich records', () => {
+test('backend layout: canonical screen wrappers supply context and flatten around rich records', () => {
   const list = renderToString(pagesScreen(_, [page()], {}))
-  assert.match(list, /data-ui="record-workspace" data-page-frame="true"/)
-  assert.match(list, /data-ui="record-heading"[\s\S]*Trang/)
-  assert.doesNotMatch(list, /data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/)
+  assert.match(list, /data-ui="list-page"[^>]*data-pattern="list"/)
+  assert.match(list, /data-ui="list-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.match(list, /data-ui="list-page-title"[\s\S]*Trang/)
 
   const rich = renderToString(
-    Framed({
+    RecordScreen({
       translator: _,
       title: 'Record',
       frame: {},
@@ -955,15 +1121,12 @@ test('backend layout: framed screens use the compact page header and flatten aro
       }),
     }),
   )
-  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
-  assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
+  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 1)
+  assert.equal(rich.match(/data-pattern="record"/g)?.length, 1)
+  assert.match(rich, /data-ui="form-page-context"[\s\S]*data-ui="breadcrumbs"/)
 
   const css = ADMIN_CSS
-  assert.match(css, /data-page-frame="true"\]:has/)
-  assert.ok(
-    css.includes('> [data-ui="record-body"] [data-ui="record-workspace"]'),
-    'the compatibility frame also flattens a rich workspace wrapped by feedback or a stack',
-  )
+  assert.match(css, /\[data-ui="form-page"\]:has\([\s\S]*?\[data-ui="record-workspace"\]/)
 })
 
 test('record workspace: collaboration aligns with the sheet when the topbar collapses', () => {
@@ -1101,7 +1264,7 @@ test('design tokens: the native date picker glyph follows the theme', () => {
   assert.match(tokens, /--admin-picker-invert: light-dark\(0, 1\);/)
 })
 
-test('backend layout: a framed screen uses one compact title without breadcrumb, kicker or glyph', () => {
+test('backend layout: a workspace screen uses one identity band with navigation context', () => {
   const manifest = compose(ketsuite.modules, { headless: true })
   const vi = translator(manifest, 'vi')
   const menu = buildMenu(manifest, {
@@ -1110,16 +1273,15 @@ test('backend layout: a framed screen uses one compact title without breadcrumb,
     active: '/admin/stock/transfers',
   })
   const framed = renderToString(
-    Framed({ translator: vi, title: 'Điều chuyển', frame: { menu }, body: surface({ body: 'x' }) }),
+    WorkspaceScreen({ translator: vi, title: 'Điều chuyển', frame: { menu }, body: surface({ body: 'x' }) }),
   )
-  // The title is owned by the compact page header, not repeated by the shell.
   assert.equal(framed.match(/data-ui="title"/g), null, 'the bar does not repeat the heading')
-  assert.equal(framed.match(/data-ui="record-heading"/g)?.length, 1)
-  assert.doesNotMatch(framed, /data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"/)
+  assert.equal(framed.match(/data-ui="dashboard-page-title"/g)?.length, 1)
+  assert.match(framed, /data-ui="dashboard-page-context"[\s\S]*data-ui="breadcrumbs"/)
 
   // A list keeps its toolbar; it just stops naming the page twice.
   const listed = renderToString(
-    Framed({
+    WorkspaceScreen({
       translator: vi,
       title: 'Điều chuyển',
       frame: { menu, chrome: { create: { label: 'Mới', path: '/x' } } },

@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { Framed, Gantt, Section } from '../../../ui/index.ts'
+import { BoardPage, Gantt, listChrome, shell } from '../../../ui/index.ts'
 import type { Frame, GanttItem } from '../../../ui/index.ts'
 import type { AnyRow } from './shared.tsx'
 import { empty } from './shared.tsx'
@@ -41,26 +41,28 @@ export const ganttScreen = (
       .filter(Boolean)
       .join(' · '),
   }))
-  return (
-    <Framed
-      translator={_}
-      title={projectName}
+  return shell(
+    _,
+    projectName,
+    <BoardPage
+      variant="operational"
       frame={frame}
+      eyebrow={_('flow_backend.gantt.title')}
+      title={projectName}
+      description={_('flow_backend.gantt.hint')}
+      controls={
+        frame.chrome ? listChrome(_, projectName, { ...frame.chrome, layout: 'command' }, false) : undefined
+      }
       body={
-        <Section
-          title={_('flow_backend.gantt.title')}
-          description={_('flow_backend.gantt.hint')}
-          body={
-            <Gantt
-              items={items}
-              today={today}
-              locale={locale}
-              labels={{ today: _('flow_backend.gantt.today'), empty: '' }}
-              empty={empty(_)}
-            />
-          }
+        <Gantt
+          items={items}
+          today={today}
+          locale={locale}
+          labels={{ today: _('flow_backend.gantt.today'), empty: '' }}
+          empty={empty(_)}
         />
       }
-    />
+    />,
+    { ...frame, chrome: null, topbar: false },
   )
 }

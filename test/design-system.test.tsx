@@ -5,7 +5,9 @@ import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   AppShell,
   Badge,
+  BoardPage,
   Button,
+  DashboardPage,
   DataTable,
   Disclosure,
   Field,
@@ -71,6 +73,45 @@ test('design system: a stacked FormPage rail keeps space above its content', () 
   )
 })
 
+test('design system: an operational ListPage body keeps a dense header gap', () => {
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const rule =
+    patterns.match(
+      /\[data-ui="list-page"\]\[data-variant="operational"\]\s*\[data-ui="list-page-body"\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
+  assert.match(rule, /padding-top: var\(--kv-space-2\)/)
+})
+
+test('design system: canonical page titles share one dense hierarchy', () => {
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const kinds = ['list-page', 'form-page', 'dashboard-page', 'board-page']
+  for (const kind of kinds) {
+    const hook = `${kind}-title`
+    const rule = patterns.match(new RegExp(`\\[data-ui="${hook}"\\]\\s*\\{(?<body>[^}]+)\\}`))?.groups?.body
+    assert.match(rule ?? '', /font-size: var\(--kv-page-title-size\)/, hook)
+    assert.match(rule ?? '', /margin: 0/, hook)
+    assert.match(rule ?? '', /line-height: var\(--kv-leading-tight\)/, hook)
+
+    const heading = patterns.match(new RegExp(`\\[data-ui="${kind}-heading"\\]\\s*\\{(?<body>[^}]+)\\}`))
+      ?.groups?.body
+    assert.match(heading ?? '', /gap: var\(--kv-space-1\)/, `${kind}-heading`)
+
+    const description = patterns.match(
+      new RegExp(`\\[data-ui="${kind}-description"\\]\\s*\\{(?<body>[^}]+)\\}`),
+    )?.groups?.body
+    assert.match(description ?? '', /margin: 0/, `${kind}-description`)
+    assert.match(description ?? '', /line-height: var\(--kv-leading-normal\)/, `${kind}-description`)
+  }
+  assert.match(patterns, /--kv-page-title-size: 1\.5rem/)
+  assert.equal((patterns.match(/font-size: var\(--kv-text-lg\)/g) ?? []).length >= 4, true)
+})
+
+test('design system: canonical page headers share compact responsive padding', () => {
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const compactPadding = /padding: var\(--kv-space-4\) var\(--kv-space-4\) var\(--kv-space-3\)/g
+  assert.equal((patterns.match(compactPadding) ?? []).length >= 4, true)
+})
+
 test('design system: FormPage does not nest a second main landmark inside AppShell', () => {
   const html = renderToString(
     <AppShell
@@ -127,6 +168,15 @@ test('design system: controls preserve their native semantics and accessible sta
   )
 })
 
+test('design system: action labels leave room for Vietnamese diacritics while truncating', () => {
+  const primitives = readFileSync('packages/design-system/src/primitives/primitives.css', 'utf8')
+  const rule = primitives.match(/\[data-ui="action-label"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
+  assert.match(rule, /min-width: 0/)
+  assert.match(rule, /overflow: hidden/)
+  assert.match(rule, /line-height: var\(--kv-leading-normal\)/)
+  assert.match(rule, /text-overflow: ellipsis/)
+})
+
 test('design system: generic patterns need no translator or KetSuite domain', () => {
   const listPage = renderToString(
     <ListPage
@@ -140,13 +190,75 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       footer="End of results"
     />,
   )
-  assert.match(listPage, /<section data-ui="list-page">/)
+  assert.match(listPage, /<section data-ui="list-page"[^>]*data-pattern="list">/)
   assert.match(listPage, /data-ui="list-page-eyebrow"[^>]*>[\s\S]*?Catalogue/)
   assert.match(listPage, /data-ui="list-page-title"[^>]*>[\s\S]*?Products/)
   assert.match(listPage, /data-ui="list-page-title-row"[\s\S]*?data-ui="list-page-actions"/)
   assert.match(listPage, /data-ui="list-page-toolbar"/)
   assert.match(listPage, /data-ui="list-page-controls"[^>]*>[\s\S]*?Search and filters/)
   assert.match(listPage, /data-ui="list-page-status"[^>]*>[\s\S]*?24 products/)
+
+  const operationalList = renderToString(
+    <ListPage
+      variant="operational"
+      context="Sales / Sales orders"
+      title="Sales orders"
+      controls="Search orders"
+      body="Order rows"
+      status="148 orders"
+    />,
+  )
+  assert.match(operationalList, /data-ui="list-page"[^>]*data-variant="operational"/)
+  assert.match(
+    operationalList,
+    /data-ui="list-page-context"[^>]*>[\s\S]*?Sales \/ Sales orders[\s\S]*?data-ui="list-page-header"/,
+  )
+  assert.match(
+    operationalList,
+    /data-ui="list-page-body"[^>]*>[\s\S]*?Order rows[\s\S]*?data-ui="list-page-footer"[^>]*>[\s\S]*?148 orders/,
+  )
+  assert.match(operationalList, /data-ui="list-page-toolbar"[\s\S]*?Search orders/)
+  assert.doesNotMatch(operationalList, /data-ui="list-page-status"/)
+
+  const dashboardPage = renderToString(
+    <DashboardPage
+      variant="operational"
+      context="Sales / Overview"
+      eyebrow="Commercial workspace"
+      title="Sales overview"
+      description="Demand and confirmed revenue"
+      actions={<Button label="Create quotation" variant="primary" />}
+      body="Sales metrics"
+    />,
+  )
+  assert.match(dashboardPage, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
+  assert.match(
+    dashboardPage,
+    /data-ui="dashboard-page-context"[^>]*>[\s\S]*?Sales \/ Overview[\s\S]*?data-ui="dashboard-page-header"/,
+  )
+  assert.match(dashboardPage, /data-ui="dashboard-page-title-row"[\s\S]*?data-ui="dashboard-page-actions"/)
+  assert.match(dashboardPage, /data-ui="dashboard-page-body"[^>]*>[\s\S]*?Sales metrics/)
+
+  const boardPage = renderToString(
+    <BoardPage
+      variant="operational"
+      context="CRM / Pipeline"
+      eyebrow="Pipeline"
+      title="Sales opportunities"
+      description="Move active opportunities"
+      actions={<Button label="Create opportunity" variant="primary" />}
+      controls="Team and owner filters"
+      body="Opportunity columns"
+    />,
+  )
+  assert.match(boardPage, /data-ui="board-page"[^>]*data-variant="operational"/)
+  assert.match(
+    boardPage,
+    /data-ui="board-page-context"[^>]*>[\s\S]*?CRM \/ Pipeline[\s\S]*?data-ui="board-page-header"/,
+  )
+  assert.match(boardPage, /data-ui="board-page-title-row"[\s\S]*?data-ui="board-page-actions"/)
+  assert.match(boardPage, /data-ui="board-page-toolbar"[\s\S]*?Team and owner filters/)
+  assert.match(boardPage, /data-ui="board-page-body"[^>]*>[\s\S]*?Opportunity columns/)
 
   const formPage = renderToString(
     <FormPage
@@ -159,11 +271,27 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
       asideLabel="Partner context"
     />,
   )
-  assert.match(formPage, /<section data-ui="form-page" data-has-aside="true">/)
+  assert.match(formPage, /<section data-ui="form-page"[^>]*data-has-aside="true"[^>]*>/)
   assert.match(formPage, /data-ui="form-page-title-row"[\s\S]*?data-ui="form-page-actions"/)
   assert.match(formPage, /data-ui="form-page-layout"[\s\S]*?data-ui="form-page-aside"/)
   assert.match(formPage, /aria-label="Partner context"/)
   assert.doesNotMatch(formPage, /data-ui="(?:form-page-back|breadcrumbs)"/)
+
+  const operationalForm = renderToString(
+    <FormPage
+      variant="operational"
+      context="Purchasing / Vendor bill / BILL-0042"
+      title="BILL-0042"
+      description="Công ty Ánh Dương"
+      actions={<Button label="Save" variant="primary" />}
+      body="Vendor bill fields"
+    />,
+  )
+  assert.match(operationalForm, /data-ui="form-page"[^>]*data-variant="operational"/)
+  assert.match(
+    operationalForm,
+    /data-ui="form-page-context"[^>]*>[\s\S]*?Purchasing \/ Vendor bill \/ BILL-0042[\s\S]*?data-ui="form-page-header"/,
+  )
 
   const formPageFragment = renderToString(
     <FormPage
@@ -218,6 +346,67 @@ test('design system: generic patterns need no translator or KetSuite domain', ()
   assert.match(form, />Save</)
 })
 
+test('design system: every KetSuite ListPage consumer uses the operational workspace and page context', () => {
+  let consumers = 0
+  for (const path of globSync('packages/ketsuite/src/modules/**/*.tsx')) {
+    const source = readFileSync(path, 'utf8')
+    const calls = [...source.matchAll(/<ListPage\b/g)].length
+    if (!calls) continue
+    consumers += calls
+    const operational = [...source.matchAll(/<ListPage\s+variant="operational"/g)].length
+    assert.equal(operational, calls, path)
+    const contextual = [...source.matchAll(/<ListPage\s+variant="operational"\s+(?:frame|context)=/g)].length
+    assert.equal(contextual, calls, path)
+  }
+  assert.ok(consumers > 0)
+})
+
+test('design system: every KetSuite FormPage consumer uses the operational workspace and page context', () => {
+  let consumers = 0
+  for (const path of globSync('packages/ketsuite/src/modules/**/*.tsx')) {
+    const source = readFileSync(path, 'utf8')
+    const calls = [...source.matchAll(/<FormPage\b/g)].length
+    if (!calls) continue
+    consumers += calls
+    const operational = [...source.matchAll(/<FormPage\s+variant="operational"/g)].length
+    assert.equal(operational, calls, path)
+    const contextual = [...source.matchAll(/<FormPage\s+variant="operational"\s+(?:frame|context)=/g)].length
+    assert.equal(contextual, calls, path)
+  }
+  assert.ok(consumers > 0)
+})
+
+test('design system: every KetSuite DashboardPage consumer uses the operational workspace and page context', () => {
+  let consumers = 0
+  for (const path of globSync('packages/ketsuite/src/modules/**/*.tsx')) {
+    const source = readFileSync(path, 'utf8')
+    const calls = [...source.matchAll(/<DashboardPage\b/g)].length
+    if (!calls) continue
+    consumers += calls
+    const operational = [...source.matchAll(/<DashboardPage\s+variant="operational"/g)].length
+    assert.equal(operational, calls, path)
+    const contextual = [...source.matchAll(/<DashboardPage\s+variant="operational"\s+(?:frame|context)=/g)]
+      .length
+    assert.equal(contextual, calls, path)
+  }
+  assert.equal(consumers, 5)
+})
+
+test('design system: every KetSuite BoardPage consumer uses the operational workspace and page context', () => {
+  let consumers = 0
+  for (const path of globSync('packages/ketsuite/src/modules/**/*.tsx')) {
+    const source = readFileSync(path, 'utf8')
+    const calls = [...source.matchAll(/<BoardPage\b/g)].length
+    if (!calls) continue
+    consumers += calls
+    const operational = [...source.matchAll(/<BoardPage\s+variant="operational"/g)].length
+    assert.equal(operational, calls, path)
+    const contextual = [...source.matchAll(/<BoardPage\s+variant="operational"\s+(?:frame|context)=/g)].length
+    assert.equal(contextual, calls, path)
+  }
+  assert.equal(consumers, 6)
+})
+
 test('design system: navigation and progress expose semantic state', () => {
   const nav = renderToString(
     <NavList label="Main" items={[{ label: 'Orders', href: '/orders', active: true, count: 7 }]} />,
@@ -245,6 +434,7 @@ test('design system: catalogue renders every registered specimen', () => {
   assert.match(catalogue, /Operational UI, kept honest/)
   assert.match(catalogue, /id="data-table"/)
   assert.match(catalogue, /id="list-page"/)
+  assert.match(catalogue, /id="board-page"/)
   assert.match(catalogue, /id="form-page"/)
   assert.match(catalogue, /id="record-form"/)
   assert.match(catalogue, /id="modal-sheet"/)

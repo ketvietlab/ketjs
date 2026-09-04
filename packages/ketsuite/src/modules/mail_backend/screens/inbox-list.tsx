@@ -21,6 +21,8 @@ export const inboxScreen = (_: Translator, frame: Frame, options: InboxScreenOpt
     _,
     _('mail_backend.inbox.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('mail_backend.inbox.title')}
       description={_('mail_backend.inbox.subtitle')}
       actions={frame.extras?.['topbar.end']}

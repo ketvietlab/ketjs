@@ -46,7 +46,7 @@ const hub = () =>
 
 test('attendance credential hub is specialized and exposes URL-owned short workflows', () => {
   const html = renderToString(hub())
-  assert.match(html, /data-ui="record-workspace"/)
+  assert.match(html, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
   for (const issue of ['kiosk', 'pin', 'qr'])
     assert.match(html, new RegExp(`href="/admin/attendance/credentials\\?issue=${issue}&amp;lang=vi"`))

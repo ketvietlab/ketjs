@@ -106,7 +106,7 @@ test('sales orders list: keeps status filters, navigation, print and ListPage co
   assert.doesNotMatch(html, /data-ui="topbar"/)
   assert.match(
     html,
-    /Tổng đơn: 22 · Chờ lập hoá đơn: 1 · Đã lập hoá đơn: 1 · Đã khoá: 2[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?Tổng đơn: 22 · Chờ lập hoá đơn: 1 · Đã lập hoá đơn: 1 · Đã khoá: 2/,
   )
   assert.match(html, /data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"/)
   assert.match(html, /data-col="name"[\s\S]*?S00001/)

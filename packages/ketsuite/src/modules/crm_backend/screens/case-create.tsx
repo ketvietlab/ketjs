@@ -25,6 +25,8 @@ export const caseCreateScreen = (
     _,
     _('crm_backend.action.create'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="crm-case-create"
       title={_('crm_backend.action.create')}
       description={_('crm_backend.cases.title')}
