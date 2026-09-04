@@ -85,9 +85,15 @@ Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision
 | `storageFromConfig`, `localStorage`, `s3Storage` | Open configured storage implementations. |
 | `namespacedStorage`, `effectStorage` | Scope object keys and record declared storage effects. |
 | `signRequest`, `presignUrl`, `sha256` | S3 Signature Version 4 primitives. |
+| `logFromConfig`, `consoleLog`, `prettyLog`, `fileLog`, `memoryLog`, `nullLog` | Open a built-in operational sink. |
+| `multiLog`, `leveledLog`, `bufferedLog`, `isolatedLog`, `redactLog` | Compose fan-out, filtering, batching, isolation and redaction. |
+| `createLogger`, `describeError`, `traceOf` | Bind record context, reduce a failure to data, and pseudonymise a correlation or actor. |
+| `CORE_EVENTS`, `MODULE_EVENT`, `isLogLevel`, `isLogDriverName` | The framework's event catalogue and the shapes a module event and configuration must have. |
 
 Use the higher-level runtime services when possible. Signing and queue primitives are public for custom
-adapters and operational tooling, not a requirement for ordinary modules.
+adapters and operational tooling, not a requirement for ordinary modules. Ordinary modules log through
+`ctx.log`; the sink API is for a deployment choosing where records go. See
+[operational logging](/ketjs/logging/).
 
 ### Data and migration
 

@@ -152,7 +152,10 @@ test('legacy presets: exported audit helpers are the exact current User/Manager 
 })
 
 const setup = async () => {
-  const b = await bootDeployment(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'shared' }, port: 0 })
+  const b = await bootDeployment(ketsuite, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_SECRET: 'shared' },
+    port: 0,
+  })
   const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   const run = (fn: string, args: Record<string, unknown> = {}) =>
     callFn(fn, args, o).then((r) => r.value as Record<string, unknown>)

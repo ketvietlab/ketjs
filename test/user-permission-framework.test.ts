@@ -200,7 +200,7 @@ test('authorization schema preserves legacy rows through the explicit scope-inde
 
 test('managed roles and scoped assignments resolve live, audited, and fail closed', async (t) => {
   const booted = await bootDeployment(deployment, {
-    env: { KET_SQLITE: ':memory:', KET_SECRET: 'permission-framework-test' },
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_SECRET: 'permission-framework-test' },
     port: 0,
     log: () => {},
   })

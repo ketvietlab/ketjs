@@ -142,7 +142,7 @@ const app = defineDeployment({
 })
 
 test('locale: only a locale the deployment ships a catalogue for is ever used', async () => {
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}/_ket/health`
   // Node's own fetch sends `Accept-Language: *` by default. That reached Intl and
   // threw, so any client that did not set the header got a 500 — found by probing,

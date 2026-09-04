@@ -108,7 +108,7 @@ const notes = defineModule({
   messages: { en: { 'page.notFound': 'Nothing here' } },
 })
 
-const memory = { KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }
+const memory = { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }
 
 test('boot: one declaration produces a running server, framework routes included', async () => {
   const app = defineDeployment({

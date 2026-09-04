@@ -610,6 +610,15 @@ export type Ctx = {
   fnKey: string
   /** Ephemeral request/command correlation. Domains must hash it before persistence. */
   correlationId: string | null
+  /**
+   * Operational logging for this call, already carrying tenant, function, hashed
+   * correlation, hashed actor and company.
+   *
+   * This is not an audit trail. A record written here leaves the process
+   * immediately, is never readable by the application, and — unlike an audit row —
+   * survives a transaction that rolls back, because the attempt was real.
+   */
+  log: import('./server/log/logger.ts').Logger
   scope: Scope
   /** The composed manifest, so a module can check data against what is installed. */
   manifest: Manifest

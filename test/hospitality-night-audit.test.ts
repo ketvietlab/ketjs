@@ -186,7 +186,7 @@ test('hospitality night audit: queue worker catches up rent and nightly services
     await producer.close()
 
     worker = await bootWorker(app, {
-      env: { KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
+      env: { KET_LOG: 'null', KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
       log: () => {},
     })
     assert.equal(await worker.drain(), 2, 'night audit and post-check-in stay-notice preparation both run')

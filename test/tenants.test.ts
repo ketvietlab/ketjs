@@ -12,6 +12,7 @@ import {
   json,
   migrateOne,
   compose,
+  nullLog,
   sqliteAdapter,
   memorySessionStore,
 } from '@ketvietlab/ketjs'
@@ -95,7 +96,7 @@ const get = (port: number, tenant: string, path: string, init: RequestInit = {})
 
 test('tenants: each request lands in its own database', async () => {
   dbs.clear()
-  const b = await bootDeployment(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0, openLog: () => nullLog() })
   const post = (host: string, id: string) =>
     get(b.port, host, '/_ket/fn/core.add', {
       method: 'POST',
@@ -117,7 +118,7 @@ test('tenants: each request lands in its own database', async () => {
 
 test('tenants: every database runs the declared deployment composition', async () => {
   dbs.clear()
-  const b = await bootDeployment(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0, openLog: () => nullLog() })
   assert.deepEqual(await get(b.port, 't1', '/modules').then((r) => r.json()), ['core', 'extra'])
   assert.deepEqual(await get(b.port, 't2', '/modules').then((r) => r.json()), ['core', 'extra'])
   assert.equal((await get(b.port, 't1', '/extra')).status, 200)
@@ -127,7 +128,7 @@ test('tenants: every database runs the declared deployment composition', async (
 
 test('tenants: health answers for the tenant that asked, not for the deployment', async () => {
   dbs.clear()
-  const b = await bootDeployment(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0, openLog: () => nullLog() })
   const h1 = (await get(b.port, 't1', '/_ket/health').then((r) => r.json())) as {
     tenant: string
     modules: string[]
@@ -144,7 +145,7 @@ test('tenants: health answers for the tenant that asked, not for the deployment'
 
 test('tenants: a host this deployment does not serve is refused, not defaulted', async () => {
   dbs.clear()
-  const b = await bootDeployment(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0, openLog: () => nullLog() })
   const r = await get(b.port, 'nobody', '/notes')
   assert.equal(r.status, 400)
   assert.match(
@@ -157,7 +158,7 @@ test('tenants: a host this deployment does not serve is refused, not defaulted',
 
 test('tenants: migrations run per tenant, on first touch', async () => {
   dbs.clear()
-  const b = await bootDeployment(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0, openLog: () => nullLog() })
   // Nothing has been touched yet, so no tenant database has been opened.
   assert.equal(dbs.size, 0)
   await get(b.port, 't1', '/notes')
@@ -413,7 +414,7 @@ test('tenants: an async datastore opener is awaited before the adapter is opened
       },
     },
   })
-  const b = await bootDeployment(asyncApp, { port: 0 })
+  const b = await bootDeployment(asyncApp, { port: 0, openLog: () => nullLog() })
   const response = await fetch(`http://127.0.0.1:${b.port}/_ket/fn/core.list`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-ket-company': 'c1' },
@@ -426,7 +427,7 @@ test('tenants: an async datastore opener is awaited before the adapter is opened
 
 test('tenants: with several databases there is no single adapter, and the type says so', async () => {
   dbs.clear()
-  const b = await bootDeployment(app, { port: 0 })
+  const b = await bootDeployment(app, { port: 0, openLog: () => nullLog() })
   assert.equal(b.adapter, null)
   assert.match(await b.banner(), /tenant\(s\), one database each/)
   await b.close()
@@ -434,7 +435,7 @@ test('tenants: with several databases there is no single adapter, and the type s
 
 test('single: one datastore is the same interface, not a second code path', async () => {
   const solo = defineDeployment({ name: 'solo', modules: [core], headless: true, serve: {} })
-  const b = await bootDeployment(solo, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(solo, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   assert.notEqual(b.adapter, null)
   assert.deepEqual(await b.tenants.keys(), [''])
   const seen = await b.tenants.with('', async (t) => t.live.order)
@@ -496,7 +497,10 @@ const loginAs = async (port: number, tenant: string, userId: string) => {
 
 test('sessions: each tenant keeps its own, so a cookie does not travel between them', async () => {
   dbs.clear()
-  const b = await bootDeployment(authed, { env: { KET_SECRET: 'shared-across-pods' }, port: 0 })
+  const b = await bootDeployment(authed, {
+    env: { KET_LOG: 'null', KET_SECRET: 'shared-across-pods' },
+    port: 0,
+  })
 
   const s1 = await b.tenants.with('t1', async (t) => t.sessions!.start({ userId: 'u1', companies: ['c1'] }))
   const jar = s1.cookie.split(';')[0]!
@@ -517,7 +521,7 @@ test('sessions: each tenant keeps its own, so a cookie does not travel between t
 
 test('sessions: the cookie carries no Domain, so the browser scopes it to one subdomain', async () => {
   dbs.clear()
-  const b = await bootDeployment(authed, { env: { KET_SECRET: 'x' }, port: 0 })
+  const b = await bootDeployment(authed, { env: { KET_LOG: 'null', KET_SECRET: 'x' }, port: 0 })
   const { cookie } = await b.tenants.with('t1', async (t) =>
     t.sessions!.start({ userId: 'u1', companies: ['c1'] }),
   )
@@ -554,7 +558,7 @@ test('sessions: a shared store binds each session to the tenant that issued it',
       },
     },
   })
-  const b = await bootDeployment(oneDomain, { env: { KET_SECRET: 'x' }, port: 0 })
+  const b = await bootDeployment(oneDomain, { env: { KET_LOG: 'null', KET_SECRET: 'x' }, port: 0 })
   const { cookie, record } = await b.tenants.with('t1', async (t) =>
     t.sessions!.start({ userId: 'u1', companies: ['c1'] }),
   )
@@ -593,7 +597,7 @@ test('sessions: a manager reacquires the tenant after its adapter is evicted', a
       },
     },
   })
-  const b = await bootDeployment(pooled, { port: 0 })
+  const b = await bootDeployment(pooled, { port: 0, openLog: () => nullLog() })
   const sessions = await b.tenants.with('t1', async (tenant) => tenant.sessions!)
   const { cookie } = await sessions.start({ userId: 'u1', companies: ['c1'] })
   assert.equal(sessions.ephemeralSecret, true)
@@ -612,7 +616,7 @@ test('sessions: a manager reacquires the tenant after its adapter is evicted', a
 
 test('sessions: turning them on with tenants is no longer refused', async () => {
   dbs.clear()
-  const b = await bootDeployment(authed, { env: { KET_SECRET: 'x' }, port: 0 })
+  const b = await bootDeployment(authed, { env: { KET_LOG: 'null', KET_SECRET: 'x' }, port: 0 })
   assert.match(await b.banner(), /identity\s+sessions \(one per tenant\)/)
   await b.close()
 })

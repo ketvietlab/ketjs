@@ -1,4 +1,5 @@
 import { KetError } from '../kernel/errors.ts'
+import type { Logger } from './log/logger.ts'
 
 export type PolicyDenialEvidence = {
   policy: string
@@ -16,6 +17,15 @@ export type PolicyDecision = {
   /** Hash or opaque identifier only, never the protected record payload. */
   targetDigest?: string
   audit?: (evidence: PolicyDenialEvidence) => Promise<void>
+  /**
+   * Where a denial is recorded operationally. Pass `ctx.log`.
+   *
+   * Separate from `audit`, and both are worth having: `audit` writes durable
+   * evidence into the tenant's own data, while this makes the denial visible to
+   * whoever is watching the deployment. The actor is not repeated into the record —
+   * `ctx.log` already carries it, hashed, and this one is raw.
+   */
+  log?: Logger
 }
 
 /** Enforce one bounded domain policy after the function capability check. */
@@ -27,6 +37,11 @@ export async function enforcePolicy(decision: PolicyDecision): Promise<void> {
     })
   if (decision.allowed) return
   const code = decision.denialCode?.trim() || 'E_POLICY_DENIED'
+  decision.log?.warn('policy_denied', {
+    policy: decision.policy,
+    code,
+    ...(decision.targetDigest ? { target: decision.targetDigest } : {}),
+  })
   await decision.audit?.({
     policy: decision.policy,
     code,

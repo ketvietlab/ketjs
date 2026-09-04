@@ -144,7 +144,7 @@ test('hospitality stay notices: physical SQLite worker prepares, repairs and rec
     await producer.close()
 
     worker = await bootWorker(app, {
-      env: { KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
+      env: { KET_LOG: 'null', KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
       log: () => {},
     })
     assert.equal(await worker.drain(), 1)
