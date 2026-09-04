@@ -49,10 +49,79 @@ export type MenuOptions = {
    * work is nowhere is worse than showing them one screen too many.
    */
   intent?: boolean
+  /**
+   * The deployment's own grouping, applied before anything else is decided.
+   *
+   * Named entries move under the declared heading; the rest keep the heading
+   * their module gave them. A heading whose entries are all filtered away
+   * disappears like any other empty heading.
+   */
+  groups?: ReadonlyArray<{ id: string; label: string; icon?: string; items: readonly string[] }>
+  /** Menu ids to keep out of the main list whatever `for` says. */
+  demote?: readonly string[]
+}
+
+/**
+ * The menu as this deployment arranges it.
+ *
+ * Regrouping happens on the declarations rather than on the built tree, so
+ * permission, intent, search and active-branch logic all keep working on one
+ * shape. A group inherits its position from the first entry it claims, which
+ * keeps a regrouped sidebar in the order the module authors already thought
+ * about rather than in declaration order.
+ */
+const regrouped = (
+  manifest: Manifest,
+  groups: MenuOptions['groups'],
+): Array<[string, MenuDef & { by: string }]> => {
+  const entries = Object.entries(manifest.menus)
+  if (!groups?.length) return entries
+
+  const claimed = new Map<string, { id: string; label: string; icon?: string; order: number }>()
+  for (const [index, group] of groups.entries())
+    for (const item of group.items)
+      claimed.set(item, { id: group.id, label: group.label, icon: group.icon, order: index })
+
+  const byId = new Map(entries)
+  const sequenceOf = (group: string): number => {
+    const owned = [...claimed.entries()]
+      .filter(([, g]) => g.id === group)
+      .map(([item]) => byId.get(item)?.sequence ?? 100)
+    return owned.length ? Math.min(...owned) : 100
+  }
+
+  const out: Array<[string, MenuDef & { by: string }]> = []
+  const seen = new Set<string>()
+  for (const [id, def] of entries) {
+    const group = claimed.get(id)
+    if (!group) {
+      out.push([id, def])
+      continue
+    }
+    if (!seen.has(group.id)) {
+      seen.add(group.id)
+      out.push([
+        group.id,
+        {
+          by: def.by,
+          label: group.label,
+          ...(group.icon ? { icon: group.icon } : {}),
+          // The declared group stands where the module's heading stood, so a
+          // regrouped sidebar sits at the same level as the one it replaces.
+          // An entry hanging straight off a root has no heading to replace, and
+          // the group becomes that root's first heading instead.
+          parent: def.parent ? (byId.get(def.parent)?.parent ?? def.parent) : undefined,
+          sequence: sequenceOf(group.id),
+        } as MenuDef & { by: string },
+      ])
+    }
+    out.push([id, { ...def, parent: group.id }])
+  }
+  return out
 }
 
 export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
-  const entries = Object.entries(manifest.menus)
+  const entries = regrouped(manifest, o.groups)
   const byParent = new Map<string | undefined, Array<[string, MenuDef & { by: string }]>>()
   for (const e of entries) {
     const list = byParent.get(e[1].parent) ?? []
@@ -68,9 +137,11 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
   // `for` is about this viewer, not about this build: an entry naming a write
   // the deployment does not compose is a declaration to fix, not a reason to
   // demote the entry for everyone.
+  const demoted = new Set(o.demote ?? [])
   let applyIntent = o.intent === true
-  const intended = (def: MenuDef): boolean =>
-    !applyIntent || !def.for?.length || def.for.some((key) => !o.allow || o.allow.includes(key))
+  const intended = (id: string, def: MenuDef): boolean =>
+    !applyIntent ||
+    (!demoted.has(id) && (!def.for?.length || def.for.some((key) => !o.allow || o.allow.includes(key))))
 
   const label = (def: MenuDef & { by: string }): string => {
     const key = `${def.by}.${def.label}`
@@ -120,7 +191,7 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
       const active = (def.path !== undefined && def.path === activePath) || children.some((c) => c.active)
       // A heading is secondary only when everything under it is: a group holding
       // one entry that is someone's work still belongs in their sidebar.
-      const secondary = children.length ? children.every((c) => c.secondary) : !intended(def)
+      const secondary = children.length ? children.every((c) => c.secondary) : !intended(id, def)
       out.push({
         id,
         label: label(def),

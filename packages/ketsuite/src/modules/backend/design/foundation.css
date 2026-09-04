@@ -330,7 +330,6 @@
   [data-ui="menu-icon"] > [data-ui="icon"],
   [data-ui="sidebar-brand-chevron"] > [data-ui="icon"],
   [data-ui="sidebar-search-icon"] > [data-ui="icon"],
-  [data-ui="menu-section-chevron"] > [data-ui="icon"],
   [data-ui="chrome-search-icon"] > [data-ui="icon"],
   [data-ui="chrome-search-toggle"] > [data-ui="icon"],
   [data-ui="indicator-icon"] > [data-ui="icon"],
@@ -372,39 +371,16 @@
     display: block;
   }
 
+  /* A group is a label rather than a control: nothing folds, so nothing invites
+   * a click or answers one. */
   [data-ui="menu-section-title"] {
     display: flex;
     inline-size: 100%;
     align-items: center;
     gap: 0.375rem;
     padding: 0.375rem 0.5rem 0.25rem;
-    margin-block-start: 0.125rem;
-    border-radius: var(--admin-radius-sm);
-    cursor: pointer;
+    margin-block-start: 0.5rem;
     list-style: none;
-    transition: background-color var(--admin-motion-fast);
-  }
-
-  [data-ui="menu-section-title"]:hover {
-    background: var(--admin-surface);
-  }
-
-  [data-ui="menu-section-title"]::-webkit-details-marker {
-    display: none;
-  }
-
-  [data-ui="menu-section-chevron"] {
-    display: grid;
-    inline-size: 0.625rem;
-    block-size: 0.625rem;
-    flex-shrink: 0;
-    place-items: center;
-    color: var(--admin-ink-secondary);
-    transition: transform var(--admin-motion-fast);
-  }
-
-  [data-ui="menu-section"][open] > [data-ui="menu-section-title"] [data-ui="menu-section-chevron"] {
-    transform: rotate(90deg);
   }
 
   [data-ui="menu-section-text"] {

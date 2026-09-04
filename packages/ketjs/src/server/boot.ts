@@ -667,6 +667,8 @@ export async function bootDeployment(
           locale: _.locale,
           active: url.pathname,
           q,
+          groups: spec.navigation?.groups,
+          demote: spec.navigation?.demote,
           // Searching is how someone reaches a surface that is not their daily
           // work, so the search results are the permitted tree, not the narrowed
           // one. Hiding what a person typed the name of would be a bug.
