@@ -36,6 +36,8 @@ export default defineModule({
       'error.invalidMessage': 'Thông báo thành công không hợp lệ hoặc quá dài.',
       'error.unavailable': 'Biểu mẫu hiện không khả dụng.',
       'error.rateLimit': 'Bạn đã gửi quá nhiều lần. Vui lòng thử lại sau.',
+      'error.staleForm': 'Biểu mẫu đã được cập nhật. Hãy tải lại trang trước khi gửi.',
+      'error.saveConflict': 'Biểu mẫu vừa được người khác lưu. Hãy tải lại rồi lưu lại.',
     },
     en: {
       'app.title': 'Website forms',
@@ -61,6 +63,8 @@ export default defineModule({
       'error.invalidMessage': 'The success message is invalid or too long.',
       'error.unavailable': 'The form is not available.',
       'error.rateLimit': 'Too many submissions. Please try again later.',
+      'error.staleForm': 'This form has been updated. Reload the page before submitting.',
+      'error.saveConflict': 'Someone else saved this form. Reload and save again.',
     },
   },
   models,
