@@ -1,5 +1,5 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { AppShell, RecordSection } from '../layouts/shell.tsx'
+import { AppShell } from '../layouts/shell.tsx'
 import { Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
 import { ActionGroup, Button, LinkButton } from '../primitives/actions.tsx'
 import { Field } from '../primitives/field.tsx'
@@ -99,6 +99,7 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
   const blocked = ['loading', 'empty', 'error', 'readonly'].includes(props.state)
   const table = (
     <DataTable
+      responsive={canvas ? 'scroll' : 'stack'}
       rows={[
         { id: 'REC-001', status: labels.ready },
         { id: 'REC-002', status: labels.pending },
@@ -112,28 +113,32 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
   )
   const form = (
     <form data-ui="record-form" id="specimen-form">
-      <RecordSection
-        title={props.tab === 'details' ? labels.section : labels.activity}
+      <Surface
         body={
-          <Stack
-            items={[
-              <Field
-                id="display-name"
-                name="name"
-                label={labels.name}
-                value="Example record"
-                disabled={blocked}
-                error={props.state === 'validation' ? labels.validation : undefined}
-              />,
-              <Field
-                id="notes"
-                name="notes"
-                label={labels.note}
-                type="textarea"
-                value={labels.hint}
-                disabled={blocked}
-              />,
-            ]}
+          <Section
+            title={props.tab === 'details' ? labels.section : labels.activity}
+            body={
+              <Stack
+                items={[
+                  <Field
+                    id="display-name"
+                    name="name"
+                    label={labels.name}
+                    value="Example record"
+                    disabled={blocked}
+                    error={props.state === 'validation' ? labels.validation : undefined}
+                  />,
+                  <Field
+                    id="notes"
+                    name="notes"
+                    label={labels.note}
+                    type="textarea"
+                    value={labels.hint}
+                    disabled={blocked}
+                  />,
+                ]}
+              />
+            }
           />
         }
       />
@@ -158,8 +163,9 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
       ]}
     />
   )
-  if (props.state === 'loading') body = <LoadingState label={labels.loading} />
-  if (props.state === 'empty') body = <EmptyState title={labels.empty} message={labels.hint} />
+  if (props.state === 'loading') body = <Surface body={<LoadingState label={labels.loading} />} />
+  if (props.state === 'empty')
+    body = <Surface body={<EmptyState title={labels.empty} message={labels.hint} />} />
   if (props.state === 'error') body = <Notice title={labels.error} message={labels.hint} tone="danger" />
   if (props.state === 'readonly')
     body = <Stack items={[<Notice title={labels.readonly} message={labels.hint} />, body]} />
@@ -211,7 +217,10 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
     navigation,
     controller: '',
     ...(props.aside
-      ? { aside: <RecordSection title={labels.auxiliary} body={labels.hint} />, asideLabel: labels.auxiliary }
+      ? {
+          aside: <Surface body={<Section title={labels.auxiliary} body={labels.hint} />} />,
+          asideLabel: labels.auxiliary,
+        }
       : {}),
   }
   const main =

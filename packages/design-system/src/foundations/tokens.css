@@ -253,10 +253,10 @@
     --kv-z-toast: 200;
 
     /* Component roles. */
-    /* Light pages separate quiet navigation chrome from the white working
-       sheet. Dark mode keeps its existing panel/header and canvas hierarchy. */
+    /* Page chrome and the canvas remain quiet; individual surfaces own their
+       fill. Dark mode keeps its existing panel/header and canvas hierarchy. */
     --kv-page-chrome-bg: light-dark(var(--kv-page-bg), var(--kv-panel-bg));
-    --kv-page-content-bg: light-dark(var(--kv-panel-bg), var(--kv-page-bg));
+    --kv-page-content-bg: var(--kv-page-bg);
     --kv-action-primary-bg: var(--kv-accent);
     --kv-action-primary-hover: var(--kv-accent-hover);
     --kv-action-primary-active: var(--kv-accent-active);
