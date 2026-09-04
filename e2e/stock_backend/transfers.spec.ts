@@ -12,7 +12,7 @@ const login = async (page: Page) => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('stock-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -64,10 +64,10 @@ test('creates a transfer and opens it from the list', async ({ page }) => {
   await page.getByRole('button', { name: 'Tạo' }).click()
 
   await expect(page).toHaveURL(/\/admin\/stock\/transfers\/[^?]+\?lang=vi$/)
-  await expect(page.locator('[data-ui="record-heading"]')).toHaveText('WH/OUT/E2E')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('WH/OUT/E2E')
   await page.goto('/admin/stock/transfers?lang=vi')
   const transfer = page.getByRole('link', { name: 'WH/OUT/E2E' })
   await expect(transfer).toBeVisible()
   await transfer.click()
-  await expect(page.locator('[data-ui="record-heading"]')).toHaveText('WH/OUT/E2E')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('WH/OUT/E2E')
 })

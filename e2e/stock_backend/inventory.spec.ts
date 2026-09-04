@@ -12,7 +12,7 @@ const login = async (page: Page) => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('stock-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
