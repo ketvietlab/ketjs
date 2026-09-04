@@ -8,6 +8,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.frontDesk',
     path: '/admin/hospitality/front-desk',
     needs: 'hospitality_core.listStays',
+    for: ['hospitality_core.checkIn', 'hospitality_core.checkOut'],
     sequence: 10,
   },
   'hospitality.tapeChart': {
@@ -15,6 +16,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.tapeChart',
     path: '/admin/hospitality/tape-chart',
     needs: 'hospitality_core.getTapeChart',
+    for: ['hospitality_core.createReservation', 'hospitality_core.moveRoom'],
     sequence: 20,
   },
   'hospitality.reservations': {
@@ -22,6 +24,11 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.reservations',
     path: '/admin/hospitality/reservations',
     needs: 'hospitality_core.listReservations',
+    for: [
+      'hospitality_core.createReservation',
+      'hospitality_core.amendReservation',
+      'hospitality_core.cancelReservation',
+    ],
     sequence: 30,
   },
   'hospitality.stays': {
@@ -29,6 +36,12 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.stays',
     path: '/admin/hospitality/stays',
     needs: 'hospitality_core.listStays',
+    for: [
+      'hospitality_core.checkIn',
+      'hospitality_core.addStayGuest',
+      'hospitality_core.moveRoom',
+      'hospitality_core.markNoShow',
+    ],
     sequence: 40,
   },
   'hospitality.folios': {
@@ -36,6 +49,11 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.folios',
     path: '/admin/hospitality/folios',
     needs: 'hospitality_core.listFolios',
+    for: [
+      'hospitality_core.addCharge',
+      'hospitality_core.voidCharge',
+      'hospitality_billing.recordFolioPayment',
+    ],
     sequence: 50,
   },
   'hospitality.services': {
@@ -43,6 +61,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.services',
     path: '/admin/hospitality/services',
     needs: 'hospitality_core.listExtraLines',
+    for: ['hospitality_core.addCharge', 'hospitality_core.materializeExtraLine'],
     sequence: 52,
   },
   'hospitality.nightAudit': {
@@ -50,6 +69,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.nightAudit',
     path: '/admin/hospitality/night-audit',
     needs: 'hospitality_core.listNightAudits',
+    for: ['hospitality_core.requestNightAudit', 'hospitality_core.previewNightAudit'],
     sequence: 54,
   },
   'hospitality.inventory': {
@@ -57,6 +77,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.inventory',
     path: '/admin/hospitality/inventory',
     needs: 'hospitality_core.listInventory',
+    for: ['hospitality_core.setInventoryRange', 'hospitality_core.setRestrictionRange'],
     sequence: 55,
   },
   'hospitality.properties': {
@@ -64,6 +85,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.properties',
     path: '/admin/hospitality/properties',
     needs: 'hospitality_core.listProperties',
+    for: ['hospitality_core.saveProperty'],
     sequence: 60,
   },
   'hospitality.rooms': {
@@ -71,6 +93,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.rooms',
     path: '/admin/hospitality/rooms',
     needs: 'hospitality_core.listRooms',
+    for: ['hospitality_core.saveRoom'],
     sequence: 70,
   },
   'hospitality.housekeeping': { parent: 'hospitality', label: 'menu.housekeeping', sequence: 70 },
@@ -79,6 +102,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.cleaningTasks',
     path: '/admin/hospitality/housekeeping',
     needs: 'hospitality_core.listCleaningTasks',
+    for: ['hospitality_core.startCleaningTask', 'hospitality_core.completeCleaningTask'],
     sequence: 10,
   },
   'hospitality.housekeepingRooms': {
@@ -86,6 +110,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.housekeepingRooms',
     path: '/admin/hospitality/housekeeping/rooms',
     needs: 'hospitality_core.listRooms',
+    for: ['hospitality_core.setRoomStatus', 'hospitality_core.createCleaningTask'],
     sequence: 20,
   },
   'hospitality.compliance': { parent: 'hospitality', label: 'menu.compliance', sequence: 80 },
@@ -94,6 +119,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.stayNotices',
     path: '/admin/hospitality/stay-notices',
     needs: 'hospitality_core.listStayNotices',
+    for: ['hospitality_core.recordStayNoticeSubmission', 'hospitality_core.confirmStayNotice'],
     sequence: 10,
   },
   'hospitality.configuration': { parent: 'hospitality', label: 'menu.configuration', sequence: 90 },
@@ -102,6 +128,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.roomTypes',
     path: '/admin/hospitality/room-types',
     needs: 'hospitality_core.listRoomTypes',
+    for: ['hospitality_core.saveRoomType'],
     sequence: 10,
   },
   'hospitality.content': {
@@ -109,6 +136,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.content',
     path: '/admin/hospitality/content',
     needs: 'hospitality_core.listContentImages',
+    for: ['hospitality_core.setPrimaryContentImage'],
     sequence: 12,
   },
   'hospitality.ratePlans': {
@@ -116,6 +144,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.ratePlans',
     path: '/admin/hospitality/rate-plans',
     needs: 'hospitality_core.listRatePlans',
+    for: ['hospitality_core.saveRatePlan'],
     sequence: 15,
   },
   'hospitality.amenities': {
@@ -123,6 +152,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.amenities',
     path: '/admin/hospitality/amenities',
     needs: 'hospitality_core.listAmenities',
+    for: ['hospitality_core.saveAmenity'],
     sequence: 20,
   },
   'hospitality.policies': {
@@ -130,6 +160,7 @@ export const menus: Record<string, MenuDef> = {
     label: 'menu.policies',
     path: '/admin/hospitality/policies',
     needs: 'hospitality_core.listCancellationPolicies',
+    for: ['hospitality_core.saveCancellationPolicy'],
     sequence: 30,
   },
 }

@@ -63,6 +63,7 @@ export const projectNav = (props: IslandProps): IslandView => {
     label,
     path: `${path}${locale}`,
     icon: null,
+    secondary: false,
     // The epic map sits under the epics screen, so the group still marks the
     // row the reader came in through rather than nothing at all.
     active: screen === id,
