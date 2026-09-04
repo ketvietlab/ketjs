@@ -148,7 +148,9 @@ test('testing: dry-run and structured HTTP failures stay observable', async () =
       () => e2e.client.call('headless_test.missing'),
       (error: unknown) => {
         assert.ok(error instanceof TestHttpError)
-        assert.equal(error.status, 400)
+        // A function this build does not serve is a 404, the same as any other
+        // address that is not there.
+        assert.equal(error.status, 404)
         assert.equal((error.body as { code: string }).code, 'E_UNKNOWN_FUNCTION')
         return true
       },

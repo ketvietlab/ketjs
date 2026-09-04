@@ -27,6 +27,29 @@ import { html, trustedMarkup } from '@ketvietlab/ketjs-view'
 
 type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promise<RouteResult> | RouteResult
 
+/**
+ * What an error means over HTTP.
+ *
+ * Every KetError used to answer 400, which said "you sent something wrong" to a
+ * person whose request was fine and whose permissions were not. A monitor cannot
+ * tell a missing grant from a malformed body, and neither can a client.
+ */
+export const statusForError = (code: string): number => {
+  if (code === 'E_FN_NOT_PERMITTED') return 403
+  if (code === 'E_NOT_FOUND' || code === 'E_UNKNOWN_FUNCTION') return 404
+  if (code === 'E_PAYLOAD_TOO_LARGE') return 413
+  return 400
+}
+
+/** True when this request is a browser navigating, rather than a client calling. */
+export const wantsHtml = (req: IncomingMessage): boolean => {
+  const accept = String(req.headers.accept ?? '')
+  if (!accept.includes('text/html')) return false
+  // A fragment request is answered by the caller's own error handling; replacing
+  // a slot with a full document would paint a page inside a page.
+  return String(req.headers['x-ket-navigation'] ?? '') === ''
+}
+
 export type ServeOpts = {
   manifest: Manifest
   /** A single database. Use `pool` + `resolveDatastore` for one database per tenant. */
@@ -65,6 +88,18 @@ export type ServeOpts = {
    * an exception into a JSON body for the client and the stack is discarded.
    */
   log?: Logger
+  /**
+   * Render an error as a page, for a browser that was navigating.
+   *
+   * Returning null falls back to JSON, which is what a client calling the API
+   * wants and what a person who clicked a link never did.
+   */
+  renderErrorPage?: (o: {
+    code: string
+    status: number
+    url: URL
+    req: IncomingMessage
+  }) => Promise<string | null>
   /**
    * Which language this request is in. Resolved in one place, like the datastore,
    * so a handler cannot answer in the wrong one by forgetting to pass it along.
@@ -766,7 +801,18 @@ export async function createKetServer(o: ServeOpts) {
         return
       }
       if (e instanceof FormValidationError) return json(res, 422, e.toJSON())
-      if (e instanceof KetError) return json(res, e.code === 'E_PAYLOAD_TOO_LARGE' ? 413 : 400, e.toJSON())
+      const status = e instanceof KetError ? statusForError(e.code) : 500
+      const code = e instanceof KetError ? e.code : 'E_INTERNAL'
+      if (o.renderErrorPage && wantsHtml(req)) {
+        // A page that fails to render an error is worse than the error, so the
+        // fallback is the JSON that was always there.
+        const page = await o.renderErrorPage({ code, status, url: requestUrl(req), req }).catch(() => null)
+        if (page !== null) {
+          res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' })
+          return res.end(page)
+        }
+      }
+      if (e instanceof KetError) return json(res, status, e.toJSON())
       return json(res, 500, { code: 'E_INTERNAL', message: (e as Error).message })
     } finally {
       requestLog?.log({

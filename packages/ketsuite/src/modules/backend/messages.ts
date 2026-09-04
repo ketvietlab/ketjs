@@ -18,6 +18,19 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.sections': 'Phân hệ',
     'nav.search': 'Tìm phân hệ, menu…',
     'nav.noMatch': 'Không có phân hệ hoặc menu nào khớp.',
+    // What a person reads when the answer is no. The code stays on the page —
+    // it is what they will be asked for — but it is not the headline, because
+    // "E_FN_NOT_PERMITTED" tells them nothing they can act on.
+    'error.forbidden.title': 'Bạn không có quyền mở màn hình này',
+    'error.forbidden.message':
+      'Tài khoản của bạn chưa được cấp quyền cho màn hình này. Nếu đây là việc bạn cần làm, hãy đề nghị quản trị viên cấp thêm quyền.',
+    'error.missing.title': 'Không tìm thấy màn hình này',
+    'error.missing.message':
+      'Đường dẫn này không còn tồn tại, hoặc chưa bao giờ có trong bản triển khai đang chạy.',
+    'error.failed.title': 'Màn hình này không mở được',
+    'error.failed.message':
+      'Đã có lỗi khi dựng màn hình. Thử lại; nếu vẫn vậy, gửi mã lỗi bên dưới cho người phụ trách hệ thống.',
+    'error.back': 'Quay lại trang đầu',
     'nav.pages': 'Trang',
     brand: 'KetSuite',
     switchCompany: 'Chuyển công ty',
@@ -96,6 +109,15 @@ export const messages: Record<string, Record<string, Message>> = {
     'app.category': 'System',
 
     'nav.sections': 'Modules',
+    'error.forbidden.title': 'You do not have access to this screen',
+    'error.forbidden.message':
+      'Your account has not been granted this screen. If this is work you need to do, ask an administrator to grant it.',
+    'error.missing.title': 'This screen does not exist',
+    'error.missing.message': 'This path is no longer served, or was never part of the running deployment.',
+    'error.failed.title': 'This screen could not be opened',
+    'error.failed.message':
+      'Something failed while building the screen. Try again; if it keeps happening, send the code below to whoever runs the system.',
+    'error.back': 'Back to the start',
     'nav.search': 'Search modules and menus…',
     'nav.noMatch': 'No module or menu matches.',
     'nav.pages': 'Pages',

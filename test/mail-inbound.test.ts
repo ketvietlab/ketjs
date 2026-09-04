@@ -188,7 +188,7 @@ test('inbound email: signed reply/reference/bounce routing, attachment storage, 
         }),
       (error: unknown) => {
         assert.ok(error instanceof TestHttpError)
-        assert.equal(error.status, 400)
+        assert.equal(error.status, 403)
         assert.equal((error.body as { code?: string }).code, 'E_FN_NOT_PERMITTED')
         return true
       },
