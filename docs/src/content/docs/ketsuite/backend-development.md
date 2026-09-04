@@ -106,10 +106,17 @@ do not implement the hierarchy with a route-local background override or another
 | Tables | `--kv-table-bg`: opaque white in light; transparent in dark, preserving row hover/selection |
 | Sidebar and record rail | Existing sidebar / subtle panel tokens, separated with low-contrast borders |
 
-For narrow tables, use `DataTable responsive="stack"`: labelled cells stack at 768px and below,
-and row/cell heights grow with their contents. The default `responsive="scroll"` preserves the
-wide table, suitable for spatial schedules and inventory grids. Do not duplicate mobile table CSS
-in consumer modules. Browser coverage must assert cell/row bounds as well as page overflow.
+For narrow tables, use `responsive="stack"`: labelled cells stack at 768px and below, and row/cell
+heights grow with their contents. The default `responsive="scroll"` preserves the wide table,
+suitable for spatial schedules and inventory grids. The option reads the same on the design-system
+`DataTable` and on the KetSuite `dataTable` helper, which adds selection, groups, sorting and
+configurable columns on top of the same markup — a stacked row hides the header, so the helper
+labels every cell it renders. Do not duplicate mobile table CSS in consumer modules. Browser
+coverage must assert cell/row bounds as well as page overflow.
+
+Prefer `stack` for an operational collection a person reads on a phone. A scrolling table there
+does not shorten the row, it moves the row sideways, so every column past the first is a value the
+reader has to discover by dragging — and nothing on screen says it is there.
 
 These roles alias the existing palette; they do not add brand colours or change the dark palette.
 `FormPage`, `DashboardPage`, and `BoardPage` are compatibility adapters for the same surface rules, not

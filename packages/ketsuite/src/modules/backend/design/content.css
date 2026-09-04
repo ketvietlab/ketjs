@@ -229,18 +229,30 @@
     flex-wrap: nowrap;
   }
 
+  /* A trail that does not fit shortens from the left: the ancestors give way
+     before the page you are on. Every crumb may shrink, so every crumb has to
+     clip — without `overflow`, `nowrap` text keeps its full width and paints
+     over the crumb beside it, which is what long labels used to do here. */
   [data-ui="page-context-trail"] [data-ui="breadcrumb"] {
     min-inline-size: 0;
+    overflow: hidden;
     white-space: nowrap;
   }
 
-  [data-ui="page-context-trail"] [data-ui="breadcrumb"]:last-child {
-    overflow: hidden;
-  }
-
-  [data-ui="page-context-trail"] [data-ui="breadcrumb"]:last-child > span {
+  [data-ui="page-context-trail"] [data-ui="breadcrumb"] > :where(a, span) {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* The separator is a pseudo-element on the crumb, so it must not be eaten by
+     the same shrinking that clips the label. */
+  [data-ui="page-context-trail"] [data-ui="breadcrumb"]:not(:last-child)::after {
+    flex: 0 0 auto;
+  }
+
+  /* The current page keeps its room last, after the ancestors have given theirs. */
+  [data-ui="page-context-trail"] [data-ui="breadcrumb"]:last-child {
+    flex: 0 1 auto;
   }
 
   [data-ui="page-context-viewer"] {

@@ -141,3 +141,44 @@ test('flow project routes: split list/create while preserving validation, locale
   )
   assert.equal(forged.status, 403)
 })
+
+test('flow project create: resubmitting the same form lands on one project, not two', async (t) => {
+  const app = await boot(t)
+
+  // The rendered form carries the record id and the idempotency key.
+  const form = await app.client.get('/admin/flow/projects?create=1&lang=en')
+  const html = await form.text()
+  const id = /name="id" value="([^"]+)"/.exec(html)?.[1]
+  const idempotencyKey = /name="idempotencyKey" value="([^"]+)"/.exec(html)?.[1]
+  assert.ok(id, 'create form carries a record id')
+  assert.ok(idempotencyKey, 'create form carries an idempotency key')
+
+  const body = () =>
+    new URLSearchParams({
+      id: id!,
+      idempotencyKey: idempotencyKey!,
+      key: 'DUP',
+      name: 'Submitted twice',
+      template: 'simple',
+    })
+
+  const first = await app.client.post('/admin/flow/projects/new?lang=en', body(), post)
+  assert.equal(first.status, 303)
+  const second = await app.client.post('/admin/flow/projects/new?lang=en', body(), post)
+  assert.equal(second.status, 303)
+  // Both posts land on the same project rather than creating a second one.
+  assert.equal(first.headers.get('location'), second.headers.get('location'))
+
+  const projects = (
+    await app.client.call<Row[]>('flow.project.list', { search: 'Submitted twice', limit: 10 })
+  ).value
+  assert.equal(projects.length, 1)
+  // And the seeded columns are not duplicated either — they are derived from the
+  // project and the column code, so the second pass upserts rather than inserts.
+  const columns = (await app.client.call<Row[]>('flow.column.list', { projectId: String(projects[0]?.id) }))
+    .value
+  assert.deepEqual(
+    columns.map((column) => column.name),
+    ['To do', 'Done'],
+  )
+})
