@@ -39,6 +39,8 @@ export default defineModule({
       'error.staleForm': 'Biểu mẫu đã được cập nhật. Hãy tải lại trang trước khi gửi.',
       'error.saveConflict': 'Biểu mẫu vừa được người khác lưu. Hãy tải lại rồi lưu lại.',
       'error.consentRequired': 'Bạn cần đồng ý với thông báo trước khi gửi.',
+      'error.consentVersionRequired':
+        'Hãy tải lại trang trước khi gửi, để ghi nhận đúng thông báo bạn đã đồng ý.',
     },
     en: {
       'app.title': 'Website forms',
@@ -67,6 +69,8 @@ export default defineModule({
       'error.staleForm': 'This form has been updated. Reload the page before submitting.',
       'error.saveConflict': 'Someone else saved this form. Reload and save again.',
       'error.consentRequired': 'You must agree to the notice before submitting.',
+      'error.consentVersionRequired':
+        'Reload the page before submitting, so the notice you agreed to is recorded correctly.',
     },
   },
   models,

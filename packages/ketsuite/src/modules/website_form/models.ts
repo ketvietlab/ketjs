@@ -37,6 +37,13 @@ export const models: Record<string, ModelDef> = {
       payload: 'json',
       /** Which field contract this payload was accepted against. */
       schemaVersion: 'int?',
+      /**
+       * The exact notice this visitor agreed to, copied at the moment they
+       * agreed. A Form is one mutable row with no history, so the version alone
+       * cannot be resolved back to any text once the notice is edited — and a
+       * consent record that cannot say what was consented to is not a record.
+       */
+      consentText: 'text?',
       consent: 'bool',
       status: 'text',
       source: 'text?',

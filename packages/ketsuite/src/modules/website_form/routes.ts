@@ -31,6 +31,9 @@ const sameOrigin = (req: Req): boolean => {
   }
 }
 
+/** Every encoding a browser or client may use for a ticked consent box. */
+const CONSENT_GIVEN = new Set(['true', 'on', 'yes', '1'])
+
 export const routes: Record<string, RouteEntry> = {
   '/website/forms/{id}/submit': {
     anonymous: true,
@@ -76,7 +79,14 @@ export const routes: Record<string, RouteEntry> = {
             {
               formId: params.id,
               payload,
-              consent: body.consent === true || body.consent === 'true' || body.consent === '1',
+              // A checked <input type="checkbox" name="consent"> with no value
+              // attribute posts "on" — the HTML default. Rejecting it told a
+              // visitor who had ticked the box that they must agree.
+              consent: CONSENT_GIVEN.has(
+                typeof body.consent === 'boolean'
+                  ? String(body.consent)
+                  : String(body.consent ?? '').toLowerCase(),
+              ),
               honeypot: String(body.honeypot ?? ''),
               source: String(body.source ?? req.headers.referer ?? url.pathname).slice(0, 2_048),
               rateKey: remote,
@@ -89,7 +99,11 @@ export const routes: Record<string, RouteEntry> = {
           const limited = result.errors?.some((error) => error.message === 'website_form.error.rateLimit')
           // 409, not 422: nothing is wrong with what the visitor typed, the form
           // they typed it into moved. The client should reload, not edit.
-          const stale = result.errors?.some((error) => error.message === 'website_form.error.staleForm')
+          const stale = result.errors?.some(
+            (error) =>
+              error.message === 'website_form.error.staleForm' ||
+              error.message === 'website_form.error.consentVersionRequired',
+          )
           return json(result, { status: result.ok ? 200 : limited ? 429 : stale ? 409 : 422 })
         } catch (error) {
           const code = error instanceof Error ? error.message : 'invalid_request'

@@ -245,19 +245,27 @@ export const functions: Record<string, FnSpec> = {
       const existing = await formById(ctx, args.id)
       if (existing && existing.siteId !== args.siteId)
         return invalid('id', 'website.error.immutableOwnership')
+      // The notice that will actually be stored, computed once so the hash and
+      // the row can never disagree: absent means "leave it alone", an explicit
+      // null clears it. Comparing the raw argument instead made every save that
+      // simply omitted the field look like a contract change.
+      const notice =
+        args.consentText === undefined
+          ? normalisedNotice(existing?.consentText)
+          : normalisedNotice(args.consentText)
+
       // A save that leaves the field contract alone keeps its version, so an
       // editor fixing a typo in the success message does not invalidate every
       // form page a visitor currently has open.
       const contractChanged =
-        !existing ||
-        contractOf(existing.schema, existing.consentText) !== contractOf(args.schema, args.consentText)
+        !existing || contractOf(existing.schema, existing.consentText) !== contractOf(args.schema, notice)
       const row = {
         id: args.id,
         siteId: args.siteId,
         name: String(args.name).trim(),
         schema: args.schema,
         schemaVersion: contractChanged ? versionOf(existing) + (existing ? 1 : 0) : versionOf(existing),
-        consentText: normalisedNotice(args.consentText),
+        consentText: notice,
         successMessage: String(args.successMessage).trim(),
         notifyTo: args.notifyTo ? String(args.notifyTo).trim() : null,
         active: args.active !== false,
@@ -299,6 +307,7 @@ export const functions: Record<string, FnSpec> = {
       payload: 'json',
       schemaVersion: 'int?',
       consent: 'bool',
+      consentText: 'text?',
       status: 'text',
       source: 'text?',
       createdAt: 'datetime',
@@ -353,9 +362,16 @@ export const functions: Record<string, FnSpec> = {
         return invalid('formId', 'website_form.error.staleForm')
       // A form that shows a notice is asking for agreement to it. Storing
       // consent: false against such a form would record a submission nobody
-      // agreed to, and the version above is what says which notice that was.
+      // agreed to.
       if (form.consentText && args.consent !== true)
         return invalid('consent', 'website_form.error.consentRequired')
+      // And a page that will not say which notice it showed cannot be recorded
+      // as agreeing to the current one. The version check above is opt-in,
+      // which is harmless for fields — but stamping an unversioned submission
+      // with the version in force would manufacture agreement to a notice the
+      // visitor may never have seen. No version, no truthful record, no write.
+      if (form.consentText && args.schemaVersion == null)
+        return invalid('schemaVersion', 'website_form.error.consentVersionRequired')
       const errors = validatePayload(form.schema, args.payload)
       if (errors.length) return { ok: false, errors }
 
@@ -382,6 +398,7 @@ export const functions: Record<string, FnSpec> = {
           payload: args.payload,
           schemaVersion: current,
           consent: args.consent === true,
+          consentText: form.consentText ? String(form.consentText) : null,
           status: 'new',
           source: args.source ? String(args.source).slice(0, 2_048) : null,
           fingerprint: key,
