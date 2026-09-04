@@ -110,7 +110,7 @@
   :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] {
     gap: 0;
     padding: 0 0 var(--kv-space-10);
-    background: var(--kv-page-bg);
+    background: var(--kv-page-content-bg);
   }
 
   :where([data-kv-design-system])
@@ -122,7 +122,7 @@
     align-items: center;
     padding-inline: var(--kv-page-padding-x);
     border-bottom: 1px solid var(--kv-panel-divider);
-    background: var(--kv-panel-bg);
+    background: var(--kv-page-chrome-bg);
   }
 
   :where([data-kv-design-system])
@@ -130,7 +130,7 @@
     [data-ui="list-page-header"] {
     padding: var(--kv-space-4) var(--kv-page-padding-x);
     border-bottom: 1px solid var(--kv-panel-divider);
-    background: var(--kv-panel-bg);
+    background: var(--kv-page-chrome-bg);
   }
 
   :where([data-kv-design-system])
@@ -153,7 +153,7 @@
     padding: var(--kv-space-3) var(--kv-page-padding-x) var(--kv-space-2-5);
     border: 0;
     border-radius: 0;
-    background: transparent;
+    background: var(--kv-page-bg);
   }
 
   :where([data-kv-design-system])
@@ -168,6 +168,7 @@
     [data-ui="list-page-body"] {
     padding-top: var(--kv-space-2);
     padding-inline: var(--kv-page-padding-x);
+    background: var(--kv-page-content-bg);
   }
 
   :where([data-kv-design-system])
@@ -308,6 +309,67 @@
   :where([data-kv-design-system]) [data-ui="record-form"] {
     display: grid;
     gap: var(--kv-gap-field-group);
+  }
+
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="table-scroll"][data-responsive="stack"] {
+      overflow: hidden;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] > [data-ui="table"] {
+      display: block;
+      min-width: 0;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] > [data-ui="table"] > thead {
+      display: none;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] > [data-ui="table"] > tbody {
+      display: block;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="row"] {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      height: auto;
+      padding: var(--kv-space-3);
+      border-bottom: 1px solid var(--kv-table-border);
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="row"]:last-child {
+      border-bottom: 0;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="cell"] {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--kv-space-2);
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+      height: auto;
+      padding: var(--kv-space-2) 0;
+      border: 0;
+      white-space: normal;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="cell"]::before {
+      content: attr(data-label);
+      color: var(--kv-text-muted);
+      font-size: var(--kv-text-sm);
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="cell"]:first-child {
+      display: block;
+      font-weight: var(--kv-weight-semibold);
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="cell"]:first-child::before {
+      display: none;
+    }
   }
 
   :where([data-kv-design-system]) [data-ui="form-errors"] {
@@ -535,6 +597,7 @@
 
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
       [data-ui="table"]
       :is(th, td):is([data-priority="secondary"], [data-priority="tertiary"]) {
       display: none;
@@ -542,6 +605,7 @@
 
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
       [data-ui="table"]
       :is(th, td)[data-priority="primary"][data-align="end"] {
       width: 7rem;
@@ -747,7 +811,7 @@
     align-items: center;
     padding-inline: var(--kv-page-padding-x);
     border-bottom: 1px solid var(--kv-panel-divider);
-    background: var(--kv-panel-bg);
+    background: var(--kv-page-chrome-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="board-page-header"] {
@@ -760,7 +824,7 @@
   :where([data-kv-design-system])
     [data-ui="board-page"][data-variant="operational"]
     [data-ui="board-page-header"] {
-    background: var(--kv-panel-bg);
+    background: var(--kv-page-chrome-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="board-page-heading"] {
@@ -835,6 +899,7 @@
     align-items: center;
     padding: var(--kv-space-3) var(--kv-page-padding-x) var(--kv-space-2-5);
     border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="board-page-controls"] {
@@ -889,7 +954,8 @@
 @layer ket.app {
   /* Dashboards are working canvases, not records. Their context and identity use
      the same quiet bands as lists and forms; KPI, workflow and analytical blocks
-     then share one uninterrupted canvas below. */
+     own their surfaces on the grey page canvas below. Never paint the whole
+     workspace white: the gaps must separate independent cards and tables. */
   :where([data-kv-design-system]) [data-ui="dashboard-page"] {
     display: grid;
     min-width: 0;
@@ -910,7 +976,7 @@
     align-items: center;
     padding-inline: var(--kv-page-padding-x);
     border-bottom: 1px solid var(--kv-panel-divider);
-    background: var(--kv-panel-bg);
+    background: var(--kv-page-chrome-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="dashboard-page-header"] {
@@ -923,7 +989,7 @@
   :where([data-kv-design-system])
     [data-ui="dashboard-page"][data-variant="operational"]
     [data-ui="dashboard-page-header"] {
-    background: var(--kv-panel-bg);
+    background: var(--kv-page-chrome-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="dashboard-page-heading"] {
@@ -997,6 +1063,11 @@
     min-width: 0;
     gap: var(--kv-space-6);
     padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-toolbar"] {
+    background: var(--kv-page-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="dashboard-page-body"] > [data-ui="stack"] {
@@ -1057,7 +1128,7 @@
   :where([data-kv-design-system]) [data-ui="form-page"] {
     display: grid;
     min-width: 0;
-    background: var(--kv-page-bg);
+    background: var(--kv-page-content-bg);
   }
 
   /* Operational forms share the same quiet location band as collections. The
@@ -1076,7 +1147,7 @@
     align-items: center;
     padding-inline: var(--kv-page-padding-x);
     border-bottom: 1px solid var(--kv-panel-divider);
-    background: var(--kv-panel-bg);
+    background: var(--kv-page-chrome-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-header"] {
@@ -1090,7 +1161,7 @@
   :where([data-kv-design-system])
     [data-ui="form-page"][data-variant="operational"]
     [data-ui="form-page-header"] {
-    background: var(--kv-panel-bg);
+    background: var(--kv-page-chrome-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-title-row"] {
@@ -1155,6 +1226,7 @@
   :where([data-kv-design-system]) [data-ui="form-page-controller"] {
     min-width: 0;
     padding-inline: var(--kv-page-padding-x);
+    background: var(--kv-page-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-controller"]:empty {
@@ -1165,6 +1237,7 @@
     min-width: 0;
     padding-inline: var(--kv-page-padding-x);
     border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-layout"] {
@@ -1183,13 +1256,19 @@
     min-width: 0;
     gap: var(--kv-space-6);
     padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
+    background: var(--kv-page-content-bg);
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-body"] > [data-ui="stack"] {
-    gap: 0;
+    gap: var(--kv-space-6);
   }
 
-  :where([data-kv-design-system]) [data-ui="form-page-body"] [data-ui="section-head"] {
+  :where([data-kv-design-system]) [data-ui="form-page-body"] > [data-ui="section"] > [data-ui="section-head"],
+  :where([data-kv-design-system])
+    [data-ui="form-page-body"]
+    > [data-ui="stack"]
+    > [data-ui="section"]
+    > [data-ui="section-head"] {
     align-items: flex-start;
     padding-bottom: 0;
     border-bottom: 0;
@@ -1205,16 +1284,6 @@
     > [data-ui="stack"]
     > [data-ui="section"]:first-child {
     padding-block-start: 0;
-  }
-
-  :where([data-kv-design-system]) [data-ui="form-page-body"] [data-ui="surface"] {
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  :where([data-kv-design-system]) [data-ui="form-page-body"] [data-ui="section-body"] > [data-ui="surface"] {
-    padding: 0;
   }
 
   :where([data-kv-design-system]) [data-ui="form-page-aside"] {
