@@ -1184,6 +1184,17 @@ const sources = {
     functions: {},
     exemptions: {},
   },
+  website_seo: {
+    posture: 'permission-bearing',
+    bundles: ['configure', 'view'],
+    functions: {
+      getEntrySeo: ['read', 'view'],
+      saveEntrySeo: ['configure', 'configure', 'website.configuration-audit'],
+    },
+    exemptions: {
+      sitemapEntries: ['internal-route', 'website_seo.public-sitemap-route'],
+    },
+  },
   website: {
     posture: 'permission-bearing',
     bundles: ['configure', 'operate', 'security', 'sensitive', 'view'],

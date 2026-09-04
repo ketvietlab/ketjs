@@ -15,11 +15,11 @@ test('public production permission catalogue covers every function owned by its 
     modulePermissionDeclarations: ketsuitePermissionModules,
   })
 
-  assert.equal(ketsuitePermissionModuleNames.length, 59)
-  assert.equal(Object.keys(manifest.permissions.modules).length, 59)
-  assert.equal(Object.keys(manifest.permissions.bundles).length, 147)
-  assert.equal(Object.keys(manifest.permissions.functions).length, 698)
-  assert.equal(Object.keys(manifest.permissions.exemptions).length, 70)
+  assert.equal(ketsuitePermissionModuleNames.length, 60)
+  assert.equal(Object.keys(manifest.permissions.modules).length, 60)
+  assert.equal(Object.keys(manifest.permissions.bundles).length, 149)
+  assert.equal(Object.keys(manifest.permissions.functions).length, 700)
+  assert.equal(Object.keys(manifest.permissions.exemptions).length, 71)
 
   const coveredModules = new Set(ketsuitePermissionModuleNames)
   const missing = Object.entries(manifest.functions)
