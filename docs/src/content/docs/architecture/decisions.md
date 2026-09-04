@@ -1558,6 +1558,29 @@ unreferenced objects older than a grace period. Its blob reads/removals are decl
 effects, so adding storage to a job does not become a new way around the operation
 boundary.
 
+**A public bucket is optional, not a change to the private bucket's ACL.** The
+existing backend remains the default and stores canonical originals. A second
+`Storage.public` backend uses explicit configuration and its own credentials; both
+backends retain the same tenant namespace and effect boundary. For eligible public
+attachments, HTTP upload commits a `storage.publish` job with the authorized row.
+The worker copies bytes to an attachment-specific, checksum-qualified key and
+records `publicStoreKey` only after rechecking visibility and company. A private
+attachment sharing the canonical checksum never inherits that public key. Direct
+function callers explicitly request `publishCopy`; single-backend callers remain
+compatible without a publication worker. Enabling split storage requires an
+additive schema migration; per-company sweeps backfill old public attachments.
+
+**Public delivery is deliberately not revocable authorization.** Only the existing
+inline media allowlist can be projected, with no format conversion or byte-level
+content validation implied. Downloads use the public backend only after resolving
+a public attachment; pending publications fall back to the original path. A
+configured public URL is unsigned and bypasses the app after issuance. Metadata
+deletion therefore relies on asynchronous object cleanup plus the operator's CDN
+retention/invalidation policy, not instant revocation. Turning off the second
+backend restores original-source delivery but does not erase old public objects.
+Assets requiring revocation must remain private. Bucket provisioning, access
+policies, and CDN response headers remain deployment responsibilities.
+
 ## D49 — Product and stock follow the domain contract where the subset is real
 **Names and codes are compatibility boundaries.** UoM is a relative tree with one
 root, product variants have a stable combination key, pricelist applicability keeps
