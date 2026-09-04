@@ -250,6 +250,17 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: {
       board: { fields: ['companyId', 'projectId', 'active', 'columnId', 'priority'] },
+      /**
+       * The backlog's own read: one project, live issues, newest first — which
+       * is `emptyIssueListState`'s default sort and therefore the query every
+       * project list screen runs before anyone touches a filter.
+       *
+       * `board` covers the same first three columns but continues into
+       * `columnId`, so the sort had to happen outside the index; `assignee`
+       * ends in `updatedAt` but starts from the person, which answers "my work"
+       * and not "this project's".
+       */
+      backlog: { fields: ['companyId', 'projectId', 'active', 'updatedAt'] },
       assignee: { fields: ['companyId', 'assigneeUserId', 'active', 'updatedAt'] },
       sprint: { fields: ['companyId', 'sprintId', 'active'] },
       epic: { fields: ['companyId', 'epicId', 'active'] },

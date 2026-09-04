@@ -5,7 +5,9 @@ import { models } from './models.ts'
 
 export default defineModule({
   name: 'flow',
-  version: '0.1.0',
+  // 0.2.0 adds the backlog index; no data change, so the migration is the
+  // index alone.
+  version: '0.2.0',
   depends: ['company', 'user', 'mail', 'storage'],
   title: 'Flow',
   summary: 'Projects, issues, sprints, and epics.',

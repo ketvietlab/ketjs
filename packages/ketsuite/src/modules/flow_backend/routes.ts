@@ -6,7 +6,7 @@ import { FIELD_KINDS, ISSUE_PRIORITIES } from '../flow/types.ts'
 import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
 import { adminPage, inLocale, localeQuery, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
-import type { FormField } from '../../ui/index.ts'
+import type { FormField, TableGroup } from '../../ui/index.ts'
 import { modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
@@ -218,27 +218,45 @@ const issueFields = (
  */
 const GANTT_ROWS = 200
 
+/**
+ * How much of a project the timeline is willing to read.
+ *
+ * `startsOn` is `startDate ?? createdAt`, which no index and no ORDER BY can
+ * express, so the rows have to be sorted here — and sorting here used to mean
+ * reading the whole project first. A ten-thousand-issue project cost fifty
+ * sequential calls every time somebody opened the chart.
+ *
+ * A declared ceiling instead, and the screen says when it is reached: a chart
+ * that quietly drew a tenth of the work would be the same lie a truncated
+ * filter tells. Ten pages is far past what a person reads on a timeline and far
+ * short of what an unbounded scan costs.
+ */
+const GANTT_SCAN = GANTT_ROWS * 10
+
 const allGanttIssues = async (
   ctx: ServeContext,
   url: URL,
   req: Req,
   projectId: string,
-): Promise<AnyRow[]> => {
-  const rows: AnyRow[] = []
-  let total = Number.POSITIVE_INFINITY
-  while (rows.length < total) {
-    const found = (await ctx.call(
+): Promise<{ rows: AnyRow[]; total: number; truncated: boolean }> => {
+  const page = async (cursor: number) =>
+    (await ctx.call(
       'flow.issue.list',
-      { projectId, cursor: String(rows.length), limit: GANTT_ROWS },
+      { projectId, cursor: String(cursor), limit: GANTT_ROWS },
       url,
       req,
     )) as AnyRow
-    const batch = (found.rows as AnyRow[]) ?? []
-    total = Number(found.total ?? rows.length + batch.length)
-    rows.push(...batch)
-    if (batch.length === 0) break
-  }
-  return rows
+  // The first answer carries the total, which is what turns the rest from a
+  // sequential walk into one round of parallel reads.
+  const first = await page(0)
+  const total = Number(first.total ?? 0)
+  const rows = ((first.rows as AnyRow[]) ?? []).slice()
+  const ceiling = Math.min(total, GANTT_SCAN)
+  const cursors: number[] = []
+  for (let at = rows.length; at < ceiling; at += GANTT_ROWS) cursors.push(at)
+  const rest = await Promise.all(cursors.map((cursor) => page(cursor)))
+  for (const found of rest) rows.push(...(((found.rows as AnyRow[]) ?? []) as AnyRow[]))
+  return { rows: rows.slice(0, ceiling), total, truncated: total > GANTT_SCAN }
 }
 
 const ganttPageHref = (url: URL, page: number): string => {
@@ -382,72 +400,61 @@ const crossProjectIssues =
     const grouped = state.groupBy.length > 0
     const cursor = (state.page - 1) * LIST_PAGE_SIZE
     const scoped = options.mine ? { mine: true } : {}
-    const result = (await ctx.call(
-      'flow.issue.list',
-      {
-        ...scoped,
-        listState: state,
-        timezone,
-        cursor: String(cursor),
-        limit: grouped ? 1 : LIST_PAGE_SIZE,
-      },
-      url,
-      req,
-    )) as AnyRow
-    const groups = grouped
-      ? await loadListGroups(ctx, url, req, state, timezone, {
-          groupFunction: 'flow.issue.group',
-          listFunction: 'flow.issue.list',
-          listArgs: scoped,
-          label: (_field, value) => String(value ?? '\u2014'),
-        })
-      : []
-    // The figures beside the list, over the same filter the list is showing —
-    // counted, not listed, so a thousand issues cost four counts.
-    const buckets = (await ctx.call(
-      'flow.issue.buckets',
-      { ...scoped, listState: state },
-      url,
-      req,
-    )) as AnyRow
+    // Two rounds instead of six. The page, its groups and the figures beside it
+    // do not depend on one another, and neither do the three reads that follow
+    // — they only had to wait for the day `issue.buckets` counted against.
+    const [result, groups, buckets] = (await Promise.all([
+      ctx.call(
+        'flow.issue.list',
+        {
+          ...scoped,
+          listState: state,
+          timezone,
+          cursor: String(cursor),
+          limit: grouped ? 1 : LIST_PAGE_SIZE,
+        },
+        url,
+        req,
+      ),
+      grouped
+        ? loadListGroups(ctx, url, req, state, timezone, {
+            groupFunction: 'flow.issue.group',
+            listFunction: 'flow.issue.list',
+            listArgs: scoped,
+            label: (_field, value) => String(value ?? '\u2014'),
+          })
+        : Promise.resolve([]),
+      // The figures beside the list, over the same filter the list is showing —
+      // counted, not listed, so a thousand issues cost four counts.
+      ctx.call('flow.issue.buckets', { ...scoped, listState: state }, url, req),
+    ])) as [AnyRow, TableGroup<AnyRow>[], AnyRow]
     // Taken from the answer rather than computed again here, so every later use
     // of "today" on this screen is the same day the counts used.
     const today = String(buckets.today ?? '')
-    const mineCount = options.mine
-      ? Number(buckets.total ?? 0)
-      : Number(
-          (
-            (await ctx.call(
-              'flow.issue.buckets',
-              { mine: true, listState: emptyIssueListState(), today },
-              url,
-              req,
-            )) as AnyRow
-          ).total ?? 0,
-        )
-    const allCount = options.mine
-      ? Number(
-          (
-            (await ctx.call(
-              'flow.issue.buckets',
-              { listState: emptyIssueListState(), today },
-              url,
-              req,
-            )) as AnyRow
-          ).total ?? 0,
-        )
-      : Number(buckets.total ?? 0)
-    const late = (await ctx.call(
-      'flow.issue.list',
-      {
-        ...scoped,
-        listState: { ...emptyIssueListState(), sort: [{ key: 'dueDate', dir: 'asc' }] },
-        overdueOn: today,
-        limit: 5,
-      },
-      url,
-      req,
-    )) as AnyRow
+    const [otherTab, late] = (await Promise.all([
+      ctx.call(
+        'flow.issue.buckets',
+        options.mine
+          ? { listState: emptyIssueListState(), today }
+          : { mine: true, listState: emptyIssueListState(), today },
+        url,
+        req,
+      ),
+      ctx.call(
+        'flow.issue.list',
+        {
+          ...scoped,
+          listState: { ...emptyIssueListState(), sort: [{ key: 'dueDate', dir: 'asc' }] },
+          overdueOn: today,
+          limit: 5,
+        },
+        url,
+        req,
+      ),
+    ])) as [AnyRow, AnyRow]
+    // One tab is the count already in hand; the other is the one just read.
+    const mineCount = options.mine ? Number(buckets.total ?? 0) : Number(otherTab.total ?? 0)
+    const allCount = options.mine ? Number(otherTab.total ?? 0) : Number(buckets.total ?? 0)
     // Which rows the due-date column should mark. Done is not late, however
     // long ago the date was.
     const marked = ((result.rows as AnyRow[]) ?? []).map((row) => ({
@@ -2238,7 +2245,8 @@ export const routes: Record<string, RouteEntry> = {
       const projectId = String(params.id)
       const project = await projectOf(ctx, url, req, projectId)
       if (!project) return text('not found', { status: 404 })
-      const allRows = await allGanttIssues(ctx, url, req, projectId)
+      const scanned = await allGanttIssues(ctx, url, req, projectId)
+      const allRows = scanned.rows
       allRows.sort((a, b) => {
         const left = String(a.startsOn ?? '')
         const right = String(b.startsOn ?? '')
@@ -2266,6 +2274,8 @@ export const routes: Record<string, RouteEntry> = {
             pager: {
               from,
               to,
+              // The pager counts what the chart can draw, and the notice below
+              // says how that differs from what the project holds.
               total: allRows.length,
               prev: currentPage > 1 ? ganttPageHref(url, currentPage - 1) : null,
               next: to < allRows.length ? ganttPageHref(url, currentPage + 1) : null,
@@ -2278,6 +2288,7 @@ export const routes: Record<string, RouteEntry> = {
             rows,
             new Date().toISOString().slice(0, 10),
             locale.startsWith('en') ? 'en-GB' : 'vi-VN',
+            scanned.truncated ? { scanned: allRows.length, total: scanned.total } : undefined,
           )
         },
       })

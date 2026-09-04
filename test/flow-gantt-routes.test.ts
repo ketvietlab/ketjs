@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
+import { tableNameFor } from '@ketvietlab/ketjs'
 import type { Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
@@ -79,4 +80,53 @@ test('project Gantt pages the complete issue set and keeps locale in chart navig
     ).status,
     405,
   )
+})
+
+test('flow gantt route: past its reading ceiling the chart says it is a first slice', async (t) => {
+  const app = await boot(t)
+  // Two thousand and one more than the harness already made, so the ceiling is
+  // crossed by one. Written straight into the store: the subject is what the
+  // route reads, not what two thousand saves do.
+  await app.fixture.withTenant('', async ({ adapter }) => {
+    const columns = [
+      'companyId',
+      'id',
+      'projectId',
+      'columnId',
+      'title',
+      'priority',
+      'threadId',
+      'active',
+      'version',
+      'startDate',
+      'dueDate',
+      'createdAt',
+      'updatedAt',
+    ]
+    const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor('flow.Issue'))} (${columns
+      .map((name) => adapter.quoteIdent(name))
+      .join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`
+    for (let index = 0; index < 2000; index += 1)
+      await adapter.run(sql, [
+        'acme',
+        `bulk-${index}`,
+        'platform',
+        'todo',
+        `Bulk ${index}`,
+        'normal',
+        `thread:flow.Issue:bulk-${index}`,
+        1,
+        1,
+        '2026-08-01',
+        '2026-08-02',
+        '2026-08-01T00:00:00.000Z',
+        new Date(Date.parse('2026-08-01T00:00:00.000Z') + index * 1000).toISOString(),
+      ] as never[])
+  })
+
+  const html = await (await app.client.get('/admin/flow/projects/platform/gantt?lang=en')).text()
+  assert.match(html, /This timeline is a first slice/)
+  // The two numbers are the ceiling and the truth, and they are not the same.
+  assert.match(html, /reads at most 2,?000 issues/)
+  assert.match(html, /holds 2,?201/)
 })
