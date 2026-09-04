@@ -136,6 +136,7 @@ export const leaderboardScreen = (
           ? dataTable(_, {
               rows,
               id: (profile) => String(profile.id),
+              responsive: 'stack',
               columns: leaderboardColumns(_, options.locale),
               rowHref: (profile) =>
                 localized(`/admin/users/${encodeURIComponent(String(profile.userId))}`, options.locale ?? ''),
