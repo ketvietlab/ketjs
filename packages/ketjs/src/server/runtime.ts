@@ -7,7 +7,7 @@ import { compose } from '../kernel/compose.ts'
 import { readConfig } from './config.ts'
 import { registerFunctions } from './fn.ts'
 import { registerJobs } from './jobs.ts'
-import { createLogger, leveledLog, logFromConfig, redactLog } from './log/index.ts'
+import { consoleLog, createLogger, isolatedLog, leveledLog, logFromConfig, redactLog } from './log/index.ts'
 import type { LogDriver, LogProcess, Logger, OpenLog } from './log/index.ts'
 import type { DeploymentSpec } from '../kernel/workspace.ts'
 import type { KetModule, Manifest } from '../types.ts'
@@ -48,11 +48,16 @@ export async function bootRuntime(
   })
   if (options.port !== undefined) config.port = options.port
 
-  // Redaction is applied here rather than left to whoever opened the driver, so a
-  // deployment's own sink is held to the same rule as the built-in ones. The level
-  // filter sits outside it, so a record nobody will keep is never redacted at all.
+  // Redaction and isolation are applied here rather than left to whoever opened the
+  // driver, so a deployment's own sink is held to the same rules as the built-in
+  // ones. Isolation sits innermost, against the sink itself: a record is emitted
+  // after a function has already committed and after an idempotency key has been
+  // marked done, so a throw from a sink would report a failure for work that
+  // succeeded. "A sink never breaks the work it describes" has to be structural
+  // rather than something every deployment remembers. The level filter is
+  // outermost, so a record nobody will keep is never redacted at all.
   const opened = await (options.openLog ?? spec.serve?.openLog ?? logFromConfig)(config)
-  const log = leveledLog(redactLog(opened), config.logLevel)
+  const log = leveledLog(redactLog(isolatedLog(opened, consoleLog())), config.logLevel)
   const logger = createLogger(log, { deployment: spec.name, process: options.role ?? 'http' })
 
   const modules = [...spec.modules, ...(spec.theme ? [spec.theme] : []), ...(spec.themes ?? [])]

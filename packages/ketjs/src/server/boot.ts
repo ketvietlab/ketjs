@@ -243,7 +243,14 @@ export type ServeSpec = {
    *
    * The built-ins need nothing but Node, so anything requiring a client library
    * belongs here rather than in the framework — the same fence as `openStore`.
-   * Level filtering and redaction are applied around whatever this returns.
+   * Level filtering, redaction and failure isolation are applied around whatever
+   * this returns, so a sink cannot break the work it is describing.
+   *
+   * Return a fresh driver per call rather than one memoised instance. A process
+   * that runs both roles — `ket dev` — opens the sink once for HTTP and once for
+   * the worker and closes each with its own role; a shared instance is closed by
+   * whichever shuts down first, and the other role's last records are written to a
+   * handle that is already gone.
    */
   openLog?: OpenLog
   /** Version and maintenance policy published by profile bootstrap routes. */

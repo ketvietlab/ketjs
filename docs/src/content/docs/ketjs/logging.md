@@ -61,7 +61,9 @@ A driver is a sink. The framework ships the ones that need nothing but Node:
 | `nullLog()` | Discards everything |
 
 Anything needing a client library belongs to the deployment, behind `serve.openLog` — the same
-fence that keeps database drivers out of the framework:
+fence that keeps database drivers out of the framework. Return a fresh driver per call: a process
+running both roles opens the sink once for HTTP and once for the worker, and closes each with its
+own role, so a memoised instance is closed by whichever shuts down first.
 
 ```ts
 // File: src/deployment.ts
@@ -92,6 +94,12 @@ Drivers stay primitive; behaviour is composed.
 | `bufferedLog(driver, options)` | Batch, with a bound on memory |
 | `isolatedLog(driver, fallback)` | Swallow a driver's failures and report once |
 | `redactLog(driver)` | Applied by the runtime; not optional |
+
+The runtime wraps whatever `openLog` returns in `redactLog` and `isolatedLog` before anything uses
+it, so a sink that throws cannot break the work it describes. That guarantee is structural rather
+than a convention: a record is emitted after a function has already committed and after an
+idempotency key has been marked done, so a sink allowed to throw there would report a failure for
+work that succeeded.
 
 `bufferedLog` drops the *newest* record when it is full, because in a cascade the first failure is
 the cause and the tail is repetition. A slice of the bound is reserved for error-level records so a

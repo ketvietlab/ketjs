@@ -125,7 +125,14 @@ export function bufferedLog(
       dropped = 0
       droppedSince = Date.now()
     }
-    if (pending.length) driver.write(pending)
+    if (!pending.length) return
+    try {
+      driver.write(pending)
+    } catch {
+      // drain() runs from a timer, where a throw is an uncaught exception and the
+      // end of the process. Note that a sink wrapped from the outside cannot help
+      // here: this call is beneath that wrapper, not through it.
+    }
   }
 
   // Unreferenced: a log timer must never be the reason a process stays alive.
