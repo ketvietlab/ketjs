@@ -84,6 +84,7 @@ export default defineConfig({
                 { label: 'Sessions and tenants', slug: 'ketjs/sessions-tenants' },
                 { label: 'Durable jobs and workers', slug: 'ketjs/jobs' },
                 { label: 'Storage, transport, streams', slug: 'ketjs/integrations' },
+                { label: 'Operational logging', slug: 'ketjs/logging' },
               ],
             },
             {

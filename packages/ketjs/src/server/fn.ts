@@ -11,6 +11,7 @@ import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
 import { DECIMAL_MAX_CHARS, parseDecimal } from '../data/changeset.ts'
 import { queueFor } from './queue.ts'
+import type { Logger } from './log/logger.ts'
 import type { Adapter, Ctx, FnSpec, KetModule, Manifest, WriteRecord } from '../types.ts'
 
 export type CallResult = {
@@ -162,37 +163,78 @@ const idempotencyKey = (
   return `v2:${digest}`
 }
 
+export type CallOptions = {
+  adapter: Adapter
+  manifest: Manifest
+  dryRun?: boolean
+  actor?: string | null
+  /** Ephemeral correlation propagated to Ctx; never persisted by the framework. */
+  correlationId?: string | null
+  idempotencyKey?: string | null
+  /** Separates public callers that can choose the same client key. */
+  idempotencyNamespace?: string | null
+  /** Defaults to a canonical digest of validated function arguments. */
+  idempotencyDigest?: string | null
+  scope?: import('../types.ts').Scope
+  /**
+   * The functions this caller may invoke. Undefined or null means unrestricted,
+   * which is what an internal call, a migration or a test is — the check exists
+   * for requests carrying an identity, and a caller with no identity has no
+   * business being narrowed by one.
+   *
+   * A list rather than a predicate so that it can be printed, diffed and stored.
+   * The framework enforces it; which list a user gets is the deployment's decision, the
+   * same split as the datastore driver.
+   */
+  allow?: readonly string[] | null
+  /** Runtime override for the optional queue wake-up signal. */
+  queueNotify?: boolean
+  /** Where this call's operational log goes. Absent discards. */
+  log?: Logger
+}
+
+/**
+ * Every call arrives here — HTTP, an in-process route, a job's own dispatch, a
+ * test — which is why this is the one place that has to record what happened.
+ *
+ * An anticipated failure is a warning and an unanticipated one is an error: a
+ * KetError is a contract this system named and expected to reject, while anything
+ * else escaped a `try` nobody wrote. Only the second kind carries a stack, and only
+ * the second kind should wake somebody up.
+ */
 export async function callFn(
   fnKey: string,
   args: Record<string, unknown>,
-  o: {
-    adapter: Adapter
-    manifest: Manifest
-    dryRun?: boolean
-    actor?: string | null
-    /** Ephemeral correlation propagated to Ctx; never persisted by the framework. */
-    correlationId?: string | null
-    idempotencyKey?: string | null
-    /** Separates public callers that can choose the same client key. */
-    idempotencyNamespace?: string | null
-    /** Defaults to a canonical digest of validated function arguments. */
-    idempotencyDigest?: string | null
-    scope?: import('../types.ts').Scope
-    /**
-     * The functions this caller may invoke. Undefined or null means unrestricted,
-     * which is what an internal call, a migration or a test is — the check exists
-     * for requests carrying an identity, and a caller with no identity has no
-     * business being narrowed by one.
-     *
-     * A list rather than a predicate so that it can be printed, diffed and stored.
-     * The framework enforces it; which list a user gets is the deployment's decision, the
-     * same split as the datastore driver.
-     */
-    allow?: readonly string[] | null
-    /** Runtime override for the optional queue wake-up signal. */
-    queueNotify?: boolean
-  },
+  o: CallOptions,
 ): Promise<CallResult> {
+  const started = Date.now()
+  try {
+    const result = await runFn(fnKey, args, o)
+    o.log?.log({
+      level: 'info',
+      event: 'fn_call',
+      fn: fnKey,
+      durationMs: Date.now() - started,
+      dryRun: result.dryRun,
+      ...(result.replayed ? { replayed: true } : {}),
+    })
+    return result
+  } catch (cause) {
+    const known = cause instanceof KetError
+    o.log?.log({
+      level: known ? 'warn' : 'error',
+      // A caller reaching for something it may not have is a security signal, not
+      // a malfunction, and it is counted separately for that reason.
+      event: known && cause.code === 'E_FN_NOT_PERMITTED' ? 'fn_denied' : 'fn_error',
+      fn: fnKey,
+      durationMs: Date.now() - started,
+      error: cause,
+    })
+    throw cause
+  }
+}
+
+async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOptions): Promise<CallResult> {
   const def = registry.get(fnKey)
   if (!def)
     throw new KetError({
@@ -271,6 +313,7 @@ export async function callFn(
     correlationId: o.correlationId ?? null,
     scope: o.scope,
     queueNotify: o.queueNotify,
+    ...(o.log ? { log: o.log.child({ fn: fnKey, dryRun }) } : {}),
   })
 
   let result: CallResult

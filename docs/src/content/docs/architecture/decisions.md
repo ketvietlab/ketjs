@@ -2082,3 +2082,60 @@ integration, and membership resolution. Mobile owns PKCE and secure token storag
 **Cost:** the framework now publishes both staff schemes and provides deterministic presentation resolver
 composition. A deployment still has to implement the private Bearer session resolver; this decision does not
 authorize accepting raw IdP JWTs or reusing POS tokens.
+## D69 — Operational logging is a driver contract, and it is not the audit trail
+**The gap.** The framework wrote nothing. A 500 was turned into a JSON body for the client and its
+stack was discarded by the handler's own catch; a caller invoking a function it may not call threw
+`E_FN_NOT_PERMITTED` and left no trace anywhere; no function had a latency or an error rate. The one
+structured stream that existed, `WorkerLog`, went to `console.log` on stdout and repeated six fields
+at ten call sites.
+
+**Chosen:** a `LogDriver` contract shaped like `Storage` and `OutboundTransport` — `name`, `write`,
+optional `flush`/`close` — with built-in console, pretty, file, memory and null sinks, and
+`multiLog` / `leveledLog` / `bufferedLog` / `isolatedLog` / `redactLog` as combinators. Anything
+needing a client library arrives through `serve.openLog`, the same fence as `openStore`. Zero
+dependencies added.
+
+**The distinction that settled the design.** An audit trail is durable business evidence: it lives in
+the tenant's database, the application queries it, it belongs to a domain contract, and it rolls back
+with the transaction that wrote it — `pos.AuditEvent` already is one. A log is none of that, and the
+sharp edge is the rollback: a record written inside a transaction that later rolls back *must* still
+be emitted, because the attempt was real and knowing it failed is the point. Two opposite
+requirements, so they cannot share a mechanism. Nothing in this decision writes to a database.
+
+**`write` is synchronous.** An await inside the request path changes interleaving and produces bugs
+that appear only under load, and a logging call that can be forgotten with a missing `await` will be.
+Drivers that need I/O buffer internally. **Cost:** a driver cannot apply backpressure to its caller,
+which is the intended trade — dropping records beats stalling the work being described — so every
+buffering driver has a bound, drops the newest while reserving room for errors, and announces the
+gap as `log_dropped`. A silent gap cannot be told apart from quiet.
+
+**Logging is not an effect.** Effects exist to make a side effect that would corrupt data impossible
+to perform undeclared; a forgotten log corrupts nothing, and `log:write` on every function would add
+noise to every manifest while discriminating nothing. The one real objection — an HTTP sink is
+undeclared network egress from inside a function — is answered by the fence: a module cannot choose a
+destination, only the deployment can.
+
+**Context is bound, not ambient.** `AsyncLocalStorage` is a Node built-in and would have worked, and
+was rejected: `ctx` exists so that "the call forgot its context" cannot be written down, and a
+module-scope logger reading its tenant from ambient state is that pattern returning by another door.
+Everything here is already handed a `ctx`, so ambient propagation buys nothing.
+
+**Redaction is structural before it is defensive.** `LogFields` accepts scalars only, so
+`log.info('saved', { input })` does not compile — that being the ordinary way a customer payload
+reaches an aggregator. `redactLog` still runs, mandatorily and around a deployment's own sink,
+because `catch (e)` and JavaScript callers have no types. `trace` and `actor` are HMAC-SHA256 keyed by
+`KET_SECRET` and truncated to 64 bits rather than the bare namespaced digest POS uses for its audit
+rows: a correlation id is often a client-chosen command key, so a bare digest of `order-42` is
+recovered by guessing — tolerable inside one tenant's own database, not in an aggregator shared by
+every tenant. Keying it also reuses an invariant that already holds, that `KET_SECRET` is identical on
+every pod, which is the only reason a web record and a worker record can be recognised as one request.
+
+**`http_request` records the route pattern, never the pathname**, because a raw path carries record
+identifiers and a query string. An unmatched path is `(unmatched)`; the status already says what
+happened.
+
+**Reversible:** the driver contract, yes — `Storage` and `OutboundTransport` have already proved that
+shape survives. The **event vocabulary, no**. Once an alert keys on `fn_error`, renaming it breaks
+that alert silently and nobody is told, which is the same failure mode as renaming a permission. The
+catalogue is therefore a closed list in code, exported as a value, and a test checks the documented
+table against it rather than trusting that both were updated.

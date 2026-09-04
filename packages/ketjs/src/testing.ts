@@ -12,6 +12,7 @@ import { bootDeployment, type BootedDeployment } from './server/boot.ts'
 import { bootWorker, type BootedWorker } from './server/worker.ts'
 import type { WorkerLog } from './server/worker.ts'
 import { callFn, type CallResult } from './server/fn.ts'
+import { memoryLog, traceOf, type MemoryLog } from './server/log/index.ts'
 import type { DeploymentSpec } from './kernel/workspace.ts'
 import type { Adapter, Manifest, Scope } from './types.ts'
 
@@ -373,6 +374,7 @@ export type CreateTestDeploymentOptions = {
   worker?: boolean
   /** Harness progress. Silent by default so test reporter output stays readable. */
   log?: (line: string) => void
+  /** Intercept worker events instead of recording them. Absent keeps `records`. */
   workerLog?: (entry: WorkerLog) => void
   client?: TestClientOptions
   port?: number
@@ -419,6 +421,14 @@ export type TestDeployment = {
   artifactsDir: string
   databasePath: string | null
   env: Readonly<Record<string, string | undefined>>
+  /**
+   * Every operational record this deployment and its worker emitted.
+   *
+   * Captured rather than printed, so a suite stays readable and so a security
+   * contract can assert that a denial was *observable* — a denial nobody can see
+   * is a denial nobody can alert on.
+   */
+  records: MemoryLog
   fixture: TestFixtures
   drainJobs(): Promise<number>
   close(): Promise<void>
@@ -458,6 +468,9 @@ export async function createTestDeployment(
   env.KET_SECRET ??= `ket-e2e-${spec.name}`
   env.KET_QUEUE_NOTIFY ??= '0'
 
+  const records = memoryLog()
+  const openLog = () => records
+
   let deployment: BootedDeployment | null = null
   let worker: BootedWorker | null = null
   try {
@@ -465,10 +478,18 @@ export async function createTestDeployment(
       env,
       port: options.port ?? 0,
       log: options.log ?? (() => {}),
+      openLog,
     })
     const wantsWorker = options.worker ?? true
     if (wantsWorker && spec.worker)
-      worker = await bootWorker(spec, { env, log: options.workerLog ?? (() => {}) })
+      worker = await bootWorker(spec, {
+        env,
+        openLog,
+        // Only when the caller asked. This used to default to a no-op because the
+        // alternative was console output; now the default goes to the captured
+        // sink, and a no-op here would suppress exactly what a test came to assert.
+        ...(options.workerLog ? { log: options.workerLog } : {}),
+      })
   } catch (error) {
     await worker?.close().catch(() => {})
     await deployment?.close().catch(() => {})
@@ -506,6 +527,15 @@ export async function createTestDeployment(
             idempotencyKey: callOptions.idempotencyKey,
             correlationId: callOptions.correlationId,
             queueNotify: false,
+            // A fixture call is not HTTP traffic and says so, but it is still a
+            // call: it goes through the same pipeline rather than around it.
+            log: booted.logger.child({
+              process: 'test',
+              tenant: callOptions.tenant ?? null,
+              trace: traceOf(callOptions.correlationId, booted.config.secret),
+              actor: traceOf(callOptions.actor, booted.config.secret),
+              company: callOptions.scope?.company ?? null,
+            }),
           }) as Promise<CallResult & { value: T }>,
       )
     },
@@ -518,6 +548,7 @@ export async function createTestDeployment(
     baseUrl,
     adapter: booted.adapter,
     artifactsDir,
+    records,
     databasePath,
     env: Object.freeze({ ...env }),
     fixture,

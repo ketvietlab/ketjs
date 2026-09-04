@@ -376,7 +376,7 @@ test('worker executes with captured context and discards an exhausted handler', 
   const fixed = new Date('2026-01-01T00:00:00.000Z')
   const logs: WorkerLog[] = []
   const worker = await bootWorker(app, {
-    env: { KET_SQLITE: file, KET_QUEUE_NOTIFY: '0' },
+    env: { KET_LOG: 'null', KET_SQLITE: file, KET_QUEUE_NOTIFY: '0' },
     now: () => fixed,
     random: () => 0,
     log: (entry) => logs.push(entry),
@@ -502,7 +502,7 @@ test('cancelling an executing job aborts its handler and cannot be overwritten b
 
   const logs: WorkerLog[] = []
   const worker = await bootWorker(app, {
-    env: { KET_SQLITE: file, KET_QUEUE_NOTIFY: '0' },
+    env: { KET_LOG: 'null', KET_SQLITE: file, KET_QUEUE_NOTIFY: '0' },
     log: (entry) => logs.push(entry),
   })
   assert.equal(await worker.runOnce(), 1)

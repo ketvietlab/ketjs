@@ -17,6 +17,9 @@ import {
   parseDecimal,
 } from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
+import { createLogger } from './log/logger.ts'
+import type { Logger } from './log/logger.ts'
+import { nullLog } from './log/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
@@ -31,6 +34,12 @@ export function createContext(o: {
   kind?: 'function' | 'job'
   queueNotify?: boolean
   writes?: WriteRecord[]
+  /**
+   * Where this call's operational log goes. Absent discards: a ctx built outside a
+   * booted runtime — a migration, a script — has no deployment to attribute records
+   * to, and inventing one would be worse than dropping them.
+   */
+  log?: Logger
 }): Ctx {
   const { adapter, manifest, fnKey } = o
   const scope: Scope = o.scope ?? { company: null, branches: null }
@@ -619,9 +628,12 @@ export function createContext(o: {
     },
   }
 
+  const log = o.log ?? createLogger(nullLog(), { deployment: 'ketjs', process: 'cli', fn: fnKey, dryRun })
+
   const ctx: Ctx = {
     fnKey,
     correlationId: o.correlationId ?? null,
+    log,
     manifest,
     scope,
     actor: o.actor ?? null,

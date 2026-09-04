@@ -43,7 +43,7 @@ test('identity engine: an internal function has no generic HTTP or agent surface
     headless: true,
     serve: {},
   })
-  const booted = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   try {
     const at = `http://127.0.0.1:${booted.port}`
     const hidden = await fetch(`${at}/_ket/fn/identity_engine.inspectCredential`, {
@@ -97,7 +97,7 @@ test('identity engine: live session resolution updates context and rejects a rev
       resolveSession: async () => live,
     },
   })
-  const booted = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   try {
     const at = `http://127.0.0.1:${booted.port}`
     const started = await fetch(`${at}/session/start`)
@@ -156,7 +156,7 @@ test('identity engine: a trusted request identity uses the normal actor, scope a
       permissions: async () => ['request_identity.inspect'],
     },
   })
-  const booted = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   try {
     const at = `http://127.0.0.1:${booted.port}`
     assert.equal((await fetch(`${at}/who`, { headers: { accept: 'application/json' } })).status, 401)

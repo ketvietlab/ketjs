@@ -22,7 +22,8 @@ import { ketsuite } from '../apps/ketsuite/deployment.ts'
  * catastrophically wrong about strangers.
  */
 
-const boot = () => bootDeployment(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'x' }, port: 0 })
+const boot = () =>
+  bootDeployment(ketsuite, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_SECRET: 'x' }, port: 0 })
 const post = (port: number, fn: string, body: unknown, cookie?: string) =>
   fetch(`http://127.0.0.1:${port}/_ket/fn/${fn}`, {
     method: 'POST',
@@ -186,7 +187,7 @@ test('declaration: an app with no sessions is unaffected, since there is no logi
     },
   })
   const app = defineDeployment({ name: 'nologin', modules: [solo], headless: true, serve: {} })
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   assert.equal((await fetch(`http://127.0.0.1:${b.port}/things`)).status, 200)
   await b.close()
 })
@@ -212,7 +213,7 @@ test('routes: anonymous policy also applies to dynamic paths', async () => {
       sessions: { secret: 'test-only', anonymous: { company: 'public' } },
     },
   })
-  const b = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   assert.equal((await fetch(`${at}/private/ao`)).status, 401)
   const open = await fetch(`${at}/public/%C3%A1o`)

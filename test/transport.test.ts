@@ -108,6 +108,7 @@ test('outbound transport: worker retry reuses the stable key and undeclared send
   const logs: WorkerLog[] = []
   const worker = await bootWorker(app, {
     env: {
+      KET_LOG: 'null',
       KET_SQLITE: database,
       KET_STORAGE_DIR: join(dir, 'storage'),
       KET_QUEUE_NOTIFY: '0',

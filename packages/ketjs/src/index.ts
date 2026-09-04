@@ -125,6 +125,40 @@ export type {
   TransportEffect,
   TransportReceipt,
 } from './server/transport/index.ts'
+export {
+  bufferedLog,
+  consoleLog,
+  CORE_EVENTS,
+  createLogger,
+  describeError,
+  fileLog,
+  isolatedLog,
+  leveledLog,
+  logFromConfig,
+  memoryLog,
+  MODULE_EVENT,
+  multiLog,
+  nullLog,
+  prettyLog,
+  redactLog,
+  traceOf,
+} from './server/log/index.ts'
+export type {
+  ConsoleLogOptions,
+  CoreEvent,
+  FileLogOptions,
+  LogContext,
+  LogDriver,
+  LogEntry,
+  LogError,
+  LogFields,
+  LogLevel,
+  LogProcess,
+  LogRecord,
+  Logger,
+  MemoryLog,
+  OpenLog,
+} from './server/log/index.ts'
 export { multipart } from './server/multipart.ts'
 export type { MultipartPart, MultipartOptions } from './server/multipart.ts'
 export { createStreams, memoryStreamStore, dbStreamStore } from './server/stream.ts'

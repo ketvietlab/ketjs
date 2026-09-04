@@ -32,7 +32,7 @@ test('storage module: upload, safe download, deduplication and queued GC work en
   try {
     server = await bootDeployment(app, {
       port: 0,
-      env: { KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_COMPANY: 'acme' },
+      env: { KET_LOG: 'null', KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_COMPANY: 'acme' },
     })
     const at = `http://127.0.0.1:${server.port}`
     const upload = async () => {
@@ -94,7 +94,7 @@ test('storage module: upload, safe download, deduplication and queued GC work en
     await server.close()
     server = null
     worker = await bootWorker(app, {
-      env: { KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_COMPANY: 'acme' },
+      env: { KET_LOG: 'null', KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_COMPANY: 'acme' },
       log: () => {},
     })
     assert.equal(await worker.drain(), 1)
@@ -121,7 +121,12 @@ test('storage module: a stranger sees only attachments explicitly marked public'
   })
   const server = await bootDeployment(app, {
     port: 0,
-    env: { KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_SECRET: 'test-only-secret' },
+    env: {
+      KET_LOG: 'null',
+      KET_SQLITE: sqliteFile,
+      KET_STORAGE_DIR: storageDir,
+      KET_SECRET: 'test-only-secret',
+    },
   })
   try {
     const checksum = 'a'.repeat(64)
