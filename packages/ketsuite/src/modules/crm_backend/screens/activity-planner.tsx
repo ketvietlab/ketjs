@@ -177,7 +177,9 @@ export const plannerScreen = (
               />,
             ]
           : []),
-        rows.length ? dataTable(_, { rows, id: (item) => String(item.id), columns }) : empty(_),
+        rows.length
+          ? dataTable(_, { rows, id: (item) => String(item.id), columns, responsive: 'stack' })
+          : empty(_),
       ])}
     />,
     { ...frame, chrome: null, topbar: false },

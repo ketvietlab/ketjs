@@ -154,3 +154,28 @@ test('avatar: the name is on the wrapper, so a screen reader is not read initial
   assert.match(html, /data-ui="avatar" title="Nguyễn Quản Trị" aria-hidden="true"/)
   assert.match(html, /data-ui="person-name">[\s\S]*Nguyễn Quản Trị/)
 })
+
+test('table: a scrolling row keeps its header, a stacked row carries its own labels', () => {
+  const scrolling = render()
+  assert.match(scrolling, /data-ui="table-scroll"[^>]*data-responsive="scroll"/, 'scrolling is the default')
+  assert.doesNotMatch(scrolling, /data-label=/, 'a cell under a visible header needs no label of its own')
+
+  const stacked = render({ responsive: 'stack' })
+  assert.match(stacked, /data-ui="table-scroll"[^>]*data-responsive="stack"/)
+  // Stacking hides the header row, so a cell that does not name itself is a
+  // value with nothing to say what it is.
+  for (const [key, label] of [
+    ['name', 'Tên'],
+    ['qty', 'SL'],
+  ] as const)
+    assert.match(
+      stacked,
+      new RegExp(`data-ui="cell" data-col="${key}"[^>]*data-label="${label}"`),
+      `${key} carries its label`,
+    )
+})
+
+test('table: stacking labels every column the reader can actually see', () => {
+  const stacked = renderToString(dataTable(_, table({ responsive: 'stack', shown: ['name', 'qty', 'id'] })))
+  assert.match(stacked, /data-col="id"[^>]*data-label="Mã"/, 'an optional column turned on is labelled too')
+})
