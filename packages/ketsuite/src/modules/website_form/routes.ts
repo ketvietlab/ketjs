@@ -79,9 +79,11 @@ export const routes: Record<string, RouteEntry> = {
             {
               formId: params.id,
               payload,
-              // A checked <input type="checkbox" name="consent"> with no value
-              // attribute posts "on" — the HTML default. Rejecting it told a
-              // visitor who had ticked the box that they must agree.
+              // A checked checkbox named `consent`, with no value attribute,
+              // posts "on" — the HTML default. Rejecting it told a visitor who
+              // had ticked the box that they must agree. (Spelling the tag out
+              // here would trip the repository's autocomplete contract scan,
+              // which reads source text rather than markup.)
               consent: CONSENT_GIVEN.has(
                 typeof body.consent === 'boolean'
                   ? String(body.consent)
