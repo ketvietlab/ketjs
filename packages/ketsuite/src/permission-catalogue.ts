@@ -1184,6 +1184,25 @@ const sources = {
     functions: {},
     exemptions: {},
   },
+  website_form_mail: {
+    posture: 'projection/bridge',
+    bundles: ['operate'],
+    functions: {
+      notifySubmission: ['operate', 'operate'],
+    },
+    exemptions: {},
+  },
+  website_seo: {
+    posture: 'permission-bearing',
+    bundles: ['configure', 'view'],
+    functions: {
+      getEntrySeo: ['read', 'view'],
+      saveEntrySeo: ['configure', 'configure', 'website.configuration-audit'],
+    },
+    exemptions: {
+      sitemapEntries: ['internal-route', 'website_seo.public-sitemap-route'],
+    },
+  },
   website: {
     posture: 'permission-bearing',
     bundles: ['configure', 'operate', 'security', 'sensitive', 'view'],
@@ -1239,6 +1258,7 @@ const sources = {
       revokeCustomerSession: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       revokeCustomerTokenGrant: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       rotateCustomerTokenGrant: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+      countSearchPublished: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       searchPublished: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       startCustomerSession: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
       updateCustomerProfile: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],

@@ -1,5 +1,17 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { asc, defineFn, deleteFrom, desc, eq, from, like, validateLayout } from '@ketvietlab/ketjs'
+import {
+  asc,
+  defineFn,
+  deleteFrom,
+  desc,
+  eq,
+  from,
+  inArray,
+  isNotNull,
+  like,
+  ne,
+  validateLayout,
+} from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   canAccessSite,
@@ -10,6 +22,7 @@ import {
   canPublishEntry,
 } from './access.ts'
 import { ensureCustomerRealm } from './customer.ts'
+import { isReservedPath, reservedPrefixes } from './paths.ts'
 
 const SITE_ROLES = new Set(['administrator', 'editor', 'author', 'contributor'])
 const MAX_JSON_BYTES = 512 * 1024
@@ -75,6 +88,22 @@ const validSlug = (value: unknown): boolean => {
 }
 const forbidden = () => invalid('siteId', 'website.error.forbidden')
 
+/**
+ * What a public page may put in its <head>.
+ *
+ * An allowlist rather than "every column that is not core": modules extend
+ * website.Entry for their own purposes, and handing a row wholesale to a theme
+ * would publish whatever the next one adds. Naming them means a new field is
+ * public only when someone says so.
+ */
+const PUBLIC_META_FIELDS = ['metaDescription', 'canonical', 'noindex', 'ogImage'] as const
+
+const publicMeta = (row: Row): Record<string, unknown> => {
+  const meta: Record<string, unknown> = {}
+  for (const field of PUBLIC_META_FIELDS) if (row[field] != null) meta[field] = row[field]
+  return meta
+}
+
 const siteById = async (ctx: Ctx, id: unknown): Promise<Row | null> => {
   const Site = ctx.table('website.Site')
   return ctx.db.one(from(Site).where(eq(Site.id, id)))
@@ -114,6 +143,102 @@ const validateFields = (
     if (!valid) errors.push({ field: key, message: 'website.error.invalidFieldType' })
   }
   return errors
+}
+
+/**
+ * How many published entries one search may scan. The window is a cost ceiling,
+ * not a page size: it is applied to entries that are actually publishable, so a
+ * site full of drafts no longer spends the budget before reaching them.
+ */
+const SEARCH_SCAN_LIMIT = 2_000
+
+/**
+ * Public site search over the published revision of each entry.
+ *
+ * The title and excerpt shown to a visitor are the published ones, which live on
+ * the revision rather than the entry, so the match cannot be a plain SQL LIKE on
+ * the entry. The revisions are therefore read in one batch keyed by id — the
+ * previous shape issued one query per candidate entry, up to 500 per keystroke.
+ *
+ * `capped` says the scan window was full: the answer is complete for everything
+ * scanned and the caller should not present the count as a total.
+ */
+const searchMatches = async (
+  ctx: Ctx,
+  siteId: unknown,
+  q: unknown,
+  need: number,
+): Promise<{ matches: Array<Record<string, unknown>>; capped: boolean }> => {
+  const term = String(q ?? '')
+    .trim()
+    .toLocaleLowerCase()
+    .slice(0, 100)
+  if (term.length < 2) return { matches: [], capped: false }
+
+  // A site that is not being served publicly has no public search either.
+  const Site = ctx.table('website.Site')
+  if (!(await ctx.db.one(from(Site).where(eq(Site.id, siteId), eq(Site.active, true)))))
+    return { matches: [], capped: false }
+
+  // Publicly readable is "has a published revision and is not in trash", not
+  // status === 'published': scheduling a later republish moves an entry to
+  // 'scheduled' while the revision already out there stays live, and filtering
+  // on the status would silently drop content a visitor can still open. This is
+  // the same gate getEntryByPath applies, so a result is always openable.
+  //
+  // A page under a namespace the deployment serves is not openable — a module
+  // route answers that path first — so it is not offered here either, the way
+  // the sitemap does not list it.
+  const prefixes = reservedPrefixes(Object.keys(ctx.manifest.routes ?? {}))
+  const Entry = ctx.table('website.Entry')
+  // One row past the window, so a site with exactly SEARCH_SCAN_LIMIT entries
+  // is reported as a complete answer rather than a capped one.
+  const scanned = await ctx.db.all(
+    from(Entry)
+      .where(eq(Entry.siteId, siteId), isNotNull(Entry.publishedRevisionId), ne(Entry.status, 'trash'))
+      .orderBy(desc(Entry.publishedAt))
+      .limit(SEARCH_SCAN_LIMIT + 1),
+  )
+  const capped = scanned.length > SEARCH_SCAN_LIMIT
+  const candidates = scanned
+    .slice(0, SEARCH_SCAN_LIMIT)
+    .filter((entry) => !isReservedPath(String(entry.path), prefixes))
+  if (!candidates.length) return { matches: [], capped }
+
+  // Only the four fields the match and the result actually use. A revision also
+  // carries layout and fields, which saveEntry allows up to half a megabyte
+  // each; reading whole rows for a window this size made one anonymous request
+  // for a single result cost hundreds of megabytes.
+  const Revision = ctx.table('website.EntryRevision')
+  const revisions = new Map<string, Row>()
+  // Batched in chunks so the parameter list stays bounded on every adapter.
+  for (let i = 0; i < candidates.length; i += 200) {
+    const ids = candidates.slice(i, i + 200).map((entry) => entry.publishedRevisionId)
+    const rows = await ctx.db.all(
+      from(Revision)
+        .select(Revision.id, Revision.entryId, Revision.title, Revision.excerpt)
+        .where(inArray(Revision.id, ids)),
+    )
+    for (const revision of rows) revisions.set(String(revision.id), revision)
+  }
+
+  const matches: Array<Record<string, unknown>> = []
+  for (const entry of candidates) {
+    const revision = revisions.get(String(entry.publishedRevisionId))
+    if (!revision || revision.entryId !== entry.id) continue
+    const haystack = `${String(revision.title)}\n${String(revision.excerpt ?? '')}`.toLocaleLowerCase()
+    if (!haystack.includes(term)) continue
+    matches.push({
+      id: entry.id,
+      type: entry.type,
+      path: entry.path,
+      title: revision.title,
+      excerpt: revision.excerpt ?? null,
+      publishedAt: entry.publishedAt ?? null,
+    })
+    if (matches.length >= need) break
+  }
+  return { matches, capped }
 }
 
 export const cmsFunctions: Record<string, FnSpec> = {
@@ -437,9 +562,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
       excerpt: 'text?',
       layout: 'json',
       fields: 'json?',
+      meta: 'json?',
       published: 'bool?',
     },
-    effects: ['read:website.Entry', 'read:website.EntryRevision', 'read:website.Page'],
+    effects: ['read:website.Site', 'read:website.Entry', 'read:website.EntryRevision', 'read:website.Page'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const path = cleanPath(args.path)
@@ -448,6 +574,13 @@ export const cmsFunctions: Record<string, FnSpec> = {
         const Page = ctx.table('website.Page')
         return ctx.db.one(from(Page).where(eq(Page.path, path), eq(Page.published, true)))
       }
+      // A site that is not being served publicly serves nothing. resolveSite
+      // already refuses one, so the storefront never arrives here for it — but
+      // this function takes a siteId from its caller, and without the check an
+      // anonymous caller naming a site being prepared could read it a page at
+      // a time while the sitemap and search both refuse to list it.
+      const Site = ctx.table('website.Site')
+      if (!(await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true))))) return null
       const Entry = ctx.table('website.Entry')
       const entry = await ctx.db.one(from(Entry).where(eq(Entry.siteId, args.siteId), eq(Entry.path, path)))
       if (entry?.publishedRevisionId && entry.status !== 'trash') {
@@ -462,6 +595,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
             excerpt: revision.excerpt ?? null,
             layout: revision.layout,
             fields: revision.fields,
+            // The head metadata travels with the page it describes. Without it
+            // the storefront handed the theme an empty meta, so the fields
+            // website_seo declares were stored and never rendered.
+            meta: publicMeta(entry),
           }
       }
       return null
@@ -479,35 +616,26 @@ export const cmsFunctions: Record<string, FnSpec> = {
       excerpt: 'text?',
       publishedAt: 'datetime?',
     },
-    effects: ['read:website.Entry', 'read:website.EntryRevision'],
+    effects: ['read:website.Site', 'read:website.Entry', 'read:website.EntryRevision'],
     handler: async (ctx: Ctx, args) => {
-      const term = String(args.q ?? '')
-        .trim()
-        .toLocaleLowerCase()
-        .slice(0, 100)
-      if (term.length < 2) return []
       const paging = page(args.limit, args.offset, 20)
-      const Entry = ctx.table('website.Entry')
-      const entries = await ctx.db.all(
-        from(Entry).where(eq(Entry.siteId, args.siteId)).orderBy(desc(Entry.publishedAt)).limit(500),
-      )
-      const matches: Array<Record<string, unknown>> = []
-      for (const entry of entries) {
-        if (!entry.publishedRevisionId || entry.status === 'trash') continue
-        const revision = (await ctx.db.select('website.EntryRevision', { id: entry.publishedRevisionId }))[0]
-        if (!revision || revision.entryId !== entry.id) continue
-        const haystack = `${String(revision.title)}\n${String(revision.excerpt ?? '')}`.toLocaleLowerCase()
-        if (!haystack.includes(term)) continue
-        matches.push({
-          id: entry.id,
-          type: entry.type,
-          path: entry.path,
-          title: revision.title,
-          excerpt: revision.excerpt ?? null,
-          publishedAt: entry.publishedAt ?? null,
-        })
-      }
-      return matches.slice(paging.offset, paging.offset + paging.limit)
+      const found = await searchMatches(ctx, args.siteId, args.q, paging.offset + paging.limit)
+      return found.matches.slice(paging.offset, paging.offset + paging.limit)
+    },
+  }),
+
+  /**
+   * How many the search would return without its window — the "/ 42" in
+   * "1-20 / 42", and the only way a result page can know there is a next one.
+   */
+  countSearchPublished: defineFn({
+    anonymous: true,
+    input: { siteId: 'id', q: 'text' },
+    output: { count: 'int', capped: 'bool' },
+    effects: ['read:website.Site', 'read:website.Entry', 'read:website.EntryRevision'],
+    handler: async (ctx: Ctx, args) => {
+      const found = await searchMatches(ctx, args.siteId, args.q, SEARCH_SCAN_LIMIT)
+      return { count: found.matches.length, capped: found.capped }
     },
   }),
 
