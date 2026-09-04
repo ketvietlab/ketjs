@@ -128,6 +128,24 @@ nothing that needs repair. A chain that is already broken, or already looping ab
 loop through this item either, so the walk stops rather than refusing. Existing orphans are therefore
 harmless, and the delete guard stops new ones appearing.
 
+## Public site search
+
+`website.searchPublished` matches a term against the **published** title and excerpt of each entry.
+Those live on the revision rather than the entry, so a draft title is never searchable and a result
+always shows what a visitor would actually see.
+
+- The publication filter is part of the query. Unpublished entries used to be fetched and discarded,
+  spending the scan window before the published ones were reached.
+- Revisions are read in one batch keyed by id. The previous shape issued one query per candidate
+  entry — up to 500 per keystroke.
+- `countSearchPublished` returns the total behind the pages, plus `capped`, which says the scan
+  window was full and the count should not be presented as a final total.
+- A site that is not active has no public search, the same rule the sitemap follows.
+
+Search deliberately does **not** honour `noindex`. That is a crawler directive about a public index,
+not a visibility rule: a page a visitor can open by URL is a page a visitor may find in the site's own
+search box.
+
 ## Public forms and their schema version
 
 A form's field contract is versioned. `Form.schemaVersion` is bumped whenever the fields change and

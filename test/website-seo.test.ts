@@ -366,3 +366,33 @@ test('seo: a sitemap never crosses into another site', async () => {
     ['/gioi-thieu'],
   )
 })
+
+test('seo: a scheduled republish does not remove a page from the sitemap', async () => {
+  const { db } = await boot()
+  await seedSite(db)
+  // The entry moves to status 'scheduled' while the revision already published
+  // stays live. Filtering the sitemap on the status would delist a page a
+  // visitor can still open.
+  const next = (await call(db, 'website.saveEntry', {
+    id: 'e1',
+    siteId: 'site1',
+    type: 'website.page',
+    slug: 'gioi-thieu',
+    path: '/gioi-thieu',
+    title: 'Giới thiệu, bản mới',
+    layout,
+  })) as { revisionId: string }
+  await call(db, 'website.publishEntry', {
+    id: 'e1',
+    expectedRevisionId: next.revisionId,
+    publishAt: new Date(Date.now() + 60_000).toISOString(),
+  })
+
+  const entries = (await call(db, 'website_seo.sitemapEntries', { siteId: 'site1' })) as Array<{
+    path: string
+  }>
+  assert.deepEqual(
+    entries.map((e) => e.path),
+    ['/gioi-thieu'],
+  )
+})
