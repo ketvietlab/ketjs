@@ -23,6 +23,25 @@ const jsonBytes = (value: unknown): number => {
   }
 }
 
+/**
+ * A stable rendering of a value, so that re-saving a form with its keys in a
+ * different order is recognised as the same contract rather than a new version.
+ */
+const canonicalJson = (value: unknown): string => {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`
+}
+
+/** Forms created before versioning existed are version 1. */
+const versionOf = (form: Row | null | undefined): number => {
+  const raw = Number(form?.schemaVersion ?? 1)
+  return Number.isInteger(raw) && raw > 0 ? raw : 1
+}
+
 const fieldsOf = (schema: unknown): FormField[] => {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return []
   const fields = (schema as { fields?: unknown }).fields
@@ -139,6 +158,7 @@ export const functions: Record<string, FnSpec> = {
       siteId: 'id',
       name: 'text',
       schema: 'json',
+      schemaVersion: 'int',
       successMessage: 'text',
       notifyTo: 'text?',
       active: 'bool',
@@ -150,18 +170,31 @@ export const functions: Record<string, FnSpec> = {
       const Form = ctx.table('website_form.Form')
       let query = from(Form).where(eq(Form.siteId, args.siteId)).orderBy(asc(Form.name))
       if (args.active != null) query = query.where(eq(Form.active, args.active))
-      return ctx.db.all(query)
+      const rows = await ctx.db.all(query)
+      // Normalised here too: a caller seeding a version from this list would
+      // otherwise send an empty value for a pre-versioning row, and the route
+      // would read that as "no version declared" and skip the staleness check.
+      return rows.map((row) => ({ ...row, schemaVersion: versionOf(row) }))
     },
   }),
 
   getForm: defineFn({
     anonymous: true,
     input: { id: 'id' },
-    output: { id: 'id', siteId: 'id', name: 'text', schema: 'json', successMessage: 'text', active: 'bool' },
+    output: {
+      id: 'id',
+      siteId: 'id',
+      name: 'text',
+      schema: 'json',
+      schemaVersion: 'int',
+      successMessage: 'text',
+      active: 'bool',
+    },
     effects: ['read:website_form.Form'],
     handler: async (ctx: Ctx, args) => {
       const form = await formById(ctx, args.id)
-      return form?.active === true ? form : null
+      // The version travels with the schema so the rendered page can send it back.
+      return form?.active === true ? { ...form, schemaVersion: versionOf(form) } : null
     },
   }),
 
@@ -193,11 +226,16 @@ export const functions: Record<string, FnSpec> = {
       const existing = await formById(ctx, args.id)
       if (existing && existing.siteId !== args.siteId)
         return invalid('id', 'website.error.immutableOwnership')
+      // A save that leaves the field contract alone keeps its version, so an
+      // editor fixing a typo in the success message does not invalidate every
+      // form page a visitor currently has open.
+      const contractChanged = !existing || canonicalJson(existing.schema) !== canonicalJson(args.schema)
       const row = {
         id: args.id,
         siteId: args.siteId,
         name: String(args.name).trim(),
         schema: args.schema,
+        schemaVersion: contractChanged ? versionOf(existing) + (existing ? 1 : 0) : versionOf(existing),
         successMessage: String(args.successMessage).trim(),
         notifyTo: args.notifyTo ? String(args.notifyTo).trim() : null,
         active: args.active !== false,
@@ -211,8 +249,22 @@ export const functions: Record<string, FnSpec> = {
         (form) => form.id !== args.id && String(form.name).toLowerCase() === row.name.toLowerCase(),
       )
       if (duplicate) return invalid('name', 'website_form.error.duplicateName')
-      if (existing) await ctx.db.update('website_form.Form', { id: args.id }, row)
-      else await ctx.db.insert('website_form.Form', row)
+      if (existing) {
+        // The version is the concurrency token, so the write has to race on it.
+        // Two saves that both read version 1 and both computed 2 would publish
+        // two different contracts under one number, and the staleness check
+        // below would then certify a stale payload as current — the exact
+        // outcome this feature exists to prevent. `null` compares as IS NULL,
+        // so a row written before versioning is guarded the same way.
+        const swapped = await ctx.db.compareAndSet(
+          'website_form.Form',
+          { id: args.id },
+          { schemaVersion: (existing.schemaVersion ?? null) as number | null },
+          row,
+        )
+        if (!('dryRun' in swapped) && !swapped.matched)
+          return invalid('schema', 'website_form.error.saveConflict')
+      } else await ctx.db.insert('website_form.Form', row)
       return { ok: true, id: args.id }
     },
   }),
@@ -223,6 +275,7 @@ export const functions: Record<string, FnSpec> = {
       id: 'id',
       formId: 'id',
       payload: 'json',
+      schemaVersion: 'int?',
       consent: 'bool',
       status: 'text',
       source: 'text?',
@@ -253,6 +306,8 @@ export const functions: Record<string, FnSpec> = {
       source: 'text?',
       rateKey: 'text?',
       submissionKey: 'text?',
+      /** The contract the page was rendered against, echoed back on submit. */
+      schemaVersion: 'int?',
     },
     output: { ok: 'bool', id: 'id?', message: 'text?', errors: 'json?' },
     effects: [
@@ -268,6 +323,12 @@ export const functions: Record<string, FnSpec> = {
       if (String(args.honeypot ?? '').trim()) return { ok: true, message: '' }
       const form = await formById(ctx, args.formId)
       if (form?.active !== true) return invalid('formId', 'website_form.error.unavailable')
+      // A page rendered against an older contract is told so once, plainly.
+      // Validating it against the current schema instead would report a field
+      // the visitor was never shown as missing, and blame them for it.
+      const current = versionOf(form)
+      if (args.schemaVersion != null && Number(args.schemaVersion) !== current)
+        return invalid('formId', 'website_form.error.staleForm')
       const errors = validatePayload(form.schema, args.payload)
       if (errors.length) return { ok: false, errors }
 
@@ -292,6 +353,7 @@ export const functions: Record<string, FnSpec> = {
           id,
           formId: args.formId,
           payload: args.payload,
+          schemaVersion: current,
           consent: args.consent === true,
           status: 'new',
           source: args.source ? String(args.source).slice(0, 2_048) : null,
