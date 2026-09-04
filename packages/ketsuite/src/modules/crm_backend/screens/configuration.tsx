@@ -65,6 +65,7 @@ export const configurationScreen = (
       variant="operational"
       frame={frame}
       title={_('crm_backend.configuration.title')}
+      description={_('crm_backend.configuration.subtitle')}
       actions={linkButton({
         href: createHref,
         label: _('crm_backend.configuration.create'),
