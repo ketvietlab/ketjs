@@ -35,6 +35,28 @@ test('flow board: uses the horizontal workspace around the kanban island', () =>
   assert.match(rendered, /data-ui="flow-board-columns"/)
 })
 
+test('flow project navigation: marks whichever of the seven screens the reader is on', () => {
+  // The group reads the screen out of the active path, so every screen has to
+  // hand it its own. Timeline, Sprints and Settings each used to hand it the
+  // backlog: three rows that could never be marked, on the screens where losing
+  // your place costs the most.
+  for (const screen of ['board', 'issues', 'gantt', 'pages', 'epics', 'sprints', 'settings']) {
+    const html = renderToString(
+      projectNav({ active: `/admin/flow/projects/project-platform/${screen}`, lang: 'en' })(),
+    )
+    const marked = [
+      ...html.matchAll(
+        /data-active="true" href="\/admin\/flow\/projects\/project-platform\/([a-z]+)\?lang=en"/g,
+      ),
+    ]
+    assert.deepEqual(
+      marked.map((match) => match[1]),
+      [screen],
+      `${screen} marks itself and nothing else`,
+    )
+  }
+})
+
 test('flow project navigation: preserves locale and marks board active', () => {
   const rendered = renderToString(
     projectNav({

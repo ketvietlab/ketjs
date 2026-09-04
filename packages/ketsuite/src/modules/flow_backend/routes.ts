@@ -2145,7 +2145,11 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
-        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
+        // The project group marks whichever row this path names, so it has to be
+        // this screen's own. Pointing all three at the backlog left Timeline,
+        // Sprints and Settings permanently unmarked, and told the reader they
+        // were on a screen they had left.
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/gantt`,
         body: (_, frame) => {
           const from = rows.length ? offset + 1 : 0
           const to = Math.min(offset + rows.length, allRows.length)
@@ -2226,7 +2230,11 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
-        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
+        // The project group marks whichever row this path names, so it has to be
+        // this screen's own. Pointing all three at the backlog left Timeline,
+        // Sprints and Settings permanently unmarked, and told the reader they
+        // were on a screen they had left.
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/sprints`,
         body: (_, frame) =>
           sprintsScreen(_, frame, {
             projectName: String(project.name),
@@ -2536,7 +2544,11 @@ export const routes: Record<string, RouteEntry> = {
       return adminPage(ctx, url, req, {
         title: String(project.name),
         translate: false,
-        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/issues`,
+        // The project group marks whichever row this path names, so it has to be
+        // this screen's own. Pointing all three at the backlog left Timeline,
+        // Sprints and Settings permanently unmarked, and told the reader they
+        // were on a screen they had left.
+        active: `/admin/flow/projects/${encodeURIComponent(projectId)}/settings`,
         body: (_, frame) =>
           settingsScreen(_, frame, String(project.name), {
             brief,
