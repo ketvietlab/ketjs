@@ -135,11 +135,25 @@ test('search: a term shorter than two characters asks nothing of the database', 
   const db = await boot()
   await seedSite(db)
   await publish(db, 'p1', 'Trà')
-  assert.deepEqual(await call(db, 'website.searchPublished', { siteId: 'site1', q: 'a' }), [])
-  assert.deepEqual(await call(db, 'website.countSearchPublished', { siteId: 'site1', q: '' }), {
-    count: 0,
-    capped: false,
-  })
+
+  // Observing the adapter, not just the return value: the guard is worth nothing
+  // if it sits below the queries it is supposed to save.
+  const seen: string[] = []
+  const original = db.all.bind(db)
+  db.all = async (sql: string, params?: unknown[]) => {
+    seen.push(sql)
+    return original(sql, params)
+  }
+  try {
+    assert.deepEqual(await call(db, 'website.searchPublished', { siteId: 'site1', q: 'a' }), [])
+    assert.deepEqual(await call(db, 'website.countSearchPublished', { siteId: 'site1', q: '' }), {
+      count: 0,
+      capped: false,
+    })
+  } finally {
+    db.all = original
+  }
+  assert.deepEqual(seen, [], 'a term too short to match must not reach the database')
 })
 
 test('search: a site that is not being served has no public search', async () => {
@@ -204,5 +218,100 @@ test('search: a scheduled republish does not delist what is already live', async
     hits.map((h) => h.title),
     ['Chuyện bên ấm trà'],
     'the live revision is still findable, and it is the live one',
+  )
+})
+
+test('search: a corpus larger than one batch is matched completely', async () => {
+  const db = await boot()
+  await seedSite(db)
+  // Revisions are read in chunks of 200. A dropped tail or a duplicated chunk
+  // is invisible until the corpus crosses that boundary.
+  const total = 210
+  for (let i = 0; i < total; i += 1) await publish(db, `p${String(i).padStart(3, '0')}`, `Trà số ${i}`)
+
+  const count = (await call(db, 'website.countSearchPublished', { siteId: 'site1', q: 'trà số' })) as {
+    count: number
+    capped: boolean
+  }
+  assert.equal(count.count, total, 'every entry across both chunks is matched exactly once')
+  assert.equal(count.capped, false)
+
+  // And the very last one, which lives past the first chunk, is reachable.
+  const tail = (await call(db, 'website.searchPublished', {
+    siteId: 'site1',
+    q: 'trà số 209',
+  })) as Hit[]
+  assert.equal(tail.length, 1)
+})
+
+test('search: a page under a namespace the deployment serves is not offered', async () => {
+  const db = await boot()
+  await seedSite(db)
+  await publish(db, 'ok', 'Trà ngon')
+  await call(db, 'website.saveEntry', {
+    id: 'shadow',
+    siteId: 'site1',
+    type: 'website.post',
+    slug: 'shadow',
+    path: '/api/tra-ngon',
+    title: 'Trà ngon',
+    layout,
+  })
+  await call(db, 'website.publishEntry', { id: 'shadow' })
+
+  const hits = (await call(db, 'website.searchPublished', { siteId: 'site1', q: 'trà' })) as Array<
+    Hit & { path: string }
+  >
+  assert.deepEqual(
+    hits.map((h) => h.path),
+    ['/ok'],
+    'a module route answers /api first, so the result would 404',
+  )
+})
+
+test('search results and the public reader agree', async () => {
+  const db = await boot()
+  await seedSite(db)
+  await publish(db, 'live', 'Trà sống')
+  await publish(db, 'shadowed', 'Trà khuất', { path: '/api/khuat' })
+  await call(db, 'website.saveEntry', {
+    id: 'draft',
+    siteId: 'site1',
+    type: 'website.post',
+    slug: 'draft',
+    path: '/draft',
+    title: 'Trà nháp',
+    layout,
+  })
+
+  // Anything search offers must be openable, and nothing it withholds for a
+  // publication reason may be openable either.
+  const hits = (await call(db, 'website.searchPublished', { siteId: 'site1', q: 'trà' })) as Array<
+    Hit & { path: string }
+  >
+  for (const hit of hits) {
+    const page = await call(db, 'website.getEntryByPath', { siteId: 'site1', path: hit.path })
+    assert.ok(page, `search offered ${hit.path} but the reader will not serve it`)
+  }
+  assert.equal(await call(db, 'website.getEntryByPath', { siteId: 'site1', path: '/draft' }), null)
+})
+
+test('search: an unserved site is closed to the reader too', async () => {
+  const db = await boot()
+  await seedSite(db)
+  await publish(db, 'p1', 'Trà ngon')
+  await call(db, 'website.saveSite', {
+    id: 'site1',
+    name: 'moc',
+    title: 'Mộc',
+    defaultLocale: 'vi',
+    theme: 'theme_paper',
+    active: false,
+  })
+  assert.deepEqual(await call(db, 'website.searchPublished', { siteId: 'site1', q: 'trà' }), [])
+  assert.equal(
+    await call(db, 'website.getEntryByPath', { siteId: 'site1', path: '/p1' }),
+    null,
+    'listing and reading must close together, not one before the other',
   )
 })

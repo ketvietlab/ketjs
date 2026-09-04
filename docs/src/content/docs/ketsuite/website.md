@@ -134,11 +134,27 @@ always shows what a visitor would actually see.
 
 - The publication filter is part of the query. Unpublished entries used to be fetched and discarded,
   spending the scan window before the published ones were reached.
-- Revisions are read in one batch keyed by id. The previous shape issued one query per candidate
-  entry — up to 500 per keystroke.
+- Revisions are read in one batch keyed by id, projected to the four fields the match and the result
+  use. The previous shape issued one query per candidate entry; reading whole rows instead would make
+  one anonymous request for a single result cost hundreds of megabytes, because a revision also
+  carries `layout` and `fields` — half a megabyte each at what `saveEntry` allows.
 - `countSearchPublished` returns the total behind the pages, plus `capped`, which says the scan
-  window was full and the count should not be presented as a final total.
+  window was full and the count should not be presented as a final total. The scan reads one row past
+  the window, so a site with exactly that many entries is reported as complete rather than capped.
 - A site that is not active has no public search, the same rule the sitemap follows.
+- Pages under a reserved namespace are not offered, for the same reason the sitemap omits them: a
+  module route answers that path first, so the result would not open.
+
+### The three public views agree
+
+The sitemap, the site's own search and `getEntryByPath` — the reader that actually serves a page —
+apply the same publication gate: a published revision, not in trash, on an active site. Search and
+the sitemap add the reserved-namespace rule, which `website` owns in `paths.ts` precisely so all
+three read one definition rather than three copies that drift.
+
+The invariant is that anything offered is openable. `getEntryByPath` previously had no active-site
+check, so a caller naming a site being prepared could read it a page at a time while both listings
+refused to name it; it now closes with them.
 
 Search deliberately does **not** honour `noindex`. That is a crawler directive about a public index,
 not a visibility rule: a page a visitor can open by URL is a page a visitor may find in the site's own
