@@ -9,6 +9,24 @@ The `account` module holds the jurisdiction-neutral double-entry ledger: journal
 entries, invoices, payments, reconciliation, period controls and books. A deployment
 must install or configure its own chart, taxes and statutory reporting localization.
 
+## Sale orders managed outside KetSuite
+
+Trusted integrations may pin `sale.Order.orderAuthority` (`local`/`external`), `stockAuthority`
+(`local`/`external`), `invoiceAuthority` (`local`/`disabled`) and an `executionPolicyVersion`.
+Null fields preserve existing native behavior. Ordinary order-edit inputs do not expose these fields.
+External order authority refuses local edits, confirmation, cancellation, reset and unlock. External
+stock authority prevents delivery generation and preserves externally supplied delivered quantities
+when `sale.syncDeliveries` runs. Disabled invoice authority reports `no` and refuses `sale.createInvoice`
+before it writes a journal entry. These are per-order decisions, not mutable company defaults.
+
+Integrations restore imported state without replaying lifecycle commands. A later cutover applies to
+new orders; changing an existing order's authority requires a separately reviewed handover. The core
+does not reinterpret old orders, manufacture completed pickings, or invent tax treatment for them.
+
+An external order can retain `externalAmountAdjustment`, the difference between its provider total
+and the sum of item subtotals. This is informational shipping/discount/rounding reconciliation, not
+a product, a tax classification, or permission to post accounting entries.
+
 ## Currency arithmetic
 
 Every stored amount is rounded to the minor unit of the currency that owns it, not to
