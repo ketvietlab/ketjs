@@ -6,17 +6,22 @@
 import { eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx } from '@ketvietlab/ketjs'
 
+const n = (value: unknown): number => Number(value ?? 0)
+
 /**
  * How much work each project is carrying, and how much of it is finished.
  *
- * Two reads for the whole page, not one per project: there is no JOIN to count
- * issues by project in a single query, and the list caps at 200 rows, so a
- * count per row would be 200 round trips. The issues come back in one
- * `inArray`, their columns in a second, and the tally is done here.
+ * Counted where the rows are. This used to read **every active issue in the
+ * company** — the list passes up to two hundred project ids and the read had no
+ * limit — then tally them in memory. Twenty projects of two thousand issues was
+ * forty thousand rows into the request, every time somebody opened the list.
  *
- * "Finished" is a column marked `terminalState`, which is the same definition
- * the board and the sub-task progress already use — a project does not carry a
- * status of its own to read instead.
+ * Two grouped counts and one small read of the terminal columns replace it. The
+ * old comment was right that a count per project would be two hundred round
+ * trips; the answer is a `GROUP BY`, not reading everything.
+ *
+ * "Finished" is a column marked `terminalState`, the same definition the board
+ * and the sub-task progress already use — a project carries no status of its own.
  */
 /**
  * The projects the caller has work in, as a set of ids.
@@ -42,20 +47,28 @@ export async function projectStats(ctx: Ctx, projectIds: string[]): Promise<Map<
   if (!projectIds.length) return tally
   for (const id of projectIds) tally.set(id, { total: 0, done: 0 })
   const I = ctx.table('flow.Issue')
-  const issues = await ctx.db.all(from(I).where(inArray(I.projectId, projectIds), eq(I.active, true)))
-  if (!issues.length) return tally
   const C = ctx.table('flow.Column')
-  const columns = await ctx.db.all(
-    from(C).where(inArray(C.id, [...new Set(issues.map((row) => String(row.columnId)))])),
-  )
-  const terminal = new Set(
-    columns.filter((column) => column.terminalState).map((column) => String(column.id)),
-  )
-  for (const issue of issues) {
-    const at = tally.get(String(issue.projectId))
-    if (!at) continue
-    at.total += 1
-    if (terminal.has(String(issue.columnId))) at.done += 1
+  // Which columns mean finished, for these projects only. A handful of rows,
+  // and the one read here that returns rows rather than counts.
+  const terminal = (
+    await ctx.db.all(
+      from(C).where(inArray(C.projectId, projectIds), eq(C.terminalState, true), eq(C.active, true)),
+    )
+  ).map((row) => String(row.id))
+  const live = from(I).where(inArray(I.projectId, projectIds), eq(I.active, true))
+  const [totals, finished] = await Promise.all([
+    ctx.db.group(live.groupBy({ col: I.projectId! })),
+    terminal.length
+      ? ctx.db.group(live.where(inArray(I.columnId, terminal)).groupBy({ col: I.projectId! }))
+      : Promise.resolve([]),
+  ])
+  for (const group of totals) {
+    const at = tally.get(String(group.key[0] ?? ''))
+    if (at) at.total = n(group.count)
+  }
+  for (const group of finished) {
+    const at = tally.get(String(group.key[0] ?? ''))
+    if (at) at.done = n(group.count)
   }
   return tally
 }

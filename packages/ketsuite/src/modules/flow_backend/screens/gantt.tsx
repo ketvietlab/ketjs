@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { BoardPage, Gantt, listChrome, shell } from '../../../ui/index.ts'
+import { BoardPage, Gantt, listChrome, Notice, shell, stack } from '../../../ui/index.ts'
 import type { Frame, GanttItem } from '../../../ui/index.ts'
 import type { AnyRow } from './shared.tsx'
 import { empty } from './shared.tsx'
@@ -22,6 +22,8 @@ export const ganttScreen = (
   rows: AnyRow[],
   today: string,
   locale: string,
+  /** Set when the project holds more work than the chart is willing to read. */
+  scan?: { scanned: number; total: number },
 ): TemplateResult => {
   const items: GanttItem[] = rows.map((row) => ({
     id: String(row.id),
@@ -53,15 +55,24 @@ export const ganttScreen = (
       controls={
         frame.chrome ? listChrome(_, projectName, { ...frame.chrome, layout: 'command' }, false) : undefined
       }
-      body={
+      body={stack([
+        // A chart that quietly drew a tenth of the work would tell the same lie
+        // a truncated filter tells — see the note on GANTT_SCAN.
+        scan ? (
+          <Notice
+            tone="warning"
+            title={_('flow_backend.gantt.partialTitle')}
+            message={_('flow_backend.gantt.partialBody', { scanned: scan.scanned, total: scan.total })}
+          />
+        ) : null,
         <Gantt
           items={items}
           today={today}
           locale={locale}
           labels={{ today: _('flow_backend.gantt.today'), empty: '' }}
           empty={empty(_)}
-        />
-      }
+        />,
+      ])}
     />,
     { ...frame, chrome: null, topbar: false },
   )
