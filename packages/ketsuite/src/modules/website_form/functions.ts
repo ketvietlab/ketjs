@@ -36,6 +36,14 @@ const canonicalJson = (value: unknown): string => {
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`
 }
 
+/**
+ * What the version is a version of: the fields a visitor is asked to fill and
+ * the notice they are asked to agree to. Both change what a rendered page means,
+ * so both belong to one version rather than two that can disagree.
+ */
+const contractOf = (schema: unknown, consentText: unknown): string =>
+  canonicalJson({ schema, consentText: consentText == null ? null : String(consentText) })
+
 /** Forms created before versioning existed are version 1. */
 const versionOf = (form: Row | null | undefined): number => {
   const raw = Number(form?.schemaVersion ?? 1)
@@ -159,6 +167,7 @@ export const functions: Record<string, FnSpec> = {
       name: 'text',
       schema: 'json',
       schemaVersion: 'int',
+      consentText: 'text?',
       successMessage: 'text',
       notifyTo: 'text?',
       active: 'bool',
@@ -187,6 +196,7 @@ export const functions: Record<string, FnSpec> = {
       name: 'text',
       schema: 'json',
       schemaVersion: 'int',
+      consentText: 'text?',
       successMessage: 'text',
       active: 'bool',
     },
@@ -204,6 +214,7 @@ export const functions: Record<string, FnSpec> = {
       siteId: 'id',
       name: 'text',
       schema: 'json',
+      consentText: 'text?',
       successMessage: 'text',
       notifyTo: 'text?',
       active: 'bool?',
@@ -229,13 +240,16 @@ export const functions: Record<string, FnSpec> = {
       // A save that leaves the field contract alone keeps its version, so an
       // editor fixing a typo in the success message does not invalidate every
       // form page a visitor currently has open.
-      const contractChanged = !existing || canonicalJson(existing.schema) !== canonicalJson(args.schema)
+      const contractChanged =
+        !existing ||
+        contractOf(existing.schema, existing.consentText) !== contractOf(args.schema, args.consentText)
       const row = {
         id: args.id,
         siteId: args.siteId,
         name: String(args.name).trim(),
         schema: args.schema,
         schemaVersion: contractChanged ? versionOf(existing) + (existing ? 1 : 0) : versionOf(existing),
+        consentText: args.consentText == null ? null : String(args.consentText).trim() || null,
         successMessage: String(args.successMessage).trim(),
         notifyTo: args.notifyTo ? String(args.notifyTo).trim() : null,
         active: args.active !== false,
@@ -329,6 +343,11 @@ export const functions: Record<string, FnSpec> = {
       const current = versionOf(form)
       if (args.schemaVersion != null && Number(args.schemaVersion) !== current)
         return invalid('formId', 'website_form.error.staleForm')
+      // A form that shows a notice is asking for agreement to it. Storing
+      // consent: false against such a form would record a submission nobody
+      // agreed to, and the version above is what says which notice that was.
+      if (form.consentText && args.consent !== true)
+        return invalid('consent', 'website_form.error.consentRequired')
       const errors = validatePayload(form.schema, args.payload)
       if (errors.length) return { ok: false, errors }
 

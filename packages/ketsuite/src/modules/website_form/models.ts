@@ -16,6 +16,13 @@ export const models: Record<string, ModelDef> = {
        * created before versioning existed read as version 1.
        */
       schemaVersion: 'int?',
+      /**
+       * The privacy notice shown beside the consent box. Part of the versioned
+       * contract, not a separate one: a bare `consent: true` records that
+       * someone ticked a box without recording which text they agreed to, so
+       * changing the notice would silently reinterpret every earlier consent.
+       */
+      consentText: 'text?',
       successMessage: 'text',
       notifyTo: 'text?',
       active: 'bool',

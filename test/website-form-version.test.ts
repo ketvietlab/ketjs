@@ -275,3 +275,110 @@ test('form: listForms and getForm agree on the version', async () => {
   assert.equal(list[0]?.schemaVersion, one.schemaVersion)
   assert.equal(one.schemaVersion, 1)
 })
+
+// --- consent is part of the same contract ----------------------------------
+
+const withNotice = {
+  id: 'f1',
+  siteId: 'site1',
+  name: 'Liên hệ',
+  schema: oneField,
+  successMessage: 'Đã nhận.',
+  consentText: 'Tôi đồng ý để Mộc liên hệ lại.',
+}
+
+test('form: changing the privacy notice bumps the same version the fields use', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.saveForm', withNotice)
+  const v2 = (await call(db, 'website_form.getForm', { id: 'f1' })) as {
+    schemaVersion: number
+    consentText: string
+  }
+  assert.equal(v2.schemaVersion, 2, 'adding a notice changes what the page means')
+  assert.equal(v2.consentText, 'Tôi đồng ý để Mộc liên hệ lại.')
+
+  await call(db, 'website_form.saveForm', {
+    ...withNotice,
+    consentText: 'Tôi đồng ý để Mộc liên hệ lại và lưu thông tin của tôi.',
+  })
+  const v3 = (await call(db, 'website_form.getForm', { id: 'f1' })) as { schemaVersion: number }
+  assert.equal(v3.schemaVersion, 3, 'one version covers fields and notice, so they cannot disagree')
+})
+
+test('form: a page open against the old notice is told to reload', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.saveForm', withNotice)
+  const shownTo = ((await call(db, 'website_form.getForm', { id: 'f1' })) as { schemaVersion: number })
+    .schemaVersion
+
+  await call(db, 'website_form.saveForm', { ...withNotice, consentText: 'Điều khoản mới.' })
+
+  const stale = (await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { email: 'mai@example.test' },
+    consent: true,
+    schemaVersion: shownTo,
+  })) as Result
+  assert.equal(stale.ok, false)
+  assert.equal(
+    stale.errors?.[0]?.message,
+    'website_form.error.staleForm',
+    'agreement to a notice that has been replaced is not agreement to the new one',
+  )
+})
+
+test('form: a form that shows a notice will not accept a submission without agreement', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.saveForm', withNotice)
+
+  const refused = (await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { email: 'mai@example.test' },
+  })) as Result
+  assert.equal(refused.ok, false)
+  assert.equal(refused.errors?.[0]?.field, 'consent')
+  assert.equal(refused.errors?.[0]?.message, 'website_form.error.consentRequired')
+  assert.deepEqual(await call(db, 'website_form.listSubmissions', { formId: 'f1' }), [])
+})
+
+test('form: the version on a submission says which notice was agreed to', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.saveForm', withNotice)
+  const agreedAt = ((await call(db, 'website_form.getForm', { id: 'f1' })) as { schemaVersion: number })
+    .schemaVersion
+  await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { email: 'mai@example.test' },
+    consent: true,
+    schemaVersion: agreedAt,
+  })
+
+  // The notice then changes. The stored submission still points at the version
+  // that was in force, so the text it agreed to is recoverable.
+  await call(db, 'website_form.saveForm', { ...withNotice, consentText: 'Điều khoản mới.' })
+
+  const rows = (await call(db, 'website_form.listSubmissions', { formId: 'f1' })) as Array<{
+    consent: boolean
+    schemaVersion: number
+  }>
+  assert.equal(rows[0]?.consent, true)
+  assert.equal(rows[0]?.schemaVersion, agreedAt)
+  assert.notEqual(
+    ((await call(db, 'website_form.getForm', { id: 'f1' })) as { schemaVersion: number }).schemaVersion,
+    rows[0]?.schemaVersion,
+  )
+})
+
+test('form: a form with no notice is unaffected', async () => {
+  const db = await boot()
+  await seed(db)
+  const accepted = (await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { email: 'mai@example.test' },
+  })) as Result
+  assert.equal(accepted.ok, true, 'consent is only required where a notice is shown')
+})
