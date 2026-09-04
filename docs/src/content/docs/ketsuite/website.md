@@ -28,11 +28,9 @@ CRM — and Website composes them through optional bridge modules.
 the module declares the fields, it also owns writing them: `website.saveEntry` deliberately does not,
 so SEO validation does not end up inside the content module.
 
-:::caution[Head rendering is not wired yet]
-Of the four fields, only `noindex` has a consumer today: the sitemap below. The storefront page scope
-in `packages/ketjs/src/server/boot.ts` passes the theme an empty `meta`, so the head fill has nothing
-to interpolate and `metaDescription`, `canonical` and `ogImage` are stored and read back but not
-rendered. Connecting the page scope is a framework change and is tracked separately.
+:::caution[Blocked on the storefront page scope]
+Of the four fields, only `noindex` has a consumer today: the sitemap below. See
+[The storefront page scope](#the-storefront-page-scope) for why, and for what else it blocks.
 :::
 
 ```ts
@@ -189,6 +187,29 @@ The check is opt-in by the page: a client that sends no version keeps the previo
 way the accepted submission records `FormSubmission.schemaVersion`, so an operator reading an old
 submission knows which contract its fields meant. Forms that existed before versioning read as
 version 1.
+
+## The storefront page scope
+
+One framework gap currently blocks two module features, so it is worth stating once.
+
+`packages/ketjs/src/server/boot.ts` builds the scope a theme renders a public page against, and that
+scope is `site`, `locale`, `page`, `meta` and `sections` — with `meta` hardcoded to `{}`. Joint fills
+and island props are projected from that scope, so anything a module wants to put on a public page has
+to be in it.
+
+What that blocks today:
+
+| Feature | Symptom |
+| --- | --- |
+| `website_seo` head tags | The `website:page.head` fill interpolates `meta.*`, which is always empty, so `metaDescription`, `canonical` and `ogImage` are stored and read back but never rendered. |
+| `website_search` box | The island declares a `label` prop that is never in scope, so it always shows its fallback, and its form action is a hardcoded `/tim-kiem` rather than a path the site chooses. There is also nowhere for it to post: no surface renders results. |
+
+The query layer for search exists and is tested — `searchPublished` and `countSearchPublished` — so
+the missing half is the public surface, not the behaviour behind it.
+
+Widening the page scope is a framework change affecting every theme, so it belongs in its own review
+rather than inside a module change. Until then, treat both features as "stored and queryable, not yet
+rendered", and do not document them as end-to-end.
 
 ## Testing
 
