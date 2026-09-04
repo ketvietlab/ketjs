@@ -32,7 +32,6 @@ export const HOOKS = [
   'menu-dot',
   'menu-section',
   'menu-section-title',
-  'menu-section-chevron',
   'menu-section-text',
   'menu-section-children',
   'sidebar-foot',
@@ -80,6 +79,12 @@ export type Indicator = {
 
 export type SidebarOptions = {
   menu: MenuNode[]
+  /**
+   * Whether to offer the list of root sections. `auto` shows it only when this
+   * viewer has more than one root to move between; a chooser with one choice is
+   * furniture that costs a row of every sidebar.
+   */
+  rootList?: 'auto' | 'always' | 'never'
   viewer?: Viewer | null
   indicators?: Indicator[]
   menuFilter?: string | null
@@ -96,15 +101,25 @@ const destination = (node: MenuNode): string => {
   return '#'
 }
 
+/**
+ * A group is a label. Nothing in the sidebar folds any more.
+ *
+ * Collapsing existed because the sidebar carried every screen a person could
+ * read, and that list was long enough to need hiding. Once it carries the work
+ * they actually do, folding costs a click to reveal six rows — and a group that
+ * starts closed is a group nobody finds.
+ *
+ * Deeper nesting still renders, as labels within labels. No shipped menu goes
+ * that deep, and a tree that did would be telling us something about itself.
+ */
 const menuItem = (node: MenuNode, depth: number): TemplateResult =>
   node.children.length ? (
     <li data-ui="menu-item-wrap" data-depth={String(depth)}>
-      <details data-ui="menu-section" open={node.active || depth === 0}>
-        <summary data-ui="menu-section-title">
-          <span data-ui="menu-section-chevron">{icon('chevron-right')}</span>
+      <div data-ui="menu-section">
+        <p data-ui="menu-section-title">
           {node.icon && hasIcon(node.icon) ? <span data-ui="menu-icon">{icon(node.icon)}</span> : ''}
           <span data-ui="menu-section-text">{node.label}</span>
-        </summary>
+        </p>
         <ul data-ui="menu-section-children">
           {each(
             node.children,
@@ -112,7 +127,7 @@ const menuItem = (node: MenuNode, depth: number): TemplateResult =>
             (child) => menuItem(child, depth + 1),
           )}
         </ul>
-      </details>
+      </div>
     </li>
   ) : (
     <li data-ui="menu-item-wrap" data-depth={String(depth)}>
@@ -167,6 +182,8 @@ export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateRes
   const { navItems } = options
   const menu = working(options.menu)
   const app = menu.find((item) => item.active) ?? menu[0] ?? null
+  const rootList = options.rootList ?? 'auto'
+  const showRoots = menu.length > 0 && (rootList === 'always' || (rootList === 'auto' && menu.length > 1))
   return (
     <>
       <div data-ui="sidebar-header">
@@ -191,32 +208,34 @@ export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateRes
 
       <nav data-ui="sidebar-nav">
         {menu.length === 0 && <p data-ui="sidebar-empty">{_('backend.nav.noMatch')}</p>}
-        {menu.length > 0 && <p data-ui="sidebar-section-label">{_('backend.nav.sections')}</p>}
-        <ul data-ui="app-list">
-          {each(
-            menu,
-            (item) => item.id,
-            (item) => (
-              <li>
-                <a
-                  data-ui="app-entry"
-                  data-active={String(item.active)}
-                  href={destination(item)}
-                  title={item.label}
-                >
-                  <span data-ui="app-icon">
-                    {item.icon && hasIcon(item.icon) ? (
-                      icon(item.icon)
-                    ) : (
-                      <span data-ui="app-monogram">{item.label.slice(0, 1)}</span>
-                    )}
-                  </span>
-                  <span data-ui="app-name">{item.label}</span>
-                </a>
-              </li>
-            ),
-          )}
-        </ul>
+        {showRoots && <p data-ui="sidebar-section-label">{_('backend.nav.sections')}</p>}
+        {showRoots && (
+          <ul data-ui="app-list">
+            {each(
+              menu,
+              (item) => item.id,
+              (item) => (
+                <li>
+                  <a
+                    data-ui="app-entry"
+                    data-active={String(item.active)}
+                    href={destination(item)}
+                    title={item.label}
+                  >
+                    <span data-ui="app-icon">
+                      {item.icon && hasIcon(item.icon) ? (
+                        icon(item.icon)
+                      ) : (
+                        <span data-ui="app-monogram">{item.label.slice(0, 1)}</span>
+                      )}
+                    </span>
+                    <span data-ui="app-name">{item.label}</span>
+                  </a>
+                </li>
+              ),
+            )}
+          </ul>
+        )}
 
         {!!app && app.children.length > 0 && (
           <>
