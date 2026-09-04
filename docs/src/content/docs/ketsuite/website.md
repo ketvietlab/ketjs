@@ -204,6 +204,24 @@ way the accepted submission records `FormSubmission.schemaVersion`, so an operat
 submission knows which contract its fields meant. Forms that existed before versioning read as
 version 1.
 
+### Consent belongs to the same contract
+
+`FormSubmission.consent` is a boolean: on its own it records that somebody ticked a box, not which
+text they agreed to. When the privacy notice changes, every earlier consent is silently reinterpreted
+as agreement to the new wording.
+
+So the notice lives on the form as `consentText` and is part of the **same** version as the fields.
+Changing it advances `schemaVersion`, which means a page open against the old notice is refused with
+`staleForm` exactly the way a page open against old fields is — agreement to a notice that has been
+replaced is not agreement to its replacement. And because the accepted submission already records
+`schemaVersion`, the text a visitor agreed to is recoverable from the version it was accepted under.
+
+One version rather than two is the point: two could disagree, and then no single number would say
+what a stored submission meant.
+
+A form that shows a notice will not accept a submission without agreement —
+`website_form.error.consentRequired`. A form with no notice is unaffected.
+
 ## The storefront page scope
 
 One framework gap currently blocks two module features, so it is worth stating once.

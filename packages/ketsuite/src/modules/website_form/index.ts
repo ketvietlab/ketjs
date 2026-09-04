@@ -38,6 +38,7 @@ export default defineModule({
       'error.rateLimit': 'Bạn đã gửi quá nhiều lần. Vui lòng thử lại sau.',
       'error.staleForm': 'Biểu mẫu đã được cập nhật. Hãy tải lại trang trước khi gửi.',
       'error.saveConflict': 'Biểu mẫu vừa được người khác lưu. Hãy tải lại rồi lưu lại.',
+      'error.consentRequired': 'Bạn cần đồng ý với thông báo trước khi gửi.',
     },
     en: {
       'app.title': 'Website forms',
@@ -65,6 +66,7 @@ export default defineModule({
       'error.rateLimit': 'Too many submissions. Please try again later.',
       'error.staleForm': 'This form has been updated. Reload the page before submitting.',
       'error.saveConflict': 'Someone else saved this form. Reload and save again.',
+      'error.consentRequired': 'You must agree to the notice before submitting.',
     },
   },
   models,
