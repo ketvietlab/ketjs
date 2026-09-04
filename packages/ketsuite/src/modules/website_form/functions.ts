@@ -42,7 +42,15 @@ const canonicalJson = (value: unknown): string => {
  * so both belong to one version rather than two that can disagree.
  */
 const contractOf = (schema: unknown, consentText: unknown): string =>
-  canonicalJson({ schema, consentText: consentText == null ? null : String(consentText) })
+  canonicalJson({ schema, consentText: normalisedNotice(consentText) })
+
+/**
+ * The stored form of a notice. Hashing the raw input while storing a trimmed
+ * one made the two disagree, so re-saving an unchanged form advanced the
+ * version every time and invalidated every page open against it.
+ */
+const normalisedNotice = (value: unknown): string | null =>
+  value == null ? null : String(value).trim() || null
 
 /** Forms created before versioning existed are version 1. */
 const versionOf = (form: Row | null | undefined): number => {
@@ -249,7 +257,7 @@ export const functions: Record<string, FnSpec> = {
         name: String(args.name).trim(),
         schema: args.schema,
         schemaVersion: contractChanged ? versionOf(existing) + (existing ? 1 : 0) : versionOf(existing),
-        consentText: args.consentText == null ? null : String(args.consentText).trim() || null,
+        consentText: normalisedNotice(args.consentText),
         successMessage: String(args.successMessage).trim(),
         notifyTo: args.notifyTo ? String(args.notifyTo).trim() : null,
         active: args.active !== false,

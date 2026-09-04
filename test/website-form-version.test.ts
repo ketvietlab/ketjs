@@ -382,3 +382,52 @@ test('form: a form with no notice is unaffected', async () => {
   })) as Result
   assert.equal(accepted.ok, true, 'consent is only required where a notice is shown')
 })
+
+test('form: re-saving an unchanged notice keeps the version', async () => {
+  const db = await boot()
+  await seed(db)
+  // Surrounding whitespace on purpose: the stored value is trimmed, and hashing
+  // the raw input instead made every save disagree with the last one and bump
+  // the version forever, invalidating every page open against the form.
+  const padded = { ...withNotice, consentText: '  Tôi đồng ý để Mộc liên hệ lại.  ' }
+  await call(db, 'website_form.saveForm', padded)
+  const first = (await call(db, 'website_form.getForm', { id: 'f1' })) as {
+    schemaVersion: number
+    consentText: string
+  }
+  assert.equal(first.consentText, 'Tôi đồng ý để Mộc liên hệ lại.', 'stored trimmed')
+
+  await call(db, 'website_form.saveForm', padded)
+  await call(db, 'website_form.saveForm', padded)
+  const later = (await call(db, 'website_form.getForm', { id: 'f1' })) as { schemaVersion: number }
+  assert.equal(later.schemaVersion, first.schemaVersion, 'saving the same notice changes nothing')
+
+  // The trimmed form of the same notice is the same contract too.
+  await call(db, 'website_form.saveForm', { ...withNotice, consentText: first.consentText })
+  const trimmed = (await call(db, 'website_form.getForm', { id: 'f1' })) as { schemaVersion: number }
+  assert.equal(trimmed.schemaVersion, first.schemaVersion)
+})
+
+test('form: an empty notice is the same as none', async () => {
+  const db = await boot()
+  await seed(db)
+  const base = { id: 'f1', siteId: 'site1', name: 'Liên hệ', schema: oneField, successMessage: 'Đã nhận.' }
+  const start = ((await call(db, 'website_form.getForm', { id: 'f1' })) as { schemaVersion: number })
+    .schemaVersion
+
+  await call(db, 'website_form.saveForm', { ...base, consentText: '' })
+  await call(db, 'website_form.saveForm', { ...base, consentText: '   ' })
+  const after = (await call(db, 'website_form.getForm', { id: 'f1' })) as {
+    schemaVersion: number
+    consentText: string | null
+  }
+  assert.equal(after.consentText, null)
+  assert.equal(after.schemaVersion, start, 'a blank notice is not a notice')
+
+  // And with no notice, consent stays optional.
+  const accepted = (await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { email: 'mai@example.test' },
+  })) as Result
+  assert.equal(accepted.ok, true)
+})
