@@ -597,6 +597,7 @@
 
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
       [data-ui="table"]
       :is(th, td):is([data-priority="secondary"], [data-priority="tertiary"]) {
       display: none;
@@ -604,6 +605,7 @@
 
     :where([data-kv-design-system])
       [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
       [data-ui="table"]
       :is(th, td)[data-priority="primary"][data-align="end"] {
       width: 7rem;
