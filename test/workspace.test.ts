@@ -170,3 +170,53 @@ test('agent: one descriptor answers "what is this deployment and what may I do"'
   assert.equal(d.models['catalog.Product']!.leadTimeDays, 'int? (by inventory)')
   assert.ok('catalog.product' in d.views)
 })
+
+test('navigation: a deployment names where each kind of viewer lands', () => {
+  const app = defineDeployment({
+    name: 'landing',
+    modules: [catalog, inventory, theme],
+    navigation: {
+      home: [
+        { needs: 'inventory.adjust', path: '/admin/inventory' },
+        { needs: 'catalog.list', path: '/admin/catalog' },
+      ],
+    },
+    serve: {},
+  })
+  assert.deepEqual(
+    app.navigation?.home?.map((entry) => entry.path),
+    ['/admin/inventory', '/admin/catalog'],
+  )
+})
+
+test('navigation: a landing condition that is not a function key is refused at authoring time', () => {
+  assert.throws(
+    () =>
+      defineDeployment({
+        name: 'landing',
+        modules: [catalog, theme],
+        // A role name is the tempting thing to write here, and it is exactly what
+        // the server cannot resolve at request time.
+        navigation: { home: [{ needs: 'warehouse-operator', path: '/admin/catalog' }] },
+        serve: {},
+      }),
+    /invalid navigation.home condition/,
+  )
+})
+
+test('navigation: a landing page pointing outside the build fails composition, not production', () => {
+  const app = defineDeployment({
+    name: 'landing',
+    modules: [catalog, theme],
+    navigation: { home: [{ needs: 'checkout.placeOrder', path: '/admin/checkout' }] },
+    serve: {},
+  })
+  assert.throws(
+    () => composeWorkspace([app]),
+    (e: Error) => {
+      assert.match(e.message, /E_DEPLOYMENT_NAVIGATION_HOME_UNKNOWN_FUNCTION/)
+      assert.match(e.message, /E_DEPLOYMENT_NAVIGATION_HOME_UNROUTED/)
+      return true
+    },
+  )
+})

@@ -6,6 +6,7 @@ export type {
   ModulePath,
   DeploymentDeclaration,
   DeploymentSpec,
+  NavigationSpec,
   WorkspaceDeclaration,
 } from './kernel/workspace.ts'
 export type {
