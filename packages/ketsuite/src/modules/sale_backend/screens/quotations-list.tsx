@@ -116,6 +116,8 @@ export const quotationsListScreen = (
     _,
     _('sale_backend.quotations.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('sale_backend.quotation.title')}
       description={_('sale_backend.quotation.subtitle')}
       actions={inline([

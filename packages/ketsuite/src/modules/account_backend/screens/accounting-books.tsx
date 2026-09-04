@@ -4,7 +4,7 @@ import {
   code,
   dataTable,
   formatMoney,
-  Framed,
+  ListScreen,
   icon,
   RecordForm,
   RecordWorkspace,
@@ -29,7 +29,7 @@ export const accountingBooksScreen = (
 ): TemplateResult => {
   const rows = (options.result?.rows as Row[] | undefined) ?? []
   return (
-    <Framed
+    <ListScreen
       translator={_}
       title={_('account_backend.books.title')}
       frame={options.frame}

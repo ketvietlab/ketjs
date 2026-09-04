@@ -1,7 +1,9 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import { pageIdentity } from './page-shell.tsx'
 
 export const HOOKS = [
   'list-page',
+  'list-page-context',
   'list-page-header',
   'list-page-heading',
   'list-page-title-row',
@@ -19,6 +21,16 @@ export const HOOKS = [
 export type ListPageProps = {
   title: string
   body: JSXChild
+  /**
+   * A narrow application context strip above the page identity. The application
+   * owns its breadcrumbs and organisation switcher; the pattern owns the slot.
+   */
+  context?: JSXChild
+  /**
+   * `operational` is the full workspace composition used by application collection
+   * screens. The unadorned variant remains available for embedded specimens.
+   */
+  variant?: 'operational'
   eyebrow?: string | null
   description?: string | null
   actions?: JSXChild
@@ -34,25 +46,31 @@ export type ListPageProps = {
  * pattern owns their order and rhythm: identity and primary action first, query
  * controls second, then the result status and the collection itself.
  */
-export const ListPage = (props: ListPageProps): TemplateResult => (
-  <section data-ui="list-page">
-    <header data-ui="list-page-header">
-      <div data-ui="list-page-heading">
-        {!!props.eyebrow && <p data-ui="list-page-eyebrow">{props.eyebrow}</p>}
-        <div data-ui="list-page-title-row">
-          <h1 data-ui="list-page-title">{props.title}</h1>
-          {props.actions !== undefined && <div data-ui="list-page-actions">{props.actions}</div>}
+export const ListPage = (props: ListPageProps): TemplateResult => {
+  const operational = props.variant === 'operational'
+  // Result summaries close the collection in an operational workspace. Keeping
+  // the legacy `status` prop as the input lets existing screens migrate without
+  // duplicating their translated count as a separate footer value.
+  const toolbarStatus = operational ? undefined : props.status
+  const footer = props.footer ?? (operational ? props.status : undefined)
+
+  return (
+    <section data-ui="list-page" data-variant={props.variant ?? null} data-pattern="list">
+      {pageIdentity('list-page', {
+        context: props.context,
+        eyebrow: props.eyebrow,
+        title: props.title,
+        description: props.description,
+        actions: props.actions,
+      })}
+      {(props.controls !== undefined || toolbarStatus !== undefined) && (
+        <div data-ui="list-page-toolbar">
+          {toolbarStatus !== undefined && <div data-ui="list-page-status">{toolbarStatus}</div>}
+          {props.controls !== undefined && <div data-ui="list-page-controls">{props.controls}</div>}
         </div>
-        {!!props.description && <p data-ui="list-page-description">{props.description}</p>}
-      </div>
-    </header>
-    {(props.controls !== undefined || props.status !== undefined) && (
-      <div data-ui="list-page-toolbar">
-        {props.status !== undefined && <div data-ui="list-page-status">{props.status}</div>}
-        {props.controls !== undefined && <div data-ui="list-page-controls">{props.controls}</div>}
-      </div>
-    )}
-    <div data-ui="list-page-body">{props.body}</div>
-    {props.footer !== undefined && <footer data-ui="list-page-footer">{props.footer}</footer>}
-  </section>
-)
+      )}
+      <div data-ui="list-page-body">{props.body}</div>
+      {footer !== undefined && <footer data-ui="list-page-footer">{footer}</footer>}
+    </section>
+  )
+}

@@ -8,7 +8,7 @@ import {
   feedback,
   FormCluster,
   type Frame,
-  Framed,
+  WorkspaceScreen,
   inventoryColumns,
   type InventoryRow,
   Metric,
@@ -34,7 +34,7 @@ export const inventoryScreen = (
     roomTypeId: selected.roomTypeId ?? '',
   }
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('hospitality_core.screen.inventory.title')}
       frame={frame}

@@ -4,7 +4,6 @@ import {
   emptyState,
   formatDateTime,
   type Frame,
-  Framed,
   providerName,
   ScheduleBoard,
   setupAction,
@@ -14,6 +13,7 @@ import {
   workflowTone,
   zonedMidnight,
 } from './shared.tsx'
+import { BoardPage, shell } from '../../../ui/index.ts'
 
 export const tapeChartScreen = (
   _: Translator,
@@ -81,11 +81,14 @@ export const tapeChartScreen = (
       tone: workflowTone(event.state),
     }
   })
-  return (
-    <Framed
-      translator={_}
-      title={_('hospitality_core.screen.tapeChart.title')}
+  const title = _('hospitality_core.screen.tapeChart.title')
+  return shell(
+    _,
+    title,
+    <BoardPage
+      variant="operational"
       frame={frame}
+      title={title}
       body={
         <ScheduleBoard
           corner={_('hospitality_core.screen.tapeChart.corner')}
@@ -101,6 +104,7 @@ export const tapeChartScreen = (
           )}
         />
       }
-    />
+    />,
+    { ...frame, topbar: false },
   )
 }

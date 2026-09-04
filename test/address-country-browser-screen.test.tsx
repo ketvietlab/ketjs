@@ -24,5 +24,5 @@ test('country browser keeps specialized hierarchy with encoded locale-safe navig
   )
   assert.match(html, /href="\/admin\/addresses\/VN%2Fa\?parentId=division%2Fa&amp;lang=en"/)
   assert.match(html, /address_backend\.divisions\.rootHint/)
-  assert.doesNotMatch(html, /data-ui="list-page"/)
+  assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
 })

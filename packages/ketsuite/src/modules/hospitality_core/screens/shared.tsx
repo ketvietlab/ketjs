@@ -11,7 +11,7 @@ import {
   formatDateTime,
   formatMoney,
   FormCluster,
-  Framed,
+  RecordScreen,
   icon,
   linkButton,
   MediaPanel,
@@ -28,6 +28,7 @@ import {
   Section,
   stack,
   Surface,
+  WorkspaceScreen,
 } from '../../../ui/index.ts'
 import type { Column, FormField, Frame } from '../../../ui/index.ts'
 import { addCalendarDays, dateKeyIn, zonedMidnight } from '../calendar.ts'
@@ -52,7 +53,7 @@ export {
   formatDateTime,
   formatMoney,
   FormCluster,
-  Framed,
+  RecordScreen,
   icon,
   linkButton,
   MediaPanel,
@@ -69,6 +70,7 @@ export {
   Section,
   stack,
   Surface,
+  WorkspaceScreen,
   addCalendarDays,
   dateKeyIn,
   zonedMidnight,

@@ -53,7 +53,8 @@ test('product attributes specialized surface: keeps the parent create form and s
   )
   assert.match(html, /name="createVariant"[\s\S]*?value="always"[\s\S]*?value="no_variant"/)
   assert.match(html, /Chưa có thuộc tính sản phẩm/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
+  assert.doesNotMatch(html, /data-ui="form-page"/)
 })
 
 test('product attributes specialized surface: keeps values and one child form scoped to each card', () => {
@@ -96,5 +97,6 @@ test('product attributes specialized surface: keeps values and one child form sc
   assert.equal(html.match(/name="name"/g)?.length, 3)
   assert.equal(html.match(/name="sequence"/g)?.length, 3)
   assert.doesNotMatch(html, />pills<|>no_variant</)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"/)
+  assert.match(html, /data-ui="list-page"[^>]*data-variant="operational"/)
+  assert.doesNotMatch(html, /data-ui="form-page"/)
 })

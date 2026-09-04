@@ -6,7 +6,7 @@ import {
   DefinitionList,
   emptyState,
   type Frame,
-  Framed,
+  RecordScreen,
   housekeepingRoomFeedback,
   icon,
   linkButton,
@@ -101,7 +101,7 @@ export const housekeepingRoomDetailScreen = (
   const guest = currentStay?.partner?.name
 
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={_('hospitality_core.housekeeping.rooms.detail.title', { code: room.code })}
       frame={frame}

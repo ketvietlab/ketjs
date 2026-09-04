@@ -30,6 +30,8 @@ export const allPagesScreen = (
     _,
     options.title,
     <ListPage
+      variant="operational"
+      frame={frame}
       title={options.title}
       description={_('flow_backend.pages.title')}
       actions={frame.extras?.['topbar.end']}

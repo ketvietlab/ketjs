@@ -109,6 +109,8 @@ export const leaderboardScreen = (
     _,
     title,
     <ListPage
+      variant="operational"
+      frame={frame}
       title={title}
       actions={inline([refresh, frame.extras?.['topbar.end'] ?? ''])}
       controls={

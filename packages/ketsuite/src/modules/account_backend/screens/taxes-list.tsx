@@ -136,6 +136,8 @@ export const taxesListScreen = (_: Translator, options: TaxesListScreenOptions):
     _,
     _('account_backend.taxes.title'),
     <ListPage
+      variant="operational"
+      frame={options.frame}
       title={_('account_backend.taxes.title')}
       description={_('account_backend.tax.subtitle')}
       actions={inline([

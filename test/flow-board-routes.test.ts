@@ -80,7 +80,7 @@ test('flow board route: retains specialized kanban, localized interactions and p
   const rendered = await page.text()
   const textContent = rendered.replace(/<!--k\[?-->/g, '')
   assert.equal(page.status, 200)
-  assert.match(rendered, /data-ui="record-workspace"/)
+  assert.match(rendered, /data-ui="board-page"[^>]*data-variant="operational"/)
   assert.doesNotMatch(rendered, /data-ui="list-page"|data-ui="form-page"/)
   assert.match(rendered, /Internal platform/)
   assert.match(rendered, /data-island="flow.board"/)

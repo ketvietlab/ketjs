@@ -61,8 +61,8 @@ test('attendance period screen keeps month context, lifecycle version and comput
     }),
   )
 
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
-  assert.match(html, /data-ui="record-workspace"/)
+  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="modal-layer"/)
+  assert.match(html, /data-ui="form-page"[^>]*data-variant="operational"/)
   assert.match(html, /method="get" action="\/admin\/attendance\?lang=vi"/)
   assert.match(html, /type="hidden" name="lang" value="vi"/)
   assert.match(html, /name="month"[^>]*value="2026-08"/)

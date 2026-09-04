@@ -83,7 +83,7 @@ test('stock transfers list: keeps create, search and table navigation in the Lis
   assert.match(html, /data-ui="list-page-actions"[\s\S]*?data-ui="bulk-form"/)
   assert.match(
     html,
-    /data-ui="list-page-toolbar"[\s\S]*?data-ui="list-page-status"[\s\S]*?Phiếu chuyển kho: 27[\s\S]*?data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"/,
+    /data-ui="list-page-controls"[\s\S]*?data-ui="chrome-search"[\s\S]*?data-ui="list-page-body"[\s\S]*?data-ui="list-page-footer"[\s\S]*?Phiếu chuyển kho: 27/,
   )
   assert.match(html, /data-col="name"[\s\S]*?WH\/INT\/00027/)
   assert.match(html, /href="\/admin\/stock\/transfers\/pick-027\?lang=vi"/)

@@ -30,6 +30,8 @@ export const allEpicsScreen = (
     _,
     options.title,
     <ListPage
+      variant="operational"
+      frame={frame}
       title={options.title}
       description={_('flow_backend.menu.epics')}
       actions={frame.extras?.['topbar.end']}

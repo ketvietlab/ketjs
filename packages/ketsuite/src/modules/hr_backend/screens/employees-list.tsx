@@ -91,6 +91,8 @@ export const employeesListScreen = (
     _,
     _('hr_backend.employees.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('hr_backend.employees.title')}
       actions={inline([
         <LinkButton label={_('hr_backend.employees.create')} href={options.createHref} variant="primary" />,

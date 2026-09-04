@@ -59,6 +59,8 @@ export const newProductScreen = (
     _,
     _('product_backend.create.title'),
     <FormPage
+      variant="operational"
+      frame={frame}
       scope="product-create-form-page"
       title={_('product_backend.create.title')}
       description={_('product_backend.create.subtitle')}

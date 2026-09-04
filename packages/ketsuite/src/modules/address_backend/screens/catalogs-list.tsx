@@ -56,6 +56,8 @@ export const catalogsScreen = (
     _,
     _('address_backend.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('address_backend.title')}
       description={_('address_backend.hint')}
       status={`${_('address_backend.title')}: ${String(options.rows.length)}`}

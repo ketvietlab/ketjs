@@ -41,7 +41,10 @@ test('project Gantt remains specialized and uses server-owned locale-safe issue 
   )
 
   assert.match(html, /data-ui="gantt"/)
+  assert.match(html, /data-ui="board-page"[^>]*data-variant="operational"/)
+  assert.match(html, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(html, /data-ui="board-page-toolbar"/)
   assert.match(html, /data-ui="gantt-row" href="\/admin\/flow\/issues\/issue%2Fa\?lang=en"/)
   assert.match(html, /201-201 \/ 201/)
-  assert.doesNotMatch(html, /data-ui="list-page"|data-ui="form-page"|data-ui="modal-layer"/)
+  assert.doesNotMatch(html, /data-ui="record-workspace"|data-ui="modal-layer"/)
 })

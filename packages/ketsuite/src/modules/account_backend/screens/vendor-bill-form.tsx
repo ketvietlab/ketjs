@@ -20,6 +20,8 @@ export const vendorBillFormScreen = (_: Translator, options: VendorBillFormScree
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-vendor-bill-form-page"
       title={title}
       description={_('account_backend.vendorBill.create.hint')}

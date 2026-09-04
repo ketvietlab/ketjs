@@ -58,6 +58,8 @@ export const journalEntryCreateScreen = (
     _,
     title,
     <FormPage
+      variant="operational"
+      frame={options.frame}
       scope="account-journal-entry-form-page"
       title={title}
       description={_('account_backend.entry.create.hint')}

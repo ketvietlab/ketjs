@@ -76,6 +76,8 @@ export const warehousesListScreen = (
     _,
     _('stock_backend.warehouses'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('stock_backend.warehouse.title')}
       description={_('stock_backend.warehouse.subtitle')}
       actions={inline([

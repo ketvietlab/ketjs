@@ -126,6 +126,8 @@ export const crossProjectScreen = (
     _,
     title,
     <ListPage
+      variant="operational"
+      frame={frame}
       title={title}
       description={_('flow_backend.issues.subtitle')}
       actions={frame.extras?.['topbar.end']}

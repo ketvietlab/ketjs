@@ -4,7 +4,7 @@ import {
   badge,
   dataTable,
   emptyState,
-  Framed,
+  ListScreen,
   icon,
   RecordForm,
   RecordWorkspace,
@@ -138,7 +138,7 @@ export const forecastScreen = (
   )
 
   return (
-    <Framed
+    <ListScreen
       translator={_}
       title={_('stock_backend.forecast')}
       frame={frame}

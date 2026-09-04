@@ -6,7 +6,7 @@ import {
   DefinitionList,
   emptyState,
   type Frame,
-  Framed,
+  WorkspaceScreen,
   Metric,
   Notice,
   RecordForm,
@@ -39,7 +39,7 @@ export const stayNoticesScreen = (
 ): TemplateResult => {
   if (!data.propertyId)
     return (
-      <Framed
+      <WorkspaceScreen
         translator={_}
         title={_('hospitality_core.screen.stayNotices.title')}
         frame={frame}
@@ -60,7 +60,7 @@ export const stayNoticesScreen = (
     ? stayNoticeAction(_, data.selected, locale, data.propertyId, data.state)
     : null
   return (
-    <Framed
+    <WorkspaceScreen
       translator={_}
       title={_('hospitality_core.screen.stayNotices.title')}
       frame={frame}

@@ -38,6 +38,8 @@ export const activitiesScreen = (
     _,
     _('activity_backend.title'),
     <ListPage
+      variant="operational"
+      frame={frame}
       title={_('activity_backend.title')}
       description={_('activity_backend.subtitle')}
       actions={frame.extras?.['topbar.end']}
