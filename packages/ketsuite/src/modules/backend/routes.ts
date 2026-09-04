@@ -18,10 +18,30 @@ const firstPath = (nodes: MenuNode[]): string | null => {
   return null
 }
 
+/**
+ * Where `/admin` sends someone.
+ *
+ * The deployment gets asked first: its `navigation.home` entries are tried in
+ * order and the first condition this viewer may call wins. A housekeeper who can
+ * complete a cleaning task lands on the cleaning worklist rather than on whichever
+ * screen happens to sort first.
+ *
+ * Falling back to the first path in menu order is what every deployment does
+ * today, and it stays the answer for anyone no entry matches — but it is a
+ * fallback, not a decision. The entry with the smallest `sequence` is an accident
+ * of declaration order.
+ */
+const landing = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<string | null> => {
+  for (const entry of ctx.navigation?.home ?? []) {
+    if (await ctx.allows(entry.needs, url, req)) return entry.path
+  }
+  return firstPath(await ctx.menu(url, req))
+}
+
 const admin =
   (ctx: ServeContext): Route =>
   async (url, req) => {
-    const target = firstPath(await ctx.menu(url, req))
+    const target = await landing(ctx, url, req)
     return target
       ? withHeaders(text('', { status: 303 }), { location: target })
       : text('This deployment has no admin screen available.', { status: 404 })

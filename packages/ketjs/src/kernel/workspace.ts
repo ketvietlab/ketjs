@@ -27,6 +27,24 @@ export type WorkerSpec = {
   shutdownGraceMs?: number
 }
 
+/**
+ * Where a deployment says what its navigation means, as opposed to what its
+ * modules happen to contain.
+ *
+ * `home` answers "what should this person see first". Entries are tried in
+ * order and the first the viewer may call wins, so the specific sits above the
+ * general. The condition is a function key rather than a role name because a
+ * role is a bundle of capabilities that the framework never sees at request
+ * time — the server knows what you may call, not what you are called.
+ *
+ * Without it `/admin` falls back to the first path in menu order, which is the
+ * entry with the smallest `sequence` the viewer is permitted to see. That is an
+ * accident of declaration order, not a decision about anyone's work.
+ */
+export type NavigationSpec = {
+  home?: ReadonlyArray<{ needs: string; path: string }>
+}
+
 export type DeploymentSpec = {
   name: string
   modules: KetModule[]
@@ -47,6 +65,8 @@ export type DeploymentSpec = {
   serve?: ServeSpec
   /** Same deployment and manifest, a separate production process role. */
   worker?: WorkerSpec
+  /** What this deployment's navigation means, over and above what its modules contain. */
+  navigation?: NavigationSpec
 }
 
 /**
@@ -99,6 +119,12 @@ export function defineDeployment(spec: DeploymentDeclaration): DeploymentDeclara
   const pageRegion = spec.serve?.pages?.region
   if (pageRegion && !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(pageRegion))
     throw new Error(`deployment "${spec.name}" declares invalid page region "${pageRegion}"`)
+  for (const entry of spec.navigation?.home ?? []) {
+    if (!/^[a-z][a-z0-9_]*\.[A-Za-z][A-Za-z0-9_.]*$/.test(entry.needs))
+      throw new Error(`deployment "${spec.name}" has invalid navigation.home condition "${entry.needs}"`)
+    if (!entry.path.startsWith('/'))
+      throw new Error(`deployment "${spec.name}" has invalid navigation.home path "${entry.path}"`)
+  }
   if (spec.worker && !Object.keys(spec.worker.queues).length)
     throw new Error(`deployment "${spec.name}" declares a worker with no queues`)
   for (const [queue, concurrency] of Object.entries(spec.worker?.queues ?? {})) {
@@ -154,6 +180,26 @@ export function composeWorkspace(deployments: DeploymentSpec[]): Workspace {
         message: `deployment "${deployment.name}" ships job "${job}" on queue "${meta.queue}" but does not configure that worker queue`,
         hint: `add worker.queues.${meta.queue}, or remove the module that contributes the job`,
       })
+    }
+    // A landing page that names a function this build does not serve, or a path
+    // nothing routes, fails quietly at runtime: the viewer simply falls through to
+    // the old first-path behaviour and nobody is told why.
+    for (const entry of deployment.navigation?.home ?? []) {
+      const manifest = manifests[deployment.name] as Manifest
+      if (!manifest.functions[entry.needs])
+        diag.add({
+          code: 'E_DEPLOYMENT_NAVIGATION_HOME_UNKNOWN_FUNCTION',
+          module: deployment.name,
+          message: `deployment "${deployment.name}" lands on "${entry.path}" when "${entry.needs}" is permitted, but that function is not in this build`,
+          hint: 'name a function the composed modules serve, or drop the entry',
+        })
+      if (!Object.keys(manifest.routes).includes(entry.path))
+        diag.add({
+          code: 'E_DEPLOYMENT_NAVIGATION_HOME_UNROUTED',
+          module: deployment.name,
+          message: `deployment "${deployment.name}" lands on "${entry.path}", which no composed module routes`,
+          hint: 'point at a served path, or compose the module that serves it',
+        })
     }
     for (const m of mods) {
       const list = usedBy.get(m.name) ?? []

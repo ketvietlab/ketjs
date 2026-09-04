@@ -1576,6 +1576,72 @@ test('catalogue: covers empty, long, blocked and error, not just the happy path'
   )
 })
 
+const landingMenu: MenuNode[] = [
+  {
+    id: 'business',
+    label: 'Business',
+    path: null,
+    icon: null,
+    active: false,
+    children: [
+      { id: 'partners', label: 'Partners', path: '/admin/partners', icon: null, active: false, children: [] },
+    ],
+  },
+]
+
+test('backend root sends a viewer where the deployment says their work is', async () => {
+  const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
+  const route = factory({
+    menu: async () => landingMenu,
+    navigation: {
+      home: [
+        { needs: 'housekeeping.completeTask', path: '/admin/housekeeping' },
+        { needs: 'sales.createOrder', path: '/admin/sales' },
+      ],
+    },
+    // This viewer cleans rooms; they cannot open an order.
+    allows: async (name: string) => name === 'housekeeping.completeTask',
+  } as unknown as ServeContext)
+
+  const result = await route(new URL('http://ket.local/admin'), { headers: {} } as never, {})
+  assert.equal(result.status, 303)
+  assert.equal(result.headers?.location, '/admin/housekeeping')
+})
+
+test('backend root tries landing conditions in order, so the specific wins', async () => {
+  const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
+  const route = factory({
+    menu: async () => landingMenu,
+    navigation: {
+      home: [
+        { needs: 'housekeeping.completeTask', path: '/admin/housekeeping' },
+        { needs: 'sales.createOrder', path: '/admin/sales' },
+      ],
+    },
+    // A manager may call both; the first entry is the one that was meant.
+    allows: async () => true,
+  } as unknown as ServeContext)
+
+  const result = await route(new URL('http://ket.local/admin'), { headers: {} } as never, {})
+  assert.equal(result.headers?.location, '/admin/housekeeping')
+})
+
+test('backend root falls back to menu order when no landing condition matches', async () => {
+  const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
+  const route = factory({
+    menu: async () => landingMenu,
+    navigation: { home: [{ needs: 'housekeeping.completeTask', path: '/admin/housekeeping' }] },
+    allows: async () => false,
+  } as unknown as ServeContext)
+
+  const result = await route(new URL('http://ket.local/admin'), { headers: {} } as never, {})
+  assert.equal(
+    result.headers?.location,
+    '/admin/partners',
+    'a deployment that declared nothing for this viewer keeps the behaviour it had',
+  )
+})
+
 test('backend root opens the first screen contributed by this deployment', async () => {
   const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
   const menu: MenuNode[] = [
