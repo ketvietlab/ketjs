@@ -14,6 +14,19 @@ import { isTimezone } from '../data/time.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Adapter } from '../types.ts'
 
+export type PublicStorageConfig =
+  | { kind: 'local'; dir: string; baseUrl?: string | null }
+  | {
+      kind: 's3'
+      bucket: string
+      accessKeyId: string
+      secretAccessKey: string
+      endpoint?: string | null
+      region?: string
+      pathStyle?: boolean
+      baseUrl?: string | null
+    }
+
 export type RuntimeConfig = {
   port: number
   host: string
@@ -47,6 +60,8 @@ export type RuntimeConfig = {
   s3AccessKeyId: string | null
   s3SecretAccessKey: string | null
   s3PathStyle: boolean
+  /** Optional second backend; the legacy storage configuration remains private/default. */
+  publicStorage?: PublicStorageConfig
 }
 
 export function readConfig(
@@ -72,6 +87,44 @@ export function readConfig(
       code: 'E_STORAGE_CONFIG',
       message: `KET_UPLOAD_MAX must be a positive integer, got "${env.KET_UPLOAD_MAX ?? uploadMax}"`,
     })
+  let publicStorage = defaults.publicStorage
+  const publicEnv = Object.keys(env).some(
+    (key) =>
+      (key.startsWith('KET_S3_PUBLIC_') ||
+        key === 'KET_STORAGE_PUBLIC_DIR' ||
+        key === 'KET_STORAGE_PUBLIC_URL') &&
+      env[key] !== undefined,
+  )
+  if (publicEnv) {
+    const baseUrl = env.KET_STORAGE_PUBLIC_URL ?? publicStorage?.baseUrl
+    if (storageKind === 's3') {
+      if (env.KET_STORAGE_PUBLIC_DIR !== undefined)
+        throw new KetError({
+          code: 'E_STORAGE_CONFIG',
+          message: 'S3 storage cannot use KET_STORAGE_PUBLIC_DIR',
+        })
+      const held = publicStorage?.kind === 's3' ? publicStorage : undefined
+      publicStorage = {
+        kind: 's3',
+        bucket: env.KET_S3_PUBLIC_BUCKET ?? held?.bucket ?? '',
+        accessKeyId: env.KET_S3_PUBLIC_KEY ?? held?.accessKeyId ?? '',
+        secretAccessKey: env.KET_S3_PUBLIC_SECRET ?? held?.secretAccessKey ?? '',
+        endpoint: env.KET_S3_PUBLIC_ENDPOINT ?? held?.endpoint,
+        region: env.KET_S3_PUBLIC_REGION ?? held?.region,
+        pathStyle:
+          env.KET_S3_PUBLIC_PATH_STYLE === undefined ? held?.pathStyle : env.KET_S3_PUBLIC_PATH_STYLE !== '0',
+        baseUrl,
+      }
+    } else {
+      if (Object.keys(env).some((key) => key.startsWith('KET_S3_PUBLIC_') && env[key] !== undefined))
+        throw new KetError({ code: 'E_STORAGE_CONFIG', message: 'KET_S3_PUBLIC_* requires KET_STORAGE=s3' })
+      publicStorage = {
+        kind: 'local',
+        dir: env.KET_STORAGE_PUBLIC_DIR ?? (publicStorage?.kind === 'local' ? publicStorage.dir : ''),
+        baseUrl,
+      }
+    }
+  }
   return {
     port: Number(env.PORT ?? defaults.port ?? 3000),
     host: env.HOST ?? defaults.host ?? '127.0.0.1',
@@ -96,6 +149,7 @@ export function readConfig(
     s3SecretAccessKey: env.KET_S3_SECRET ?? defaults.s3SecretAccessKey ?? null,
     s3PathStyle:
       env.KET_S3_PATH_STYLE === undefined ? (defaults.s3PathStyle ?? false) : env.KET_S3_PATH_STYLE !== '0',
+    ...(publicStorage ? { publicStorage } : {}),
   }
 }
 

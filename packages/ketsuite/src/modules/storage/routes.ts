@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { json, KetError, localStorage, multipart, streamed, text, withHeaders } from '@ketvietlab/ketjs'
 import type { MultipartPart, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
+import { inlineTypes } from './policy.ts'
 
 export type Attachment = {
   id: string
@@ -11,6 +12,7 @@ export type Attachment = {
   kind: string
   url?: string
   storeKey?: string
+  publicStoreKey?: string
   mimetype: string
   size: number
   public: boolean
@@ -42,15 +44,6 @@ const safeType = (value: string | undefined): string => {
   const type = (value ?? 'application/octet-stream').split(';')[0]!.trim().toLowerCase()
   return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(type) ? type : 'application/octet-stream'
 }
-
-const inline = new Set([
-  'image/avif',
-  'image/gif',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/pdf',
-])
 
 const disposition = (name: string, showInline: boolean): string => {
   const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\\r\n]/g, '_') || 'download'
@@ -110,6 +103,7 @@ export const receiveAttachment = async (
     if (!source) throw new Error('temporary upload disappeared')
     await storage.put(key, source.body, { type: uploadPart.type, size: uploadPart.size })
     const id = randomUUID()
+    const isPublic = defaults.public ?? (fields.public === 'true' || fields.public === '1')
     return (await ctx.call(
       'storage.createAttachment',
       {
@@ -123,7 +117,8 @@ export const receiveAttachment = async (
         mimetype: uploadPart.type,
         size: uploadPart.size,
         checksum: uploadPart.checksum,
-        public: defaults.public ?? (fields.public === 'true' || fields.public === '1'),
+        public: isPublic,
+        ...(isPublic && storage.public ? { publishCopy: true } : {}),
         createdAt: new Date().toISOString(),
       },
       url,
@@ -168,15 +163,18 @@ const download =
     if (attachment.kind === 'url' && attachment.url)
       return withHeaders(text('', { status: 302 }), { ...redirect, location: attachment.url })
     if (!attachment.storeKey) return text('attachment has no stored object', { status: 404 })
-    const storage = await ctx.storageOf(url, req)
-    const showInline = inline.has(attachment.mimetype)
+    const root = await ctx.storageOf(url, req)
+    const showInline = inlineTypes.has(attachment.mimetype)
+    const published = attachment.public && showInline && attachment.publicStoreKey ? root.public : undefined
+    const storage = published || root
+    const key = published ? attachment.publicStoreKey! : attachment.storeKey
     const headers = {
       'x-content-type-options': 'nosniff',
       'content-disposition': disposition(attachment.name, showInline),
       'cache-control': cacheControl,
     }
     if (req.method === 'HEAD') {
-      const found = await storage.head(attachment.storeKey)
+      const found = await storage.head(key)
       return found
         ? withHeaders(text('', { type: showInline ? attachment.mimetype : 'application/octet-stream' }), {
             ...headers,
@@ -184,13 +182,20 @@ const download =
           })
         : text('not found', { status: 404 })
     }
+    if (published?.publicUrl)
+      return withHeaders(text('', { status: 302 }), { ...redirect, location: published.publicUrl(key) })
     // A signed URL avoids proxying large, browser-safe files. Unknown active content
     // always passes through the app so it receives attachment + nosniff headers.
     if (showInline && attachment.size >= 1024 * 1024) {
-      const signed = await storage.signedUrl(attachment.storeKey, { expiresIn: 60 })
-      if (signed) return withHeaders(text('', { status: 302 }), { ...redirect, location: signed })
+      const signed = await storage.signedUrl(key, { expiresIn: 60 })
+      if (signed)
+        return withHeaders(text('', { status: 302 }), {
+          ...redirect,
+          'cache-control': 'private, no-store',
+          location: signed,
+        })
     }
-    const found = await storage.get(attachment.storeKey)
+    const found = await storage.get(key)
     if (!found) return text('not found', { status: 404 })
     return withHeaders(
       streamed(found.body, { type: showInline ? attachment.mimetype : 'application/octet-stream' }),
