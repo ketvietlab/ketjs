@@ -960,6 +960,30 @@ test('flow issues: the overview buckets are disjoint, add up, and agree with the
       'the four buckets partition the total',
     )
 
+    // The counts run the same query the list does, so a custom-field rule reaches
+    // `flow.IssueFieldValue` here exactly as it does in `issue.list`. Effects are
+    // enforced, so this call fails outright unless `issue.buckets` declares that
+    // read — which is the whole point of declaring one.
+    const field = await call<Row>('flow.field.save', {
+      id: 'field-env',
+      projectId: 'proj1',
+      code: 'environment',
+      name: 'Environment',
+      kind: 'select',
+      config: { options: [{ code: 'production', label: 'Production' }] },
+      idempotencyKey: 'field-env-save',
+    })
+    assert.equal(field.ok, true, JSON.stringify(field.errors))
+    const filtered = await call<Row>('flow.issue.buckets', {
+      projectId: 'proj1',
+      listState: {
+        ...emptyIssueListState(),
+        filters: [{ kind: 'rule', field: 'field:environment', operator: 'equals', value: 'production' }],
+      },
+      today,
+    })
+    assert.equal(Number(filtered.total), 0, 'nothing holds that value yet, and the call still succeeds')
+
     // The list has to name exactly the issues the count counted.
     const late = await call<Row>('flow.issue.list', {
       listState: emptyIssueListState(),

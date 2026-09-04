@@ -15,11 +15,11 @@ test('public production permission catalogue covers every function owned by its 
     modulePermissionDeclarations: ketsuitePermissionModules,
   })
 
-  assert.equal(ketsuitePermissionModuleNames.length, 61)
-  assert.equal(Object.keys(manifest.permissions.modules).length, 61)
-  assert.equal(Object.keys(manifest.permissions.bundles).length, 150)
-  assert.equal(Object.keys(manifest.permissions.functions).length, 701)
-  assert.equal(Object.keys(manifest.permissions.exemptions).length, 72)
+  assert.equal(ketsuitePermissionModuleNames.length, 63)
+  assert.equal(Object.keys(manifest.permissions.modules).length, 63)
+  assert.equal(Object.keys(manifest.permissions.bundles).length, 154)
+  assert.equal(Object.keys(manifest.permissions.functions).length, 752)
+  assert.equal(Object.keys(manifest.permissions.exemptions).length, 76)
 
   const coveredModules = new Set(ketsuitePermissionModuleNames)
   const missing = Object.entries(manifest.functions)
@@ -72,6 +72,39 @@ test('public catalogue separates CRM agent work from assignment, merge, analytic
   assert.deepEqual(declaration?.functions['crm.case.merge']?.bundles, ['crm.merge'])
   assert.deepEqual(declaration?.functions['crm.enrichment.preview']?.bundles, ['crm.analytics'])
   assert.deepEqual(declaration?.functions['crm.assignmentRule.save']?.bundles, ['crm.configure'])
+})
+
+test('public catalogue separates Flow reading, working, writing documents, and project configuration', () => {
+  const declaration = ketsuitePermissionModules.flow
+  // Reading is the floor and pulls nothing else in with it.
+  assert.deepEqual(declaration?.functions['flow.issue.list']?.bundles, ['flow.view'])
+  // Ordinary work: moving an issue is the one door that checks dependencies.
+  assert.deepEqual(declaration?.functions['flow.issue.move']?.bundles, ['flow.operate'])
+  // Writing the collaborative document is its own right: a reviewer may hold it
+  // without holding the right to rename the record.
+  assert.deepEqual(declaration?.functions['flow.issue.editDescription']?.bundles, ['flow.author'])
+  assert.deepEqual(declaration?.functions['flow.page.editContent']?.bundles, ['flow.author'])
+  assert.notDeepEqual(
+    declaration?.functions['flow.page.save']?.bundles,
+    declaration?.functions['flow.page.editContent']?.bundles,
+  )
+  // Changing a column's `terminalState` changes what "done" means for the whole
+  // project — and with it every progress figure and every blocking check. That is
+  // audited configuration, not day-to-day work.
+  assert.equal(declaration?.functions['flow.column.save']?.risk, 'configure')
+  assert.equal(declaration?.functions['flow.column.save']?.policy, 'flow.configuration-audit')
+  // The two keys whose reach exceeds one project both carry a policy authority.
+  assert.equal(declaration?.functions['flow.tag.archive']?.policy, 'flow.configuration-audit')
+  assert.equal(declaration?.functions['flow.page.move']?.policy, 'flow.domain-policy')
+  // Live Doc's four commit functions are not a right anybody is granted: they are
+  // exempt because the route calling them has already run its own record check.
+  const bridge = ketsuitePermissionModules.flow_backend
+  assert.equal(bridge?.posture, 'projection/bridge')
+  assert.deepEqual(Object.keys(bridge?.functions ?? {}), [])
+  assert.deepEqual(bridge?.exemptions['flow_backend.sync.commitContent'], {
+    reason: 'internal-route',
+    authority: 'flow_backend.trusted-route-worker-or-service',
+  })
 })
 
 test('public catalogue exposes least-privilege Hospitality job bundles without removing legacy grants', () => {

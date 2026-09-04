@@ -25,6 +25,14 @@ export type ProjectCreateScreenOptions = {
   action: string
   cancelHref: string
   returnTo: string
+  /**
+   * The project's id, decided when the form is rendered rather than when it is
+   * posted. `project.save` upserts by id, so a resubmitted form lands on the
+   * same project instead of creating a second one — every other create form in
+   * this module already carries one.
+   */
+  recordId: string
+  idempotencyKey: string
   errors?: readonly string[]
 }
 
@@ -45,7 +53,11 @@ export const projectCreateModal = (_: Translator, options: ProjectCreateScreenOp
       submitVariant: 'primary',
       cancelHref: options.cancelHref,
       cancelLabel: _('flow_backend.action.cancel'),
-      hidden: { returnTo: options.returnTo },
+      hidden: {
+        returnTo: options.returnTo,
+        id: options.recordId,
+        idempotencyKey: options.idempotencyKey,
+      },
       fields: options.fields,
       errors: options.errors,
     },
@@ -96,7 +108,11 @@ export const projectCreateScreen = (
               submit={title}
               submitVariant="primary"
               submitPlacement="external"
-              hidden={{ returnTo: options.returnTo }}
+              hidden={{
+                returnTo: options.returnTo,
+                id: options.recordId,
+                idempotencyKey: options.idempotencyKey,
+              }}
               fields={options.fields}
               errors={options.errors}
             />
