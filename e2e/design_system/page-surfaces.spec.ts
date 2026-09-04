@@ -161,8 +161,10 @@ for (const kind of kinds)
             expect(geometry.bodyTop).toBeGreaterThanOrEqual(geometry.headerBottom)
             if (geometry.actionGap !== null) expect(geometry.actionGap).toBeGreaterThanOrEqual(8)
             evidence.push({ state, ...geometry })
-            if (state === 'baseline')
+            if (state === 'baseline') {
+              await page.evaluate(() => document.fonts.ready)
               await page.screenshot({ path: testInfo.outputPath('baseline.png'), fullPage: true })
+            }
           }
           if (record) {
             await page.goto(`/surfaces?${new URLSearchParams({ kind, lang, theme, state: 'baseline' })}`)
