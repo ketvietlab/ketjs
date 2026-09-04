@@ -556,7 +556,18 @@ const projectReturnTo = (url: URL, requested?: string | null): string => {
 const projectCreateHref = (url: URL): string => {
   const target = new URL(url)
   target.pathname = '/admin/flow/projects'
-  for (const key of ['create', 'invalid', 'error', 'key', 'name', 'description', 'template', 'customColumns'])
+  for (const key of [
+    'create',
+    'invalid',
+    'error',
+    'id',
+    'idempotencyKey',
+    'key',
+    'name',
+    'description',
+    'template',
+    'customColumns',
+  ])
     target.searchParams.delete(key)
   target.searchParams.set('create', '1')
   return `${target.pathname}${target.search}`
@@ -571,7 +582,7 @@ const projectCreateFailureHref = (
   const target = new URL(returnTo, url)
   target.searchParams.set('create', '1')
   if (errors.length) target.searchParams.set('invalid', '1')
-  for (const name of ['key', 'name', 'description', 'template', 'customColumns']) {
+  for (const name of ['id', 'idempotencyKey', 'key', 'name', 'description', 'template', 'customColumns']) {
     const value = values[name]
     if (value) target.searchParams.set(name, value)
   }
@@ -750,7 +761,7 @@ const projectCreateRoute =
     const _ = ctx.translate(ctx.localeOf(url, req))
     let errors: string[] = []
     let values: Record<string, string> = Object.fromEntries(
-      ['key', 'name', 'description', 'template', 'customColumns']
+      ['id', 'idempotencyKey', 'key', 'name', 'description', 'template', 'customColumns']
         .map((name) => [name, url.searchParams.get(name) ?? ''])
         .filter(([, value]) => value),
     )
@@ -772,7 +783,12 @@ const projectCreateRoute =
       if (!names.length) {
         errors = [_('flow_backend.error.customColumnsRequired')]
       } else {
-        const id = randomUUID()
+        // The id and the key come from the rendered form, not from this request:
+        // `project.save` upserts by id, so posting the same form twice lands on
+        // the same project rather than creating a second one with its own set of
+        // columns and issue types. Falling back to a fresh id keeps an older
+        // cached form, or a scripted post, working.
+        const id = form.id || randomUUID()
         const result = (await ctx.call(
           'flow.project.save',
           {
@@ -782,25 +798,30 @@ const projectCreateRoute =
               name: form.name ?? '',
               description: form.description || null,
             },
-            idempotencyKey: randomUUID(),
+            idempotencyKey: form.idempotencyKey || randomUUID(),
           },
           url,
           req,
         )) as AnyRow
         if (result.ok) {
           for (const [index, name] of names.entries()) {
+            // Derived from the project and the column code rather than fresh each
+            // time: the whole create flow has to be idempotent, not just its first
+            // write. A second post with a fresh id would insert a second column
+            // carrying the same code, which the unique index refuses with a 500.
+            const code = slugify(name)
             const column = (await ctx.call(
               'flow.column.save',
               {
                 values: {
-                  id: randomUUID(),
+                  id: `${id}:column:${code}`,
                   projectId: id,
-                  code: slugify(name),
+                  code,
                   name,
                   sequence: (index + 1) * 10,
                   terminalState: index === names.length - 1,
                 },
-                idempotencyKey: randomUUID(),
+                idempotencyKey: `${id}:column:${code}`,
               },
               url,
               req,
@@ -808,22 +829,27 @@ const projectCreateRoute =
             if (!column.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
           }
           for (const [index, name] of (TYPE_TEMPLATES[form.template ?? 'simple'] ??
-            TYPE_TEMPLATES.simple)!.entries())
-            await ctx.call(
+            TYPE_TEMPLATES.simple)!.entries()) {
+            const code = slugify(name)
+            // Same reason as the columns above, and the result is checked rather
+            // than dropped: a type that failed to seed left no trace at all.
+            const type = (await ctx.call(
               'flow.issueType.save',
               {
                 values: {
-                  id: randomUUID(),
+                  id: `${id}:type:${code}`,
                   projectId: id,
-                  code: slugify(name),
+                  code,
                   name,
                   sequence: (index + 1) * 10,
                 },
-                idempotencyKey: randomUUID(),
+                idempotencyKey: `${id}:type:${code}`,
               },
               url,
               req,
-            )
+            )) as AnyRow
+            if (!type.ok) return seeOther(inLocale(url, `/admin/flow/projects/${id}/settings`))
+          }
           return seeOther(inLocale(url, `/admin/flow/projects/${id}/board`))
         }
         errors = errorsOf(result, _)
@@ -1192,6 +1218,8 @@ export const routes: Record<string, RouteEntry> = {
             'create',
             'invalid',
             'error',
+            'id',
+            'idempotencyKey',
             'key',
             'name',
             'description',
@@ -1207,6 +1235,9 @@ export const routes: Record<string, RouteEntry> = {
               action: projectCreateHref(url),
               cancelHref: returnTo,
               returnTo,
+              // Kept across a failed submit so the retry lands on the same project.
+              recordId: url.searchParams.get('id') || randomUUID(),
+              idempotencyKey: url.searchParams.get('idempotencyKey') || randomUUID(),
               fields: projectCreateFields(
                 _,
                 Object.fromEntries(

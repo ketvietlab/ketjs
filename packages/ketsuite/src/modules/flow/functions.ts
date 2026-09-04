@@ -891,7 +891,11 @@ export const functions: Record<string, FnSpec> = {
       today: 'text',
     },
     output: { total: 'int', done: 'int', overdue: 'int', waiting: 'int', working: 'int' },
-    effects: ['read:flow.Issue', 'read:flow.Column', 'read:flow.FieldDef'],
+    // The same `issueQuery` `issue.list` and `issue.group` run, so the same
+    // `flow.IssueFieldValue` read whenever the state carries a `field:<code>`
+    // rule — see resolveFieldFilters. A capability nobody declares is one
+    // nobody reviewed, and this one was missing while the other two had it.
+    effects: ['read:flow.Issue', 'read:flow.Column', 'read:flow.FieldDef', 'read:flow.IssueFieldValue'],
     agent: true,
     handler: (ctx, args) => issueBuckets(ctx, args, String(args.today)),
   }),
