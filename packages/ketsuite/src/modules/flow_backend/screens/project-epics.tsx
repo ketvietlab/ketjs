@@ -4,6 +4,7 @@ import {
   BoardPage,
   KanbanCard,
   KanbanGrid,
+  inline,
   LinkButton,
   linkButton,
   modalForm,
@@ -77,6 +78,12 @@ export const epicsScreen = (
         const count = _('flow_backend.epics.issueCount', {
           count: Number(epic.totalCount ?? 0),
         })
+        // What the epic is carrying, and how much of it is finished. The
+        // estimate was stored per issue and added up nowhere, so an epic had a
+        // count of issues and no idea of its size.
+        const sized = Number(epic.estimate ?? 0)
+          ? ` · ${_('flow_backend.epics.estimate')} ${String(epic.estimateDone ?? 0)}/${String(epic.estimate ?? 0)}`
+          : ''
         return (
           <KanbanCard
             key={String(epic.id)}
@@ -84,13 +91,16 @@ export const epicsScreen = (
             href={localized(`/admin/flow/epics/${id}`, locale)}
             meta={
               epic.issuesHref
-                ? linkButton({
-                    href: localized(String(epic.issuesHref), locale),
-                    label: count,
-                    variant: 'tertiary',
-                    size: 'compact',
-                  })
-                : count
+                ? inline([
+                    linkButton({
+                      href: localized(String(epic.issuesHref), locale),
+                      label: count,
+                      variant: 'tertiary',
+                      size: 'compact',
+                    }),
+                    sized,
+                  ])
+                : `${count}${sized}`
             }
             actions={stack(
               [
