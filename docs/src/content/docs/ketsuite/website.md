@@ -213,14 +213,27 @@ as agreement to the new wording.
 So the notice lives on the form as `consentText` and is part of the **same** version as the fields.
 Changing it advances `schemaVersion`, which means a page open against the old notice is refused with
 `staleForm` exactly the way a page open against old fields is — agreement to a notice that has been
-replaced is not agreement to its replacement. And because the accepted submission already records
-`schemaVersion`, the text a visitor agreed to is recoverable from the version it was accepted under.
+replaced is not agreement to its replacement. One version rather than two is the point: two could
+disagree, and then no single number would say what a stored submission meant.
 
-One version rather than two is the point: two could disagree, and then no single number would say
-what a stored submission meant.
+The accepted submission stores the notice **verbatim** in `FormSubmission.consentText`. A `Form` is
+one mutable row with no history, so the version number alone could never be resolved back to the
+older text once the notice is edited — and a consent record that cannot say what was consented to is
+not a record.
 
-A form that shows a notice will not accept a submission without agreement —
-`website_form.error.consentRequired`. A form with no notice is unaffected.
+Three rules follow, and they apply only to a form that actually shows a notice:
+
+| Rule | Error |
+| --- | --- |
+| A submission must carry agreement. | `consentRequired` (422) |
+| A submission must say which notice it saw. Stamping an unversioned post with the version in force would manufacture agreement to a notice the visitor may never have seen — so no version means no truthful record, and no write. | `consentVersionRequired` (409) |
+| A save that omits `consentText` leaves the stored notice alone. A full replacement row meant any writer without that field — including the admin form editor, which has none — silently wiped the notice and disarmed the gate. An explicit `null` still clears it. | — |
+
+A form with no notice is unaffected, including the lenient unversioned submit.
+
+Over HTTP the consent box is read as agreement for `on`, `true`, `yes` or `1`. A checked
+`<input type="checkbox" name="consent">` with no `value` attribute posts `on` — the HTML default —
+so accepting only `true`/`1` told a visitor who had ticked the box that they must agree.
 
 ## The storefront page scope
 

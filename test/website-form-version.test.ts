@@ -344,7 +344,7 @@ test('form: a form that shows a notice will not accept a submission without agre
   assert.deepEqual(await call(db, 'website_form.listSubmissions', { formId: 'f1' }), [])
 })
 
-test('form: the version on a submission says which notice was agreed to', async () => {
+test('form: a submission records the exact notice it agreed to', async () => {
   const db = await boot()
   await seed(db)
   await call(db, 'website_form.saveForm', withNotice)
@@ -357,20 +357,97 @@ test('form: the version on a submission says which notice was agreed to', async 
     schemaVersion: agreedAt,
   })
 
-  // The notice then changes. The stored submission still points at the version
-  // that was in force, so the text it agreed to is recoverable.
+  // The notice then changes. A Form is one mutable row with no history, so the
+  // version number alone could never be resolved back to the old text — the
+  // submission has to carry it.
   await call(db, 'website_form.saveForm', { ...withNotice, consentText: 'Điều khoản mới.' })
 
   const rows = (await call(db, 'website_form.listSubmissions', { formId: 'f1' })) as Array<{
     consent: boolean
+    consentText: string
     schemaVersion: number
   }>
   assert.equal(rows[0]?.consent, true)
   assert.equal(rows[0]?.schemaVersion, agreedAt)
-  assert.notEqual(
-    ((await call(db, 'website_form.getForm', { id: 'f1' })) as { schemaVersion: number }).schemaVersion,
-    rows[0]?.schemaVersion,
+  assert.equal(
+    rows[0]?.consentText,
+    'Tôi đồng ý để Mộc liên hệ lại.',
+    'the text they agreed to survives the notice being rewritten',
   )
+  assert.equal(
+    ((await call(db, 'website_form.getForm', { id: 'f1' })) as { consentText: string }).consentText,
+    'Điều khoản mới.',
+  )
+})
+
+test('form: a save that omits the notice leaves it alone', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.saveForm', withNotice)
+  const before = (await call(db, 'website_form.getForm', { id: 'f1' })) as {
+    schemaVersion: number
+    consentText: string
+  }
+
+  // The shipped admin editor has no consentText field, so this is what every
+  // save through it looks like. It used to wipe the notice and disarm the gate.
+  await call(db, 'website_form.saveForm', {
+    id: 'f1',
+    siteId: 'site1',
+    name: 'Liên hệ (đổi tên)',
+    schema: oneField,
+    successMessage: 'Đã nhận.',
+  })
+  const after = (await call(db, 'website_form.getForm', { id: 'f1' })) as {
+    schemaVersion: number
+    consentText: string
+  }
+  assert.equal(after.consentText, before.consentText, 'the notice survives an unrelated edit')
+  assert.equal(after.schemaVersion, before.schemaVersion, 'and the contract did not change')
+
+  const refused = (await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { email: 'mai@example.test' },
+    schemaVersion: after.schemaVersion,
+  })) as Result
+  assert.equal(refused.ok, false, 'the gate is still armed')
+})
+
+test('form: an explicit null still removes the notice', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.saveForm', withNotice)
+  await call(db, 'website_form.saveForm', { ...withNotice, consentText: null })
+  const after = (await call(db, 'website_form.getForm', { id: 'f1' })) as { consentText: string | null }
+  assert.equal(after.consentText, null)
+})
+
+test('form: a page that will not say which notice it showed is refused', async () => {
+  const db = await boot()
+  await seed(db)
+  await call(db, 'website_form.saveForm', withNotice)
+
+  // Consent given, but no version. Stamping this with the version in force
+  // would record agreement to whatever the notice says now.
+  const refused = (await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { email: 'mai@example.test' },
+    consent: true,
+  })) as Result
+  assert.equal(refused.ok, false)
+  assert.equal(refused.errors?.[0]?.field, 'schemaVersion')
+  assert.equal(refused.errors?.[0]?.message, 'website_form.error.consentVersionRequired')
+  assert.deepEqual(await call(db, 'website_form.listSubmissions', { formId: 'f1' }), [])
+})
+
+test('form: a form with no notice still accepts an unversioned submission', async () => {
+  const db = await boot()
+  await seed(db)
+  const accepted = (await call(db, 'website_form.submitForm', {
+    formId: 'f1',
+    payload: { email: 'mai@example.test' },
+  })) as Result
+  assert.equal(accepted.ok, true, 'the stricter rule applies only where a notice is shown')
 })
 
 test('form: a form with no notice is unaffected', async () => {
