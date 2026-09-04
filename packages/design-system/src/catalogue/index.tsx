@@ -17,6 +17,8 @@ import { ModalSheet } from '../patterns/modal-sheet.tsx'
 import { Pipeline } from '../patterns/pipeline.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
 
+export { PageSurfacePreview, surfaceKinds, surfaceStates } from './page-surfaces.tsx'
+
 export type ComponentExample = {
   id: string
   name: string
@@ -768,6 +770,7 @@ export const componentGroups: readonly ComponentGroup[] = [
 ]
 
 export const CATALOGUE_HOOKS = [
+  'catalogue-surface-preview',
   'catalogue',
   'catalogue-rail',
   'catalogue-brand',
@@ -833,6 +836,11 @@ export const CataloguePage = (
               {String(count)} specimens from one markup, token and state contract. Dense enough for daily
               work; quiet enough for decisions.
             </p>
+            <LinkButton
+              label="Review page surfaces"
+              href="/surfaces?kind=record&theme=light"
+              variant="secondary"
+            />
           </div>
           <div data-ui="catalogue-controls" role="group" aria-label="Catalogue preferences">
             <span>Theme</span>

@@ -22,6 +22,8 @@ export type DataTableProps<Row> = {
   selected?: (row: Row) => boolean
   emptyTitle?: string
   emptyMessage?: string
+  /** Stack labelled cells on narrow screens, or retain horizontal scrolling. */
+  responsive?: 'scroll' | 'stack'
 }
 
 export const HOOKS = ['table-scroll', 'table', 'table-caption', 'col', 'row', 'cell', 'row-link'] as const
@@ -33,7 +35,7 @@ export const DataTable = <Row,>(props: DataTableProps<Row>): TemplateResult =>
       message={props.emptyMessage ?? 'There is nothing to show yet.'}
     />
   ) : (
-    <div data-ui="table-scroll">
+    <div data-ui="table-scroll" data-responsive={props.responsive ?? 'scroll'}>
       <table data-ui="table">
         {!!props.caption && <caption data-ui="table-caption">{props.caption}</caption>}
         <thead>
@@ -73,6 +75,7 @@ export const DataTable = <Row,>(props: DataTableProps<Row>): TemplateResult =>
                     data-align={column.align ?? 'start'}
                     data-kind={column.kind ?? 'text'}
                     data-priority={column.priority ?? 'secondary'}
+                    data-label={props.responsive === 'stack' ? column.label : null}
                   >
                     {props.rowHref && index === 0 ? (
                       <a data-ui="row-link" href={props.rowHref(row)}>

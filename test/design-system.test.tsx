@@ -112,6 +112,67 @@ test('design system: canonical page headers share compact responsive padding', (
   assert.equal((patterns.match(compactPadding) ?? []).length >= 4, true)
 })
 
+test('design system: light page surfaces use component roles without changing the palette', () => {
+  const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  assert.match(tokens, /--kv-page-chrome-bg: light-dark\(var\(--kv-page-bg\), var\(--kv-panel-bg\)\)/)
+  assert.match(tokens, /--kv-page-content-bg: var\(--kv-page-bg\)/)
+  assert.match(tokens, /--kv-table-bg: light-dark\(var\(--kv-panel-bg\), transparent\)/)
+  for (const kind of ['list-page', 'form-page', 'dashboard-page', 'board-page']) {
+    for (const region of ['context', 'header']) {
+      const rule = patterns.match(
+        new RegExp(
+          `\\[data-ui="${kind}"\\]\\[data-variant="operational"\\]\\s*\\[data-ui="${kind}-${region}"\\]\\s*\\{([^}]+)\\}`,
+        ),
+      )?.[1]
+      assert.match(rule ?? '', /background: var\(--kv-page-chrome-bg\)/, `${kind}-${region}`)
+    }
+  }
+  for (const kind of ['form-page']) {
+    const rule = patterns.match(new RegExp(`\\[data-ui="${kind}-body"\\]\\s*\\{([^}]+)\\}`))?.[1]
+    assert.match(rule ?? '', /background: var\(--kv-page-content-bg\)/, `${kind}-body`)
+  }
+  assert.match(patterns, /\[data-ui="form-page-aside"\]\s*\{[^}]*background: var\(--kv-panel-bg-subtle\)/)
+  assert.doesNotMatch(
+    patterns,
+    /\[data-ui="form-page-body"\] \[data-ui="surface"\]\s*\{[^}]*background: transparent/,
+  )
+})
+
+test('design system: workspace canvas stays grey between independent white surfaces', () => {
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const layouts = readFileSync('packages/design-system/src/layouts/layouts.css', 'utf8')
+  for (const hook of ['dashboard-page', 'dashboard-page-body', 'board-page']) {
+    const rule = patterns.match(new RegExp(`\\[data-ui="${hook}"\\]\\s*\\{([^}]+)\\}`))?.[1]
+    assert.match(rule ?? '', /background: var\(--kv-page-bg\)/, hook)
+    assert.doesNotMatch(rule ?? '', /background: var\(--kv-page-content-bg\)/, hook)
+  }
+  for (const hook of ['surface', 'content-card', 'metric']) {
+    const rule = layouts.match(new RegExp(`\\[data-ui="${hook}"\\]\\s*\\{([^}]+)\\}`))?.[1]
+    assert.match(rule ?? '', /background: var\(--kv-panel-bg\)/, hook)
+  }
+})
+
+test('design system: stacked tables own labels and release fixed desktop row heights', () => {
+  const props = {
+    columns: [{ key: 'name', label: 'Display name', cell: (row: { name: string }) => row.name }],
+    rows: [{ name: 'Example' }],
+    id: (row: { name: string }) => row.name,
+  }
+  const stacked = renderToString(<DataTable {...props} responsive="stack" />)
+  const scrolling = renderToString(<DataTable {...props} />)
+  assert.match(stacked, /data-responsive="stack"/)
+  assert.match(stacked, /data-label="Display name"/)
+  assert.match(scrolling, /data-responsive="scroll"/)
+  assert.doesNotMatch(scrolling, /data-label=/)
+  for (const hook of ['row', 'cell']) {
+    assert.match(
+      css,
+      new RegExp(`\\[data-responsive="stack"\\] \\[data-ui="${hook}"\\]\\s*\\{[^}]*height: auto`),
+    )
+  }
+})
+
 test('design system: FormPage does not nest a second main landmark inside AppShell', () => {
   const html = renderToString(
     <AppShell
