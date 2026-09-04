@@ -194,7 +194,7 @@ test('report HTTP route generates synchronously and reuses the 30-day cache', as
   })
   const server = await bootDeployment(app, {
     port: 0,
-    env: { KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_COMPANY: 'acme' },
+    env: { KET_LOG: 'null', KET_SQLITE: sqliteFile, KET_STORAGE_DIR: storageDir, KET_COMPANY: 'acme' },
     log: () => {},
   })
   try {

@@ -10,10 +10,13 @@ import { sqliteStore } from './config.ts'
 import { jobDefinition } from './jobs.ts'
 import { createQueue, JOB_CHANNEL } from './queue.ts'
 import { bootRuntime } from './runtime.ts'
+import { traceOf } from './log/index.ts'
+import type { OpenLog } from './log/index.ts'
 import { effectStorage, namespacedStorage, storageFromConfig } from './storage/index.ts'
 import { effectTransport, unavailableTransport } from './transport/index.ts'
 import type { DurableJob, Queue } from './queue.ts'
 import type { DeploymentSpec } from '../kernel/workspace.ts'
+import type { LogLevel } from './log/index.ts'
 import type { Adapter, JobContext, Manifest } from '../types.ts'
 import type { RuntimeConfig } from './config.ts'
 
@@ -112,13 +115,24 @@ export async function bootWorker(
     now?: () => Date
     random?: () => number
     log?: (entry: WorkerLog) => void
+    /** Redirect this worker's operational records, without editing the spec. */
+    openLog?: OpenLog
   } = {},
 ): Promise<BootedWorker> {
   if (!spec.worker || !Object.keys(spec.worker.queues).length)
     throw new Error(`deployment "${spec.name}" declares no worker queues`)
 
   const env = options.env ?? process.env
-  const { config, manifest } = await bootRuntime(spec, { env })
+  const {
+    config,
+    manifest,
+    log: sink,
+    logger,
+  } = await bootRuntime(spec, {
+    env,
+    role: 'worker',
+    ...(options.openLog ? { openLog: options.openLog } : {}),
+  })
   const baseStorage = await (spec.serve?.openStorage ?? storageFromConfig)(config)
   const baseTransport = await (spec.serve?.openTransport ?? unavailableTransport)(config)
   const storageFor = (tenant: string) => namespacedStorage(baseStorage, tenant || spec.name)
@@ -128,7 +142,36 @@ export async function bootWorker(
   const workerId = options.workerId ?? `${spec.name}-${process.pid}-${randomUUID().slice(0, 8)}`
   const now = options.now ?? (() => new Date())
   const random = options.random ?? Math.random
-  const log = options.log ?? ((entry: WorkerLog) => console.log(JSON.stringify(entry)))
+  /**
+   * The worker's own events, on the deployment's sink.
+   *
+   * `WorkerLog` stays the internal shape and `options.log` keeps replacing it, so a
+   * deployment that already intercepts these is unaffected. What changed is where
+   * the default goes: one pipeline, redacted and level-filtered like everything
+   * else, instead of a second private one on stdout.
+   */
+  const emit = (entry: WorkerLog): void => {
+    const level: LogLevel =
+      entry.event === 'discarded' || entry.event === 'handler_ignored_abort'
+        ? 'error'
+        : entry.event === 'retrying' || entry.event === 'cancelled'
+          ? 'warn'
+          : 'info'
+    logger.child({ tenant: entry.tenant || null }).log({
+      level,
+      event: entry.event === 'handler_ignored_abort' ? 'job_ignored_abort' : `job_${entry.event}`,
+      fn: entry.job,
+      ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
+      ...(entry.error === undefined ? {} : { error: entry.error }),
+      fields: {
+        workerId: entry.workerId,
+        jobId: entry.jobId,
+        queue: entry.queue,
+        attempt: entry.attempt,
+      },
+    })
+  }
+  const log = options.log ?? emit
   const pollMin = spec.worker.pollMinMs ?? 100
   const pollMax = spec.worker.pollMaxMs ?? 2_000
   const refreshMs = spec.worker.tenantRefreshMs ?? 60_000
@@ -238,6 +281,17 @@ export async function bootWorker(
         actor: job.actor,
         scope: job.scope,
         queueNotify: config.queueNotify,
+        log: logger.child({
+          tenant: tenant.key || null,
+          fn: job.job,
+          actor: traceOf(job.actor, config.secret),
+          company: job.scope?.company ?? null,
+          // The job's own id, hashed like any other correlation: every record from
+          // one attempt shares it. It is deliberately not the trace of the request
+          // that enqueued the job — the queue does not carry a correlation column,
+          // so claiming otherwise here would be a lie a dashboard would believe.
+          trace: traceOf(job.id, config.secret),
+        }),
       })
       const context = Object.assign(base, {
         job: {
@@ -471,6 +525,9 @@ export async function bootWorker(
       await unsubscribe?.()
       await source.close()
       await baseTransport.close?.()
+      logger.info('shutdown', { workerId })
+      await sink.flush?.()
+      await sink.close?.()
     },
   }
 }

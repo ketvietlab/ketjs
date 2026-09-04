@@ -70,7 +70,10 @@ test('pos: provider payment primitives stay behind an internal integration seam'
     headless: true,
     serve: {},
   })
-  const booted = await bootDeployment(deployment, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const booted = await bootDeployment(deployment, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:' },
+    port: 0,
+  })
   try {
     for (const name of names) {
       const response = await fetch(`http://127.0.0.1:${booted.port}/_ket/fn/${name}`, {

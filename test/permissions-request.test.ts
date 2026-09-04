@@ -7,6 +7,7 @@ import {
   json,
   memorySessionStore,
   sqliteAdapter,
+  nullLog,
 } from '@ketvietlab/ketjs'
 import type { Adapter } from '@ketvietlab/ketjs'
 
@@ -93,7 +94,7 @@ const boot = async () => {
       },
     },
   })
-  const booted = await bootDeployment(app, { port: 0, log: () => {} })
+  const booted = await bootDeployment(app, { port: 0, log: () => {}, openLog: () => nullLog() })
   const cookie = Object.fromEntries(
     await Promise.all(
       ['t1', 't2'].map(async (tenant) => [
@@ -213,7 +214,11 @@ test('permissions: a custom audience receives only its deployment-scoped functio
             : [],
     },
   })
-  const booted = await bootDeployment(app, { env: { KET_SQLITE: ':memory:' }, port: 0, log: () => {} })
+  const booted = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:' },
+    port: 0,
+    log: () => {},
+  })
   t.after(() => booted.close())
   const headers = { authorization: 'Bearer pos-token', 'content-type': 'application/json' }
   const allowed = await fetch(`http://127.0.0.1:${booted.port}/api/pos/v1/probe`, { headers })
