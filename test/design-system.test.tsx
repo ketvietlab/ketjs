@@ -112,6 +112,29 @@ test('design system: canonical page headers share compact responsive padding', (
   assert.equal((patterns.match(compactPadding) ?? []).length >= 4, true)
 })
 
+test('design system: light page surfaces use component roles without changing the palette', () => {
+  const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  assert.match(tokens, /--kv-page-chrome-bg: light-dark\(var\(--kv-page-bg\), var\(--kv-panel-bg\)\)/)
+  assert.match(tokens, /--kv-page-content-bg: light-dark\(var\(--kv-panel-bg\), var\(--kv-page-bg\)\)/)
+  assert.match(tokens, /--kv-table-bg: light-dark\(var\(--kv-panel-bg\), transparent\)/)
+  for (const kind of ['list-page', 'form-page', 'dashboard-page', 'board-page']) {
+    for (const region of ['context', 'header']) {
+      const rule = patterns.match(
+        new RegExp(
+          `\\[data-ui="${kind}"\\]\\[data-variant="operational"\\]\\s*\\[data-ui="${kind}-${region}"\\]\\s*\\{([^}]+)\\}`,
+        ),
+      )?.[1]
+      assert.match(rule ?? '', /background: var\(--kv-page-chrome-bg\)/, `${kind}-${region}`)
+    }
+  }
+  for (const kind of ['form-page', 'dashboard-page']) {
+    const rule = patterns.match(new RegExp(`\\[data-ui="${kind}-body"\\]\\s*\\{([^}]+)\\}`))?.[1]
+    assert.match(rule ?? '', /background: var\(--kv-page-content-bg\)/, `${kind}-body`)
+  }
+  assert.match(patterns, /\[data-ui="form-page-aside"\]\s*\{[^}]*background: var\(--kv-panel-bg-subtle\)/)
+})
+
 test('design system: FormPage does not nest a second main landmark inside AppShell', () => {
   const html = renderToString(
     <AppShell

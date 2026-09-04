@@ -3,7 +3,13 @@
 // every component specimen from the package-owned catalogue.
 
 import { compose, createKetServer, document, json, page, sqliteAdapter } from '@ketvietlab/ketjs'
-import { CatalogueHead, CataloguePage } from '@ketvietlab/design-system/catalogue'
+import {
+  CatalogueHead,
+  CataloguePage,
+  PageSurfacePreview,
+  surfaceKinds,
+  surfaceStates,
+} from '@ketvietlab/design-system/catalogue'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -25,6 +31,27 @@ const app = await createKetServer({
   assets: { prefix: '/design-system/', dir: ASSETS },
   routes: {
     '/_ket/health': () => json({ ok: true, app: 'design-system' }),
+    '/surfaces': (url) => {
+      const lang = oneOf(url.searchParams.get('lang'), ['en', 'vi'] as const, 'en')
+      return page({
+        body: document({
+          lang,
+          title: 'Page surface hierarchy',
+          head: CatalogueHead(),
+          body: (
+            <PageSurfacePreview
+              kind={oneOf(url.searchParams.get('kind'), surfaceKinds, 'record')}
+              state={oneOf(url.searchParams.get('state'), surfaceStates, 'baseline')}
+              theme={oneOf(url.searchParams.get('theme'), ['light', 'dark'] as const, 'light')}
+              tab={oneOf(url.searchParams.get('tab'), ['details', 'activity'] as const, 'details')}
+              aside={url.searchParams.get('aside') !== 'false'}
+              controls={url.searchParams.get('controls') !== 'false'}
+              lang={lang}
+            />
+          ),
+        }),
+      })
+    },
     '/': (url) => {
       const theme = oneOf(url.searchParams.get('theme'), ['light', 'dark', 'system'] as const, 'dark')
       const density = oneOf(
