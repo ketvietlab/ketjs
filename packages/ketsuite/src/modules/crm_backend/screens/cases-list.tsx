@@ -143,6 +143,7 @@ export const casesListScreen = (
               columns: caseListColumns(_),
               rows: options.rows,
               groups,
+              responsive: 'stack',
               id: (row) => String(row.id),
               rowHref: (row) => localized(`/admin/crm/cases/${String(row.id)}`, options.locale ?? ''),
               ...options.table,
