@@ -3,7 +3,7 @@
 // the kit, because each one carries a Flow message key.
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { badge, emptyState } from '../../../ui/index.ts'
+import { badge, emptyState, Notice } from '../../../ui/index.ts'
 
 /** A row as a screen sees it: whatever the domain sent, read by key. */
 export type AnyRow = Record<string, unknown>
@@ -45,6 +45,22 @@ export const entryBody = (_: Translator, row: AnyRow): string => {
   if (body && _.resolves(body)) return _(body)
   return body || '\u2014'
 }
+
+/**
+ * Said only when a custom-field filter stopped short.
+ *
+ * A truncated *list* looks truncated — it has a pager. A truncated *filter*
+ * looks like an answer, which is why the domain reports it and why every screen
+ * that can show one has to pass it on. The figures above the list run the same
+ * query, so they are short by the same amount and the notice says so.
+ */
+export const filterTruncatedNotice = (_: Translator, limit: number): TemplateResult => (
+  <Notice
+    tone="warning"
+    title={_('flow_backend.issues.filterTruncatedTitle')}
+    message={_('flow_backend.issues.filterTruncatedBody', { count: limit })}
+  />
+)
 
 export const when = (value: unknown): string => {
   const raw = String(value ?? '')

@@ -3,6 +3,7 @@ import {
   asc,
   bucketEq,
   compileListFilter,
+  dateBucket,
   deleteFrom,
   desc,
   eq,
@@ -11,6 +12,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  isTimezone,
   lt,
   not,
   or,
@@ -31,6 +33,36 @@ export const issue = (field: string, code: string, params?: Record<string, unkno
 })
 export const invalid = (...errors: FlowIssue[]): FlowResult => ({ ok: false, errors })
 export const now = (): string => new Date().toISOString()
+
+/**
+ * The company's civil-date timezone, or UTC when it has none.
+ *
+ * "Overdue" and "grouped by day" are claims about a calendar, and a calendar
+ * belongs to a place. For Flow that place is the company: unlike Hospitality it
+ * has no notion of a site, and a company that disagreed with itself about what
+ * day it is would make the figures beside a list and the list itself say
+ * different things — see FLW-DEC-010.
+ *
+ * The column is Accounting's by name because Accounting needed a civil date
+ * first. It is the company's by meaning, and reading it here is what keeps two
+ * settings from having to agree.
+ */
+export async function businessTimezone(ctx: Ctx): Promise<string> {
+  const companyId = ctx.scope?.company
+  if (!companyId) return 'UTC'
+  const company = (await ctx.db.select('company.Company', { id: companyId }))[0]
+  const timezone = String(company?.accountingTimezone ?? '').trim()
+  return isTimezone(timezone) ? timezone : 'UTC'
+}
+
+/**
+ * Today where the company is — which, for most of the day in Vietnam, is not
+ * today in UTC. A task due today was being counted late from 07:00 local.
+ */
+export async function businessToday(ctx: Ctx, timezone?: string): Promise<string> {
+  const zone = timezone ?? (await businessTimezone(ctx))
+  return dateBucket(new Date().toISOString(), 'day', zone) ?? new Date().toISOString().slice(0, 10)
+}
 export const n = (value: unknown): number => Number(value ?? 0)
 
 export const normalized = (value: unknown): string =>
@@ -479,7 +511,10 @@ const boardEdges = async (ctx: Ctx): Promise<{ terminal: string[]; first: string
 const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const I = ctx.table('flow.Issue')
   const given = listStateOf(args.listState) ?? emptyIssueListState()
-  const timezone = String(args.timezone ?? 'UTC')
+  // A caller may still name a timezone — an agent reporting for somewhere else
+  // — but no caller has to, and the screens no longer do. The default is the
+  // company's own calendar rather than UTC, which was nobody's calendar.
+  const timezone = String(args.timezone ?? '').trim() || (await businessTimezone(ctx))
   let query = from(I)
   // The spec has to know the project's own fields, or `parseListState` would
   // have dropped their rules as unknown before they ever reached here.
@@ -604,14 +639,19 @@ export type IssueBuckets = {
   overdue: number
   waiting: number
   working: number
+  /** The civil date these counts were taken against, for the screen to reuse. */
+  today: string
 }
 
 export async function issueBuckets(
   ctx: Ctx,
   args: Record<string, unknown>,
-  today: string,
+  today?: string,
 ): Promise<IssueBuckets> {
-  const { query } = await issueQuery(ctx, args)
+  const { query, timezone } = await issueQuery(ctx, args)
+  // The same calendar the query was compiled against, so the overdue count and
+  // the list it sits beside cannot disagree about where the day ends.
+  const day = String(today ?? '').trim() || (await businessToday(ctx, timezone))
   const I = ctx.table('flow.Issue')
   const { terminal, first } = await boardEdges(ctx)
 
@@ -620,14 +660,21 @@ export async function issueBuckets(
   const [total, done, overdue, waiting] = await Promise.all([
     ctx.db.count(query),
     terminal.length ? ctx.db.count(query.where(inArray(I.columnId, terminal))) : Promise.resolve(0),
-    ctx.db.count(query.where(...open, isNotNull(I.dueDate), lt(I.dueDate, today))),
+    ctx.db.count(query.where(...open, isNotNull(I.dueDate), lt(I.dueDate, day))),
     first.length
       ? ctx.db.count(
-          query.where(...open, inArray(I.columnId, first), or(isNull(I.dueDate), gte(I.dueDate, today))),
+          query.where(...open, inArray(I.columnId, first), or(isNull(I.dueDate), gte(I.dueDate, day))),
         )
       : Promise.resolve(0),
   ])
-  return { total, done, overdue, waiting, working: Math.max(0, total - done - overdue - waiting) }
+  return {
+    total,
+    done,
+    overdue,
+    waiting,
+    working: Math.max(0, total - done - overdue - waiting),
+    today: day,
+  }
 }
 
 export async function issueDetail(ctx: Ctx, id: string): Promise<Row | null> {

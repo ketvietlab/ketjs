@@ -18,9 +18,10 @@ import {
   Tabs,
 } from '../../../ui/index.ts'
 import type { Frame, TableGroup } from '../../../ui/index.ts'
+import { FIELD_FILTER_MATCHES } from '../../flow/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
-import { priorityBadge, when } from './shared.tsx'
+import { filterTruncatedNotice, priorityBadge, when } from './shared.tsx'
 
 /** The four figures beside the list, and the tab counts, from `issueBuckets`. */
 export type IssueOverview = {
@@ -36,6 +37,12 @@ export type IssueOverview = {
   tab: string
   tabs: Array<{ id: string; label: string; href: string; count: number }>
   locale?: string
+  /**
+   * Set when a custom-field filter stopped short. It sits on the overview
+   * rather than beside it because the counts above the list run the same query:
+   * when the filter is short, so are they.
+   */
+  filterTruncated?: boolean
 }
 
 const share = (part: number, whole: number): string => (whole ? `${Math.round((part * 100) / whole)}%` : '—')
@@ -149,6 +156,7 @@ export const crossProjectScreen = (
       }
       status={`${title}: ${String(overview?.total ?? rows.length)}`}
       body={stack([
+        overview?.filterTruncated ? filterTruncatedNotice(_, FIELD_FILTER_MATCHES) : null,
         ...(overview
           ? [
               overviewPanel(_, overview),

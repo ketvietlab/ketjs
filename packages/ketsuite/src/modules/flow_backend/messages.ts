@@ -107,6 +107,9 @@ const vi = {
   'pages.title': 'Tài liệu',
   'pages.search': 'Tìm tài liệu…',
   'issues.subtitle': 'Quản lý và theo dõi tất cả công việc trong hệ thống.',
+  'issues.filterTruncatedTitle': 'Kết quả chưa đầy đủ',
+  'issues.filterTruncatedBody':
+    'Bộ lọc theo trường tùy chỉnh dừng ở {count} công việc khớp, nên cả danh sách lẫn các con số bên trên đều chưa tính hết. Thu hẹp bộ lọc — thêm dự án, trạng thái hoặc khoảng thời gian — để thấy đủ.',
   'issue.summary': 'Thông tin chung',
   'issue.attributes': 'Thông tin',
   'attachments.title': 'Tệp đính kèm',
@@ -302,6 +305,9 @@ const en: Record<keyof typeof vi, Message> = {
   'pages.title': 'Docs',
   'pages.search': 'Search documents…',
   'issues.subtitle': 'Every issue in the system, tracked in one place.',
+  'issues.filterTruncatedTitle': 'This result is incomplete',
+  'issues.filterTruncatedBody':
+    'The custom-field filter stopped at {count} matching issues, so this list and the figures above it are both counting less than there is. Narrow the filter — add a project, a status or a date range — to see the rest.',
   'issue.summary': 'Details',
   'issue.attributes': 'Attributes',
   'attachments.title': 'Attachments',
