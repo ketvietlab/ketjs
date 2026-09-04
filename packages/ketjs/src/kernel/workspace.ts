@@ -52,6 +52,34 @@ export type NavigationSpec = {
    * tree. A function key again, for the same reason `home` uses one.
    */
   audit?: readonly string[]
+  /**
+   * Regroup the menu the way this product's shifts actually run.
+   *
+   * A module groups its screens the way the module is built — hospitality puts
+   * folios and billing under "Operations" because both are hospitality code.
+   * A hotel does not run that way: the person holding the folio is a cashier and
+   * their shift is "Payments". Only the deployment knows this, and until now only
+   * the module could say it.
+   *
+   * Entries named here move under the declared heading; entries left out keep the
+   * heading their module gave them. Order is the order declared.
+   */
+  groups?: ReadonlyArray<{ id: string; label: string; icon?: string; items: readonly string[] }>
+  /**
+   * Menu ids to keep out of the main list regardless of `for`.
+   *
+   * `for` answers "is this your work". This answers "is this worth a permanent
+   * row", which is the question a manager who can do everything still has.
+   */
+  demote?: readonly string[]
+  /**
+   * Whether the shell offers the list of root sections.
+   *
+   * `auto` shows it when this viewer has more than one root worth visiting, which
+   * is the honest default. A single-domain product like a hotel sets `never`: a
+   * chooser with one choice is furniture.
+   */
+  rootList?: 'auto' | 'always' | 'never'
 }
 
 export type DeploymentSpec = {
@@ -128,6 +156,12 @@ export function defineDeployment(spec: DeploymentDeclaration): DeploymentDeclara
   const pageRegion = spec.serve?.pages?.region
   if (pageRegion && !/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/.test(pageRegion))
     throw new Error(`deployment "${spec.name}" declares invalid page region "${pageRegion}"`)
+  for (const group of spec.navigation?.groups ?? []) {
+    if (!/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(group.id))
+      throw new Error(`deployment "${spec.name}" has invalid navigation.groups id "${group.id}"`)
+    if (!group.items.length)
+      throw new Error(`deployment "${spec.name}" declares navigation group "${group.id}" with no entries`)
+  }
   for (const key of spec.navigation?.audit ?? []) {
     if (!/^[a-z][a-z0-9_]*\.[A-Za-z][A-Za-z0-9_.]*$/.test(key))
       throw new Error(`deployment "${spec.name}" has invalid navigation.audit condition "${key}"`)

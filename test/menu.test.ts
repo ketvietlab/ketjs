@@ -308,3 +308,53 @@ test('intent: off by default, so a caller that does not ask keeps the whole tree
     true,
   )
 })
+
+test('groups: a deployment regroups the menu the way its shifts run', () => {
+  // The module puts both screens under one heading because both are its code.
+  // The hotel runs a front desk and a cash desk, and those are different shifts.
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties'],
+    groups: [
+      { id: 'shift', label: 'Ca làm việc', items: ['hotel.cleaning'] },
+      { id: 'setup', label: 'Thiết lập', items: ['hotel.properties'] },
+    ],
+  })
+  assert.deepEqual(
+    tree[0]!.children.map((child) => [child.label, child.children.map((leaf) => leaf.path)]),
+    [
+      ['Ca làm việc', ['/admin/hotel/cleaning']],
+      ['Thiết lập', ['/admin/hotel/properties']],
+    ],
+  )
+})
+
+test('groups: an entry the deployment does not claim keeps the heading its module gave it', () => {
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties'],
+    groups: [{ id: 'shift', label: 'Ca làm việc', items: ['hotel.cleaning'] }],
+  })
+  assert.deepEqual(
+    tree[0]!.children.map((child) => [child.label, child.path]),
+    [
+      ['Ca làm việc', null],
+      // Unclaimed, so it stays exactly where its module put it.
+      ['Properties', '/admin/hotel/properties'],
+    ],
+  )
+})
+
+test('demote: a deployment can take an entry off the main list without touching permission', () => {
+  const tree = buildMenu(hotelManifest(), {
+    // This viewer works on both screens; the deployment still says one of them
+    // does not deserve a permanent row.
+    allow: ['hotel.listRooms', 'hotel.listProperties', 'hotel.completeCleaning', 'hotel.saveProperty'],
+    intent: true,
+    demote: ['hotel.properties'],
+  })
+  const items = tree[0]!.children
+  assert.deepEqual(
+    items.filter((item) => !item.secondary).map((item) => item.path),
+    ['/admin/hotel/cleaning'],
+  )
+  assert.ok(items.some((item) => item.path === '/admin/hotel/properties' && item.secondary))
+})
