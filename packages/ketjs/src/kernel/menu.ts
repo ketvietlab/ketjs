@@ -66,9 +66,16 @@ export type MenuOptions = {
  *
  * Regrouping happens on the declarations rather than on the built tree, so
  * permission, intent, search and active-branch logic all keep working on one
- * shape. A group inherits its position from the first entry it claims, which
- * keeps a regrouped sidebar in the order the module authors already thought
- * about rather than in declaration order.
+ * shape.
+ *
+ * Declaration order wins, for the groups and for the entries inside them. The
+ * first version of this inherited each group's position from the earliest entry
+ * it claimed, on the theory that module authors had already thought about order.
+ * They had — but within headings that regrouping dissolves. `sequence` 10 under
+ * "Operations" and `sequence` 10 under "Housekeeping" never had to compare, and
+ * once both headings are gone they compare as a tie broken by the alphabet. A
+ * hotel that listed its shifts in the order a shift runs got them back sorted by
+ * first letter.
  */
 const regrouped = (
   manifest: Manifest,
@@ -77,18 +84,18 @@ const regrouped = (
   const entries = Object.entries(manifest.menus)
   if (!groups?.length) return entries
 
-  const claimed = new Map<string, { id: string; label: string; icon?: string; order: number }>()
+  const claimed = new Map<
+    string,
+    { id: string; label: string; icon?: string; order: number; place: number }
+  >()
   for (const [index, group] of groups.entries())
-    for (const item of group.items)
-      claimed.set(item, { id: group.id, label: group.label, icon: group.icon, order: index })
+    for (const [place, item] of group.items.entries())
+      claimed.set(item, { id: group.id, label: group.label, icon: group.icon, order: index, place })
 
   const byId = new Map(entries)
-  const sequenceOf = (group: string): number => {
-    const owned = [...claimed.entries()]
-      .filter(([, g]) => g.id === group)
-      .map(([item]) => byId.get(item)?.sequence ?? 100)
-    return owned.length ? Math.min(...owned) : 100
-  }
+  // Spaced like module sequences so a declared group still interleaves sensibly
+  // with a heading the deployment left alone.
+  const groupSequence = (index: number): number => (index + 1) * 10
 
   const out: Array<[string, MenuDef & { by: string }]> = []
   const seen = new Set<string>()
@@ -111,11 +118,11 @@ const regrouped = (
           // An entry hanging straight off a root has no heading to replace, and
           // the group becomes that root's first heading instead.
           parent: def.parent ? (byId.get(def.parent)?.parent ?? def.parent) : undefined,
-          sequence: sequenceOf(group.id),
+          sequence: groupSequence(group.order),
         } as MenuDef & { by: string },
       ])
     }
-    out.push([id, { ...def, parent: group.id }])
+    out.push([id, { ...def, parent: group.id, sequence: group.place }])
   }
   return out
 }

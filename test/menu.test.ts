@@ -328,6 +328,27 @@ test('groups: a deployment regroups the menu the way its shifts run', () => {
   )
 })
 
+test('groups: the order declared is the order shown, for groups and for their entries', () => {
+  // Both entries sit at sequence 10 under different module headings — a tie the
+  // alphabet used to break, which put "Thiết lập" above "Ca làm việc".
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties'],
+    groups: [
+      { id: 'shift', label: 'Ca làm việc', items: ['hotel.properties', 'hotel.cleaning'] },
+      { id: 'setup', label: 'Thiết lập', items: [] },
+    ].filter((group) => group.items.length),
+  })
+  assert.deepEqual(
+    tree[0]!.children.map((child) => child.label),
+    ['Ca làm việc'],
+  )
+  assert.deepEqual(
+    tree[0]!.children[0]!.children.map((leaf) => leaf.path),
+    ['/admin/hotel/properties', '/admin/hotel/cleaning'],
+    'entries follow the order the deployment listed them, not their module sequence',
+  )
+})
+
 test('groups: an entry the deployment does not claim keeps the heading its module gave it', () => {
   const tree = buildMenu(hotelManifest(), {
     allow: ['hotel.listRooms', 'hotel.listProperties'],
