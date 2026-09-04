@@ -91,7 +91,8 @@ a module-local query-string convention.
 ### Page surface hierarchy
 
 All three canonical patterns share component-owned surface roles. A light operational page uses a
-quiet grey context/identity band and controls, a white working region, and a grey contextual rail.
+quiet grey context/identity band and controls, white record/list working regions, and a grey contextual rail.
+Workspaces instead keep a grey page canvas between independent white cards, surfaces and tables.
 `ListPage`, `RecordPage`, and `WorkspacePage` keep their existing header measurements and structure;
 do not implement the hierarchy with a route-local background override or another whole-page card.
 
@@ -99,8 +100,9 @@ do not implement the hierarchy with a route-local background override or another
 | --- | --- |
 | Context and identity header | `--kv-page-chrome-bg`: page grey in light, existing panel tone in dark |
 | Controls and record tabs | `--kv-page-bg`: continuous quiet navigation band |
-| List, record, vertical workspace content | `--kv-page-content-bg`: white in light, existing canvas tone in dark |
-| Spatial workspace canvas | `--kv-page-bg`: cards, table surfaces and timelines remain independent objects |
+| List and record content | `--kv-page-content-bg`: white in light, existing canvas tone in dark |
+| Workspace canvas, both flow and spatial | `--kv-page-bg`: keep the gaps grey; cards, table surfaces and timelines remain independent objects |
+| Workspace content blocks | Existing `Surface`, `ContentCard`, `Metric` and table tokens own the white fill; never wrap the whole workspace in one white surface |
 | Tables | `--kv-table-bg`: opaque white in light; transparent in dark, preserving row hover/selection |
 | Sidebar and record rail | Existing sidebar / subtle panel tokens, separated with low-contrast borders |
 

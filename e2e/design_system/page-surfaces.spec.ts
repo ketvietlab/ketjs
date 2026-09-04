@@ -42,6 +42,7 @@ for (const kind of kinds)
           const hook = hooks[kind]
           const record = hook === 'form-page'
           const canvas = hook === 'board-page'
+          const workspace = canvas || hook === 'dashboard-page'
           const chrome = theme === 'light' ? 'rgb(247, 245, 245)' : 'rgb(29, 34, 40)'
           const working = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(27, 31, 36)'
           const ground = theme === 'light' ? 'rgb(247, 245, 245)' : 'rgb(27, 31, 36)'
@@ -59,8 +60,31 @@ for (const kind of kinds)
             await expect(header).toHaveCSS('padding-top', '16px')
             await expect(header).toHaveCSS('padding-left', width === 390 ? '16px' : '28px')
             await expect(header.locator('h1')).toHaveCSS('font-size', width === 390 ? '16px' : '24px')
-            if (!canvas) await expect(body).toHaveCSS('background-color', working)
-            else await expect(main.locator('[data-pattern]')).toHaveCSS('background-color', ground)
+            if (!workspace) await expect(body).toHaveCSS('background-color', working)
+            else {
+              await expect(main.locator('[data-pattern]')).toHaveCSS('background-color', ground)
+              if (!canvas) await expect(body).toHaveCSS('background-color', ground)
+              if (['baseline', 'validation', 'readonly'].includes(state)) {
+                const panel = theme === 'light' ? working : 'rgb(29, 34, 40)'
+                await expect(body.locator('[data-ui="surface"]')).toHaveCSS('background-color', panel)
+                for (const metric of await body.locator('[data-ui="metric"]').all())
+                  await expect(metric).toHaveCSS('background-color', panel)
+                const gap = await body.evaluate((e) => {
+                  const surface = e.querySelector('[data-ui="surface"]')!.getBoundingClientRect()
+                  const grid = e.querySelector('[data-ui="grid"]')!.getBoundingClientRect()
+                  const point = document.elementFromPoint(surface.left + 4, (grid.bottom + surface.top) / 2)!
+                  let painted: Element | null = point
+                  while (painted && getComputedStyle(painted).backgroundColor === 'rgba(0, 0, 0, 0)')
+                    painted = painted.parentElement
+                  return {
+                    size: surface.top - grid.bottom,
+                    background: painted && getComputedStyle(painted).backgroundColor,
+                  }
+                })
+                expect(gap.size).toBeGreaterThanOrEqual(12)
+                expect(gap.background).toBe(ground)
+              }
+            }
             if (record) {
               await expect(main.locator('[data-ui="form-page-navigation"]')).toHaveCSS(
                 'background-color',
