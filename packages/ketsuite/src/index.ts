@@ -329,6 +329,19 @@ export type { PeriodState, PunchKind, PunchSource, RequestState } from './module
 export { default as storage } from './modules/storage/index.ts'
 export { default as hospitalityCore } from './modules/hospitality_core/index.ts'
 export { default as hospitalityBilling } from './modules/hospitality_billing/index.ts'
+/**
+ * The room-night primitives, so a channel adapter claims inventory through the
+ * same ledger the front desk does rather than counting rooms for itself. Two
+ * writers measuring availability two ways cannot block each other, whatever
+ * each one believes.
+ */
+export {
+  InventoryConflict,
+  occupancyDates,
+  replaceInventoryClaim,
+  restrictionIssues,
+} from './modules/hospitality_core/inventory.ts'
+export type { InventoryHold, InventoryIssue } from './modules/hospitality_core/inventory.ts'
 export {
   ACCOMMODATION_TYPES,
   AMENITY_SCOPES,

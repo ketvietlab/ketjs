@@ -18,6 +18,7 @@ import {
   DOCUMENT_TYPES,
   GENDERS,
   OCR_STATES,
+  OUT_OF_SERVICE_ROOM_STATUSES,
 } from './types.ts'
 import { dateKeyIn } from './calendar.ts'
 import {
@@ -514,6 +515,7 @@ export const applyNoShow = async (
       )
       if (!('matched' in stayClaim) || !stayClaim.matched)
         throw new TransitionConflict(issue('state', 'transition_conflict'))
+      await closeHold(tx, reservation.stayId, 'room_hold_no_show')
     }
     const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
     if (folio?.state !== 'open') throw new TransitionConflict(issue('folioId', 'folio_not_open'))
@@ -544,6 +546,55 @@ export const applyNoShow = async (
     }
     return success(reservation.id, { state: 'no_show' })
   })
+}
+
+/**
+ * A room is kept for one stay at a time over the nights it is kept for.
+ *
+ * Room `status` cannot carry this. A room held for next Tuesday is an ordinary
+ * available room today and must stay sellable; `occupied` is about now, not
+ * about a calendar. So the exclusion lives in the assignment schedule, and this
+ * is the question every writer of one has to ask first.
+ */
+const roomTakenBetween = async (
+  ctx: Ctx,
+  roomId: unknown,
+  startAt: string,
+  endAt: string | null,
+  exceptStayId?: unknown,
+): Promise<boolean> => {
+  const A = ctx.table('hospitality_core.RoomAssignment')
+  const rows = await ctx.db.all(from(A).where(eq(A.roomId, roomId)))
+  return rows.some((row) => {
+    if (row.state === 'closed') return false
+    if (exceptStayId != null && row.stayId === exceptStayId) return false
+    // An assignment with no end is open-ended: a guest in the room now, with no
+    // departure recorded yet. It collides with everything from its start on.
+    const otherStart = Date.parse(String(row.startAt))
+    const otherEnd = row.endAt ? Date.parse(String(row.endAt)) : Number.POSITIVE_INFINITY
+    const start = Date.parse(startAt)
+    const end = endAt ? Date.parse(endAt) : Number.POSITIVE_INFINITY
+    return otherStart < end && otherEnd > start
+  })
+}
+
+/** The room being kept for this stay, if the desk has chosen one. */
+const heldAssignment = async (ctx: Ctx, stayId: unknown): Promise<Row | null> => {
+  const A = ctx.table('hospitality_core.RoomAssignment')
+  return ctx.db.one(from(A).where(eq(A.stayId, stayId), eq(A.state, 'held')))
+}
+
+/**
+ * Let go of a room kept for a stay that will not use it.
+ *
+ * Shared by cancelling, marking a no-show and choosing a different room, so a
+ * hold cannot outlive the reason it was made — a room kept for a guest who
+ * cancelled in March is a room nobody can be put in until somebody notices.
+ */
+const closeHold = async (ctx: Ctx, stayId: unknown, reason: string): Promise<void> => {
+  const held = await heldAssignment(ctx, stayId)
+  if (!held) return
+  await ctx.db.update('hospitality_core.RoomAssignment', { id: held.id }, { state: 'closed', reason })
 }
 
 export const operations: Record<string, FnSpec> = {
@@ -1016,6 +1067,8 @@ export const operations: Record<string, FnSpec> = {
       'write:hospitality_core.Charge',
       'write:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.InventoryChange',
+      'read:hospitality_core.RoomAssignment',
+      'write:hospitality_core.RoomAssignment',
     ],
     idempotent: true,
     agent: true,
@@ -1053,6 +1106,7 @@ export const operations: Record<string, FnSpec> = {
             )
             if (!('matched' in stayClaim) || !stayClaim.matched)
               throw new TransitionConflict(issue('state', 'transition_conflict'))
+            await closeHold(tx, reservation.stayId, 'room_hold_cancelled')
           }
           const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
           const C = tx.table('hospitality_core.Charge')
@@ -1124,6 +1178,8 @@ export const operations: Record<string, FnSpec> = {
       'write:hospitality_core.Folio',
       'write:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.InventoryChange',
+      'read:hospitality_core.RoomAssignment',
+      'write:hospitality_core.RoomAssignment',
     ],
     idempotent: true,
     agent: true,
@@ -1204,6 +1260,7 @@ export const operations: Record<string, FnSpec> = {
       'write:hospitality_core.Folio',
       'write:hospitality_core.RoomAssignment',
       'enqueue:hospitality_core.prepareStayNotices',
+      'read:hospitality_core.RoomAssignment',
     ],
     idempotent: true,
     agent: true,
@@ -1237,8 +1294,13 @@ export const operations: Record<string, FnSpec> = {
       if (early && !text(args.earlyReason)) return failure(issue('at', 'early_check_in'))
 
       const R = ctx.table('hospitality_core.Room')
+      const held = await heldAssignment(ctx, stay.id)
       let room: Row | null = null
       if (args.roomId) room = await record(ctx, 'hospitality_core.Room', args.roomId)
+      // The desk already decided which room this guest gets; arriving is not the
+      // moment to decide it again. A clerk who passes a room explicitly still
+      // overrides, and the hold is closed either way below.
+      else if (held) room = await record(ctx, 'hospitality_core.Room', held.roomId)
       else {
         const candidates = await ctx.db.all(
           from(R).where(
@@ -1248,13 +1310,21 @@ export const operations: Record<string, FnSpec> = {
             eq(R.active, true),
           ),
         )
-        room = candidates[0] ?? null
+        // A room kept for somebody arriving later is not a free room now.
+        for (const candidate of candidates) {
+          if (await roomTakenBetween(ctx, candidate.id, String(stay.checkIn), String(stay.checkOut), stay.id))
+            continue
+          room = candidate
+          break
+        }
       }
       if (!room) return failure(issue('roomId', 'no_available_room'))
       if (room.propertyId !== stay.propertyId) return failure(issue('roomId', 'property_mismatch'))
       if (room.roomTypeId !== stay.roomTypeId) return failure(issue('roomId', 'room_type_mismatch'))
       if (room.status !== 'available' || room.active !== true)
         return failure(issue('roomId', 'room_not_available'))
+      if (await roomTakenBetween(ctx, room.id, String(stay.checkIn), String(stay.checkOut), stay.id))
+        return failure(issue('roomId', 'room_already_held'))
 
       const assignmentId = args.assignmentId ?? `${String(stay.id)}:assignment:1`
       const transitioned = await transition(() =>
@@ -1285,6 +1355,7 @@ export const operations: Record<string, FnSpec> = {
           )
           if (!('matched' in roomClaim) || !roomClaim.matched)
             throw new TransitionConflict(issue('roomId', 'room_not_available'))
+          await closeHold(tx, stay.id, 'room_hold_taken')
           await tx.db.insert('hospitality_core.RoomAssignment', {
             id: assignmentId,
             stayId: stay.id,
@@ -1437,6 +1508,90 @@ export const operations: Record<string, FnSpec> = {
           return success(stay.id, { checkOut: schedule.checkOut, amountTotal: schedule.amountTotal })
         }),
       )
+    },
+  }),
+
+  /**
+   * Keep a named room for a guest who has not arrived.
+   *
+   * Availability is counted per room type per night, and the reservation has
+   * already taken one of those. Holding a specific room takes nothing further —
+   * it only says which room the guest walks into — so this never touches the
+   * ledger. What it does take is the room itself, for those nights, from
+   * everybody else.
+   */
+  holdRoom: defineFn({
+    input: { stayId: 'id', roomId: 'id', reason: 'text?' },
+    output: { ok: 'bool', id: 'id?', roomId: 'id?', errors: 'json?' },
+    effects: [
+      'read:hospitality_core.Stay',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.RoomAssignment',
+      'write:hospitality_core.RoomAssignment',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const stay = await record(ctx, 'hospitality_core.Stay', args.stayId)
+      if (!stay) return failure(issue('stayId', 'stay_missing'))
+      // A guest already in a room has one; changing it is `moveRoom`, which
+      // knows how to hand the old room back to housekeeping.
+      if (stay.state !== 'draft') return failure(issue('state', 'stay_cannot_hold_room'))
+      const room = await record(ctx, 'hospitality_core.Room', args.roomId)
+      if (!room) return failure(issue('roomId', 'room_missing'))
+      if (room.propertyId !== stay.propertyId) return failure(issue('roomId', 'property_mismatch'))
+      if (room.roomTypeId !== stay.roomTypeId) return failure(issue('roomId', 'room_type_mismatch'))
+      if (room.active !== true || oneOf(OUT_OF_SERVICE_ROOM_STATUSES, room.status))
+        return failure(issue('roomId', 'room_not_available'))
+
+      const startAt = String(stay.checkIn)
+      const endAt = String(stay.checkOut)
+      if (await roomTakenBetween(ctx, room.id, startAt, endAt, stay.id))
+        return failure(issue('roomId', 'room_already_held'))
+
+      const id = `${String(stay.id)}:hold`
+      return transition(() =>
+        ctx.tx(async (tx) => {
+          // One hold to a stay: choosing again replaces the choice rather than
+          // quietly keeping two rooms for one guest.
+          const existing = await heldAssignment(tx, stay.id)
+          if (existing && existing.id !== id)
+            await tx.db.update(
+              'hospitality_core.RoomAssignment',
+              { id: existing.id },
+              { state: 'closed', reason: 'room_hold_replaced' },
+            )
+          const values = {
+            stayId: stay.id,
+            propertyId: stay.propertyId,
+            roomId: room.id,
+            roomTypeId: room.roomTypeId,
+            startAt,
+            endAt,
+            state: 'held',
+            reason: text(args.reason) || undefined,
+          }
+          const current = await record(tx, 'hospitality_core.RoomAssignment', id)
+          if (current) await tx.db.update('hospitality_core.RoomAssignment', { id }, values)
+          else await tx.db.insert('hospitality_core.RoomAssignment', { id, ...values })
+          return success(id, { roomId: room.id })
+        }),
+      )
+    },
+  }),
+
+  /** Give back a room kept for a guest, without cancelling anything else. */
+  releaseRoomHold: defineFn({
+    input: { stayId: 'id', reason: 'text?' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:hospitality_core.RoomAssignment', 'write:hospitality_core.RoomAssignment'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const held = await heldAssignment(ctx, args.stayId)
+      if (!held) return success(args.stayId)
+      await closeHold(ctx, args.stayId, text(args.reason) || 'room_hold_released')
+      return success(held.id)
     },
   }),
 
