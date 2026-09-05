@@ -740,6 +740,25 @@ and the sitemap are built from the primary, so a site left with hosts and no pri
 wrong address to every crawler that asks; promote another one first. The last host goes freely,
 primary or not — a site with no domains is a site nobody has pointed anywhere yet.
 
+### Reordering a menu was arithmetic
+
+`MenuItem.position` is an integer and the only way to change it was to open the item's form and type
+a different number. Moving the fourth link above the second meant working out what numbers the other
+three would then need — which is not editing, and gets worse the longer the menu is.
+
+`moveMenuItem` takes a direction. Two buttons per row, which are reachable from a keyboard without
+anything having to be dragged; WEB-018 asked for keyboard reordering and this is the version that
+needs no client-side code at all.
+
+It **renumbers the sibling group** rather than swapping two positions. Nothing has ever enforced
+distinct positions and `addMenuItem` defaults them all to zero, so a swap between two items that both
+sit at zero would move nothing and look broken. Renumbering settles the order it found and then
+applies the move, which also quietly repairs a menu whose positions had all collapsed.
+
+Siblings only: moving an item past its parent's neighbour would be a reparent, which is a different
+decision and already has its own field. And the ends are where a move stops, not where it fails — a
+first item asked to go up answers `ok`, because that is the state the caller asked for.
+
 ### A question no screen could answer
 
 Every Website screen is scoped to one site, because every contract behind them takes a `siteId`.
