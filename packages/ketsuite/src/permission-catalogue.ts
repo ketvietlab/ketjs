@@ -410,6 +410,7 @@ const sources = {
       'project.save': ['configure', 'configure', 'flow.configuration-audit'],
       'project.stats': ['read', 'view'],
       'sprint.close': ['operate', 'operate'],
+      'sprint.delete': ['operate', 'operate'],
       'sprint.list': ['read', 'view'],
       'sprint.save': ['operate', 'operate'],
       'sprint.start': ['operate', 'operate'],
