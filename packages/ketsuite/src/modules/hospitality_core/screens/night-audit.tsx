@@ -100,25 +100,29 @@ export const nightAuditScreen = (
                 id: 'in-house',
                 label: _('hospitality_core.nightAudit.metric.inHouse'),
                 value: data.preview.inHouseCount,
+                tone: 'neutral' as const,
               },
               {
                 id: 'services',
                 label: _('hospitality_core.nightAudit.metric.servicesDue'),
                 value: data.preview.serviceDue,
+                tone: 'neutral' as const,
               },
               {
                 id: 'rent',
                 label: _('hospitality_core.nightAudit.metric.rentDue'),
                 value: data.preview.rentDue,
+                tone: 'neutral' as const,
               },
               {
                 id: 'night-audit-amount',
                 label: _('hospitality_core.nightAudit.metric.estimated'),
                 value: formatMoney(_, data.preview.estimatedAmount),
+                tone: 'neutral' as const,
               },
             ]}
             id={(item) => item.id}
-            card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+            card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
           />
         ) : null,
         <Section

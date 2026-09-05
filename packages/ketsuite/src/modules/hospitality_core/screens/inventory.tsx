@@ -28,6 +28,7 @@ export const inventoryScreen = (
   frame: Frame,
   state?: string | null,
 ): TemplateResult => {
+  const minimumAvailable = rows.length ? Math.min(...rows.map((row) => row.available)) : 0
   const selectedRoomTypes = roomTypes.filter((row) => row.propertyId === selected.propertyId)
   const hidden = {
     propertyId: selected.propertyId ?? '',
@@ -91,25 +92,37 @@ export const inventoryScreen = (
         />,
         <CardGrid
           items={[
-            { id: 'days', label: _('hospitality_core.metric.inventoryDays'), value: rows.length },
+            {
+              id: 'days',
+              label: _('hospitality_core.metric.inventoryDays'),
+              value: rows.length,
+              tone: 'neutral' as const,
+            },
             {
               id: 'available',
               label: _('hospitality_core.metric.minimumAvailable'),
-              value: rows.length ? Math.min(...rows.map((row) => row.available)) : 0,
+              value: minimumAvailable,
+              // This is the worst night in the window, so zero means the window
+              // contains a night that cannot be sold at all.
+              tone: rows.length && !minimumAvailable ? ('danger' as const) : ('neutral' as const),
             },
             {
               id: 'sold',
               label: _('hospitality_core.metric.sold'),
               value: rows.reduce((sum, row) => sum + row.sold, 0),
+              tone: 'neutral' as const,
             },
             {
+              // Blocking is a deliberate act, not a fault; the number is here to
+              // be seen, not to be alarmed about.
               id: 'blocked',
               label: _('hospitality_core.metric.blocked'),
               value: rows.reduce((sum, row) => sum + row.blocked, 0),
+              tone: 'neutral' as const,
             },
           ]}
           id={(item) => item.id}
-          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
         />,
         <Section
           title={_('hospitality_core.screen.inventory.allotment')}

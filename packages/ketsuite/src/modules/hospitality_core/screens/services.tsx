@@ -92,25 +92,29 @@ export const servicesScreen = (
               id: 'fees',
               label: _('hospitality_core.services.metric.fees'),
               value: data.propertyCharges.length,
+              tone: 'neutral' as const,
             },
             {
               id: 'extras',
               label: _('hospitality_core.services.metric.extras'),
               value: data.extraLines.length,
+              tone: 'neutral' as const,
             },
             {
               id: 'posted',
               label: _('hospitality_core.services.metric.posted'),
               value: activeCharges.length,
+              tone: 'neutral' as const,
             },
             {
               id: 'value',
               label: _('hospitality_core.services.metric.postedValue'),
               value: formatMoney(_, totalPosted),
+              tone: 'neutral' as const,
             },
           ]}
           id={(item) => item.id}
-          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
         />,
         <Section
           title={_('hospitality_core.services.section.fees')}

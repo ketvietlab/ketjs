@@ -6,6 +6,7 @@ import {
   type CleaningTaskRow,
   type CleaningTaskSummary,
   dataTable,
+  cleaningTone,
   emptyState,
   type Frame,
   linkButton,
@@ -128,7 +129,7 @@ export const cleaningTasksScreen = (
             <Metric
               label={_(`hospitality_core.cleaningState.${item.state}`)}
               value={String(item.count)}
-              tone={item.state}
+              tone={cleaningTone(item.state)}
             />
           )}
         />,
