@@ -72,6 +72,9 @@ export default defineModule({
       'menus.emptyHint': 'Menu được sắp xếp và cô lập theo website.',
       'forms.title': 'Biểu mẫu website',
       'forms.newTitle': 'Biểu mẫu mới',
+      'forms.editTitle': 'Sửa biểu mẫu',
+      'action.open': 'Mở',
+      'state.kept': 'Giữ lại',
       'forms.formHint': 'Khai báo field bằng JSON; submission được kiểm tra schema, honeypot và rate limit.',
       'forms.empty': 'Chưa có biểu mẫu.',
       'forms.emptyHint': 'Tạo biểu mẫu liên hệ hoặc nhận yêu cầu đầu tiên.',
@@ -133,6 +136,15 @@ export default defineModule({
       'field.href': 'Liên kết',
       'field.position': 'Thứ tự',
       'field.notifyTo': 'Email nhận thông báo',
+      'field.consentText': 'Thông báo quyền riêng tư',
+      'field.summaryFields': 'Trường xem trước',
+      'field.retentionDays': 'Thời hạn lưu (ngày)',
+      'help.consentText':
+        'Hiện cạnh ô đồng ý. Để trống nghĩa là biểu mẫu không hỏi đồng ý. Sửa văn bản này sẽ nâng version của biểu mẫu.',
+      'help.summaryFields':
+        'Tên trường, cách nhau bằng dấu phẩy, được phép hiện trong danh sách. Để trống thì danh sách không hiện câu trả lời nào.',
+      'help.retentionDays':
+        'Sau bấy nhiêu ngày, nội dung khách điền bị xóa còn bản ghi đồng ý được giữ. Để trống nghĩa là giữ lại.',
       'field.successMessage': 'Thông báo thành công',
       'field.schema': 'Schema field (JSON)',
       'field.payload': 'Dữ liệu',
@@ -213,6 +225,9 @@ export default defineModule({
       'menus.emptyHint': 'Menus are ordered and isolated by site.',
       'forms.title': 'Website forms',
       'forms.newTitle': 'New form',
+      'forms.editTitle': 'Edit form',
+      'action.open': 'Open',
+      'state.kept': 'Kept',
       'forms.formHint':
         'Declare fields as JSON; submissions use schema validation, a honeypot and rate limiting.',
       'forms.empty': 'No forms yet.',
@@ -276,6 +291,15 @@ export default defineModule({
       'field.href': 'Link',
       'field.position': 'Position',
       'field.notifyTo': 'Notification email',
+      'field.consentText': 'Privacy notice',
+      'field.summaryFields': 'Preview fields',
+      'field.retentionDays': 'Retention (days)',
+      'help.consentText':
+        'Shown beside the consent box. Blank means the form asks for no agreement. Editing this text advances the form version.',
+      'help.summaryFields':
+        'Field names, comma separated, allowed to appear in the list. Blank means the list shows no answers.',
+      'help.retentionDays':
+        'After this many days the answers are erased and the consent record is kept. Blank means kept.',
       'field.successMessage': 'Success message',
       'field.schema': 'Field schema (JSON)',
       'field.payload': 'Payload',
