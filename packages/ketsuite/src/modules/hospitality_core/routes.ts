@@ -940,38 +940,53 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(lang)
       const propertyId = await selectedProperty(ctx, url, req)
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
-      const range = calendarRange(url.searchParams.get('date'), 1, timezone)
+      const requested = url.searchParams.get('date')?.slice(0, 10)
+      const day =
+        requested && /^\d{4}-\d{2}-\d{2}$/u.test(requested) ? requested : dateKeyIn(new Date(), timezone)
+      const range = calendarRange(day, 1, timezone)
       // The landing screen is where a new deployment starts. Five zeroes and
       // "nothing needs attention" is a true statement and useless advice when
       // the property itself has not been created yet.
       const configured = ((await ctx.call('hospitality_core.listProperties', {}, url, req)) as unknown[])
         .length
-      const [stays, inHouseStays, openFolios] = (await Promise.all([
+      const [stays, inHouseStays] = (await Promise.all([
         ctx.call('hospitality_core.listStays', { propertyId, from: range.from, to: range.to }, url, req),
         ctx.call('hospitality_core.listStays', { propertyId, state: 'checked_in' }, url, req),
-        ctx.call('hospitality_core.listFolios', { propertyId, state: 'open' }, url, req),
-      ])) as [StayRow[], StayRow[], FolioRow[]]
+      ])) as [StayRow[], StayRow[]]
+      // An auditor and a night auditor read this screen without doing desk
+      // work; the row action is for the people who do it.
+      const may = {
+        checkIn: await ctx.allows('hospitality_core.checkIn', url, req),
+        checkOut: await ctx.allows('hospitality_core.checkOut', url, req),
+      }
       const inRange = (value: string) => value >= range.from && value < range.to
       const now = new Date().toISOString()
       const overdue = inHouseStays
         .filter((stay) => stay.checkOut < now)
         .sort((left, right) => left.checkOut.localeCompare(right.checkOut))
       const overdueIds = new Set(overdue.map((stay) => stay.id))
+      // The desk works two queues today: who is coming in, and who is going
+      // out. A guest already late is in neither — they are the first thing the
+      // screen says, above both.
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.frontDesk.title',
         body: (_, frame) =>
           frontDeskScreen(
             _,
-            stays.filter((stay) => !overdueIds.has(stay.id)),
-            overdue,
             {
-              arrivals: stays.filter((stay) => stay.state === 'draft' && inRange(stay.checkIn)).length,
-              inHouse: inHouseStays.length,
-              departures: stays.filter((stay) => stay.state === 'checked_in' && inRange(stay.checkOut))
-                .length,
-              overdue: overdue.length,
-              openFolios: openFolios.length,
+              day,
+              arrivals: stays
+                .filter((stay) => stay.state === 'draft' && inRange(stay.checkIn))
+                .sort((left, right) => left.checkIn.localeCompare(right.checkIn)),
+              departures: stays
+                .filter(
+                  (stay) => stay.state === 'checked_in' && inRange(stay.checkOut) && !overdueIds.has(stay.id),
+                )
+                .sort((left, right) => left.checkOut.localeCompare(right.checkOut)),
+              overdue,
+              inHouse: inHouseStays,
             },
+            may,
             lang,
             timezone,
             frame,
