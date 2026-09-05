@@ -15,13 +15,51 @@ test('public production permission catalogue covers every function owned by its 
     modulePermissionDeclarations: ketsuitePermissionModules,
   })
 
-  assert.equal(ketsuitePermissionModuleNames.length, 65)
-  assert.equal(Object.keys(manifest.permissions.modules).length, 65)
-  assert.equal(Object.keys(manifest.permissions.bundles).length, 158)
-  assert.equal(Object.keys(manifest.permissions.functions).length, 770)
-  assert.equal(Object.keys(manifest.permissions.exemptions).length, 80)
+  assert.equal(ketsuitePermissionModuleNames.length, 67)
+  assert.equal(Object.keys(manifest.permissions.modules).length, 67)
+  assert.equal(Object.keys(manifest.permissions.bundles).length, 165)
+  assert.equal(Object.keys(manifest.permissions.functions).length, 783)
+  assert.equal(Object.keys(manifest.permissions.exemptions).length, 83)
 
   const coveredModules = new Set(ketsuitePermissionModuleNames)
+
+  // A module composed into production but absent from the catalogue used to be
+  // invisible here: the coverage filter below reads `coveredModules.has(fn.by)`,
+  // so an undeclared module took its own functions out of the set being checked
+  // and the assertion passed on what was left. Twenty-one modules were in that
+  // gap, `website_form` among them — five ungoverned functions before this change, eleven after.
+  //
+  // Owners are checked first now, against a list rather than against nothing.
+  // The list is the debt, written down: every module on it ships in production
+  // with no permission declaration. It may only shrink — adding a name is how
+  // this test stops meaning anything, and a new module that forgets its
+  // declaration fails here instead of hiding.
+  const UNGOVERNED = [
+    'account_activity_backend',
+    'account_mail_backend',
+    'account_partner',
+    'calendar_activity',
+    'calendar_mail_transport',
+    'loyalty_sale',
+    'mail_inbound',
+    'product_activity_backend',
+    'product_variant_activity_backend',
+    'product_variant_mail_backend',
+    'report',
+    'sale_activity_backend',
+    'sale_mail_backend',
+    'stock_activity_backend',
+    'stock_lot_activity_backend',
+    'stock_lot_mail_backend',
+    'stock_mail_inbound',
+    'website_hospitality',
+    'website_retail',
+  ]
+  const undeclared = [...new Set(Object.values(manifest.functions).map((fn) => fn.by))]
+    .filter((owner) => !coveredModules.has(owner))
+    .sort()
+  assert.deepEqual(undeclared, UNGOVERNED)
+
   const missing = Object.entries(manifest.functions)
     .filter(([, fn]) => coveredModules.has(fn.by))
     .map(([key]) => key)

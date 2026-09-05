@@ -1296,6 +1296,25 @@ const sources = {
     functions: {},
     exemptions: {},
   },
+  website_form: {
+    posture: 'permission-bearing',
+    bundles: ['configure', 'operate', 'security', 'sensitive', 'view'],
+    functions: {
+      countSubmissions: ['read', 'view'],
+      exportSubmissions: ['sensitive', 'sensitive', 'website.sensitive-data'],
+      holdSubmission: ['operate', 'operate'],
+      listForms: ['read', 'view'],
+      listSubmissionAudit: ['sensitive', 'sensitive', 'website.sensitive-data'],
+      listSubmissions: ['read', 'view'],
+      purgeSubmissions: ['security', 'security', 'website.security-audit'],
+      readSubmission: ['sensitive', 'sensitive', 'website.sensitive-data'],
+      saveForm: ['configure', 'configure', 'website.configuration-audit'],
+    },
+    exemptions: {
+      getForm: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+      submitForm: ['internal-route', 'website_form.public-submit-route'],
+    },
+  },
   website_form_mail: {
     posture: 'projection/bridge',
     bundles: ['operate'],
@@ -1303,6 +1322,19 @@ const sources = {
       notifySubmission: ['operate', 'operate'],
     },
     exemptions: {},
+  },
+  website_menu: {
+    posture: 'permission-bearing',
+    bundles: ['configure', 'view'],
+    functions: {
+      addMenuItem: ['configure', 'configure', 'website.configuration-audit'],
+      listMenu: ['read', 'view'],
+      removeMenuItem: ['configure', 'configure', 'website.configuration-audit'],
+      snapshotMenu: ['configure', 'configure', 'website.configuration-audit'],
+    },
+    exemptions: {
+      publicMenu: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+    },
   },
   website_search: {
     posture: 'permission-bearing',
