@@ -33,7 +33,7 @@ import {
   reserveInventory,
   restrictionIssues,
 } from './inventory.ts'
-import { postCharge, settleCancelledFolio } from './services.ts'
+import { FolioConflict, postCharge, settleCancelledFolio } from './services.ts'
 import { initializeRecurringRent } from './night-audit.ts'
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
@@ -193,6 +193,7 @@ const transition = async <T>(run: () => Promise<T>): Promise<T | { ok: false; er
     return await run()
   } catch (error) {
     if (error instanceof TransitionConflict) return failure(error.problem)
+    if (error instanceof FolioConflict) return failure(error.problem)
     if (error instanceof InventoryConflict) return failure(error.problem)
     throw error
   }
@@ -493,6 +494,11 @@ export const applyNoShow = async (
 ): Promise<{ ok: boolean; id?: string; errors: Issue[]; state?: string }> => {
   const timestamp = at.toISOString()
   const property = await record(ctx, 'hospitality_core.Property', reservation.propertyId)
+  // A guest who never arrived owes what the cancellation policy says, not the
+  // whole stay. The folio used to close with every room night still active on
+  // it, so a flexible booking nobody showed up for was billed in full — a
+  // no-show is the cancellation the guest never got around to making.
+  const fee = await cancellationFee(ctx, reservation, at)
   const inventoryDates =
     reservation.bookingType === 'hourly'
       ? []
@@ -519,14 +525,16 @@ export const applyNoShow = async (
     }
     const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
     if (folio?.state !== 'open') throw new TransitionConflict(issue('folioId', 'folio_not_open'))
-    const folioClaim = await tx.db.compareAndSet(
-      'hospitality_core.Folio',
-      { id: folio.id },
-      { state: 'open', version: folio.version },
-      { state: 'closed', closedAt: timestamp, version: Number(folio.version) + 1 },
-    )
-    if (!('matched' in folioClaim) || !folioClaim.matched)
-      throw new TransitionConflict(issue('folioId', 'transition_conflict'))
+    await settleCancelledFolio(tx, {
+      folioId: folio.id,
+      stayId: reservation.stayId,
+      fee: fee.amount,
+      chargeId: `${String(reservation.id)}:no_show`,
+      sourceKey: `reservation:${String(reservation.id)}:no_show`,
+      reason: fee.code,
+      kind: 'no_show',
+      at: timestamp,
+    })
     if (inventoryDates.length) {
       await releaseInventory(
         tx,
@@ -544,7 +552,7 @@ export const applyNoShow = async (
         aggregateId: reservation.id,
       })
     }
-    return success(reservation.id, { state: 'no_show' })
+    return success(reservation.id, { state: 'no_show', noShowFee: fee.amount })
   })
 }
 
@@ -1165,16 +1173,21 @@ export const operations: Record<string, FnSpec> = {
 
   markNoShow: defineFn({
     input: { id: 'id', reason: 'text', at: 'datetime?' },
-    output: { ok: 'bool', id: 'id?', state: 'text?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', state: 'text?', noShowFee: 'decimal?', errors: 'json?' },
     effects: [
       'read:hospitality_core.Reservation',
+      'read:hospitality_core.Charge',
       'read:hospitality_core.Folio',
       'read:hospitality_core.Property',
+      'read:hospitality_core.RoomType',
+      'read:hospitality_core.CancellationPolicy',
+      'read:company.Company',
       'read:hospitality_core.Room',
       'read:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.Reservation',
       'write:hospitality_core.Stay',
       'write:hospitality_core.Folio',
+      'write:hospitality_core.Charge',
       'write:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.InventoryChange',
       'read:hospitality_core.RoomAssignment',

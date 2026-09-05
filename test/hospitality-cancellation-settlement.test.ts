@@ -79,6 +79,9 @@ const app = defineDeployment({
   ],
   theme: suite.paperTheme,
   serve: { defaults: { defaultCompany: 'default', defaultLocale: 'vi', fallbackLocale: 'vi' } },
+  // The night audit runs on the maintenance queue, and it is one of the two
+  // callers of the settlement under test here.
+  worker: { queues: { maintenance: 1, default: 1 } },
 })
 
 type Fixture = Awaited<ReturnType<typeof createTestDeployment>>
@@ -145,6 +148,10 @@ const boot = async (e2e: Fixture) => {
 const booked = async (
   call: <T>(name: string, input?: Record<string, unknown>) => Promise<{ value: T }>,
   id: string,
+  stay: { checkIn: string; checkOut: string } = {
+    checkIn: '2026-11-01T14:00:00.000Z',
+    checkOut: '2026-11-03T12:00:00.000Z',
+  },
 ): Promise<string> => {
   const created = await call<Row>('hospitality_core.createReservation', {
     id,
@@ -153,8 +160,8 @@ const booked = async (
     partnerId: 'guest',
     bookingType: 'nightly',
     billingMode: 'upfront',
-    checkIn: '2026-11-01T14:00:00.000Z',
-    checkOut: '2026-11-03T12:00:00.000Z',
+    checkIn: stay.checkIn,
+    checkOut: stay.checkOut,
     rate: '500',
   })
   assert.equal(created.value.ok, true, JSON.stringify(created.value.errors))
@@ -317,4 +324,142 @@ test('a partial penalty is charged as a partial penalty, not rounded to all or n
   assert.equal(again.value.ok, true)
   assert.equal(again.value.state, 'cancelled')
   assert.deepEqual((await folioState(e2e, folioId)).amountTotal, '500')
+})
+
+test('a guest who never arrived owes the policy, not the whole stay', async (t) => {
+  const e2e = await createTestDeployment(app)
+  t.after(() => e2e.close())
+  const call = await boot(e2e)
+  await call('hospitality_core.saveCancellationPolicy', {
+    id: 'strict',
+    code: 'STRICT',
+    name: 'Nghiêm ngặt',
+    type: 'strict',
+    freeCancellationHours: 48,
+    penaltyPercent: '50',
+  })
+  await call('hospitality_core.saveRoomType', {
+    id: 'deluxe',
+    propertyId: 'hotel',
+    code: 'DLX',
+    name: 'Deluxe',
+    baseRate: '500',
+    cancellationPolicyId: 'strict',
+  })
+
+  const folioId = await booked(call, 'absent')
+  const marked = await call<Row>('hospitality_core.markNoShow', {
+    id: 'absent',
+    reason: 'no arrival by midnight',
+    at: '2026-11-02T00:30:00.000Z',
+  })
+  assert.equal(marked.value.ok, true, JSON.stringify(marked.value.errors))
+  // Half of two nights at 500, because that is what the policy says. The folio
+  // used to close with both room nights still active on it — the full 1000.
+  assert.equal(marked.value.noShowFee, '500')
+  assert.deepEqual(await folioState(e2e, folioId), {
+    state: 'closed',
+    amountTotal: '500',
+    // And it says it was a no-show, not a cancellation the guest never made.
+    charges: ['cancellation/active/no_show:strict/500', 'room/void/room:deluxe/1000'],
+  })
+})
+
+test('a no-show on a booking that could be cancelled for free costs nothing', async (t) => {
+  const e2e = await createTestDeployment(app)
+  t.after(() => e2e.close())
+  const call = await boot(e2e)
+  await call('hospitality_core.saveCancellationPolicy', {
+    id: 'flexible',
+    code: 'FLEX',
+    name: 'Linh hoạt',
+    type: 'flexible',
+    freeCancellationHours: 0,
+    penaltyPercent: '0',
+  })
+  await call('hospitality_core.saveRoomType', {
+    id: 'deluxe',
+    propertyId: 'hotel',
+    code: 'DLX',
+    name: 'Deluxe',
+    baseRate: '500',
+    cancellationPolicyId: 'flexible',
+  })
+
+  const folioId = await booked(call, 'absent-free')
+  const marked = await call<Row>('hospitality_core.markNoShow', {
+    id: 'absent-free',
+    reason: 'no arrival by midnight',
+    at: '2026-11-02T00:30:00.000Z',
+  })
+  assert.equal(marked.value.ok, true, JSON.stringify(marked.value.errors))
+  assert.equal(marked.value.noShowFee, '0')
+  assert.deepEqual(await folioState(e2e, folioId), {
+    state: 'cancelled',
+    amountTotal: '0',
+    charges: ['room/void/room:deluxe/1000'],
+  })
+})
+
+test('the night audit prices a missed arrival the same way the desk would', async (t) => {
+  const e2e = await createTestDeployment(app)
+  t.after(() => e2e.close())
+  const call = await boot(e2e)
+  await call('hospitality_core.saveCancellationPolicy', {
+    id: 'strict',
+    code: 'STRICT',
+    name: 'Nghiêm ngặt',
+    type: 'strict',
+    freeCancellationHours: 48,
+    penaltyPercent: '50',
+  })
+  await call('hospitality_core.saveRoomType', {
+    id: 'deluxe',
+    propertyId: 'hotel',
+    code: 'DLX',
+    name: 'Deluxe',
+    baseRate: '500',
+    cancellationPolicyId: 'strict',
+  })
+
+  // In the past: a night audit refuses a date that has not happened yet.
+  const folioId = await booked(call, 'ghost', {
+    checkIn: '2026-08-01T14:00:00.000Z',
+    checkOut: '2026-08-03T12:00:00.000Z',
+  })
+  // A room was being kept for this guest, so the audit has one to let go of.
+  const held = await call<Row>('hospitality_core.holdRoom', { stayId: 'ghost:stay', roomId: '101' })
+  assert.equal(held.value.ok, true, JSON.stringify(held.value.errors))
+
+  const requested = await call<Row>('hospitality_core.requestNightAudit', {
+    propertyId: 'hotel',
+    auditDate: '2026-08-01',
+  })
+  assert.equal(requested.value.ok, true, JSON.stringify(requested.value.errors))
+  assert.equal(await e2e.drainJobs(), 1)
+
+  // The audit reaches applyNoShow, which reads the policy, the company's
+  // currency and the room being held. Every one of those is an effect the job
+  // has to have declared, and an undeclared read throws rather than warning.
+  const run = await e2e.fixture.withTenant(
+    '',
+    async ({ adapter }) =>
+      (await adapter.all('SELECT state, "noShowPosted", error FROM hospitality_core_night_audit_run'))[0]!,
+  )
+  assert.equal(String(run.state), 'completed', String(run.error ?? ''))
+  assert.equal(Number(run.noShowPosted), 1)
+  assert.deepEqual(await folioState(e2e, folioId), {
+    state: 'closed',
+    amountTotal: '500',
+    charges: ['cancellation/active/no_show:strict/500', 'room/void/room:deluxe/1000'],
+  })
+  const assignment = await e2e.fixture.withTenant(
+    '',
+    async ({ adapter }) =>
+      (await adapter.all('SELECT state, reason FROM hospitality_core_room_assignment'))[0]!,
+  )
+  assert.deepEqual(
+    { state: String(assignment.state), reason: String(assignment.reason) },
+    { state: 'closed', reason: 'room_hold_no_show' },
+  )
 })
