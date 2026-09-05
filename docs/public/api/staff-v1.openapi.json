@@ -6537,6 +6537,797 @@
         "x-ket-idempotent": true
       }
     },
+    "/flow/overview": {
+      "get": {
+        "operationId": "staff.flow.overview",
+        "summary": "Read the caller’s own project workload as one aggregate.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "today",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "projectCount": {
+                            "type": "integer"
+                          },
+                          "total": {
+                            "type": "integer"
+                          },
+                          "done": {
+                            "type": "integer"
+                          },
+                          "overdue": {
+                            "type": "integer"
+                          },
+                          "waiting": {
+                            "type": "integer"
+                          },
+                          "working": {
+                            "type": "integer"
+                          },
+                          "asOf": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["projectCount", "total", "done", "overdue", "waiting", "working", "asOf"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "flow.work",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/flow/projects": {
+      "get": {
+        "operationId": "staff.flow.projects.list",
+        "summary": "List the projects this caller is a member of.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2
+            }
+          },
+          {
+            "name": "mine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "key": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "key", "name"]
+                            }
+                          }
+                        },
+                        "required": ["items"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "flow.work",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/flow/issues": {
+      "get": {
+        "operationId": "staff.flow.issues.list",
+        "summary": "List issues the caller may see, newest first, one page at a time.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2
+            }
+          },
+          {
+            "name": "mine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "projectId": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "columnId": {
+                                  "type": "string"
+                                },
+                                "columnName": {
+                                  "type": ["string", "null"]
+                                },
+                                "priority": {
+                                  "type": "string",
+                                  "enum": ["low", "normal", "high", "urgent"]
+                                },
+                                "assigneeUserId": {
+                                  "type": ["string", "null"]
+                                },
+                                "assigneeName": {
+                                  "type": ["string", "null"]
+                                },
+                                "dueDate": {
+                                  "type": ["string", "null"]
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["id", "projectId", "title", "columnId", "priority", "updatedAt"]
+                            }
+                          },
+                          "nextCursor": {
+                            "type": ["string", "null"]
+                          }
+                        },
+                        "required": ["items", "nextCursor"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "flow.work",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/flow/issues/{id}": {
+      "get": {
+        "operationId": "staff.flow.issues.get",
+        "summary": "Read one issue, or answer not found when it is not the caller’s to read.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "columnId": {
+                            "type": "string"
+                          },
+                          "columnName": {
+                            "type": ["string", "null"]
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": ["low", "normal", "high", "urgent"]
+                          },
+                          "assigneeUserId": {
+                            "type": ["string", "null"]
+                          },
+                          "assigneeName": {
+                            "type": ["string", "null"]
+                          },
+                          "dueDate": {
+                            "type": ["string", "null"]
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": ["string", "null"]
+                          },
+                          "epicId": {
+                            "type": ["string", "null"]
+                          },
+                          "sprintId": {
+                            "type": ["string", "null"]
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "projectId",
+                          "title",
+                          "columnId",
+                          "priority",
+                          "updatedAt",
+                          "version"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "flow.work",
+          "action": "read"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": false
+      }
+    },
+    "/flow/issues/{id}/move": {
+      "post": {
+        "operationId": "staff.flow.issues.move",
+        "summary": "Move an issue to another column on its board.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "columnId": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["columnId", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "columnId": {
+                            "type": "string"
+                          },
+                          "columnName": {
+                            "type": ["string", "null"]
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": ["low", "normal", "high", "urgent"]
+                          },
+                          "assigneeUserId": {
+                            "type": ["string", "null"]
+                          },
+                          "assigneeName": {
+                            "type": ["string", "null"]
+                          },
+                          "dueDate": {
+                            "type": ["string", "null"]
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": ["string", "null"]
+                          },
+                          "epicId": {
+                            "type": ["string", "null"]
+                          },
+                          "sprintId": {
+                            "type": ["string", "null"]
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "projectId",
+                          "title",
+                          "columnId",
+                          "priority",
+                          "updatedAt",
+                          "version"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "flow.work",
+          "action": "transition"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/flow/issues/{id}/assign": {
+      "post": {
+        "operationId": "staff.flow.issues.assign",
+        "summary": "Put an issue on somebody, or take it off.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "assigneeUserId": {
+                    "type": ["string", "null"]
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": ["assigneeUserId", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "columnId": {
+                            "type": "string"
+                          },
+                          "columnName": {
+                            "type": ["string", "null"]
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": ["low", "normal", "high", "urgent"]
+                          },
+                          "assigneeUserId": {
+                            "type": ["string", "null"]
+                          },
+                          "assigneeName": {
+                            "type": ["string", "null"]
+                          },
+                          "dueDate": {
+                            "type": ["string", "null"]
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": ["string", "null"]
+                          },
+                          "epicId": {
+                            "type": ["string", "null"]
+                          },
+                          "sprintId": {
+                            "type": ["string", "null"]
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "projectId",
+                          "title",
+                          "columnId",
+                          "priority",
+                          "updatedAt",
+                          "version"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "flow.work",
+          "action": "assign"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
+    "/flow/issues/{id}/comment": {
+      "post": {
+        "operationId": "staff.flow.issues.comment",
+        "summary": "Say something on an issue the caller can see.",
+        "security": [
+          {
+            "staffBearer": []
+          },
+          {
+            "staffCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["body"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["id"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-ket-capability": {
+          "key": "flow.work",
+          "action": "comment"
+        },
+        "x-ket-auth": "required",
+        "x-ket-idempotent": true
+      }
+    },
     "/hospitality/context": {
       "get": {
         "operationId": "staff.hospitality.context",
