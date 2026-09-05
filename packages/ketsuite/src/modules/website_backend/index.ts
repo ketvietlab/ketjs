@@ -117,6 +117,17 @@ export default defineModule({
       'submission.noAudit': 'Chưa có ai xem',
       'submission.noAuditHint': 'Lần mở đầu tiên sẽ xuất hiện ở đây.',
       'submission.purgedHint': 'Nội dung đã bị xóa. Bản ghi đồng ý được giữ lại.',
+      'submissions.export': 'Xuất dữ liệu',
+      'submissions.exportHint':
+        'Chỉ những trường được nêu tên mới rời khỏi hệ thống, và danh sách đó được ghi vào sổ.',
+      'submissions.exportFields': 'Trường cần xuất',
+      'submissions.exportFieldsHint':
+        'Tên trường, cách nhau bằng dấu phẩy. Trường không có trong biểu mẫu sẽ bị từ chối.',
+      'submissions.purge': 'Xóa nội dung quá hạn',
+      'submissions.purgeHint':
+        'Xóa nội dung của những lượt gửi đã quá thời hạn lưu và không bị giữ. Không hoàn tác được.',
+      'submissions.purgeConfirm': 'Tôi hiểu việc này không hoàn tác được',
+      'submissions.purgeUnconfirmed': 'Hãy xác nhận trước khi xóa.',
       'action.open': 'Mở',
       'state.kept': 'Giữ lại',
       'forms.formHint': 'Khai báo field bằng JSON; submission được kiểm tra schema, honeypot và rate limit.',
@@ -313,6 +324,17 @@ export default defineModule({
       'submission.noAudit': 'Nobody has looked yet',
       'submission.noAuditHint': 'The first read will appear here.',
       'submission.purgedHint': 'The answers were erased. The consent record is kept.',
+      'submissions.export': 'Export',
+      'submissions.exportHint':
+        'Only the fields named here leave the system, and that list is written into the record.',
+      'submissions.exportFields': 'Fields to export',
+      'submissions.exportFieldsHint':
+        'Field names, comma separated. A field the form does not ask is refused.',
+      'submissions.purge': 'Erase what is past its window',
+      'submissions.purgeHint':
+        'Erases the answers of submissions past the retention window that are not on hold. This cannot be undone.',
+      'submissions.purgeConfirm': 'I understand this cannot be undone',
+      'submissions.purgeUnconfirmed': 'Confirm before erasing.',
       'action.open': 'Open',
       'state.kept': 'Kept',
       'forms.formHint':
