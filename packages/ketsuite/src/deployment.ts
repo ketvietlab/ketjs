@@ -43,6 +43,7 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
       suite.livedoc,
       suite.flow,
       suite.flowBackend,
+      suite.flowStaffChannel,
       suite.activity,
       suite.activityBackend,
       suite.calendar,

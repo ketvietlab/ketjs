@@ -13,6 +13,7 @@ import {
   FormCluster,
   RecordScreen,
   icon,
+  inline,
   linkButton,
   MediaPanel,
   Metric,
@@ -55,6 +56,7 @@ export {
   FormCluster,
   RecordScreen,
   icon,
+  inline,
   linkButton,
   MediaPanel,
   Metric,
@@ -482,6 +484,7 @@ export type ReservationRow = {
   partnerId: string
   provider: string
   roomTypeId: string
+  bookingType: string
   checkIn: string
   checkOut: string
   adults: number
@@ -496,7 +499,6 @@ export type ReservationDetail = ReservationRow & {
   propertyId: string
   folioId: string
   stayId?: string | null
-  bookingType: string
   billingMode: string
   rate: string | number
   quantity: string | number
@@ -738,6 +740,13 @@ export const cleaningTone = (state: string): 'positive' | 'warning' | 'danger' |
   if (state === 'done') return 'positive'
   return 'neutral'
 }
+
+export const calendarDate = (value: string, locale: string, timezone: string): string =>
+  formatDateTime(locale, new Date(value), {
+    timeZone: timezone,
+    day: '2-digit',
+    month: '2-digit',
+  })
 
 export const dateTime = (value: string, locale: string, timezone: string): string =>
   formatDateTime(locale, new Date(value), {
@@ -2231,6 +2240,33 @@ export const serviceChargeColumns = (
   },
 ]
 
+/**
+ * How long the guest is booked for, in the unit their booking is priced in.
+ *
+ * Two date columns made a reader subtract to learn the one number that decides
+ * the price and the room-night, and calling every span "nights" would be wrong
+ * for a booking sold by the hour.
+ */
+export const stayLength = (
+  _: Translator,
+  row: { bookingType: string; checkIn: string; checkOut: string },
+  locale: string,
+  timezone: string,
+): string => {
+  // The clock matters for a room sold by the hour. For a nightly stay both ends
+  // are the property's own check-in and check-out times, the same on every row,
+  // so printing them costs a line of wrapping and says nothing.
+  const at = row.bookingType === 'hourly' ? dateTime : calendarDate
+  const span = `${at(row.checkIn, locale, timezone)} – ${at(row.checkOut, locale, timezone)}`
+  const ms = Date.parse(row.checkOut) - Date.parse(row.checkIn)
+  if (!Number.isFinite(ms) || ms <= 0) return span
+  const unit = { nightly: 86_400_000, hourly: 3_600_000, weekly: 604_800_000, monthly: 2_592_000_000 }[
+    row.bookingType
+  ]
+  if (!unit) return span
+  return `${span} · ${_(`hospitality_core.duration.${row.bookingType}`, { count: Math.max(1, Math.round(ms / unit)) })}`
+}
+
 export const reservationColumns = (
   _: Translator,
   locale: string,
@@ -2256,6 +2292,14 @@ export const reservationColumns = (
     priority: 'primary',
   },
   {
+    key: 'status',
+    label: _('hospitality_core.col.status'),
+    cell: (row) =>
+      badge(_(`hospitality_core.reservationState.${row.state}`), workflowTone(row.state), row.state),
+    kind: 'status',
+    priority: 'primary',
+  },
+  {
     key: 'provider',
     label: _('hospitality_core.col.provider'),
     cell: (row) => badge(providerName(_, row.provider), 'neutral'),
@@ -2267,15 +2311,9 @@ export const reservationColumns = (
     cell: (row) => row.roomType?.name ?? code(row.roomTypeId),
   },
   {
-    key: 'checkIn',
-    label: _('hospitality_core.col.checkIn'),
-    cell: (row) => dateTime(row.checkIn, locale, timezone),
-    kind: 'date',
-  },
-  {
-    key: 'checkOut',
-    label: _('hospitality_core.col.checkOut'),
-    cell: (row) => dateTime(row.checkOut, locale, timezone),
+    key: 'stay',
+    label: _('hospitality_core.col.stayDates'),
+    cell: (row) => stayLength(_, row, locale, timezone),
     kind: 'date',
   },
   {
@@ -2284,14 +2322,6 @@ export const reservationColumns = (
     cell: (row) => formatMoney(_, row.amountTotal),
     align: 'end',
     kind: 'currency',
-  },
-  {
-    key: 'status',
-    label: _('hospitality_core.col.status'),
-    cell: (row) =>
-      badge(_(`hospitality_core.reservationState.${row.state}`), workflowTone(row.state), row.state),
-    kind: 'status',
-    priority: 'primary',
   },
 ]
 
