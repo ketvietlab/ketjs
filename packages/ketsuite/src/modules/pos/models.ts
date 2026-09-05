@@ -264,6 +264,7 @@ export const models: Record<string, ModelDef> = {
   /** Append-only operational timeline for sensitive POS commands. */
   AuditEvent: {
     scope: 'company',
+    append: true,
     fields: {
       id: 'id',
       subjectType: 'text',
