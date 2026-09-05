@@ -11,6 +11,7 @@ import { HOOKS as state } from './state.tsx'
 import { HOOKS as table } from './table.tsx'
 import { HOOKS as nav } from './nav.tsx'
 import { HOOKS as chrome } from './chrome.tsx'
+import { HOOKS as timeframe } from './timeframe.tsx'
 import { HOOKS as layout } from './layout.tsx'
 import { HOOKS as actions } from './actions.tsx'
 import { HOOKS as surfaces } from './surfaces.tsx'
@@ -49,6 +50,7 @@ const ALL = [
   ...navigation,
   ...nav,
   ...chrome,
+  ...timeframe,
   ...layout,
   ...mail,
   ...activity,

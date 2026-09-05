@@ -391,6 +391,7 @@ const sources = {
       // something else, and a policy authority because it is the answer to
       // "who can see the project we hid".
       'project.access.grant': ['security', 'project-access', 'flow.domain-policy'],
+      'project.count': ['read', 'view'],
       'project.access.list': ['sensitive', 'project-access', 'flow.domain-policy'],
       'project.access.revoke': ['security', 'project-access', 'flow.domain-policy'],
       // Ending a project is not configuring one. Its own capability so that a
@@ -420,6 +421,16 @@ const sources = {
     },
     exemptions: {},
   },
+  // Routes only, no functions of its own: every read and command reaches Flow
+  // through `ctx.call`, which is what makes project membership apply to the
+  // phone without the rule being written a second time (FLW-DEC-019).
+  flow_staff_channel: {
+    posture: 'projection/bridge',
+    bundles: [],
+    functions: {},
+    exemptions: {},
+  },
+
   flow_backend: {
     posture: 'projection/bridge',
     bundles: [],

@@ -4,6 +4,7 @@ import type { IncomingMessage } from 'node:http'
 import type { ListState, Row, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { FIELD_KINDS, ISSUE_PRIORITIES } from '../flow/types.ts'
 import { emptyIssueListState, issueListSearch } from '../flow/search.ts'
+import { commandRecordId } from '../flow/operations.ts'
 import { adminPage, inLocale, localeQuery, resultErrors } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { FormField, TableGroup } from '../../ui/index.ts'
@@ -1239,12 +1240,27 @@ export const routes: Record<string, RouteEntry> = {
 
       const _ = ctx.translate(ctx.localeOf(url, req))
       const showArchived = url.searchParams.get('archived') === '1'
+      // One page, and the real total beside it. This used to ask for two
+      // hundred and report what came back as the whole company's project
+      // count — wrong past that, and with no way to reach the rest (FLW-039).
+      const page = Math.max(1, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
       const all = (await ctx.call(
         'flow.project.list',
-        { limit: 200, includeArchived: showArchived },
+        {
+          limit: LIST_PAGE_SIZE,
+          cursor: (page - 1) * LIST_PAGE_SIZE,
+          includeArchived: showArchived,
+        },
         url,
         req,
       )) as AnyRow[]
+      const counted = (await ctx.call(
+        'flow.project.count',
+        { includeArchived: showArchived },
+        url,
+        req,
+      )) as AnyRow
+      const total = Number(counted.total ?? 0)
       const stats = (await ctx.call(
         'flow.project.stats',
         { projectIds: all.map((project) => String(project.id)) },
@@ -1252,7 +1268,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as AnyRow[]
       const statsBy = new Map(stats.map((row) => [String(row.id), row]))
-      const counted = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
+      const withStats = all.map((project) => ({ ...project, ...statsBy.get(String(project.id)) }))
 
       const tab = showArchived ? 'archived' : url.searchParams.get('tab') === 'mine' ? 'mine' : 'all'
       // Asked as "which projects", not as "the two hundred issues I touched
@@ -1261,11 +1277,11 @@ export const routes: Record<string, RouteEntry> = {
       const rows =
         tab === 'mine'
           ? ((await ctx.call('flow.project.list', { mine: true }, url, req)) as AnyRow[]).map(
-              (project) => counted.find((row) => String(row.id) === String(project.id)) ?? project,
+              (project) => withStats.find((row) => String(row.id) === String(project.id)) ?? project,
             )
           : tab === 'archived'
-            ? counted.filter((project) => project.active === false)
-            : counted
+            ? withStats.filter((project) => project.active === false)
+            : withStats
 
       const recent = (await ctx.call(
         'flow.issue.list',
@@ -1281,7 +1297,20 @@ export const routes: Record<string, RouteEntry> = {
         body: (_, frame) => {
           const workspace = projectsListScreen(_, frame, {
             rows,
-            projectCount: all.length,
+            projectCount: total,
+            // Only the tab that really pages gets a pager. `mine` and
+            // `archived` are filters over what came back, so a pager on them
+            // would count pages of a list this route never asked for.
+            pager:
+              tab === 'all' && total > LIST_PAGE_SIZE
+                ? {
+                    from: rows.length ? (page - 1) * LIST_PAGE_SIZE + 1 : 0,
+                    to: Math.min(page * LIST_PAGE_SIZE, total),
+                    total,
+                    prev: page > 1 ? `/admin/flow/projects?page=${page - 1}` : null,
+                    next: page * LIST_PAGE_SIZE < total ? `/admin/flow/projects?page=${page + 1}` : null,
+                  }
+                : null,
             issueCount: stats.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
             issuesDone: stats.reduce((sum, row) => sum + Number(row.done ?? 0), 0),
             activeCount: stats.filter((row) => String(row.state) === 'active').length,
@@ -1508,15 +1537,20 @@ export const routes: Record<string, RouteEntry> = {
         const form = await readForm(req)
         values = issueCreateValues(form)
         const returnTo = projectIssuesReturnTo(url, projectId, form.returnTo)
+        // The key is rendered once per opening of the form, so a double click
+        // or a back-and-resubmit posts the same one. The id has to follow it:
+        // a fresh uuid per attempt made the second attempt a different record,
+        // and one intent became two issues (FLW-033).
+        const key = form.idempotencyKey || randomUUID()
         const result = (await ctx.call(
           'flow.issue.save',
           {
-            id: randomUUID(),
+            id: commandRecordId(`flow.issue.create:${projectId}`, key),
             projectId,
             columnId: values.columnId || String(columns[0]?.id ?? ''),
             title: values.title,
             priority: values.priority || undefined,
-            idempotencyKey: form.idempotencyKey || randomUUID(),
+            idempotencyKey: key,
           },
           url,
           req,

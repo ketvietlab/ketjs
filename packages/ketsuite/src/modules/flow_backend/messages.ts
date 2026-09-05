@@ -13,6 +13,8 @@ const vi = {
   'action.follow': 'Theo dõi',
   'action.unfollow': 'Bỏ theo dõi',
   'action.restore': 'Khôi phục',
+  'action.previous': 'Trang trước',
+  'action.next': 'Trang sau',
   'issue.archivedTitle': 'Công việc đã lưu trữ',
   'issue.archivedBody':
     'Công việc này không còn nằm trong bảng, danh sách hay bất kỳ con số tiến độ nào. Các phụ thuộc vẫn giữ nguyên: nếu nó đang chặn việc khác thì vẫn chặn.',
@@ -253,6 +255,8 @@ const en: Record<keyof typeof vi, Message> = {
   'action.follow': 'Follow',
   'action.unfollow': 'Stop following',
   'action.restore': 'Restore',
+  'action.previous': 'Previous',
+  'action.next': 'Next',
   'issue.archivedTitle': 'This issue is archived',
   'issue.archivedBody':
     'It is out of the board, the lists and every progress figure. Its dependencies are untouched: if it was blocking something, it still is.',

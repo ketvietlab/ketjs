@@ -479,3 +479,118 @@ test('the front desk offers the shift its work and a read-only viewer only the r
   assert.doesNotMatch(departuresOnly, /hospitality_core\.reservation\.action\.checkIn/)
   assert.match(departuresOnly, /hospitality_core\.reservation\.action\.checkOut/)
 })
+
+test('the tape chart says which week it is showing and what its colours mean', () => {
+  const stay = (id: string, roomId: string | null, state: string, start: string, end: string) => ({
+    id,
+    stayId: `${id}:stay`,
+    roomId,
+    guest: 'Nguyễn An',
+    provider: 'direct',
+    state,
+    start,
+    end,
+  })
+  const chart = {
+    timezone: 'UTC',
+    from: '2026-09-05T00:00:00.000Z',
+    to: '2026-09-12T00:00:00.000Z',
+    rooms: [
+      {
+        id: 'r301',
+        code: '301',
+        name: 'Phòng 301',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        status: 'available',
+        capacity: 2,
+        active: true,
+        roomType: { name: 'Deluxe' },
+      },
+    ],
+    events: [
+      stay('in-house', 'r301', 'checked_in', '2026-09-05T07:00:00.000Z', '2026-09-07T05:00:00.000Z'),
+      stay('waiting', null, 'draft', '2026-09-08T07:00:00.000Z', '2026-09-09T05:00:00.000Z'),
+    ],
+  }
+  const render = (may: { book: boolean }) =>
+    renderToString(coreScreens.tapeChartScreen(translate, chart as never, may, 'vi', {} as never))
+
+  const board = render({ book: true })
+  // The week, not just seven unlabelled columns.
+  assert.match(board, /05\/09\/2026 – 11\/09\/2026/)
+  // And a way to reach another one, which the route accepted all along.
+  assert.match(board, /from=2026-08-29/)
+  assert.match(board, /from=2026-09-12/)
+  assert.match(board, /hospitality_core\.screen\.tapeChart\.availability/)
+  assert.match(board, /reservations\?create=1/)
+  assert.match(board, /hospitality_core\.reservation\.action\.new/)
+  // A key to exactly the two states on this board, and to nothing else.
+  assert.match(board, /hospitality_core\.stayState\.draft/)
+  assert.match(board, /hospitality_core\.stayState\.checked_in/)
+  assert.doesNotMatch(board, /hospitality_core\.stayState\.cancelled/)
+  assert.doesNotMatch(board, /hospitality_core\.stayState\.no_show/)
+  // The board looks draggable and is not; the key says so.
+  assert.match(board, /hospitality_core\.screen\.tapeChart\.legendHint/)
+
+  // Looking at the week is not permission to book into it.
+  const readOnly = render({ book: false })
+  assert.doesNotMatch(readOnly, /reservations\?create=1/)
+  assert.match(readOnly, /05\/09\/2026 – 11\/09\/2026/)
+  assert.match(readOnly, /hospitality_core\.stayState\.checked_in/)
+})
+
+test('a reservation row says how long the stay is, in the unit it is sold by', () => {
+  const row = (bookingType: string, checkIn: string, checkOut: string) => ({
+    id: 'dp-1',
+    code: 'DP-1',
+    partnerId: 'guest',
+    provider: 'direct',
+    roomTypeId: 'deluxe',
+    bookingType,
+    checkIn,
+    checkOut,
+    adults: 2,
+    children: 0,
+    amountTotal: '100',
+    state: 'confirmed',
+  })
+  const length = (r: ReturnType<typeof row>) => coreScreens.stayLength(translate, r, 'vi', 'Asia/Ho_Chi_Minh')
+
+  // Two nights, and it says two nights rather than making a reader subtract.
+  assert.match(
+    length(row('nightly', '2026-09-04T07:00:00.000Z', '2026-09-06T05:00:00.000Z')),
+    /hospitality_core\.duration\.nightly/,
+  )
+  // A room sold by the hour is not measured in nights.
+  assert.match(
+    length(row('hourly', '2026-09-04T07:00:00.000Z', '2026-09-04T10:00:00.000Z')),
+    /hospitality_core\.duration\.hourly/,
+  )
+  assert.doesNotMatch(
+    length(row('hourly', '2026-09-04T07:00:00.000Z', '2026-09-04T10:00:00.000Z')),
+    /hospitality_core\.duration\.nightly/,
+  )
+  // A booking type with no unit, or dates that make no span, says the dates and
+  // claims nothing else.
+  assert.doesNotMatch(
+    length(row('bespoke', '2026-09-04T07:00:00.000Z', '2026-09-06T05:00:00.000Z')),
+    /hospitality_core\.duration\./,
+  )
+  assert.doesNotMatch(
+    length(row('nightly', '2026-09-06T05:00:00.000Z', '2026-09-04T07:00:00.000Z')),
+    /hospitality_core\.duration\./,
+  )
+
+  // A nightly stay always starts and ends at the property's own hours, so the
+  // clock is the same on every row; only the hourly case prints it.
+  assert.doesNotMatch(
+    length(row('nightly', '2026-09-04T07:00:00.000Z', '2026-09-06T05:00:00.000Z')),
+    /\d\d:\d\d/,
+  )
+  assert.match(length(row('hourly', '2026-09-04T07:00:00.000Z', '2026-09-04T10:00:00.000Z')), /\d\d:\d\d/)
+
+  // The list leads with what a reader scans for, and has one date column.
+  const columns = coreScreens.reservationColumns(translate, 'vi', 'Asia/Ho_Chi_Minh').map((c) => c.key)
+  assert.deepEqual(columns, ['code', 'guest', 'status', 'provider', 'roomType', 'stay', 'amount'])
+})

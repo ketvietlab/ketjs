@@ -111,6 +111,7 @@ export {
   RecordScreen,
   WorkspaceScreen,
   listChrome,
+  timeframeFilter,
   topbarSearch,
   emptyState,
   errorState,
