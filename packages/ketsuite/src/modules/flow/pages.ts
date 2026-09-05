@@ -14,7 +14,7 @@ import { asc, desc, eq, from, ilike, inArray, isNull, or } from '@ketvietlab/ket
 import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { actorRequired, commandKey, invalid, issue, n, now } from './operations.ts'
 import type { FlowResult } from './operations.ts'
-import { restrictToVisible, visibleProjects } from './membership.ts'
+import { canReadProject, readableProject, restrictToVisible, visibleProjects } from './membership.ts'
 
 export type SavePageInput = {
   id: string
@@ -34,8 +34,18 @@ const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]
 /** How deep a page may sit under another. */
 const MAX_DEPTH = 8
 
-const pageRow = async (ctx: Ctx, id: unknown): Promise<Row | null> =>
-  (await ctx.db.select('flow.Page', { id }))[0] ?? null
+/**
+ * A page, if this caller may read the project it is in.
+ *
+ * Every page path reaches a row through here — save, move, reorder, archive,
+ * restore and the detail read alike — so one gate covers six, and the seventh
+ * somebody writes next gets it without having to remember.
+ */
+const pageRow = async (ctx: Ctx, id: unknown): Promise<Row | null> => {
+  const row = (await ctx.db.select('flow.Page', { id }))[0] ?? null
+  if (!row) return null
+  return (await canReadProject(ctx, row.projectId)) ? row : null
+}
 
 /**
  * Refuses a parent that would make the tree eat itself.
@@ -82,8 +92,10 @@ export async function savePage(ctx: Ctx, input: SavePageInput): Promise<FlowResu
   if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
   const title = String(input.title ?? '').trim()
   if (!title) return invalid(issue('title', 'flow.error.required'))
-  if (!(await ctx.db.select('flow.Project', { id: input.projectId, active: true }))[0])
-    return invalid(issue('projectId', 'flow.error.notFound'))
+  // A page written into a project the caller cannot see is the same act as
+  // reading one, and gets the same answer: there is no such project.
+  const project = await readableProject(ctx, input.projectId)
+  if (!project || project.active !== true) return invalid(issue('projectId', 'flow.error.notFound'))
 
   return ctx.tx(async (tx) => {
     const existing = await pageRow(tx, input.id)

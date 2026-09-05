@@ -1638,12 +1638,21 @@ export const functions: Record<string, FnSpec> = {
   'issue.dependency.remove': defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.IssueDependency', 'write:flow.IssueDependency', ...membershipEffects],
+    effects: [
+      'read:flow.IssueDependency',
+      'write:flow.IssueDependency',
+      'read:flow.Issue',
+      ...membershipEffects,
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const existing = (await ctx.db.select('flow.IssueDependency', { id: args.id }))[0]
-      if (!existing) return invalid(issue('id', 'flow.error.notFound'))
+      // The edge carries no project of its own, so it is read through the issue
+      // it hangs off — cutting a link between two issues is editing the project
+      // they are in, and needs the same standing as anything else there.
+      if (!existing || !(await readableRow(ctx, 'flow.Issue', existing.issueId)))
+        return invalid(issue('id', 'flow.error.notFound'))
       const D = ctx.table('flow.IssueDependency')
       await ctx.db.del(deleteFrom(D).where(eq(D.id, args.id)))
       return { ok: true, id: args.id }

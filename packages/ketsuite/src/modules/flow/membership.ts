@@ -23,13 +23,6 @@ import { deleteFrom, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
 
 /**
- * Every project id the caller may read, or `null` for "no restriction".
- *
- * `null` and `[]` are different answers and callers must keep them apart: the
- * first is "see everything", the second is "see nothing". Collapsing them would
- * make the filter stop filtering for exactly the people it exists to stop.
- */
-/**
  * Answered once per call, not once per query.
  *
  * A single function call cannot change who the caller is or what they are a
@@ -39,10 +32,18 @@ import type { Ctx, Row } from '@ketvietlab/ketjs'
  * start leaving out.
  *
  * Keyed weakly by the context, so it lives exactly as long as the call does and
- * a transaction's own context gets its own answer.
+ * a transaction's own context — `ctx.tx` hands the body a different one — gets
+ * its own answer rather than inheriting a stale one.
  */
 const answered = new WeakMap<Ctx, Promise<string[] | null>>()
 
+/**
+ * Every project id the caller may read, or `null` for "no restriction".
+ *
+ * `null` and `[]` are different answers and callers must keep them apart: the
+ * first is "see everything", the second is "see nothing". Collapsing them would
+ * make the filter stop filtering for exactly the people it exists to stop.
+ */
 export function visibleProjects(ctx: Ctx): Promise<string[] | null> {
   const held = answered.get(ctx)
   if (held) return held
@@ -53,10 +54,10 @@ export function visibleProjects(ctx: Ctx): Promise<string[] | null> {
 
 async function resolveVisibleProjects(ctx: Ctx): Promise<string[] | null> {
   if (!ctx.actor) return null
-  // One after another, not `Promise.all`. This runs inside transactions — every
-  // command loads the record it is about through the gate — and a transaction is
-  // one connection, so two reads issued together wait on each other rather than
-  // overlapping. The memo above is what makes the sequence cheap.
+  // Read in order and stop at the first answer, rather than asking all three at
+  // once: a superuser costs one read and a grant holder two, and the third —
+  // the membership list itself — is only needed by the callers who are actually
+  // restricted. The memo above is what keeps even that to once per call.
   const user = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0] ?? null
   if (user?.superuser === true) return null
   const grant = (await ctx.db.select('flow.ProjectAccessGrant', { userId: ctx.actor }))[0] ?? null

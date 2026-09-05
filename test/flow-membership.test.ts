@@ -188,10 +188,14 @@ test('a member of one project sees one project, and the other one is not there',
   assert.equal(await two('flow.epic.editContent', { id: 'e1' }), null)
   assert.equal(await two('flow.page.editContent', { id: 'pg1' }), null)
 
-  // And the archive commands, which are how a project gets taken apart.
+  // And the archive commands, which are how a project gets taken apart. Pages
+  // are here too because every page path — save, move, reorder, archive,
+  // restore — reaches its row through one function, so one of them standing
+  // stands for all five.
   for (const [fnKey, id] of [
     ['flow.column.archive', 'c1'],
     ['flow.epic.archive', 'e1'],
+    ['flow.page.archive', 'pg1'],
   ] as const)
     assert.equal((await two<Row>(fnKey, { id })).ok, false, fnKey)
 })
