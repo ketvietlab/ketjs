@@ -146,6 +146,7 @@ export const createKetsuiteDeployment = (openStore: OpenStore = sqliteStore) =>
       pages: {
         siteResolve: 'website.resolveSite',
         resolve: 'website.getEntryByPath',
+        menuResolve: 'website_menu.publicMenu',
         region: 'website.page',
         notFound: 'website.page.notFound',
         siteTitle: 'KetSuite',

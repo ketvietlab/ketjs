@@ -189,6 +189,12 @@ export type PagesSpec = {
   resolve: string
   /** Optional function taking `{ host }` and returning site id, title, locale and theme. */
   siteResolve?: string
+  /**
+   * Optional function taking `{ siteId }` and returning the site's navigation.
+   * Its answer reaches a theme as `menu`; without it a theme that draws
+   * navigation draws nothing, which is a blank nav rather than an error.
+   */
+  menuResolve?: string
   /** Theme region whose host carries the same data-ket-slot name. */
   region?: string
   /** Message key for the title of a path that has no page. */
@@ -906,6 +912,14 @@ export async function bootDeployment(
       hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the deployment, or drop serve.pages`,
     })
   }
+  if (pages?.menuResolve && !manifest.functions[pages.menuResolve]) {
+    throw new KetError({
+      code: 'E_MENU_RESOLVER_MISSING',
+      module: spec.name,
+      message: `deployment "${spec.name}" resolves navigation with "${pages.menuResolve}", which no composed module declares`,
+      hint: `add the module that owns "${pages.menuResolve.split('.')[0]}", or drop serve.pages.menuResolve`,
+    })
+  }
   if (pages?.siteResolve && !manifest.functions[pages.siteResolve]) {
     throw new KetError({
       code: 'E_SITE_RESOLVER_MISSING',
@@ -1159,9 +1173,18 @@ export async function bootDeployment(
                 sections: [],
               }
             }
+            // Navigation belongs to the site, not to the page, so it is resolved
+            // beside it rather than carried by it. The framework names no
+            // module: the deployment says which function answers, the way it
+            // already does for the site and the page.
+            const menu =
+              pages.menuResolve && resolvedSite?.id
+                ? ((await ctx.call(pages.menuResolve, { siteId: resolvedSite.id }, url, req)) ?? [])
+                : []
             return {
               site,
               locale,
+              menu,
               page: { id: row.id, path: url.pathname, title: row.title },
               // Whatever the resolver says describes this page. The framework
               // does not name the fields — a module owns them and decides what
