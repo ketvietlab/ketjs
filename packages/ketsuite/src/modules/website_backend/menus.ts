@@ -52,4 +52,15 @@ export const menus: Record<string, MenuDef> = {
     needs: 'website.listSites',
     sequence: 10,
   },
+  /**
+   * Redirects sit beside the sites rather than under one, because the question
+   * "where did this address go" arrives without a site in mind.
+   */
+  'website.redirects': {
+    parent: 'website.configuration',
+    label: 'menu.redirects',
+    path: '/admin/website/redirects',
+    needs: 'website.listRedirects',
+    sequence: 20,
+  },
 }
