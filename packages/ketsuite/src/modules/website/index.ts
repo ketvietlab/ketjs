@@ -73,6 +73,9 @@ export default defineModule({
       'error.taxonomyCycle': 'Cấu trúc term tạo thành vòng lặp.',
       'error.termSiteMismatch': 'Nội dung và term phải thuộc cùng website.',
       'error.termInUse': 'Không thể xóa term đang có term con hoặc đang được gán cho nội dung.',
+      'error.mediaInUse': 'Không thể xóa ảnh đang được đặt trên một trang. Hãy gỡ khỏi trang trước.',
+      'error.mediaUsageUnknown':
+        'Website quá lớn để rà hết trong một lần, nên không thể khẳng định ảnh này không còn được dùng. Hãy gỡ ảnh khỏi các trang rồi thử lại.',
       'error.invalidDimensions': 'Kích thước media không hợp lệ.',
       'error.invalidRedirect': 'Hai đường dẫn redirect phải khác nhau và là đường dẫn nội bộ.',
       'error.redirectCycle': 'Redirect tạo thành vòng lặp.',
@@ -150,6 +153,9 @@ export default defineModule({
       'error.taxonomyCycle': 'The term hierarchy contains a cycle.',
       'error.termSiteMismatch': 'The content and term must belong to the same site.',
       'error.termInUse': 'A term with children or content assignments cannot be deleted.',
+      'error.mediaInUse': 'This image is placed on a page. Take it off the page first.',
+      'error.mediaUsageUnknown':
+        'The site is larger than one scan, so nothing can say this image is unused. Take it off the pages that draw it and try again.',
       'error.invalidDimensions': 'The media dimensions are invalid.',
       'error.invalidRedirect': 'Redirect paths must be distinct local paths.',
       'error.redirectCycle': 'The redirect creates a cycle.',

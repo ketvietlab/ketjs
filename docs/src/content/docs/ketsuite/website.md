@@ -740,6 +740,35 @@ and the sitemap are built from the primary, so a site left with hosts and no pri
 wrong address to every crawler that asks; promote another one first. The last host goes freely,
 primary or not — a site with no domains is a site nobody has pointed anywhere yet.
 
+### An image could be deleted out from under the pages drawing it
+
+`deleteTerm` has refused a term that is in use since it was written. `deleteMediaMetadata` removed
+its row with no question asked — so an image could vanish from under every page placing it, and those
+pages went on naming an id that no longer resolved. Nothing anywhere said why the picture stopped
+appearing.
+
+The reason it stayed open this long is that a layout had no way to *say* a setting was a media
+reference: `website.hero.image` was `text?`, indistinguishable from a URL or a caption, so a usage
+scan would have been a guess about which strings look like ids.
+
+It did not need a new mechanism. Section settings are parsed by the same type parser as model fields,
+and that parser already understands `ref:module.Model` — `ref` maps to `string` in the settings
+validator, so `image: 'ref:website.MediaMetadata?'` is machine-readable *and* changes nothing about
+what is already stored. `mediaFieldsOf` reads the composed manifest for the settings declared that
+way, so a theme that never declares one is simply never scanned, and a theme that declares three is
+scanned for three.
+
+`mediaUsage` names the pages; `deleteMediaMetadata` refuses while any remain; the media screen shows
+the list, so the refusal is one an editor can act on rather than argue with. A draft counts as much
+as a published page — taking the image away breaks what an editor is working on just as surely as
+what a visitor reads.
+
+**A capped scan refuses too.** The scan reads up to `USAGE_SCAN_LIMIT` entries, and on a site past
+that it cannot answer "nothing uses this". So it does not: the delete is refused with a different
+message, and the screen says the scan did not reach the whole site rather than showing an empty list
+that reads as "safe". This is the same rule the publication preflight follows, for the same reason —
+a partial check presented as a clean bill of health is worse than no check.
+
 ### What you see and what you get
 
 The submissions list filters by status. The export ignored it. So narrowing the screen to the four

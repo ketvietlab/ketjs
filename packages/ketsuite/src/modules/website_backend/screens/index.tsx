@@ -1214,13 +1214,20 @@ export const mediaScreen = (
   />
 )
 
+export type MediaUsage = {
+  used: boolean
+  capped: boolean
+  uses: Array<{ entryId: string; path: string; title: string; published: boolean }>
+}
+
 export const mediaFormScreen = (
   _: Translator,
   row: Partial<MediaRow>,
   frame: Frame,
-  options: { errors?: string[]; locale?: string } = {},
+  options: { errors?: string[]; locale?: string; usage?: MediaUsage | null } = {},
 ): TemplateResult => {
   const existing = !!row.id
+  const usage = options.usage ?? null
   return (
     <FormScreenFrame
       translator={_}
@@ -1292,6 +1299,66 @@ export const mediaFormScreen = (
                         variant: 'destructive',
                       },
                     ]}
+                  />
+                }
+              />,
+            ]
+          : []),
+        // Delete refuses while a page draws this, so saying which pages is the
+        // difference between a refusal an editor can act on and one they argue
+        // with.
+        ...(existing && usage
+          ? [
+              <Section
+                title={_('website_backend.media.usage')}
+                description={_('website_backend.media.usageHint')}
+                body={
+                  <Surface
+                    body={
+                      usage.capped ? (
+                        <Notice
+                          tone="warning"
+                          title={_('website_backend.media.usageUnknown')}
+                          message={_('website_backend.media.usageUnknownHint')}
+                        />
+                      ) : usage.uses.length === 0 ? (
+                        emptyState(
+                          _('website_backend.media.usageNone'),
+                          _('website_backend.media.usageNoneHint'),
+                        )
+                      ) : (
+                        dataTable(_, {
+                          rows: usage.uses,
+                          id: (use) => use.entryId,
+                          rowHref: (use) => `/admin/website/pages/${use.entryId}`,
+                          columns: [
+                            {
+                              key: 'title',
+                              label: _('website_backend.field.title'),
+                              priority: 'primary',
+                              cell: (use) => use.title,
+                            },
+                            {
+                              key: 'path',
+                              label: _('website_backend.field.path'),
+                              kind: 'identifier',
+                              cell: (use) => code(use.path),
+                            },
+                            {
+                              key: 'state',
+                              label: _('website_backend.field.status'),
+                              cell: (use) =>
+                                badge(
+                                  use.published
+                                    ? _('website_backend.state.published')
+                                    : _('website_backend.state.draft'),
+                                  use.published ? 'positive' : 'neutral',
+                                ),
+                            },
+                          ],
+                        })
+                      )
+                    }
                   />
                 }
               />,
