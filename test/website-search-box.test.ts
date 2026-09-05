@@ -27,9 +27,10 @@ test('search box: the island declares the copy it renders', () => {
 })
 
 test('search box: results come from the functions the public reader agrees with', () => {
-  // Not a private index and not a second query path: the same anonymous
-  // functions the sitemap and getEntryByPath are held to.
-  for (const fn of ['website.resolveSite', 'website.searchPublished', 'website.countSearchPublished']) {
+  // The index rather than a live scan now, but the property is the same one:
+  // whatever answers is held to the publication gate getEntryByPath applies, so
+  // the box cannot offer a page the reader refuses.
+  for (const fn of ['website.resolveSite', 'website_search.searchIndexed']) {
     assert.ok(client.includes(fn), `the browser half should call ${fn}`)
     assert.ok(manifest.functions[fn], `${fn} is composed`)
     assert.equal(manifest.functions[fn]?.anonymous, true, `${fn} must be callable by a visitor`)

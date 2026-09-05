@@ -1,6 +1,8 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { fills } from './fills.ts'
+import { functions } from './functions.ts'
 import { islands } from './islands.ts'
+import { models } from './models.ts'
 
 export default defineModule({
   name: 'website_search',
@@ -23,5 +25,7 @@ export default defineModule({
   },
   depends: ['website'],
   fills,
+  functions,
   islands,
+  models,
 })

@@ -45,13 +45,12 @@ export default function websiteSearch(props) {
     // resolved the page this box is rendered on.
     const site = await post('website.resolveSite', { host: location.host })
     if (!site?.id) throw new Error('no site')
-    const [found, count] = await Promise.all([
-      post('website.searchPublished', { siteId: site.id, q, limit: 20 }),
-      post('website.countSearchPublished', { siteId: site.id, q }),
-    ])
-    hits.set(Array.isArray(found) ? found : [])
-    total.set(Number(count?.count ?? 0))
-    capped.set(count?.capped === true)
+    // One call rather than two: the index answers the page and the total
+    // together, and tells us whether it is behind what is being served.
+    const found = await post('website_search.searchIndexed', { siteId: site.id, q, limit: 20 })
+    hits.set(Array.isArray(found?.hits) ? found.hits : [])
+    total.set(Number(found?.total ?? 0))
+    capped.set(found?.stale === true)
     state.set('ready')
   }
 
@@ -94,6 +93,7 @@ export default function websiteSearch(props) {
     if (state() === 'loading') return 'Đang tìm…'
     if (state() === 'failed') return 'Không tải được kết quả. Hãy thử lại.'
     if (hits().length === 0) return props.emptyLabel ?? 'Không có nội dung nào khớp từ khoá này.'
+    // `capped` now means the index is still catching up, so the count is a floor.
     return `${total()}${capped() ? '+' : ''} kết quả cho “${term()}”`
   }
 
