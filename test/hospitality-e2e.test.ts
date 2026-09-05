@@ -1155,16 +1155,26 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const frontDesk = await e2e.client.get('/admin/hospitality/front-desk?lang=vi&date=2026-08-20')
   const html = await frontDesk.text()
   assert.match(html, /Bàn lễ tân/)
-  assert.match(html, /Nguyễn An/)
   assert.match(html, /Lưu trú quá giờ trả phòng/)
   assert.match(html, /RES-OVERDUE/)
   assert.match(html, /Trần Bình/)
+  // The desk works two queues: who is still to arrive, and who is due out.
+  assert.match(html, /Khách đến hôm nay/)
+  assert.match(html, /Khách rời hôm nay/)
+  // Nguyễn An arrived today and was shown to a room; the desk is done with
+  // them until Friday, so they leave the queues and stay on the stays list.
+  assert.doesNotMatch(html, /Nguyễn An/)
+  const staysList = await e2e.client.get('/admin/hospitality/stays?lang=vi&property=hotel')
+  assert.equal(staysList.status, 200)
+  assert.match(await staysList.text(), /Nguyễn An/)
 
   const english = await e2e.client.get('/admin/hospitality/front-desk?lang=en&date=2026-08-20')
   assert.equal(english.status, 200)
   const englishHtml = await english.text()
   assert.match(englishHtml, /Front desk/)
   assert.match(englishHtml, /Overdue departures/)
+  assert.match(englishHtml, /Arriving today/)
+  assert.match(englishHtml, /Departing today/)
   assert.match(englishHtml, /RES-OVERDUE/)
   const englishServices = await e2e.client.get('/admin/hospitality/services?lang=en&property=hotel')
   assert.equal(englishServices.status, 200)
