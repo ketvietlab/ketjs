@@ -440,13 +440,147 @@ export const entryFormScreen = (
   )
 }
 
+export type RevisionRow = {
+  id: string
+  version: number
+  kind: string
+  authorId?: string | null
+  createdAt: string
+}
+
+export type RevisionDiff = {
+  fromVersion: number
+  toVersion: number
+  identified: boolean
+  changes: Array<{
+    id: string
+    type: string
+    change: string
+    path: string
+    from?: string | number
+    fields?: string[]
+  }>
+}
+
+/**
+ * What a revision did, without restoring it to find out.
+ *
+ * The list was dates and authors: to see what a revision changed, someone had
+ * to restore it and look. `diffRevisions` has been able to answer since it was
+ * written and nothing asked it. It defaults to the newest two, because "what
+ * changed?" is the question people arrive at this screen holding.
+ */
+const revisionCompare = (
+  _: Translator,
+  entry: EntryRow,
+  rows: RevisionRow[],
+  diff: RevisionDiff | null,
+  basePath: string,
+  locale: string,
+): TemplateResult => {
+  const options = rows.map((row) => ({
+    value: row.id,
+    label: `${_('website_backend.field.version')} ${row.version} · ${row.kind}`,
+  }))
+  return (
+    <Section
+      title={_('website_backend.revisions.compare')}
+      description={_('website_backend.revisions.compareHint')}
+      body={stack([
+        <Surface
+          padding="compact"
+          body={
+            <RecordForm
+              action={`${basePath}/${entry.id}/revisions${locale}`}
+              method="get"
+              layout="inline"
+              fields={[
+                {
+                  name: 'from',
+                  label: _('website_backend.revisions.from'),
+                  type: 'select',
+                  options,
+                  value: diff ? rows.find((row) => row.version === diff.fromVersion)?.id : undefined,
+                },
+                {
+                  name: 'to',
+                  label: _('website_backend.revisions.to'),
+                  type: 'select',
+                  options,
+                  value: diff ? rows.find((row) => row.version === diff.toVersion)?.id : undefined,
+                },
+              ]}
+              submit={_('website_backend.revisions.compare')}
+              submitVariant="secondary"
+            />
+          }
+        />,
+        ...(diff && !diff.identified
+          ? [
+              <Notice
+                tone="info"
+                title={_('website_backend.revisions.unidentified')}
+                message={_('website_backend.revisions.unidentifiedHint')}
+              />,
+            ]
+          : []),
+        ...(diff
+          ? [
+              diff.changes.length === 0
+                ? emptyState(
+                    _('website_backend.revisions.noChanges'),
+                    _('website_backend.revisions.noChangesHint'),
+                  )
+                : dataTable(_, {
+                    rows: diff.changes,
+                    id: (row) => `${row.id}:${row.change}`,
+                    columns: [
+                      {
+                        key: 'change',
+                        label: _('website_backend.revisions.change'),
+                        priority: 'primary',
+                        cell: (row) => badge(row.change, row.change === 'removed' ? 'neutral' : 'info'),
+                      },
+                      {
+                        key: 'section',
+                        label: _('website_backend.revisions.section'),
+                        cell: (row) => row.type,
+                      },
+                      {
+                        key: 'where',
+                        label: _('website_backend.revisions.where'),
+                        cell: (row) =>
+                          row.change === 'moved' && row.from !== undefined
+                            ? `${row.from} → ${row.path}`
+                            : row.path,
+                      },
+                      {
+                        key: 'detail',
+                        label: _('website_backend.revisions.detail'),
+                        cell: (row) =>
+                          row.fields?.length
+                            ? row.fields.join(', ')
+                            : row.change === 'retyped' && row.from !== undefined
+                              ? String(row.from)
+                              : '',
+                      },
+                    ],
+                  }),
+            ]
+          : []),
+      ])}
+    />
+  )
+}
+
 export const revisionsScreen = (
   _: Translator,
   entry: EntryRow,
-  rows: Array<{ id: string; version: number; kind: string; authorId?: string | null; createdAt: string }>,
+  rows: RevisionRow[],
   frame: Frame,
   locale = '',
   basePath = '/admin/website/pages',
+  diff: RevisionDiff | null = null,
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
@@ -459,6 +593,7 @@ export const revisionsScreen = (
           href: `${basePath}/${entry.id}${locale}`,
         }),
       ]),
+      ...(rows.length > 1 ? [revisionCompare(_, entry, rows, diff, basePath, locale)] : []),
       rows.length === 0
         ? emptyState(_('website_backend.revisions.empty'), _('website_backend.revisions.emptyHint'))
         : dataTable(_, {
