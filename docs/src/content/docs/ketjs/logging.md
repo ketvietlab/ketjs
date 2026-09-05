@@ -127,6 +127,8 @@ silently — the same care applies as to renaming a permission.
 | `job_discarded` | error | A job exhausted its attempts |
 | `job_cancelled` | warn | A job's lease was lost or it was cancelled |
 | `job_ignored_abort` | error | A handler kept working after it was aborted |
+| `rate_limited` | warn | A caller exceeded a declared ceiling and was refused |
+| `rate_pruned` | info | Stale rate counters were removed from a tenant |
 | `schedule_fired` | info | A due schedule enqueued its job, with the tick and how many were skipped |
 | `schedule_error` | error | A tenant's schedule sweep failed; other tenants continue |
 | `worker_tick_error` | error | A worker poll pass threw |

@@ -162,6 +162,8 @@ export type {
 export { classificationInventory, formatClassification } from './kernel/classification.ts'
 export { MIN_EVERY_MS, parseEvery, tickAt, ticksBetween, validateSchedule } from './kernel/schedule.ts'
 export { claimDue } from './server/schedule.ts'
+export { claimRateSlot, pruneRateSlots } from './server/ratelimit.ts'
+export type { RatePolicy, RateVerdict } from './server/ratelimit.ts'
 export type { ScheduleClaim } from './server/schedule.ts'
 export type { ClassificationInventory, ClassifiedField } from './kernel/classification.ts'
 export { multipart } from './server/multipart.ts'
