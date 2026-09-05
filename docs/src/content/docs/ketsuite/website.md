@@ -740,6 +740,52 @@ and the sitemap are built from the primary, so a site left with hosts and no pri
 wrong address to every crawler that asks; promote another one first. The last host goes freely,
 primary or not — a site with no domains is a site nobody has pointed anywhere yet.
 
+### The index that was still a scan
+
+`SearchDocument` exists so "a search is a lookup rather than a scan", and `haystack` — title and
+excerpt, lowercased into one column — exists so "a match is one comparison". Both are quotes from the
+model's own comments, and the read path did neither:
+
+```ts
+// File: packages/ketsuite/src/modules/website_search/functions.ts
+const rows = await ctx.db.all(from(Document).where(eq(Document.siteId, args.siteId)))
+const matches = rows.filter((row) => String(row.haystack).includes(needle))
+```
+
+Every document of the site, into memory, on every keystroke, filtered in JavaScript. The index had
+made the *write* side cheap — one row per entry, no revision fetch per match — and left the read side
+exactly what it replaced. The match is a `LIKE` on `haystack` now, with the window in the query and
+the total from `count`, so a page of ten hits reads ten rows.
+
+#### A wildcard a visitor typed
+
+`like` could not escape a pattern and `ilike` could, so every case-sensitive search in the codebase
+passed whatever a person typed straight into a `LIKE`. A `%` matched the whole table and a `_`
+matched any character — someone searching for "50%" or "co_op" got nonsense, and the count beside it
+agreed, which made it look deliberate.
+
+`like` takes the same `escapePattern` flag now, and `likeLiteral` turns what a person typed into a
+literal. Both halves are needed: the backslash is only special when the statement says `ESCAPE`. The
+entry-title search on the pages list uses it too — that box was only exposed to people recently, and
+it had the same hole.
+
+#### An index nobody rebuilt on a schedule
+
+`reindexSite` says in its own comment that it exists "so an operator or a job can drive a long
+rebuild". There was no job. Between publications the index caught up only through `searchIndexed`,
+which builds three passes inline and then answers `stale` — a sound fallback that was also the entire
+schedule, paid for by whichever visitors happened to search first.
+
+`indexSweep` runs hourly across companies and queues `rebuildStale` per legal entity; that job spends
+a bounded number of passes and re-queues itself if a site is still behind, so a first build over a
+large site cannot hold a worker slot long enough to be killed and retried from the beginning. The
+company is in the unique key because a unique job key is unique per tenant, not per company.
+
+The passes moved to `rebuild.ts` because a job cannot reach a declared function — a `JobContext` has
+no `call` — so building has to be an ordinary import, the way `website_form` keeps its purge. The
+split says what the model says: the index is derived, and building it is not the same act as
+answering with it.
+
 ### A preview link that opened nothing
 
 `previewEntry` has existed since preview tokens did, and **nothing ever called it**. A link could be
