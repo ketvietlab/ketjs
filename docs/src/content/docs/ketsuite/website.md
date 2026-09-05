@@ -628,6 +628,51 @@ caller asked for, and making a retry an error only punishes a double-submitted f
 The lesson is not about taxonomy. A write with no matching read is not a feature that is merely
 incomplete — it is a feature that damages the data and hides the damage.
 
+### The arguments no screen passed
+
+A second audit, after the one that looked for functions nothing calls: for every `ctx.call` in
+KetSuite, which of the callee's declared inputs does no caller ever supply? Most answers were paging
+arguments a screen legitimately does not need. Three were not.
+
+#### A guard against a stale base, never passed
+
+`activatePublication` moves the site pointer under compare-and-set, which reads the current pointer
+and then matches against what it just read — so the CAS cannot notice that the *list the row came
+from* is stale. `expectedPublicationId` is the guard for exactly that, and nothing passed it.
+
+The consequence: the publications screen draws a row prepared while nothing was live. Somebody else
+activates a different set. Activating the first row now moves the site off theirs and supersedes it,
+with no conflict reported to anyone. The screen sends the base it was drawn against now, and an empty
+string means "nothing was live then" — a claim, not an absence, and a different thing from omitting
+the argument.
+
+The base is read with `activePublication` rather than found in the rows, because the state filter
+added alongside it can hide the live row, and reading the base off a filtered list would claim the
+site had nothing live and refuse every activation.
+
+#### A preview link was minted by looking at the screen
+
+The preview route minted a token on the GET. Opening the screen twice left two tokens; a link
+prefetcher or a security scanner touching the link left one nobody knew about. `createPreviewToken`
+has always taken `ttlSeconds` (60–3600, default 900) and `oneTime`, and neither was reachable, so
+every link was fifteen minutes and reusable.
+
+Minting is a POST now, with both terms on the form. Expiry is the cheaper control of the two — a link
+that stops working on its own needs no revoking — and `oneTime` is what "send this to exactly one
+reader" means. Both the entry-kind route and the kind-neutral `/admin/website/content/{id}/preview`
+alias got the same treatment; the alias had the same defect.
+
+#### Lists that could not be narrowed
+
+`listSubmissions` and `countSubmissions` take `status`, `listPublications` takes `state`, and no
+screen passed either. Superseded publications accumulate one per activation and are the majority of
+the list within a week, which buries the two rows anybody came to see. Both filters are on their
+screens now.
+
+Still unpassed and deliberately left: `listSites.active` and `listForms.active`. The site list is
+read through `sitesOf`, which every screen's site switcher shares, so filtering there needs a
+separate call rather than a parameter — worth doing, not worth doing while touching six other screens.
+
 ### publishEntry had no inverse
 
 A page could go live and never come back down. Nothing set `Entry.status` back, and nothing cleared

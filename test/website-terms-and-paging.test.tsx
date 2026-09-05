@@ -202,7 +202,13 @@ test('terms: a page not saved yet has no entry to file anything against', () => 
  */
 test('preview: the screen offers to withdraw every link, on the entry’s own path', () => {
   const html = renderToString(
-    previewScreen(translate, entry, 'tok', '2026-09-05T00:15:00.000Z', {}, '/admin/website/posts'),
+    previewScreen(
+      translate,
+      entry,
+      { token: 'tok', expiresAt: '2026-09-05T00:15:00.000Z' },
+      {},
+      '/admin/website/posts',
+    ),
   )
   assert.match(html, /action="\/admin\/website\/posts\/p1\/preview\/revoke"/u)
   assert.match(html, /action\.revokePreviews/u)

@@ -455,27 +455,30 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
   [`${kind.basePath}/{id}/preview`]:
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'GET') return text('GET', { status: 405 })
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const detail = await entryOf(ctx, url, req, params.id)
       if (!detail || detail.entry.type !== type)
         return text(_('website_backend.error.notFound'), { status: 404 })
-      const preview = (await ctx.call('website.createPreviewToken', { entryId: params.id }, url, req)) as {
-        token: string
-        expiresAt: string
+      // A GET used to mint. Opening the screen twice, or a link prefetcher
+      // touching it once, left tokens behind that nobody knew existed.
+      let minted: { token: string; expiresAt: string } | null = null
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        minted = (await ctx.call(
+          'website.createPreviewToken',
+          {
+            entryId: params.id,
+            ttlSeconds: Number(form.ttlSeconds) || null,
+            oneTime: !!form.oneTime,
+          },
+          url,
+          req,
+        )) as { token: string; expiresAt: string }
       }
       return adminPage(ctx, url, req, {
         title: 'website_backend.preview.title',
-        body: (_, frame) =>
-          previewScreen(
-            _,
-            detail.entry,
-            preview.token,
-            preview.expiresAt,
-            frame,
-            kind.basePath,
-            localeQuery(url),
-          ),
+        body: (_, frame) => previewScreen(_, detail.entry, minted, frame, kind.basePath, localeQuery(url)),
       })
     },
 
@@ -803,17 +806,28 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/website/content/{id}/preview':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'GET') return text('GET', { status: 405 })
+      if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const detail = await entryOf(ctx, url, req, params.id)
       if (!detail) return text(_('website_backend.error.notFound'), { status: 404 })
-      const preview = (await ctx.call('website.createPreviewToken', { entryId: params.id }, url, req)) as {
-        token: string
-        expiresAt: string
+      let minted: { token: string; expiresAt: string } | null = null
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        minted = (await ctx.call(
+          'website.createPreviewToken',
+          {
+            entryId: params.id,
+            ttlSeconds: Number(form.ttlSeconds) || null,
+            oneTime: !!form.oneTime,
+          },
+          url,
+          req,
+        )) as { token: string; expiresAt: string }
       }
       return adminPage(ctx, url, req, {
         title: 'website_backend.preview.title',
-        body: (_, frame) => previewScreen(_, detail.entry, preview.token, preview.expiresAt, frame),
+        body: (_, frame) =>
+          previewScreen(_, detail.entry, minted, frame, '/admin/website/content', localeQuery(url)),
       })
     },
 
@@ -939,10 +953,22 @@ export const routes: Record<string, RouteEntry> = {
       const sites = await sitesOf(ctx, url, req)
       const posted = req.method === 'POST' ? await readForm(req) : null
       const siteId = posted?.siteId || selectedSite(url, sites)
+      const chosenState = url.searchParams.get('state')
+      const state = chosenState && chosenState !== 'all' ? chosenState : null
       const render = async (errors?: string[], notice?: string | null) => {
+        const live = siteId
+          ? ((await ctx.call('website.activePublication', { siteId }, url, req)) as {
+              id?: string
+            } | null)
+          : null
         const [rows, entries] = siteId
           ? await Promise.all([
-              ctx.call('website.listPublications', { siteId }, url, req) as Promise<PublicationRow[]>,
+              ctx.call(
+                'website.listPublications',
+                { siteId, ...(state ? { state } : {}) },
+                url,
+                req,
+              ) as Promise<PublicationRow[]>,
               ctx.call('website.listEntries', { siteId, status: 'published' }, url, req) as Promise<
                 EntryRow[]
               >,
@@ -955,6 +981,8 @@ export const routes: Record<string, RouteEntry> = {
               errors,
               notice,
               locale: localeQuery(url),
+              state: chosenState ?? 'all',
+              activeId: live?.id ?? null,
             }),
         })
       }
@@ -984,7 +1012,19 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const result = (await ctx.call('website.activatePublication', { id: params.id }, url, req)) as {
+      const form = await readForm(req)
+      const result = (await ctx.call(
+        'website.activatePublication',
+        {
+          id: params.id,
+          // What the list said was live when this row was drawn. The empty
+          // string is a site that had no active publication then, which is a
+          // different claim from "do not check".
+          expectedPublicationId: form.expectedPublicationId ?? null,
+        },
+        url,
+        req,
+      )) as {
         ok?: boolean
         missingSections?: string[]
       }
@@ -1805,16 +1845,26 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const current = pageOf(url)
+      const chosen = url.searchParams.get('status')
+      const status = chosen && chosen !== 'all' ? chosen : null
       const [rows, total] = await Promise.all([
         ctx.call(
           'website_form.listSubmissions',
-          { formId: params.id, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
+          {
+            formId: params.id,
+            ...(status ? { status } : {}),
+            limit: PAGE_SIZE,
+            offset: (current - 1) * PAGE_SIZE,
+          },
           url,
           req,
         ) as Promise<SubmissionRow[]>,
-        ctx.call('website_form.countSubmissions', { formId: params.id }, url, req) as Promise<{
-          count: number
-        }>,
+        ctx.call(
+          'website_form.countSubmissions',
+          { formId: params.id, ...(status ? { status } : {}) },
+          url,
+          req,
+        ) as Promise<{ count: number }>,
       ])
       const sites = await sitesOf(ctx, url, req)
       const siteId = url.searchParams.get('site') || selectedSite(url, sites)
@@ -1840,6 +1890,7 @@ export const routes: Record<string, RouteEntry> = {
             retentionDays: form?.retentionDays ?? null,
             locale: localeQuery(url),
             pager: pager(url, current, rows.length, total.count),
+            status: chosen ?? 'all',
           }),
       })
     },
