@@ -1806,7 +1806,7 @@ test('hospitality stays: early check-out releases only future inventory and reta
   }
 })
 
-test('hospitality reservations: no-show releases inventory but retains charges for reconciliation', async () => {
+test('hospitality reservations: no-show gives the nights back and charges what the policy says', async () => {
   const adapter = await boot()
   try {
     await property(adapter)
@@ -1857,7 +1857,17 @@ test('hospitality reservations: no-show releases inventory but retains charges f
       },
       adapter,
     )
-    assert.deepEqual(marked.value, { ok: true, id: 'no-show-booking', state: 'no_show', errors: [] })
+    // No cancellation policy is configured here, and the policy is what prices
+    // a no-show now, so this guest owes nothing. Before HOS-DEC-021 the folio
+    // closed with both room nights still on it — 250 for a booking whose terms
+    // nobody had ever set.
+    assert.deepEqual(marked.value, {
+      ok: true,
+      id: 'no-show-booking',
+      state: 'no_show',
+      noShowFee: '0',
+      errors: [],
+    })
     const reservation = (await call('hospitality_core.getReservation', { id: 'no-show-booking' }, adapter))
       .value as Row
     const stay = (await call('hospitality_core.getStay', { id: 'no-show-booking:stay' }, adapter))
@@ -1876,13 +1886,13 @@ test('hospitality reservations: no-show releases inventory but retains charges f
       {
         reservationState: 'no_show',
         stayState: 'no_show',
-        folioState: 'closed',
-        amountTotal: 250,
+        folioState: 'cancelled',
+        amountTotal: 0,
         noShowReason: 'Guest did not answer',
         noShowAt: '2026-10-01T07:00:00.000Z',
       },
     )
-    assert.equal((folio.charges as Row[])[0]?.state, 'active', 'no-show does not void the room charge')
+    assert.equal((folio.charges as Row[])[0]?.state, 'void', 'a room nobody slept in is not a room charge')
     const ledger = await adapter.all(
       `SELECT date, sold FROM hospitality_core_availability_ledger ORDER BY date`,
     )
