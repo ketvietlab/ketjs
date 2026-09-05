@@ -27,8 +27,12 @@ import {
 } from './access.ts'
 import { ensureCustomerRealm } from './customer.ts'
 import { isReservedPath, reservedPrefixes } from './paths.ts'
+import { preflightEntry } from './renderable.ts'
 
 const SITE_ROLES = new Set(['administrator', 'editor', 'author', 'contributor'])
+/** How many pages one unnamed preflight will read. Beyond it, the answer is "ask again by id". */
+const PREFLIGHT_SCAN_LIMIT = 1_000
+
 const MAX_JSON_BYTES = 512 * 1024
 const hasControlCharacter = (value: string): boolean =>
   [...value].some((character) => {
@@ -898,9 +902,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
 
   publishEntry: defineFn({
     input: { id: 'id', publishAt: 'datetime?', expectedRevisionId: 'id?' },
-    output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?', unrenderable: 'json?' },
     effects: [
       'read:website.Entry',
+      'read:website.EntryRevision',
       'read:website.SiteMember',
       'write:website.Entry',
       'enqueue:website.publishScheduled',
@@ -913,6 +918,16 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!(await canPublishEntry(ctx, entry))) return forbidden()
       if (args.expectedRevisionId && args.expectedRevisionId !== entry.currentRevisionId)
         return invalid('expectedRevisionId', 'website.error.editConflict')
+      // Publishing is where a draft becomes something a visitor loads. A
+      // layout the deployment can no longer draw raises E_UNKNOWN_SECTION in
+      // the renderer, so refusing here turns a five hundred on the storefront
+      // into a refusal the editor can act on.
+      const renderable = await preflightEntry(ctx, entry)
+      if (renderable.errors.length)
+        return {
+          ...invalid('id', 'website.error.entryUnrenderable'),
+          unrenderable: [renderable],
+        }
       const revisionId = String(entry.currentRevisionId)
       const now = new Date()
       const scheduled = args.publishAt ? new Date(String(args.publishAt)) : null
@@ -953,6 +968,52 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!('dryRun' in changed) && !changed.matched)
         return invalid('expectedRevisionId', 'website.error.editConflict')
       return { ok: true, id: args.id, status: 'published' }
+    },
+  }),
+
+  /**
+   * What would break if this went live now.
+   *
+   * The same check the publish paths run, without the publish - so an editor
+   * can see that a page places a section this deployment no longer provides
+   * before pressing a button that would refuse, rather than after.
+   */
+  preflightPublication: defineFn({
+    input: { siteId: 'id', entryIds: 'json?' },
+    output: { ok: 'bool', checked: 'int?', capped: 'bool?', unrenderable: 'json?', errors: 'json?' },
+    effects: [
+      'read:website.Site',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.SiteMember',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      if (!(await canManageStructure(ctx, args.siteId))) return invalid('siteId', 'website.error.forbidden')
+      const ids = Array.isArray(args.entryIds) ? args.entryIds.map(String) : null
+      if (ids && ids.length > 1_000) return invalid('entryIds', 'website.error.publicationTooLarge')
+      const Entry = ctx.table('website.Entry')
+      // Absent means every page on the site that is not in the bin, which is
+      // the question an operator actually asks after a deployment changes.
+      // One past the ceiling, so a site larger than the scan can say so.
+      const found = ids
+        ? await ctx.db.all(from(Entry).where(eq(Entry.siteId, args.siteId), inArray(Entry.id, ids)))
+        : await ctx.db.all(
+            from(Entry)
+              .where(eq(Entry.siteId, args.siteId), ne(Entry.status, 'trash'))
+              .limit(PREFLIGHT_SCAN_LIMIT + 1),
+          )
+      const capped = found.length > PREFLIGHT_SCAN_LIMIT
+      const rows = capped ? found.slice(0, PREFLIGHT_SCAN_LIMIT) : found
+      const unrenderable = []
+      for (const entry of rows) {
+        const check = await preflightEntry(ctx, entry)
+        if (check.errors.length) unrenderable.push(check)
+      }
+      // A partial scan cannot answer "is this site safe to publish" with yes,
+      // so a capped run is never ok however clean the pages it reached were.
+      // Naming the pages it did find is still worth more than refusing to say
+      // anything.
+      return { ok: unrenderable.length === 0 && !capped, checked: rows.length, capped, unrenderable }
     },
   }),
 
