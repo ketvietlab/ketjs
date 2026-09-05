@@ -15,8 +15,8 @@ test('public production permission catalogue covers every function owned by its 
     modulePermissionDeclarations: ketsuitePermissionModules,
   })
 
-  assert.equal(ketsuitePermissionModuleNames.length, 65)
-  assert.equal(Object.keys(manifest.permissions.modules).length, 65)
+  assert.equal(ketsuitePermissionModuleNames.length, 66)
+  assert.equal(Object.keys(manifest.permissions.modules).length, 66)
   assert.equal(Object.keys(manifest.permissions.bundles).length, 158)
   assert.equal(Object.keys(manifest.permissions.functions).length, 770)
   assert.equal(Object.keys(manifest.permissions.exemptions).length, 80)
