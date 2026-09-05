@@ -1534,6 +1534,39 @@ export async function epicTotals(
  * the wrong answer; the version still moves, so anyone with that issue open
  * gets the conflict on their own next save.
  */
+/**
+ * Remove a sprint that was never started.
+ *
+ * Only `planned`. A sprint that has run is a record of what a team did in a
+ * fortnight, and deleting one would take that away from every figure that
+ * reports on it — `closeSprint` is how a sprint ends. This is for the other
+ * case: one made by mistake, or planned and then abandoned before it began.
+ *
+ * Issues planned into it are let go rather than deleted with it. They go back
+ * to the backlog, which is where they were before somebody put them in a
+ * sprint that never happened; taking the work away with the plan would be a
+ * surprise nobody asked for (FLW-016).
+ */
+export async function deleteSprint(
+  ctx: Ctx,
+  input: { id: string; idempotencyKey: string },
+): Promise<FlowResult> {
+  if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
+  if (!commandKey(input.idempotencyKey))
+    return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
+  return ctx.tx(async (tx) => {
+    const held = await readableRow(tx, 'flow.Sprint', input.id)
+    if (!held) return invalid(issue('id', 'flow.error.notFound'))
+    if (held.state !== 'planned') return invalid(issue('id', 'flow.error.invalidSprintState'))
+    const planned = await tx.db.select('flow.Issue', { sprintId: input.id })
+    for (const row of planned)
+      await tx.db.update('flow.Issue', { id: row.id }, { sprintId: null, updatedAt: now() })
+    const S = tx.table('flow.Sprint')
+    await tx.db.del(deleteFrom(S).where(eq(S.id, input.id)))
+    return { ok: true, id: input.id, released: planned.length }
+  })
+}
+
 export async function closeSprint(
   ctx: Ctx,
   input: { id: string; carryTo?: string | null; idempotencyKey: string },

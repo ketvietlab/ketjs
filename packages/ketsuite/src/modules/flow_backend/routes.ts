@@ -1699,6 +1699,20 @@ export const routes: Record<string, RouteEntry> = {
         active: endpoint,
         body: (t, frame) => {
           const errors = url.searchParams.getAll('error')
+          // `page.list` has taken a search since it was written and this route
+          // has passed it for as long — through `?q=`, which until now only a
+          // hand-typed URL could set. The chrome is what the cross-project
+          // document screen already uses; a second, hand-rolled form here
+          // would be a second place for the same thing to drift (FLW-034).
+          frame.chrome = {
+            ...frame.chrome,
+            search: {
+              name: 'q',
+              value: url.searchParams.get('q') ?? '',
+              placeholder: t('flow_backend.pages.search'),
+              keep: keepForListSearch(url),
+            },
+          }
           return pagesScreen(t, frame, {
             projectName: String(project.name ?? ''),
             pages,
