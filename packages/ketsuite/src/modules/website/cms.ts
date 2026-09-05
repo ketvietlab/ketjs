@@ -29,6 +29,7 @@ import {
 } from './access.ts'
 import { ensureCustomerRealm } from './customer.ts'
 import { isReservedPath, reservedPrefixes } from './paths.ts'
+import { usageOf } from './media-usage.ts'
 import { preflightEntry } from './renderable.ts'
 
 /**
@@ -1614,15 +1615,53 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Which pages draw this media item.
+   *
+   * The other half of the guard below: an editor about to delete an image
+   * should be able to see what would break, and `deleteTerm` has shown the
+   * same for taxonomy since it was written.
+   */
+  mediaUsage: defineFn({
+    input: { id: 'id' },
+    output: { used: 'bool', capped: 'bool', uses: 'json' },
+    effects: [
+      'read:website.MediaMetadata',
+      'read:website.SiteMember',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const media = (await ctx.db.select('website.MediaMetadata', { id: args.id }))[0]
+      if (!media || !(await canAccessSite(ctx, media.siteId))) return { used: false, capped: false, uses: [] }
+      const { uses, capped } = await usageOf(ctx, media)
+      return { used: uses.length > 0, capped, uses }
+    },
+  }),
+
   deleteMediaMetadata: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:website.MediaMetadata', 'read:website.SiteMember', 'write:website.MediaMetadata'],
+    effects: [
+      'read:website.MediaMetadata',
+      'read:website.SiteMember',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'write:website.MediaMetadata',
+    ],
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
       const media = (await ctx.db.select('website.MediaMetadata', { id: args.id }))[0]
       if (!media) return { ok: true, id: args.id }
       if (!(await canManageStructure(ctx, media.siteId))) return forbidden()
+      // A page placing this would go on naming an id that no longer resolves,
+      // and nothing anywhere would say why the image stopped appearing.
+      const { uses, capped } = await usageOf(ctx, media)
+      if (uses.length) return invalid('id', 'website.error.mediaInUse')
+      // A scan that did not reach the whole site cannot answer "nothing uses
+      // this" - the same reason a capped preflight is never ok.
+      if (capped) return invalid('id', 'website.error.mediaUsageUnknown')
       const Media = ctx.table('website.MediaMetadata')
       await ctx.db.del(deleteFrom(Media).where(eq(Media.id, args.id)))
       return { ok: true, id: args.id }
