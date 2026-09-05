@@ -17,7 +17,13 @@
 //   visible to nobody, which is the only safe default for a model whose whole
 //   purpose is to keep some projects unread.
 //
-// See FLW-DEC-012.
+// That a superuser passes is a decision, not an oversight. FLW-DEC-021 asked it
+// directly and the answer was yes: a superuser is the customer's own root
+// account and every other KetSuite module treats it that way, so making Flow
+// the one that holds it back would break the admin tooling and every fixture
+// that runs as one, for nothing the grant row does not already offer.
+//
+// See FLW-DEC-012 and FLW-DEC-021.
 
 import { deleteFrom, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
