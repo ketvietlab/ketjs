@@ -416,6 +416,7 @@ test('Hospitality focused roles render only actions present in their exact allow
       {
         amend: true,
         checkIn: false,
+        holdRoom: false,
         adjustDeparture: false,
         checkOut: false,
         cancel: false,
@@ -424,7 +425,10 @@ test('Hospitality focused roles render only actions present in their exact allow
     ),
   )
   assert.match(reservation, /hospitality_core\.reservation\.action\.amend</)
-  assert.doesNotMatch(reservation, /hospitality_core\.reservation\.action\.(?:cancel|checkIn|noShow)</)
+  assert.doesNotMatch(
+    reservation,
+    /hospitality_core\.reservation\.action\.(?:cancel|checkIn|noShow|holdRoom)</,
+  )
 })
 
 test('the front desk offers the shift its work and a read-only viewer only the record', () => {
