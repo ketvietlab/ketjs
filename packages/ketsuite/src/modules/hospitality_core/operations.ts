@@ -2019,6 +2019,123 @@ export const operations: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Everything the desk needs before it presses check out, in one read.
+   *
+   * A departure was four screens: the stay to see who and which room, the folio
+   * to see what is owed, the extras to see what a supplier has not confirmed
+   * yet, and the property to know whether the hour matters. Nothing joined
+   * them, so whether a guest could leave was a judgement each person made by
+   * hand — and the refusal only arrived after the button.
+   *
+   * The blockers here are the same ones `checkOut` raises, read rather than
+   * discovered. `balance` is deliberately not one of them: leaving is not
+   * paying, and a hotel that refused every departure with a bill outstanding
+   * would refuse most of them.
+   */
+  checkOutReadiness: defineFn({
+    input: { stayId: 'id' },
+    output: {
+      stayId: 'id',
+      state: 'text',
+      ready: 'bool',
+      roomId: 'id?',
+      roomName: 'text?',
+      guestName: 'text?',
+      checkIn: 'datetime?',
+      dueOut: 'datetime?',
+      late: 'bool',
+      lateReasonRequired: 'bool',
+      folioId: 'id?',
+      folioState: 'text?',
+      balance: 'decimal?',
+      charges: 'json?',
+      awaitingFulfilment: 'json?',
+      blockers: 'json?',
+    },
+    effects: [
+      'read:hospitality_core.Stay',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.RoomAssignment',
+      'read:hospitality_core.Folio',
+      'read:hospitality_core.Charge',
+      'read:hospitality_core.ExtraLine',
+      'read:partner.Partner',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const stay = await record(ctx, 'hospitality_core.Stay', args.stayId)
+      if (!stay)
+        return {
+          stayId: args.stayId,
+          state: 'missing',
+          ready: false,
+          late: false,
+          lateReasonRequired: false,
+          blockers: [issue('stayId', 'stay_missing')],
+        }
+      const property = await record(ctx, 'hospitality_core.Property', stay.propertyId)
+      const room = stay.currentRoomId ? await record(ctx, 'hospitality_core.Room', stay.currentRoomId) : null
+      const partner = stay.partnerId ? await record(ctx, 'partner.Partner', stay.partnerId) : null
+      const folio = stay.folioId ? await record(ctx, 'hospitality_core.Folio', stay.folioId) : null
+      const now = new Date()
+      const dueOut = date(stay.checkOut)
+      const late = !!dueOut && now > dueOut
+      const blockers: Issue[] = []
+      if (stay.state === 'checked_out') blockers.push(issue('state', 'stay_already_checked_out'))
+      else if (stay.state !== 'checked_in' || !stay.currentRoomId)
+        blockers.push(issue('state', 'stay_cannot_check_out'))
+      if (!property) blockers.push(issue('propertyId', 'property_missing'))
+
+      const A = ctx.table('hospitality_core.RoomAssignment')
+      const active = await ctx.db.one(from(A).where(eq(A.stayId, stay.id), eq(A.state, 'active')))
+      if (stay.state === 'checked_in' && !active) blockers.push(issue('stayId', 'active_assignment_missing'))
+
+      const C = ctx.table('hospitality_core.Charge')
+      const charges = folio
+        ? await ctx.db.all(
+            from(C)
+              .where(eq(C.folioId, folio.id), eq(C.state, 'active'))
+              .orderBy(asc(C.occurredAt), asc(C.id)),
+          )
+        : []
+
+      // A line a supplier still owes us is not a refusal, but closing the folio
+      // over it is how a charge goes missing. The desk gets to see it first.
+      const E = ctx.table('hospitality_core.ExtraLine')
+      const lines = await ctx.db.all(
+        from(E).where(eq(E.stayId, stay.id), eq(E.active, true)).preload('charges'),
+      )
+      const awaitingFulfilment = lines
+        .filter((line) => String(line.fulfillmentKind ?? 'none') === 'external_stock')
+        .filter(
+          (line) => !((line.charges as Row[] | undefined) ?? []).some((charge) => charge.state === 'active'),
+        )
+        .map((line) => ({ id: line.id, description: line.description, quantity: line.quantity }))
+
+      const lateReasonRequired = property?.enforceTimes === true && late
+      return {
+        stayId: stay.id,
+        state: String(stay.state),
+        ready: blockers.length === 0,
+        roomId: stay.currentRoomId ?? null,
+        roomName: room ? String(room.name ?? room.code ?? room.id) : null,
+        guestName: partner ? String(partner.name ?? '') : null,
+        checkIn: stay.checkIn ?? null,
+        dueOut: stay.checkOut ?? null,
+        late,
+        lateReasonRequired,
+        folioId: folio?.id ?? null,
+        folioState: folio ? String(folio.state) : null,
+        balance: folio ? String(folio.amountTotal ?? '0') : null,
+        charges,
+        awaitingFulfilment,
+        blockers,
+      }
+    },
+  }),
+
   getFolio: defineFn({
     input: { id: 'id' },
     output: {
