@@ -28,6 +28,7 @@ import {
   cataloguePage,
   CASES,
   contentCard,
+  timeframeFilter,
   countBadge,
   dataTable,
   datePicker,
@@ -672,6 +673,27 @@ const everything = [
     { shown: ['id'], colsHref: (keys) => `/admin/pages?cols=${keys.join(',')}` },
   ),
   person('Nguyễn Quản Trị'),
+  // The period a screen reports on: the choice, the range it resolves to and the
+  // moment it was computed. Rendered with all three so the optional parts are in
+  // the contract too.
+  timeframeFilter({
+    id: 'contract-timeframe',
+    label: 'Kỳ báo cáo',
+    options: [
+      { id: 'today', label: 'Hôm nay', href: '/admin/crm/overview?period=today' },
+      {
+        id: 'last_30_days',
+        label: '30 ngày qua',
+        href: '/admin/crm/overview?period=last_30_days',
+        active: true,
+        detail: '2026-08-06 → 2026-09-05',
+      },
+    ],
+    range: '2026-08-06 → 2026-09-05',
+    asOf: '2026-09-05 09:42',
+    asOfLabel: 'Cập nhật',
+    note: 'Asia/Ho_Chi_Minh',
+  }),
   // A sidebar whose search matched nothing: the label goes, a note takes its place.
   pagesScreen(_, [page()], { menu: [], menuFilter: 'zzz' }),
   // How far along a record is. A value, because the empty case draws nothing at

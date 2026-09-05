@@ -129,6 +129,9 @@ export type {
 export { sidebar, sidebarMain, sidebarFoot, navGroup } from './nav.tsx'
 export type { Indicator, SidebarOptions, Viewer } from './nav.tsx'
 export { bulkActions, listChrome, topbarSearch } from './chrome.tsx'
+export { timeframeFilter } from './timeframe.tsx'
+export { timeframeFilter as TimeframeFilter } from './timeframe.tsx'
+export type { TimeframeFilterOptions, TimeframeOption } from './timeframe.tsx'
 export type {
   Facet,
   ListChrome,
