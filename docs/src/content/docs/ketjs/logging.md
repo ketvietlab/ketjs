@@ -127,6 +127,10 @@ silently — the same care applies as to renaming a permission.
 | `job_discarded` | error | A job exhausted its attempts |
 | `job_cancelled` | warn | A job's lease was lost or it was cancelled |
 | `job_ignored_abort` | error | A handler kept working after it was aborted |
+| `schedule_fired` | info | A due schedule enqueued its job, with the tick and how many were skipped |
+| `schedule_error` | error | A tenant's schedule sweep failed; other tenants continue |
+| `worker_tick_error` | error | A worker poll pass threw |
+| `queue_notifier_unavailable` | warn | LISTEN/NOTIFY could not be subscribed; polling remains the guarantee |
 | `log_dropped` | warn | Records were discarded, with how many and why |
 | `log_driver_failed` | error | A sink threw; its records are being lost |
 

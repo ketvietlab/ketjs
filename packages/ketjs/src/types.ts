@@ -329,8 +329,31 @@ export type FnMeta = {
  * vocabulary, including enqueue: moving work out of an HTTP request or chaining
  * it to another job must not become a way around the operation boundary.
  */
+/**
+ * When a job runs on its own, with nobody asking.
+ *
+ * Two forms, because they answer different questions and the second one costs a
+ * timezone. `every` is an interval and has no wall clock in it at all. `dailyAt`
+ * is a wall-clock time somewhere, which is the only way to say "after the shop
+ * closes" and the reason a timezone has to be named.
+ */
+export type JobSchedule = { every: string } | { dailyAt: string; timezone?: string }
+
 export type JobSpec = {
   queue?: string
+  /**
+   * Run this job on a schedule as well as on demand.
+   *
+   * Once per tenant database, with no company: the framework knows which tenants
+   * exist and does not know what a company is. A job that has per-company work to
+   * do declares `crossCompany` to see them and enqueues per company from there.
+   *
+   * A tick missed while nothing was running is skipped, not replayed. Three days
+   * of downtime produce one run, not three, and the record says how many ticks
+   * were passed over — a job that needs to know what it missed can read its own
+   * ledger, which is more truthful than three identical runs.
+   */
+  schedule?: JobSchedule
   input?: Record<string, string>
   effects?: string[]
   crossCompany?: boolean
@@ -344,6 +367,7 @@ export type JobSpec = {
 export type JobMeta = {
   by: string
   queue: string
+  schedule?: JobSchedule
   input: Record<string, string>
   effects: string[]
   crossCompany: boolean
@@ -357,6 +381,15 @@ export type JobEnqueueOptions = {
   uniqueKey?: string
   /** Zero is highest priority. */
   priority?: number
+  /**
+   * Enqueue into one company other than the caller's.
+   *
+   * Only an operation that declares `crossCompany` may do this, because only that
+   * operation was allowed to see more than one company in the first place. It
+   * exists for the fan-out a scheduled job has to perform: the schedule itself runs
+   * once per tenant with no company, and the work is per legal entity.
+   */
+  company?: string
 }
 
 export type JobEnqueueResult = { id: string; existing: boolean }

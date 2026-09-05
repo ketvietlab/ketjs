@@ -680,12 +680,27 @@ export function createContext(o: {
           o.queueNotify === undefined
             ? await queueFor(adapter)
             : await createQueue(adapter, { notify: o.queueNotify })
+        // Enqueueing into another company is the fan-out a scheduled job has to
+        // perform: the schedule runs once per tenant with no company, and the work
+        // belongs to legal entities. It is gated on the same declaration that let
+        // this operation see more than one company in the first place, so the
+        // capability is in the manifest rather than in this call.
+        const { company: target, ...rest } = options ?? {}
+        const named = target?.trim()
+        if (named && !operation.crossCompany) {
+          throw new KetError({
+            code: 'E_ENQUEUE_COMPANY_NOT_ALLOWED',
+            module: operation.by,
+            message: `"${fnKey}" enqueued "${name}" into company "${named}" without declaring crossCompany`,
+            hint: 'declare crossCompany: true if this really acts across legal entities, or drop the company',
+          })
+        }
         return queue.enqueue(name, args, {
-          ...options,
+          ...rest,
           queue: meta.queue,
           maxAttempts: meta.maxAttempts,
           actor: o.actor ?? null,
-          scope,
+          scope: named ? { company: named, companies: [named], branch: null, branches: null } : scope,
         })
       },
     },

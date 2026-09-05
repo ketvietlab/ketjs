@@ -80,6 +80,7 @@ Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision
 | `parseCookies`, `SESSION_COOKIE` | Parse cookies and reference the framework session-cookie name. |
 | `createStreams`, `memoryStreamStore`, `dbStreamStore` | Create resumable stream writers and backing stores. |
 | `createQueue`, `queueFor`, `JOB_CHANNEL` | Manage durable job state and queue wake-up channels. |
+| `validateSchedule`, `tickAt`, `ticksBetween`, `parseEvery`, `claimDue` | Read a job schedule, and claim its due tick in one tenant. |
 | `createIdempotency` | Persist and replay idempotent operation results. |
 | `effectTransport`, `memoryTransport`, `unavailableTransport` | Execute or test declared outbound messages. |
 | `validateOutboundMessage` | Validate an outbound transport payload. |
