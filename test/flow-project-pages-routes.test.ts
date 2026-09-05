@@ -156,3 +156,25 @@ test('flow project pages route: specialized tree and URL-owned create preserve h
   const refused = await app.client.request(collection, { method: 'PUT' })
   assert.equal(refused.status, 405)
 })
+
+/**
+ * A tree you can search (FLW-034).
+ *
+ * `page.list` has taken a search since it was written and this route has
+ * passed it for as long — through `?q=`, which until now only a hand-typed URL
+ * could set. A project with three hundred documents had a tree and no way to
+ * find anything in it.
+ */
+test('flow project pages: the document tree carries a search box that filters it', async (t) => {
+  const { app } = await boot(t)
+  const path = '/admin/flow/projects/platform/pages?lang=en'
+
+  const opened = await (await app.client.get(path)).text()
+  // The box is really on the page, with the name the route reads.
+  assert.match(opened, /name="q"/)
+
+  const all = await (await app.client.get(path)).text()
+  const searched = await (await app.client.get(`${path}&q=Local`)).text()
+  assert.notEqual(all, searched, 'and typing in it changes what comes back')
+  assert.match(searched, /value="Local"/, 'the box keeps what was typed')
+})
