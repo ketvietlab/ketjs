@@ -92,7 +92,37 @@ const statusTone = (status: string): 'positive' | 'info' | 'warning' | 'neutral'
         ? 'warning'
         : 'neutral'
 
-export const sitesScreen = (_: Translator, rows: SiteRow[], frame: Frame, locale = ''): TemplateResult => (
+/**
+ * All / on / off, as three links.
+ *
+ * `active` is on every one of these list contracts and no screen passed it, so
+ * a suspended site and a retired form were indistinguishable from a live one
+ * in the only place anybody looks.
+ */
+const activeFilter = (_: Translator, href: (state: string) => string, chosen: string): TemplateResult =>
+  inline([
+    linkButton({ label: _('website_backend.state.all'), href: href('all'), size: 'compact' }),
+    linkButton({
+      label: _('website_backend.state.active'),
+      href: href('active'),
+      size: 'compact',
+      variant: chosen === 'active' ? 'secondary' : 'tertiary',
+    }),
+    linkButton({
+      label: _('website_backend.state.inactive'),
+      href: href('inactive'),
+      size: 'compact',
+      variant: chosen === 'inactive' ? 'secondary' : 'tertiary',
+    }),
+  ])
+
+export const sitesScreen = (
+  _: Translator,
+  rows: SiteRow[],
+  frame: Frame,
+  locale = '',
+  active = 'all',
+): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.sites.title')}
@@ -110,6 +140,11 @@ export const sitesScreen = (_: Translator, rows: SiteRow[], frame: Frame, locale
           variant: 'secondary',
         }),
       ]),
+      activeFilter(
+        _,
+        (state) => `/admin/website/sites?state=${state}${locale ? `&${locale.slice(1)}` : ''}`,
+        active,
+      ),
       rows.length === 0
         ? emptyState(_('website_backend.sites.empty'), _('website_backend.sites.emptyHint'))
         : dataTable(_, {
@@ -1290,6 +1325,7 @@ export const preflightScreen = (
   siteId: string,
   frame: Frame,
   locale = '',
+  scope = 'all',
 ): TemplateResult => (
   <RecordScreen
     translator={_}
@@ -1300,6 +1336,20 @@ export const preflightScreen = (
         linkButton({
           label: _('website_backend.action.backToContent'),
           href: `/admin/website/pages?site=${encodeURIComponent(siteId)}${locale ? `&${locale.slice(1)}` : ''}`,
+        }),
+        // The scan over every page is the one that can be capped; asking about
+        // the published set is a bounded question with a definite answer.
+        linkButton({
+          label: _('website_backend.preflight.scopeAll'),
+          href: `/admin/website/preflight?site=${encodeURIComponent(siteId)}&scope=all${locale ? `&${locale.slice(1)}` : ''}`,
+          size: 'compact',
+          variant: scope === 'all' ? 'secondary' : 'tertiary',
+        }),
+        linkButton({
+          label: _('website_backend.preflight.scopePublished'),
+          href: `/admin/website/preflight?site=${encodeURIComponent(siteId)}&scope=published${locale ? `&${locale.slice(1)}` : ''}`,
+          size: 'compact',
+          variant: scope === 'published' ? 'secondary' : 'tertiary',
         }),
       ]),
       ...(result.capped
@@ -1516,12 +1566,19 @@ export const formsScreen = (
   siteId: string | null,
   frame: Frame,
   locale = '',
+  active = 'all',
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.forms.title')}
     frame={frame}
     body={stack([
+      activeFilter(
+        _,
+        (state) =>
+          `/admin/website/forms?site=${encodeURIComponent(siteId ?? '')}&state=${state}${locale ? `&${locale.slice(1)}` : ''}`,
+        active,
+      ),
       inline([
         linkButton({
           label: _('website_backend.action.newForm'),
@@ -1903,6 +1960,7 @@ const submissionActions = (
   fields: string[],
   retentionDays: number | null,
   locale: string,
+  status = 'all',
 ): TemplateResult[] => [
   <Section
     title={_('website_backend.submissions.export')}
@@ -1915,12 +1973,16 @@ const submissionActions = (
             action={`/admin/website/forms/${formId}/submissions/export${locale}`}
             method="get"
             layout="inline"
+            hidden={{ status }}
             fields={[
               {
                 name: 'fields',
                 label: _('website_backend.submissions.exportFields'),
                 value: fields.join(', '),
-                help: _('website_backend.submissions.exportFieldsHint'),
+                help:
+                  status === 'all'
+                    ? _('website_backend.submissions.exportFieldsHint')
+                    : `${_('website_backend.submissions.exportFieldsHint')} ${_('website_backend.submissions.exportScoped')}`,
                 required: true,
               },
             ]}
@@ -2020,6 +2082,7 @@ export const submissionsScreen = (
             options.fields ?? [],
             options.retentionDays ?? null,
             options.locale ?? '',
+            options.status ?? 'all',
           )
         : []),
       rows.length === 0
