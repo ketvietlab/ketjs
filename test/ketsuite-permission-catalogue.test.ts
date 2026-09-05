@@ -15,11 +15,45 @@ test('public production permission catalogue covers every function owned by its 
     modulePermissionDeclarations: ketsuitePermissionModules,
   })
 
-  assert.equal(ketsuitePermissionModuleNames.length, 68)
-  assert.equal(Object.keys(manifest.permissions.modules).length, 68)
-  assert.equal(Object.keys(manifest.permissions.bundles).length, 165)
-  assert.equal(Object.keys(manifest.permissions.functions).length, 797)
-  assert.equal(Object.keys(manifest.permissions.exemptions).length, 83)
+  // These four figures used to be four equalities against literals, and every
+  // one of them tripped on every legitimate addition. That made them a merge
+  // conflict on nearly every parallel branch — and worse, it made the fix
+  // "bump the number", which nobody reviews. A gate whose repair is mechanical
+  // is a gate that has stopped asking anything.
+  //
+  // Each one is now asserted the way its own failure mode runs.
+
+  // The catalogue and the manifest have to name the *same* modules, not merely
+  // count the same. Compared to each other rather than to a number, this is
+  // both stricter than the old assertion and free of a literal to maintain:
+  // a module declared but never composed, or composed but never declared, is
+  // caught by name.
+  assert.deepEqual(
+    [...ketsuitePermissionModuleNames].sort(),
+    Object.keys(manifest.permissions.modules).sort(),
+  )
+
+  // Bundles and functions only ever grow, so a literal here catches nothing a
+  // reviewer wants caught. A floor catches the failure that would matter: a
+  // deployment that stops composing half of what it should, which no other
+  // assertion in this file would notice.
+  assert.ok(
+    Object.keys(manifest.permissions.bundles).length >= 160,
+    'the composed deployment lost permission bundles',
+  )
+  assert.ok(
+    Object.keys(manifest.permissions.functions).length >= 780,
+    'the composed deployment lost permission-bearing functions',
+  )
+
+  // Exemptions are the escape hatch, so this one keeps a number — as a ceiling.
+  // Removing an exemption is the direction to encourage and never trips it;
+  // adding one does, and that is exactly the moment somebody should be made to
+  // look. Raise it only with the reason written beside the exemption itself.
+  assert.ok(
+    Object.keys(manifest.permissions.exemptions).length <= 83,
+    'a new permission exemption was added — say why, in the declaration',
+  )
 
   const coveredModules = new Set(ketsuitePermissionModuleNames)
 

@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, idempotencyKey, routesOf } from '../channel_api/core.ts'
 import { CASE_KINDS, TERMINAL_STATES } from '../crm/types.ts'
 
 type Req = Parameters<Route>[1]
@@ -307,17 +307,6 @@ const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown) =
             },
           ]),
       ),
-    }),
-  }
-}
-
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req): string | ReturnType<typeof domainFailure> => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
     }),
   }
 }

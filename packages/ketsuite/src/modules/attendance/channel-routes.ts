@@ -6,7 +6,7 @@
 // framework resolves the actor from the session, and attendance resolves the
 // employee from the actor, so an operator can only ever punch their own clock.
 
-import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, idempotencyKey, routesOf } from '../channel_api/core.ts'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 
 type Req = Parameters<Route>[1]
@@ -74,17 +74,6 @@ const punchResult = {
     sessionId: string,
   },
   required: ['kind', 'occurredAt', 'sessionId'],
-}
-
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
-    }),
-  }
 }
 
 const localDate = (value: string): boolean => {
