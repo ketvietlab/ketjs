@@ -170,6 +170,10 @@ checks those; given none it checks every page on the site that is not in the bin
 question an operator actually asks after a deployment changes. It answers `ok`, how many pages were
 looked at, and the ones that would break with their errors.
 
+An unnamed run reads a thousand pages and reports `capped` beyond that, and a capped run is **never**
+`ok` however clean the pages it reached were: a partial scan cannot answer "is this site safe to
+publish" with yes. Naming what it did find is still worth more than refusing to answer at all.
+
 ## SEO and the public projection
 
 `website_seo` adds four optional fields to an entry it does not own — `metaDescription`, `canonical`,

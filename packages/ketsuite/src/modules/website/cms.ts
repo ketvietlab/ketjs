@@ -30,6 +30,9 @@ import { isReservedPath, reservedPrefixes } from './paths.ts'
 import { preflightEntry } from './renderable.ts'
 
 const SITE_ROLES = new Set(['administrator', 'editor', 'author', 'contributor'])
+/** How many pages one unnamed preflight will read. Beyond it, the answer is "ask again by id". */
+const PREFLIGHT_SCAN_LIMIT = 1_000
+
 const MAX_JSON_BYTES = 512 * 1024
 const hasControlCharacter = (value: string): boolean =>
   [...value].some((character) => {
@@ -977,7 +980,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
    */
   preflightPublication: defineFn({
     input: { siteId: 'id', entryIds: 'json?' },
-    output: { ok: 'bool', checked: 'int?', unrenderable: 'json?', errors: 'json?' },
+    output: { ok: 'bool', checked: 'int?', capped: 'bool?', unrenderable: 'json?', errors: 'json?' },
     effects: [
       'read:website.Site',
       'read:website.Entry',
@@ -991,17 +994,26 @@ export const cmsFunctions: Record<string, FnSpec> = {
       const Entry = ctx.table('website.Entry')
       // Absent means every page on the site that is not in the bin, which is
       // the question an operator actually asks after a deployment changes.
-      const rows = ids
+      // One past the ceiling, so a site larger than the scan can say so.
+      const found = ids
         ? await ctx.db.all(from(Entry).where(eq(Entry.siteId, args.siteId), inArray(Entry.id, ids)))
         : await ctx.db.all(
-            from(Entry).where(eq(Entry.siteId, args.siteId), ne(Entry.status, 'trash')).limit(1_000),
+            from(Entry)
+              .where(eq(Entry.siteId, args.siteId), ne(Entry.status, 'trash'))
+              .limit(PREFLIGHT_SCAN_LIMIT + 1),
           )
+      const capped = found.length > PREFLIGHT_SCAN_LIMIT
+      const rows = capped ? found.slice(0, PREFLIGHT_SCAN_LIMIT) : found
       const unrenderable = []
       for (const entry of rows) {
         const check = await preflightEntry(ctx, entry)
         if (check.errors.length) unrenderable.push(check)
       }
-      return { ok: unrenderable.length === 0, checked: rows.length, unrenderable }
+      // A partial scan cannot answer "is this site safe to publish" with yes,
+      // so a capped run is never ok however clean the pages it reached were.
+      // Naming the pages it did find is still worth more than refusing to say
+      // anything.
+      return { ok: unrenderable.length === 0 && !capped, checked: rows.length, capped, unrenderable }
     },
   }),
 

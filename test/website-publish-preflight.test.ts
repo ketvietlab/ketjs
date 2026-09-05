@@ -213,3 +213,30 @@ test('preflight: an entry with no revision yet is not reported as broken', async
   assert.equal(clean.ok, true)
   assert.deepEqual(clean.unrenderable, [])
 })
+
+test('preflight: a scan that did not reach the whole site never answers "fine"', async () => {
+  const db = await boot()
+  await seed(db, [paragraph])
+
+  // A thousand and one pages, written straight in: the point is the size of
+  // the site, not the path that created it, and every one of them is clean.
+  const now = new Date().toISOString()
+  for (let n = 0; n < 1_001; n += 1)
+    await db.run(
+      `INSERT INTO website_entry
+         ("companyId", "createdAt", "updatedAt", id, "siteId", type, slug, path, title, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['acme', now, now, `bulk-${n}`, 'site1', 'website.page', `b${n}`, `/b${n}`, `Trang ${n}`, 'draft'],
+    )
+
+  const answer = (await before(db, 'website.preflightPublication', { siteId: 'site1' })) as Result & {
+    capped?: boolean
+  }
+  assert.equal(answer.capped, true, 'the site is larger than one scan')
+  assert.deepEqual(answer.unrenderable, [], 'and nothing it reached was broken')
+  assert.equal(
+    answer.ok,
+    false,
+    'a partial scan cannot answer "is this site safe to publish" with yes, however clean the part it saw',
+  )
+})
