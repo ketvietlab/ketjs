@@ -41,6 +41,7 @@ export const reservationDetailScreen = (
   permissions: {
     amend: boolean
     checkIn: boolean
+    holdRoom: boolean
     adjustDeparture: boolean
     checkOut: boolean
     cancel: boolean
@@ -48,6 +49,7 @@ export const reservationDetailScreen = (
   } = {
     amend: true,
     checkIn: true,
+    holdRoom: true,
     adjustDeparture: true,
     checkOut: true,
     cancel: true,
@@ -128,6 +130,70 @@ export const reservationDetailScreen = (
               },
             ]}
           />
+        }
+      />,
+    )
+  }
+
+  // Choosing the room before the guest arrives is the desk's own decision, made
+  // once and kept. Offered while the stay is still ahead of them; after check-in
+  // the room is theirs and changing it is `moveRoom`.
+  if (reservation.state === 'confirmed' && reservation.stayId && permissions.holdRoom) {
+    const held = reservation.stay?.assignments?.find((assignment) => assignment.state === 'held')
+    actions.push(
+      <Section
+        title={_('hospitality_core.reservation.action.holdRoom')}
+        description={
+          held
+            ? _('hospitality_core.reservation.action.holdRoomKept', {
+                room: held.roomName ?? held.roomId,
+              })
+            : _('hospitality_core.reservation.action.holdRoomHint')
+        }
+        body={
+          rooms.length ? (
+            <>
+              <RecordForm
+                action={action}
+                method="post"
+                submit={_(
+                  held
+                    ? 'hospitality_core.reservation.action.holdRoomChange'
+                    : 'hospitality_core.reservation.action.holdRoom',
+                )}
+                submitVariant="secondary"
+                hidden={{ operation: 'hold-room', lang: locale }}
+                fields={[
+                  {
+                    name: 'roomId',
+                    label: _('hospitality_core.reservation.field.room'),
+                    type: 'select',
+                    required: true,
+                    value: held?.roomId ?? '',
+                    options: rooms.map((candidate) => ({
+                      value: candidate.id,
+                      label: `${candidate.code} · ${candidate.name}`,
+                    })),
+                  },
+                ]}
+              />
+              {held ? (
+                <RecordForm
+                  action={action}
+                  method="post"
+                  submit={_('hospitality_core.reservation.action.releaseRoomHold')}
+                  submitVariant="tertiary"
+                  hidden={{ operation: 'release-room-hold', lang: locale }}
+                  fields={[]}
+                />
+              ) : null}
+            </>
+          ) : (
+            emptyState(
+              _('hospitality_core.reservation.empty.availableRooms'),
+              _('hospitality_core.reservation.empty.availableRoomsHint'),
+            )
+          )
         }
       />,
     )
