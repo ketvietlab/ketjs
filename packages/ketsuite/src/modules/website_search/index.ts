@@ -2,6 +2,7 @@ import { defineModule } from '@ketvietlab/ketjs'
 import { fills } from './fills.ts'
 import { functions } from './functions.ts'
 import { islands } from './islands.ts'
+import { jobs } from './jobs.ts'
 import { models } from './models.ts'
 
 export default defineModule({
@@ -28,4 +29,5 @@ export default defineModule({
   functions,
   islands,
   models,
+  jobs,
 })

@@ -213,3 +213,87 @@ test('index: searching is anonymous, because a visitor has no session', () => {
   assert.equal(manifest.functions['website_search.searchIndexed']?.anonymous, true)
   assert.notEqual(manifest.functions['website_search.reindexSite']?.anonymous, true)
 })
+
+/**
+ * The index made the write side cheap and left the read side a scan: every
+ * document of the site pulled into memory on every keystroke and filtered in
+ * JavaScript, which is exactly what the model's own comment says the index
+ * exists to stop.
+ */
+test('search: a page of hits does not read the whole site', async () => {
+  const db = await boot()
+  await site(db)
+  for (let i = 0; i < 12; i += 1) await write(db, `p${i}`, `Trang so ${i}`)
+  await call(db, 'website_search.reindexSite', { siteId: 'site1', passes: 50 })
+
+  // Rows returned per read, which is the difference the change is about: the
+  // old code read every document of the site and sliced in JavaScript, so one
+  // read came back with twelve rows however small the page was.
+  const widest: number[] = []
+  const watched = new Proxy(db, {
+    get(target, key: string | symbol) {
+      const held = Reflect.get(target, key) as unknown
+      if (key !== 'all' || typeof held !== 'function') return held
+      return async (...args: unknown[]) => {
+        const rows = (await (held as (...a: unknown[]) => Promise<unknown[]>).apply(target, args)) ?? []
+        widest.push(rows.length)
+        return rows
+      }
+    },
+  })
+
+  const answer = (
+    await callFn(
+      'website_search.searchIndexed',
+      { siteId: 'site1', q: 'trang', limit: 3 },
+      { adapter: watched as Adapter, manifest, scope: SCOPE },
+    )
+  ).value as Search
+
+  assert.equal(answer.hits.length, 3, 'the page is the size that was asked for')
+  assert.equal(answer.total, 12, 'and the total counts what was not returned')
+  assert.ok(widest.length > 0, 'the search reads something')
+  assert.ok(
+    Math.max(...widest) <= 3,
+    `a read came back with ${Math.max(...widest)} rows for a page of 3: the match is not in the query`,
+  )
+})
+
+test('search: a wildcard a visitor typed is a character, not a pattern', async () => {
+  const db = await boot()
+  await site(db)
+  await write(db, 'giam-gia', 'Giam 50% hom nay')
+  await write(db, 'khac', 'Chuyen khac')
+  await call(db, 'website_search.reindexSite', { siteId: 'site1', passes: 50 })
+
+  // Two characters, so this reaches the query rather than stopping at the
+  // minimum term length - which is what made an earlier version of this test
+  // pass without the escaping doing anything.
+  assert.equal(
+    (await search(db, '%%')).total,
+    0,
+    'unescaped, this is "anything" twice over and returns the whole site',
+  )
+  assert.equal(
+    (await search(db, 'gia_')).total,
+    0,
+    'unescaped, the underscore matches any character and this finds "giam"',
+  )
+
+  // And the literal a visitor actually meant still matches.
+  const real = await search(db, '50%')
+  assert.equal(real.total, 1)
+  assert.equal(real.hits[0]?.title, 'Giam 50% hom nay')
+})
+
+test('search: the sweep is what keeps the index level between publications', () => {
+  // reindexSite said in its own comment that it existed so "an operator or a
+  // job" could drive a rebuild, and there was no job: between publications the
+  // index only caught up through searchIndexed, three passes at a time, paid
+  // for by whichever visitors searched first.
+  const sweep = manifest.jobs['website_search.indexSweep']
+  assert.ok(sweep, 'the sweep must be composed')
+  assert.equal(sweep?.crossCompany, true, 'every legal entity has sites of its own')
+  assert.deepEqual(sweep?.schedule, { every: '1h' })
+  assert.ok(manifest.jobs['website_search.rebuildStale'], 'and the per-company pass it queues')
+})

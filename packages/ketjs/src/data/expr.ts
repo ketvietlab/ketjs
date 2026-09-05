@@ -105,7 +105,22 @@ export const numericCompare = (c: Col, cmp: '=' | '<>' | '>' | '<' | '>=' | '<='
   value,
   numeric: true,
 })
-export const like = (c: Col, value: string): Expr => ({ op: 'like', col: col(c), value })
+export const like = (c: Col, value: string, escapePattern = false): Expr => ({
+  op: 'like',
+  col: col(c),
+  value,
+  escape: escapePattern,
+})
+
+/**
+ * What a person typed, as a literal inside a LIKE pattern.
+ *
+ * Wrap the result in the `%` you want and pass `escapePattern` to `like` or
+ * `ilike`; without both halves the escaping does nothing, because the backslash
+ * is only special when the statement says ESCAPE.
+ */
+export const likeLiteral = (value: string): string =>
+  value.replace(/[\\%_]/g, (character) => `\\${character}`)
 export const ilike = (c: Col, value: string, escapePattern = false): Expr => ({
   op: 'like',
   col: col(c),
