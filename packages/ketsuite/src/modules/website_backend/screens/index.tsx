@@ -1076,11 +1076,28 @@ export const formCreateScreen = (
   />
 )
 
-export const submissionsScreen = (
-  _: Translator,
-  rows: Array<{ id: string; payload: unknown; consent: boolean; status: string; createdAt: string }>,
-  frame: Frame,
-): TemplateResult => (
+export type SubmissionRow = {
+  id: string
+  summary: Record<string, unknown>
+  consent: boolean
+  status: string
+  createdAt: string
+  held?: boolean
+  holdReason?: string | null
+  purgedAt?: string | null
+}
+
+/**
+ * The queue, showing what the queue is allowed to show.
+ *
+ * This column used to print the whole payload. It cannot any more, and should
+ * not have: working a contact form meant reading everyone's phone number
+ * whether or not that was the job. What it shows now is whichever answers the
+ * form itself declares safe to preview - nothing, unless someone chose
+ * otherwise - and it says which of the two empty cases it is looking at, so a
+ * blank column reads as a decision rather than as a broken screen.
+ */
+export const submissionsScreen = (_: Translator, rows: SubmissionRow[], frame: Frame): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.submissions.title')}
@@ -1100,9 +1117,22 @@ export const submissionsScreen = (
                 cell: (row) => row.createdAt,
               },
               {
-                key: 'payload',
-                label: _('website_backend.field.payload'),
-                cell: (row) => code(JSON.stringify(row.payload)),
+                key: 'summary',
+                label: _('website_backend.field.summary'),
+                cell: (row) =>
+                  row.purgedAt
+                    ? badge(_('website_backend.state.purged'), 'neutral')
+                    : Object.keys(row.summary ?? {}).length
+                      ? code(JSON.stringify(row.summary))
+                      : badge(_('website_backend.state.noPreview'), 'neutral'),
+              },
+              {
+                key: 'hold',
+                label: _('website_backend.field.hold'),
+                cell: (row) =>
+                  row.held
+                    ? badge(row.holdReason ?? _('website_backend.state.yes'), 'warning')
+                    : badge(_('website_backend.state.no'), 'neutral'),
               },
               {
                 key: 'consent',
