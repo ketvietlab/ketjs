@@ -1593,12 +1593,99 @@ export type SubmissionRow = {
  * otherwise - and it says which of the two empty cases it is looking at, so a
  * blank column reads as a decision rather than as a broken screen.
  */
-export const submissionsScreen = (_: Translator, rows: SubmissionRow[], frame: Frame): TemplateResult => (
+/**
+ * Taking the answers out, and erasing them, from the screen they live on.
+ *
+ * Both name what they will touch before they touch it. An export lists the
+ * fields it will carry, because "export everything" is how personal data ends
+ * up somewhere nobody can account for; an erasure says the window it will
+ * apply and asks to be confirmed, because it cannot be undone.
+ */
+const submissionActions = (
+  _: Translator,
+  formId: string,
+  fields: string[],
+  retentionDays: number | null,
+  locale: string,
+): TemplateResult[] => [
+  <Section
+    title={_('website_backend.submissions.export')}
+    description={_('website_backend.submissions.exportHint')}
+    body={
+      <Surface
+        padding="compact"
+        body={
+          <RecordForm
+            action={`/admin/website/forms/${formId}/submissions/export${locale}`}
+            method="get"
+            layout="inline"
+            fields={[
+              {
+                name: 'fields',
+                label: _('website_backend.submissions.exportFields'),
+                value: fields.join(', '),
+                help: _('website_backend.submissions.exportFieldsHint'),
+                required: true,
+              },
+            ]}
+            submit={_('website_backend.submissions.export')}
+            submitVariant="secondary"
+          />
+        }
+      />
+    }
+  />,
+  ...(retentionDays == null
+    ? []
+    : [
+        <Section
+          title={_('website_backend.submissions.purge')}
+          description={_('website_backend.submissions.purgeHint')}
+          body={
+            <Surface
+              padding="compact"
+              body={
+                <RecordForm
+                  action={`/admin/website/forms/${formId}/submissions/purge${locale}`}
+                  layout="inline"
+                  fields={[
+                    {
+                      name: 'confirm',
+                      label: _('website_backend.submissions.purgeConfirm'),
+                      type: 'checkbox',
+                      help: `${_('website_backend.field.retentionDays')}: ${retentionDays}`,
+                    },
+                  ]}
+                  submit={_('website_backend.submissions.purge')}
+                  submitVariant="secondary"
+                />
+              }
+            />
+          }
+        />,
+      ]),
+]
+
+export const submissionsScreen = (
+  _: Translator,
+  rows: SubmissionRow[],
+  frame: Frame,
+  options: { formId?: string; fields?: string[]; retentionDays?: number | null; locale?: string } = {},
+): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.submissions.title')}
     frame={frame}
-    body={
+    body={stack([
+      ...(options.formId
+        ? submissionActions(
+            _,
+            options.formId,
+            options.fields ?? [],
+            options.retentionDays ?? null,
+            options.locale ?? '',
+          )
+        : []),
       rows.length === 0
         ? emptyState(_('website_backend.submissions.empty'), _('website_backend.submissions.emptyHint'))
         : dataTable(_, {
@@ -1646,7 +1733,7 @@ export const submissionsScreen = (_: Translator, rows: SubmissionRow[], frame: F
                 cell: (row) => badge(row.status, 'info'),
               },
             ],
-          })
-    }
+          }),
+    ])}
   />
 )
