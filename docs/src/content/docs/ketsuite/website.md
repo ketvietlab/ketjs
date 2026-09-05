@@ -628,6 +628,38 @@ caller asked for, and making a retry an error only punishes a double-submitted f
 The lesson is not about taxonomy. A write with no matching read is not a feature that is merely
 incomplete — it is a feature that damages the data and hides the damage.
 
+### A redirect could be created but never corrected
+
+`saveRedirect` is an upsert and the screen minted a fresh id on every submit, so nothing could reach
+the update branch. `Redirect` is unique on `(companyId, siteId, fromPath)`, which made the
+consequence sharper than "you cannot edit": submitting the correction for a mistyped path hit the
+unique index, and — because nothing checked it first — came back as a raw driver exception and a 500
+rather than an answer. The typo kept the address, and the correct redirect could never be added.
+
+Three things close it. `saveRedirect` looks for the path before writing and returns
+`duplicateRedirect` the way `saveDomain` has always returned `duplicateHost`. The row carries an
+edit control that posts to its own id. And the `active` flag, which the contract has always had and
+the screen always wrote as `true`, is now a control — so the list's "active / inactive" column,
+which until now could only ever read "active", says something.
+
+Off rather than deleted, because the unique index holds one row per `fromPath`: deleting to free the
+path and deactivating to stop it are the same reversible act, and one of them keeps the history of
+what that address used to do. `listRedirects` has always taken an `active` filter; the screen passes
+it now, which is what makes an inactive row findable.
+
+### A host could be attached and never detached
+
+The same shape on `saveDomain`: an upsert, a screen that always sent a new id, and a unique index on
+the host. So a host attached to the wrong site, or a decommissioned one, stayed — and kept its claim
+on that name, so nobody could attach it anywhere else either. Neither the primary nor
+`redirectToPrimary` could be changed once set, even though `saveDomain` promotes a new primary and
+demotes the old one in the same transaction.
+
+`deleteDomain` refuses to remove the primary while the site still has other hosts. Canonical URLs
+and the sitemap are built from the primary, so a site left with hosts and no primary publishes the
+wrong address to every crawler that asks; promote another one first. The last host goes freely,
+primary or not — a site with no domains is a site nobody has pointed anywhere yet.
+
 ### Preview links accumulate
 
 Every visit to an entry's preview screen mints another token. That is deliberate: a preview is
