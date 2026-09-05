@@ -44,6 +44,17 @@ export const menus: Record<string, MenuDef> = {
     needs: 'website_form.listForms',
     sequence: 50,
   },
+  /**
+   * Above configuration, because it is a thing to glance at rather than a
+   * thing to set up.
+   */
+  'website.health': {
+    parent: 'website',
+    label: 'menu.health',
+    path: '/admin/website/health',
+    needs: 'website.listSites',
+    sequence: 70,
+  },
   'website.configuration': { parent: 'website', label: 'menu.configuration', sequence: 90 },
   'website.sites': {
     parent: 'website.configuration',

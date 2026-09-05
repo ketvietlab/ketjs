@@ -13,6 +13,7 @@ import {
   redirectsScreen,
   searchIndexScreen,
   siteDomainsScreen,
+  siteHealthScreen,
   siteMembersScreen,
   submissionRecordScreen,
   formsScreen,
@@ -43,6 +44,7 @@ import type {
   PublicationRow,
   RedirectRow,
   SeoValues,
+  SiteHealth,
   PreflightResult,
   MenuRow,
   RevisionDiff,
@@ -1082,6 +1084,48 @@ export const routes: Record<string, RouteEntry> = {
       const result = await ctx.call('website.rollbackPublication', { id: randomUUID(), siteId }, url, req)
       if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
       return seeOther(inLocale(url, `/admin/website/publications?site=${encodeURIComponent(siteId)}`))
+    },
+
+  /**
+   * Which site needs looking at, across all of them.
+   *
+   * Every other screen is scoped to one site because every contract behind
+   * them takes a `siteId`, which makes "is anything wrong" a question you can
+   * only answer by opening each site in turn and remembering. Read-only, and
+   * built entirely from reads that already existed.
+   */
+  '/admin/website/health':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const sites = await sitesOf(ctx, url, req)
+      const rows = await Promise.all(
+        sites.map(async (site): Promise<SiteHealth> => {
+          const [domains, publications, index] = await Promise.all([
+            ctx.call('website.listDomains', { siteId: site.id }, url, req) as Promise<DomainRow[]>,
+            ctx.call('website.listPublications', { siteId: site.id }, url, req) as Promise<PublicationRow[]>,
+            ctx.call('website_search.indexStatus', { siteId: site.id }, url, req) as Promise<{
+              state: string
+              current: boolean
+            }>,
+          ])
+          return {
+            siteId: site.id,
+            title: site.title ?? site.name,
+            active: site.active !== false,
+            primaryHost: domains.find((domain) => domain.primary)?.host ?? null,
+            domainCount: domains.length,
+            indexState: index?.state ?? 'absent',
+            indexCurrent: index?.current === true,
+            preparedCount: publications.filter((row) => row.state === 'prepared').length,
+            hasActivePublication: publications.some((row) => row.state === 'active'),
+          }
+        }),
+      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.health.title',
+        body: (_, frame) => siteHealthScreen(_, rows, frame, localeQuery(url)),
+      })
     },
 
   '/admin/website/preflight':
