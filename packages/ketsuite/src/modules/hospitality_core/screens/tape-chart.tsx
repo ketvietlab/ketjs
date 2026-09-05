@@ -1,11 +1,14 @@
 import {
   addCalendarDays,
+  badge,
   dateKeyIn,
   emptyState,
   formatDateTime,
   type Frame,
+  linkButton,
   providerName,
   ScheduleBoard,
+  Section,
   setupAction,
   type TapeChart,
   type TemplateResult,
@@ -15,9 +18,15 @@ import {
 } from './shared.tsx'
 import { BoardPage, shell } from '../../../ui/index.ts'
 
+/** What the viewer may start from here, rather than what they may look at. */
+export type TapeChartPermissions = { book: boolean }
+
+const WORKFLOW_ORDER = ['draft', 'confirmed', 'checked_in', 'checked_out', 'no_show', 'cancelled']
+
 export const tapeChartScreen = (
   _: Translator,
   chart: TapeChart,
+  may: TapeChartPermissions,
   locale: string,
   frame: Frame,
 ): TemplateResult => {
@@ -82,6 +91,24 @@ export const tapeChartScreen = (
     }
   })
   const title = _('hospitality_core.screen.tapeChart.title')
+  const day = (key: string) =>
+    formatDateTime(locale, new Date(`${key}T12:00:00Z`), {
+      timeZone: 'UTC',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+  // The route has always taken a `?from=`, so the seven columns can be any week.
+  // Nothing on the page said which, and there was no way to reach another one.
+  const week = (offset: number) =>
+    `/admin/hospitality/tape-chart?from=${encodeURIComponent(addCalendarDays(startKey, offset))}&lang=${encodeURIComponent(locale)}`
+  const lastKey = addCalendarDays(startKey, dayCount - 1)
+
+  // Only the states actually on this week's board. A key to a colour nobody can
+  // see is a key to nothing.
+  const shown = new Set(events.map((event) => String(event.state)))
+  const legend = WORKFLOW_ORDER.filter((state) => shown.has(state))
+
   return shell(
     _,
     title,
@@ -89,20 +116,70 @@ export const tapeChartScreen = (
       variant="operational"
       frame={frame}
       title={title}
+      description={`${day(startKey)} – ${day(lastKey)}`}
+      actions={
+        may.book
+          ? linkButton({
+              label: _('hospitality_core.reservation.action.new'),
+              href: `/admin/hospitality/reservations?create=1&lang=${encodeURIComponent(locale)}`,
+              variant: 'primary',
+            })
+          : undefined
+      }
+      controls={
+        <>
+          {linkButton({
+            label: _('hospitality_core.screen.tapeChart.previous'),
+            href: week(-dayCount),
+            variant: 'tertiary',
+            size: 'compact',
+          })}
+          {linkButton({
+            label: _('hospitality_core.screen.tapeChart.next'),
+            href: week(dayCount),
+            variant: 'tertiary',
+            size: 'compact',
+          })}
+          {linkButton({
+            label: _('hospitality_core.screen.tapeChart.availability'),
+            href: `/admin/hospitality/inventory?lang=${encodeURIComponent(locale)}`,
+            variant: 'secondary',
+            size: 'compact',
+          })}
+        </>
+      }
       body={
-        <ScheduleBoard
-          corner={_('hospitality_core.screen.tapeChart.corner')}
-          days={days}
-          rows={rows}
-          events={events}
-          empty={emptyState(
-            _('hospitality_core.screen.tapeChart.empty'),
-            _('hospitality_core.screen.tapeChart.emptyHint'),
-            {
-              actions: setupAction(_('hospitality_core.room.action.create'), '/admin/hospitality/rooms/new'),
-            },
-          )}
-        />
+        <>
+          <ScheduleBoard
+            corner={_('hospitality_core.screen.tapeChart.corner')}
+            days={days}
+            rows={rows}
+            events={events}
+            empty={emptyState(
+              _('hospitality_core.screen.tapeChart.empty'),
+              _('hospitality_core.screen.tapeChart.emptyHint'),
+              {
+                actions: setupAction(
+                  _('hospitality_core.room.action.create'),
+                  '/admin/hospitality/rooms/new',
+                ),
+              },
+            )}
+          />
+          {legend.length ? (
+            <Section
+              title={_('hospitality_core.screen.tapeChart.legend')}
+              description={_('hospitality_core.screen.tapeChart.legendHint')}
+              body={
+                <div data-ui="inline">
+                  {legend.map((state) =>
+                    badge(_(`hospitality_core.stayState.${state}`), workflowTone(state), state),
+                  )}
+                </div>
+              }
+            />
+          ) : null}
+        </>
       }
     />,
     { ...frame, topbar: false },
