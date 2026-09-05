@@ -855,8 +855,7 @@ export const revisionsScreen = (
 export const previewScreen = (
   _: Translator,
   entry: EntryRow,
-  token: string,
-  expiresAt: string,
+  minted: { token: string; expiresAt: string } | null,
   frame: Frame,
   basePath = '/admin/website/pages',
   locale = '',
@@ -867,32 +866,70 @@ export const previewScreen = (
     frame={frame}
     body={stack([
       <Notice tone="info" title={entry.title} message={_('website_backend.preview.hint')} />,
+      // Minting used to happen on the GET, so opening this screen - or a link
+      // prefetcher touching it - issued another token every time. It is a
+      // decision now, and the two things the contract has always accepted and
+      // no screen offered are the decision's terms.
       <Surface
         body={
           <RecordForm
-            action={basePath}
-            method="get"
+            action={`${basePath}/${entry.id}/preview${locale}`}
             fields={[
               {
-                name: 'token',
-                label: _('website_backend.preview.token'),
-                value: token,
-                disabled: true,
-                span: 'full',
+                name: 'ttlSeconds',
+                label: _('website_backend.preview.ttl'),
+                type: 'select',
+                value: '900',
+                options: [
+                  { value: '300', label: _('website_backend.preview.ttl5') },
+                  { value: '900', label: _('website_backend.preview.ttl15') },
+                  { value: '3600', label: _('website_backend.preview.ttl60') },
+                ],
+                help: _('website_backend.preview.ttlHint'),
               },
               {
-                name: 'expiresAt',
-                label: _('website_backend.preview.expires'),
-                value: expiresAt,
-                disabled: true,
+                name: 'oneTime',
+                label: _('website_backend.preview.oneTime'),
+                type: 'checkbox',
+                help: _('website_backend.preview.oneTimeHint'),
                 span: 'full',
               },
             ]}
-            submit={_('website_backend.action.backToContent')}
-            submitVariant="secondary"
+            submit={_('website_backend.action.createPreview')}
+            submitVariant="primary"
           />
         }
       />,
+      ...(minted
+        ? [
+            <Surface
+              body={
+                <RecordForm
+                  action={basePath}
+                  method="get"
+                  fields={[
+                    {
+                      name: 'token',
+                      label: _('website_backend.preview.token'),
+                      value: minted.token,
+                      disabled: true,
+                      span: 'full',
+                    },
+                    {
+                      name: 'expiresAt',
+                      label: _('website_backend.preview.expires'),
+                      value: minted.expiresAt,
+                      disabled: true,
+                      span: 'full',
+                    },
+                  ]}
+                  submit={_('website_backend.action.backToContent')}
+                  submitVariant="secondary"
+                />
+              }
+            />,
+          ]
+        : []),
       <Section
         title={_('website_backend.preview.revokeTitle')}
         description={_('website_backend.preview.revokeHint')}
@@ -1921,6 +1958,7 @@ export const submissionsScreen = (
     retentionDays?: number | null
     locale?: string
     pager?: Pager | null
+    status?: string
   } = {},
 ): TemplateResult => (
   <ListScreenFrame
@@ -1929,6 +1967,38 @@ export const submissionsScreen = (
     frame={frame}
     footer={options.pager ? pagerBar(_, options.pager) : null}
     body={stack([
+      // `listSubmissions` and `countSubmissions` have both taken this since
+      // they were written. Without it a form with a year of entries is read
+      // thirty at a time and the erased rows sit among the live ones.
+      ...(options.formId
+        ? [
+            <Surface
+              padding="compact"
+              body={
+                <RecordForm
+                  action={`/admin/website/forms/${options.formId}/submissions${options.locale ?? ''}`}
+                  method="get"
+                  layout="inline"
+                  fields={[
+                    {
+                      name: 'status',
+                      label: _('website_backend.field.status'),
+                      type: 'select',
+                      value: options.status ?? 'all',
+                      options: [
+                        { value: 'all', label: _('website_backend.state.all') },
+                        { value: 'new', label: _('website_backend.state.new') },
+                        { value: 'purged', label: _('website_backend.state.purged') },
+                      ],
+                    },
+                  ]}
+                  submit={_('website_backend.action.apply')}
+                  submitVariant="secondary"
+                />
+              }
+            />,
+          ]
+        : []),
       ...(options.formId
         ? submissionActions(
             _,
@@ -2539,7 +2609,14 @@ export const publicationsScreen = (
   sites: FormOption[],
   siteId: string | null,
   frame: Frame,
-  options: { errors?: string[]; locale?: string; notice?: string | null } = {},
+  options: {
+    errors?: string[]
+    locale?: string
+    notice?: string | null
+    state?: string
+    /** What is live right now, read apart from the list so a filter cannot hide it. */
+    activeId?: string | null
+  } = {},
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
@@ -2547,6 +2624,39 @@ export const publicationsScreen = (
     frame={frame}
     body={stack([
       siteSwitcher(_, '/admin/website/publications', sites, siteId, options.locale ?? ''),
+      // Superseded sets accumulate one per activation and are the majority of
+      // the list within a week, which buries the two rows anybody came to see.
+      ...(siteId
+        ? [
+            <Surface
+              padding="compact"
+              body={
+                <RecordForm
+                  action={`/admin/website/publications${options.locale ?? ''}`}
+                  method="get"
+                  layout="inline"
+                  hidden={{ site: siteId }}
+                  fields={[
+                    {
+                      name: 'state',
+                      label: _('website_backend.field.status'),
+                      type: 'select',
+                      value: options.state ?? 'all',
+                      options: [
+                        { value: 'all', label: _('website_backend.state.all') },
+                        { value: 'prepared', label: _('website_backend.pubstate.prepared') },
+                        { value: 'active', label: _('website_backend.pubstate.active') },
+                        { value: 'superseded', label: _('website_backend.pubstate.superseded') },
+                      ],
+                    },
+                  ]}
+                  submit={_('website_backend.action.apply')}
+                  submitVariant="secondary"
+                />
+              }
+            />,
+          ]
+        : []),
       ...(options.notice
         ? [<Notice tone="positive" title={_('website_backend.publications.done')} message={options.notice} />]
         : []),
@@ -2616,6 +2726,7 @@ export const publicationsScreen = (
                     row.state === 'prepared' ? (
                       <RecordActions
                         action={`/admin/website/publications/${row.id}/activate${options.locale ?? ''}`}
+                        hidden={{ expectedPublicationId: options.activeId ?? '' }}
                         size="compact"
                         actions={[
                           {
