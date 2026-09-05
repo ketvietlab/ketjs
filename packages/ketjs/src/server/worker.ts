@@ -212,6 +212,7 @@ export async function bootWorker(
   let loop: Promise<void> | null = null
   let unsubscribe: (() => Promise<void>) | null = null
   let sweepTimer: ReturnType<typeof setInterval> | null = null
+  let sweeping: Promise<unknown> | null = null
   let wakeResolve: (() => void) | null = null
   const inFlight = new Set<Promise<void>>()
   const controllers = new Map<string, AbortController>()
@@ -570,7 +571,14 @@ export async function bootWorker(
       // to two seconds when there is nothing to do, and a schedule that only fires
       // when the queue is busy is not a schedule.
       sweepTimer = setInterval(() => {
-        void sweepSchedules().catch((error) => logger.error('schedule_error', error, { workerId }))
+        // Held so that close() can wait for it. A sweep still running when the
+        // tenant source shuts under it would fail on a closed pool and report an
+        // error that is really just the process stopping.
+        sweeping = sweepSchedules()
+          .catch((error) => logger.error('schedule_error', error, { workerId }))
+          .finally(() => {
+            sweeping = null
+          })
       }, sweepMs)
       sweepTimer.unref?.()
     }
@@ -616,6 +624,7 @@ export async function bootWorker(
       if (!graceful)
         for (const controller of controllers.values()) controller.abort(new Error('worker shutting down'))
       if (sweepTimer) clearInterval(sweepTimer)
+      await sweeping
       await unsubscribe?.()
       await source.close()
       await baseTransport.close?.()
