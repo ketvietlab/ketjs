@@ -185,6 +185,23 @@ always shows what a visitor would actually see.
 - Pages under a reserved namespace are not offered, for the same reason the sitemap omits them: a
   module route answers that path first, so the result would not open.
 
+### The box renders its own results
+
+The box used to submit to a hardcoded `/tim-kiem`. No module route serves that path and no page had to
+exist there, so a visitor who searched landed on a 404 — the query layer was complete and unreachable.
+
+It now submits nowhere and renders results in place. That is not a shortcut: the query lives in the
+URL, and a page resolver is handed a path rather than a query string, so **no server-rendered surface
+can see it**. A results page would need either a framework change to widen the resolver contract for
+every deployment, or a theme template placing an island — which would make every website theme depend
+on `website_search` for one optional section. Rendering next to the box costs neither.
+
+The browser half calls `website.resolveSite`, `website.searchPublished` and
+`website.countSearchPublished` — the same anonymous functions the sitemap and the public reader are
+held to, so anything it offers is a page the reader will serve. It applies the same two-character
+floor `searchPublished` applies, rather than spending a round trip to be told nothing, and it keeps
+`?q=` in the URL so a search can be linked and reloaded.
+
 ### The three public views agree
 
 The sitemap, the site's own search and `getEntryByPath` — the reader that actually serves a page —
@@ -286,11 +303,8 @@ whatever the page resolver returns. The framework does not name the fields — t
 them decides what is public — so this closed the SEO half without teaching `boot.ts` about
 `website_seo`.
 
-**Still open: the search box.** `website_search` declares a `label` prop that is never in scope, so it
-always shows its fallback, and its form action is a hardcoded `/tim-kiem` rather than a path the site
-chooses. There is also nowhere for it to post — no surface renders results. The query layer exists and
-is tested (`searchPublished`, `countSearchPublished`), so what is missing is the public surface, not
-the behaviour behind it. That needs a decision about where results live before it needs code.
+The search box still shows its fallback label, because `label` is a prop and props are projected from
+that scope. That is cosmetic; the box itself now works (see below).
 
 ## Testing
 
