@@ -22,6 +22,56 @@ CRM — and Website composes them through optional bridge modules.
 - `website_form_mail`: optional bridge that tells a form's owner a request arrived.
 - `website_retail`, `website_hospitality`, `crm_website`: optional bridges to the owning domain.
 
+## Publishing a set
+
+`publishEntry` flips one entry's pointer the moment someone presses the button on it, so a set of
+related changes reaches visitors piecemeal — a page whose menu link is not there yet, or a link to a
+page that is not published. A **publication** freezes which revision of which entry goes out, and
+activating it moves all of them or none.
+
+```ts
+// File: examples/website/publish.ts
+await ctx.call('website.preparePublication', {
+  id: 'pub-2026-09-05',
+  siteId: 'moc',
+  entryIds: ['gioi-thieu', 'chuyen-ben-am-tra'],
+})
+// Nothing is public yet — a prepared publication is a proposal.
+await ctx.call('website.activatePublication', {
+  id: 'pub-2026-09-05',
+  expectedPublicationId: '', // what was active when the reviewer looked
+})
+```
+
+Both paths stay. A site that publishes one page at a time is not doing anything wrong, and this does
+not take that away.
+
+### The site pointer is the concurrency token
+
+Activation moves `Site.activePublicationId` under compare-and-set **before** it touches any entry.
+Two activations that both started from the same base would otherwise each believe they replaced the
+other, and the entry pointers would end up a mix of the two. The loser gets
+`website.error.publicationStaleBase` and has run nothing.
+
+Pass `expectedPublicationId` to say which base the reviewer was looking at; omit it to accept whatever
+is current.
+
+### What a publication refuses, and how
+
+Preparing names the entry in every refusal — a caller publishing twenty pages needs to know which one
+is the problem, not that "an entry" was wrong. An entry outside the site, in the trash, or without a
+current revision stops the whole prepare, and nothing is written.
+
+Preparing the same set twice under the same id returns what was prepared; the set is identified by a
+hash over `entryId:revisionId`, so ordering is not identity. The same id for a *different* set is
+`website.error.publicationConflict`. Replaying an activation is not an error — it already happened.
+
+### Rollback is a publication
+
+Going back prepares the previous set again rather than undoing. The history stays, and the entries go
+through the same activation the forward direction does — so a page trashed since it was last public
+does not come back by the side door.
+
 ## SEO and the public projection
 
 `website_seo` adds four optional fields to an entry it does not own — `metaDescription`, `canonical`,

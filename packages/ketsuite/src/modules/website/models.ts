@@ -17,9 +17,52 @@ export const models: Record<string, ModelDef> = {
       theme: 'text',
       tokens: 'json?',
       siteGroup: 'text?',
+      /**
+       * Which publication a visitor is currently reading.
+       *
+       * Optional because a site that has only ever used publishEntry has none,
+       * and must keep working: the per-entry pointer stays the fallback.
+       */
+      activePublicationId: 'ref:website.Publication?',
       active: 'bool',
     },
     indexes: { active_name: { fields: ['companyId', 'active', 'name'] } },
+  },
+
+  /**
+   * One publish, one record.
+   *
+   * Publishing was per entry: a page went live the moment someone pressed the
+   * button on it, so a set of related changes reached visitors piecemeal — a
+   * page whose menu link did not exist yet, or a link to a page that was not
+   * published. A publication freezes which revision of which entry goes out,
+   * and activating it moves all of them or none.
+   *
+   * The frozen set lives in `entries` rather than in rows of its own: it is an
+   * immutable snapshot read as a whole, and never queried by its parts.
+   */
+  Publication: {
+    scope: 'company',
+    timestamps: true,
+    fields: {
+      id: 'id',
+      siteId: 'ref:website.Site',
+      /** prepared → active → superseded. A superseded publication is history. */
+      state: 'text',
+      entries: 'json',
+      entryCount: 'int',
+      contentHash: 'text',
+      preparedBy: 'text?',
+      preparedAt: 'datetime',
+      activatedAt: 'datetime?',
+      supersededAt: 'datetime?',
+      /** Which publication this one replaced, so a rollback can name its base. */
+      previousId: 'ref:website.Publication?',
+    },
+    indexes: {
+      site_state: { fields: ['companyId', 'siteId', 'state'] },
+      site_prepared: { fields: ['companyId', 'siteId', 'preparedAt'] },
+    },
   },
   SiteDomain: {
     scope: 'company',

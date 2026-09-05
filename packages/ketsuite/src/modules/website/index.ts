@@ -11,6 +11,7 @@ import { functions } from './functions.ts'
 import { tokens } from './tokens.ts'
 import { contentTypes, taxonomies } from './content-types.ts'
 import { cmsFunctions } from './cms.ts'
+import { publicationFunctions } from './publication.ts'
 import { customerFunctions } from './customer.ts'
 import { jobs } from './jobs.ts'
 
@@ -66,6 +67,16 @@ export default defineModule({
       'error.invalidRedirect': 'Hai đường dẫn redirect phải khác nhau và là đường dẫn nội bộ.',
       'error.redirectCycle': 'Redirect tạo thành vòng lặp.',
       'error.lastAdministrator': 'Website phải luôn còn ít nhất một quản trị viên.',
+      'error.publicationEmpty': 'Cần chọn ít nhất một nội dung để xuất bản.',
+      'error.publicationTooLarge': 'Một lần xuất bản vượt quá số nội dung cho phép.',
+      'error.publicationDuplicate': 'Một nội dung xuất hiện hai lần trong lần xuất bản này.',
+      'error.publicationEntryOutsideSite': 'Nội dung không thuộc website này.',
+      'error.publicationEntryTrashed': 'Nội dung đã bị xóa nên không thể xuất bản.',
+      'error.publicationConflict': 'Mã xuất bản này đã dùng cho một tập nội dung khác.',
+      'error.publicationNotFound': 'Không tìm thấy lần xuất bản.',
+      'error.publicationSuperseded': 'Lần xuất bản này đã bị thay thế.',
+      'error.publicationStaleBase': 'Nội dung công khai vừa thay đổi. Hãy xem lại rồi xuất bản.',
+      'error.publicationNoBase': 'Chưa có lần xuất bản trước để quay lại.',
       'customer.error.realmUnavailable': 'Website chưa sẵn sàng cho tài khoản khách hàng.',
       'customer.error.invalidName': 'Tên khách hàng không hợp lệ hoặc quá dài.',
       'customer.error.invalidEmail': 'Địa chỉ email không hợp lệ.',
@@ -123,6 +134,16 @@ export default defineModule({
       'error.invalidRedirect': 'Redirect paths must be distinct local paths.',
       'error.redirectCycle': 'The redirect creates a cycle.',
       'error.lastAdministrator': 'A site must always retain at least one administrator.',
+      'error.publicationEmpty': 'Select at least one piece of content to publish.',
+      'error.publicationTooLarge': 'One publication exceeds the allowed number of entries.',
+      'error.publicationDuplicate': 'An entry appears twice in this publication.',
+      'error.publicationEntryOutsideSite': 'That entry does not belong to this site.',
+      'error.publicationEntryTrashed': 'That entry is in the trash and cannot be published.',
+      'error.publicationConflict': 'This publication id was already used for a different set.',
+      'error.publicationNotFound': 'Publication not found.',
+      'error.publicationSuperseded': 'This publication has already been replaced.',
+      'error.publicationStaleBase': 'What is public changed while you were working. Review, then publish.',
+      'error.publicationNoBase': 'There is no earlier publication to roll back to.',
       'customer.error.realmUnavailable': 'Customer accounts are not ready for this site.',
       'customer.error.invalidName': 'The customer name is invalid or too long.',
       'customer.error.invalidEmail': 'The email address is invalid.',
@@ -144,7 +165,7 @@ export default defineModule({
   joints,
   sections,
   views,
-  functions: { ...functions, ...cmsFunctions, ...customerFunctions },
+  functions: { ...functions, ...cmsFunctions, ...publicationFunctions, ...customerFunctions },
   jobs,
   tokens,
 })
