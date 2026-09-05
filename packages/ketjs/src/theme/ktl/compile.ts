@@ -25,6 +25,7 @@ export type CompileOpts = {
   renderRegion?: RegionRenderer
   renderIsland?: IslandRenderer
   renderSections?: SectionsRenderer
+  renderSlot?: (name: string, scope: Scope) => string
   /** Renders another template by name, with the scope this one built for it. */
   renderTemplate?: (name: string, scope: Scope, from: string) => string
   name?: string
@@ -249,6 +250,19 @@ export function compileKtl(source: string, opts: CompileOpts = {}): Compiled {
           })
         return (s, out) => {
           out.push(opts.renderSections ? opts.renderSections(s) : '')
+        }
+      }
+      if (n.k === 'slot') {
+        // A printed report has no page tree to draw children from, so the same
+        // refusal that guards `sections` guards this.
+        if (opts.mode === 'report')
+          throw new KetError({
+            code: 'E_REPORT_WEB_PRIMITIVE',
+            message: `${at({ name, line: n.line })} uses slot`,
+          })
+        const slot = n.name
+        return (s, out) => {
+          out.push(opts.renderSlot ? opts.renderSlot(slot, s) : '')
         }
       }
       if (n.k === 'render') {

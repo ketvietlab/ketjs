@@ -804,9 +804,11 @@ export const cmsFunctions: Record<string, FnSpec> = {
         }
       const type = ctx.manifest.contentTypes[String(args.type)]
       if (!type) return invalid('type', 'website.error.invalidContentType')
+      // How many sections a page may hold is now counted over the tree and
+      // reported by validateLayout, so the flat length check that used to sit
+      // here would only have bounded the top level of a nested document.
       if (
         !Array.isArray(args.layout) ||
-        args.layout.length > 100 ||
         jsonBytes(args.layout) + jsonBytes(args.fields ?? {}) > MAX_JSON_BYTES
       )
         return invalid('layout', 'website.error.payloadTooLarge')

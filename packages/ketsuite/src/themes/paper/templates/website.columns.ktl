@@ -1,0 +1,4 @@
+<section class="columns" data-ket-section="columns" data-gap="{{ gap | default: 'normal' }}">
+  <div class="col col-left">{% slot "left" %}</div>
+  <div class="col col-right">{% slot "right" %}</div>
+</section>
