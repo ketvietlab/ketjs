@@ -26,6 +26,7 @@ import type {
   MediaRow,
   MenuRow,
   SiteRow,
+  SubmissionRow,
   TaxonomyRow,
 } from './screens/index.tsx'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
@@ -937,7 +938,7 @@ export const routes: Record<string, RouteEntry> = {
         { formId: params.id },
         url,
         req,
-      )) as never[]
+      )) as SubmissionRow[]
       return adminPage(ctx, url, req, {
         title: 'website_backend.submissions.title',
         body: (_, frame) => submissionsScreen(_, rows, frame),
