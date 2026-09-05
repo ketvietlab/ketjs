@@ -740,6 +740,30 @@ and the sitemap are built from the primary, so a site left with hosts and no pri
 wrong address to every crawler that asks; promote another one first. The last host goes freely,
 primary or not — a site with no domains is a site nobody has pointed anywhere yet.
 
+### A question no screen could answer
+
+Every Website screen is scoped to one site, because every contract behind them takes a `siteId`.
+That is right for doing the work and wrong for noticing it: "is anything wrong" could only be
+answered by opening each site in turn and remembering what the last one said.
+
+And the things worth knowing are exactly the ones nobody goes looking for. A site with no primary
+domain publishes the wrong canonical to every crawler that asks — and there is no screen you would
+have opened to find that out, because you had no reason to suspect it. A publication prepared last
+week and never activated looks like nothing at all. An index that has not caught up degrades search
+quietly, by design.
+
+The overview reads what already existed — `listDomains`, `listPublications`, `indexStatus`, one
+round per site — and lists only the sites with something to say, each row leading to the screen that
+fixes it. Two decisions about what *not* to warn about:
+
+- **An index that never existed is not an index that fell behind.** A site nobody has searched has no
+  index and needs none; `state: 'absent'` raises nothing.
+- **No host at all outranks the wrong host.** A site nothing points at answers nowhere, which is not
+  a canonical-URL problem, and stacking both messages would bury the one that matters.
+
+The number of sites read is on the screen whether or not anything is wrong, because a list that only
+ever holds problems cannot tell "nothing is wrong" from "nothing was checked".
+
 ### Twelve readers, no writer
 
 `Entry.status === 'trash'` is honoured in twelve places across five modules. The public resolver
