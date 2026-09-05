@@ -53,6 +53,15 @@ export const models: Record<string, ModelDef> = {
       entryCount: 'int',
       contentHash: 'text',
       /**
+       * The distinct section types the frozen set places.
+       *
+       * Recorded so the last gate before content goes live can ask whether the
+       * deployment still provides them without re-reading every revision: a
+       * module removed between preparing and activating is exactly the window
+       * that turns a publication into a five hundred on the storefront.
+       */
+      sectionTypes: 'json?',
+      /**
        * What other modules froze alongside the entries, keyed by module name.
        *
        * `website` does not read it. A publication has to be able to carry the

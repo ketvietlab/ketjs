@@ -57,6 +57,9 @@ export default defineModule({
       'error.invalidPath': 'Đường dẫn nội bộ không hợp lệ.',
       'error.invalidSlug': 'Slug chỉ được chứa chữ, số và dấu gạch ngang.',
       'error.revisionNotFound': 'Không tìm thấy revision.',
+      'error.entryUnrenderable': 'Trang này dùng section mà bản cài đặt hiện tại không còn cung cấp.',
+      'error.publicationUnrenderable':
+        'Bản xuất bản chứa trang dùng section mà bản cài đặt hiện tại không còn cung cấp.',
       'error.invalidDatetime': 'Ngày giờ không hợp lệ.',
       'error.invalidTaxonomy': 'Taxonomy chưa được đăng ký.',
       'error.invalidParent': 'Term cha không hợp lệ.',
@@ -124,6 +127,9 @@ export default defineModule({
       'error.invalidPath': 'The local path is invalid.',
       'error.invalidSlug': 'The slug may only contain letters, numbers and hyphens.',
       'error.revisionNotFound': 'The revision was not found.',
+      'error.entryUnrenderable': 'This page places a section this deployment no longer provides.',
+      'error.publicationUnrenderable':
+        'The publication holds a page placing a section this deployment no longer provides.',
       'error.invalidDatetime': 'The date and time are invalid.',
       'error.invalidTaxonomy': 'The taxonomy is not registered.',
       'error.invalidParent': 'The parent term is invalid.',
