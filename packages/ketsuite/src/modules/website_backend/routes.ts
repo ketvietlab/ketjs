@@ -5,7 +5,7 @@ import { readForm, seeOther } from '../backend/forms.ts'
 import {
   contentScreen,
   entryFormScreen,
-  formCreateScreen,
+  formEditorScreen,
   formsScreen,
   mediaFormScreen,
   mediaScreen,
@@ -24,6 +24,7 @@ import type {
   EntryKind,
   EntryRow,
   MediaRow,
+  FormRow,
   MenuRow,
   SiteRow,
   SubmissionRow,
@@ -82,6 +83,49 @@ const resultErrors = (result: unknown, _: ReturnType<ServeContext['translate']>)
     return `${issue.field ? `${issue.field}: ` : ''}${translated}`
   })
 }
+
+/**
+ * The contract fields the editor owns, read back out of a posted form.
+ *
+ * Blank means blank, not "leave it alone": `saveForm` treats an absent field
+ * as "keep what is there" so that a writer without the field cannot wipe it,
+ * but this screen *shows* all three, so the operator saw the box and left it
+ * empty on purpose.
+ */
+const formContractFields = (form: Record<string, string>) => {
+  const notice = (form.consentText ?? '').trim()
+  const preview = (form.summaryFields ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+  const days = (form.retentionDays ?? '').trim()
+  return {
+    consentText: notice || null,
+    summaryFields: preview.length ? preview : null,
+    // A number field in a browser will not submit letters, but a refusal that
+    // names the field beats a five hundred if one ever arrives: -1 fails the
+    // domain check, where E_INVALID_INPUT on NaN would throw past the screen.
+    retentionDays: days === '' ? null : Number.isInteger(Number(days)) ? Number(days) : -1,
+  }
+}
+
+const formValuesOf = (row: {
+  name?: unknown
+  notifyTo?: unknown
+  successMessage?: unknown
+  consentText?: unknown
+  summaryFields?: unknown
+  retentionDays?: unknown
+  schema?: unknown
+}): Record<string, string> => ({
+  name: String(row.name ?? ''),
+  notifyTo: String(row.notifyTo ?? ''),
+  successMessage: String(row.successMessage ?? ''),
+  consentText: String(row.consentText ?? ''),
+  summaryFields: Array.isArray(row.summaryFields) ? row.summaryFields.join(', ') : '',
+  retentionDays: row.retentionDays == null ? '' : String(row.retentionDays),
+  schema: JSON.stringify(row.schema ?? {}, null, 2),
+})
 
 const entryOf = (ctx: ServeContext, url: URL, req: Req, id: string) =>
   ctx.call('website.getEntry', { id }, url, req) as Promise<EntryDetail | null>
@@ -889,7 +933,7 @@ export const routes: Record<string, RouteEntry> = {
           return adminPage(ctx, url, req, {
             title: 'website_backend.forms.newTitle',
             body: (_, frame) =>
-              formCreateScreen(_, siteId, frame, {
+              formEditorScreen(_, siteId, frame, {
                 values: form,
                 errors: [_('website_backend.error.invalidJson')],
                 locale: localeQuery(url),
@@ -904,6 +948,7 @@ export const routes: Record<string, RouteEntry> = {
             schema: schema.value,
             successMessage: form.successMessage,
             notifyTo: form.notifyTo || null,
+            ...formContractFields(form),
             active: true,
           },
           url,
@@ -914,7 +959,7 @@ export const routes: Record<string, RouteEntry> = {
         return adminPage(ctx, url, req, {
           title: 'website_backend.forms.newTitle',
           body: (_, frame) =>
-            formCreateScreen(_, siteId, frame, {
+            formEditorScreen(_, siteId, frame, {
               values: form,
               errors: resultErrors(result, _),
               locale: localeQuery(url),
@@ -924,8 +969,59 @@ export const routes: Record<string, RouteEntry> = {
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       return adminPage(ctx, url, req, {
         title: 'website_backend.forms.newTitle',
-        body: (_, frame) => formCreateScreen(_, siteId, frame, { locale: localeQuery(url) }),
+        body: (_, frame) => formEditorScreen(_, siteId, frame, { locale: localeQuery(url) }),
       })
+    },
+
+  '/admin/website/forms/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const posted = req.method === 'POST' ? await readForm(req) : null
+      const siteId = posted?.siteId || url.searchParams.get('site') || selectedSite(url, sites)
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      // listForms is the screen's own data source and forms are few, so the
+      // editor reads through it rather than adding a function whose only
+      // caller would be this route.
+      const forms = (await ctx.call('website_form.listForms', { siteId }, url, req)) as FormRow[]
+      const existing = forms.find((row) => row.id === params.id)
+      if (!existing) return text(_('website_backend.error.notFound'), { status: 404 })
+
+      const render = (values: Record<string, string>, errors?: string[]) =>
+        adminPage(ctx, url, req, {
+          title: 'website_backend.forms.editTitle',
+          body: (_, frame) =>
+            formEditorScreen(_, siteId, frame, {
+              id: params.id,
+              values,
+              errors,
+              locale: localeQuery(url),
+            }),
+        })
+
+      if (req.method === 'GET') return render(formValuesOf(existing))
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = posted ?? {}
+      const schema = parseJson(form.schema)
+      if (!schema.ok) return render(form, [_('website_backend.error.invalidJson')])
+      const result = await ctx.call(
+        'website_form.saveForm',
+        {
+          id: params.id,
+          siteId,
+          name: form.name,
+          schema: schema.value,
+          successMessage: form.successMessage,
+          notifyTo: form.notifyTo || null,
+          ...formContractFields(form),
+        },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/forms?site=${encodeURIComponent(siteId)}`))
+      return render(form, resultErrors(result, _))
     },
 
   '/admin/website/forms/{id}/submissions':
