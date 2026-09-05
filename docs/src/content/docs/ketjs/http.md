@@ -273,6 +273,43 @@ The generic transport buffers at most 1 MiB of JSON by default. Configure `serve
 `Content-Length` and streamed bytes before it runs scope, permission, or actor resolvers, so an
 unauthenticated request cannot make those paths retain an unbounded body first.
 
+## Rate limiting
+
+A deployment may put a ceiling on how often one caller reaches a route:
+
+```ts
+// File: src/deployment.ts
+serve: {
+  rateLimit: (ctx, url, req) =>
+    url.pathname === '/api/token'
+      ? { action: 'auth.refresh', key: callerOf(req), limit: 60, windowMs: 15 * 60_000 }
+      : null,
+}
+```
+
+A refusal is answered `429` with `retry-after`, before the route runs — refusing after doing the work
+is a limit that costs what it was meant to save. Each refusal leaves a `rate_limited` record.
+
+**Return null for almost everything.** The check is durable, which means a database round trip, so
+pointing it at all traffic hands an attacker a lever rather than taking one away. Name the routes where
+*repetition by one identified caller* is the abuse — signing in, refreshing a token, an expensive
+report. Volumetric floods belong to whatever sits in front of the process.
+
+`key` says who is being limited: an account id, a hashed address, a device. It is hashed with the
+action before storage, so the table holds a counter and not a record of who was where. `action` is
+kept, because it is low-cardinality and it is what an operator greps for.
+
+State lives in `ket_rate` in the tenant's own database, created the first time a policy is claimed —
+a deployment that limits nothing carries no limiter state. The worker prunes counters nobody has
+touched for a day; a deployment running no worker should call `pruneRateSlots` itself.
+
+The window is fixed rather than a token bucket, because `limit per windowMs` is what a person means
+and a bucket quietly changes it. The cost, stated: a caller can spend a full allowance at the end of
+one window and another at the start of the next, so the worst case across a boundary is twice the
+limit.
+
+`claimRateSlot` is exported for a module that needs the same ceiling somewhere other than a route.
+
 ## Error handling
 
 `KetError` values serialize their `code`, message, and optional hint. Use stable codes for machine
