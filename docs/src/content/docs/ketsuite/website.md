@@ -740,6 +740,24 @@ and the sitemap are built from the primary, so a site left with hosts and no pri
 wrong address to every crawler that asks; promote another one first. The last host goes freely,
 primary or not — a site with no domains is a site nobody has pointed anywhere yet.
 
+### What you see and what you get
+
+The submissions list filters by status. The export ignored it. So narrowing the screen to the four
+rows you meant and pressing Export handed you every row the form has ever taken — silently, in a file
+named the same either way. The export carries the filter now, says so on the form when one is
+applied, and names the file for what it holds.
+
+Two more `active` filters that the contracts always accepted and no screen passed: on the sites list
+and on the forms list. A suspended site and a retired form were indistinguishable from a live one in
+the only place anybody looks. The sites list reads `listSites` directly rather than through
+`sitesOf` — that helper feeds every screen's site switcher, and a switcher that hid suspended sites
+would make them unreachable rather than merely unlisted.
+
+`preflightPublication` takes `entryIds` and nothing passed it, so the only question the screen could
+ask was "every page on the site" — which is the one that hits the scan ceiling and can then only
+answer "ask again by id". The screen offers the published set as well: a named set is never a partial
+scan, so that question has a definite answer however large the site is.
+
 ### A field that was stored, returned, and dropped
 
 `Site.tokens` could be written, `resolveSite` answered with it, and the storefront threw it away: the

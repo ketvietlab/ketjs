@@ -598,9 +598,21 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
+      // Read directly rather than through sitesOf: that one feeds every
+      // screen's site switcher, and a switcher that hides suspended sites
+      // would make them unreachable rather than merely unlisted.
+      const chosen = url.searchParams.get('state')
+      const filter = chosen === 'active' || chosen === 'inactive' ? { active: chosen === 'active' } : {}
       return adminPage(ctx, url, req, {
         title: 'website_backend.sites.title',
-        body: async (_, frame) => sitesScreen(_, await sitesOf(ctx, url, req), frame, localeQuery(url)),
+        body: async (_, frame) =>
+          sitesScreen(
+            _,
+            (await ctx.call('website.listSites', filter, url, req)) as SiteRow[],
+            frame,
+            localeQuery(url),
+            chosen ?? 'all',
+          ),
       })
     },
 
@@ -1079,10 +1091,25 @@ export const routes: Record<string, RouteEntry> = {
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
       if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
-      const result = (await ctx.call('website.preflightPublication', { siteId }, url, req)) as PreflightResult
+      // `entryIds` has been on this contract since it was written and nothing
+      // passed it, so the only question the screen could ask was "every page on
+      // the site" - which is the one that hits the scan ceiling and can then
+      // only answer "ask again by id". Naming the published set asks a smaller
+      // question the contract answers exactly.
+      const scope = url.searchParams.get('scope') === 'published' ? 'published' : 'all'
+      const published =
+        scope === 'published'
+          ? ((await ctx.call('website.listEntries', { siteId, status: 'published' }, url, req)) as EntryRow[])
+          : []
+      const result = (await ctx.call(
+        'website.preflightPublication',
+        { siteId, ...(scope === 'published' ? { entryIds: published.map((row) => row.id) } : {}) },
+        url,
+        req,
+      )) as PreflightResult
       return adminPage(ctx, url, req, {
         title: 'website_backend.preflight.title',
-        body: (_, frame) => preflightScreen(_, result, siteId, frame, localeQuery(url)),
+        body: (_, frame) => preflightScreen(_, result, siteId, frame, localeQuery(url), scope),
       })
     },
 
@@ -1641,10 +1668,21 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(ctx.localeOf(url, req))
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
-      const rows = siteId ? ((await ctx.call('website_form.listForms', { siteId }, url, req)) as never[]) : []
+      const chosen = url.searchParams.get('state')
+      const rows = siteId
+        ? ((await ctx.call(
+            'website_form.listForms',
+            {
+              siteId,
+              ...(chosen === 'active' || chosen === 'inactive' ? { active: chosen === 'active' } : {}),
+            },
+            url,
+            req,
+          )) as FormRow[])
+        : []
       return adminPage(ctx, url, req, {
         title: 'website_backend.forms.title',
-        body: (_, frame) => formsScreen(_, rows, siteId, frame, localeQuery(url)),
+        body: (_, frame) => formsScreen(_, rows, siteId, frame, localeQuery(url), chosen ?? 'all'),
       })
     },
 
@@ -1779,9 +1817,13 @@ export const routes: Record<string, RouteEntry> = {
         .map((name) => name.trim())
         .filter(Boolean)
       if (!fields.length) return text(_('website_backend.error.invalid'), { status: 400 })
+      // The same narrowing the list is showing. Without it the download and
+      // the screen disagreed and only one of them said so.
+      const chosen = url.searchParams.get('status')
+      const status = chosen && chosen !== 'all' ? chosen : null
       const result = (await ctx.call(
         'website_form.exportSubmissions',
-        { formId: params.id, fields, reason: 'admin.export' },
+        { formId: params.id, fields, ...(status ? { status } : {}), reason: 'admin.export' },
         url,
         req,
       )) as { ok?: boolean; fields?: string[]; rows?: Array<Record<string, unknown>> }
@@ -1789,7 +1831,7 @@ export const routes: Record<string, RouteEntry> = {
       const columns = ['_id', '_createdAt', '_status', ...(result.fields ?? [])]
       return withHeaders(text(csvOf(columns, result.rows ?? [])), {
         'content-type': 'text/csv; charset=utf-8',
-        'content-disposition': `attachment; filename="${safeFilename(params.id)}-submissions.csv"`,
+        'content-disposition': `attachment; filename="${safeFilename(`${params.id}${status ? `-${status}` : ''}`)}-submissions.csv"`,
       })
     },
 
