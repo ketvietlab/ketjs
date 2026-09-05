@@ -27,6 +27,8 @@ import type {
   MediaRow,
   FormRow,
   MenuRow,
+  RevisionDiff,
+  RevisionRow,
   SubmissionAuditRow,
   SubmissionRecord,
   SiteRow,
@@ -129,6 +131,38 @@ const formValuesOf = (row: {
   retentionDays: row.retentionDays == null ? '' : String(row.retentionDays),
   schema: JSON.stringify(row.schema ?? {}, null, 2),
 })
+
+/**
+ * The two revisions being compared, and what changed between them.
+ *
+ * Defaults to the newest two rather than waiting to be asked: "what changed?"
+ * is the question people arrive at this screen holding, and answering it
+ * without a click is the difference between a feature and a form.
+ */
+const revisionDiffOf = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  entryId: string,
+  rows: RevisionRow[],
+): Promise<RevisionDiff | null> => {
+  if (rows.length < 2) return null
+  const known = new Set(rows.map((row) => row.id))
+  const asked = (name: string) => {
+    const value = url.searchParams.get(name)
+    return value && known.has(value) ? value : null
+  }
+  const to = asked('to') ?? rows[0]?.id
+  const from = asked('from') ?? rows[1]?.id
+  if (!to || !from || to === from) return null
+  const result = (await ctx.call(
+    'website.diffRevisions',
+    { entryId, fromRevisionId: from, toRevisionId: to },
+    url,
+    req,
+  )) as (RevisionDiff & { ok?: boolean }) | null
+  return result?.ok ? result : null
+}
 
 const entryOf = (ctx: ServeContext, url: URL, req: Req, id: string) =>
   ctx.call('website.getEntry', { id }, url, req) as Promise<EntryDetail | null>
@@ -282,16 +316,17 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const detail = await entryOf(ctx, url, req, params.id)
       if (!detail || detail.entry.type !== type)
         return text(_('website_backend.error.notFound'), { status: 404 })
-      const rows = (await ctx.call('website.listRevisions', { entryId: params.id }, url, req)) as Array<{
-        id: string
-        version: number
-        kind: string
-        authorId?: string | null
-        createdAt: string
-      }>
+      const rows = (await ctx.call(
+        'website.listRevisions',
+        { entryId: params.id },
+        url,
+        req,
+      )) as RevisionRow[]
+      const diff = await revisionDiffOf(ctx, url, req, params.id, rows)
       return adminPage(ctx, url, req, {
         title: 'website_backend.revisions.title',
-        body: (_, frame) => revisionsScreen(_, detail.entry, rows, frame, localeQuery(url), kind.basePath),
+        body: (_, frame) =>
+          revisionsScreen(_, detail.entry, rows, frame, localeQuery(url), kind.basePath, diff),
       })
     },
 
