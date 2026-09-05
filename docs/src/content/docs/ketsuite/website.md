@@ -604,7 +604,8 @@ render it from.
 
 A placement may now carry `slots`, keyed by the slot names its section declares:
 
-```json
+```jsonc
+// File: examples/website/nested-layout.json
 {
   "type": "website.columns",
   "settings": { "gap": "wide" },
