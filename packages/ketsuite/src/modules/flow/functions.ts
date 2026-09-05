@@ -28,6 +28,16 @@ import {
   startSprint,
 } from './operations.ts'
 import { emptyIssueListState } from './search.ts'
+import {
+  addMember,
+  canReadProject,
+  membersOf,
+  readableProject,
+  readableRow,
+  removeMember,
+  visibleProjects,
+  visibleRows,
+} from './membership.ts'
 import { projectsWithMyWork, projectStateOf, projectStats } from './projects.ts'
 import {
   archivePage,
@@ -40,8 +50,28 @@ import {
   savePage,
 } from './pages.ts'
 
+/**
+ * What passing the membership gate costs in effects.
+ *
+ * Spread into every command that touches a project's data. Named because it is
+ * not a capability one function happens to need — it is the condition all of
+ * them read under, and a list copied at thirty call sites is a list that will
+ * disagree with itself.
+ */
+const membershipEffects = [
+  'read:flow.Project',
+  'read:flow.ProjectMember',
+  'read:flow.ProjectAccessGrant',
+  'read:user.User',
+] as const
+
 const flowReadEffects = [
   'read:flow.Project',
+  // The membership gate every Flow read now passes through — see membership.ts.
+  // Named here rather than at each call site because it is not a capability one
+  // function happens to need; it is the condition all of them read under.
+  'read:flow.ProjectMember',
+  'read:flow.ProjectAccessGrant',
   'read:flow.Column',
   'read:flow.IssueType',
   'read:flow.FieldDef',
@@ -158,7 +188,15 @@ const saveEntity = (
   defineFn({
     input: { values: 'json', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: [`read:${model}`, `write:${model}`],
+    effects: [
+      `read:${model}`,
+      `write:${model}`,
+      'read:flow.Project',
+      'write:flow.ProjectMember',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -169,13 +207,31 @@ const saveEntity = (
       const values = args.values as Record<string, unknown>
       const id = String(values.id ?? '')
       if (!id) return invalid(issue('id', 'flow.error.required'))
+      // Two shapes, one rule. A project's own row is named by its id; everything
+      // else this builds — columns, issue types, epics — names its project in a
+      // column. Either way, writing into a project a caller cannot see is the
+      // thing this refuses, and it refuses it as "not found".
+      const target = model === 'flow.Project' ? id : String(values.projectId ?? '')
       const existing = (await ctx.db.select(model, { id }))[0]
+      const known = model === 'flow.Project' ? Boolean(existing) : true
+      if (known && target && !(await canReadProject(ctx, target)))
+        return invalid(issue('id', 'flow.error.notFound'))
       const cs = ctx
         .change(model, { ...defaults(values, existing), ...values }, existing ?? null)
         .cast(fields)
       const withRequired = required.length ? cs.required(required) : cs
       if (!withRequired.valid) return { ok: false, errors: withRequired.errors }
       await ctx.db.commit(withRequired, existing ? { id } : undefined)
+      // A project nobody can see is not a project anybody asked for, and there
+      // is no other door: membership is what makes it visible, so the person
+      // who created it has to walk through first.
+      if (model === 'flow.Project' && !existing && ctx.actor)
+        await addMember(ctx, {
+          projectId: id,
+          userId: ctx.actor,
+          addedByUserId: ctx.actor,
+          at: new Date().toISOString(),
+        })
       return { ok: true, id }
     },
   })
@@ -190,13 +246,181 @@ export const functions: Record<string, FnSpec> = {
       mine: 'bool?',
     },
     output: { id: 'id', key: 'text', name: 'text', description: 'text?', active: 'bool' },
-    effects: ['read:flow.Project', 'read:flow.Issue'],
+    effects: [
+      'read:flow.Project',
+      'read:flow.Issue',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
     agent: true,
     handler: async (ctx, args) => {
-      const rows = await optionRows(ctx, 'flow.Project', args)
+      // Membership first, then the caller's own `mine` filter. They answer
+      // different questions — "which projects exist for me" and "which of those
+      // am I carrying work in" — and only the first one is a rule.
+      const visible = await visibleProjects(ctx)
+      const rows = (await optionRows(ctx, 'flow.Project', args)).filter(
+        (row) => visible === null || visible.includes(String(row.id)),
+      )
       if (args.mine !== true) return rows
       const mine = await projectsWithMyWork(ctx)
       return rows.filter((row) => mine.has(String(row.id)))
+    },
+  }),
+
+  /**
+   * Who is on a project.
+   *
+   * Reading the membership of a project is reading the project, so it is gated
+   * the same way: somebody who cannot see the project cannot see who is on it,
+   * and finds out nothing by asking.
+   */
+  'project.member.list': defineFn({
+    input: { projectId: 'id' },
+    output: { id: 'id', projectId: 'id', userId: 'id', userName: 'text', addedAt: 'datetime' },
+    effects: [...membershipEffects],
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!(await canReadProject(ctx, args.projectId))) return []
+      return membersOf(ctx, String(args.projectId))
+    },
+  }),
+
+  /**
+   * Put somebody on a project, or take them off.
+   *
+   * Configuration rather than everyday work: adding a person decides what they
+   * may read, which is a different act from moving their cards around. The
+   * caller has to be able to see the project first — you cannot staff a project
+   * you are not on unless you hold the company-wide grant.
+   */
+  'project.member.add': defineFn({
+    input: { projectId: 'id', userId: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [...membershipEffects, 'write:flow.ProjectMember'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const error = command(ctx, args.idempotencyKey)
+      if (error) return error
+      if (!(await canReadProject(ctx, args.projectId)))
+        return invalid(issue('projectId', 'flow.error.notFound'))
+      const user = (await ctx.db.select('user.User', { id: args.userId, active: true }))[0]
+      if (!user) return invalid(issue('userId', 'flow.error.notFound'))
+      await addMember(ctx, {
+        projectId: String(args.projectId),
+        userId: String(args.userId),
+        addedByUserId: ctx.actor,
+        at: new Date().toISOString(),
+      })
+      return { ok: true, id: `${String(args.projectId)}:${String(args.userId)}` }
+    },
+  }),
+
+  'project.member.remove': defineFn({
+    input: { projectId: 'id', userId: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', errors: 'json?' },
+    effects: [...membershipEffects, 'write:flow.ProjectMember'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const error = command(ctx, args.idempotencyKey)
+      if (error) return error
+      if (!(await canReadProject(ctx, args.projectId)))
+        return invalid(issue('projectId', 'flow.error.notFound'))
+      // Removing the last member is allowed and is not an accident to guard
+      // against: a project with nobody on it is closed, which is what somebody
+      // clearing out a project wants. The company-wide grant is how it is
+      // reopened, and that is the point of having one.
+      const removed = await removeMember(ctx, String(args.projectId), String(args.userId))
+      return removed ? { ok: true } : invalid(issue('userId', 'flow.error.notFound'))
+    },
+  }),
+
+  /**
+   * Who reads every project in the company, and the two commands that decide it.
+   *
+   * The widest reach Flow grants, so it is `security` risk with an authority of
+   * its own: this is the row that makes somebody able to read a project nobody
+   * added them to. It exists so membership can be administered at all, and so a
+   * project whose members have left is not unreachable.
+   */
+  'project.access.list': defineFn({
+    input: {},
+    output: { id: 'id', userId: 'id', addedAt: 'datetime' },
+    effects: ['read:flow.ProjectAccessGrant'],
+    agent: true,
+    handler: (ctx) => ctx.db.select('flow.ProjectAccessGrant', {}),
+  }),
+
+  'project.access.grant': defineFn({
+    input: { userId: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:flow.ProjectAccessGrant', 'write:flow.ProjectAccessGrant', 'read:user.User'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const error = command(ctx, args.idempotencyKey)
+      if (error) return error
+      const user = (await ctx.db.select('user.User', { id: args.userId, active: true }))[0]
+      if (!user) return invalid(issue('userId', 'flow.error.notFound'))
+      await ctx.db.insertIfAbsent('flow.ProjectAccessGrant', {
+        id: String(args.userId),
+        userId: args.userId,
+        addedAt: new Date().toISOString(),
+        addedByUserId: ctx.actor,
+      })
+      return { ok: true, id: String(args.userId) }
+    },
+  }),
+
+  'project.access.revoke': defineFn({
+    input: { userId: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', errors: 'json?' },
+    effects: ['read:flow.ProjectAccessGrant', 'write:flow.ProjectAccessGrant'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const error = command(ctx, args.idempotencyKey)
+      if (error) return error
+      const held = (await ctx.db.select('flow.ProjectAccessGrant', { userId: args.userId }))[0]
+      if (!held) return invalid(issue('userId', 'flow.error.notFound'))
+      const G = ctx.table('flow.ProjectAccessGrant')
+      await ctx.db.del(deleteFrom(G).where(eq(G.id, held.id)))
+      return { ok: true }
+    },
+  }),
+
+  /**
+   * The issue counts behind a list of projects, in two reads rather than one
+   * per project — see `projectStats`.
+   */
+  'project.stats': defineFn({
+    input: { projectIds: 'json' },
+    output: { id: 'id', total: 'int', done: 'int', state: 'text' },
+    effects: [
+      'read:flow.Issue',
+      'read:flow.Column',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const asked = Array.isArray(args.projectIds) ? args.projectIds.map(String) : []
+      // A count is a reading. Asking for the totals of a project you are not on
+      // would answer "how much work is in there", which is most of what the
+      // project is.
+      const visible = await visibleProjects(ctx)
+      const ids = visible === null ? asked : asked.filter((id) => visible.includes(id))
+      const stats = await projectStats(ctx, ids)
+      return [...stats].map(([id, counted]) => ({
+        id,
+        total: counted.total,
+        done: counted.done,
+        state: projectStateOf(counted),
+      }))
     },
   }),
 
@@ -208,27 +432,6 @@ export const functions: Record<string, FnSpec> = {
    * `optionRows` caps at 200 rows sorted by name — so the 201st project by
    * name would answer "not found" on its own board.
    */
-  /**
-   * The issue counts behind a list of projects, in two reads rather than one
-   * per project — see `projectStats`.
-   */
-  'project.stats': defineFn({
-    input: { projectIds: 'json' },
-    output: { id: 'id', total: 'int', done: 'int', state: 'text' },
-    effects: ['read:flow.Issue', 'read:flow.Column'],
-    agent: true,
-    handler: async (ctx, args) => {
-      const ids = Array.isArray(args.projectIds) ? args.projectIds.map(String) : []
-      const stats = await projectStats(ctx, ids)
-      return [...stats].map(([id, counted]) => ({
-        id,
-        total: counted.total,
-        done: counted.done,
-        state: projectStateOf(counted),
-      }))
-    },
-  }),
-
   'project.get': defineFn({
     input: { id: 'id' },
     output: {
@@ -240,9 +443,16 @@ export const functions: Record<string, FnSpec> = {
       contentAttachmentId: 'id?',
       active: 'bool',
     },
-    effects: ['read:flow.Project'],
+    effects: [
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
     agent: true,
-    handler: async (ctx, args) => (await ctx.db.select('flow.Project', { id: args.id }))[0] ?? null,
+    // Nothing rather than a refusal: that a project exists is itself the half of
+    // the answer a hidden project must not give away — see readableProject.
+    handler: async (ctx, args) => (await readableProject(ctx, args.id)) ?? null,
   }),
 
   /**
@@ -259,10 +469,10 @@ export const functions: Record<string, FnSpec> = {
     // written" — and the next push started from a blank document and flattened
     // it over the real one.
     output: { id: 'id?', contentAttachmentId: 'id?' },
-    effects: ['read:flow.Project'],
+    effects: ['read:flow.Project', ...membershipEffects],
     agent: true,
     handler: async (ctx, args) => {
-      const row = (await ctx.db.select('flow.Project', { id: args.id }))[0]
+      const row = await readableProject(ctx, args.id)
       return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
     },
   }),
@@ -285,9 +495,19 @@ export const functions: Record<string, FnSpec> = {
       terminalState: 'bool',
       active: 'bool',
     },
-    effects: ['read:flow.Column'],
+    effects: [
+      'read:flow.Column',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+      ...membershipEffects,
+    ],
     agent: true,
     handler: async (ctx, args) => {
+      // A project's configuration is the project. Answering with its columns
+      // for somebody who cannot see the project describes it to them.
+      if (!(await canReadProject(ctx, args.projectId))) return []
       const rows = await ctx.db.select(
         'flow.Column',
         args.includeArchived === true
@@ -313,11 +533,11 @@ export const functions: Record<string, FnSpec> = {
   'column.archive': defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Column', 'write:flow.Column', 'read:flow.Issue'],
+    effects: ['read:flow.Column', 'write:flow.Column', 'read:flow.Issue', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const existing = (await ctx.db.select('flow.Column', { id: args.id }))[0]
+      const existing = await readableRow(ctx, 'flow.Column', args.id)
       if (!existing) return invalid(issue('id', 'flow.error.notFound'))
       const held = await ctx.db.select('flow.Issue', { columnId: args.id, active: true })
       if (held.length) return invalid(issue('id', 'flow.error.columnHasIssues'))
@@ -337,9 +557,17 @@ export const functions: Record<string, FnSpec> = {
       sequence: 'int',
       active: 'bool',
     },
-    effects: ['read:flow.IssueType'],
+    effects: [
+      'read:flow.IssueType',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+      ...membershipEffects,
+    ],
     agent: true,
     handler: async (ctx, args) => {
+      if (!(await canReadProject(ctx, args.projectId))) return []
       const rows = await ctx.db.select(
         'flow.IssueType',
         args.includeArchived === true
@@ -369,11 +597,11 @@ export const functions: Record<string, FnSpec> = {
   'issueType.archive': defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.IssueType', 'write:flow.IssueType', 'read:flow.Issue'],
+    effects: ['read:flow.IssueType', 'write:flow.IssueType', 'read:flow.Issue', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const existing = (await ctx.db.select('flow.IssueType', { id: args.id }))[0]
+      const existing = await readableRow(ctx, 'flow.IssueType', args.id)
       if (!existing) return invalid(issue('id', 'flow.error.notFound'))
       const held = await ctx.db.select('flow.Issue', { typeId: args.id, active: true })
       if (held.length) return invalid(issue('id', 'flow.error.typeHasIssues'))
@@ -404,13 +632,13 @@ export const functions: Record<string, FnSpec> = {
   'board.remember': defineFn({
     input: { projectId: 'id' },
     output: { ok: 'bool', errors: 'json?' },
-    effects: ['read:flow.BoardScope', 'write:flow.BoardScope', 'read:flow.Project'],
+    effects: ['read:flow.BoardScope', 'write:flow.BoardScope', 'read:flow.Project', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       if (!ctx.actor) return invalid(issue('actor', 'flow.error.actorRequired'))
-      const project = (await ctx.db.select('flow.Project', { id: args.projectId, active: true }))[0]
-      if (!project) return invalid(issue('projectId', 'flow.error.notFound'))
+      const project = await readableProject(ctx, args.projectId)
+      if (!project || project.active !== true) return invalid(issue('projectId', 'flow.error.notFound'))
       // One row per reader, so opening a different board replaces the answer
       // rather than adding one.
       const id = `${String(ctx.actor)}`
@@ -433,9 +661,17 @@ export const functions: Record<string, FnSpec> = {
       sequence: 'int',
       active: 'bool',
     },
-    effects: ['read:flow.FieldDef'],
+    effects: [
+      'read:flow.FieldDef',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+      ...membershipEffects,
+    ],
     agent: true,
     handler: async (ctx, args) => {
+      if (!(await canReadProject(ctx, args.projectId))) return []
       const rows = await ctx.db.select(
         'flow.FieldDef',
         args.includeArchived === true
@@ -463,7 +699,7 @@ export const functions: Record<string, FnSpec> = {
       idempotencyKey: 'text',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.FieldDef', 'write:flow.FieldDef'],
+    effects: ['read:flow.FieldDef', 'write:flow.FieldDef', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -509,7 +745,7 @@ export const functions: Record<string, FnSpec> = {
   'field.archive': defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.FieldDef', 'write:flow.FieldDef'],
+    effects: ['read:flow.FieldDef', 'write:flow.FieldDef', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
@@ -535,9 +771,10 @@ export const functions: Record<string, FnSpec> = {
       estimate: 'decimal',
       estimateDone: 'decimal',
     },
-    effects: ['read:flow.Epic', 'read:flow.Issue', 'read:flow.Column'],
+    effects: ['read:flow.Epic', 'read:flow.Issue', 'read:flow.Column', ...membershipEffects],
     agent: true,
     handler: async (ctx, args) => {
+      if (!(await canReadProject(ctx, args.projectId))) return []
       const where: Row = { projectId: args.projectId }
       if (args.id) where.id = args.id
       if (args.includeArchived !== true) where.active = true
@@ -567,11 +804,19 @@ export const functions: Record<string, FnSpec> = {
   'epic.listAll': defineFn({
     input: { search: 'text?', cursor: 'int?', limit: 'int?' },
     output: { rows: 'json', total: 'int' },
-    effects: ['read:flow.Epic', 'read:flow.Project'],
+    effects: [
+      'read:flow.Epic',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
     agent: true,
     handler: async (ctx, args) => {
+      // Every project's epics means every project this caller may see. The
+      // screen behind it is the cross-project one, so nothing else narrows it.
       const [epics, projects] = await Promise.all([
-        ctx.db.select('flow.Epic', { active: true }),
+        visibleRows(ctx, 'flow.Epic', { active: true }),
         ctx.db.select('flow.Project', { active: true }),
       ])
       const named = new Map(projects.map((project) => [String(project.id), String(project.name ?? '')]))
@@ -603,11 +848,18 @@ export const functions: Record<string, FnSpec> = {
   'epic.get': defineFn({
     input: { id: 'id' },
     output: { value: 'json?' },
-    effects: ['read:flow.Epic'],
+    effects: [
+      'read:flow.Epic',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
     agent: true,
-    handler: async (ctx, args) => ({
-      value: (await ctx.db.select('flow.Epic', { id: args.id }))[0] ?? null,
-    }),
+    handler: async (ctx, args) => {
+      const held = (await ctx.db.select('flow.Epic', { id: args.id }))[0] ?? null
+      return { value: held && (await canReadProject(ctx, held.projectId)) ? held : null }
+    },
   }),
 
   /**
@@ -624,10 +876,10 @@ export const functions: Record<string, FnSpec> = {
     // written" — and the next push started from a blank document and flattened
     // it over the real one.
     output: { id: 'id?', contentAttachmentId: 'id?' },
-    effects: ['read:flow.Epic'],
+    effects: ['read:flow.Epic', ...membershipEffects],
     agent: true,
     handler: async (ctx, args) => {
-      const row = (await ctx.db.select('flow.Epic', { id: args.id }))[0]
+      const row = await readableRow(ctx, 'flow.Epic', args.id)
       return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
     },
   }),
@@ -642,11 +894,11 @@ export const functions: Record<string, FnSpec> = {
   'epic.archive': defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Epic', 'write:flow.Epic'],
+    effects: ['read:flow.Epic', 'write:flow.Epic', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const existing = (await ctx.db.select('flow.Epic', { id: args.id }))[0]
+      const existing = await readableRow(ctx, 'flow.Epic', args.id)
       if (!existing) return invalid(issue('id', 'flow.error.notFound'))
       await ctx.db.update('flow.Epic', { id: args.id }, { active: false })
       return { ok: true, id: args.id }
@@ -675,15 +927,26 @@ export const functions: Record<string, FnSpec> = {
       updatedAt: 'datetime',
       childCount: 'int',
     },
-    effects: ['read:flow.Page'],
+    effects: [
+      'read:flow.Page',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+      ...membershipEffects,
+    ],
     agent: true,
-    handler: (ctx, args) =>
-      listPages(ctx, {
+    handler: async (ctx, args) => {
+      // Without a project this is the cross-project search, which listPages
+      // filters itself; with one it is that project's tree.
+      if (args.projectId != null && !(await canReadProject(ctx, args.projectId))) return []
+      return listPages(ctx, {
         projectId: args.projectId == null ? null : String(args.projectId),
         search: args.search == null ? null : String(args.search),
         includeArchived: args.includeArchived === true,
         limit: args.limit == null ? undefined : n(args.limit),
-      }),
+      })
+    },
   }),
 
   /**
@@ -696,7 +959,7 @@ export const functions: Record<string, FnSpec> = {
   'page.listAll': defineFn({
     input: { search: 'text?', cursor: 'int?', limit: 'int?' },
     output: { rows: 'json', total: 'int' },
-    effects: ['read:flow.Page', 'read:flow.Project'],
+    effects: ['read:flow.Page', ...membershipEffects],
     agent: true,
     handler: (ctx, args) =>
       listAllPages(ctx, {
@@ -709,9 +972,18 @@ export const functions: Record<string, FnSpec> = {
   'page.get': defineFn({
     input: { id: 'id' },
     output: { value: 'json?' },
-    effects: ['read:flow.Page', 'read:flow.Project'],
+    effects: [
+      'read:flow.Page',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
     agent: true,
-    handler: async (ctx, args) => ({ value: await pageDetail(ctx, String(args.id)) }),
+    handler: async (ctx, args) => {
+      const held = await pageDetail(ctx, String(args.id))
+      return { value: held && (await canReadProject(ctx, held.projectId)) ? held : null }
+    },
   }),
 
   'page.save': defineFn({
@@ -725,7 +997,7 @@ export const functions: Record<string, FnSpec> = {
       idempotencyKey: 'text',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Page', 'write:flow.Page', 'read:flow.Project'],
+    effects: ['read:flow.Page', 'write:flow.Page', 'read:flow.Project', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -750,7 +1022,7 @@ export const functions: Record<string, FnSpec> = {
   'page.move': defineFn({
     input: { id: 'id', parentPageId: 'id?', sequence: 'int?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Page', 'write:flow.Page'],
+    effects: ['read:flow.Page', 'write:flow.Page', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -764,7 +1036,7 @@ export const functions: Record<string, FnSpec> = {
   'page.reorder': defineFn({
     input: { id: 'id', direction: 'text' },
     output: { ok: 'bool', id: 'id?', moved: 'bool?', errors: 'json?' },
-    effects: ['read:flow.Page', 'write:flow.Page'],
+    effects: ['read:flow.Page', 'write:flow.Page', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -777,7 +1049,7 @@ export const functions: Record<string, FnSpec> = {
   'page.archive': defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Page', 'write:flow.Page'],
+    effects: ['read:flow.Page', 'write:flow.Page', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) => archivePage(ctx, String(args.id)),
@@ -786,7 +1058,7 @@ export const functions: Record<string, FnSpec> = {
   'page.restore': defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Page', 'write:flow.Page'],
+    effects: ['read:flow.Page', 'write:flow.Page', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) => restorePage(ctx, String(args.id)),
@@ -810,10 +1082,10 @@ export const functions: Record<string, FnSpec> = {
     // written" — and the next push started from a blank document and flattened
     // it over the real one.
     output: { id: 'id?', contentAttachmentId: 'id?' },
-    effects: ['read:flow.Page'],
+    effects: ['read:flow.Page', ...membershipEffects],
     agent: true,
     handler: async (ctx, args) => {
-      const row = (await ctx.db.select('flow.Page', { id: args.id }))[0]
+      const row = await readableRow(ctx, 'flow.Page', args.id)
       return row ? { id: row.id, contentAttachmentId: row.contentAttachmentId ?? null } : null
     },
   }),
@@ -840,9 +1112,19 @@ export const functions: Record<string, FnSpec> = {
       estimate: 'decimal',
       estimateDone: 'decimal',
     },
-    effects: ['read:flow.Sprint', 'read:flow.Issue', 'read:flow.Column'],
+    effects: [
+      'read:flow.Sprint',
+      'read:flow.Issue',
+      'read:flow.Column',
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+      ...membershipEffects,
+    ],
     agent: true,
     handler: async (ctx, args) => {
+      if (!(await canReadProject(ctx, args.projectId))) return []
       const [rows, totals] = await Promise.all([
         ctx.db.select('flow.Sprint', { projectId: args.projectId }),
         sprintTotals(ctx, String(args.projectId)),
@@ -870,15 +1152,17 @@ export const functions: Record<string, FnSpec> = {
       idempotencyKey: 'text',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Sprint', 'write:flow.Sprint'],
+    effects: ['read:flow.Sprint', 'write:flow.Sprint', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const error = command(ctx, args.idempotencyKey)
       if (error) return error
-      const existing = (await ctx.db.select('flow.Sprint', { id: args.id }))[0]
+      const existing = await readableRow(ctx, 'flow.Sprint', args.id)
       if (existing && existing.state !== 'planned')
         return invalid(issue('id', 'flow.error.invalidSprintState'))
+      if (!(await canReadProject(ctx, args.projectId)))
+        return invalid(issue('projectId', 'flow.error.notFound'))
       const name = String(args.name ?? '').trim()
       if (!name) return invalid(issue('name', 'flow.error.required'))
       const values = {
@@ -897,7 +1181,7 @@ export const functions: Record<string, FnSpec> = {
   'sprint.start': defineFn({
     input: { id: 'id', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Sprint', 'write:flow.Sprint'],
+    effects: ['read:flow.Sprint', 'write:flow.Sprint', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -920,6 +1204,7 @@ export const functions: Record<string, FnSpec> = {
       'write:flow.Issue',
       'read:flow.Column',
       ...timelineEntryEffects,
+      ...membershipEffects,
     ],
     idempotent: true,
     agent: true,
@@ -1071,6 +1356,7 @@ export const functions: Record<string, FnSpec> = {
       'read:flow.IssueFieldValue',
       // Where the company keeps its calendar — see businessTimezone.
       'read:company.Company',
+      ...membershipEffects,
     ],
     agent: true,
     handler: (ctx, args) => issueBuckets(ctx, args, args.today == null ? undefined : String(args.today)),
@@ -1098,9 +1384,20 @@ export const functions: Record<string, FnSpec> = {
 
   'issue.get': defineFn({
     input: { id: 'id' },
-    effects: [...flowReadEffects],
+    effects: [
+      ...flowReadEffects,
+      'read:flow.Project',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
     agent: true,
-    handler: (ctx, args) => issueDetail(ctx, String(args.id)),
+    // Not found rather than forbidden: that an issue exists in a project this
+    // caller cannot see is itself the half of the answer to withhold.
+    handler: async (ctx, args) => {
+      const held = await issueDetail(ctx, String(args.id))
+      return held && (await canReadProject(ctx, held.projectId)) ? held : null
+    },
   }),
 
   /**
@@ -1114,9 +1411,9 @@ export const functions: Record<string, FnSpec> = {
    */
   'issue.editDescription': defineFn({
     input: { id: 'id' },
-    effects: ['read:flow.Issue'],
+    effects: ['read:flow.Issue', ...membershipEffects],
     agent: true,
-    handler: async (ctx, args) => (await ctx.db.select('flow.Issue', { id: args.id }))[0] ?? null,
+    handler: async (ctx, args) => (await readableRow(ctx, 'flow.Issue', args.id)) ?? null,
   }),
 
   'issue.save': defineFn({
@@ -1171,6 +1468,7 @@ export const functions: Record<string, FnSpec> = {
       'read:flow.Column',
       'read:flow.IssueDependency',
       ...timelineEntryEffects,
+      ...membershipEffects,
     ],
     idempotent: true,
     agent: true,
@@ -1186,7 +1484,13 @@ export const functions: Record<string, FnSpec> = {
   'issue.assignSprint': defineFn({
     input: { id: 'id', sprintId: 'id?', expectedVersion: 'int', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
-    effects: ['read:flow.Issue', 'write:flow.Issue', 'read:flow.Sprint', ...timelineEntryEffects],
+    effects: [
+      'read:flow.Issue',
+      'write:flow.Issue',
+      'read:flow.Sprint',
+      ...timelineEntryEffects,
+      ...membershipEffects,
+    ],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -1209,7 +1513,7 @@ export const functions: Record<string, FnSpec> = {
       idempotencyKey: 'text',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: [...commentEffects, 'read:user.User', 'write:mail.Mention'],
+    effects: [...commentEffects, 'read:user.User', 'write:mail.Mention', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -1224,13 +1528,6 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   /**
-   * Leaves an issue's thread.
-   *
-   * A separate key from commenting, because it is the opposite act: everything
-   * else in this module hands out subscriptions, and this is the only way to
-   * give one back.
-   */
-  /**
    * Off the board, without claiming it was finished — see archiveIssue.
    *
    * Its own key rather than a flag on `issue.save`: taking work out of every
@@ -1240,7 +1537,7 @@ export const functions: Record<string, FnSpec> = {
   'issue.archive': defineFn({
     input: { id: 'id', expectedVersion: 'int', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
-    effects: ['read:flow.Issue', 'write:flow.Issue'],
+    effects: ['read:flow.Issue', 'write:flow.Issue', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -1254,7 +1551,7 @@ export const functions: Record<string, FnSpec> = {
   'issue.restore': defineFn({
     input: { id: 'id', expectedVersion: 'int', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
-    effects: ['read:flow.Issue', 'write:flow.Issue'],
+    effects: ['read:flow.Issue', 'write:flow.Issue', ...membershipEffects],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -1276,6 +1573,7 @@ export const functions: Record<string, FnSpec> = {
       'read:partner.Partner',
       'read:mail.Follower',
       'write:mail.Follower',
+      ...membershipEffects,
     ],
     idempotent: true,
     agent: true,
@@ -1286,6 +1584,13 @@ export const functions: Record<string, FnSpec> = {
       }),
   }),
 
+  /**
+   * Leaves an issue's thread.
+   *
+   * A separate key from commenting, because it is the opposite act: everything
+   * else in this module hands out subscriptions, and this is the only way to
+   * give one back.
+   */
   'issue.unfollow': defineFn({
     input: { issueId: 'id', idempotencyKey: 'text' },
     output: { ok: 'bool', removed: 'int?', errors: 'json?' },
@@ -1298,6 +1603,7 @@ export const functions: Record<string, FnSpec> = {
       'read:mail.Follower',
       'write:mail.Follower',
       'write:mail.FollowerSubtype',
+      ...membershipEffects,
     ],
     idempotent: true,
     agent: true,
@@ -1311,7 +1617,12 @@ export const functions: Record<string, FnSpec> = {
   'issue.dependency.add': defineFn({
     input: { id: 'id', issueId: 'id', dependsOnIssueId: 'id', relation: 'text', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Issue', 'read:flow.IssueDependency', 'write:flow.IssueDependency'],
+    effects: [
+      'read:flow.Issue',
+      'read:flow.IssueDependency',
+      'write:flow.IssueDependency',
+      ...membershipEffects,
+    ],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -1327,12 +1638,21 @@ export const functions: Record<string, FnSpec> = {
   'issue.dependency.remove': defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.IssueDependency', 'write:flow.IssueDependency'],
+    effects: [
+      'read:flow.IssueDependency',
+      'write:flow.IssueDependency',
+      'read:flow.Issue',
+      ...membershipEffects,
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const existing = (await ctx.db.select('flow.IssueDependency', { id: args.id }))[0]
-      if (!existing) return invalid(issue('id', 'flow.error.notFound'))
+      // The edge carries no project of its own, so it is read through the issue
+      // it hangs off — cutting a link between two issues is editing the project
+      // they are in, and needs the same standing as anything else there.
+      if (!existing || !(await readableRow(ctx, 'flow.Issue', existing.issueId)))
+        return invalid(issue('id', 'flow.error.notFound'))
       const D = ctx.table('flow.IssueDependency')
       await ctx.db.del(deleteFrom(D).where(eq(D.id, args.id)))
       return { ok: true, id: args.id }

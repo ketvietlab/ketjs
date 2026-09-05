@@ -54,6 +54,18 @@ export type SettingsScreenOptions = {
    * tag here and clears it from every project at once.
    */
   tagUsage: Record<string, number>
+  /**
+   * Who is on this project, and the picker for putting somebody else on it.
+   *
+   * This block is not configuration in the way the four below it are: it is the
+   * list of people for whom this project exists at all. Somebody taken off here
+   * stops seeing the project entirely — not a narrower view of it — which is
+   * why the block says so in words rather than leaving it to be discovered.
+   */
+  members: readonly AnyRow[]
+  memberPicker: JSXChild
+  memberErrors?: readonly string[]
+  memberIdempotencyKey: string
 }
 
 const editAction = (_: Translator, href: string): TemplateResult => (
@@ -117,6 +129,63 @@ export const settingsScreen = (
           ])}
         />,
         <Section title={_('flow_backend.settings.brief')} body={options.brief} />,
+        <Section
+          title={_('flow_backend.settings.members')}
+          description={_('flow_backend.settings.membersHint')}
+          body={stack([
+            options.members.length
+              ? dataTable(_, {
+                  rows: options.members,
+                  id: (row) => String(row.id),
+                  columns: [
+                    {
+                      key: 'userName',
+                      label: _('flow_backend.settings.memberUser'),
+                      priority: 'primary',
+                      cell: (row) => String(row.userName || row.userId),
+                    },
+                    {
+                      key: 'addedAt',
+                      label: _('flow_backend.settings.memberSince'),
+                      cell: (row) => String(row.addedAt ?? '').slice(0, 10),
+                    },
+                    {
+                      key: 'remove',
+                      label: '',
+                      align: 'end',
+                      cell: (row) => (
+                        <RecordForm
+                          action={options.endpoint}
+                          hidden={{ action: 'removeMember', userId: String(row.userId) }}
+                          fields={[]}
+                          submit={_('flow_backend.settings.memberRemove')}
+                          submitVariant="destructive"
+                          submitSize="compact"
+                          layout="inline"
+                        />
+                      ),
+                    },
+                  ],
+                })
+              : empty(_),
+            <RecordForm
+              action={options.endpoint}
+              hidden={{ action: 'addMember', idempotencyKey: options.memberIdempotencyKey }}
+              fields={[
+                {
+                  name: 'userId',
+                  label: _('flow_backend.settings.memberUser'),
+                  required: true,
+                  control: options.memberPicker,
+                },
+              ]}
+              errors={options.memberErrors}
+              submit={_('flow_backend.settings.memberAdd')}
+              submitVariant="primary"
+              submitSize="compact"
+            />,
+          ])}
+        />,
         <Section
           title={_('flow_backend.settings.columns')}
           actions={createAction(_, options.createHref.column)}

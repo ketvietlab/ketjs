@@ -28,6 +28,9 @@ const options = {
   brief: 'Project brief',
   profile: [{ name: 'name', label: 'Name', value: 'Platform' }],
   archived: false,
+  members: [],
+  memberPicker: '',
+  memberIdempotencyKey: 'member-key',
   tagUsage: {},
 }
 

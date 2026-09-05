@@ -53,6 +53,16 @@ const boot = async (timezone?: string) => {
     defaultCompanyId: 'acme',
   })
   await e2e.fixture.call('user.grantCompany', { id: 'u1:acme', userId: 'u1', companyId: 'acme' })
+  // These cases seed rows straight into the store rather than through
+  // `project.save`, so nobody is a member of anything. The company-wide grant
+  // says what is true: this test is about read costs and figures, not about who
+  // may see which project — that has its own file.
+  // As 'u1', because granting is a command and a command needs an actor.
+  await e2e.fixture.call(
+    'flow.project.access.grant',
+    { userId: 'u1', idempotencyKey: 'read-scope-grant' },
+    { actor: 'u1', scope: { company: 'acme' } },
+  )
   await e2e.client.login({ login: 'u1', password: 'test-password' })
   const call = async <T = Row>(name: string, input: Record<string, unknown> = {}) =>
     (await e2e.client.call<T>(name, input)).value

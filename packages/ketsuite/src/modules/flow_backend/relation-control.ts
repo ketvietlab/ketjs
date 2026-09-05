@@ -45,6 +45,30 @@ export const assigneeControl = (
   })
 
 /**
+ * Who to put on a project.
+ *
+ * The same list the assignee picker reads, asked a different question. It is a
+ * picker rather than a select because a company's user list is not a small
+ * vocabulary, and because adding somebody to a project is the act that decides
+ * what they may read — worth typing a name for, rather than scrolling.
+ */
+export const memberControl = (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  _: Translator,
+  options: { id: string; users: RelationOption[] },
+): Promise<JSXChild> =>
+  relationControl(ctx, url, req, options.id, {
+    name: 'userId',
+    ariaLabel: _('flow_backend.settings.memberUser'),
+    required: true,
+    options: empty(options.users),
+    labels: relationLabels(_, _('flow_backend.relation.users')),
+    manager: { listFunction: 'user.listUsers', descriptionField: 'login' },
+  })
+
+/**
  * Who a comment is addressed to.
  *
  * The same list the assignee picker uses, taking several at once. A mention is

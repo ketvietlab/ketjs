@@ -77,6 +77,14 @@ qualified policy key after capability authorization and before the sensitive tra
 code and emits only sanitized evidence. This keeps maker-checker, ownership, lifecycle, and threshold rules with
 the domain that owns the record without forking the user resolver.
 
+Neither capabilities nor policies decide *which records a caller may see*. A module whose records are private to
+an audience resolves that audience from its own rows, in one place, and every read of those records passes
+through it: `crm.caseAudience` for cases, `flow.visibleProjects` for projects. Both answer `null` for "no
+restriction" — no actor, a superuser, or an explicit company-wide grant row — and a list of ids otherwise, so a
+caller who belongs to nothing reads nothing. The company-wide grant is a row rather than a capability on purpose:
+`Ctx` carries no allow-list, so a domain function cannot ask what the caller may do, and an audience that could
+be widened from the permission catalogue would be widened by accident.
+
 An anonymous provider callback that owns a cryptographic company binding may use
 `ctx.callUncheckedForVerifiedCompany()` after signature verification. Derive the company from signed
 credential material and verify the exact request bytes before dispatch. The helper deliberately creates one
