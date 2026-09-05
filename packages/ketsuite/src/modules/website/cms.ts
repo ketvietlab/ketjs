@@ -9,10 +9,14 @@ import {
   inArray,
   isNotNull,
   like,
+  diffPlacements,
+  isPlacementId,
   ne,
+  placementIdErrors,
   validateLayout,
+  withPlacementIds,
 } from '@ketvietlab/ketjs'
-import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Placement, PlacementChange, Row } from '@ketvietlab/ketjs'
 import {
   canAccessSite,
   canAdministerSite,
@@ -287,6 +291,60 @@ const searchMatches = async (
     if (matches.length >= need) break
   }
   return { matches, capped }
+}
+
+const sha256 = (input: string): string => createHash('sha256').update(input).digest('hex')
+
+const layoutOf = (revision: Row | null | undefined): Placement[] => {
+  const raw = revision?.layout
+  const parsed = typeof raw === 'string' ? safeJson(raw) : raw
+  return Array.isArray(parsed) ? (parsed as Placement[]) : []
+}
+
+const safeJson = (value: string): unknown => {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * What the editor would have to reconcile, said in placements.
+ *
+ * Best effort by design: the report is an aid attached to a refusal that
+ * already stands on its own, so a revision that cannot be read produces a
+ * refusal with no report rather than an error in place of the refusal.
+ */
+const conflictReport = async (
+  ctx: Ctx,
+  expectedRevisionId: unknown,
+  headRevisionId: unknown,
+): Promise<{
+  expectedRevisionId: string | null
+  headRevisionId: string | null
+  changes: PlacementChange[]
+} | null> => {
+  if (expectedRevisionId == null) return null
+  const expected = (await ctx.db.select('website.EntryRevision', { id: expectedRevisionId }))[0]
+  if (!expected) return null
+  const head =
+    headRevisionId == null
+      ? await latestRevisionOf(ctx, expected.entryId)
+      : (await ctx.db.select('website.EntryRevision', { id: headRevisionId }))[0]
+  if (!head || head.id === expected.id) return null
+  return {
+    expectedRevisionId: String(expected.id),
+    headRevisionId: String(head.id),
+    changes: diffPlacements(layoutOf(expected), layoutOf(head)),
+  }
+}
+
+const latestRevisionOf = async (ctx: Ctx, entryId: unknown): Promise<Row | null> => {
+  const Revision = ctx.table('website.EntryRevision')
+  return ctx.db.one(
+    from(Revision).where(eq(Revision.entryId, entryId)).orderBy(desc(Revision.version)).limit(1),
+  )
 }
 
 export const cmsFunctions: Record<string, FnSpec> = {
@@ -708,7 +766,14 @@ export const cmsFunctions: Record<string, FnSpec> = {
       kind: 'text?',
       expectedRevisionId: 'id?',
     },
-    output: { ok: 'bool', id: 'id?', revisionId: 'id?', version: 'int?', errors: 'json?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      revisionId: 'id?',
+      version: 'int?',
+      errors: 'json?',
+      conflict: 'json?',
+    },
     effects: [
       'read:website.Site',
       'read:website.Entry',
@@ -730,7 +795,13 @@ export const cmsFunctions: Record<string, FnSpec> = {
         args.expectedRevisionId != null &&
         args.expectedRevisionId !== existing.currentRevisionId
       )
-        return invalid('expectedRevisionId', 'website.error.editConflict')
+        // "Someone else saved" was the whole answer, which leaves the editor to
+        // reload and find the difference by eye. The refusal now carries the
+        // difference itself, per placement, so a client can show what moved.
+        return {
+          ...invalid('expectedRevisionId', 'website.error.editConflict'),
+          conflict: await conflictReport(ctx, args.expectedRevisionId, existing.currentRevisionId),
+        }
       const type = ctx.manifest.contentTypes[String(args.type)]
       if (!type) return invalid('type', 'website.error.invalidContentType')
       if (
@@ -741,6 +812,12 @@ export const cmsFunctions: Record<string, FnSpec> = {
         return invalid('layout', 'website.error.payloadTooLarge')
       const layoutCheck = validateLayout(ctx.manifest, args.layout)
       if (!layoutCheck.ok) return { ok: false, errors: layoutCheck.errors }
+      const idErrors = placementIdErrors(args.layout as Placement[])
+      if (idErrors.length) return { ok: false, errors: idErrors }
+      // Ids are assigned here rather than trusted from the client, so content
+      // written before identity existed gains it on its first save and keeps it
+      // on every save after. A client that already carries ids keeps its own.
+      const layout = withPlacementIds(args.layout as Placement[], sha256)
       const fieldErrors = validateFields(type.fields, args.fields)
       if (fieldErrors.length) return { ok: false, errors: fieldErrors }
       const path = cleanPath(args.path)
@@ -801,14 +878,18 @@ export const cmsFunctions: Record<string, FnSpec> = {
           kind: args.kind === 'autosave' ? 'autosave' : 'revision',
           title,
           excerpt,
-          layout: args.layout,
+          layout,
           fields: args.fields ?? {},
           authorId: ctx.actor,
           createdAt: new Date().toISOString(),
         })
         return true
       })
-      if (!saved) return invalid('expectedRevisionId', 'website.error.editConflict')
+      if (!saved)
+        return {
+          ...invalid('expectedRevisionId', 'website.error.editConflict'),
+          conflict: await conflictReport(ctx, args.expectedRevisionId, null),
+        }
       return { ok: true, id: args.id, revisionId, version }
     },
   }),
@@ -892,6 +973,61 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * What changed between two revisions of a page, placement by placement.
+   *
+   * Version history was a list of dates and authors: to see what a revision
+   * did, someone had to restore it and look. This answers the question the
+   * list was raising, and answers it the way the editor works - a section
+   * moved, a setting changed, a section added - rather than as two blobs of
+   * JSON to compare by eye.
+   *
+   * Placements written before identity existed have no id, so they compare as
+   * removed and added. That is the truthful answer rather than a defect: with
+   * no id there is no evidence the two are the same section, and guessing by
+   * position is what the id exists to replace.
+   */
+  diffRevisions: defineFn({
+    input: { entryId: 'id', fromRevisionId: 'id', toRevisionId: 'id' },
+    output: {
+      ok: 'bool',
+      fromVersion: 'int?',
+      toVersion: 'int?',
+      changes: 'json?',
+      identified: 'bool?',
+      errors: 'json?',
+    },
+    effects: ['read:website.Entry', 'read:website.EntryRevision', 'read:website.SiteMember'],
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.entryId)
+      if (!entry || !(await canEditEntry(ctx, entry))) return invalid('entryId', 'website.error.forbidden')
+      const [before, after] = await Promise.all([
+        ctx.db.select('website.EntryRevision', { id: args.fromRevisionId }),
+        ctx.db.select('website.EntryRevision', { id: args.toRevisionId }),
+      ])
+      const from_ = before[0]
+      const to = after[0]
+      // Both revisions have to belong to the entry the caller was authorized
+      // against, or a revision id becomes a way to read another page's history.
+      if (!from_ || !to || from_.entryId !== args.entryId || to.entryId !== args.entryId)
+        return invalid('revisionId', 'website.error.revisionNotFound')
+      const fromLayout = layoutOf(from_)
+      const toLayout = layoutOf(to)
+      return {
+        ok: true,
+        fromVersion: Number(from_.version),
+        toVersion: Number(to.version),
+        changes: diffPlacements(fromLayout, toLayout),
+        // Says whether the comparison had identity to work with, so a client
+        // can explain a wholesale added/removed list instead of presenting it
+        // as a genuine rewrite.
+        identified: [...fromLayout, ...toLayout].every((placement) =>
+          isPlacementId((placement as { id?: unknown }).id),
+        ),
+      }
+    },
+  }),
+
   restoreRevision: defineFn({
     input: { entryId: 'id', revisionId: 'id' },
     output: { ok: 'bool', id: 'id?', revisionId: 'id?', version: 'int?', errors: 'json?' },
@@ -933,7 +1069,11 @@ export const cmsFunctions: Record<string, FnSpec> = {
           kind: 'restore',
           title: revision.title,
           excerpt: revision.excerpt ?? null,
-          layout: revision.layout,
+          // A restore is a write like any other, so it leaves identified
+          // placements behind: restoring a revision from before identity
+          // existed would otherwise put an unidentifiable layout back at the
+          // head, and every diff after it would read as a rewrite.
+          layout: withPlacementIds(layoutOf(revision), sha256),
           fields: revision.fields,
           authorId: ctx.actor,
           createdAt: new Date().toISOString(),

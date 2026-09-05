@@ -40,7 +40,14 @@ export type {
 export { compose } from './kernel/compose.ts'
 export { compilePermissionBundles, permissionDigest } from './kernel/permissions.ts'
 export type { CompilePermissionOptions } from './kernel/permissions.ts'
-export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
+export {
+  validateLayout,
+  formatLayoutErrors,
+  withPlacementIds,
+  placementIdErrors,
+  diffPlacements,
+  isPlacementId,
+} from './kernel/layout.ts'
 export { buildMenu, activeMenuRoot } from './kernel/menu.ts'
 export type { MenuNode, MenuOptions } from './kernel/menu.ts'
 export {
@@ -51,7 +58,7 @@ export {
   PSEUDO_LOCALE,
 } from './kernel/i18n.ts'
 export type { Translator, Message, Catalog, Messages } from './kernel/i18n.ts'
-export type { Placement, LayoutError } from './kernel/layout.ts'
+export type { Placement, LayoutError, IdentifiedPlacement, PlacementChange } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
 export { KetError, Diagnostics } from './kernel/errors.ts'
 export { isDateText } from './kernel/types.ts'

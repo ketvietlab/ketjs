@@ -530,6 +530,79 @@ The test now checks owners first, against a named `UNGOVERNED` list. `website_fo
 shrink: adding a name is how that test stops meaning anything, and a new module that forgets its
 declaration now fails the same way a new function does.
 
+## A layout has identity
+
+### Where the builder document lives, and why it is not a new table
+
+The page builder design asks for a versioned document with stable node identity before anything else
+is built, and asks that the model be reconciled against what exists rather than stood up beside it.
+The reconciliation says: **the document is `EntryRevision.layout`, and no new table is needed.**
+
+| What the builder needs | What already provides it |
+| --- | --- |
+| Immutable revisions | `EntryRevision` is one row per version, never updated |
+| Optimistic concurrency | `saveEntry` takes `expectedRevisionId` and races the entry pointer |
+| A frozen set at publish | `Publication.entries` freezes `{entryId, revisionId, path, meta}` |
+| Content the theme renders | `pageScope.sections` is the layout, passed through untouched |
+
+A parallel `BuilderDocument` table would need its own versioning, its own publication freeze, and its
+own reconciliation with `Entry.status` and the preview token — three duplications of machinery that
+already works, and three more places for the two to disagree about which content is live.
+
+What was missing was never storage. It was **identity**.
+
+### A placement that can be recognised again
+
+A layout was an ordered array and nothing else. Save a page with the sections swapped, and the stored
+revision cannot say whether a section moved or was deleted and a different one added in its place.
+Nothing downstream can recover that from position: not undo, not a diff between two revisions, not a
+conflict that explains itself. All three are in the builder design, and all three were unbuildable.
+
+Every placement now carries an `id`, beside `type` rather than inside `settings` - it is not something
+a section declares or a theme renders, and putting it in `settings` would collide with a real setting
+and fail validation.
+
+`saveEntry` assigns ids rather than trusting them, so content written before identity existed gains it
+on its first save. An id that is already there is never replaced: identity belongs to the client
+across an editing session, and rewriting it server-side would break the undo stack it anchors. The
+same happens on `restoreRevision`, because a restore is a write like any other - putting an
+unidentifiable layout back at the head would make every diff after it read as a rewrite.
+
+**Derived from content, not from position.** Two placements of the same type with the same settings are
+disambiguated by how many identical ones came before. Deriving from the index instead would mean the
+first save after a reorder - exactly the save that turns legacy content into identified content -
+renamed everything it touched, which is the one case the id exists to distinguish.
+
+Two ids are refused at the write rather than resolved at the read: a malformed one, and the same one
+used twice. A duplicate makes every later diff ambiguous, and there is no honest way to guess which
+of the two a change belongs to.
+
+### A diff, and a conflict that carries one
+
+`website.diffRevisions` compares two revisions of one page and answers per placement: `added`,
+`removed`, `moved` (with where it came from), `settings` (naming the fields), and `retyped`. Retyped
+is separate because a placement whose type changed is a different section wearing the same id, and a
+reviewer must never read that as an edit. Both revisions must belong to the entry the caller was
+authorized against, so a revision id cannot become a way to read another page's history.
+
+`identified` says whether the comparison had identity to work with. Placements written before this
+change have no id and compare as removed plus added - the truthful answer, since without an id there
+is no evidence the two are the same section, and guessing by position is the thing being replaced. A
+client can use the flag to explain that rather than present it as a real rewrite.
+
+A failed `expectedRevisionId` check used to answer "someone else saved this", which leaves the editor
+to reload and find the difference by eye. The refusal now carries the diff between the revision the
+caller was editing and the one at the head. The report is best effort and attached to a refusal that
+already stands on its own: a revision that cannot be read produces a refusal with no report, never an
+error in place of the refusal.
+
+### What this does not do yet
+
+Nesting. A layout is still a flat ordered list, so a section cannot contain blocks, and the mocks that
+show nested structure have nothing to render from. That needs slot rules on the section definition and
+a theme that can render children, and it is the next gate rather than part of this one - a tree the
+renderer cannot draw would be a model with no reader.
+
 ## The storefront page scope
 
 `packages/ketjs/src/server/boot.ts` builds the scope a theme renders a public page against: `site`,

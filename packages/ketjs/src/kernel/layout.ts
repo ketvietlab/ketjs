@@ -84,3 +84,154 @@ export function validateLayout(manifest: Manifest, layout: unknown): { ok: boole
 
 export const formatLayoutErrors = (errors: LayoutError[]): string =>
   errors.map((e) => `  [${e.at}] ${e.type}${e.field ? '.' + e.field : ''} ${e.message}`).join('\n')
+
+// ---------------------------------------------------------------------------
+// Placement identity
+//
+// A layout used to be an ordered array and nothing else, so a saved revision
+// could not say whether a section had moved or had been deleted and a new one
+// added in its place. Everything an editor needs downstream - undo, a diff
+// between two revisions, a conflict that says what conflicted - rests on being
+// able to answer that, and none of it can be recovered from position alone.
+//
+// The id lives beside `type` rather than inside `settings`: it is not something
+// a section declares or a theme renders, and putting it in `settings` would
+// make it collide with a real setting and fail validation.
+
+/** How long a derived id is. Long enough not to collide, short enough to read. */
+const DERIVED_ID_LENGTH = 16
+
+const canonical = (value: unknown): string => {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`
+}
+
+/** A placement id is opaque, but it has to survive a round trip through JSON. */
+export const isPlacementId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(value)
+
+export type IdentifiedPlacement = Placement & { id: string }
+
+/**
+ * Give every placement an id, deriving one only where none exists.
+ *
+ * Derived from the content, not the position, and disambiguated by how many
+ * identical placements came before it. Deriving from the index instead would
+ * mean that the first save after a reorder - the one that turns legacy content
+ * into identified content - renamed everything it touched, which is precisely
+ * the case the id exists to distinguish.
+ *
+ * An id already present is never replaced, so identity survives every later
+ * save regardless of what this function would have derived.
+ */
+export const withPlacementIds = (
+  layout: readonly Placement[],
+  digest: (input: string) => string,
+): IdentifiedPlacement[] => {
+  const seen = new Map<string, number>()
+  return layout.map((placement) => {
+    const existing = (placement as { id?: unknown }).id
+    if (isPlacementId(existing)) return { ...placement, id: existing }
+    const fingerprint = `${placement.type} ${canonical(placement.settings ?? {})}`
+    const ordinal = seen.get(fingerprint) ?? 0
+    seen.set(fingerprint, ordinal + 1)
+    return { ...placement, id: digest(`${fingerprint} ${ordinal}`).slice(0, DERIVED_ID_LENGTH) }
+  })
+}
+
+/** Ids a layout cannot have: malformed, or the same one twice. */
+export const placementIdErrors = (layout: readonly Placement[]): LayoutError[] => {
+  const errors: LayoutError[] = []
+  const seen = new Set<string>()
+  layout.forEach((placement, at) => {
+    const id = (placement as { id?: unknown }).id
+    if (id === undefined) return
+    if (!isPlacementId(id)) {
+      errors.push({ at, type: placement?.type ?? '(unknown)', field: 'id', message: 'is not a placement id' })
+      return
+    }
+    if (seen.has(id))
+      errors.push({
+        at,
+        type: placement?.type ?? '(unknown)',
+        field: 'id',
+        // Two placements sharing an id make every later diff ambiguous, so this
+        // is refused at the write rather than resolved by guessing at the read.
+        message: 'is already used by another placement in this layout',
+      })
+    seen.add(id)
+  })
+  return errors
+}
+
+export type PlacementChange =
+  | { id: string; type: string; change: 'added'; at: number }
+  | { id: string; type: string; change: 'removed'; at: number }
+  | { id: string; type: string; change: 'moved'; from: number; at: number }
+  | { id: string; type: string; change: 'settings'; at: number; fields: string[] }
+  | { id: string; type: string; change: 'retyped'; at: number; from: string }
+
+const changedSettings = (before: unknown, after: unknown): string[] => {
+  const a = (before ?? {}) as Record<string, unknown>
+  const b = (after ?? {}) as Record<string, unknown>
+  const names = new Set([...Object.keys(a), ...Object.keys(b)])
+  return [...names].filter((name) => canonical(a[name]) !== canonical(b[name])).sort()
+}
+
+/**
+ * What changed between two layouts, said per placement rather than per index.
+ *
+ * Only placements carrying ids can be compared this way. Anything without one
+ * is reported as removed and added, which is the truthful answer: with no id
+ * there is no evidence the two are the same section.
+ */
+export const diffPlacements = (
+  before: readonly Placement[],
+  after: readonly Placement[],
+): PlacementChange[] => {
+  const index = (layout: readonly Placement[]) => {
+    const map = new Map<string, { placement: Placement; at: number }>()
+    layout.forEach((placement, at) => {
+      const id = (placement as { id?: unknown }).id
+      if (isPlacementId(id)) map.set(id, { placement, at })
+    })
+    return map
+  }
+  const from = index(before)
+  const to = index(after)
+  const changes: PlacementChange[] = []
+
+  for (const [id, entry] of from)
+    if (!to.has(id)) changes.push({ id, type: entry.placement.type, change: 'removed', at: entry.at })
+
+  for (const [id, entry] of to) {
+    const previous = from.get(id)
+    if (!previous) {
+      changes.push({ id, type: entry.placement.type, change: 'added', at: entry.at })
+      continue
+    }
+    if (previous.placement.type !== entry.placement.type) {
+      // A placement that changed type is a different section wearing the same
+      // id. Reported on its own so a reviewer never reads it as an edit.
+      changes.push({
+        id,
+        type: entry.placement.type,
+        change: 'retyped',
+        at: entry.at,
+        from: previous.placement.type,
+      })
+      continue
+    }
+    const fields = changedSettings(previous.placement.settings, entry.placement.settings)
+    if (fields.length)
+      changes.push({ id, type: entry.placement.type, change: 'settings', at: entry.at, fields })
+    if (previous.at !== entry.at)
+      changes.push({ id, type: entry.placement.type, change: 'moved', from: previous.at, at: entry.at })
+  }
+
+  return changes.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
