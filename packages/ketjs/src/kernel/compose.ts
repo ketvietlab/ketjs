@@ -15,6 +15,50 @@ import { tableNameFor } from '../data/migrate.ts'
 import { compilePermissionBundles } from './permissions.ts'
 import type { RoleTemplateDef } from '../types.ts'
 
+const FIELD_KEYS = new Set(['type', 'personal', 'sensitive'])
+
+type NormalizedField =
+  | { ok: true; type: string; personal: boolean; sensitive: boolean }
+  | { ok: false; code: string; reason: string }
+
+/**
+ * Accept both field forms.
+ *
+ * The vocabulary is closed: a key nobody knows is a build error rather than a flag
+ * that silently does nothing, which is how a field ends up believed to be protected
+ * when it is not.
+ */
+function normalizeField(declared: string | import('../types.ts').FieldDef): NormalizedField {
+  if (typeof declared === 'string') {
+    return { ok: true, type: declared, personal: false, sensitive: false }
+  }
+  if (declared === null || typeof declared !== 'object') {
+    return { ok: false, code: 'E_BAD_FIELD', reason: 'a field is a type string or an object with a type' }
+  }
+  const unknown = Object.keys(declared).filter((k) => !FIELD_KEYS.has(k))
+  if (unknown.length) {
+    return {
+      ok: false,
+      code: 'E_BAD_FIELD',
+      reason: `unknown field key(s) ${unknown.join(', ')} (accepted: ${[...FIELD_KEYS].join(', ')})`,
+    }
+  }
+  if (typeof declared.type !== 'string') {
+    return { ok: false, code: 'E_BAD_FIELD', reason: 'a field object needs a type string' }
+  }
+  for (const flag of ['personal', 'sensitive'] as const) {
+    if (declared[flag] !== undefined && typeof declared[flag] !== 'boolean') {
+      return { ok: false, code: 'E_BAD_FIELD', reason: `"${flag}" must be a boolean` }
+    }
+  }
+  return {
+    ok: true,
+    type: declared.type,
+    personal: declared.personal === true,
+    sensitive: declared.sensitive === true,
+  }
+}
+
 const qualify = (mod: string, name: string) => `${mod}.${name}`
 const jointKey = (mod: string, name: string) => `${mod}:${name}`
 
@@ -286,7 +330,7 @@ export function compose(
         fields['createdAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
         fields['updatedAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
       }
-      for (const [fname, tspec] of Object.entries(def.fields ?? {})) {
+      for (const [fname, declared] of Object.entries(def.fields ?? {})) {
         if (def.timestamps && (fname === 'createdAt' || fname === 'updatedAt')) {
           diag.add({
             code: 'E_TIMESTAMP_FIELD_RESERVED',
@@ -296,6 +340,14 @@ export function compose(
           })
           continue
         }
+        // A field is a type string, or an object when it has more to say. The two
+        // forms compose to the same thing, so nothing downstream learns the difference.
+        const spec = normalizeField(declared)
+        if (!spec.ok) {
+          diag.add({ code: spec.code, module: m.name, message: `${key}.${fname}: ${spec.reason}` })
+          continue
+        }
+        const tspec = spec.type
         const t = parseType(tspec)
         if (!t.ok) {
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key}.${fname}: ${t.reason}` })
@@ -310,7 +362,14 @@ export function compose(
           })
           continue
         }
-        fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
+        fields[fname] = {
+          base: t.base,
+          optional: t.optional,
+          target: t.target,
+          by: m.name,
+          ...(spec.personal ? { personal: true } : {}),
+          ...(spec.sensitive ? { sensitive: true } : {}),
+        }
       }
       const indexes: ComposedModel['indexes'] = {}
       for (const [indexName, index] of Object.entries(def.indexes ?? {})) {
@@ -377,7 +436,7 @@ export function compose(
         })
         continue
       }
-      for (const [fname, tspec] of Object.entries(addl)) {
+      for (const [fname, declared] of Object.entries(addl)) {
         // Checked ahead of the collision below so the message names the real cause:
         // these columns are the isolation boundary, not a name somebody took first.
         if (fname === 'companyId' || fname === 'branchId') {
@@ -399,6 +458,15 @@ export function compose(
           })
           continue
         }
+        // Extension takes both field forms too. A bridge is exactly the module that
+        // adds a phone number to somebody else's partner, so it is exactly the module
+        // that has to be able to say the column is personal data.
+        const spec = normalizeField(declared)
+        if (!spec.ok) {
+          diag.add({ code: spec.code, module: m.name, message: `${target}.${fname}: ${spec.reason}` })
+          continue
+        }
+        const tspec = spec.type
         const t = parseType(tspec)
         if (!t.ok) {
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${target}.${fname}: ${t.reason}` })
@@ -415,7 +483,14 @@ export function compose(
           })
           continue
         }
-        model.fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
+        model.fields[fname] = {
+          base: t.base,
+          optional: t.optional,
+          target: t.target,
+          by: m.name,
+          ...(spec.personal ? { personal: true } : {}),
+          ...(spec.sensitive ? { sensitive: true } : {}),
+        }
       }
     }
   }

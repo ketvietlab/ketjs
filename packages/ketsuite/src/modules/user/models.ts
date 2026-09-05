@@ -18,13 +18,17 @@ export const models: Record<string, ModelDef> = {
     scope: 'shared',
     fields: {
       id: 'id',
-      login: 'text',
-      /** scrypt, parameters encoded in the value. Never in any declared output. */
-      passwordHash: 'text?',
+      login: { type: 'text', personal: true },
+      /**
+       * scrypt, parameters encoded in the value. Never in any declared output —
+       * which used to be a promise in this comment and is now a declaration the
+       * framework enforces at every boundary a value can leave by.
+       */
+      passwordHash: { type: 'text?', sensitive: true },
       /** Optional: an internal operator needs no entry in the address book. */
       partnerId: 'ref:partner.Partner?',
-      name: 'text',
-      email: 'text?',
+      name: { type: 'text', personal: true },
+      email: { type: 'text?', personal: true },
       lang: 'text?',
       /** IANA timezone used for datetime filters and grouped list buckets. */
       timezone: 'text?',
