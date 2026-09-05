@@ -134,6 +134,46 @@ Going back prepares the previous set again rather than undoing. The history stay
 through the same activation the forward direction does — so a page trashed since it was last public
 does not come back by the side door.
 
+### Nothing goes live that cannot be drawn
+
+`saveEntry` checked a layout against the sections that exist. Nothing else did.
+
+That left five paths to live content taking the stored layout as given: `publishEntry`,
+`preparePublication`, `activatePublication`, `rollbackPublication`, and the entry pointers those move.
+So a page placing a section from a module the deployment has since dropped could be made live, and
+`E_UNKNOWN_SECTION` would be raised in the renderer — at a visitor, as a five hundred, rather than at
+the editor who could have fixed it. A publication makes it worse rather than better: it moves a whole
+set at once, so one page referencing a vanished section takes every page in the set down with it.
+
+**`publishEntry` refuses**, and the refusal carries the layout errors and the path, so an editor is
+told which section rather than that something is wrong.
+
+**`preparePublication` refuses and names the entry** — a caller publishing twenty pages needs to know
+which one. It checks at prepare rather than at activate because prepare is where the caller can still
+fix the page.
+
+**`activatePublication` checks again**, because a deployment can drop a module between preparing and
+activating and that is the moment content reaches visitors. It does not re-read the set: preparing
+records `Publication.sectionTypes`, the distinct section types the frozen entries place, so the last
+gate costs one pass over a handful of names. `rollbackPublication` carries that list forward, and
+computes it where the base publication predates the column — otherwise rolling back to an older
+publication would produce a set the gate has nothing to check.
+
+**`restoreRevision` is deliberately not gated.** A restore makes a draft; it moves
+`currentRevisionId` and never touches `publishedRevisionId`, so it does not change what a visitor
+reads. Refusing it would trap an editor with a page they can neither recover nor repair — getting the
+old content back is how the missing section gets replaced. The gate that matters still refuses to
+publish it.
+
+`website.preflightPublication` runs the same check without publishing anything. Given `entryIds` it
+checks those; given none it checks every page on the site that is not in the bin, which is the
+question an operator actually asks after a deployment changes. It answers `ok`, how many pages were
+looked at, and the ones that would break with their errors.
+
+An unnamed run reads a thousand pages and reports `capped` beyond that, and a capped run is **never**
+`ok` however clean the pages it reached were: a partial scan cannot answer "is this site safe to
+publish" with yes. Naming what it did find is still worth more than refusing to answer at all.
+
 ## SEO and the public projection
 
 `website_seo` adds four optional fields to an entry it does not own — `metaDescription`, `canonical`,

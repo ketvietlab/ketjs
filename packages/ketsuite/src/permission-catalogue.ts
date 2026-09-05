@@ -1398,6 +1398,7 @@ const sources = {
       listTaxonomyTerms: ['read', 'view'],
       activatePublication: ['configure', 'configure', 'website.configuration-audit'],
       listPublications: ['read', 'view'],
+      preflightPublication: ['read', 'view'],
       preparePublication: ['configure', 'configure', 'website.configuration-audit'],
       publishEntry: ['configure', 'configure', 'website.configuration-audit'],
       rollbackPublication: ['configure', 'configure', 'website.configuration-audit'],
