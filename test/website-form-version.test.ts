@@ -258,11 +258,14 @@ test('form: a field actually named schemaVersion still works', async () => {
   assert.equal(accepted.ok, true)
 
   const rows = (await call(db, 'website_form.listSubmissions', { formId: 'f1' })) as Array<{
-    payload: Record<string, unknown>
+    id: string
     schemaVersion: number
   }>
-  assert.equal(rows[0]?.payload.schemaVersion, 'ban 3', "the visitor's answer is preserved")
-  assert.equal(rows[0]?.schemaVersion, 1, 'and the contract version is recorded separately')
+  assert.equal(rows[0]?.schemaVersion, 1, 'the contract version is recorded separately')
+  const record = (await call(db, 'website_form.readSubmission', { id: rows[0]?.id })) as {
+    payload: Record<string, unknown>
+  }
+  assert.equal(record?.payload.schemaVersion, 'ban 3', "the visitor's answer is preserved")
 })
 
 test('form: listForms and getForm agree on the version', async () => {
