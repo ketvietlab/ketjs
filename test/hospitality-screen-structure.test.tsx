@@ -479,3 +479,63 @@ test('the front desk offers the shift its work and a read-only viewer only the r
   assert.doesNotMatch(departuresOnly, /hospitality_core\.reservation\.action\.checkIn/)
   assert.match(departuresOnly, /hospitality_core\.reservation\.action\.checkOut/)
 })
+
+test('the tape chart says which week it is showing and what its colours mean', () => {
+  const stay = (id: string, roomId: string | null, state: string, start: string, end: string) => ({
+    id,
+    stayId: `${id}:stay`,
+    roomId,
+    guest: 'Nguyễn An',
+    provider: 'direct',
+    state,
+    start,
+    end,
+  })
+  const chart = {
+    timezone: 'UTC',
+    from: '2026-09-05T00:00:00.000Z',
+    to: '2026-09-12T00:00:00.000Z',
+    rooms: [
+      {
+        id: 'r301',
+        code: '301',
+        name: 'Phòng 301',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        status: 'available',
+        capacity: 2,
+        active: true,
+        roomType: { name: 'Deluxe' },
+      },
+    ],
+    events: [
+      stay('in-house', 'r301', 'checked_in', '2026-09-05T07:00:00.000Z', '2026-09-07T05:00:00.000Z'),
+      stay('waiting', null, 'draft', '2026-09-08T07:00:00.000Z', '2026-09-09T05:00:00.000Z'),
+    ],
+  }
+  const render = (may: { book: boolean }) =>
+    renderToString(coreScreens.tapeChartScreen(translate, chart as never, may, 'vi', {} as never))
+
+  const board = render({ book: true })
+  // The week, not just seven unlabelled columns.
+  assert.match(board, /05\/09\/2026 – 11\/09\/2026/)
+  // And a way to reach another one, which the route accepted all along.
+  assert.match(board, /from=2026-08-29/)
+  assert.match(board, /from=2026-09-12/)
+  assert.match(board, /hospitality_core\.screen\.tapeChart\.availability/)
+  assert.match(board, /reservations\?create=1/)
+  assert.match(board, /hospitality_core\.reservation\.action\.new/)
+  // A key to exactly the two states on this board, and to nothing else.
+  assert.match(board, /hospitality_core\.stayState\.draft/)
+  assert.match(board, /hospitality_core\.stayState\.checked_in/)
+  assert.doesNotMatch(board, /hospitality_core\.stayState\.cancelled/)
+  assert.doesNotMatch(board, /hospitality_core\.stayState\.no_show/)
+  // The board looks draggable and is not; the key says so.
+  assert.match(board, /hospitality_core\.screen\.tapeChart\.legendHint/)
+
+  // Looking at the week is not permission to book into it.
+  const readOnly = render({ book: false })
+  assert.doesNotMatch(readOnly, /reservations\?create=1/)
+  assert.match(readOnly, /05\/09\/2026 – 11\/09\/2026/)
+  assert.match(readOnly, /hospitality_core\.stayState\.checked_in/)
+})

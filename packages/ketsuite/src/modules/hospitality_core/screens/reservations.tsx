@@ -56,7 +56,7 @@ export const reservationsScreen = (
       title={_('hospitality_core.screen.reservations.title')}
       frame={frame}
       actions={linkButton({
-        label: _('hospitality_core.reservation.section.intake'),
+        label: _('hospitality_core.reservation.action.new'),
         href: modal?.createHref ?? '/admin/hospitality/reservations?create=1',
         variant: 'primary',
       })}

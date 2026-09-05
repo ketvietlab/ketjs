@@ -1552,9 +1552,12 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )) as TapeChart
+      // The board is for looking at; the one thing it offers to start is a
+      // booking, and only to somebody who may make one.
+      const may = { book: await ctx.allows('hospitality_core.createReservation', url, req) }
       return adminPage(ctx, url, req, {
         title: 'hospitality_core.screen.tapeChart.title',
-        body: (_, frame) => tapeChartScreen(_, chart, lang, frame),
+        body: (_, frame) => tapeChartScreen(_, chart, may, lang, frame),
       })
     },
 
