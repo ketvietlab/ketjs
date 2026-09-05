@@ -37,6 +37,7 @@ dependencies and its browser-facing entrypoint avoids Node APIs.
 | `explainWorkspace` | Render a workspace composition summary. |
 | `validateLayout`, `formatLayoutErrors` | Validate placement and extension relationships. |
 | `diffManifests`, `formatDiff` | Compare manifest contracts. |
+| `classificationInventory`, `formatClassification` | Enumerate personal and sensitive fields, and the models that classify none. |
 | `KetError`, `Diagnostics` | Structured framework errors and accumulated diagnostics. |
 
 Primary types include `Manifest`, `Module`, `Theme`, `Model`, `DeploymentDeclaration`, `DeploymentSpec`,
