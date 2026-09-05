@@ -340,10 +340,14 @@ test('cms: saves immutable revisions and publishes a stable revision per site', 
   assert.equal(((await call(db, 'website.listRevisions', { entryId: 'about' })) as unknown[]).length, 2)
 
   const preview = (await call(db, 'website.createPreviewToken', { entryId: 'about' })) as { token: string }
+  // previewEntry answers what getEntryByPath answers, so one renderer draws a
+  // draft and a published page the same way.
   const held = (await call(db, 'website.previewEntry', { token: preview.token })) as {
-    revision: { title: string }
+    title: string
+    published: boolean
   }
-  assert.equal(held.revision.title, 'About v2 draft')
+  assert.equal(held.title, 'About v2 draft')
+  assert.equal(held.published, true, 'the entry is live; the draft behind the link is not')
   await db.close()
 })
 

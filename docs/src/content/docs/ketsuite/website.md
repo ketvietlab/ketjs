@@ -740,6 +740,47 @@ and the sitemap are built from the primary, so a site left with hosts and no pri
 wrong address to every crawler that asks; promote another one first. The last host goes freely,
 primary or not — a site with no domains is a site nobody has pointed anywhere yet.
 
+### A preview link that opened nothing
+
+`previewEntry` has existed since preview tokens did, and **nothing ever called it**. A link could be
+minted, shown on screen, copied into a chat, expired and revoked — and opening it reached no route at
+all. The whole feature ended at handing over a string.
+
+The renderer is the framework's, because only the framework can draw a theme region: `serve.pages`
+gains `previewResolve`, a function taking `{ token }`, beside the `resolve` that takes a path. A
+request to the preview path with a token resolves through that function instead, and the same
+`pageScope` builds the same scope for the same theme — which is the point. A second shape would have
+meant a second renderer, and a preview drawn by a different renderer is not a preview.
+
+That is why `previewEntry` now answers what `getEntryByPath` answers rather than `{ entry, revision }`.
+Its `meta` is the entry's own rather than the publication's frozen copy: a preview exists to show what
+is about to go out.
+
+`page.path` comes from the row, not the request. A preview is served from one address and is a page
+at another, and the theme writes canonical links from that field.
+
+#### Three headers, and why each
+
+| Header | Value |
+| --- | --- |
+| `cache-control` | `no-store, max-age=0` |
+| `x-robots-tag` | `noindex, nofollow, noarchive` |
+| `referrer-policy` | `no-referrer` |
+
+`no-store` rather than `private`, because the reader's own browser cache is a place the draft outlives
+the link. `no-referrer` because the token is in the URL, and without it the first outbound click hands
+it to a third party. They are set only on the preview path — a published page is meant to be indexed
+and cached, and a test asserts it carries none of them.
+
+#### The path is one no page can claim
+
+`/_ket/preview`, inside the namespace the framework already owns for `/_ket/health` and `/_ket/agent`.
+`reservedPrefixes` derives from module routes, and the framework's own routes are not module routes —
+so `/_ket` was **not** reserved, and a page published at `/_ket/health` would have been advertised in
+the sitemap while the framework served the path. It is in `ALWAYS_RESERVED` now, beside `/api` and
+`/internal/v1`. A deployment that sets `previewPath` outside `/_ket/` is refused at boot rather than
+serving a path a page could take.
+
 ### Preview links accumulate
 
 Every visit to an entry's preview screen mints another token. That is deliberate: a preview is

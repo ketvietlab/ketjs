@@ -70,6 +70,9 @@ export default defineModule({
       'preview.hint': 'Token chỉ đọc này hết hạn sau 15 phút và trỏ đúng revision hiện tại.',
       'preview.token': 'Token',
       'preview.expires': 'Hết hạn',
+      'preview.link': 'Liên kết',
+      'preview.linkHint':
+        'Dán sau tên miền của website. Trang mở ra là bản nháp hiện tại, không được lập chỉ mục và không lưu trong cache.',
       'preview.ttl': 'Hiệu lực',
       'preview.ttl5': '5 phút',
       'preview.ttl15': '15 phút',
@@ -392,6 +395,9 @@ export default defineModule({
       'preview.hint': 'This read-only token expires after 15 minutes and targets the current revision.',
       'preview.token': 'Token',
       'preview.expires': 'Expires',
+      'preview.link': 'Link',
+      'preview.linkHint':
+        "Paste it after the site's domain. It opens the current draft, kept out of any index and out of every cache.",
       'preview.ttl': 'Good for',
       'preview.ttl5': '5 minutes',
       'preview.ttl15': '15 minutes',

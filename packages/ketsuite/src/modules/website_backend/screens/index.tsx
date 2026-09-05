@@ -909,10 +909,11 @@ export const previewScreen = (
                   method="get"
                   fields={[
                     {
-                      name: 'token',
-                      label: _('website_backend.preview.token'),
-                      value: minted.token,
+                      name: 'link',
+                      label: _('website_backend.preview.link'),
+                      value: `/_ket/preview?token=${encodeURIComponent(minted.token)}`,
                       disabled: true,
+                      help: _('website_backend.preview.linkHint'),
                       span: 'full',
                     },
                     {

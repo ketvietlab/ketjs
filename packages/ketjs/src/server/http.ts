@@ -136,9 +136,29 @@ export type ServeOpts = {
   /** Extra routes, matched before the theme takes the request. */
   routes?: Record<string, HttpRoute>
   pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
+  /**
+   * True for a page nobody but the holder of its link should see — a draft
+   * behind a preview token, say. The response then carries the three headers
+   * that keep it out of a crawler's index, a shared cache, and the referrer of
+   * whatever the reader clicks next.
+   */
+  pagePrivate?: (url: URL, req: IncomingMessage) => boolean
   /** Theme region returned for progressive GET navigation. */
   pageRegion?: string
 }
+
+/**
+ * A page that is not for the public.
+ *
+ * `no-store` rather than `private`: the reader's own browser cache is a place
+ * the draft outlives the link. `no-referrer` because the token is in the URL,
+ * and without it the first outbound click hands it to a third party.
+ */
+const PRIVATE_PAGE_HEADERS = {
+  'cache-control': 'no-store, max-age=0',
+  'x-robots-tag': 'noindex, nofollow, noarchive',
+  'referrer-policy': 'no-referrer',
+} as const
 
 /**
  * A mount is either a directory, or a function from the rest of the path to an
@@ -797,18 +817,22 @@ export async function createKetServer(o: ServeOpts) {
           return res.end('not found')
         }
         const scope = o.pageScope ? await o.pageScope(url, req) : {}
+        const privatePage = o.pagePrivate?.(url, req) === true
         const pageRegion = o.pageRegion
         if (pageRegion && isNavigationRequest(req)) {
           const page = scope['page'] as { title?: unknown } | undefined
+          const fragment = navigablePage(req, {
+            title: String(page?.title ?? ''),
+            document: () => html``,
+            slots: {
+              [pageRegion]: () => html`${trustedMarkup(theme.renderRegion(pageRegion, scope))}`,
+            },
+          })
           return send(
             res,
-            navigablePage(req, {
-              title: String(page?.title ?? ''),
-              document: () => html``,
-              slots: {
-                [pageRegion]: () => html`${trustedMarkup(theme.renderRegion(pageRegion, scope))}`,
-              },
-            }),
+            privatePage
+              ? { ...fragment, headers: { ...fragment.headers, ...PRIVATE_PAGE_HEADERS } }
+              : fragment,
           )
         }
         const fullHtml = bootstrapDocument(
@@ -817,6 +841,7 @@ export async function createKetServer(o: ServeOpts) {
         res.writeHead(200, {
           'content-type': 'text/html; charset=utf-8',
           ...(o.pageRegion ? { vary: 'X-Ket-Navigation' } : {}),
+          ...(privatePage ? PRIVATE_PAGE_HEADERS : {}),
         })
         return res.end(fullHtml)
       }
