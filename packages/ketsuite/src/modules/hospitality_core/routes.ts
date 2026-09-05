@@ -21,6 +21,8 @@ import {
   propertiesScreen,
   propertyDetailScreen,
   ratePlansScreen,
+  type CheckOutReadiness,
+  checkOutPrepScreen,
   reservationDetailScreen,
   reservationsScreen,
   inventoryScreen,
@@ -132,6 +134,8 @@ const renderReservationDetail = async (
     req,
   )) as ReservationDetail | null
   if (!reservation) return text('Not found', { status: 404 })
+  if (url.searchParams.get('action') === 'check-out' && reservation.stayId)
+    return renderCheckOutPrep(ctx, url, req, reservation, errors)
   const permissions = {
     amend: await ctx.allows('hospitality_core.amendReservation', url, req),
     checkIn: await ctx.allows('hospitality_core.checkIn', url, req),
@@ -193,6 +197,47 @@ const renderReservationDetail = async (
         url.searchParams.get('status'),
         errors,
         permissions,
+      ),
+  })
+}
+
+/**
+ * The read the desk used to do by hand across four screens, before a departure.
+ *
+ * It hangs off the reservation rather than getting a route of its own, because
+ * that is where the desk already is and where the command it leads to lives.
+ */
+const renderCheckOutPrep = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  reservation: ReservationDetail,
+  errors: readonly string[] = [],
+) => {
+  const readiness = (await ctx.call(
+    'hospitality_core.checkOutReadiness',
+    { stayId: reservation.stayId },
+    url,
+    req,
+  )) as CheckOutReadiness | null
+  if (!readiness) return text('Not found', { status: 404 })
+  const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
+  const lang = ctx.localeOf(url, req)
+  const _ = ctx.translate(lang)
+  const permitted = await ctx.allows('hospitality_core.checkOut', url, req)
+  return adminPage(ctx, url, req, {
+    title: _('hospitality_core.checkOutPrep.title', { code: reservation.code }),
+    translate: false,
+    body: (_, frame) =>
+      checkOutPrepScreen(
+        _,
+        readiness,
+        { id: reservation.id, code: reservation.code },
+        lang,
+        timezone,
+        frame,
+        permitted,
+        errors,
       ),
   })
 }
@@ -1371,7 +1416,7 @@ export const routes: Record<string, RouteEntry> = {
           ])
         result = (await ctx.call(
           'hospitality_core.checkOut',
-          { stayId: reservation.stayId },
+          { stayId: reservation.stayId, lateReason: form.lateReason?.trim() || undefined },
           url,
           req,
         )) as OperationResult

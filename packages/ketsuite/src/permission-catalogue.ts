@@ -497,6 +497,7 @@ const sources = {
       cancelReservation: ['approve', 'approve', 'hospitality_core.domain-policy'],
       checkIn: ['operate', 'operate'],
       checkOut: ['operate', 'operate'],
+      checkOutReadiness: ['read', ['view', 'operate']],
       cleaningTaskSummary: ['operate', ['operate', 'housekeeping-attend', 'housekeeping-supervise']],
       completeCleaningTask: ['approve', ['approve', 'housekeeping-attend'], 'hospitality_core.domain-policy'],
       confirmStayNotice: ['approve', ['approve', 'compliance-operate'], 'hospitality_core.domain-policy'],
