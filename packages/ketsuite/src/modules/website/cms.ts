@@ -1376,6 +1376,72 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  listEntryTerms: defineFn({
+    input: { entryId: 'id' },
+    output: { id: 'id', termId: 'id', taxonomy: 'text', slug: 'text', name: 'text' },
+    effects: [
+      'read:website.Entry',
+      'read:website.SiteMember',
+      'read:website.EntryTerm',
+      'read:website.TaxonomyTerm',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.entryId)
+      if (!entry || !(await canAccessSite(ctx, entry.siteId))) return []
+      const assignments = await ctx.db.select('website.EntryTerm', { entryId: args.entryId })
+      if (!assignments.length) return []
+      const Term = ctx.table('website.TaxonomyTerm')
+      const terms = await ctx.db.all(
+        from(Term)
+          .where(
+            inArray(
+              Term.id,
+              assignments.map((row) => row.termId),
+            ),
+          )
+          .orderBy(asc(Term.taxonomy), asc(Term.name)),
+      )
+      const byId = new Map(terms.map((term) => [term.id, term]))
+      // The assignment's own id, because that is what unassignTerm is given
+      // and what a remove button has to carry.
+      return assignments.flatMap((assignment) => {
+        const term = byId.get(assignment.termId)
+        return term
+          ? [
+              {
+                id: assignment.id,
+                termId: term.id,
+                taxonomy: term.taxonomy,
+                slug: term.slug,
+                name: term.name,
+              },
+            ]
+          : []
+      })
+    },
+  }),
+
+  unassignTerm: defineFn({
+    input: { entryId: 'id', termId: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.EntryTerm'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.entryId)
+      if (!entry || !(await canEditEntry(ctx, entry))) return forbidden()
+      const EntryTerm = ctx.table('website.EntryTerm')
+      // Removing a term that is not there is the state the caller asked for,
+      // so this answers ok either way rather than making a retry an error.
+      await ctx.db.del(
+        deleteFrom(EntryTerm)
+          .where(eq(EntryTerm.entryId, args.entryId))
+          .where(eq(EntryTerm.termId, args.termId)),
+      )
+      return { ok: true, id: args.entryId }
+    },
+  }),
+
   saveMediaMetadata: defineFn({
     input: {
       id: 'id',

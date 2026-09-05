@@ -9,13 +9,14 @@ import {
   inline,
   linkButton,
   Notice,
+  pagerBar,
   RecordActions,
   RecordForm,
   Section,
   stack,
   Surface,
 } from '../../../ui/index.ts'
-import type { FormOption, Frame } from '../../../ui/index.ts'
+import type { FormOption, Frame, Pager } from '../../../ui/index.ts'
 import { FormScreenFrame, ListScreenFrame } from './page-frame.tsx'
 
 export type SiteRow = {
@@ -252,11 +253,13 @@ export const contentScreen = (
   frame: Frame,
   locale = '',
   kind: EntryKind = { basePath: '/admin/website/pages', titleKey: 'pages' },
+  pager: Pager | null = null,
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_(`website_backend.${kind.titleKey}.title`)}
     frame={frame}
+    footer={pager ? pagerBar(_, pager) : null}
     body={stack([
       <Surface
         padding="compact"
@@ -327,6 +330,108 @@ export const contentScreen = (
   />
 )
 
+export type EntryTermRow = {
+  /** The assignment's id. `termId` is what removes it, this is what lists it. */
+  id: string
+  termId: string
+  taxonomy: string
+  slug: string
+  name: string
+}
+
+/**
+ * Which taxonomy terms this entry carries.
+ *
+ * assignTerm shipped with the taxonomy module and nothing ever read the
+ * assignment back or took it off, so a term put on a page went invisible the
+ * moment it was assigned - and deleteTerm refuses while an assignment exists,
+ * which made the term itself permanent as well.
+ */
+export const entryTermsSection = (
+  _: Translator,
+  entryId: string,
+  assigned: EntryTermRow[],
+  available: TaxonomyRow[],
+  locale = '',
+): TemplateResult => {
+  const unassigned = available.filter((term) => !assigned.some((row) => row.termId === term.id))
+  return (
+    <Section
+      title={_('website_backend.terms.title')}
+      description={_('website_backend.terms.hint')}
+      body={
+        <Surface
+          body={stack([
+            assigned.length === 0
+              ? emptyState(_('website_backend.terms.empty'), _('website_backend.terms.emptyHint'))
+              : dataTable(_, {
+                  rows: assigned,
+                  id: (row) => row.id,
+                  columns: [
+                    {
+                      key: 'taxonomy',
+                      label: _('website_backend.field.taxonomy'),
+                      cell: (row) => badge(row.taxonomy, 'info'),
+                    },
+                    {
+                      key: 'name',
+                      label: _('website_backend.terms.name'),
+                      priority: 'primary',
+                      cell: (row) => row.name,
+                    },
+                    {
+                      key: 'slug',
+                      label: _('website_backend.field.slug'),
+                      kind: 'identifier',
+                      cell: (row) => code(row.slug),
+                    },
+                    {
+                      key: 'remove',
+                      label: _('website_backend.action.remove'),
+                      cell: (row) => (
+                        <RecordActions
+                          action={`/admin/website/content/${entryId}/terms/${row.termId}/remove${locale}`}
+                          size="compact"
+                          actions={[
+                            {
+                              value: 'remove',
+                              label: _('website_backend.action.remove'),
+                              variant: 'destructive',
+                            },
+                          ]}
+                        />
+                      ),
+                    },
+                  ],
+                }),
+            ...(unassigned.length
+              ? [
+                  <RecordForm
+                    action={`/admin/website/content/${entryId}/terms${locale}`}
+                    layout="inline"
+                    fields={[
+                      {
+                        name: 'termId',
+                        label: _('website_backend.terms.add'),
+                        type: 'select',
+                        options: unassigned.map((term) => ({
+                          value: term.id,
+                          label: `${term.taxonomy} / ${term.name}`,
+                        })),
+                      },
+                    ]}
+                    submit={_('website_backend.action.assign')}
+                    submitVariant="secondary"
+                  />,
+                ]
+              : [emptyState(_('website_backend.terms.none'), _('website_backend.terms.noneHint'))]),
+          ])}
+        />
+      }
+    />
+  )
+}
+
 export const entryFormScreen = (
   _: Translator,
   detail: EntryDetail | null,
@@ -338,6 +443,7 @@ export const entryFormScreen = (
     errors?: string[]
     locale?: string
     seo?: SeoValues | null
+    terms?: { assigned: EntryTermRow[]; available: TaxonomyRow[] } | null
   } = {},
 ): TemplateResult => {
   const entry = detail?.entry
@@ -468,6 +574,19 @@ export const entryFormScreen = (
         // Only on a page that exists: the head tags describe a revision, and
         // there is no revision until the page has been saved once.
         ...(existing && options.seo ? [entrySeoSection(_, entry.id, options.seo, options.locale ?? '')] : []),
+        // Same reason: an assignment points at an entry, and there is no entry
+        // to point at until the page has been saved once.
+        ...(existing && options.terms
+          ? [
+              entryTermsSection(
+                _,
+                entry.id,
+                options.terms.assigned,
+                options.terms.available,
+                options.locale ?? '',
+              ),
+            ]
+          : []),
       ])}
     />
   )
@@ -658,12 +777,13 @@ export const revisionsScreen = (
                 // the content back is how it gets repaired.
                 key: 'restore',
                 label: _('website_backend.action.restore'),
-                cell: (row) =>
-                  linkButton({
-                    label: _('website_backend.action.restore'),
-                    href: `${basePath}/${entry.id}/revisions/${row.id}/restore${locale}`,
-                    size: 'compact',
-                  }),
+                cell: (row) => (
+                  <RecordActions
+                    action={`${basePath}/${entry.id}/revisions/${row.id}/restore${locale}`}
+                    size="compact"
+                    actions={[{ value: 'restore', label: _('website_backend.action.restore') }]}
+                  />
+                ),
               },
             ],
           }),
@@ -671,6 +791,13 @@ export const revisionsScreen = (
   />
 )
 
+/**
+ * One preview link, and the way to withdraw all of them.
+ *
+ * Every visit here mints another token, so the links accumulate: a preview
+ * pasted into a chat outlives the reason it was shared, and until now nothing
+ * could call any of them back.
+ */
 export const previewScreen = (
   _: Translator,
   entry: EntryRow,
@@ -678,6 +805,7 @@ export const previewScreen = (
   expiresAt: string,
   frame: Frame,
   basePath = '/admin/website/pages',
+  locale = '',
 ): TemplateResult => (
   <RecordScreen
     translator={_}
@@ -708,6 +836,26 @@ export const previewScreen = (
             ]}
             submit={_('website_backend.action.backToContent')}
             submitVariant="secondary"
+          />
+        }
+      />,
+      <Section
+        title={_('website_backend.preview.revokeTitle')}
+        description={_('website_backend.preview.revokeHint')}
+        body={
+          <Surface
+            body={
+              <RecordActions
+                action={`${basePath}/${entry.id}/preview/revoke${locale}`}
+                actions={[
+                  {
+                    value: 'revoke',
+                    label: _('website_backend.action.revokePreviews'),
+                    variant: 'destructive',
+                  },
+                ]}
+              />
+            }
           />
         }
       />,
@@ -1713,12 +1861,19 @@ export const submissionsScreen = (
   _: Translator,
   rows: SubmissionRow[],
   frame: Frame,
-  options: { formId?: string; fields?: string[]; retentionDays?: number | null; locale?: string } = {},
+  options: {
+    formId?: string
+    fields?: string[]
+    retentionDays?: number | null
+    locale?: string
+    pager?: Pager | null
+  } = {},
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.submissions.title')}
     frame={frame}
+    footer={options.pager ? pagerBar(_, options.pager) : null}
     body={stack([
       ...(options.formId
         ? submissionActions(
@@ -1889,12 +2044,19 @@ export const siteMembersScreen = (
               {
                 key: 'remove',
                 label: _('website_backend.action.remove'),
-                cell: (row) =>
-                  linkButton({
-                    label: _('website_backend.action.remove'),
-                    href: `/admin/website/sites/${site.id}/members/${row.id}/remove${options.locale ?? ''}`,
-                    size: 'compact',
-                  }),
+                cell: (row) => (
+                  <RecordActions
+                    action={`/admin/website/sites/${site.id}/members/${row.id}/remove${options.locale ?? ''}`}
+                    size="compact"
+                    actions={[
+                      {
+                        value: 'remove',
+                        label: _('website_backend.action.remove'),
+                        variant: 'destructive',
+                      },
+                    ]}
+                  />
+                ),
               },
             ],
           }),
@@ -2285,20 +2447,27 @@ export const publicationsScreen = (
                   key: 'act',
                   label: _('website_backend.publications.action'),
                   cell: (row) =>
-                    row.state === 'prepared'
-                      ? linkButton({
-                          label: _('website_backend.action.activate'),
-                          href: `/admin/website/publications/${row.id}/activate${options.locale ?? ''}`,
-                          size: 'compact',
-                          variant: 'primary',
-                        })
-                      : row.state === 'active'
-                        ? linkButton({
-                            label: _('website_backend.action.rollback'),
-                            href: `/admin/website/publications/${row.id}/rollback${options.locale ?? ''}`,
-                            size: 'compact',
-                          })
-                        : '',
+                    row.state === 'prepared' ? (
+                      <RecordActions
+                        action={`/admin/website/publications/${row.id}/activate${options.locale ?? ''}`}
+                        size="compact"
+                        actions={[
+                          {
+                            value: 'activate',
+                            label: _('website_backend.action.activate'),
+                            variant: 'primary',
+                          },
+                        ]}
+                      />
+                    ) : row.state === 'active' ? (
+                      <RecordActions
+                        action={`/admin/website/publications/${row.id}/rollback${options.locale ?? ''}`}
+                        size="compact"
+                        actions={[{ value: 'rollback', label: _('website_backend.action.rollback') }]}
+                      />
+                    ) : (
+                      ''
+                    ),
                 },
               ],
             }),
