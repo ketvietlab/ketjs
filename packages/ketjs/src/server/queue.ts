@@ -43,7 +43,9 @@ export type DurableJob = {
   updatedAt: string
 }
 
-export type EnqueueJobOptions = JobEnqueueOptions & {
+// `company` is a ctx-level convenience that has already resolved into `scope` by
+// the time it reaches here; the queue only ever stores a scope.
+export type EnqueueJobOptions = Omit<JobEnqueueOptions, 'company'> & {
   queue?: string
   maxAttempts?: number
   actor?: string | null

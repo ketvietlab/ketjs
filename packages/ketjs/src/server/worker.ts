@@ -9,6 +9,8 @@ import { createContext } from './ctx.ts'
 import { sqliteStore } from './config.ts'
 import { jobDefinition } from './jobs.ts'
 import { createQueue, JOB_CHANNEL } from './queue.ts'
+import { claimDue } from './schedule.ts'
+import { KetError } from '../kernel/errors.ts'
 import { bootRuntime } from './runtime.ts'
 import { traceOf } from './log/index.ts'
 import type { OpenLog } from './log/index.ts'
@@ -30,6 +32,14 @@ export type WorkerLog = {
   attempt: number
   durationMs?: number
   error?: string
+  /**
+   * The failure's stable code when it had one.
+   *
+   * Reducing a KetError to its message threw away the one part worth counting: a
+   * record saying "E_UNEXPECTED" for a failure the system named and expected is a
+   * record nobody can group or alert on.
+   */
+  errorCode?: string
 }
 
 export type BootedWorker = {
@@ -37,6 +47,11 @@ export type BootedWorker = {
   manifest: Manifest
   /** Claim one fair pass without starting a permanent loop. */
   runOnce(): Promise<number>
+  /**
+   * Move every due schedule forward once, and enqueue what moved. Returns how many
+   * jobs were enqueued. `start()` does this on a timer; a test does it deliberately.
+   */
+  sweepSchedules(): Promise<number>
   /** Keep claiming until no due work and all claimed jobs have settled. */
   drain(): Promise<number>
   /** Start adaptive polling. Idempotent. */
@@ -162,7 +177,15 @@ export async function bootWorker(
       event: entry.event === 'handler_ignored_abort' ? 'job_ignored_abort' : `job_${entry.event}`,
       fn: entry.job,
       ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
-      ...(entry.error === undefined ? {} : { error: entry.error }),
+      // Rebuilt so describeError sees a named failure rather than a bare string:
+      // the code survived the WorkerLog boundary in its own field.
+      ...(entry.error === undefined
+        ? {}
+        : {
+            error: entry.errorCode
+              ? new KetError({ code: entry.errorCode, message: entry.error })
+              : entry.error,
+          }),
       fields: {
         workerId: entry.workerId,
         jobId: entry.jobId,
@@ -175,6 +198,8 @@ export async function bootWorker(
   const pollMin = spec.worker.pollMinMs ?? 100
   const pollMax = spec.worker.pollMaxMs ?? 2_000
   const refreshMs = spec.worker.tenantRefreshMs ?? 60_000
+  const sweepMs = Math.max(1_000, spec.worker.scheduleSweepMs ?? 30_000)
+  const scheduled = Object.values(manifest.jobs).some((meta) => meta.schedule)
   const leaseMs = spec.worker.leaseMs ?? 60_000
   const shutdownGrace = spec.worker.shutdownGraceMs ?? 15_000
   const maxConcurrency = spec.serve?.tenants ? (spec.serve.tenants.max ?? 32) : Infinity
@@ -186,6 +211,7 @@ export async function bootWorker(
   let closing = false
   let loop: Promise<void> | null = null
   let unsubscribe: (() => Promise<void>) | null = null
+  let sweepTimer: ReturnType<typeof setInterval> | null = null
   let wakeResolve: (() => void) | null = null
   const inFlight = new Set<Promise<void>>()
   const controllers = new Map<string, AbortController>()
@@ -345,6 +371,7 @@ export async function bootWorker(
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      const errorCode = error instanceof KetError ? { errorCode: error.code } : {}
       if (job.attempt >= job.maxAttempts) {
         const changed = await queue.discard(job.id, error, workerId)
         if (!changed) {
@@ -370,6 +397,7 @@ export async function bootWorker(
           attempt: job.attempt,
           durationMs: now().getTime() - started,
           error: message,
+          ...errorCode,
         })
       } else {
         const changed = await queue.retry(job.id, error, retryAt(job.attempt), workerId)
@@ -396,6 +424,7 @@ export async function bootWorker(
           attempt: job.attempt,
           durationMs: now().getTime() - started,
           error: message,
+          ...errorCode,
         })
       }
     } finally {
@@ -456,6 +485,62 @@ export async function bootWorker(
     return claimed
   }
 
+  /**
+   * Move every due schedule forward, in every tenant, and enqueue what moved.
+   *
+   * Claim first, enqueue second: a crash between the two loses one tick rather than
+   * running it twice, which is the right way round for anything that touches money.
+   * A tenant that throws does not stop the rest — one broken database is not a
+   * reason for every other tenant to stop keeping time.
+   */
+  const sweepSchedules = async (): Promise<number> => {
+    if (!scheduled || closing) return 0
+    await refresh()
+    let fired = 0
+    for (const key of tenantKeys) {
+      if (closing) break
+      const at = logger.child({ tenant: key || null })
+      try {
+        await source.with(key, async (tenant) => {
+          const claims = await claimDue(tenant.adapter, tenant.live, {
+            now: now(),
+            timezone: config.defaultTimezone,
+          })
+          if (!claims.length) return
+          const queue = await createQueue(tenant.adapter, { notify: config.queueNotify })
+          for (const claim of claims) {
+            const meta = tenant.live.jobs[claim.job]
+            if (!meta) continue
+            await queue.enqueue(
+              claim.job,
+              {},
+              {
+                queue: meta.queue,
+                maxAttempts: meta.maxAttempts,
+                actor: null,
+                // No company: the framework knows which tenants exist and does not
+                // know what a company is. A job with per-company work declares
+                // crossCompany, reads them, and enqueues per company from there.
+                scope: { company: null, companies: null, branch: null, branches: null },
+                uniqueKey: `schedule:${claim.tick}`,
+              },
+            )
+            fired += 1
+            at.log({
+              level: 'info',
+              event: 'schedule_fired',
+              fn: claim.job,
+              fields: { tick: claim.tick, skipped: claim.skipped },
+            })
+          }
+        })
+      } catch (error) {
+        at.error('schedule_error', error)
+      }
+    }
+    return fired
+  }
+
   const drain = async (): Promise<number> => {
     let total = 0
     for (;;) {
@@ -473,32 +558,40 @@ export async function bootWorker(
       let idle = pollMin
       while (!closing) {
         const claimed = await runOnce().catch((error) => {
-          console.error(JSON.stringify({ event: 'worker_tick_error', workerId, error: String(error) }))
+          logger.error('worker_tick_error', error, { workerId })
           return 0
         })
         idle = claimed ? pollMin : Math.min(pollMax, Math.max(pollMin, idle * 2))
         if (!closing) await waitForWake(idle)
       }
     })()
+    if (scheduled && !sweepTimer) {
+      // Its own timer rather than a step in the poll loop: the poll loop backs off
+      // to two seconds when there is nothing to do, and a schedule that only fires
+      // when the queue is busy is not a schedule.
+      sweepTimer = setInterval(() => {
+        void sweepSchedules().catch((error) => logger.error('schedule_error', error, { workerId }))
+      }, sweepMs)
+      sweepTimer.unref?.()
+    }
   }
 
   if (source.singleAdapter?.notifications?.subscribe && config.queueNotify) {
     try {
       unsubscribe = await source.singleAdapter.notifications.subscribe(JOB_CHANNEL, wake, wake)
     } catch (error) {
-      console.warn(
-        JSON.stringify({
-          event: 'queue_notifier_unavailable',
-          workerId,
-          error: String(error),
-          fallback: 'polling',
-        }),
-      )
+      logger.log({
+        level: 'warn',
+        event: 'queue_notifier_unavailable',
+        error,
+        fields: { workerId, fallback: 'polling' },
+      })
     }
   }
 
   return {
     workerId,
+    sweepSchedules,
     manifest,
     runOnce,
     drain,
@@ -522,6 +615,7 @@ export async function bootWorker(
       if (graceTimer) clearTimeout(graceTimer)
       if (!graceful)
         for (const controller of controllers.values()) controller.abort(new Error('worker shutting down'))
+      if (sweepTimer) clearInterval(sweepTimer)
       await unsubscribe?.()
       await source.close()
       await baseTransport.close?.()
