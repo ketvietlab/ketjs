@@ -1348,6 +1348,7 @@ const sources = {
       addMenuItem: ['configure', 'configure', 'website.configuration-audit'],
       listMenu: ['read', 'view'],
       preflightMenu: ['read', 'view'],
+      moveMenuItem: ['configure', 'configure', 'website.configuration-audit'],
       removeMenuItem: ['configure', 'configure', 'website.configuration-audit'],
       snapshotMenu: ['configure', 'configure', 'website.configuration-audit'],
     },

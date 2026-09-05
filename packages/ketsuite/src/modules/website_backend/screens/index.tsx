@@ -1554,6 +1554,24 @@ export const menusScreen = (
                 kind: 'number',
                 cell: (row) => String(row.position),
               },
+              {
+                // Buttons, so the order is editable from a keyboard without
+                // anything having to be dragged - and without an editor doing
+                // arithmetic in the position box, which was the only way.
+                key: 'move',
+                label: _('website_backend.menus.move'),
+                cell: (row) => (
+                  <RecordActions
+                    action={`/admin/website/menus/${row.id}/move${locale}`}
+                    hidden={{ site: row.siteId }}
+                    size="compact"
+                    actions={[
+                      { value: 'up', label: _('website_backend.menus.up') },
+                      { value: 'down', label: _('website_backend.menus.down') },
+                    ]}
+                  />
+                ),
+              },
             ],
           }),
     ])}

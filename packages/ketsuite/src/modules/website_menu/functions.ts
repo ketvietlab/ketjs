@@ -242,6 +242,61 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * One place up or down, among its own siblings.
+   *
+   * Reordering a menu meant opening each item and typing a number into
+   * `position` - which is arithmetic rather than editing, and gets worse the
+   * longer the menu is. Two buttons is the whole feature, and buttons are
+   * reachable from a keyboard without anything having to be dragged.
+   *
+   * The sibling group is renumbered from its display order rather than having
+   * two positions swapped. Nothing has ever enforced distinct positions and
+   * `addMenuItem` defaults them all to zero, so a swap between two items that
+   * both sit at zero would move nothing and look broken. Renumbering settles
+   * the order it found and then applies the move.
+   */
+  moveMenuItem: defineFn({
+    input: { id: 'id', direction: 'text' },
+    output: { ok: 'bool', id: 'id?', position: 'int?', errors: 'json?' },
+    effects: ['read:website.SiteMember', 'read:website_menu.MenuItem', 'write:website_menu.MenuItem'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const direction = String(args.direction)
+      if (direction !== 'up' && direction !== 'down')
+        return invalid('direction', 'website_menu.error.invalidDirection')
+      const item = (await ctx.db.select('website_menu.MenuItem', { id: args.id }))[0]
+      // A row that is not there and a row you may not touch answer the same,
+      // the way the rest of the module does: existence is not free to probe.
+      if (!item || (ctx.actor && (!item.siteId || !(await canManageStructure(ctx, String(item.siteId))))))
+        return invalid('id', 'website.error.forbidden')
+
+      const M = ctx.table('website_menu.MenuItem')
+      const all = await ctx.db.all(
+        from(M).where(eq(M.siteId, item.siteId)).orderBy(asc(M.position), asc(M.id)),
+      )
+      // Siblings only: moving an item past its parent's neighbour would be a
+      // reparent, which is a different decision and has its own field.
+      const siblings = all.filter((row) => (row.parentId ?? null) === (item.parentId ?? null))
+      const at = siblings.findIndex((row) => String(row.id) === String(args.id))
+      const to = direction === 'up' ? at - 1 : at + 1
+      // Already at the end is the state the caller asked for, not a failure.
+      if (at < 0 || to < 0 || to >= siblings.length)
+        return { ok: true, id: args.id, position: Number(item.position ?? 0) }
+
+      const ordered = [...siblings]
+      const [moved] = ordered.splice(at, 1)
+      if (moved) ordered.splice(to, 0, moved)
+      await ctx.tx(async (tx) => {
+        for (const [index, row] of ordered.entries())
+          if (Number(row.position ?? 0) !== index)
+            await tx.db.update('website_menu.MenuItem', { id: row.id }, { position: index })
+      })
+      return { ok: true, id: args.id, position: to }
+    },
+  }),
+
   removeMenuItem: defineFn({
     input: { id: 'id' },
     effects: ['read:website.SiteMember', 'read:website_menu.MenuItem', 'write:website_menu.MenuItem'],
