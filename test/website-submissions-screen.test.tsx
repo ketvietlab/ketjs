@@ -14,6 +14,7 @@ translate.resolves = () => true
 
 const row = (over: Partial<SubmissionRow> = {}): SubmissionRow => ({
   id: 's1',
+  formId: 'f1',
   summary: {},
   consent: true,
   status: 'new',
