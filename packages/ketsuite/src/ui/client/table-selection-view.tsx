@@ -15,6 +15,7 @@ const dismissibleDropdown = [
 type KetBrowserGlobals = typeof globalThis & {
   [key: symbol]: unknown
   __ketNavigation?: { navigate?: (href: string) => unknown }
+  confirm: (message?: string) => boolean
 }
 
 const browserGlobals = globalThis as KetBrowserGlobals
@@ -181,6 +182,46 @@ const eventStartedInNestedModal = (event: KeyboardEvent, routeModal: HTMLElement
         target.matches('[data-ui="modal-layer"][data-presentation="dialog"]'),
     )
 
+/**
+ * Whether anything in the modal has been typed into since the server rendered it.
+ *
+ * Comparing each control against its own default is what makes this work without
+ * any bookkeeping: the page is server-rendered, so the default *is* the state the
+ * reader was given. A modal with no form — a reader, an inspector — has nothing
+ * to compare and is never dirty, so the guard costs those screens nothing.
+ */
+const modalHasDraft = (modal: HTMLElement): boolean => {
+  for (const field of modal.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')) {
+    if (field.disabled) continue
+    if (field.type === 'checkbox' || field.type === 'radio') {
+      if (field.checked !== field.defaultChecked) return true
+    } else if (field.value !== field.defaultValue) return true
+  }
+  for (const area of modal.querySelectorAll<HTMLTextAreaElement>('textarea'))
+    if (!area.disabled && area.value !== area.defaultValue) return true
+  for (const select of modal.querySelectorAll<HTMLSelectElement>('select')) {
+    if (select.disabled) continue
+    for (const option of select.options) if (option.selected !== option.defaultSelected) return true
+  }
+  return false
+}
+
+/**
+ * The guard, and what it is not.
+ *
+ * Closing a modal is a link, and a link still works with scripting off — that is
+ * the point of building it as one. So this catches the stray backdrop click and
+ * the reflexive Escape; it is not a lock, and nothing here should be read as one.
+ * The wording comes from the server because this file cannot translate.
+ */
+const mayLeaveModal = (modal: HTMLElement): boolean => {
+  if (!modalHasDraft(modal)) return true
+  const message = modal.getAttribute('data-unsaved-prompt')
+  // No prompt declared means the screen did not ask to be guarded.
+  if (!message) return true
+  return browserGlobals.confirm(message)
+}
+
 /** Progressive keyboard behavior for URL-owned create/edit workspaces. */
 const installRouteModal = (): void => {
   if (browserGlobals[routeModalMarker]) return
@@ -199,6 +240,29 @@ const installRouteModal = (): void => {
   focusModal()
   new MutationObserver(focusModal).observe(document.body, { childList: true, subtree: true })
 
+  // The backdrop and the X are ordinary links, so the guard has to run before
+  // the navigation layer sees the click rather than inside it.
+  document.addEventListener(
+    'click',
+    (event) => {
+      const modal = activeRouteModal()
+      if (!modal) return
+      const leaving = event
+        .composedPath()
+        .find(
+          (target) =>
+            target instanceof HTMLElement &&
+            target.matches('[data-ui="modal-close"], [data-ui="modal-backdrop"]'),
+        )
+      if (!leaving || !modal.contains(leaving as HTMLElement)) return
+      if (!mayLeaveModal(modal)) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    },
+    true,
+  )
+
   document.addEventListener('keydown', (event) => {
     const modal = activeRouteModal()
     if (!modal) return
@@ -210,6 +274,7 @@ const installRouteModal = (): void => {
       const close = modal.querySelector<HTMLAnchorElement>('[data-ui="modal-close"]')
       if (!close) return
       event.preventDefault()
+      if (!mayLeaveModal(modal)) return
       navigateTo(close.getAttribute('href') ?? close.href)
       return
     }

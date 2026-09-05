@@ -168,6 +168,7 @@ export {
   tabs,
   mediaPanel,
   attachmentPanel,
+  modalForm,
   modalSheet,
   recordForm,
   formCluster,
