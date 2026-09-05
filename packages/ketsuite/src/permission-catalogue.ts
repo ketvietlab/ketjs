@@ -1422,7 +1422,9 @@ const sources = {
       saveSite: ['configure', 'configure', 'website.configuration-audit'],
       saveSiteMember: ['configure', 'configure', 'website.configuration-audit'],
       saveTerm: ['configure', 'configure', 'website.configuration-audit'],
+      trashEntry: ['configure', 'configure', 'website.configuration-audit'],
       unassignTerm: ['configure', 'configure', 'website.configuration-audit'],
+      untrashEntry: ['configure', 'configure', 'website.configuration-audit'],
     },
     exemptions: {
       authenticateCustomer: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],

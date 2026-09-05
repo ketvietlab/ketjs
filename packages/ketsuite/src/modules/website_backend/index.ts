@@ -96,6 +96,9 @@ export default defineModule({
       'preflight.scopePublished': 'Chỉ trang đã xuất bản',
       'publish.at': 'Xuất bản lúc',
       'publish.atHint': 'Để trống là xuất bản ngay. Đặt thời điểm tương lai để hẹn giờ.',
+      'publish.trashHint':
+        'Bỏ vào thùng để trang biến khỏi danh sách, khỏi sitemap, khỏi tìm kiếm và khỏi mọi bản xuất bản mới. Không xóa gì cả — lấy lại được.',
+      'publish.untrashHint': 'Lấy lại sẽ đưa trang về bản nháp, không tự xuất bản lại.',
       'publish.downHint':
         'Gỡ xuống chỉ tác động đường xuất bản theo từng trang. Trang đã đóng băng trong bản xuất bản đang chạy phải chờ bản xuất bản kế tiếp.',
       'publish.cancelHint': 'Hủy lịch đưa trang về bản nháp; công việc đã xếp hàng sẽ tự bỏ qua.',
@@ -176,6 +179,8 @@ export default defineModule({
       'action.apply': 'Lọc',
       'action.createPreview': 'Tạo liên kết',
       'action.unpublish': 'Gỡ xuất bản',
+      'action.trash': 'Bỏ vào thùng',
+      'action.untrash': 'Lấy lại',
       'action.cancelSchedule': 'Hủy lịch',
       'action.deactivate': 'Tạm dừng',
       'action.revokePreviews': 'Thu hồi mọi liên kết',
@@ -434,6 +439,9 @@ export default defineModule({
       'preflight.scopePublished': 'Published pages only',
       'publish.at': 'Publish at',
       'publish.atHint': 'Leave empty to publish now. Set a time in the future to schedule it.',
+      'publish.trashHint':
+        'Throwing it away takes the page off the list, out of the sitemap, out of search and out of any new publication. Nothing is deleted — it can be taken back.',
+      'publish.untrashHint': 'Taking it back makes it a draft; it does not publish itself again.',
       'publish.downHint':
         'Taking down affects the per-entry path only. A page frozen into the active publication waits for the next one.',
       'publish.cancelHint':
@@ -514,6 +522,8 @@ export default defineModule({
       'action.apply': 'Filter',
       'action.createPreview': 'Create a link',
       'action.unpublish': 'Take down',
+      'action.trash': 'Throw away',
+      'action.untrash': 'Take it back',
       'action.cancelSchedule': 'Cancel the schedule',
       'action.deactivate': 'Switch off',
       'action.revokePreviews': 'Revoke every link',
