@@ -9,6 +9,7 @@ import {
   emptyState,
   icon,
   linkButton,
+  modalForm,
   RecordActions,
   RecordForm,
   RecordScreen,
@@ -71,12 +72,66 @@ export const permissionScreen = (_: Translator, frame: Frame): TemplateResult =>
 
 export type CaseDetailControls = {
   stage?: JSXChild
+  /** Opportunity stages, offered only while confirming a conversion. */
+  convertStage?: JSXChild
   mergeSource?: JSXChild
   assignTeam?: JSXChild
   assignUser?: JSXChild
   activityAssignee?: JSXChild
   quotationProduct?: JSXChild
 }
+
+/**
+ * The step before a lead becomes an opportunity.
+ *
+ * Converting changes what the record is, and the record keeps its identity while
+ * it happens: the same case, the same partner, the same timeline and the same
+ * owner. A one-click action in the bar could neither say that nor ask which
+ * stage the opportunity should open in, so it asks here instead.
+ */
+export const caseConvertModal = (
+  _: Translator,
+  row: AnyRow,
+  options: { action: string; cancelHref: string; control?: JSXChild; errors?: string[] },
+): TemplateResult =>
+  modalForm({
+    id: 'crm-case-convert',
+    title: _('crm_backend.convert.title'),
+    description: _('crm_backend.convert.hint'),
+    closeHref: options.cancelHref,
+    closeLabel: _('crm_backend.action.cancel'),
+    presentation: 'dialog',
+    form: {
+      id: 'crm-case-convert-form',
+      scope: 'crm-case-convert',
+      action: options.action,
+      cancelHref: options.cancelHref,
+      cancelLabel: _('crm_backend.action.cancel'),
+      errors: options.errors,
+      hidden: { action: 'convert', expectedVersion: String(row.version ?? 0) },
+      fields: [
+        {
+          name: 'stageId',
+          label: _('crm_backend.convert.stage'),
+          required: true,
+          control: options.control,
+        },
+        {
+          // The checkbox is checked again on the server. A required attribute
+          // is a hint to a browser, not a condition the record was converted
+          // under.
+          name: 'confirm',
+          label: _('crm_backend.convert.confirm'),
+          type: 'checkbox',
+          required: true,
+          span: 'full',
+          help: _('crm_backend.convert.confirmText'),
+        },
+      ],
+      submit: _('crm_backend.action.convert'),
+      submitVariant: 'primary',
+    },
+  })
 
 export const caseDetailScreen = (
   _: Translator,
@@ -612,9 +667,9 @@ export const caseDetailScreen = (
           : overviewTab
   const actions = [
     { value: 'refreshScore', label: _('crm_backend.action.refreshScore'), variant: 'secondary' as const },
-    ...(row.kind === 'lead'
-      ? [{ value: 'convert', label: _('crm_backend.action.convert'), variant: 'primary' as const }]
-      : []),
+    // "Convert" is not here either: it changes what the record is, and the
+    // action bar has nowhere to say so or to ask which stage the opportunity
+    // opens in. Its confirmation is a step of its own.
     // "Lost" is not here: it needs a reason, and a bare action button could only
     // ever send "not_specified". Its form lives on the overview tab.
     ...(row.kind === 'opportunity' && row.terminalState === 'open'
@@ -676,7 +731,25 @@ export const caseDetailScreen = (
               ]}
             />
           }
-          controller={<RecordActions action={endpoint} actions={actions} />}
+          controller={
+            <>
+              {row.kind === 'lead'
+                ? linkButton({
+                    href: localized(`${basePath}?tab=${activeTab}&modal=convert`, options.locale ?? ''),
+                    label: _('crm_backend.action.convert'),
+                    variant: 'primary',
+                  })
+                : null}
+              <RecordActions
+                action={endpoint}
+                // Without this the route falls back to the version it just read,
+                // and the compare-and-set behind every one of these actions can
+                // never fail. A stale tab would silently win.
+                hidden={{ expectedVersion: String(row.version ?? 0) }}
+                actions={actions}
+              />
+            </>
+          }
           body={main}
           aside={stack([
             <Section

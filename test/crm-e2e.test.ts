@@ -55,14 +55,53 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   let row = await call<Row>('crm.case.get', { id })
   assert.equal(row.kind, 'lead')
 
-  const converted = await app.client.post(
+  // Converting is confirmed, not clicked. The acknowledgement is checked on the
+  // server, so a post without it leaves a lead as a lead.
+  const unconfirmed = await app.client.post(
     `/admin/crm/cases/${id}?lang=en`,
     new URLSearchParams({ action: 'convert', expectedVersion: String(row.version) }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
+  assert.equal(unconfirmed.status, 200)
+  assert.match(await unconfirmed.text(), /Confirm the need before converting/u)
+  assert.equal((await call<Row>('crm.case.get', { id })).kind, 'lead')
+
+  // And it says which version it saw. Without that the compare-and-set behind
+  // the action matches by construction and a stale tab wins.
+  const unversioned = await app.client.post(
+    `/admin/crm/cases/${id}?lang=en`,
+    new URLSearchParams({ action: 'convert', confirm: 'on' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(unversioned.status, 422)
+  assert.equal((await call<Row>('crm.case.get', { id })).kind, 'lead')
+
+  // The confirmation step chooses the stage the opportunity opens in.
+  const step = await app.client.get(`/admin/crm/cases/${id}?lang=en&modal=convert`)
+  assert.equal(step.status, 200)
+  const stepHtml = await step.text()
+  assert.match(stepHtml, /Convert lead to opportunity/u)
+  assert.match(stepHtml, /No second customer and no second case are created/u)
+
+  const converted = await app.client.post(
+    `/admin/crm/cases/${id}?lang=en`,
+    new URLSearchParams({
+      action: 'convert',
+      confirm: 'on',
+      stageId: 'crm-stage-qualified',
+      expectedVersion: String(row.version),
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
   assert.equal(converted.status, 303)
+  // The step the conversion was asked from closes behind it.
+  assert.doesNotMatch(String(converted.headers.get('location')), /modal=convert/u)
   row = await call<Row>('crm.case.get', { id })
   assert.equal(row.kind, 'opportunity')
+  assert.equal(row.stageId, 'crm-stage-qualified', 'the chosen stage is the one it opens in')
+  // The same case, not a second one: converting keeps the record it changed.
+  assert.equal(row.id, id)
+  assert.equal(row.partnerId, 'customer')
 
   const moved = await app.client.post(
     '/admin/crm/pipeline/move?lang=en',
