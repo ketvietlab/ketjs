@@ -83,6 +83,7 @@ Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision
 | `validateSchedule`, `tickAt`, `ticksBetween`, `parseEvery`, `claimDue` | Read a job schedule, and claim its due tick in one tenant. |
 | `claimRateSlot`, `pruneRateSlots` | Spend one slot of a durable per-caller allowance, and drop stale counters. |
 | `nextSequenceNumber`, `peekSequenceNumber` | Allocate and read a company-scoped document number. |
+| `auditHash`, `auditId` | Namespaced digest for an identity, and a command-derived event id. |
 | `createIdempotency` | Persist and replay idempotent operation results. |
 | `effectTransport`, `memoryTransport`, `unavailableTransport` | Execute or test declared outbound messages. |
 | `validateOutboundMessage` | Validate an outbound transport payload. |

@@ -35,6 +35,16 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
         'existing rows carry the old shape; widening leaks and narrowing hides data',
       )
     }
+    if (amodel && Boolean(amodel.append) !== Boolean(bmodel.append)) {
+      push(
+        'risky',
+        'MODEL_APPEND_CHANGED',
+        `model "${mkey}" is ${amodel.append ? 'now' : 'no longer'} append-only`,
+        amodel.append
+          ? 'code that updated these rows will now be refused at runtime'
+          : 'a record whose value was that it never changed can now be edited',
+      )
+    }
     if (!amodel) {
       const extenders = new Set(
         Object.values(bmodel.fields)

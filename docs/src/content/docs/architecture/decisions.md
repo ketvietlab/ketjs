@@ -2310,3 +2310,41 @@ pretending otherwise would just move the failure somewhere less legible.
 
 **Reversible:** yes. Nothing is in the manifest, and the existing module allocators keep working
 untouched — this PR does not migrate them.
+## D74 — Append-only is a model property; what an event means is not
+**The gap.** Two modules keep an audit timeline and both promised the same thing in prose —
+`pos.AuditEvent` "never edits the first event", `account.AuditEvent` the same by convention. Nothing
+held either to it. A promise a reviewer has to remember is one a refactor eventually breaks, and both
+timelines exist precisely because somebody will later want to know that a row did not change.
+
+**Chosen:** `append: true` on a model. `ctx.db.update`, `del`, `compareAndSet` and an updating
+changeset are refused with `E_APPEND_ONLY`; insert and `insertIfAbsent` are untouched, so a replay is
+still answered by landing on the row it already wrote.
+
+**Where the line falls, and why here.** The alternative was a framework-owned `ket_audit` table that
+modules write into. That was rejected: `pos.listAuditEvents` is a public contract with filters,
+paging and a clamped window, and POS stores `configId` and `sessionId` as immutable dimensions
+captured with the command — none of which a framework knows about. Taking that into a framework table
+would repeat, in the other direction, the mistake D69 was written to avoid. The framework owns the
+*integrity* of the record and the domain owns its *meaning*.
+
+**The two helpers are the rest of that line.** `auditId` derives an identity from the command so a
+retry is the same command. `auditHash` produces a digest namespaced by the owning module, so two
+timelines cannot be joined by accident and a digest from one cannot be tested against a guess made in
+another. Both were written by hand in POS; neither is about what an event means.
+
+**Hashing is offered, not imposed.** The two existing timelines disagree: POS hashes actor, subject
+and related identities, `account` stores them raw. Both can be right — POS exports a sample beyond
+the tenant, `account` needs to join back. A framework that forced either would be deciding a question
+it cannot see the inputs to. `auditHash`'s documentation says plainly that it is pseudonymisation and
+not secrecy, because a low-entropy value stays guessable.
+
+**Declaring it plans no migration**, by the same argument as D70: it describes what may happen to a
+row rather than how the row is stored, so the schema snapshot ignores it and a test asserts the two
+snapshots are identical. `ket diff` does report it, risky in both directions.
+
+**Cost:** a model that later genuinely needs a correction has to model the correction as a new row,
+which is what an append-only timeline means and is more work than an `UPDATE`. Both KetSuite
+timelines were already written that way, so nothing had to change to adopt it.
+
+**Reversible:** yes — removing the flag restores the previous behaviour, and `ket diff` says so out
+loud when it happens.
