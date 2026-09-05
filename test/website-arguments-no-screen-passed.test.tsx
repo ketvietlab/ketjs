@@ -191,7 +191,9 @@ test('preview: a minted link is shown beside the form that made it', () => {
       '/admin/website/pages',
     ),
   )
-  assert.match(html, /value="tok"/u)
+  // The screen hands over the link, not the raw token: a token on its own is
+  // not something anybody can open.
+  assert.match(html, /value="\/_ket\/preview\?token=tok"/u)
   assert.match(html, /name="ttlSeconds"/u)
 })
 
