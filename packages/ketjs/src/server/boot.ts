@@ -1188,6 +1188,13 @@ export async function bootDeployment(
       ? {
           ...(pages.region ? { pageRegion: pages.region } : {}),
           pagePrivate: (url: URL) => isPreviewRequest(url),
+          siteTokens: async (url: URL, req: IncomingMessage) => {
+            const resolved = await siteOf(url, req)
+            const tokens = resolved?.tokens
+            return tokens && typeof tokens === 'object' && !Array.isArray(tokens)
+              ? (tokens as Record<string, string>)
+              : null
+          },
           pageScope: async (url: URL, req: IncomingMessage) => {
             const resolvedSite = await siteOf(url, req)
             const site = {
