@@ -26,7 +26,19 @@ const invalid = (field: string, message: string) => ({ ok: false, errors: [{ fie
  * Two prepares over the same revisions hash the same, which is what lets a
  * caller notice it is about to publish nothing.
  */
-const hashOf = (entries: ReadonlyArray<{ entryId: string; revisionId: string }>): string =>
+const canonical = (value: unknown): string => {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`
+}
+
+const hashOf = (
+  entries: ReadonlyArray<{ entryId: string; revisionId: string }>,
+  attachments: unknown = null,
+): string =>
   createHash('sha256')
     .update(
       [...entries]
@@ -34,6 +46,9 @@ const hashOf = (entries: ReadonlyArray<{ entryId: string; revisionId: string }>)
         .map((e) => `${e.entryId}:${e.revisionId}`)
         .join('\n'),
     )
+    // Attachments are part of what the caller proposed: the same pages with a
+    // different menu is a different publication.
+    .update(`\n--\n${canonical(attachments ?? null)}`)
     .digest('hex')
 
 const publicationById = (ctx: Ctx, id: unknown): Promise<Row | null> => {
@@ -50,7 +65,7 @@ export const publicationFunctions: Record<string, FnSpec> = {
    * someone keeps editing afterwards.
    */
   preparePublication: defineFn({
-    input: { id: 'id', siteId: 'id', entryIds: 'json' },
+    input: { id: 'id', siteId: 'id', entryIds: 'json', attachments: 'json?' },
     output: { ok: 'bool', id: 'id?', entryCount: 'int?', contentHash: 'text?', errors: 'json?' },
     effects: [
       'read:website.Site',
@@ -93,11 +108,16 @@ export const publicationFunctions: Record<string, FnSpec> = {
         })
       }
 
+      const attachments =
+        args.attachments && typeof args.attachments === 'object' && !Array.isArray(args.attachments)
+          ? (args.attachments as Record<string, unknown>)
+          : null
+
       const existing = await publicationById(ctx, args.id)
       if (existing) {
         // Same key, same set: hand back what was prepared. Same key, different
         // set: the caller is reusing an id for a different intent.
-        if (existing.contentHash !== hashOf(entries))
+        if (existing.contentHash !== hashOf(entries, attachments))
           return invalid('id', 'website.error.publicationConflict')
         return {
           ok: true,
@@ -107,7 +127,7 @@ export const publicationFunctions: Record<string, FnSpec> = {
         }
       }
 
-      const contentHash = hashOf(entries)
+      const contentHash = hashOf(entries, attachments)
       await ctx.db.insert('website.Publication', {
         id: args.id,
         siteId: args.siteId,
@@ -115,6 +135,7 @@ export const publicationFunctions: Record<string, FnSpec> = {
         entries,
         entryCount: entries.length,
         contentHash,
+        attachments,
         preparedBy: ctx.actor ?? null,
         preparedAt: new Date().toISOString(),
       })
@@ -194,6 +215,32 @@ export const publicationFunctions: Record<string, FnSpec> = {
 
       if (!won) return invalid('id', 'website.error.publicationStaleBase')
       return { ok: true, id: publication.id, supersededId: base ?? null }
+    },
+  }),
+
+  /**
+   * What is public right now, for a module that froze something alongside it.
+   *
+   * Anonymous because the navigation a visitor reads is decided by it, and a
+   * visitor has no session. It carries the attachment bag and nothing else
+   * about the entries: which pages are public is already answerable.
+   */
+  activePublication: defineFn({
+    anonymous: true,
+    input: { siteId: 'id' },
+    output: { id: 'id', attachments: 'json?', activatedAt: 'datetime?' },
+    effects: ['read:website.Site', 'read:website.Publication'],
+    handler: async (ctx: Ctx, args) => {
+      const Site = ctx.table('website.Site')
+      const site = await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true)))
+      if (!site?.activePublicationId) return null
+      const publication = await publicationById(ctx, site.activePublicationId)
+      if (publication?.state !== 'active') return null
+      return {
+        id: publication.id,
+        attachments: publication.attachments ?? null,
+        activatedAt: publication.activatedAt ?? null,
+      }
     },
   }),
 
@@ -277,7 +324,8 @@ export const publicationFunctions: Record<string, FnSpec> = {
         state: 'prepared',
         entries,
         entryCount: entries.length,
-        contentHash: hashOf(entries),
+        contentHash: hashOf(entries, target.attachments ?? null),
+        attachments: target.attachments ?? null,
         preparedBy: ctx.actor ?? null,
         preparedAt: new Date().toISOString(),
       })

@@ -52,6 +52,17 @@ export const models: Record<string, ModelDef> = {
       entries: 'json',
       entryCount: 'int',
       contentHash: 'text',
+      /**
+       * What other modules froze alongside the entries, keyed by module name.
+       *
+       * `website` does not read it. A publication has to be able to carry the
+       * navigation and the metadata that go with a set of pages — otherwise a
+       * menu change reaches visitors on its own schedule and a link appears
+       * before the page it points at. But `website_menu` depends on `website`,
+       * not the other way round, so the slot is opaque here and the module that
+       * owns a key is the only thing that reads it.
+       */
+      attachments: 'json?',
       preparedBy: 'text?',
       preparedAt: 'datetime',
       activatedAt: 'datetime?',
