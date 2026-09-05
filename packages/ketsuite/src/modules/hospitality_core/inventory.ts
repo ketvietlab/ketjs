@@ -343,18 +343,32 @@ export const releaseInventory = async (
 }
 
 /**
- * Replace one reservation's room-night claim without exposing a release window.
- * Deltas are applied in one stable order so two concurrent room-type swaps do
- * not lock the same ledger rows in opposite order.
+ * One party's claim on room-nights: a room type, the nights it holds, and how
+ * many rooms of that type on each of them.
  */
-export const replaceReservedInventory = async (
+export type InventoryHold = {
+  roomTypeId: unknown
+  dates: readonly string[]
+  quantity?: number
+}
+
+/**
+ * Move a claim from what it was to what it should be, in one net change.
+ *
+ * The two sides are whole claims rather than one swap, because a party can hold
+ * several rooms across several types at once — a channel booking of three rooms
+ * is three holds, and a revision may drop one, move another and add a third.
+ * Netting them first is what keeps a room the claim already had from being
+ * released and re-taken, which is a window another booking can fit through.
+ *
+ * Deltas are applied in one stable order so two concurrent changes never lock
+ * the same ledger rows in opposite order.
+ */
+export const replaceInventoryClaim = async (
   ctx: Ctx,
   propertyId: unknown,
-  previousRoomTypeId: unknown,
-  previousDates: readonly string[],
-  nextRoomTypeId: unknown,
-  nextDates: readonly string[],
-  quantity = 1,
+  previous: readonly InventoryHold[],
+  next: readonly InventoryHold[],
 ): Promise<void> => {
   const deltas = new Map<string, { roomTypeId: unknown; date: string; delta: number }>()
   const add = (roomTypeId: unknown, date: string, delta: number) => {
@@ -362,8 +376,9 @@ export const replaceReservedInventory = async (
     const current = deltas.get(key)
     deltas.set(key, { roomTypeId, date, delta: (current?.delta ?? 0) + delta })
   }
-  for (const date of previousDates) add(previousRoomTypeId, date, -quantity)
-  for (const date of nextDates) add(nextRoomTypeId, date, quantity)
+  for (const hold of previous)
+    for (const date of hold.dates) add(hold.roomTypeId, date, -(hold.quantity ?? 1))
+  for (const hold of next) for (const date of hold.dates) add(hold.roomTypeId, date, hold.quantity ?? 1)
 
   const changes = [...deltas.entries()]
     .filter(([, value]) => value.delta !== 0)
@@ -391,6 +406,23 @@ export const replaceReservedInventory = async (
       return { total, sold: Math.max(sold + change.delta, 0), blocked }
     })
 }
+
+/** The single-swap form, kept for the callers that only ever move one room. */
+export const replaceReservedInventory = async (
+  ctx: Ctx,
+  propertyId: unknown,
+  previousRoomTypeId: unknown,
+  previousDates: readonly string[],
+  nextRoomTypeId: unknown,
+  nextDates: readonly string[],
+  quantity = 1,
+): Promise<void> =>
+  replaceInventoryClaim(
+    ctx,
+    propertyId,
+    [{ roomTypeId: previousRoomTypeId, dates: previousDates, quantity }],
+    [{ roomTypeId: nextRoomTypeId, dates: nextDates, quantity }],
+  )
 
 export const defaultRatePlan = async (
   ctx: Ctx,
