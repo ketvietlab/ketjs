@@ -176,7 +176,34 @@ const optionRows = async (
         String(a.name ?? '').localeCompare(String(b.name ?? '')) ||
         String(a.id).localeCompare(String(b.id)),
     )
-    .slice(0, Math.max(1, Math.min(200, n(args.limit ?? 80))))
+    .slice(
+      Math.max(0, n(args.cursor ?? 0)),
+      Math.max(0, n(args.cursor ?? 0)) + Math.max(1, Math.min(200, n(args.limit ?? 80))),
+    )
+}
+
+/**
+ * How many rows `optionRows` would have to choose from, before the page.
+ *
+ * The same read and the same filter, stopping short of the slice. Separate
+ * rather than folded into `optionRows` because every caller of that wants an
+ * array and only the list screens want a figure — and a screen that shows the
+ * length of its own page as the total is a screen that lies the moment there
+ * is a second page (FLW-039).
+ */
+const optionCount = async (
+  ctx: Ctx,
+  model: string,
+  args: Record<string, unknown>,
+  keep: (row: Row) => boolean = () => true,
+): Promise<number> => {
+  const rows = await ctx.db.select(model, args.includeArchived === true ? {} : { active: true })
+  const needle = normalized(args.search)
+  return rows.filter(
+    (row) =>
+      keep(row) &&
+      (!needle || normalized(row.name).includes(needle) || normalized(row.code).includes(needle)),
+  ).length
 }
 
 /** Plain upsert for the entities with no CAS field — no concurrent editor to race against. */
@@ -243,6 +270,8 @@ export const functions: Record<string, FnSpec> = {
       search: 'text?',
       limit: 'int?',
       includeArchived: 'bool?',
+      /** Where in the ordered list this page starts — see project.count. */
+      cursor: 'int?',
       /** Only projects the caller has an issue in — see the note on projectsWithMyWork. */
       mine: 'bool?',
     },
@@ -389,6 +418,52 @@ export const functions: Record<string, FnSpec> = {
       const G = ctx.table('flow.ProjectAccessGrant')
       await ctx.db.del(deleteFrom(G).where(eq(G.id, held.id)))
       return { ok: true }
+    },
+  }),
+
+  /**
+   * How many projects there are to page through.
+   *
+   * The list screen used to show the length of the page it had — capped at two
+   * hundred — as though it were the total, so a company with more projects was
+   * told a number that was simply wrong, and the rest were unreachable. This
+   * answers the real figure, through the same membership filter the list uses
+   * (FLW-039).
+   */
+  'project.count': defineFn({
+    input: { search: 'text?', includeArchived: 'bool?', mine: 'bool?' },
+    output: { total: 'int' },
+    effects: [
+      'read:flow.Project',
+      'read:flow.Issue',
+      'read:flow.ProjectMember',
+      'read:flow.ProjectAccessGrant',
+      'read:user.User',
+    ],
+    agent: true,
+    handler: async (ctx, args) => {
+      const visible = await visibleProjects(ctx)
+      if (visible !== null && !visible.length) return { total: 0 }
+      // Counted over the rows themselves rather than with a SQL count, because
+      // `optionRows` matches a normalised name in JS: a count in the database
+      // would answer a different, larger question for exactly the searches
+      // people type. Reading every project is what the list already does.
+      const rows = await optionCount(
+        ctx,
+        'flow.Project',
+        args,
+        (row) => visible === null || visible.includes(String(row.id)),
+      )
+      if (args.mine !== true) return { total: rows }
+      const mine = await projectsWithMyWork(ctx)
+      return {
+        total: await optionCount(
+          ctx,
+          'flow.Project',
+          args,
+          (row) => (visible === null || visible.includes(String(row.id))) && mine.has(String(row.id)),
+        ),
+      }
     },
   }),
 
@@ -719,12 +794,17 @@ export const functions: Record<string, FnSpec> = {
   'board.scope': defineFn({
     input: {},
     output: { projectId: 'id?' },
-    effects: ['read:flow.BoardScope'],
+    effects: ['read:flow.BoardScope', ...membershipEffects],
     agent: true,
     handler: async (ctx) => {
       if (!ctx.actor) return { projectId: null }
       const held = (await ctx.db.select('flow.BoardScope', { userId: ctx.actor }))[0]
-      return { projectId: held ? held.projectId : null }
+      if (!held) return { projectId: null }
+      // Where they were last is not where they may still go: somebody taken off
+      // a project keeps the row that remembers it, and answering with it would
+      // send the screen to a board that is no longer theirs — and would name a
+      // project they can no longer be told exists.
+      return (await canReadProject(ctx, held.projectId)) ? { projectId: held.projectId } : { projectId: null }
     },
   }),
 
@@ -738,9 +818,13 @@ export const functions: Record<string, FnSpec> = {
       if (!ctx.actor) return invalid(issue('actor', 'flow.error.actorRequired'))
       const project = await readableProject(ctx, args.projectId)
       if (!project || project.active !== true) return invalid(issue('projectId', 'flow.error.notFound'))
-      // One row per reader, so opening a different board replaces the answer
-      // rather than adding one.
-      const id = `${String(ctx.actor)}`
+      // One row per reader **per company**. The id used to be the user id
+      // alone, which read as "one row per reader" and was not: the primary key
+      // is not company-scoped, so somebody who works in two companies got one
+      // row in whichever they opened first, and every later company answered
+      // `ok: true` and remembered nothing. Silent, and only visible as a board
+      // that would not stay where you left it (FLW-023).
+      const id = `${String(ctx.scope.company)}:${String(ctx.actor)}`
       const row = { id, userId: ctx.actor, projectId: args.projectId, updatedAt: new Date().toISOString() }
       await ctx.db.insertIfAbsent('flow.BoardScope', row)
       await ctx.db.update('flow.BoardScope', { id }, row)
@@ -1280,7 +1364,15 @@ export const functions: Record<string, FnSpec> = {
   'sprint.start': defineFn({
     input: { id: 'id', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:flow.Sprint', 'write:flow.Sprint', ...membershipEffects],
+    effects: [
+      'read:flow.Sprint',
+      'write:flow.Sprint',
+      // The guard row this contends on, so two callers cannot both be told
+      // they started a sprint — see flow.ProjectGuard.
+      'read:flow.ProjectGuard',
+      'write:flow.ProjectGuard',
+      ...membershipEffects,
+    ],
     idempotent: true,
     agent: true,
     handler: (ctx, args) =>
@@ -1340,6 +1432,14 @@ export const functions: Record<string, FnSpec> = {
       // Every row, archived issues included, because that is what `tag.archive`
       // deletes. A count that quietly skipped archived work would understate
       // exactly the thing the reader is about to lose.
+      //
+      // Counted across every project on purpose, membership notwithstanding.
+      // The figure exists to answer "what will archiving this destroy", and
+      // archiving a tag clears it from every project at once (FLW-DEC-006) — a
+      // count narrowed to the reader's own projects would understate the damage
+      // and make the warning a lie. What it gives away is one number about work
+      // the reader cannot otherwise see, which is the price of the warning
+      // being true. See the exception list in flow-membership.test.ts.
       const groups = await ctx.db.group(
         from(IT)
           .where(
@@ -1785,8 +1885,12 @@ export const functions: Record<string, FnSpec> = {
   'issue.dependencies': defineFn({
     input: { issueIds: 'json', includeExternalTargets: 'bool?' },
     output: { issueId: 'id', dependsOnIssueId: 'id', relation: 'text' },
-    effects: ['read:flow.IssueDependency'],
+    effects: ['read:flow.IssueDependency', 'read:flow.Issue', ...membershipEffects],
     agent: true,
+    // The ids come from the caller, so this answered about any issue anybody
+    // named — including whether an issue in a project they cannot see has
+    // blockers, which is an existence answer about a hidden project. The map
+    // view passes ids it just read, so filtering costs it nothing (FLW-018).
     handler: (ctx, args) =>
       dependenciesFor(
         ctx,

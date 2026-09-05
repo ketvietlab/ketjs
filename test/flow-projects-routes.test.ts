@@ -182,3 +182,50 @@ test('flow project create: resubmitting the same form lands on one project, not 
     ['To do', 'Done'],
   )
 })
+
+/**
+ * A list that is longer than its page says so, and can be read to the end
+ * (FLW-039).
+ *
+ * The screen used to ask for two hundred projects and report what came back as
+ * the company's project count. Under two hundred that is the same number; over
+ * it, the figure is wrong and the rest of the projects have no link to reach
+ * them by. Fifty-one projects is one more than a page, which is the smallest
+ * seed that can tell the two apart.
+ */
+test('flow project routes: the list pages, and says how many there really are', async (t) => {
+  const app = await boot(t)
+  const scope = { company: 'acme', branches: null }
+  for (let index = 0; index < 51; index += 1) {
+    const id = `bulk-${String(index).padStart(3, '0')}`
+    await app.fixture.call<Row>(
+      'flow.project.save',
+      {
+        values: { id, key: `B${String(index).padStart(3, '0')}`, name: `Dự án ${index}` },
+        idempotencyKey: `bulk-project-${id}`,
+      },
+      { scope, actor: 'admin' },
+    )
+  }
+
+  /** Which of the seeded projects a rendered page actually shows. */
+  const shown = (html: string) => new Set(html.match(/bulk-\d{3}/g) ?? [])
+
+  const first = await (await app.client.get('/admin/flow/projects?lang=en')).text()
+  // The real total, not the length of what is on screen. Both numbers used to
+  // be the same because the screen reported the second as the first.
+  assert.match(first, /51/)
+  assert.match(first, /href="\/admin\/flow\/projects\?page=2"/)
+
+  const second = await (await app.client.get('/admin/flow/projects?page=2&lang=en')).text()
+  assert.match(second, /href="\/admin\/flow\/projects\?page=1"/)
+
+  // Asked structurally rather than by name: the list orders by name, so "Dự án
+  // 50" sorts before "Dự án 9" and naming a project that "must" be on page two
+  // asserts the sort rather than the paging.
+  const page1 = shown(first)
+  const page2 = shown(second)
+  assert.equal(page1.size, 50, 'a full page')
+  assert.equal(page2.size, 1, 'and the one that did not fit')
+  assert.equal([...page2].filter((id) => page1.has(id)).length, 0, 'with no overlap between them')
+})

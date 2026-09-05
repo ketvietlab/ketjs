@@ -11,7 +11,9 @@ export default defineModule({
   // an empty table means an empty Flow until somebody is added to a project.
   // 0.4.0 adds ProjectDeletion and the purge job behind it: the record of a
   // deletion has to outlive the project, so it is a table rather than a flag.
-  version: '0.4.0',
+  // 0.5.0 adds ProjectGuard, a row per project that exists only to be
+  // contended on, so "one active sprint" survives two people pressing start.
+  version: '0.5.0',
   depends: ['company', 'user', 'mail', 'storage'],
   title: 'Flow',
   summary: 'Projects, issues, sprints, and epics.',
@@ -28,6 +30,7 @@ export {
   FIELD_FILTER_MATCHES,
   assignSprint,
   closeSprint,
+  commandRecordId,
   groupIssues,
   issueDetail,
   listIssues,

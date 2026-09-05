@@ -10,10 +10,10 @@
 //
 // See FLW-DEC-019.
 
-import { createHash } from 'node:crypto'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
 import { emptyIssueListState } from '../flow/search.ts'
+import { commandRecordId } from '../flow/operations.ts'
 import { ISSUE_PRIORITIES } from '../flow/types.ts'
 
 type Req = Parameters<Route>[1]
@@ -31,10 +31,6 @@ type Issue = { field?: string; code?: string; params?: Record<string, unknown> }
  * succeeded. Deriving the id from the namespace the call is already
  * deduplicated under makes a replay byte-identical, so it replays.
  */
-const commandId = (namespace: string, key: string): string => {
-  const hex = createHash('sha256').update(`${namespace}\n${key}`).digest('hex')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
-}
 
 const string = { type: 'string' }
 const nullableString = { type: ['string', 'null'] }
@@ -508,7 +504,7 @@ export const channelRoutes = routesOf(
       if (typeof key !== 'string') return key
       const id = String(params.id)
       if (!(await ctx.call('flow.issue.get', { id }, url, req))) return notFound(ctx, url, req)
-      const commentId = commandId(`flow.issue.comment:${id}`, key)
+      const commentId = commandRecordId(`flow.issue.comment:${id}`, key)
       const posted = (await ctx.call(
         'flow.issue.comment',
         { id: commentId, issueId: id, body: String(request.body.body), idempotencyKey: key },
