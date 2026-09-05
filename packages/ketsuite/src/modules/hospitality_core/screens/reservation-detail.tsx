@@ -262,21 +262,19 @@ export const reservationDetailScreen = (
           }
         />,
       )
+    // Check-out used to be a bare button here: press it and find out. It now
+    // leads to the one read that answers whether the guest can go and what is
+    // still on the bill, and the button lives there.
     if (permissions.checkOut)
       actions.push(
         <Section
           title={_('hospitality_core.reservation.action.checkOut')}
           description={_('hospitality_core.reservation.action.checkOutHint')}
-          body={
-            <RecordForm
-              action={action}
-              method="post"
-              submit={_('hospitality_core.reservation.action.checkOut')}
-              submitVariant="primary"
-              hidden={{ operation: 'check-out', lang: locale }}
-              fields={[]}
-            />
-          }
+          body={linkButton({
+            href: `${action}?action=check-out${locale ? `&lang=${locale}` : ''}`,
+            label: _('hospitality_core.checkOutPrep.open'),
+            variant: 'primary',
+          })}
         />,
       )
   }

@@ -1219,6 +1219,19 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     assert.deepEqual({ ...correction[0] }, { state: 'void', voidReason: 'Lễ tân ghi nhầm số lượng' })
   })
 
+  // The desk reads the departure before it closes it: who and which room, what
+  // is on the bill, and whether anything is still owed. The button lives here.
+  const prep = await e2e.client.get('/admin/hospitality/reservations/booking-1?action=check-out&lang=vi')
+  const prepHtml = await prep.text()
+  assert.equal(prep.status, 200, prepHtml)
+  assert.match(prepHtml, /Chuẩn bị trả phòng/)
+  assert.match(prepHtml, /Thông tin bàn giao/)
+  assert.match(prepHtml, /Các khoản của khách/)
+  // Leaving is not paying, and the page says so rather than implying otherwise.
+  assert.match(prepHtml, /Đủ điều kiện trả phòng/)
+  assert.match(prepHtml, /Hóa đơn và khoản thu là bước sau/)
+  assert.doesNotMatch(prepHtml, /hospitality_core\./)
+
   const checkedOut = await e2e.client.post(
     '/admin/hospitality/reservations/booking-1?lang=vi',
     new URLSearchParams({ operation: 'check-out', lang: 'vi' }),
