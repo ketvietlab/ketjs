@@ -3,6 +3,7 @@ import { defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canPublishEntry } from './access.ts'
 import { frozenMeta } from './cms.ts'
+import { layoutOf, missingSectionTypes, preflightEntry, sectionTypesIn } from './renderable.ts'
 
 /**
  * Publishing a set, rather than publishing one page at a time.
@@ -18,6 +19,24 @@ import { frozenMeta } from './cms.ts'
  */
 
 const MAX_PUBLICATION_ENTRIES = 1_000
+
+/**
+ * The distinct section types a frozen set places.
+ *
+ * Read once here so that activation - the hot path - can ask whether the
+ * deployment still provides them without touching a single revision again.
+ */
+const frozenSectionTypes = async (
+  ctx: Ctx,
+  entries: ReadonlyArray<{ revisionId: string }>,
+): Promise<string[]> => {
+  const types = new Set<string>()
+  for (const entry of entries) {
+    const revision = (await ctx.db.select('website.EntryRevision', { id: entry.revisionId }))[0]
+    for (const type of sectionTypesIn(layoutOf(revision))) types.add(type)
+  }
+  return [...types].sort()
+}
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 
@@ -67,10 +86,18 @@ export const publicationFunctions: Record<string, FnSpec> = {
    */
   preparePublication: defineFn({
     input: { id: 'id', siteId: 'id', entryIds: 'json', attachments: 'json?' },
-    output: { ok: 'bool', id: 'id?', entryCount: 'int?', contentHash: 'text?', errors: 'json?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      entryCount: 'int?',
+      contentHash: 'text?',
+      errors: 'json?',
+      unrenderable: 'json?',
+    },
     effects: [
       'read:website.Site',
       'read:website.Entry',
+      'read:website.EntryRevision',
       'read:website.SiteMember',
       'read:website.Publication',
       'write:website.Publication',
@@ -107,6 +134,17 @@ export const publicationFunctions: Record<string, FnSpec> = {
         if (entry.status === 'trash') return invalid(entryId, 'website.error.publicationEntryTrashed')
         if (!entry.currentRevisionId) return invalid(entryId, 'website.error.revisionNotFound')
         if (!(await canPublishEntry(ctx, entry))) return invalid(entryId, 'website.error.forbidden')
+        // A publication is the gate: it moves a whole set at once, so one page
+        // placing a section this deployment no longer provides takes every page
+        // in the set down with it. Checked here rather than at activation
+        // because here is where a caller can still fix the page.
+        const check = await preflightEntry(ctx, entry)
+        if (check.errors.length)
+          return {
+            ok: false,
+            errors: [{ field: entryId, message: 'website.error.publicationUnrenderable' }],
+            unrenderable: [check],
+          }
         entries.push({
           entryId,
           revisionId: String(entry.currentRevisionId),
@@ -144,6 +182,7 @@ export const publicationFunctions: Record<string, FnSpec> = {
         entries,
         entryCount: entries.length,
         contentHash,
+        sectionTypes: await frozenSectionTypes(ctx, entries),
         attachments,
         preparedBy: ctx.actor ?? null,
         preparedAt: new Date().toISOString(),
@@ -161,7 +200,7 @@ export const publicationFunctions: Record<string, FnSpec> = {
    */
   activatePublication: defineFn({
     input: { id: 'id', expectedPublicationId: 'id?' },
-    output: { ok: 'bool', id: 'id?', supersededId: 'id?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', supersededId: 'id?', errors: 'json?', missingSections: 'json?' },
     effects: [
       'read:website.Site',
       'read:website.Entry',
@@ -179,6 +218,17 @@ export const publicationFunctions: Record<string, FnSpec> = {
       // Replaying an activation is not an error; it already happened.
       if (publication.state === 'active') return { ok: true, id: publication.id }
       if (publication.state !== 'prepared') return invalid('id', 'website.error.publicationSuperseded')
+
+      // Preparing validated every entry, but a deployment can drop a module
+      // between preparing and activating, and this is the moment the content
+      // reaches visitors. Checking the recorded type names costs one pass over
+      // a handful of strings rather than a re-read of the whole set.
+      const missing = missingSectionTypes(ctx.manifest, publication.sectionTypes)
+      if (missing.length)
+        return {
+          ...invalid('id', 'website.error.publicationUnrenderable'),
+          missingSections: missing,
+        }
 
       const Site = ctx.table('website.Site')
       const site = await ctx.db.one(from(Site).where(eq(Site.id, publication.siteId)))
@@ -289,6 +339,7 @@ export const publicationFunctions: Record<string, FnSpec> = {
       'read:website.Site',
       'read:website.Entry',
       'read:website.SiteMember',
+      'read:website.EntryRevision',
       'read:website.Publication',
       'write:website.Publication',
     ],
@@ -334,6 +385,12 @@ export const publicationFunctions: Record<string, FnSpec> = {
         entries,
         entryCount: entries.length,
         contentHash: hashOf(entries, target.attachments ?? null),
+        // Carried forward where the base recorded it, and computed where it
+        // did not: a publication prepared before this existed would otherwise
+        // roll back into a set the activation gate has nothing to check.
+        sectionTypes: Array.isArray(target.sectionTypes)
+          ? target.sectionTypes
+          : await frozenSectionTypes(ctx, entries),
         attachments: target.attachments ?? null,
         preparedBy: ctx.actor ?? null,
         preparedAt: new Date().toISOString(),
