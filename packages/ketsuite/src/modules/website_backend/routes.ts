@@ -6,6 +6,7 @@ import {
   contentScreen,
   entryFormScreen,
   formEditorScreen,
+  preflightScreen,
   submissionRecordScreen,
   formsScreen,
   mediaFormScreen,
@@ -25,7 +26,9 @@ import type {
   EntryKind,
   EntryRow,
   MediaRow,
+  DanglingLink,
   FormRow,
+  PreflightResult,
   MenuRow,
   RevisionDiff,
   RevisionRow,
@@ -698,6 +701,27 @@ export const routes: Record<string, RouteEntry> = {
       })
     },
 
+  /**
+   * The publish check, run because someone asked.
+   *
+   * preflightPublication reads a revision per page, so it is a button rather
+   * than something the content list pays for on every render.
+   */
+  '/admin/website/preflight':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const siteId = selectedSite(url, sites)
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      const result = (await ctx.call('website.preflightPublication', { siteId }, url, req)) as PreflightResult
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.preflight.title',
+        body: (_, frame) => preflightScreen(_, result, siteId, frame, localeQuery(url)),
+      })
+    },
+
   '/admin/website/menus':
     (ctx: ServeContext): Route =>
     async (url, req) => {
@@ -708,9 +732,18 @@ export const routes: Record<string, RouteEntry> = {
       const rows = siteId
         ? ((await ctx.call('website_menu.listMenu', { siteId }, url, req)) as MenuRow[])
         : []
+      // One extra query on a screen that already lists the menu, and the only
+      // place a broken link is visible at all: the item and the page it names
+      // are edited on different screens on different days.
+      const check = siteId
+        ? ((await ctx.call('website_menu.preflightMenu', { siteId }, url, req)) as {
+            dangling?: DanglingLink[]
+          })
+        : null
       return adminPage(ctx, url, req, {
         title: 'website_backend.menus.title',
-        body: (_, frame) => menusScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url)),
+        body: (_, frame) =>
+          menusScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url), check?.dangling ?? []),
       })
     },
 
