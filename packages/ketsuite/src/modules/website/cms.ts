@@ -517,6 +517,27 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  deleteDomain: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.SiteMember', 'read:website.SiteDomain', 'write:website.SiteDomain'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const domain = (await ctx.db.select('website.SiteDomain', { id: args.id }))[0]
+      if (!domain) return { ok: true, id: args.id }
+      if (!(await canAdministerSite(ctx, domain.siteId))) return forbidden()
+      const siblings = await ctx.db.select('website.SiteDomain', { siteId: domain.siteId })
+      // Canonical URLs and the sitemap are built from the primary, so removing
+      // it while other hosts still answer for the site would publish the wrong
+      // address to every crawler that asks. Promote another one first.
+      if (domain.primary === true && siblings.length > 1)
+        return invalid('id', 'website.error.primaryDomainInUse')
+      const Domain = ctx.table('website.SiteDomain')
+      await ctx.db.del(deleteFrom(Domain).where(eq(Domain.id, args.id)))
+      return { ok: true, id: args.id }
+    },
+  }),
+
   listDomains: defineFn({
     input: { siteId: 'id', limit: 'int?', offset: 'int?' },
     output: {
@@ -1564,6 +1585,8 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (existing && existing.siteId !== args.siteId)
         return invalid('id', 'website.error.immutableOwnership')
       const redirects = await ctx.db.select('website.Redirect', { siteId: args.siteId })
+      const taken = redirects.find((redirect) => redirect.id !== args.id && redirect.fromPath === fromPath)
+      if (taken) return invalid('fromPath', 'website.error.duplicateRedirect')
       let target: unknown = toPath
       for (let depth = 0; depth <= 20; depth += 1) {
         if (target === fromPath || depth === 20) return invalid('toPath', 'website.error.redirectCycle')

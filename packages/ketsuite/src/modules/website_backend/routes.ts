@@ -1078,10 +1078,16 @@ export const routes: Record<string, RouteEntry> = {
       if (!site) return text(_('website_backend.error.notFound'), { status: 404 })
       const render = async (values?: Record<string, string>, errors?: string[]) => {
         const rows = (await ctx.call('website.listDomains', { siteId: params.id }, url, req)) as DomainRow[]
+        const wanted = url.searchParams.get('edit')
         return adminPage(ctx, url, req, {
           title: 'website_backend.domains.title',
           body: (_, frame) =>
-            siteDomainsScreen(_, site, rows, frame, { values, errors, locale: localeQuery(url) }),
+            siteDomainsScreen(_, site, rows, frame, {
+              values,
+              errors,
+              locale: localeQuery(url),
+              editing: wanted ? (rows.find((row) => row.id === wanted) ?? null) : null,
+            }),
         })
       }
       if (req.method === 'GET') return render()
@@ -1102,6 +1108,47 @@ export const routes: Record<string, RouteEntry> = {
       if ((result as { ok?: boolean }).ok)
         return seeOther(inLocale(url, `/admin/website/sites/${params.id}/domains`))
       return render(form, resultErrors(result, _))
+    },
+
+  /**
+   * Correcting a host that is already attached.
+   *
+   * `saveDomain` is an upsert that promotes a new primary and demotes the old
+   * one in the same transaction, and the create route minted a fresh id every
+   * time - so re-submitting an existing host only collided with the unique
+   * index, and neither the primary nor `redirectToPrimary` could be changed
+   * once set.
+   */
+  '/admin/website/sites/{id}/domains/{domainId}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      const result = await ctx.call(
+        'website.saveDomain',
+        {
+          id: params.domainId,
+          siteId: params.id,
+          host: form.host,
+          primary: !!form.primary,
+          redirectToPrimary: !!form.redirectToPrimary,
+        },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/sites/${params.id}/domains`))
+    },
+
+  '/admin/website/sites/{id}/domains/{domainId}/remove':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = await ctx.call('website.deleteDomain', { id: params.domainId }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/sites/${params.id}/domains`))
     },
 
   /**
@@ -1152,9 +1199,22 @@ export const routes: Record<string, RouteEntry> = {
       const posted = req.method === 'POST' ? await readForm(req) : null
       const siteId = posted?.siteId || selectedSite(url, sites)
       const render = async (values?: Record<string, string>, errors?: string[]) => {
+        // `listRedirects` has always taken this filter and nothing passed it,
+        // which was of a piece with the route writing `active: true` every
+        // time: there were no inactive rows to look at.
+        const state = url.searchParams.get('state')
         const rows = siteId
-          ? ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[])
+          ? ((await ctx.call(
+              'website.listRedirects',
+              {
+                siteId,
+                ...(state === 'active' || state === 'inactive' ? { active: state === 'active' } : {}),
+              },
+              url,
+              req,
+            )) as RedirectRow[])
           : []
+        const wanted = url.searchParams.get('edit')
         return adminPage(ctx, url, req, {
           title: 'website_backend.redirects.title',
           body: (_, frame) =>
@@ -1162,6 +1222,7 @@ export const routes: Record<string, RouteEntry> = {
               values,
               errors,
               locale: localeQuery(url),
+              editing: wanted ? (rows.find((row) => row.id === wanted) ?? null) : null,
             }),
         })
       }
@@ -1185,6 +1246,66 @@ export const routes: Record<string, RouteEntry> = {
       if ((result as { ok?: boolean }).ok)
         return seeOther(inLocale(url, `/admin/website/redirects?site=${encodeURIComponent(siteId)}`))
       return render(form, resultErrors(result, _))
+    },
+
+  /**
+   * Correcting one that is already there.
+   *
+   * `saveRedirect` is an upsert and the create route minted a fresh id every
+   * time, so a typo could not be fixed: the correction collided with the
+   * unique index on `fromPath` and the wrong row kept the address.
+   */
+  '/admin/website/redirects/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      const siteId = form.siteId
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      const current = ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[]).find(
+        (row) => row.id === params.id,
+      )
+      if (!current) return text(_('website_backend.error.notFound'), { status: 404 })
+      const result = await ctx.call(
+        'website.saveRedirect',
+        {
+          id: params.id,
+          siteId,
+          fromPath: form.fromPath,
+          toPath: form.toPath,
+          permanent: !!form.permanent,
+          // An edit is about where the address goes, not whether it is on.
+          active: current.active,
+        },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/redirects?site=${encodeURIComponent(siteId)}`))
+    },
+
+  '/admin/website/redirects/{id}/state':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      const sites = await sitesOf(ctx, url, req)
+      const siteId = selectedSite(url, sites)
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      const current = ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[]).find(
+        (row) => row.id === params.id,
+      )
+      if (!current) return text(_('website_backend.error.notFound'), { status: 404 })
+      const result = await ctx.call(
+        'website.saveRedirect',
+        { ...current, active: form.action === 'activate' },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/redirects?site=${encodeURIComponent(siteId)}`))
     },
 
   '/admin/website/taxonomies/new':
