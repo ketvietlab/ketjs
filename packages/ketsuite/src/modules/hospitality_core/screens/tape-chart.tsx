@@ -5,6 +5,7 @@ import {
   emptyState,
   formatDateTime,
   type Frame,
+  inline,
   linkButton,
   providerName,
   ScheduleBoard,
@@ -170,13 +171,11 @@ export const tapeChartScreen = (
             <Section
               title={_('hospitality_core.screen.tapeChart.legend')}
               description={_('hospitality_core.screen.tapeChart.legendHint')}
-              body={
-                <div data-ui="inline">
-                  {legend.map((state) =>
-                    badge(_(`hospitality_core.stayState.${state}`), workflowTone(state), state),
-                  )}
-                </div>
-              }
+              body={inline(
+                legend.map((state) =>
+                  badge(_(`hospitality_core.stayState.${state}`), workflowTone(state), state),
+                ),
+              )}
             />
           ) : null}
         </>
