@@ -420,6 +420,16 @@ const sources = {
     },
     exemptions: {},
   },
+  // Routes only, no functions of its own: every read and command reaches Flow
+  // through `ctx.call`, which is what makes project membership apply to the
+  // phone without the rule being written a second time (FLW-DEC-019).
+  flow_staff_channel: {
+    posture: 'projection/bridge',
+    bundles: [],
+    functions: {},
+    exemptions: {},
+  },
+
   flow_backend: {
     posture: 'projection/bridge',
     bundles: [],
