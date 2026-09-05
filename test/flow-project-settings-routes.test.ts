@@ -124,3 +124,54 @@ test('project settings route says how far the tag buttons reach before they are 
   assert.match(html, /Tags belong to the company, not to this project/)
   assert.match(html, /2 issues/)
 })
+
+/**
+ * The members block, which is the screen half of FLW-DEC-012.
+ *
+ * Worth a route test rather than a screen test alone: what makes this block
+ * correct is not how it looks but that pressing its buttons changes who can
+ * read the project, and only a rendered page posting back to itself shows that.
+ */
+test('project settings route shows who is on the project and changes it', async (t) => {
+  const app = await boot(t)
+  const path = '/admin/flow/projects/platform/settings?lang=en'
+
+  // Whoever made the project is on it — otherwise nobody would be, and the
+  // project would be unreadable by the person who just made it.
+  const opened = await (await app.client.get(path)).text()
+  assert.match(opened, /Members/)
+  assert.match(opened, /Only members can read this project/)
+  assert.match(opened, /Admin/)
+
+  await app.fixture.call<Row>(
+    'user.createUser',
+    { id: 'mai', login: 'mai', password: 'correct horse', name: 'Mai' },
+    { scope: { company: 'acme', branch: 'root:acme', branches: ['root:acme'] } },
+  )
+  await app.fixture.call<Row>(
+    'user.grantCompany',
+    { id: 'mai:acme', userId: 'mai', companyId: 'acme' },
+    { scope: { company: 'acme', branch: 'root:acme', branches: ['root:acme'] } },
+  )
+
+  const idempotencyKey = hidden(opened, 'idempotencyKey')
+  const added = await app.client.post(
+    path,
+    new URLSearchParams({ action: 'addMember', userId: 'mai', idempotencyKey }),
+    post,
+  )
+  assert.equal(added.status, 303)
+  const withMai = await (await app.client.get(path)).text()
+  assert.match(withMai, /Mai/)
+
+  // And off again. The row is gone from the block, which is the same thing as
+  // saying the project is gone from her.
+  const removed = await app.client.post(
+    path,
+    new URLSearchParams({ action: 'removeMember', userId: 'mai' }),
+    post,
+  )
+  assert.equal(removed.status, 303)
+  const without = await (await app.client.get(path)).text()
+  assert.doesNotMatch(without, /Mai/)
+})

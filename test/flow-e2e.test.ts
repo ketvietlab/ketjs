@@ -876,9 +876,11 @@ test('flow projects: counts come back per project, and a state is derived from t
     // Asking for nothing is not an error, and asking about a project that does
     // not exist answers for the ones that do rather than failing the page.
     assert.deepEqual(await call<Row[]>('flow.project.stats', { projectIds: [] }), [])
+    // A project that does not exist and a project this caller may not see give
+    // the same answer — nothing. Telling them apart would tell a reader that a
+    // hidden project is there, which is the half of the answer to withhold.
     const partial = await call<Row[]>('flow.project.stats', { projectIds: ['mixed', 'no-such'] })
-    assert.equal(partial.length, 2)
-    assert.equal(Number(partial.find((row) => String(row.id) === 'no-such')?.total), 0)
+    assert.equal(partial.length, 1)
   } finally {
     await e2e.close()
   }

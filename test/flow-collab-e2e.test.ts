@@ -190,6 +190,14 @@ test('flow collab: reading an issue does not grant rewriting its description', a
       values: { id: 'proj1', key: 'PRJ', name: 'Flagship' },
       idempotencyKey: 'project-save-1',
     })
+    // The reader has the function grant and now needs the other half of the
+    // answer: being on the project. A grant says what somebody may do; being a
+    // member says which projects they may do it to (FLW-DEC-012).
+    await call('flow.project.member.add', {
+      projectId: 'proj1',
+      userId: 'reader',
+      idempotencyKey: 'member-reader-proj1',
+    })
     await call('flow.column.save', {
       values: { id: 'col-todo', projectId: 'proj1', code: 'todo', name: 'To do' },
       idempotencyKey: 'column-save-1',
@@ -263,6 +271,13 @@ test('flow collab: a reader can open a document this process has to load first',
     await call('flow.project.save', {
       values: { id: 'proj1', key: 'PRJ', name: 'Flagship' },
       idempotencyKey: 'project-save-1',
+    })
+    // The reader has the function grant and now needs the other half of the
+    // answer: being on the project (FLW-DEC-012).
+    await call('flow.project.member.add', {
+      projectId: 'proj1',
+      userId: 'reader',
+      idempotencyKey: 'member-reader-cold',
     })
     await call('flow.column.save', {
       values: { id: 'col-todo', projectId: 'proj1', code: 'todo', name: 'To do' },

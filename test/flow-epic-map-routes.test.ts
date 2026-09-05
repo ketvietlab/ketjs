@@ -70,6 +70,14 @@ const boot = async (t: TestContext) => {
       values: { id, key, name },
       idempotencyKey: `project-${id}`,
     })
+    // The reader has the function grant and now needs the other half of the
+    // answer: being on the project. A grant says what somebody may do; being a
+    // member says which projects they may do it to (FLW-DEC-012).
+    await call('flow.project.member.add', {
+      projectId: id,
+      userId: 'reader',
+      idempotencyKey: `member-reader-${id}`,
+    })
   }
   await call('flow.column.save', {
     values: { id: 'todo', projectId: 'platform', code: 'todo', name: 'To do', sequence: 10 },

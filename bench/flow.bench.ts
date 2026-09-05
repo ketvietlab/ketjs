@@ -103,8 +103,29 @@ try {
     superuser: true,
   })
   await seed('user.grantCompany', { id: 'bench:kv', userId: 'bench', companyId: 'kv' })
+  // A second reader who is nobody special. `bench` is a superuser, so every
+  // screen it opens takes the short way through the membership gate — one user
+  // lookup and no filter. That is not the shape most callers have, so the same
+  // screens are read again as somebody who is a member of the projects and
+  // nothing more: three lookups, and an `IN (...)` on every project-scoped
+  // query. The second row is the one to watch when this filter changes.
+  await seed('user.createUser', {
+    id: 'member',
+    login: 'member',
+    password: 'bench-password',
+    name: 'Trần Bình',
+    defaultCompanyId: 'kv',
+  })
+  await seed('user.grantCompany', { id: 'member:kv', userId: 'member', companyId: 'kv' })
 
   const seeding = performance.now()
+  const membershipRows = Array.from({ length: PROJECTS }, (_, index) => [
+    'kv',
+    'p' + index + ':member',
+    'p' + index,
+    'member',
+    stamp,
+  ])
   await bench.fixture.withTenant('', async ({ adapter }) => {
     await bulk(
       adapter,
@@ -204,7 +225,15 @@ try {
     )
   })
 
-  await bench.client.login({ login: 'bench', password: 'bench-password' })
+  await bench.fixture.withTenant('', async ({ adapter }) => {
+    await bulk(
+      adapter,
+      'flow.ProjectMember',
+      ['companyId', 'id', 'projectId', 'userId', 'addedAt'],
+      membershipRows,
+    )
+  })
+
   console.log(
     `Flow read costs — ${PROJECTS} projects, ${PROJECTS * PER_PROJECT} issues, ${PAGES} documents` +
       ` on ${databaseUrl ? 'PostgreSQL' : 'SQLite'} (seeded in ${((performance.now() - seeding) / 1000).toFixed(1)}s)`,
@@ -219,27 +248,37 @@ try {
     ['pages', '/admin/flow/pages?lang=vi'],
   ] as const
 
-  for (const [label, path] of screens) {
-    const times: number[] = []
-    let bytes = 0
-    for (let round = 0; round < ROUNDS; round += 1) {
-      const at = performance.now()
-      const response = await bench.client.get(path)
-      const html = await response.text()
-      times.push(performance.now() - at)
-      bytes = html.length
-      if (response.status !== 200) throw new Error(`${label} answered ${response.status}`)
-    }
-    // The first round pays for whatever the process caches; the rest is the read.
-    const warm = times.slice(1)
-    const mean = warm.reduce((sum, value) => sum + value, 0) / warm.length
+  for (const who of ['bench', 'member'] as const) {
+    await bench.client.login({ login: who, password: 'bench-password' })
     console.log(
-      `  ${label.padEnd(9)} mean=${mean.toFixed(1).padStart(8)} ms  p50=${percentile(warm, 0.5)
-        .toFixed(1)
-        .padStart(
-          8,
-        )} ms  p95=${percentile(warm, 0.95).toFixed(1).padStart(8)} ms  html=${String(bytes).padStart(7)} B`,
+      `  as ${who}${who === 'bench' ? ' (superuser — the gate answers at once)' : ' (a member of every project — the gate filters)'}`,
     )
+    await readScreens()
+  }
+
+  async function readScreens() {
+    for (const [label, path] of screens) {
+      const times: number[] = []
+      let bytes = 0
+      for (let round = 0; round < ROUNDS; round += 1) {
+        const at = performance.now()
+        const response = await bench.client.get(path)
+        const html = await response.text()
+        times.push(performance.now() - at)
+        bytes = html.length
+        if (response.status !== 200) throw new Error(`${label} answered ${response.status}`)
+      }
+      // The first round pays for whatever the process caches; the rest is the read.
+      const warm = times.slice(1)
+      const mean = warm.reduce((sum, value) => sum + value, 0) / warm.length
+      console.log(
+        `    ${label.padEnd(9)} mean=${mean.toFixed(1).padStart(8)} ms  p50=${percentile(warm, 0.5)
+          .toFixed(1)
+          .padStart(
+            8,
+          )} ms  p95=${percentile(warm, 0.95).toFixed(1).padStart(8)} ms  html=${String(bytes).padStart(7)} B`,
+      )
+    }
   }
 } finally {
   await bench.close()

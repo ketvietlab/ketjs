@@ -14,6 +14,7 @@ import { asc, desc, eq, from, ilike, inArray, isNull, or } from '@ketvietlab/ket
 import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { actorRequired, commandKey, invalid, issue, n, now } from './operations.ts'
 import type { FlowResult } from './operations.ts'
+import { canReadProject, readableProject, restrictToVisible, visibleProjects } from './membership.ts'
 
 export type SavePageInput = {
   id: string
@@ -33,8 +34,18 @@ const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]
 /** How deep a page may sit under another. */
 const MAX_DEPTH = 8
 
-const pageRow = async (ctx: Ctx, id: unknown): Promise<Row | null> =>
-  (await ctx.db.select('flow.Page', { id }))[0] ?? null
+/**
+ * A page, if this caller may read the project it is in.
+ *
+ * Every page path reaches a row through here — save, move, reorder, archive,
+ * restore and the detail read alike — so one gate covers six, and the seventh
+ * somebody writes next gets it without having to remember.
+ */
+const pageRow = async (ctx: Ctx, id: unknown): Promise<Row | null> => {
+  const row = (await ctx.db.select('flow.Page', { id }))[0] ?? null
+  if (!row) return null
+  return (await canReadProject(ctx, row.projectId)) ? row : null
+}
 
 /**
  * Refuses a parent that would make the tree eat itself.
@@ -81,8 +92,10 @@ export async function savePage(ctx: Ctx, input: SavePageInput): Promise<FlowResu
   if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
   const title = String(input.title ?? '').trim()
   if (!title) return invalid(issue('title', 'flow.error.required'))
-  if (!(await ctx.db.select('flow.Project', { id: input.projectId, active: true }))[0])
-    return invalid(issue('projectId', 'flow.error.notFound'))
+  // A page written into a project the caller cannot see is the same act as
+  // reading one, and gets the same answer: there is no such project.
+  const project = await readableProject(ctx, input.projectId)
+  if (!project || project.active !== true) return invalid(issue('projectId', 'flow.error.notFound'))
 
   return ctx.tx(async (tx) => {
     const existing = await pageRow(tx, input.id)
@@ -339,11 +352,18 @@ export async function listPages(
   const matching = needle
     ? [or(ilike(P.title, `%${wildcard(needle)}%`, true), ilike(P.previewText, `%${wildcard(needle)}%`, true))]
     : []
+  // With a project named the function key has already checked it; without one
+  // this is a search across every project there is, and that is the shape the
+  // filter has to catch.
+  const visible = await visibleProjects(ctx)
   const rows = await ctx.db.all(
-    from(P)
-      .where(...where, ...matching)
-      .orderBy(...(args.projectId ? [asc(P.sequence), asc(P.title)] : [desc(P.updatedAt)]))
-      .limit(Math.max(1, Math.min(500, n(args.limit ?? 300)))),
+    restrictToVisible(
+      from(P)
+        .where(...where, ...matching)
+        .orderBy(...(args.projectId ? [asc(P.sequence), asc(P.title)] : [desc(P.updatedAt)])),
+      P.projectId,
+      visible,
+    ).limit(Math.max(1, Math.min(500, n(args.limit ?? 300)))),
   )
   // Counted over the branch as it really is, not over the rows that matched: a
   // page with three children has three whether or not the search kept them, and
@@ -388,19 +408,25 @@ export async function listAllPages(
 ): Promise<{ rows: Array<PageRow & { projectName: string }>; total: number }> {
   const P = ctx.table('flow.Page')
   const needle = String(args.search ?? '').trim()
-  const query = from(P)
-    .where(
-      eq(P.active, true),
-      ...(needle
-        ? [
-            or(
-              ilike(P.title, `%${wildcard(needle)}%`, true),
-              ilike(P.previewText, `%${wildcard(needle)}%`, true),
-            ),
-          ]
-        : []),
-    )
-    .orderBy(desc(P.updatedAt), asc(P.id))
+  // Every project's documents means every project this caller may see.
+  const visible = await visibleProjects(ctx)
+  const query = restrictToVisible(
+    from(P)
+      .where(
+        eq(P.active, true),
+        ...(needle
+          ? [
+              or(
+                ilike(P.title, `%${wildcard(needle)}%`, true),
+                ilike(P.previewText, `%${wildcard(needle)}%`, true),
+              ),
+            ]
+          : []),
+      )
+      .orderBy(desc(P.updatedAt), asc(P.id)),
+    P.projectId,
+    visible,
+  )
   const cursor = Math.max(0, n(args.cursor ?? 0))
   const limit = Math.max(1, Math.min(200, n(args.limit ?? 50)))
   const [total, rows] = await Promise.all([

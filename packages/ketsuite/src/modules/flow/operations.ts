@@ -22,6 +22,7 @@ import { ensureThread, followThread, listTimeline, postMessage, unfollowThread }
 import { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES } from './types.ts'
 import type { FieldKind } from './types.ts'
 import { emptyIssueListState, FIELD_FILTER_PREFIX, issueListSearch } from './search.ts'
+import { readableProject, readableRow, restrictToVisible, visibleProjects } from './membership.ts'
 
 export type FlowIssue = { field: string; code: string; params?: Record<string, unknown> }
 export type FlowResult = { ok: boolean; id?: string; errors?: FlowIssue[]; [key: string]: unknown }
@@ -78,8 +79,18 @@ export const commandKey = (value: unknown): string | null => {
   return key.length >= 8 && key.length <= 200 ? key : null
 }
 
-const projectExists = async (ctx: Ctx, id: unknown): Promise<boolean> =>
-  Boolean((await ctx.db.select('flow.Project', { id, active: true }))[0])
+/**
+ * Live, and readable by this caller.
+ *
+ * Creating an issue in a project somebody cannot see is writing to a project
+ * they cannot see, so the same gate answers both. The caller turns a false here
+ * into "not found", which is also the right answer for a project that is real
+ * but not theirs.
+ */
+const projectExists = async (ctx: Ctx, id: unknown): Promise<boolean> => {
+  const project = await readableProject(ctx, id)
+  return Boolean(project && project.active === true)
+}
 
 const columnOf = async (ctx: Ctx, id: unknown): Promise<Row | null> =>
   (await ctx.db.select('flow.Column', { id, active: true }))[0] ?? null
@@ -510,6 +521,10 @@ const boardEdges = async (ctx: Ctx): Promise<{ terminal: string[]; first: string
 
 const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const I = ctx.table('flow.Issue')
+  // Every issue read — list, group, buckets, options — comes through here, so
+  // this is where a caller stops seeing projects they are not on. One gate
+  // rather than four, because the fourth is the one somebody forgets.
+  const visible = await visibleProjects(ctx)
   const given = listStateOf(args.listState) ?? emptyIssueListState()
   // A caller may still name a timezone — an agent reporting for somewhere else
   // — but no caller has to, and the screens no longer do. The default is the
@@ -525,6 +540,7 @@ const issueQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const spec = issueListSearch(I, defs)
   const compiled = compileListFilter(spec, state, { timezone })
   if (compiled) query = query.where(compiled)
+  query = restrictToVisible(query, I.projectId, visible)
   // No match is not "no filter": asking for a value nothing holds has to answer
   // with nothing, which an empty list already does — `query.ts` compiles an
   // empty `IN` to `1 = 0` rather than to no clause at all.
@@ -816,7 +832,7 @@ export async function saveIssue(ctx: Ctx, input: SaveIssueInput): Promise<FlowRe
   if (kind && String(kind.projectId) !== String(input.projectId))
     return invalid(issue('typeId', 'flow.error.typeProjectMismatch'))
   return ctx.tx(async (tx) => {
-    const existing = (await tx.db.select('flow.Issue', { id: input.id }))[0]
+    const existing = await readableRow(tx, 'flow.Issue', input.id)
     if (existing && String(existing.projectId) !== String(input.projectId))
       return invalid(issue('projectId', 'flow.error.immutableProject'))
     // moveIssue is the only door into a column, because it is the one that
@@ -1048,7 +1064,7 @@ export async function moveIssue(
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
-    const held = (await tx.db.select('flow.Issue', { id: input.id }))[0]
+    const held = await readableRow(tx, 'flow.Issue', input.id)
     if (!held) return invalid(issue('id', 'flow.error.notFound'))
     const column = await columnOf(tx, input.columnId)
     if (!column || String(column.projectId) !== String(held.projectId))
@@ -1102,7 +1118,7 @@ export async function assignSprint(
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
-    const held = (await tx.db.select('flow.Issue', { id: input.id }))[0]
+    const held = await readableRow(tx, 'flow.Issue', input.id)
     if (!held) return invalid(issue('id', 'flow.error.notFound'))
     const sprint = await assignableSprint(tx, input.sprintId)
     if (sprint === undefined) return invalid(issue('sprintId', 'flow.error.sprintClosed'))
@@ -1166,8 +1182,8 @@ export async function addDependency(
     return invalid(issue('dependsOnIssueId', 'flow.error.selfDependency'))
   return ctx.tx(async (tx) => {
     const [held, target] = await Promise.all([
-      tx.db.select('flow.Issue', { id: input.issueId }),
-      tx.db.select('flow.Issue', { id: input.dependsOnIssueId }),
+      readableRow(tx, 'flow.Issue', input.issueId).then((row) => (row ? [row] : [])),
+      readableRow(tx, 'flow.Issue', input.dependsOnIssueId).then((row) => (row ? [row] : [])),
     ])
     if (!held[0] || !target[0]) return invalid(issue('id', 'flow.error.notFound'))
     if (input.relation === 'blocks' && (await createsBlockCycle(tx, input.issueId, input.dependsOnIssueId)))
@@ -1200,7 +1216,7 @@ export async function addComment(
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
   if (!input.body.trim()) return invalid(issue('body', 'flow.error.required'))
-  const held = (await ctx.db.select('flow.Issue', { id: input.issueId }))[0]
+  const held = await readableRow(ctx, 'flow.Issue', input.issueId)
   if (!held) return invalid(issue('issueId', 'flow.error.notFound'))
   // Before the message, so the author is subscribed to the replies to it.
   // `postMessage` excludes the author from its own recipients, so this does
@@ -1280,7 +1296,7 @@ async function setIssueActive(
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
-    const held = (await tx.db.select('flow.Issue', { id: input.id }))[0]
+    const held = await readableRow(tx, 'flow.Issue', input.id)
     if (!held) return invalid(issue('id', 'flow.error.notFound'))
     // Already where the caller wants it: say so rather than burning a version.
     if (Boolean(held.active) === active) return { ok: true, id: input.id, version: n(held.version) }
@@ -1308,7 +1324,7 @@ export async function startFollowing(
   if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
-  const held = (await ctx.db.select('flow.Issue', { id: input.issueId }))[0]
+  const held = await readableRow(ctx, 'flow.Issue', input.issueId)
   if (!held) return invalid(issue('issueId', 'flow.error.notFound'))
   await followIssue(ctx, held.threadId, ctx.actor)
   return { ok: true, id: input.issueId }
@@ -1321,7 +1337,7 @@ export async function stopFollowing(
   if (!actorRequired(ctx)) return invalid(issue('actor', 'flow.error.actorRequired'))
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
-  const held = (await ctx.db.select('flow.Issue', { id: input.issueId }))[0]
+  const held = await readableRow(ctx, 'flow.Issue', input.issueId)
   if (!held) return invalid(issue('issueId', 'flow.error.notFound'))
   const user = (await ctx.db.select('user.User', { id: ctx.actor }))[0]
   if (!user?.partnerId) return { ok: true, removed: 0 }
@@ -1333,7 +1349,7 @@ export async function stopFollowing(
  * Whether the reader follows this issue, so a screen can offer the right verb.
  */
 export async function following(ctx: Ctx, issueId: string): Promise<boolean> {
-  const held = (await ctx.db.select('flow.Issue', { id: issueId }))[0]
+  const held = await readableRow(ctx, 'flow.Issue', issueId)
   if (!held || !ctx.actor) return false
   const user = (await ctx.db.select('user.User', { id: ctx.actor }))[0]
   if (!user?.partnerId) return false
@@ -1352,7 +1368,7 @@ export async function startSprint(
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
-    const held = (await tx.db.select('flow.Sprint', { id: input.id }))[0]
+    const held = await readableRow(tx, 'flow.Sprint', input.id)
     if (!held) return invalid(issue('id', 'flow.error.notFound'))
     if (held.state !== 'planned') return invalid(issue('id', 'flow.error.invalidSprintState'))
     // A project runs at most one active sprint at a time, which is what makes
@@ -1463,12 +1479,12 @@ export async function closeSprint(
   if (!commandKey(input.idempotencyKey))
     return invalid(issue('idempotencyKey', 'flow.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
-    const held = (await tx.db.select('flow.Sprint', { id: input.id }))[0]
+    const held = await readableRow(tx, 'flow.Sprint', input.id)
     if (!held) return invalid(issue('id', 'flow.error.notFound'))
     if (held.state !== 'active') return invalid(issue('id', 'flow.error.invalidSprintState'))
     let carried = 0
     if (input.carryTo !== undefined) {
-      const target = input.carryTo ? (await tx.db.select('flow.Sprint', { id: input.carryTo }))[0] : null
+      const target = input.carryTo ? await readableRow(tx, 'flow.Sprint', input.carryTo) : null
       if (input.carryTo) {
         if (!target || String(target.projectId) !== String(held.projectId))
           return invalid(issue('carryTo', 'flow.error.sprintProjectMismatch'))
