@@ -409,6 +409,7 @@ export function compose(
         owner: m.name,
         scope: def.scope,
         timestamps: def.timestamps === true,
+        append: def.append === true,
         fields,
         indexes,
       }

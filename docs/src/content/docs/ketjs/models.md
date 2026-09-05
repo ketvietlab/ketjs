@@ -153,6 +153,61 @@ It prints every classified field with the module that contributed it — and eve
 nothing at all. That last list is the point: an inventory of only the fields somebody remembered to tag
 is the one thing worse than no inventory, because it looks complete.
 
+## Records that must not change
+
+A model may declare that its rows are written once:
+
+```ts
+// File: src/modules/pos/models.ts
+AuditEvent: {
+  scope: 'company',
+  append: true,
+  fields: { id: 'id', action: 'text', occurredAt: 'datetime' },
+}
+```
+
+`ctx.db.update`, `ctx.db.del`, `ctx.db.compareAndSet` and an updating changeset are all refused with
+`E_APPEND_ONLY`. Those are four doors into one room, so the refusal lives on the two write paths the
+others route through rather than being repeated.
+
+Insert still works, and `insertIfAbsent` is how a replay is answered: a retried command derives the
+same id, lands on the row it already wrote, and changes nothing.
+
+This is for a record whose value **is** that it did not change afterwards — an audit timeline, a
+posted ledger entry, a delivered receipt. Both audit models in KetSuite already promised exactly this
+in a comment, and nothing held them to it. A promise a reviewer has to remember is one a refactor
+eventually breaks.
+
+Declaring it plans no migration: append-only describes what may happen to a row, not how it is
+stored, so the schema snapshot ignores it. `ket diff` does not: a model that gains or loses the flag
+is reported as risky, because losing it means a record that could not be edited suddenly can be.
+
+### Audit identity and digests
+
+Two helpers, for the parts every timeline has to get right and neither of which is about what an
+event means:
+
+```ts
+// File: src/modules/pos/functions.ts
+import { auditHash, auditId } from '@ketvietlab/ketjs'
+
+await ctx.db.insertIfAbsent('pos.AuditEvent', {
+  id: auditId('pos', ['shift.close', shiftId, ctx.correlationId ?? '']),
+  actorHash: auditHash('pos', 'actor', ctx.actor),
+})
+```
+
+`auditId` derives an identity from the command, so a retry is recognisably the same command rather
+than a second event. `auditHash` produces a digest that stands for an identity without carrying it,
+namespaced by the owning module so two timelines cannot be joined by accident and a digest from one
+cannot be tested against a guess made in another.
+
+`auditHash` is pseudonymisation, not secrecy: a low-entropy value stays guessable by anyone who can
+run the same hash. It keeps a value out of a row, not out of reach.
+
+What an event *means* — its subject, action, and which configuration or session it happened in —
+stays the module's. A framework that modelled that would be modelling somebody's compliance regime.
+
 ## Scope is mandatory
 
 Every model selects one isolation scope:

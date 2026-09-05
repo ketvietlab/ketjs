@@ -841,6 +841,7 @@ export const models: Record<string, ModelDef> = {
   /** Cross-feature accounting timeline; financial facts remain in their source models. */
   AuditEvent: {
     scope: 'company',
+    append: true,
     fields: {
       id: 'id',
       subjectType: 'text',
