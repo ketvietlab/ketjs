@@ -46,7 +46,7 @@ await ctx.call('website.activatePublication', {
 Both paths stay. A site that publishes one page at a time is not doing anything wrong, and this does
 not take that away.
 
-### The outbox, and why there isn't one yet
+### The outbox, and its first consumer
 
 WEB-014 asks for "CAS pointer + outbox atomic". The atomic half is already there and does not need a
 table: `ctx.tx` hands its body a context bound to the transaction's own connection, and
@@ -58,10 +58,14 @@ rebuild, and no delivery to make off the back of a publication. Enqueuing a job 
 be a mechanism pretending to be a feature, so nothing is queued today — and a test asserts that, so
 adding one is a deliberate change rather than a silent one.
 
-When a consumer does arrive it will most likely be a search index, and the dependency direction is
-the thing to plan around: `website` cannot depend on `website_search`, so either the consumer is a
-module `website` may depend on, or the deployment wires it the way `serve.pages.menuResolve` wires
-navigation.
+The search index is that consumer, and it sidesteps the dependency question rather than answering it:
+`website` still cannot depend on `website_search`, so instead of being pushed at activation the index
+notices on read that the active publication has changed. Nothing is enqueued, nothing is wired, and a
+site that never searches never pays for an index.
+
+A push would still be better for a large site, where the first search after a publication does the
+catching up. That needs either a consumer `website` may depend on, or deployment wiring of the kind
+`serve.pages.menuResolve` uses.
 
 ### What else goes out with the pages
 
@@ -308,6 +312,29 @@ always shows what a visitor would actually see.
 - A site that is not active has no public search, the same rule the sitemap follows.
 - Pages under a reserved namespace are not offered, for the same reason the sitemap omits them: a
   module route answers that path first, so the result would not open.
+
+### The index
+
+`website.searchPublished` reads every published entry of a site, fetches each revision, and matches in
+JavaScript. That is correct and it does not scale: the cost of one keystroke grows with the site, and
+the window that bounds it is also a ceiling on what can be found.
+
+`website_search` keeps a `SearchDocument` per published entry and a `SearchIndexState` per site.
+`searchIndexed` answers from it, and the box calls that instead of scanning.
+
+The index is **derived data**. It never decides what is public — the publication does — so it is built
+under the same gate the reader and the sitemap apply, and a test asserts that everything it offers is
+a page `getEntryByPath` will serve.
+
+**Staleness is by publication.** `SearchIndexState.publicationId` records which set the index was
+built for; when that is no longer the active one, the index is behind. A search that finds it behind
+runs a few build passes itself and then answers with what it has, reporting `stale: true`. A visitor
+is never blocked on a full rebuild, and the caller is never told a partial count is final.
+
+**Rebuilds resume.** A pass reads a bounded batch ordered by path and records the last path it
+handled, so `reindexSite` can be called repeatedly — by an operator, or by the search itself — without
+starting again or indexing anything twice. A rebuild for a different publication clears first, because
+leftovers describe pages that may no longer be served.
 
 ### The box renders its own results
 

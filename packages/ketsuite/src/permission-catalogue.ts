@@ -1304,6 +1304,17 @@ const sources = {
     },
     exemptions: {},
   },
+  website_search: {
+    posture: 'permission-bearing',
+    bundles: ['operate', 'view'],
+    functions: {
+      indexStatus: ['read', 'view'],
+      reindexSite: ['operate', 'operate'],
+    },
+    exemptions: {
+      searchIndexed: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
+    },
+  },
   website_seo: {
     posture: 'permission-bearing',
     bundles: ['configure', 'view'],
