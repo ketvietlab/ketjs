@@ -96,12 +96,60 @@ const forbidden = () => invalid('siteId', 'website.error.forbidden')
  * would publish whatever the next one adds. Naming them means a new field is
  * public only when someone says so.
  */
-const PUBLIC_META_FIELDS = ['metaDescription', 'canonical', 'noindex', 'ogImage'] as const
+/**
+ * Metadata that describes the content, and therefore travels with it.
+ *
+ * A description or a canonical belongs to a particular revision of a page: it
+ * should reach a visitor when that revision does, not the moment an editor
+ * saves it.
+ */
+export const FROZEN_META_FIELDS = ['metaDescription', 'canonical', 'ogImage'] as const
 
-const publicMeta = (row: Row): Record<string, unknown> => {
+/**
+ * `noindex` is deliberately not in that list. It is not a description of the
+ * page, it is an instruction to stop showing it — and an instruction to stop
+ * should not wait for the next publication to take effect.
+ */
+const LIVE_META_FIELDS = ['noindex'] as const
+
+const PUBLIC_META_FIELDS = [...FROZEN_META_FIELDS, ...LIVE_META_FIELDS] as const
+
+const pickMeta = (row: Row, fields: readonly string[]): Record<string, unknown> => {
   const meta: Record<string, unknown> = {}
-  for (const field of PUBLIC_META_FIELDS) if (row[field] != null) meta[field] = row[field]
+  for (const field of fields) if (row[field] != null) meta[field] = row[field]
   return meta
+}
+
+export const frozenMeta = (row: Row): Record<string, unknown> => pickMeta(row, FROZEN_META_FIELDS)
+
+const publicMeta = (row: Row): Record<string, unknown> => pickMeta(row, PUBLIC_META_FIELDS)
+
+/**
+ * The metadata a visitor is served for a page.
+ *
+ * When the page went out as part of a publication, the description, canonical
+ * and share image are the ones frozen with it — an editor saving a new
+ * description does not rewrite what is public until the next publication
+ * carries it out. `noindex` is always read live, because an instruction to stop
+ * showing a page should not wait for a publication to take effect.
+ *
+ * A site that has never published a set reads everything live, which is what
+ * every site did before publications existed.
+ */
+const servedMeta = async (ctx: Ctx, site: Row, entry: Row): Promise<Record<string, unknown>> => {
+  const live = publicMeta(entry)
+  if (!site.activePublicationId) return live
+
+  const Publication = ctx.table('website.Publication')
+  const publication = await ctx.db.one(
+    from(Publication).where(eq(Publication.id, site.activePublicationId), eq(Publication.state, 'active')),
+  )
+  const frozen = ((publication?.entries ?? []) as Array<{ entryId?: string; meta?: unknown }>).find(
+    (row) => row.entryId === entry.id,
+  )?.meta
+  if (!frozen || typeof frozen !== 'object') return live
+
+  return { ...(frozen as Record<string, unknown>), ...pickMeta(entry, LIVE_META_FIELDS) }
 }
 
 const siteById = async (ctx: Ctx, id: unknown): Promise<Row | null> => {
@@ -565,7 +613,13 @@ export const cmsFunctions: Record<string, FnSpec> = {
       meta: 'json?',
       published: 'bool?',
     },
-    effects: ['read:website.Site', 'read:website.Entry', 'read:website.EntryRevision', 'read:website.Page'],
+    effects: [
+      'read:website.Site',
+      'read:website.Publication',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.Page',
+    ],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const path = cleanPath(args.path)
@@ -580,7 +634,8 @@ export const cmsFunctions: Record<string, FnSpec> = {
       // anonymous caller naming a site being prepared could read it a page at
       // a time while the sitemap and search both refuse to list it.
       const Site = ctx.table('website.Site')
-      if (!(await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true))))) return null
+      const site = await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true)))
+      if (!site) return null
       const Entry = ctx.table('website.Entry')
       const entry = await ctx.db.one(from(Entry).where(eq(Entry.siteId, args.siteId), eq(Entry.path, path)))
       if (entry?.publishedRevisionId && entry.status !== 'trash') {
@@ -598,7 +653,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
             // The head metadata travels with the page it describes. Without it
             // the storefront handed the theme an empty meta, so the fields
             // website_seo declares were stored and never rendered.
-            meta: publicMeta(entry),
+            meta: await servedMeta(ctx, site, entry),
           }
       }
       return null
