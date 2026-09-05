@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { defineFn, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canPublishEntry } from './access.ts'
+import { frozenMeta } from './cms.ts'
 
 /**
  * Publishing a set, rather than publishing one page at a time.
@@ -91,7 +92,12 @@ export const publicationFunctions: Record<string, FnSpec> = {
       const rows = await ctx.db.all(from(Entry).where(inArray(Entry.id, ids)))
       const found = new Map(rows.map((row) => [String(row.id), row]))
 
-      const entries: Array<{ entryId: string; revisionId: string; path: string }> = []
+      const entries: Array<{
+        entryId: string
+        revisionId: string
+        path: string
+        meta: Record<string, unknown>
+      }> = []
       for (const entryId of ids) {
         const entry = found.get(entryId)
         // Every reason to refuse names the entry, because a caller publishing
@@ -105,6 +111,9 @@ export const publicationFunctions: Record<string, FnSpec> = {
           entryId,
           revisionId: String(entry.currentRevisionId),
           path: String(entry.path),
+          // A description or a canonical belongs to the revision it describes,
+          // so it is frozen here rather than read live at request time.
+          meta: frozenMeta(entry),
         })
       }
 
