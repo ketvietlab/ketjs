@@ -940,7 +940,10 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(lang)
       const propertyId = await selectedProperty(ctx, url, req)
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
-      const range = calendarRange(url.searchParams.get('date'), 1, timezone)
+      const requested = url.searchParams.get('date')?.slice(0, 10)
+      const day =
+        requested && /^\d{4}-\d{2}-\d{2}$/u.test(requested) ? requested : dateKeyIn(new Date(), timezone)
+      const range = calendarRange(day, 1, timezone)
       // The landing screen is where a new deployment starts. Five zeroes and
       // "nothing needs attention" is a true statement and useless advice when
       // the property itself has not been created yet.
@@ -965,6 +968,7 @@ export const routes: Record<string, RouteEntry> = {
           frontDeskScreen(
             _,
             {
+              day,
               arrivals: stays
                 .filter((stay) => stay.state === 'draft' && inRange(stay.checkIn))
                 .sort((left, right) => left.checkIn.localeCompare(right.checkIn)),

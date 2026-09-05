@@ -4,6 +4,7 @@ import {
   dataTable,
   dateTime,
   emptyState,
+  formatDateTime,
   type Frame,
   guestName,
   linkButton,
@@ -17,9 +18,12 @@ import {
   type TemplateResult,
   type Translator,
   WorkspaceScreen,
+  zonedMidnight,
 } from './shared.tsx'
 
 export type FrontDeskToday = {
+  /** The calendar day the screen is showing, as YYYY-MM-DD. */
+  day: string
   /** Booked for today and not yet in the room. */
   arrivals: StayRow[]
   /** In the room and due out today. */
@@ -32,6 +36,20 @@ export type FrontDeskToday = {
 
 const headcount = (rows: StayRow[]): number =>
   rows.reduce((total, row) => total + row.adults + row.children, 0)
+
+/**
+ * Every heading on this screen says "today". The route has always accepted a
+ * `?date=`, so "today" can be a Tuesday in August, and nothing on the page
+ * said so. The day is now named under the title.
+ */
+const dayLabel = (day: string, locale: string, timezone: string): string =>
+  formatDateTime(locale, zonedMidnight(day, timezone), {
+    timeZone: timezone,
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
 
 /**
  * Where the work is done. Check-in and check-out both live on the reservation,
@@ -139,6 +157,7 @@ export const frontDeskScreen = (
     <WorkspaceScreen
       translator={_}
       title={_('hospitality_core.screen.frontDesk.title')}
+      subtitle={dayLabel(today.day, locale, timezone)}
       frame={frame}
       body={stack([
         // Three counts of movement and one of trouble. Each says how many people

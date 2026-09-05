@@ -1158,6 +1158,9 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(html, /Lưu trú quá giờ trả phòng/)
   assert.match(html, /RES-OVERDUE/)
   assert.match(html, /Trần Bình/)
+  // Every heading says "today", and ?date= means today can be a Thursday in
+  // August. The screen names the day it is actually showing.
+  assert.match(html, /20\/08\/2026/)
   // The desk works two queues: who is still to arrive, and who is due out.
   assert.match(html, /Khách đến hôm nay/)
   assert.match(html, /Khách rời hôm nay/)
