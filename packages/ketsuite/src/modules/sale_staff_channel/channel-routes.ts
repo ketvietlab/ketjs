@@ -6,7 +6,7 @@
 
 import { createHash } from 'node:crypto'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, idempotencyKey, routesOf } from '../channel_api/core.ts'
 
 type Req = Parameters<Route>[1]
 type Customer = {
@@ -112,16 +112,6 @@ const project = (row: Record<string, unknown>): Customer => ({
 const commandId = (namespace: string, key: string): string => {
   const hex = createHash('sha256').update(`${namespace}\n${key}`).digest('hex')
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
-}
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
-    }),
-  }
 }
 const invalidCustomer = (ctx: ServeContext, url: URL, req: Req, field: string) => ({
   status: 422,

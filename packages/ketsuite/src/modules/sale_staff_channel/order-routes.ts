@@ -5,7 +5,14 @@
 // never invents an aggregate version or a write action.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, sha256, stableHash } from '../channel_api/core.ts'
+import {
+  channelError,
+  defineChannelRoute,
+  idempotencyKey,
+  routesOf,
+  sha256,
+  stableHash,
+} from '../channel_api/core.ts'
 // The domain owns the state machine. Copying its values into the contract by
 // hand meant the published enum could fall behind it, and now that the facade
 // refuses anything the enum omits, falling behind would turn a legitimate
@@ -359,17 +366,6 @@ const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown) =
         ),
       },
     ),
-  }
-}
-
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
-    }),
   }
 }
 

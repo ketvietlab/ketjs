@@ -11,7 +11,7 @@
 // See FLW-DEC-019.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, idempotencyKey, routesOf } from '../channel_api/core.ts'
 import { emptyIssueListState } from '../flow/search.ts'
 import { commandRecordId } from '../flow/operations.ts'
 import { ISSUE_PRIORITIES } from '../flow/types.ts'
@@ -187,25 +187,6 @@ const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown) =
             },
           ]),
       ),
-    }),
-  }
-}
-
-/**
- * The replay key, taken from the header the way every staff channel takes it.
- *
- * Defined here rather than imported because ten channel modules each carry
- * their own copy of these ten lines. Lifting them into `channel_api` is worth
- * doing and is not this change: it would touch every one of them, and a Flow
- * PR is the wrong place to find out that one of them differed.
- */
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req): string | ReturnType<typeof domainFailure> => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
     }),
   }
 }
