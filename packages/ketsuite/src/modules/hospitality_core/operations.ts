@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import { asc, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   addDecimals,
@@ -556,6 +556,29 @@ export const applyNoShow = async (
  * about a calendar. So the exclusion lives in the assignment schedule, and this
  * is the question every writer of one has to ask first.
  */
+/**
+ * Put the room's own name on the assignments that carry only its id.
+ *
+ * `roomName` has been on the assignment row all along and nothing ever filled
+ * it, so every screen fell back to printing an id. One read of the rooms named
+ * by the assignments in hand is enough for a whole page of them.
+ */
+const nameAssignedRooms = async (ctx: Ctx, stays: Row[]): Promise<Row[]> => {
+  const wanted = new Set<string>()
+  for (const stay of stays)
+    for (const assignment of (stay.assignments ?? []) as Row[])
+      if (assignment.roomId) wanted.add(String(assignment.roomId))
+  if (!wanted.size) return stays
+  const R = ctx.table('hospitality_core.Room')
+  const rooms = await ctx.db.all(from(R).where(inArray(R.id, [...wanted])))
+  const names = new Map(rooms.map((room) => [String(room.id), String(room.name ?? room.code ?? room.id)]))
+  for (const stay of stays)
+    for (const assignment of (stay.assignments ?? []) as Row[])
+      assignment.roomName = names.get(String(assignment.roomId)) ?? assignment.roomName
+
+  return stays
+}
+
 const roomTakenBetween = async (
   ctx: Ctx,
   roomId: unknown,
@@ -1205,18 +1228,22 @@ export const operations: Record<string, FnSpec> = {
       'read:hospitality_core.RoomType',
       'read:hospitality_core.Room',
       'read:hospitality_core.Reservation',
+      'read:hospitality_core.RoomAssignment',
     ],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const S = ctx.table('hospitality_core.Stay')
-      let query = from(S).orderBy(asc(S.checkIn)).preload('partner', 'roomType', 'currentRoom', 'reservation')
+      let query = from(S)
+        .orderBy(asc(S.checkIn))
+        .preload('partner', 'roomType', 'currentRoom', 'reservation', 'assignments')
       if (args.propertyId) query = query.where(eq(S.propertyId, args.propertyId))
       if (args.state) query = query.where(eq(S.state, args.state))
       const start = args.from ? date(args.from) : null
       const end = args.to ? date(args.to) : null
-      return (await ctx.db.all(query)).filter(
+      const rows = (await ctx.db.all(query)).filter(
         (row) => (!start || date(row.checkOut)! > start) && (!end || date(row.checkIn)! < end),
       )
+      return nameAssignedRooms(ctx, rows)
     },
   }),
 
