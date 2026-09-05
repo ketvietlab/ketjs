@@ -1380,6 +1380,7 @@ const sources = {
       createPreviewToken: ['sensitive', 'sensitive', 'website.sensitive-data'],
       deleteMediaMetadata: ['configure', 'configure', 'website.configuration-audit'],
       deleteTerm: ['configure', 'configure', 'website.configuration-audit'],
+      diffRevisions: ['read', 'view'],
       getEntry: ['read', 'view'],
       getMediaMetadata: ['read', 'view'],
       getTaxonomyTerm: ['read', 'view'],
