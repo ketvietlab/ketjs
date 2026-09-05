@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
+import { PAGE_SIZE, pageOf, pager } from '../backend/paging.ts'
 import {
   contentScreen,
   entryFormScreen,
@@ -31,6 +32,7 @@ import type {
   EntryDetail,
   EntryKind,
   EntryRow,
+  EntryTermRow,
   MediaRow,
   DanglingLink,
   DomainRow,
@@ -183,6 +185,17 @@ const revisionDiffOf = async (
 const entryOf = (ctx: ServeContext, url: URL, req: Req, id: string) =>
   ctx.call('website.getEntry', { id }, url, req) as Promise<EntryDetail | null>
 
+/**
+ * Where an entry's own screen lives.
+ *
+ * A route shared by pages and posts still has to send the browser to one of
+ * them, and `/admin/website/pages/{id}` answers 404 for a post.
+ */
+const entryHref = async (ctx: ServeContext, url: URL, req: Req, id: string): Promise<string> => {
+  const detail = await entryOf(ctx, url, req, id)
+  return `${detail?.entry.type === 'website.post' ? '/admin/website/posts' : '/admin/website/pages'}/${id}`
+}
+
 const saveEntry = async (
   ctx: ServeContext,
   url: URL,
@@ -226,14 +239,18 @@ const renderEntry = async (
   // Read beside the entry rather than folded into getEntry: the head tags
   // belong to website_seo, and the CMS does not get to decide what is public
   // about a page on that module's behalf.
-  const seo = detail
-    ? ((await ctx.call(
-        'website_seo.getEntrySeo',
-        { entryId: detail.entry.id },
-        url,
-        req,
-      )) as SeoValues | null)
-    : null
+  const [seo, assigned, available] = detail
+    ? await Promise.all([
+        ctx.call(
+          'website_seo.getEntrySeo',
+          { entryId: detail.entry.id },
+          url,
+          req,
+        ) as Promise<SeoValues | null>,
+        ctx.call('website.listEntryTerms', { entryId: detail.entry.id }, url, req) as Promise<EntryTermRow[]>,
+        ctx.call('website.listTaxonomyTerms', { siteId }, url, req) as Promise<TaxonomyRow[]>,
+      ])
+    : [null, [], []]
   return adminPage(ctx, url, req, {
     title: detail?.entry.title ?? _(`website_backend.${kind.titleKey}.newTitle`),
     translate: false,
@@ -241,6 +258,7 @@ const renderEntry = async (
       entryFormScreen(_, detail, siteId, kind, frame, {
         ...options,
         seo,
+        terms: detail ? { assigned, available } : null,
         locale: localeQuery(url),
       }),
   })
@@ -254,13 +272,32 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const _ = ctx.translate(ctx.localeOf(url, req))
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
-      const rows = siteId
-        ? ((await ctx.call('website.listEntries', { siteId, type }, url, req)) as EntryRow[])
-        : []
+      const current = pageOf(url)
+      const [rows, total] = siteId
+        ? await Promise.all([
+            ctx.call(
+              'website.listEntries',
+              { siteId, type, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
+              url,
+              req,
+            ) as Promise<EntryRow[]>,
+            ctx.call('website.countEntries', { siteId, type }, url, req) as Promise<{ count: number }>,
+          ])
+        : [[] as EntryRow[], { count: 0 }]
       return adminPage(ctx, url, req, {
         title: _(`website_backend.${kind.titleKey}.title`),
         translate: false,
-        body: (_, frame) => contentScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url), kind),
+        body: (_, frame) =>
+          contentScreen(
+            _,
+            rows,
+            siteOptions(sites),
+            siteId,
+            frame,
+            localeQuery(url),
+            kind,
+            pager(url, current, rows.length, total.count),
+          ),
       })
     },
 
@@ -361,6 +398,7 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
   [`${kind.basePath}/{id}/revisions/{revisionId}/restore`]:
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const result = await ctx.call(
         'website.restoreRevision',
@@ -389,8 +427,35 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       return adminPage(ctx, url, req, {
         title: 'website_backend.preview.title',
         body: (_, frame) =>
-          previewScreen(_, detail.entry, preview.token, preview.expiresAt, frame, kind.basePath),
+          previewScreen(
+            _,
+            detail.entry,
+            preview.token,
+            preview.expiresAt,
+            frame,
+            kind.basePath,
+            localeQuery(url),
+          ),
       })
+    },
+
+  /**
+   * Withdraw every preview link this entry has.
+   *
+   * Each visit to the preview screen mints another token, so they accumulate,
+   * and a link pasted into a chat outlives the reason it was shared.
+   * revokePreviewTokens has always been able to call them all back; nothing
+   * asked it to. Back to the entry rather than the preview screen, because
+   * landing on the preview screen would immediately mint a fresh one.
+   */
+  [`${kind.basePath}/{id}/preview/revoke`]:
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = await ctx.call('website.revokePreviewTokens', { entryId: params.id }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `${kind.basePath}/${params.id}`))
     },
 })
 
@@ -749,6 +814,46 @@ export const routes: Record<string, RouteEntry> = {
    * than something the content list pays for on every render.
    */
   /**
+   * The taxonomy terms one entry carries.
+   *
+   * assignTerm shipped with the taxonomy module and no screen ever called it,
+   * so the categories and tags a site declares could only be put on a page by
+   * an agent - and `listEntryTerms` and `unassignTerm` did not exist at all,
+   * which made an assignment invisible and permanent once made.
+   */
+  '/admin/website/content/{id}/terms':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      if (!form.termId) return text(_('website_backend.terms.noTerm'), { status: 400 })
+      const result = await ctx.call(
+        'website.assignTerm',
+        { id: randomUUID(), entryId: params.id, termId: form.termId },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, await entryHref(ctx, url, req, params.id)))
+    },
+
+  '/admin/website/content/{id}/terms/{termId}/remove':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = await ctx.call(
+        'website.unassignTerm',
+        { entryId: params.id, termId: params.termId },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, await entryHref(ctx, url, req, params.id)))
+    },
+
+  /**
    * The head tags for one page.
    *
    * saveEntrySeo has existed since the SEO module and no screen wrote to it,
@@ -775,7 +880,7 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
-      return seeOther(inLocale(url, `/admin/website/pages/${params.id}`))
+      return seeOther(inLocale(url, await entryHref(ctx, url, req, params.id)))
     },
 
   /**
@@ -837,6 +942,7 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/website/publications/{id}/activate':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const result = (await ctx.call('website.activatePublication', { id: params.id }, url, req)) as {
         ok?: boolean
@@ -854,6 +960,7 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/website/publications/{id}/rollback':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
@@ -949,6 +1056,7 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/website/sites/{id}/members/{memberId}/remove':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
       const result = await ctx.call('website.removeSiteMember', { id: params.memberId }, url, req)
       if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
@@ -1535,12 +1643,18 @@ export const routes: Record<string, RouteEntry> = {
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      const rows = (await ctx.call(
-        'website_form.listSubmissions',
-        { formId: params.id },
-        url,
-        req,
-      )) as SubmissionRow[]
+      const current = pageOf(url)
+      const [rows, total] = await Promise.all([
+        ctx.call(
+          'website_form.listSubmissions',
+          { formId: params.id, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
+          url,
+          req,
+        ) as Promise<SubmissionRow[]>,
+        ctx.call('website_form.countSubmissions', { formId: params.id }, url, req) as Promise<{
+          count: number
+        }>,
+      ])
       const sites = await sitesOf(ctx, url, req)
       const siteId = url.searchParams.get('site') || selectedSite(url, sites)
       const forms = siteId
@@ -1564,6 +1678,7 @@ export const routes: Record<string, RouteEntry> = {
             fields: form?.summaryFields?.length ? form.summaryFields : schemaFields,
             retentionDays: form?.retentionDays ?? null,
             locale: localeQuery(url),
+            pager: pager(url, current, rows.length, total.count),
           }),
       })
     },
