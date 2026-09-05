@@ -22,6 +22,8 @@ import { KetError as KetErr } from '../kernel/errors.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
 import { compileRoutes } from '../kernel/routes.ts'
 import type { Logger } from './log/logger.ts'
+import { claimRateSlot } from './ratelimit.ts'
+import type { RatePolicy } from './ratelimit.ts'
 import type { RouteParams } from '../kernel/routes.ts'
 import { html, trustedMarkup } from '@ketvietlab/ketjs-view'
 
@@ -81,6 +83,17 @@ export type ServeOpts = {
   resolveStream?: (id: string, url: URL, req: IncomingMessage) => string | null | Promise<string | null>
   /** Maximum buffered JSON body for the generic function transport. Defaults to 1 MiB. */
   maxJsonBodyBytes?: number
+  /**
+   * A ceiling on how often one caller may reach a route, or null for no ceiling.
+   *
+   * Deliberately per-request rather than global: a durable check costs a database
+   * round trip, so applying it to everything would hand an attacker a lever rather
+   * than take one away. Return a policy for the handful of routes where repetition
+   * is the abuse — signing in, refreshing a token, an expensive report — and null
+   * everywhere else. Volume belongs to whatever sits in front of this process.
+   */
+  rateLimit?: (url: URL, req: IncomingMessage) => RatePolicy | null
+
   /**
    * Where request-level records go.
    *
@@ -642,6 +655,33 @@ export async function createKetServer(o: ServeOpts) {
       if (mounts.some((m) => url.pathname.startsWith(m.prefix))) {
         res.writeHead(404, { 'content-type': 'text/plain' })
         return res.end('not found')
+      }
+
+      // Before anything expensive, including before a route is chosen: refusing
+      // after doing the work is a limit that costs what it was meant to save.
+      const policy = o.rateLimit?.(url, req)
+      if (policy) {
+        const verdict = await withDb(url, req, (adapter) => claimRateSlot(adapter, policy))
+        if (!verdict.ok) {
+          route = `rate:${policy.action}`
+          requestLog?.log({
+            level: 'warn',
+            event: 'rate_limited',
+            fields: {
+              action: policy.action,
+              limit: policy.limit,
+              retryAfterMs: verdict.retryAfterMs,
+              method: req.method ?? '',
+            },
+          })
+          res.writeHead(429, {
+            'content-type': 'application/json; charset=utf-8',
+            'retry-after': String(Math.max(1, Math.ceil(verdict.retryAfterMs / 1_000))),
+          })
+          return res.end(
+            JSON.stringify({ code: 'E_RATE_LIMITED', message: `too many "${policy.action}" requests` }),
+          )
+        }
       }
 
       const matched = matchRoute(url.pathname)
