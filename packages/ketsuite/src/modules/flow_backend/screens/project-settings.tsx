@@ -66,6 +66,18 @@ export type SettingsScreenOptions = {
   memberPicker: JSXChild
   memberErrors?: readonly string[]
   memberIdempotencyKey: string
+  /**
+   * The project's own name, and the key for the one command that cannot be
+   * taken back.
+   *
+   * The name is here because the confirmation is to type it: a dialog that
+   * only asks "are you sure?" is a dialog people learn to dismiss, and one
+   * that makes you copy the name out is one you cannot get through while
+   * looking at a different project.
+   */
+  deleteName: string
+  deleteErrors?: readonly string[]
+  deleteIdempotencyKey: string
 }
 
 const editAction = (_: Translator, href: string): TemplateResult => (
@@ -336,6 +348,28 @@ export const settingsScreen = (
                   ],
                 })
               : empty(_)
+          }
+        />,
+        <Section
+          title={_('flow_backend.settings.delete')}
+          description={_('flow_backend.settings.deleteHint')}
+          body={
+            <RecordForm
+              action={options.endpoint}
+              hidden={{ action: 'deleteProject', idempotencyKey: options.deleteIdempotencyKey }}
+              fields={[
+                {
+                  name: 'confirmName',
+                  label: _('flow_backend.settings.deleteConfirm'),
+                  required: true,
+                  placeholder: options.deleteName,
+                  span: 'full',
+                },
+              ]}
+              errors={options.deleteErrors}
+              submit={_('flow_backend.settings.deleteAction')}
+              submitVariant="destructive"
+            />
           }
         />,
         <Section

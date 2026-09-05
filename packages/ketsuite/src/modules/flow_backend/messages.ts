@@ -222,6 +222,11 @@ const vi = {
   'settings.tagUsage': 'Đang gắn',
   'settings.tagUsageCount': { one: '{count} công việc', other: '{count} công việc' },
   'settings.tags': 'Nhãn',
+  'settings.delete': 'Xóa hẳn dự án',
+  'settings.deleteHint':
+    'Xóa hẳn là không hoàn tác được: công việc, tài liệu, chặng, bình luận và tệp đính kèm đều đi, kể cả tệp đã tải lên. Lưu trữ mới là thứ có thể mở lại.',
+  'settings.deleteConfirm': 'Gõ tên dự án để xác nhận',
+  'settings.deleteAction': 'Xóa hẳn',
   'settings.members': 'Thành viên',
   'settings.membersHint':
     'Chỉ thành viên đọc được dự án này. Người bị gỡ khỏi đây không còn thấy dự án, chứ không phải thấy ít đi.',
@@ -457,6 +462,11 @@ const en: Record<keyof typeof vi, Message> = {
   'settings.tagUsage': 'In use on',
   'settings.tagUsageCount': { one: '{count} issue', other: '{count} issues' },
   'settings.tags': 'Tags',
+  'settings.delete': 'Delete this project',
+  'settings.deleteHint':
+    'Deleting cannot be undone: the issues, documents, epics, comments and uploaded files all go. Archiving is the one that can be reopened.',
+  'settings.deleteConfirm': 'Type the project name to confirm',
+  'settings.deleteAction': 'Delete for good',
   'settings.members': 'Members',
   'settings.membersHint':
     'Only members can read this project. Somebody taken off here stops seeing it entirely, not partly.',

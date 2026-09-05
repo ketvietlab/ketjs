@@ -200,6 +200,45 @@ export const models: Record<string, ModelDef> = {
   },
 
   /**
+   * A project somebody asked to have deleted, and what became of the request.
+   *
+   * Archiving is the default and stays the default; this is the other thing —
+   * the project and everything in it removed for good, blobs included, because
+   * somebody asked for the data to be gone rather than hidden (FLW-DEC-018).
+   *
+   * Written **before** anything is deleted. A record that appears only on
+   * success is not an audit trail: the interesting case is the deletion that
+   * ran halfway, and that is exactly the case a success-only record misses.
+   *
+   * `projectId` is plain text rather than `ref:flow.Project`. It has to be:
+   * the row it names is what this row exists to remember, and a reference to a
+   * deleted project is a reference to nothing. The key and name are copied for
+   * the same reason — after the purge there is nowhere left to read them from,
+   * and "project 7f3a-… was deleted" answers nobody's question.
+   */
+  ProjectDeletion: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      projectId: 'text',
+      projectKey: 'text',
+      projectName: 'text',
+      requestedAt: 'datetime',
+      requestedByUserId: 'ref:user.User?',
+      reason: 'text?',
+      /** `requested` until the queue finishes, then `done`. */
+      state: 'text',
+      completedAt: 'datetime?',
+      /** What went, by table, so the record says more than "it ran". */
+      removed: 'json?',
+    },
+    indexes: {
+      target: { fields: ['companyId', 'projectId'] },
+      pending: { fields: ['companyId', 'state', 'requestedAt'] },
+    },
+  },
+
+  /**
    * Which project a reader's board is looking at.
    *
    * A board has to be one project's: `Column` belongs to a project by design,
