@@ -73,6 +73,20 @@ existed.
 Attachments are part of the content hash, so the same pages with a different menu is a different
 publication rather than a replay.
 
+### Metadata that travels, and metadata that does not
+
+A description, a canonical and a share image describe a particular revision of a page, so they are
+frozen into the publication alongside the revision. Saving a new description used to rewrite what was
+public immediately, with no publication involved at all; it now waits for the next one, while the
+editor's own view shows what they saved.
+
+`noindex` is deliberately **not** frozen. It is not a description of the page, it is an instruction to
+stop showing it — and an instruction to stop should not wait for a publication to take effect. It is
+read live in the head and in the sitemap alike, so a delist is immediate everywhere.
+
+Because the SEO fields sit on the entry that `website` owns, they need no attachment: they are frozen
+into the publication's own entry list, next to the revision they describe.
+
 ### The site pointer is the concurrency token
 
 Activation moves `Site.activePublicationId` under compare-and-set **before** it touches any entry.
