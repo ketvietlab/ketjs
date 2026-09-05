@@ -8,7 +8,7 @@
 
 import { dateTimeFormatter } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, idempotencyKey, routesOf, sha256 } from '../channel_api/core.ts'
 import {
   BOOKING_TYPES,
   CLEANING_TASK_PRIORITIES,
@@ -529,17 +529,6 @@ const unsupported = (ctx: ServeContext, url: URL, req: Req) => ({
     messageKey: 'hospitality_staff_channel.error.unsupportedOperation',
   }),
 })
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  return key.length >= 8 && key.length <= 200
-    ? key
-    : {
-        status: 400,
-        error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-          messageKey: 'channel_api.error.idempotencyRequired',
-        }),
-      }
-}
 const commandId = (namespace: string, key: string): string => `staff:${sha256(`${namespace}\n${key}`)}`
 const requestVersion = (req: Req, body: Row): string => {
   const header = String(req.headers['if-match'] ?? '')
