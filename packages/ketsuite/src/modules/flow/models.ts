@@ -139,19 +139,6 @@ export const models: Record<string, ModelDef> = {
   },
 
   /**
-   * Which project a reader's board is looking at.
-   *
-   * A board has to be one project's: `Column` belongs to a project by design,
-   * so a board spanning them has nothing to group by. The route is global, the
-   * scope is per person, and this is where that scope lives.
-   *
-   * Flow's own model rather than a preference store for the whole suite.
-   * Nothing here has one, and inventing one as a side effect of a board would
-   * be deciding on every other module's behalf how they keep per-user state.
-   * When a second module needs it, that is the moment to lift it — not this
-   * one.
-   */
-  /**
    * Who is on a project.
    *
    * The one thing that decides what a person sees. A permission bundle answers
@@ -212,6 +199,19 @@ export const models: Record<string, ModelDef> = {
     },
   },
 
+  /**
+   * Which project a reader's board is looking at.
+   *
+   * A board has to be one project's: `Column` belongs to a project by design,
+   * so a board spanning them has nothing to group by. The route is global, the
+   * scope is per person, and this is where that scope lives.
+   *
+   * Flow's own model rather than a preference store for the whole suite.
+   * Nothing here has one, and inventing one as a side effect of a board would
+   * be deciding on every other module's behalf how they keep per-user state.
+   * When a second module needs it, that is the moment to lift it — not this
+   * one.
+   */
   BoardScope: {
     scope: 'company',
     fields: {

@@ -386,21 +386,21 @@ const sources = {
       'page.reorder': ['operate', 'operate'],
       'page.restore': ['operate', 'operate'],
       'page.save': ['operate', 'operate'],
-      // Who is on a project decides what they may read, which is a decision
-      // about the project rather than a day of work in it.
-      'project.member.add': ['configure', 'configure', 'flow.configuration-audit'],
-      'project.member.remove': ['configure', 'configure', 'flow.configuration-audit'],
-      'project.member.list': ['read', 'view'],
       // The widest reach Flow grants: reading every project regardless of who
       // was added to it. Its own capability, so nobody holds it by holding
       // something else, and a policy authority because it is the answer to
       // "who can see the project we hid".
       'project.access.grant': ['security', 'project-access', 'flow.domain-policy'],
-      'project.access.revoke': ['security', 'project-access', 'flow.domain-policy'],
       'project.access.list': ['sensitive', 'project-access', 'flow.domain-policy'],
+      'project.access.revoke': ['security', 'project-access', 'flow.domain-policy'],
       'project.editContent': ['operate', 'author'],
       'project.get': ['read', 'view'],
       'project.list': ['read', 'view'],
+      // Who is on a project decides what they may read, which is a decision
+      // about the project rather than a day of work in it.
+      'project.member.add': ['configure', 'configure', 'flow.configuration-audit'],
+      'project.member.list': ['read', 'view'],
+      'project.member.remove': ['configure', 'configure', 'flow.configuration-audit'],
       'project.save': ['configure', 'configure', 'flow.configuration-audit'],
       'project.stats': ['read', 'view'],
       'sprint.close': ['operate', 'operate'],

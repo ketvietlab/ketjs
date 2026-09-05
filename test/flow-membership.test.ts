@@ -92,11 +92,76 @@ async function boot(t: { after(fn: () => unknown): void }): Promise<Deployment> 
   return e2e
 }
 
-/** Sign in as somebody and answer as them. The session replaces the last one. */
+/** A complete list state — the reads that take one refuse a partial shape. */
+const listState = (groupBy: ReadonlyArray<{ key: string }> = []) => ({
+  q: '',
+  presets: [],
+  filters: [],
+  groupBy,
+  sort: [{ key: 'updatedAt', dir: 'desc' as const }],
+  openGroups: [],
+  groupPages: {},
+  page: 1,
+  includeArchived: false,
+})
+
+/**
+ * Every read that answers with project data, as one list.
+ *
+ * Named once so the member and the stranger are asked exactly the same
+ * questions — a list that only the stranger is asked proves nothing, because
+ * an empty answer might be empty for everybody. Each entry says how to count
+ * what came back, since the envelopes differ: some answer an array, some a
+ * page with a total.
+ */
+/** Rows belonging to `proj1`, whichever envelope they arrived in. */
+const ofProj1 = (rows: readonly Row[], key: 'id' | 'projectId') =>
+  rows.filter((row) => String(row[key]) === 'proj1').length
+
+const projectReads: ReadonlyArray<readonly [string, Record<string, unknown>, (value: never) => number]> = [
+  // Counted as "how much of proj1 came back", never as "how much came back":
+  // the stranger is a member of their own project and rightly sees it, so an
+  // assertion that they see nothing at all would be asserting the wrong thing
+  // — and would pass only until somebody gave them a project of their own.
+  ['flow.project.list', {}, (v: Row[]) => ofProj1(v, 'id')],
+  ['flow.project.stats', { projectIds: ['proj1'] }, (v: Row[]) => ofProj1(v, 'id')],
+  ['flow.issue.list', { projectId: 'proj1' }, (v: { rows: Row[] }) => v.rows.length],
+  ['flow.issue.list', {}, (v: { rows: Row[] }) => ofProj1(v.rows, 'projectId')],
+  ['flow.issue.options', { projectId: 'proj1' }, (v: Row[]) => v.length],
+  ['flow.issue.buckets', { projectId: 'proj1', listState: listState() }, (v: { total: number }) => v.total],
+  [
+    'flow.issue.group',
+    { projectId: 'proj1', listState: listState([{ key: 'columnId' }]) },
+    (v: Row[]) => v.length,
+  ],
+  ['flow.epic.list', { projectId: 'proj1' }, (v: Row[]) => v.length],
+  ['flow.epic.listAll', {}, (v: { rows: Row[] }) => ofProj1(v.rows, 'projectId')],
+  ['flow.page.list', { projectId: 'proj1' }, (v: Row[]) => v.length],
+  ['flow.page.list', {}, (v: Row[]) => ofProj1(v, 'projectId')],
+  ['flow.page.listAll', {}, (v: { rows: Row[] }) => ofProj1(v.rows, 'projectId')],
+  ['flow.sprint.list', { projectId: 'proj1' }, (v: Row[]) => v.length],
+] as const
+
+/**
+ * Sign in as somebody and answer as them.
+ *
+ * The deployment has one client, so signing in replaces the last session — and
+ * a closure made earlier would quietly start speaking as whoever signed in
+ * since. Each call checks and signs back in if it has to, so the name a test
+ * calls through is who the call is really from, wherever it sits in the file.
+ */
+const signedIn = new WeakMap<Deployment, string>()
+
 async function as(e2e: Deployment, login: string) {
-  await e2e.client.login({ login, password: 'test-password' })
-  return async <T = Row>(name: string, input: Record<string, unknown> = {}) =>
-    (await e2e.client.call<T>(name, input)).value
+  const enter = async () => {
+    await e2e.client.login({ login, password: 'test-password' })
+    signedIn.set(e2e, login)
+  }
+  await enter()
+  return async <T = Row>(name: string, input: Record<string, unknown> = {}) => {
+    if (signedIn.get(e2e) !== login) await enter()
+    return (await e2e.client.call<T>(name, input)).value
+  }
 }
 
 test('a member of one project sees one project, and the other one is not there', async (t) => {
@@ -134,16 +199,36 @@ test('a member of one project sees one project, and the other one is not there',
     values: { id: 'proj2', key: 'TWO', name: 'Dự án hai' },
     idempotencyKey: 'project-two',
   })
+  // A sprint too, so every list in `projectReads` has something to answer with
+  // for the member.
+  const back = await as(e2e, 'u1')
+  await back('flow.sprint.save', {
+    id: 's1',
+    projectId: 'proj1',
+    name: 'Chặng chạy một',
+    idempotencyKey: 'sprint-one',
+  })
 
-  // Gate 1 — the lists. Each sees their own and nothing else, and neither sees
-  // the orphan. Three projects exist; each of them can name one.
+  // Gate 1 — every read that answers with project data, asked twice.
+  //
+  // The member's answer has to be non-empty before the stranger's empty one
+  // means anything: an assertion that a stranger sees nothing passes just as
+  // well when nobody sees anything, which is how a filter that is quietly
+  // broken in the other direction goes unnoticed. Some of these are asked with
+  // no project named, because a filter written on the argument rather than on
+  // the rule answers across every project exactly there.
+  const member = await as(e2e, 'u1')
+  for (const [fnKey, input, count] of projectReads)
+    assert.ok(count((await member(fnKey, input)) as never) > 0, `${fnKey} answers the member`)
+  const stranger = await as(e2e, 'u2')
+  for (const [fnKey, input, count] of projectReads)
+    assert.equal(count((await stranger(fnKey, input)) as never), 0, `${fnKey} answers the stranger`)
+
+  // And the project each of them does hold is the one they hold.
   assert.deepEqual(
     ((await two<Row[]>('flow.project.list')) ?? []).map((row) => String(row.id)),
     ['proj2'],
   )
-  assert.deepEqual((await two<Row>('flow.issue.list', { projectId: 'proj1' })).rows, [])
-  assert.deepEqual((await two<Row>('flow.epic.listAll')).rows, [])
-  assert.deepEqual((await two<Row>('flow.page.listAll')).rows, [])
 
   // Gate 2 — by id. Not a refusal: the same `null` a row that is not there
   // gives. A refusal would confirm that `proj1` and its issue exist, which for
@@ -156,11 +241,11 @@ test('a member of one project sees one project, and the other one is not there',
 
   // Gate 3 — a project with no members belongs to nobody. Not to the person who
   // happens to be looking, and not to whoever made it, because nobody did.
-  assert.equal(await two('flow.project.get', { id: 'orphan' }), null)
-  const back = await as(e2e, 'u1')
-  assert.equal(await back('flow.project.get', { id: 'orphan' }), null)
+  assert.equal(await stranger('flow.project.get', { id: 'orphan' }), null)
+  const again = await as(e2e, 'u1')
+  assert.equal(await again('flow.project.get', { id: 'orphan' }), null)
   assert.deepEqual(
-    ((await back<Row[]>('flow.project.list')) ?? []).map((row) => String(row.id)),
+    ((await again<Row[]>('flow.project.list')) ?? []).map((row) => String(row.id)),
     ['proj1'],
   )
 

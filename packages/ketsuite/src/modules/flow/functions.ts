@@ -269,18 +269,6 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   /**
-   * One project by id, the way `issue.get` answers one issue.
-   *
-   * Every project-scoped screen needs the project behind the id in its URL.
-   * Resolving that through `project.list` means listing and filtering, and
-   * `optionRows` caps at 200 rows sorted by name — so the 201st project by
-   * name would answer "not found" on its own board.
-   */
-  /**
-   * The issue counts behind a list of projects, in two reads rather than one
-   * per project — see `projectStats`.
-   */
-  /**
    * Who is on a project.
    *
    * Reading the membership of a project is reading the project, so it is gated
@@ -403,6 +391,10 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * The issue counts behind a list of projects, in two reads rather than one
+   * per project — see `projectStats`.
+   */
   'project.stats': defineFn({
     input: { projectIds: 'json' },
     output: { id: 'id', total: 'int', done: 'int', state: 'text' },
@@ -432,6 +424,14 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * One project by id, the way `issue.get` answers one issue.
+   *
+   * Every project-scoped screen needs the project behind the id in its URL.
+   * Resolving that through `project.list` means listing and filtering, and
+   * `optionRows` caps at 200 rows sorted by name — so the 201st project by
+   * name would answer "not found" on its own board.
+   */
   'project.get': defineFn({
     input: { id: 'id' },
     output: {
@@ -1528,13 +1528,6 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   /**
-   * Leaves an issue's thread.
-   *
-   * A separate key from commenting, because it is the opposite act: everything
-   * else in this module hands out subscriptions, and this is the only way to
-   * give one back.
-   */
-  /**
    * Off the board, without claiming it was finished — see archiveIssue.
    *
    * Its own key rather than a flag on `issue.save`: taking work out of every
@@ -1591,6 +1584,13 @@ export const functions: Record<string, FnSpec> = {
       }),
   }),
 
+  /**
+   * Leaves an issue's thread.
+   *
+   * A separate key from commenting, because it is the opposite act: everything
+   * else in this module hands out subscriptions, and this is the only way to
+   * give one back.
+   */
   'issue.unfollow': defineFn({
     input: { issueId: 'id', idempotencyKey: 'text' },
     output: { ok: 'bool', removed: 'int?', errors: 'json?' },
