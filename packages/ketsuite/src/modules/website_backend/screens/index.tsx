@@ -38,6 +38,8 @@ export type EntryRow = {
   excerpt?: string | null
   status: string
   updatedAt?: string | null
+  /** Set only while `status` is `scheduled`: when the queued publish fires. */
+  publishAt?: string | null
 }
 
 export type EntryDetail = {
@@ -254,6 +256,8 @@ export const contentScreen = (
   locale = '',
   kind: EntryKind = { basePath: '/admin/website/pages', titleKey: 'pages' },
   pager: Pager | null = null,
+  /** What the URL asked for, so the controls come back showing it. */
+  query: { search?: string; status?: string } = {},
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
@@ -261,6 +265,8 @@ export const contentScreen = (
     frame={frame}
     footer={pager ? pagerBar(_, pager) : null}
     body={stack([
+      // One GET form for all three, because they are one question - which
+      // pages am I looking at - and three forms would each drop the other two.
       <Surface
         padding="compact"
         body={
@@ -276,8 +282,25 @@ export const contentScreen = (
                 value: siteId,
                 options: sites,
               },
+              {
+                name: 'q',
+                label: _('website_backend.field.search'),
+                value: query.search ?? '',
+              },
+              {
+                name: 'status',
+                label: _('website_backend.field.status'),
+                type: 'select',
+                value: query.status ?? 'all',
+                options: [
+                  { value: 'all', label: _('website_backend.state.all') },
+                  { value: 'draft', label: _('website_backend.state.draft') },
+                  { value: 'scheduled', label: _('website_backend.state.scheduled') },
+                  { value: 'published', label: _('website_backend.state.published') },
+                ],
+              },
             ]}
-            submit={_('website_backend.action.switchSite')}
+            submit={_('website_backend.action.apply')}
             submitVariant="secondary"
           />
         }
@@ -553,19 +576,50 @@ export const entryFormScreen = (
                 description={_('website_backend.publish.hint')}
                 body={
                   <Surface
-                    body={
-                      <RecordActions
+                    body={stack([
+                      // publishEntry has taken `publishAt` since it was written
+                      // and enqueues website.publishScheduled for it, but no
+                      // screen offered the field - so a page could only ever go
+                      // live the moment somebody pressed the button.
+                      <RecordForm
                         action={`${kind.basePath}/${entry.id}/publish${options.locale ?? ''}`}
                         hidden={revision?.id ? { expectedRevisionId: revision.id } : undefined}
-                        actions={[
+                        layout="inline"
+                        fields={[
                           {
-                            value: 'publish',
-                            label: _('website_backend.action.publish'),
-                            variant: 'primary',
+                            name: 'publishAt',
+                            label: _('website_backend.publish.at'),
+                            type: 'datetime-local',
+                            value: entry.publishAt ? String(entry.publishAt).slice(0, 16) : '',
+                            help: _('website_backend.publish.atHint'),
                           },
                         ]}
-                      />
-                    }
+                        submit={_('website_backend.action.publish')}
+                        submitVariant="primary"
+                      />,
+                      ...(entry.status === 'published' || entry.status === 'scheduled'
+                        ? [
+                            <RecordActions
+                              action={`${kind.basePath}/${entry.id}/unpublish${options.locale ?? ''}`}
+                              label={
+                                entry.status === 'scheduled'
+                                  ? _('website_backend.publish.cancelHint')
+                                  : _('website_backend.publish.downHint')
+                              }
+                              actions={[
+                                {
+                                  value: 'unpublish',
+                                  label:
+                                    entry.status === 'scheduled'
+                                      ? _('website_backend.action.cancelSchedule')
+                                      : _('website_backend.action.unpublish'),
+                                  variant: 'destructive',
+                                },
+                              ]}
+                            />,
+                          ]
+                        : []),
+                    ])}
                   />
                 }
               />,

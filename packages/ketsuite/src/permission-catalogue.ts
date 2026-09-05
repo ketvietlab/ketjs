@@ -1410,6 +1410,7 @@ const sources = {
       publishPage: ['configure', 'configure', 'website.configuration-audit'],
       removeSiteMember: ['security', 'security', 'website.security-audit'],
       restoreRevision: ['operate', 'operate'],
+      unpublishEntry: ['configure', 'configure', 'website.configuration-audit'],
       revokePreviewTokens: ['sensitive', 'sensitive', 'website.sensitive-data'],
       saveDomain: ['configure', 'configure', 'website.configuration-audit'],
       saveEntry: ['configure', 'configure', 'website.configuration-audit'],
