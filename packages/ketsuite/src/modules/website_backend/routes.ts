@@ -454,6 +454,40 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       return seeOther(inLocale(url, `${kind.basePath}/${params.id}`))
     },
 
+  /**
+   * Out of the way, and back again.
+   *
+   * Every reader in the module already honoured `trash` and nothing could
+   * write it, so a page made by mistake stayed on the list for ever.
+   */
+  [`${kind.basePath}/{id}/trash`]:
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const detail = await entryOf(ctx, url, req, params.id)
+      if (!detail || detail.entry.type !== type)
+        return text(_('website_backend.error.notFound'), { status: 404 })
+      const result = await ctx.call('website.trashEntry', { id: params.id }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      // Back to the list: the page is off it now, and staying on a screen for
+      // something you just put away reads as though it did not work.
+      return seeOther(inLocale(url, `${kind.basePath}?site=${encodeURIComponent(detail.entry.siteId)}`))
+    },
+
+  [`${kind.basePath}/{id}/untrash`]:
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const detail = await entryOf(ctx, url, req, params.id)
+      if (!detail || detail.entry.type !== type)
+        return text(_('website_backend.error.notFound'), { status: 404 })
+      const result = await ctx.call('website.untrashEntry', { id: params.id }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `${kind.basePath}/${params.id}`))
+    },
+
   [`${kind.basePath}/{id}/revisions/{revisionId}/restore`]:
     (ctx: ServeContext): Route =>
     async (url, req, params) => {

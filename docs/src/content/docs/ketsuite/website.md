@@ -740,6 +740,58 @@ and the sitemap are built from the primary, so a site left with hosts and no pri
 wrong address to every crawler that asks; promote another one first. The last host goes freely,
 primary or not — a site with no domains is a site nobody has pointed anywhere yet.
 
+### A question no screen could answer
+
+Every Website screen is scoped to one site, because every contract behind them takes a `siteId`.
+That is right for doing the work and wrong for noticing it: "is anything wrong" could only be
+answered by opening each site in turn and remembering what the last one said.
+
+And the things worth knowing are exactly the ones nobody goes looking for. A site with no primary
+domain publishes the wrong canonical to every crawler that asks — and there is no screen you would
+have opened to find that out, because you had no reason to suspect it. A publication prepared last
+week and never activated looks like nothing at all. An index that has not caught up degrades search
+quietly, by design.
+
+The overview reads what already existed — `listDomains`, `listPublications`, `indexStatus`, one
+round per site — and lists only the sites with something to say, each row leading to the screen that
+fixes it. Two decisions about what *not* to warn about:
+
+- **An index that never existed is not an index that fell behind.** A site nobody has searched has no
+  index and needs none; `state: 'absent'` raises nothing.
+- **No host at all outranks the wrong host.** A site nothing points at answers nowhere, which is not
+  a canonical-URL problem, and stacking both messages would bury the one that matters.
+
+The number of sites read is on the screen whether or not anything is wrong, because a list that only
+ever holds problems cannot tell "nothing is wrong" from "nothing was checked".
+
+### Twelve readers, no writer
+
+`Entry.status === 'trash'` is honoured in twelve places across five modules. The public resolver
+refuses a trashed entry. The sitemap leaves it out. The menu link validator does not count it as a
+target. The search index skips it. Preflight does not check it. The media library does not count it
+as a use. `preparePublication` refuses a set that names one, with its own error message.
+
+**Nothing ever wrote it.** Every consumer of the concept was built, in five modules, and the producer
+did not exist — so a page created by mistake stayed on the list for ever, and the only thing an
+editor could do was give it a title that said to ignore it.
+
+`trashEntry` and `untrashEntry` are that producer. Trash rather than delete, and that is the whole
+design rather than a compromise: `ref:` emits no foreign key, so removing an entry would leave its
+revisions, its term assignments, its preview tokens and — across a module boundary `website` cannot
+reach — its `website_seo.EntrySeo` row all pointing at nothing. Trash keeps every row and answers the
+question people actually have, which is "get this off my list". The eleven readers were right; they
+were just waiting.
+
+Two details. Trashing clears `publishedRevisionId` the way `unpublishEntry` does — the resolver
+checks the status as well, but a pointer left behind is a pointer somebody later trusts. And taking
+something back makes a **draft**, never a published page: what it used to say may be the reason it
+was thrown away.
+
+`listEntries` and `countEntries` now leave the bin out unless `status: 'trash'` is asked for by
+name. They were the last two readers that did not, because until now there was nothing to exclude —
+and the two have to agree, or the pager counts rows the list will not show and the last page comes
+back empty.
+
 ### An image could be deleted out from under the pages drawing it
 
 `deleteTerm` has refused a term that is in use since it was written. `deleteMediaMetadata` removed

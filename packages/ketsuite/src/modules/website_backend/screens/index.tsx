@@ -345,6 +345,9 @@ export const contentScreen = (
                   { value: 'draft', label: _('website_backend.state.draft') },
                   { value: 'scheduled', label: _('website_backend.state.scheduled') },
                   { value: 'published', label: _('website_backend.state.published') },
+                  // Only by asking: the list leaves the bin out otherwise, the
+                  // way every other reader in the module already does.
+                  { value: 'trash', label: _('website_backend.state.trash') },
                 ],
               },
             ]}
@@ -645,6 +648,33 @@ export const entryFormScreen = (
                         submit={_('website_backend.action.publish')}
                         submitVariant="primary"
                       />,
+                      ...(entry.status === 'trash'
+                        ? [
+                            <RecordActions
+                              action={`${kind.basePath}/${entry.id}/untrash${options.locale ?? ''}`}
+                              label={_('website_backend.publish.untrashHint')}
+                              actions={[
+                                {
+                                  value: 'untrash',
+                                  label: _('website_backend.action.untrash'),
+                                  variant: 'primary',
+                                },
+                              ]}
+                            />,
+                          ]
+                        : [
+                            <RecordActions
+                              action={`${kind.basePath}/${entry.id}/trash${options.locale ?? ''}`}
+                              label={_('website_backend.publish.trashHint')}
+                              actions={[
+                                {
+                                  value: 'trash',
+                                  label: _('website_backend.action.trash'),
+                                  variant: 'destructive',
+                                },
+                              ]}
+                            />,
+                          ]),
                       ...(entry.status === 'published' || entry.status === 'scheduled'
                         ? [
                             <RecordActions

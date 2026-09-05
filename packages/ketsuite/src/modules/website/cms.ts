@@ -663,7 +663,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
         .where(eq(Entry.siteId, args.siteId))
         .orderBy(desc(Entry.updatedAt), asc(Entry.title))
       if (args.type) query = query.where(eq(Entry.type, args.type))
+      // Asked for by name or left out entirely: a list of what there is does
+      // not mean a list of what was thrown away.
       if (args.status) query = query.where(eq(Entry.status, args.status))
+      else query = query.where(ne(Entry.status, 'trash'))
       if (args.search) query = query.where(like(Entry.title, titlePattern(args.search), true))
       query = query.limit(paging.limit).offset(paging.offset)
       return ctx.db.all(query)
@@ -679,7 +682,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
       const Entry = ctx.table('website.Entry')
       let query = from(Entry).where(eq(Entry.siteId, args.siteId))
       if (args.type) query = query.where(eq(Entry.type, args.type))
+      // The same rule as listEntries, or the pager counts rows the list will
+      // not show and the last page comes back empty.
       if (args.status) query = query.where(eq(Entry.status, args.status))
+      else query = query.where(ne(Entry.status, 'trash'))
       if (args.search) query = query.where(like(Entry.title, titlePattern(args.search), true))
       return { count: await ctx.db.count(query) }
     },
@@ -1008,6 +1014,67 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!('dryRun' in changed) && !changed.matched)
         return invalid('expectedRevisionId', 'website.error.editConflict')
       return { ok: true, id: args.id, status: 'published' }
+    },
+  }),
+
+  /**
+   * Out of the way, without being gone.
+   *
+   * Every consumer in the module already honours `trash`: the public resolver
+   * refuses it, the sitemap and the menu validator leave it out, the search
+   * index skips it, preflight and the media library do not count it, and
+   * `preparePublication` refuses a set containing one. Nothing could produce
+   * it, so a page created by mistake stayed in the list for ever.
+   *
+   * Trash rather than delete because deleting is the harder question and this
+   * is not it: `ref:` emits no foreign key, so removing an entry would leave
+   * its revisions, its term assignments, its preview tokens and - across a
+   * module boundary `website` cannot reach - its SEO row all pointing at
+   * nothing. Trash keeps every row and answers the question people actually
+   * have, which is "get this off my list".
+   */
+  trashEntry: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.id)
+      if (!entry || !(await canPublishEntry(ctx, entry))) return forbidden()
+      if (entry.status === 'trash') return { ok: true, id: args.id }
+      // The same clearing unpublishEntry does. The resolver checks the status
+      // too, but a pointer left behind is a pointer somebody later trusts.
+      await ctx.db.update(
+        'website.Entry',
+        { id: args.id },
+        { status: 'trash', publishedRevisionId: null, scheduledRevisionId: null, publishAt: null },
+      )
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  /**
+   * Back to a draft.
+   *
+   * `saveEntry` and `restoreRevision` both already revive a trashed entry,
+   * which is right - editing something means you want it back - but it is an
+   * implicit revival, and a screen needs a control that says what it does.
+   */
+  untrashEntry: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.id)
+      if (!entry || !(await canPublishEntry(ctx, entry))) return forbidden()
+      if (entry.status !== 'trash') return { ok: true, id: args.id }
+      // A draft, never straight back to published: what it used to say may be
+      // the reason it was thrown away.
+      await ctx.db.update('website.Entry', { id: args.id }, { status: 'draft' })
+      return { ok: true, id: args.id }
     },
   }),
 
