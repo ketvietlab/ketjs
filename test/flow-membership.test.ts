@@ -352,8 +352,43 @@ test('the grant row is the door, and being a superuser is the documented excepti
  * declare it.
  */
 test('every function that reads project content declares the membership tables', () => {
-  const content = ['flow.Issue', 'flow.Epic', 'flow.Page', 'flow.Sprint', 'flow.Project']
+  // Every table whose rows belong to one project, not only the four that hold
+  // what a person writes. The first version of this test named those four and
+  // missed `issue.dependencies`, which reads `flow.IssueDependency` and
+  // nothing else — a caller could hand it any id and learn whether that issue
+  // had blockers, which is an existence answer about a project they cannot see
+  // (FLW-018). A table left out of this list is the next one to go unnoticed.
+  const content = [
+    'flow.Project',
+    'flow.Issue',
+    'flow.Epic',
+    'flow.Page',
+    'flow.Sprint',
+    'flow.Column',
+    'flow.IssueType',
+    'flow.FieldDef',
+    'flow.IssueDependency',
+    'flow.IssueTag',
+    'flow.IssueFieldValue',
+    'flow.BoardScope',
+  ]
   const gate = ['read:flow.ProjectMember', 'read:flow.ProjectAccessGrant']
+
+  /**
+   * The two keys that read project-scoped rows without the gate, on purpose.
+   *
+   * Both are about tags, which are the company's rather than a project's
+   * (FLW-DEC-006). Archiving one clears it from every project at once, and the
+   * count beside the button exists to say how much that will destroy — a
+   * figure narrowed to the reader's own projects would understate the damage
+   * and make the warning a lie. What they give away is one number about work
+   * the reader cannot otherwise see; that is the price of the warning being
+   * true, and it is a price worth naming here rather than leaving to be
+   * rediscovered as a bug.
+   *
+   * Nothing else belongs on this list. A new entry is a decision, not a fix.
+   */
+  const deliberate = ['tag.list', 'tag.archive']
 
   const ungated = Object.entries(flowFunctions)
     .filter(([, fn]) => {
@@ -367,6 +402,7 @@ test('every function that reads project content declares the membership tables',
       return !gate.every((needed) => effects.includes(needed))
     })
     .map(([key]) => key)
+    .filter((key) => !deliberate.includes(key))
 
   assert.deepEqual(ungated, [])
 })
@@ -386,4 +422,81 @@ test('the membership filter reads rows, not capabilities', async () => {
     assert.equal(source.includes(forbidden), false, `membership.ts must not consult ${forbidden}`)
   }
   assert.equal(source.includes("select('flow.ProjectMember'"), true)
+})
+
+/**
+ * Two ways a caller could learn about a project without reading one (FLW-018,
+ * FLW-023).
+ *
+ * Neither was found by asking the code what it did. The first came from
+ * widening the static test above to every project-scoped table rather than the
+ * four that hold what people write; the second from running a fixture with the
+ * same user in two companies and looking at the rows.
+ */
+test('naming an issue does not answer for it, and a board is remembered per company', async (t) => {
+  const e2e = await boot(t)
+
+  const one = await as(e2e, 'u1')
+  await one('flow.project.save', {
+    values: { id: 'proj1', key: 'ONE', name: 'Dự án một' },
+    idempotencyKey: 'project-one',
+  })
+  await one('flow.column.save', {
+    values: { id: 'c1', projectId: 'proj1', code: 'todo', name: 'Cần làm' },
+    idempotencyKey: 'column-todo',
+  })
+  for (const [id, title] of [
+    ['i1', 'Việc một'],
+    ['i2', 'Việc hai'],
+  ] as const)
+    await one('flow.issue.save', {
+      id,
+      projectId: 'proj1',
+      columnId: 'c1',
+      title,
+      idempotencyKey: `issue-${id}`,
+    })
+  await one('flow.issue.dependency.add', {
+    id: 'dep-1',
+    issueId: 'i2',
+    dependsOnIssueId: 'i1',
+    relation: 'blocks',
+    idempotencyKey: 'dependency-one',
+  })
+
+  // The member sees the edge, which is what makes the next assertion mean
+  // something rather than pass on an empty table.
+  assert.equal(((await one<Row[]>('flow.issue.dependencies', { issueIds: ['i1', 'i2'] })) ?? []).length, 1)
+
+  // A stranger naming both ids learns nothing. This read takes its ids from the
+  // caller rather than from a query, so it is the one place where the rule has
+  // to be applied to what was asked rather than to what was found.
+  const stranger = await as(e2e, 'u2')
+  assert.deepEqual(await stranger<Row[]>('flow.issue.dependencies', { issueIds: ['i1', 'i2'] }), [])
+  assert.deepEqual(
+    await stranger<Row[]>('flow.issue.dependencies', {
+      issueIds: ['i1', 'i2'],
+      includeExternalTargets: true,
+    }),
+    [],
+    'and asking for the far ends as well does not open a door either',
+  )
+
+  // A board the caller has been taken off is not where they are sent back to.
+  await one('flow.board.remember', { projectId: 'proj1' })
+  assert.equal(
+    String(((await one<Row>('flow.board.scope')) ?? {}).projectId),
+    'proj1',
+    'a member is sent back to the board they left',
+  )
+  await e2e.fixture.call(
+    'flow.project.member.remove',
+    { projectId: 'proj1', userId: 'u1', idempotencyKey: 'remove-u1-key' },
+    { actor: 'root', scope: acme },
+  )
+  assert.equal(
+    ((await one<Row>('flow.board.scope')) ?? {}).projectId,
+    null,
+    'and somebody who is no longer on it is not told it is still there',
+  )
 })

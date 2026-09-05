@@ -260,3 +260,60 @@ test('flow project issues route: a filter that stopped short reaches the screen 
   const quiet = await (await app.client.get('/admin/flow/projects/platform/issues?lang=en')).text()
   assert.doesNotMatch(quiet, /This result is incomplete/)
 })
+
+/**
+ * One intent, one issue (FLW-033).
+ *
+ * The form renders its idempotency key once per opening, so a double click, a
+ * back button or a phone retrying a request all post the same key. The id used
+ * to be a fresh uuid on each attempt, which made the second attempt a
+ * different record — and one person pressing the button twice ended up with
+ * two issues nobody meant to make.
+ */
+test('flow project issues: resubmitting the create form does not make a second issue', async (t) => {
+  const { app, call } = await boot(t)
+  const collection = '/admin/flow/projects/platform/issues?lang=en'
+  const before = (await call<{ total: number }>('flow.issue.list', { projectId: 'platform' })).total
+
+  const submit = () =>
+    app.client.post(
+      `${collection}&create=1`,
+      new URLSearchParams({
+        title: 'Đúng một lần',
+        columnId: 'todo',
+        returnTo: collection,
+        // The same key both times, which is what the rendered form really does.
+        idempotencyKey: 'issue-create-once',
+      }),
+      post,
+    )
+
+  assert.equal((await submit()).status, 303)
+  const after = (await call<{ total: number }>('flow.issue.list', { projectId: 'platform' })).total
+  assert.equal(after, before + 1)
+
+  assert.equal((await submit()).status, 303, 'the second submit still answers as a success')
+  assert.equal(
+    (await call<{ total: number }>('flow.issue.list', { projectId: 'platform' })).total,
+    after,
+    'and it lands on the issue the first one made rather than beside it',
+  )
+
+  // A different key is a different intent, and does make a second issue.
+  assert.equal(
+    (
+      await app.client.post(
+        `${collection}&create=1`,
+        new URLSearchParams({
+          title: 'Lần khác',
+          columnId: 'todo',
+          returnTo: collection,
+          idempotencyKey: 'issue-create-twice',
+        }),
+        post,
+      )
+    ).status,
+    303,
+  )
+  assert.equal((await call<{ total: number }>('flow.issue.list', { projectId: 'platform' })).total, after + 1)
+})
