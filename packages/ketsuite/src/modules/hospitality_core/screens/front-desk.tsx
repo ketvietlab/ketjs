@@ -1,4 +1,5 @@
 import {
+  badge,
   CardGrid,
   type Column,
   dataTable,
@@ -7,6 +8,7 @@ import {
   formatDateTime,
   type Frame,
   guestName,
+  inline,
   linkButton,
   Metric,
   Notice,
@@ -43,6 +45,18 @@ export type FrontDeskToday = {
 export type FrontDeskPermissions = {
   checkIn: boolean
   checkOut: boolean
+}
+
+/**
+ * The room being kept for an arriving guest.
+ *
+ * Until rooms could be held this column was the booked room type, because a
+ * room column on somebody who has not arrived was empty by construction. Now
+ * it is either the room the desk chose or a mark that nobody has.
+ */
+const heldRoom = (row: StayRow): string | null => {
+  const held = row.assignments?.find((assignment) => assignment.state === 'held')
+  return held ? (held.roomName ?? held.roomId) : null
 }
 
 const headcount = (rows: StayRow[]): number =>
@@ -94,14 +108,21 @@ const guestColumn = (_: Translator): Column<StayRow> => ({
 })
 
 /**
- * An arrival has no room yet. A room is chosen at check-in and nowhere else —
- * there is no pre-assignment in the product — so the thing to show a clerk
- * before the guest walks up is what was booked, not an empty cell.
+ * What the clerk needs to see before the guest walks up: the room being kept
+ * for them, or — when nobody has chosen one — the type that was booked, so the
+ * clerk knows what to choose from.
  */
-const roomTypeColumn = (_: Translator): Column<StayRow> => ({
+const arrivalRoomColumn = (_: Translator): Column<StayRow> => ({
   key: 'roomType',
-  label: _('hospitality_core.col.roomType'),
-  cell: (row) => row.roomType?.name ?? '—',
+  label: _('hospitality_core.col.room'),
+  cell: (row) => {
+    const held = heldRoom(row)
+    if (held) return held
+    return inline([
+      row.roomType?.name ?? '—',
+      badge(_('hospitality_core.screen.frontDesk.unassigned'), 'warning', 'unassigned'),
+    ])
+  },
 })
 
 const roomColumn = (_: Translator): Column<StayRow> => ({
@@ -125,7 +146,7 @@ const arrivalColumns = (
 ): Array<Column<StayRow>> => [
   codeColumn(_, locale),
   guestColumn(_),
-  roomTypeColumn(_),
+  arrivalRoomColumn(_),
   {
     // Not `col.checkIn`: that reads "Nhận phòng", the same words as the button
     // beside it, and the two mean different things — an hour and a job to do.
