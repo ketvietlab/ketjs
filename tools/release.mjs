@@ -21,9 +21,11 @@ const workspaces = [
     dir: 'packages/design-system',
     maxPackedBytes: 150_000,
   },
-  { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 500_000 },
+  // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
+  // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
+  { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 1_200_000 },
   { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 2_000_000 },
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 4_000_000 },
 ]
 
 /** @param {string} message @returns {never} */
@@ -255,6 +257,7 @@ const smoke = (tarballs, version, parent) => {
       '--no-fund',
       '--package-lock=false',
       tarball('@ketvietlab/ketjs-view'),
+      tarball('@ketvietlab/design-system'),
       tarball('@ketvietlab/ketjs'),
       tarball('@ketvietlab/ketsuite'),
     ],
