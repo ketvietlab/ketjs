@@ -13,7 +13,7 @@ const login = async (page: Page) => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('stock-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -28,7 +28,7 @@ for (const viewport of [
     test(`renders transfer detail in ${locale} correctly on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.goto(`${transferPath}?lang=${locale}`)
-      await expect(page.locator('[data-ui="record-heading"]')).toHaveText('WH/OUT/REVIEW')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('WH/OUT/REVIEW')
       await expect(page.locator('select[name="productId"]')).toHaveValue('stock-variant')
       await expect(page.locator('[data-ui="chatter-loading"], [data-ui="activity-loading"]')).toHaveCount(0)
 

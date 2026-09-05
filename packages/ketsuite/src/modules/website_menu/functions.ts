@@ -26,6 +26,83 @@ const MAX_MENU_ANCESTORS = 100
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 
 export const functions: Record<string, FnSpec> = {
+  /**
+   * The navigation a visitor sees.
+   *
+   * Separate from listMenu rather than loosening it: listMenu is the editor's
+   * view, scoped by site membership, and an anonymous caller has no membership
+   * to scope by. This one answers for a site that is actually being served, the
+   * same gate the sitemap and public search apply, and returns only what a
+   * theme needs to draw a link.
+   */
+  /**
+   * Freeze the navigation so it can go out with the pages it points at.
+   *
+   * The answer is handed to `website.preparePublication` as an attachment. Left
+   * out, a menu change reaches visitors on its own schedule: a link appears
+   * before the page it points at, or a page arrives with no way to reach it.
+   */
+  snapshotMenu: defineFn({
+    input: { siteId: 'id' },
+    output: { items: 'json' },
+    effects: ['read:website.SiteMember', 'read:website_menu.MenuItem'],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      if (!(await canAccessSite(ctx, args.siteId))) return { items: [] }
+      const M = ctx.table('website_menu.MenuItem')
+      const rows = await ctx.db.all(
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+      )
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          label: row.label,
+          href: row.href,
+          position: row.position,
+          parentId: row.parentId ?? null,
+        })),
+      }
+    },
+  }),
+
+  publicMenu: defineFn({
+    anonymous: true,
+    input: { siteId: 'id' },
+    output: { id: 'id', label: 'text', href: 'text', position: 'int', parentId: 'id?' },
+    effects: ['read:website.Site', 'read:website.Publication', 'read:website_menu.MenuItem'],
+    handler: async (ctx: Ctx, args) => {
+      const Site = ctx.table('website.Site')
+      const site = await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true)))
+      if (!site) return []
+
+      // A site that publishes as a set reads the navigation that went out with
+      // the pages, not whatever the editor has saved since. A site that has
+      // never prepared a publication reads live rows, which is what every site
+      // did before publications existed.
+      if (site.activePublicationId) {
+        const P = ctx.table('website.Publication')
+        const publication = await ctx.db.one(
+          from(P).where(eq(P.id, site.activePublicationId), eq(P.state, 'active')),
+        )
+        const frozen = (publication?.attachments as { website_menu?: { items?: unknown } } | null)
+          ?.website_menu?.items
+        if (Array.isArray(frozen)) return frozen as Array<Record<string, unknown>>
+      }
+
+      const M = ctx.table('website_menu.MenuItem')
+      const rows = await ctx.db.all(
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+      )
+      return rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        href: row.href,
+        position: row.position,
+        parentId: row.parentId ?? null,
+      }))
+    },
+  }),
+
   listMenu: defineFn({
     input: { siteId: 'id?' },
     effects: ['read:website_menu.MenuItem', 'read:website.SiteMember'],

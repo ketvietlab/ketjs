@@ -994,7 +994,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const folioDetailEn = await e2e.client.get('/admin/hospitality/folios/booking-1%3Afolio?lang=en')
   assert.equal(folioDetailEn.status, 200)
   const folioDetailEnHtml = await folioDetailEn.text()
-  assert.match(folioDetailEnHtml, /Operational record only/)
+  assert.match(folioDetailEnHtml, /Not an invoice yet/)
   assert.match(folioDetailEnHtml, /Post charge/)
   assert.doesNotMatch(folioDetailEnHtml, /hospitality_core\./)
   const chargePosted = await e2e.client.post(
@@ -1089,22 +1089,22 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     ['/admin/hospitality/front-desk?lang=vi&date=2026-08-20', 'Bàn lễ tân'],
     ['/admin/hospitality/tape-chart?lang=vi&from=2026-08-20', 'Lịch phòng'],
     ['/admin/hospitality/reservations?lang=vi', 'Đặt phòng'],
-    ['/admin/hospitality/stays?lang=vi', 'Lưu trú'],
-    ['/admin/hospitality/folios?lang=vi', 'Hồ sơ dịch vụ'],
+    ['/admin/hospitality/stays?lang=vi', 'Khách đang lưu trú'],
+    ['/admin/hospitality/folios?lang=vi', 'Phiếu chi phí'],
     ['/admin/hospitality/properties?lang=vi', 'Cơ sở lưu trú'],
-    ['/admin/hospitality/rooms?lang=vi', 'Sơ đồ phòng'],
+    ['/admin/hospitality/rooms?lang=vi', 'Danh mục phòng'],
     ['/admin/hospitality/room-types?lang=vi', 'Loại phòng'],
     [
       '/admin/hospitality/content?lang=vi&property=hotel&target=room_type%3Adeluxe',
       'Nội dung &amp; hình ảnh',
     ],
-    ['/admin/hospitality/rate-plans?lang=vi', 'Giá bán'],
+    ['/admin/hospitality/rate-plans?lang=vi', 'Bảng giá'],
     ['/admin/hospitality/services?lang=vi&property=hotel', 'Dịch vụ &amp; phụ phí'],
     ['/admin/hospitality/night-audit?lang=vi&property=hotel&auditDate=2026-08-20', 'Chốt ngày vận hành'],
     ['/admin/hospitality/stay-notices?lang=vi&property=hotel', 'Thông báo lưu trú'],
     [
       '/admin/hospitality/inventory?lang=vi&property=hotel&roomType=deluxe&from=2026-08-20&to=2026-08-22',
-      'Tồn kho &amp; hạn chế bán',
+      'Phòng trống và điều kiện bán',
     ],
     ['/admin/hospitality/amenities?lang=vi', 'Danh mục tiện nghi'],
     ['/admin/hospitality/policies?lang=vi', 'Chính sách hủy'],

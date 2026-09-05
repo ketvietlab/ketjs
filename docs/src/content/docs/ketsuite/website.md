@@ -22,6 +22,97 @@ CRM — and Website composes them through optional bridge modules.
 - `website_form_mail`: optional bridge that tells a form's owner a request arrived.
 - `website_retail`, `website_hospitality`, `crm_website`: optional bridges to the owning domain.
 
+## Publishing a set
+
+`publishEntry` flips one entry's pointer the moment someone presses the button on it, so a set of
+related changes reaches visitors piecemeal — a page whose menu link is not there yet, or a link to a
+page that is not published. A **publication** freezes which revision of which entry goes out, and
+activating it moves all of them or none.
+
+```ts
+// File: examples/website/publish.ts
+await ctx.call('website.preparePublication', {
+  id: 'pub-2026-09-05',
+  siteId: 'moc',
+  entryIds: ['gioi-thieu', 'chuyen-ben-am-tra'],
+})
+// Nothing is public yet — a prepared publication is a proposal.
+await ctx.call('website.activatePublication', {
+  id: 'pub-2026-09-05',
+  expectedPublicationId: '', // what was active when the reviewer looked
+})
+```
+
+Both paths stay. A site that publishes one page at a time is not doing anything wrong, and this does
+not take that away.
+
+### What else goes out with the pages
+
+A publication carries an `attachments` bag keyed by module name, and `website` does not read it. The
+navigation has to be able to go out with the pages it points at — otherwise a link appears before the
+page it points at, or a page arrives with no way to reach it — but `website_menu` depends on
+`website`, not the other way round. So the slot is opaque, and the module that owns a key is the only
+thing that reads it.
+
+```ts
+// File: examples/website/publish-with-menu.ts
+const menu = await ctx.call('website_menu.snapshotMenu', { siteId: 'moc' })
+await ctx.call('website.preparePublication', {
+  id: 'pub-2026-09-05',
+  siteId: 'moc',
+  entryIds: ['gioi-thieu'],
+  attachments: { website_menu: menu },
+})
+```
+
+`website_menu.publicMenu` then reads the frozen navigation while that publication is active, and an
+edit made afterwards stays in the editor's view until the next publication carries it out. A site that
+has never prepared a publication reads live rows, which is what every site did before publications
+existed.
+
+Attachments are part of the content hash, so the same pages with a different menu is a different
+publication rather than a replay.
+
+### Metadata that travels, and metadata that does not
+
+A description, a canonical and a share image describe a particular revision of a page, so they are
+frozen into the publication alongside the revision. Saving a new description used to rewrite what was
+public immediately, with no publication involved at all; it now waits for the next one, while the
+editor's own view shows what they saved.
+
+`noindex` is deliberately **not** frozen. It is not a description of the page, it is an instruction to
+stop showing it — and an instruction to stop should not wait for a publication to take effect. It is
+read live in the head and in the sitemap alike, so a delist is immediate everywhere.
+
+Because the SEO fields sit on the entry that `website` owns, they need no attachment: they are frozen
+into the publication's own entry list, next to the revision they describe.
+
+### The site pointer is the concurrency token
+
+Activation moves `Site.activePublicationId` under compare-and-set **before** it touches any entry.
+Two activations that both started from the same base would otherwise each believe they replaced the
+other, and the entry pointers would end up a mix of the two. The loser gets
+`website.error.publicationStaleBase` and has run nothing.
+
+Pass `expectedPublicationId` to say which base the reviewer was looking at; omit it to accept whatever
+is current.
+
+### What a publication refuses, and how
+
+Preparing names the entry in every refusal — a caller publishing twenty pages needs to know which one
+is the problem, not that "an entry" was wrong. An entry outside the site, in the trash, or without a
+current revision stops the whole prepare, and nothing is written.
+
+Preparing the same set twice under the same id returns what was prepared; the set is identified by a
+hash over `entryId:revisionId`, so ordering is not identity. The same id for a *different* set is
+`website.error.publicationConflict`. Replaying an activation is not an error — it already happened.
+
+### Rollback is a publication
+
+Going back prepares the previous set again rather than undoing. The history stays, and the entries go
+through the same activation the forward direction does — so a page trashed since it was last public
+does not come back by the side door.
+
 ## SEO and the public projection
 
 `website_seo` adds four optional fields to an entry it does not own — `metaDescription`, `canonical`,
@@ -116,6 +207,22 @@ way.
 
 A parent belonging to a different site remains `website.error.invalidParent`.
 
+### Navigation has to reach the page
+
+A theme draws `{% for item in menu %}`. Nothing ever put a menu in that scope, so every public page
+rendered an empty nav — the items were stored, editable, and invisible.
+
+Navigation belongs to the site rather than to the page, so it is resolved beside it:
+`serve.pages.menuResolve` names the function, the way `siteResolve` and `resolve` already do, and its
+answer reaches the theme as `menu`. The framework names no module; the deployment points it at
+`website_menu.publicMenu`, and a deployment that names a function no composed module declares fails at
+boot rather than rendering a blank nav.
+
+`publicMenu` is separate from `listMenu` rather than a loosening of it. `listMenu` is the editor's
+view, scoped by site membership, and a visitor has no membership to scope by. The public one answers
+only for a site that is actually being served — the same gate the sitemap and public search apply —
+and returns only what a theme needs to draw a link.
+
 ### Pre-existing damage is not this edit's problem
 
 Only the parent the caller named is validated. The rest of the chain is walked for one reason: to see
@@ -184,6 +291,23 @@ always shows what a visitor would actually see.
 - A site that is not active has no public search, the same rule the sitemap follows.
 - Pages under a reserved namespace are not offered, for the same reason the sitemap omits them: a
   module route answers that path first, so the result would not open.
+
+### The box renders its own results
+
+The box used to submit to a hardcoded `/tim-kiem`. No module route serves that path and no page had to
+exist there, so a visitor who searched landed on a 404 — the query layer was complete and unreachable.
+
+It now submits nowhere and renders results in place. That is not a shortcut: the query lives in the
+URL, and a page resolver is handed a path rather than a query string, so **no server-rendered surface
+can see it**. A results page would need either a framework change to widen the resolver contract for
+every deployment, or a theme template placing an island — which would make every website theme depend
+on `website_search` for one optional section. Rendering next to the box costs neither.
+
+The browser half calls `website.resolveSite`, `website.searchPublished` and
+`website.countSearchPublished` — the same anonymous functions the sitemap and the public reader are
+held to, so anything it offers is a page the reader will serve. It applies the same two-character
+floor `searchPublished` applies, rather than spending a round trip to be told nothing, and it keeps
+`?q=` in the URL so a search can be linked and reloaded.
 
 ### The three public views agree
 
@@ -286,11 +410,8 @@ whatever the page resolver returns. The framework does not name the fields — t
 them decides what is public — so this closed the SEO half without teaching `boot.ts` about
 `website_seo`.
 
-**Still open: the search box.** `website_search` declares a `label` prop that is never in scope, so it
-always shows its fallback, and its form action is a hardcoded `/tim-kiem` rather than a path the site
-chooses. There is also nowhere for it to post — no surface renders results. The query layer exists and
-is tested (`searchPublished`, `countSearchPublished`), so what is missing is the public surface, not
-the behaviour behind it. That needs a decision about where results live before it needs code.
+The search box still shows its fallback label, because `label` is a prop and props are projected from
+that scope. That is cosmetic; the box itself now works (see below).
 
 ## Testing
 
