@@ -46,6 +46,10 @@ export default defineModule({
       'error.payloadTooLarge': 'Dữ liệu vượt quá giới hạn cho phép.',
       'error.duplicateName': 'Tên này đã được sử dụng.',
       'error.duplicateHost': 'Tên miền này đã được gán cho website khác.',
+      'error.primaryDomainInUse':
+        'Không thể gỡ tên miền chính khi website còn tên miền khác. Hãy đặt một tên miền khác làm chính trước.',
+      'error.duplicateRedirect':
+        'Đường dẫn này đã có chuyển hướng. Hãy sửa chuyển hướng đang có thay vì thêm mới.',
       'error.duplicatePath': 'Đường dẫn này đã được sử dụng trên website.',
       'error.duplicateSlug': 'Slug này đã được sử dụng.',
       'error.siteNotFound': 'Không tìm thấy website.',
@@ -116,6 +120,10 @@ export default defineModule({
       'error.payloadTooLarge': 'The payload exceeds the allowed size.',
       'error.duplicateName': 'This name is already in use.',
       'error.duplicateHost': 'This domain is already assigned to another site.',
+      'error.primaryDomainInUse':
+        'The primary domain cannot be removed while the site has others. Make one of them primary first.',
+      'error.duplicateRedirect':
+        'That path already redirects somewhere. Edit the redirect it has rather than adding another.',
       'error.duplicatePath': 'This path is already in use on the site.',
       'error.duplicateSlug': 'This slug is already in use.',
       'error.siteNotFound': 'The site was not found.',

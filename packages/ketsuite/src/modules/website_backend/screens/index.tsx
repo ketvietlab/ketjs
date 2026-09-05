@@ -2076,90 +2076,140 @@ export const siteDomainsScreen = (
   site: SiteRow,
   rows: DomainRow[],
   frame: Frame,
-  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
-): TemplateResult => (
-  <ListScreenFrame
-    translator={_}
-    title={_('website_backend.domains.title')}
-    frame={frame}
-    body={stack([
-      inline([
-        linkButton({
-          label: _('website_backend.action.backToSite'),
-          href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
-        }),
-      ]),
-      <Section
-        title={_('website_backend.domains.add')}
-        description={_('website_backend.domains.addHint')}
-        body={
-          <Surface
-            padding="compact"
-            body={
-              <RecordForm
-                action={`/admin/website/sites/${site.id}/domains${options.locale ?? ''}`}
-                layout="inline"
-                fields={[
-                  {
-                    name: 'host',
-                    label: _('website_backend.domains.host'),
-                    value: options.values?.host,
-                    required: true,
-                  },
-                  {
-                    name: 'primary',
-                    label: _('website_backend.domains.primary'),
-                    type: 'checkbox',
-                    help: _('website_backend.domains.primaryHint'),
-                  },
-                  {
-                    name: 'redirectToPrimary',
-                    label: _('website_backend.domains.redirect'),
-                    type: 'checkbox',
-                  },
-                ]}
-                submit={_('website_backend.action.save')}
-                submitVariant="primary"
-                errors={options.errors}
-              />
-            }
-          />
-        }
-      />,
-      rows.length === 0
-        ? emptyState(_('website_backend.domains.empty'), _('website_backend.domains.emptyHint'))
-        : dataTable(_, {
-            rows,
-            id: (row) => row.id,
-            columns: [
-              {
-                key: 'host',
-                label: _('website_backend.domains.host'),
-                priority: 'primary',
-                cell: (row) => row.host,
-              },
-              {
-                key: 'primary',
-                label: _('website_backend.domains.primary'),
-                cell: (row) =>
-                  row.primary
-                    ? badge(_('website_backend.state.yes'), 'positive')
-                    : badge(_('website_backend.state.no'), 'neutral'),
-              },
-              {
-                key: 'redirect',
-                label: _('website_backend.domains.redirect'),
-                cell: (row) =>
-                  badge(
-                    row.redirectToPrimary ? _('website_backend.state.yes') : _('website_backend.state.no'),
-                    'neutral',
-                  ),
-              },
-            ],
+  options: {
+    values?: Record<string, string>
+    errors?: string[]
+    locale?: string
+    /** The row `?edit=` names, if any: the add form becomes that row's form. */
+    editing?: DomainRow | null
+  } = {},
+): TemplateResult => {
+  const editing = options.editing ?? null
+  const values = options.values ?? {}
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('website_backend.domains.title')}
+      frame={frame}
+      body={stack([
+        inline([
+          linkButton({
+            label: _('website_backend.action.backToSite'),
+            href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
           }),
-    ])}
-  />
-)
+          ...(editing
+            ? [
+                linkButton({
+                  label: _('website_backend.action.cancel'),
+                  href: `/admin/website/sites/${site.id}/domains${options.locale ?? ''}`,
+                }),
+              ]
+            : []),
+        ]),
+        <Section
+          title={editing ? _('website_backend.domains.edit') : _('website_backend.domains.add')}
+          description={_('website_backend.domains.addHint')}
+          body={
+            <Surface
+              padding="compact"
+              body={
+                <RecordForm
+                  action={`/admin/website/sites/${site.id}/domains${editing ? `/${editing.id}` : ''}${options.locale ?? ''}`}
+                  layout="inline"
+                  fields={[
+                    {
+                      name: 'host',
+                      label: _('website_backend.domains.host'),
+                      value: values.host ?? editing?.host,
+                      required: true,
+                    },
+                    {
+                      name: 'primary',
+                      label: _('website_backend.domains.primary'),
+                      type: 'checkbox',
+                      value: values.primary != null ? values.primary === '1' : (editing?.primary ?? false),
+                      help: _('website_backend.domains.primaryHint'),
+                    },
+                    {
+                      name: 'redirectToPrimary',
+                      label: _('website_backend.domains.redirect'),
+                      type: 'checkbox',
+                      value:
+                        values.redirectToPrimary != null
+                          ? values.redirectToPrimary === '1'
+                          : (editing?.redirectToPrimary ?? false),
+                    },
+                  ]}
+                  submit={_('website_backend.action.save')}
+                  submitVariant="primary"
+                  errors={options.errors}
+                />
+              }
+            />
+          }
+        />,
+        rows.length === 0
+          ? emptyState(_('website_backend.domains.empty'), _('website_backend.domains.emptyHint'))
+          : dataTable(_, {
+              rows,
+              id: (row) => row.id,
+              columns: [
+                {
+                  key: 'host',
+                  label: _('website_backend.domains.host'),
+                  priority: 'primary',
+                  cell: (row) => row.host,
+                },
+                {
+                  key: 'primary',
+                  label: _('website_backend.domains.primary'),
+                  cell: (row) =>
+                    row.primary
+                      ? badge(_('website_backend.state.yes'), 'positive')
+                      : badge(_('website_backend.state.no'), 'neutral'),
+                },
+                {
+                  key: 'redirect',
+                  label: _('website_backend.domains.redirect'),
+                  cell: (row) =>
+                    badge(
+                      row.redirectToPrimary ? _('website_backend.state.yes') : _('website_backend.state.no'),
+                      'neutral',
+                    ),
+                },
+                {
+                  key: 'edit',
+                  label: _('website_backend.action.edit'),
+                  cell: (row) =>
+                    linkButton({
+                      label: _('website_backend.action.edit'),
+                      href: `/admin/website/sites/${site.id}/domains?edit=${encodeURIComponent(row.id)}${options.locale ? `&${options.locale.slice(1)}` : ''}`,
+                      size: 'compact',
+                    }),
+                },
+                {
+                  key: 'remove',
+                  label: _('website_backend.action.remove'),
+                  cell: (row) => (
+                    <RecordActions
+                      action={`/admin/website/sites/${site.id}/domains/${row.id}/remove${options.locale ?? ''}`}
+                      size="compact"
+                      actions={[
+                        {
+                          value: 'remove',
+                          label: _('website_backend.action.remove'),
+                          variant: 'destructive',
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ],
+            }),
+      ])}
+    />
+  )
+}
 
 /**
  * Where an address that used to work now goes.
@@ -2174,97 +2224,159 @@ export const redirectsScreen = (
   sites: FormOption[],
   siteId: string | null,
   frame: Frame,
-  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
-): TemplateResult => (
-  <ListScreenFrame
-    translator={_}
-    title={_('website_backend.redirects.title')}
-    frame={frame}
-    body={stack([
-      siteSwitcher(_, '/admin/website/redirects', sites, siteId, options.locale ?? ''),
-      ...(siteId
-        ? [
-            <Section
-              title={_('website_backend.redirects.add')}
-              description={_('website_backend.redirects.addHint')}
-              body={
-                <Surface
-                  padding="compact"
-                  body={
-                    <RecordForm
-                      action={`/admin/website/redirects${options.locale ?? ''}`}
-                      hidden={{ siteId }}
-                      layout="inline"
-                      fields={[
-                        {
-                          name: 'fromPath',
-                          label: _('website_backend.redirects.from'),
-                          value: options.values?.fromPath,
-                          required: true,
-                        },
-                        {
-                          name: 'toPath',
-                          label: _('website_backend.redirects.to'),
-                          value: options.values?.toPath,
-                          required: true,
-                        },
-                        {
-                          name: 'permanent',
-                          label: _('website_backend.redirects.permanent'),
-                          type: 'checkbox',
-                          help: _('website_backend.redirects.permanentHint'),
-                        },
-                      ]}
-                      submit={_('website_backend.action.save')}
-                      submitVariant="primary"
-                      errors={options.errors}
-                    />
-                  }
-                />
-              }
-            />,
-          ]
-        : []),
-      !siteId
-        ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
-        : rows.length === 0
-          ? emptyState(_('website_backend.redirects.empty'), _('website_backend.redirects.emptyHint'))
-          : dataTable(_, {
-              rows,
-              id: (row) => row.id,
-              columns: [
-                {
-                  key: 'from',
-                  label: _('website_backend.redirects.from'),
-                  priority: 'primary',
-                  cell: (row) => row.fromPath,
-                },
-                { key: 'to', label: _('website_backend.redirects.to'), cell: (row) => row.toPath },
-                {
-                  key: 'kind',
-                  label: _('website_backend.redirects.permanent'),
-                  cell: (row) =>
-                    badge(
-                      row.permanent
-                        ? _('website_backend.redirects.p301')
-                        : _('website_backend.redirects.p302'),
-                      row.permanent ? 'info' : 'neutral',
+  options: {
+    values?: Record<string, string>
+    errors?: string[]
+    locale?: string
+    /** The row `?edit=` names, if any: the add form becomes that row's form. */
+    editing?: RedirectRow | null
+  } = {},
+): TemplateResult => {
+  const editing = options.editing ?? null
+  const values = options.values ?? {}
+  const query = (params: Record<string, string>) => {
+    const search = new URLSearchParams({ site: siteId ?? '', ...params })
+    if (options.locale) search.set('lang', options.locale.slice('?lang='.length))
+    return `/admin/website/redirects?${search.toString()}`
+  }
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('website_backend.redirects.title')}
+      frame={frame}
+      body={stack([
+        siteSwitcher(_, '/admin/website/redirects', sites, siteId, options.locale ?? ''),
+        ...(siteId
+          ? [
+              <Section
+                title={editing ? _('website_backend.redirects.edit') : _('website_backend.redirects.add')}
+                description={_('website_backend.redirects.addHint')}
+                body={
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        action={`/admin/website/redirects${editing ? `/${editing.id}` : ''}${options.locale ?? ''}`}
+                        hidden={{ siteId }}
+                        layout="inline"
+                        fields={[
+                          {
+                            name: 'fromPath',
+                            label: _('website_backend.redirects.from'),
+                            value: values.fromPath ?? editing?.fromPath,
+                            required: true,
+                          },
+                          {
+                            name: 'toPath',
+                            label: _('website_backend.redirects.to'),
+                            value: values.toPath ?? editing?.toPath,
+                            required: true,
+                          },
+                          {
+                            name: 'permanent',
+                            label: _('website_backend.redirects.permanent'),
+                            type: 'checkbox',
+                            value:
+                              values.permanent != null
+                                ? values.permanent === '1'
+                                : (editing?.permanent ?? true),
+                            help: _('website_backend.redirects.permanentHint'),
+                          },
+                        ]}
+                        submit={_('website_backend.action.save')}
+                        submitVariant="primary"
+                        errors={options.errors}
+                      />
+                    }
+                  />
+                }
+              />,
+              // The list already had a column for a state nothing could produce:
+              // the route wrote `active: true` every time, so every row read
+              // "active" for ever and the off switch on the contract was unreachable.
+              inline([
+                linkButton({ label: _('website_backend.redirects.all'), href: query({}) }),
+                linkButton({
+                  label: _('website_backend.state.active'),
+                  href: query({ state: 'active' }),
+                }),
+                linkButton({
+                  label: _('website_backend.state.inactive'),
+                  href: query({ state: 'inactive' }),
+                }),
+              ]),
+            ]
+          : []),
+        !siteId
+          ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
+          : rows.length === 0
+            ? emptyState(_('website_backend.redirects.empty'), _('website_backend.redirects.emptyHint'))
+            : dataTable(_, {
+                rows,
+                id: (row) => row.id,
+                columns: [
+                  {
+                    key: 'from',
+                    label: _('website_backend.redirects.from'),
+                    priority: 'primary',
+                    cell: (row) => row.fromPath,
+                  },
+                  { key: 'to', label: _('website_backend.redirects.to'), cell: (row) => row.toPath },
+                  {
+                    key: 'kind',
+                    label: _('website_backend.redirects.permanent'),
+                    cell: (row) =>
+                      badge(
+                        row.permanent
+                          ? _('website_backend.redirects.p301')
+                          : _('website_backend.redirects.p302'),
+                        row.permanent ? 'info' : 'neutral',
+                      ),
+                  },
+                  {
+                    key: 'status',
+                    label: _('website_backend.field.status'),
+                    cell: (row) =>
+                      badge(
+                        row.active ? _('website_backend.state.active') : _('website_backend.state.inactive'),
+                        row.active ? 'positive' : 'neutral',
+                      ),
+                  },
+                  {
+                    key: 'edit',
+                    label: _('website_backend.action.edit'),
+                    cell: (row) =>
+                      linkButton({
+                        label: _('website_backend.action.edit'),
+                        href: query({ edit: row.id }),
+                        size: 'compact',
+                      }),
+                  },
+                  {
+                    // Off rather than deleted: the unique index holds one row per
+                    // `fromPath`, so deleting to "free" the path and deactivating
+                    // to stop it are the same reversible act, and one of them
+                    // keeps the history of what that address used to do.
+                    key: 'state',
+                    label: _('website_backend.redirects.state'),
+                    cell: (row) => (
+                      <RecordActions
+                        action={`/admin/website/redirects/${row.id}/state${options.locale ?? ''}`}
+                        size="compact"
+                        actions={[
+                          row.active
+                            ? { value: 'deactivate', label: _('website_backend.action.deactivate') }
+                            : { value: 'activate', label: _('website_backend.action.activate') },
+                        ]}
+                      />
                     ),
-                },
-                {
-                  key: 'status',
-                  label: _('website_backend.field.status'),
-                  cell: (row) =>
-                    badge(
-                      row.active ? _('website_backend.state.active') : _('website_backend.state.inactive'),
-                      row.active ? 'positive' : 'neutral',
-                    ),
-                },
-              ],
-            }),
-    ])}
-  />
-)
+                  },
+                ],
+              }),
+      ])}
+    />
+  )
+}
 
 /**
  * Whether search is answering from the content that is actually live.
