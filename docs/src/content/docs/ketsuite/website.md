@@ -46,6 +46,23 @@ await ctx.call('website.activatePublication', {
 Both paths stay. A site that publishes one page at a time is not doing anything wrong, and this does
 not take that away.
 
+### The outbox, and why there isn't one yet
+
+WEB-014 asks for "CAS pointer + outbox atomic". The atomic half is already there and does not need a
+table: `ctx.tx` hands its body a context bound to the transaction's own connection, and
+`jobs.enqueue` queues through that context's adapter — so a job enqueued inside an activation would
+commit with it, and an activation that loses the compare-and-set would queue nothing.
+
+What is missing is a **consumer**. There is no cache to invalidate, no physical search index to
+rebuild, and no delivery to make off the back of a publication. Enqueuing a job nobody handles would
+be a mechanism pretending to be a feature, so nothing is queued today — and a test asserts that, so
+adding one is a deliberate change rather than a silent one.
+
+When a consumer does arrive it will most likely be a search index, and the dependency direction is
+the thing to plan around: `website` cannot depend on `website_search`, so either the consumer is a
+module `website` may depend on, or the deployment wires it the way `serve.pages.menuResolve` wires
+navigation.
+
 ### What else goes out with the pages
 
 A publication carries an `attachments` bag keyed by module name, and `website` does not read it. The
