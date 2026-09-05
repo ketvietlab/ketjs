@@ -17,6 +17,7 @@ export default defineModule({
       'app.category': 'Website',
       'error.menuCycle': 'Cấu trúc menu tạo thành vòng lặp.',
       'error.menuTooDeep': 'Menu lồng nhau quá sâu.',
+      'error.invalidDirection': 'Chỉ di chuyển lên hoặc xuống.',
       'error.menuInUse': 'Không thể xóa mục menu đang có mục con.',
     },
     en: {
@@ -25,6 +26,7 @@ export default defineModule({
       'app.category': 'Website',
       'error.menuCycle': 'The menu structure would form a cycle.',
       'error.menuTooDeep': 'The menu is nested too deeply.',
+      'error.invalidDirection': 'A move is up or down.',
       'error.menuInUse': 'A menu item with children cannot be deleted.',
     },
   },

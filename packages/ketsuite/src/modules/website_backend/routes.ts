@@ -1727,6 +1727,30 @@ export const routes: Record<string, RouteEntry> = {
 
   '/admin/website/menus/new': menuEditRoute(),
   '/admin/website/menus/{id}': menuEditRoute(),
+  /**
+   * One place up or down.
+   *
+   * Reordering meant opening each item and typing a number into `position`,
+   * which is arithmetic rather than editing and gets worse the longer the menu
+   * is. The move is a POST because it writes.
+   */
+  '/admin/website/menus/{id}/move':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      const siteId = form.site || url.searchParams.get('site') || ''
+      const result = await ctx.call(
+        'website_menu.moveMenuItem',
+        { id: params.id, direction: form.action },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/menus?site=${encodeURIComponent(siteId)}`))
+    },
+
   '/admin/website/menus/{id}/delete':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
