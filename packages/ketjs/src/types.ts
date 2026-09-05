@@ -463,7 +463,7 @@ export type ModuleSpec = ModuleMeta & {
   /** Version ranges required at compose time for published extension contracts. */
   compatible?: Record<string, string>
   models?: Record<string, ModelDef>
-  extend?: Record<string, Record<string, string>>
+  extend?: Record<string, Record<string, string | FieldDef>>
   /** Navigation entries this module contributes. Keys are ids other menus parent onto. */
   menus?: Record<string, MenuDef>
   joints?: Record<string, JointDef>
@@ -536,7 +536,7 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly depends: readonly string[]
   readonly compatible: Readonly<Record<string, string>>
   readonly models: Record<string, ModelDef>
-  readonly extend: Record<string, Record<string, string>>
+  readonly extend: Record<string, Record<string, string | FieldDef>>
   readonly menus: Record<string, MenuDef>
   readonly joints: Record<string, JointDef>
   readonly omits: readonly string[]

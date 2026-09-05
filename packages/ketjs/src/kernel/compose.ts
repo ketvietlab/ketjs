@@ -436,7 +436,7 @@ export function compose(
         })
         continue
       }
-      for (const [fname, tspec] of Object.entries(addl)) {
+      for (const [fname, declared] of Object.entries(addl)) {
         // Checked ahead of the collision below so the message names the real cause:
         // these columns are the isolation boundary, not a name somebody took first.
         if (fname === 'companyId' || fname === 'branchId') {
@@ -458,6 +458,15 @@ export function compose(
           })
           continue
         }
+        // Extension takes both field forms too. A bridge is exactly the module that
+        // adds a phone number to somebody else's partner, so it is exactly the module
+        // that has to be able to say the column is personal data.
+        const spec = normalizeField(declared)
+        if (!spec.ok) {
+          diag.add({ code: spec.code, module: m.name, message: `${target}.${fname}: ${spec.reason}` })
+          continue
+        }
+        const tspec = spec.type
         const t = parseType(tspec)
         if (!t.ok) {
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${target}.${fname}: ${t.reason}` })
@@ -474,7 +483,14 @@ export function compose(
           })
           continue
         }
-        model.fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
+        model.fields[fname] = {
+          base: t.base,
+          optional: t.optional,
+          target: t.target,
+          by: m.name,
+          ...(spec.personal ? { personal: true } : {}),
+          ...(spec.sensitive ? { sensitive: true } : {}),
+        }
       }
     }
   }
