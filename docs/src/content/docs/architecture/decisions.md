@@ -2277,3 +2277,36 @@ counter that has to be pruned — the worker does it hourly on a pass it already
 a deployment with no worker has to call `pruneRateSlots` itself.
 
 **Reversible:** yes. Nothing here is in the manifest, and the two log events are additive.
+## D73 — Document numbers are a primitive, and the format is not
+**The gap, found by counting.** Two modules had already written the same allocator: a counter row, a
+read, a compare-and-set, a retry loop. `sale.nextName` retries 64 times with jittered backoff and a
+comment explaining that a bulk import is a stampede by design. `pos.nextOrderNumber` retries 32 times
+with **no backoff at all**, so it spins hottest exactly when the counter is contended. Both are
+correct; only one is careful, and the next module to need a number would have picked one at random.
+
+**Chosen:** `ctx.sequence(name)` over a framework `ket_sequence` table, with the careful retry.
+
+**It returns a number.** Turning 42 into `S00042` or `POS/00042` is the domain's, and a framework
+that chose would be choosing an invoice format for a tax authority it has never heard of.
+
+**Per company by default, shared only when asked.** Both existing implementations keyed by something
+the caller passed in — a company key in one, a session id in the other. That works until somebody
+forgets, and what a forgotten scope produces is two legal entities issuing the same invoice number,
+which nobody notices until an auditor does. The default is therefore the safe one and the wide one
+costs a parameter.
+
+**Gaplessness is the caller's, and the docs say so.** The counter moves in whatever transaction the
+caller is already in, so a number taken inside the transaction that writes the document rolls back
+with it, and one taken outside leaves a gap when a later step fails. No counter can know which
+happened, so promising "gapless" unconditionally would be a promise the framework cannot keep.
+
+**A dry-run reads without consuming.** The alternative — allocating during a preview — makes the real
+command that follows skip a number, and shows the caller a number nobody will ever use. It follows
+that a preview number is not reserved, which is stated rather than left to be discovered.
+
+**Cost:** one more framework table, and a sequence hot enough to lose 64 races raises rather than
+blocks. That error names the fix (split the sequence) because a single row is a real ceiling and
+pretending otherwise would just move the failure somewhere less legible.
+
+**Reversible:** yes. Nothing is in the manifest, and the existing module allocators keep working
+untouched — this PR does not migrate them.

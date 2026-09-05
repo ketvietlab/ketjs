@@ -267,6 +267,54 @@ the writes and the job notification.
 Nested adapter transactions are not supported. Keep the transaction boundary at the business
 operation level.
 
+## Document numbers
+
+`ctx.sequence()` takes the next number in a named sequence:
+
+```ts
+// File: src/modules/sale/functions.ts
+const number = await ctx.sequence('sale.order')
+const name = `S${String(number).padStart(5, '0')}`
+```
+
+It returns a **number**, never a formatted string. Turning 42 into `S00042` or `POS/00042` is the
+domain's decision — a framework that chose the format would be choosing an invoice format for a tax
+authority it has never heard of.
+
+**Counted per company by default.** `ctx.sequence('sale.order')` gives each company its own count.
+Pass `{ shared: true }` for one count across the tenant. The default is that way round because two
+legal entities issuing the same invoice number is a bug nobody notices until an auditor does, and it
+would be caused by forgetting a parameter.
+
+`{ start: 1000 }` decides where a sequence opens the first time anybody asks; it is ignored once the
+sequence exists.
+
+### Whether numbers are gapless is decided by where you take them
+
+The counter moves in whatever transaction the caller is already in.
+
+```ts
+// File: src/modules/sale/functions.ts
+await ctx.tx(async (tx) => {
+  const number = await tx.sequence('sale.order')      // rolls back with the order
+  await tx.db.commit(orderChanges)
+})
+```
+
+Taken inside the transaction that writes the document, a rollback takes the number back with it.
+Taken outside, a later failure leaves a gap, and no counter can know that happened.
+
+A dry-run reads the sequence without consuming a number, so a preview cannot make the real command
+that follows skip one. The preview number is therefore not reserved.
+
+### Under contention
+
+Every document of one kind funnels through one row, so a bulk import is a stampede by design. The
+read and compare-and-set retry with jittered backoff: losing the race there is normal rather than
+exceptional, and what must not happen is giving up while the row is live and turning a valid order
+into a spurious failure. After 64 attempts it raises `E_SEQUENCE_CONTENDED`, which means one row is
+carrying more concurrent allocation than it can and the sequence wants splitting.
+
 ## Dry-run
 
 Functions declaring `dryRun: true` may be called with dry-run enabled. Context write methods report
