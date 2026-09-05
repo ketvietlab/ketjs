@@ -16,6 +16,7 @@ import {
   inArray,
   isNull,
   like,
+  likeLiteral,
   not,
   or,
   planMigration,
@@ -239,6 +240,30 @@ test('query: the whole set of operators renders', () => {
   assert.match(sql.text, /"slug" IS NULL/)
   assert.match(sql.text, /ORDER BY .*"priceCents" DESC NULLS FIRST, .*"title" ASC NULLS LAST/)
   assert.deepEqual(sql.params, ['a', 'b', '%áo%', 10, 20])
+})
+
+/**
+ * `ilike` could escape a pattern and `like` could not, so every case-sensitive
+ * search passed whatever a person typed straight into a LIKE: a `%` matched the
+ * whole table and a `_` matched any character.
+ */
+test('query: a LIKE can treat what a person typed as a literal', () => {
+  const plain = from(P).where(like(P.title!, '%50%%')).toSQL()
+  assert.match(plain.text, /LIKE \?/)
+  assert.equal(plain.text.includes('ESCAPE'), false, 'unasked-for escaping would change every caller')
+
+  const escaped = from(P)
+    .where(like(P.title!, `%${likeLiteral('50%')}%`, true))
+    .toSQL()
+  assert.match(escaped.text, /LIKE \? ESCAPE/)
+  assert.deepEqual(escaped.params, ['%50\\%%'])
+})
+
+test('query: likeLiteral escapes both wildcards and the escape character itself', () => {
+  // A backslash left alone would swallow the character after it once ESCAPE is
+  // in play, so it has to be escaped before the wildcards are.
+  assert.equal(likeLiteral('a%b_c\\d'), 'a\\%b\\_c\\\\d')
+  assert.equal(likeLiteral('nothing special'), 'nothing special')
 })
 
 test('query: an empty IN list is false, not a syntax error', () => {

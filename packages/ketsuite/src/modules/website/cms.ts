@@ -9,6 +9,7 @@ import {
   inArray,
   isNotNull,
   like,
+  likeLiteral,
   diffPlacements,
   isPlacementId,
   ne,
@@ -28,6 +29,15 @@ import {
 import { ensureCustomerRealm } from './customer.ts'
 import { isReservedPath, reservedPrefixes } from './paths.ts'
 import { preflightEntry } from './renderable.ts'
+
+/**
+ * What a person typed in the title box, as a literal.
+ *
+ * Without the escape a `%` matched every page and a `_` matched any character,
+ * so the list answered nonsense to anyone searching for "50%" or "co_op" - and
+ * the count beside it agreed, which made it look deliberate.
+ */
+const titlePattern = (search: unknown): string => `%${likeLiteral(String(search).trim().slice(0, 100))}%`
 
 const SITE_ROLES = new Set(['administrator', 'editor', 'author', 'contributor'])
 /** How many pages one unnamed preflight will read. Beyond it, the answer is "ask again by id". */
@@ -645,7 +655,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
         .orderBy(desc(Entry.updatedAt), asc(Entry.title))
       if (args.type) query = query.where(eq(Entry.type, args.type))
       if (args.status) query = query.where(eq(Entry.status, args.status))
-      if (args.search) query = query.where(like(Entry.title, `%${String(args.search).trim().slice(0, 100)}%`))
+      if (args.search) query = query.where(like(Entry.title, titlePattern(args.search), true))
       query = query.limit(paging.limit).offset(paging.offset)
       return ctx.db.all(query)
     },
@@ -661,7 +671,7 @@ export const cmsFunctions: Record<string, FnSpec> = {
       let query = from(Entry).where(eq(Entry.siteId, args.siteId))
       if (args.type) query = query.where(eq(Entry.type, args.type))
       if (args.status) query = query.where(eq(Entry.status, args.status))
-      if (args.search) query = query.where(like(Entry.title, `%${String(args.search).trim().slice(0, 100)}%`))
+      if (args.search) query = query.where(like(Entry.title, titlePattern(args.search), true))
       return { count: await ctx.db.count(query) }
     },
   }),
