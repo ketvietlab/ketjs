@@ -1239,10 +1239,29 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * The draft behind a preview link.
+   *
+   * Answers the same shape as `getEntryByPath`, because the storefront renders
+   * whichever of the two answered and a second shape would mean a second
+   * renderer. `meta` is the entry's own, not the publication's frozen copy: a
+   * preview is for looking at what is about to go out.
+   */
   previewEntry: defineFn({
     anonymous: true,
     input: { token: 'text' },
-    output: { entry: 'json', revision: 'json' },
+    output: {
+      id: 'id',
+      siteId: 'id?',
+      type: 'text?',
+      path: 'text',
+      title: 'text',
+      excerpt: 'text?',
+      layout: 'json',
+      fields: 'json?',
+      meta: 'json?',
+      published: 'bool?',
+    },
     effects: [
       'read:website.PreviewToken',
       'write:website.PreviewToken',
@@ -1271,7 +1290,18 @@ export const cmsFunctions: Record<string, FnSpec> = {
         )
         if (!('dryRun' in used) && !used.matched) return null
       }
-      return { entry, revision }
+      return {
+        id: entry.id,
+        siteId: entry.siteId,
+        type: entry.type,
+        path: entry.path,
+        title: revision.title,
+        excerpt: revision.excerpt ?? null,
+        layout: revision.layout,
+        fields: revision.fields,
+        meta: publicMeta(entry),
+        published: entry.status === 'published',
+      }
     },
   }),
 

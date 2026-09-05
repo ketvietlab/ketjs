@@ -196,6 +196,17 @@ export type PagesSpec = {
    * navigation draws nothing, which is a blank nav rather than an error.
    */
   menuResolve?: string
+  /**
+   * Optional function taking `{ token }` and answering the same shape as
+   * `resolve`, for a draft nobody has published yet. Without it a deployment
+   * can mint preview links and has nowhere to spend them.
+   */
+  previewResolve?: string
+  /**
+   * Where a preview link points. Defaults to `/_ket/preview`, inside the
+   * namespace the framework already owns, so no published page can claim it.
+   */
+  previewPath?: string
   /** Theme region whose host carries the same data-ket-slot name. */
   region?: string
   /** Message key for the title of a path that has no page. */
@@ -913,12 +924,36 @@ export async function bootDeployment(
   }
 
   const pages = serve.pages
+  const previewPath = pages?.previewPath ?? '/_ket/preview'
+  /**
+   * A preview is a request at that one path carrying a token, and only when the
+   * deployment named something to answer it — otherwise the path is an ordinary
+   * miss rather than a preview that silently renders nothing.
+   */
+  const isPreviewRequest = (url: URL): boolean =>
+    !!pages?.previewResolve && url.pathname === previewPath && !!url.searchParams.get('token')
   if (pages && !manifest.functions[pages.resolve]) {
     throw new KetError({
       code: 'E_PAGE_RESOLVER_MISSING',
       module: spec.name,
       message: `deployment "${spec.name}" resolves pages with "${pages.resolve}", which no composed module declares`,
       hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the deployment, or drop serve.pages`,
+    })
+  }
+  if (pages?.previewResolve && !manifest.functions[pages.previewResolve]) {
+    throw new KetError({
+      code: 'E_PREVIEW_RESOLVER_MISSING',
+      module: spec.name,
+      message: `deployment "${spec.name}" resolves previews with "${pages.previewResolve}", which no composed module declares`,
+      hint: `add the module that owns "${pages.previewResolve.split('.')[0]}", or drop serve.pages.previewResolve`,
+    })
+  }
+  if (pages?.previewPath && !pages.previewPath.startsWith('/_ket/')) {
+    throw new KetError({
+      code: 'E_PREVIEW_PATH_UNRESERVED',
+      module: spec.name,
+      message: `deployment "${spec.name}" serves previews at "${pages.previewPath}", which a published page could claim`,
+      hint: 'keep the preview path under /_ket/, the namespace no page may be published in',
     })
   }
   if (pages?.menuResolve && !manifest.functions[pages.menuResolve]) {
@@ -1152,6 +1187,7 @@ export async function bootDeployment(
     ...(pages
       ? {
           ...(pages.region ? { pageRegion: pages.region } : {}),
+          pagePrivate: (url: URL) => isPreviewRequest(url),
           pageScope: async (url: URL, req: IncomingMessage) => {
             const resolvedSite = await siteOf(url, req)
             const site = {
@@ -1163,14 +1199,26 @@ export async function bootDeployment(
             // It was hardcoded there, which made i18n untrue on the first tag of every
             // storefront page.
             const locale = resolvedSite?.locale ?? localeOf(url, req)
-            const row = (await ctx.call(
-              pages.resolve,
-              { path: url.pathname, ...(resolvedSite?.id ? { siteId: resolvedSite.id } : {}) },
-              url,
-              req,
-            )) as {
+            // A preview reads by token, not by path: the draft has no address
+            // on the site yet, which is the whole reason a link is needed.
+            const row = (
+              isPreviewRequest(url)
+                ? await ctx.call(
+                    pages.previewResolve as string,
+                    { token: url.searchParams.get('token') ?? '' },
+                    url,
+                    req,
+                  )
+                : await ctx.call(
+                    pages.resolve,
+                    { path: url.pathname, ...(resolvedSite?.id ? { siteId: resolvedSite.id } : {}) },
+                    url,
+                    req,
+                  )
+            ) as {
               id: string
               title: string
+              path?: string
               layout: unknown
               meta?: Record<string, unknown> | null
             } | null
@@ -1195,7 +1243,7 @@ export async function bootDeployment(
               site,
               locale,
               menu,
-              page: { id: row.id, path: url.pathname, title: row.title },
+              page: { id: row.id, path: row.path ?? url.pathname, title: row.title },
               // Whatever the resolver says describes this page. The framework
               // does not name the fields — a module owns them and decides what
               // is public; this only stops hardcoding the answer to "nothing".

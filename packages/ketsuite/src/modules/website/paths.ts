@@ -11,7 +11,7 @@
  * Namespaces reserved even when no module claims them by prefix. `/api` and
  * `/internal/v1` are reserved as families rather than registered as single paths.
  */
-const ALWAYS_RESERVED = ['/api', '/internal/v1'] as const
+const ALWAYS_RESERVED = ['/api', '/internal/v1', '/_ket'] as const
 
 /**
  * The reserved namespaces, derived from what the deployment actually serves.
