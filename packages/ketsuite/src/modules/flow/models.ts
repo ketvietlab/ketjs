@@ -239,6 +239,29 @@ export const models: Record<string, ModelDef> = {
   },
 
   /**
+   * A row to contend on, so two people cannot start a sprint at the same time.
+   *
+   * "A project runs one active sprint" spans rows, so no single-row constraint
+   * can express it, and the model DSL has no partial unique index to hand it
+   * to the database with. Read-then-write inside a transaction is enough on
+   * SQLite, where writers are serialized, and is not enough on PostgreSQL at
+   * READ COMMITTED: two transactions each read zero active sprints and each
+   * write one, and the project ends up with two — which means it has none,
+   * because every screen asking for "the" current sprint gets whichever the
+   * query happened to order first.
+   *
+   * So the invariant is given something to serialize on. Both transactions
+   * update this row first and the second one waits; when it goes on, its next
+   * statement takes a fresh snapshot and sees what the first one did. The same
+   * device `user.SecurityGuard` uses, for the same reason (FLW-019).
+   */
+  ProjectGuard: {
+    scope: 'company',
+    fields: { id: 'id', projectId: 'ref:flow.Project', updatedAt: 'datetime' },
+    indexes: { project: { fields: ['companyId', 'projectId'], unique: true } },
+  },
+
+  /**
    * Which project a reader's board is looking at.
    *
    * A board has to be one project's: `Column` belongs to a project by design,

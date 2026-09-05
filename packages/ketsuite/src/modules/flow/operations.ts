@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { randomUUID } from 'node:crypto'
 import {
   asc,
@@ -73,6 +74,22 @@ export const normalized = (value: unknown): string =>
     .toLowerCase()
 
 export const actorRequired = (ctx: Ctx): string | null => ctx.actor || null
+
+/**
+ * The id of a record a command creates, derived from what the command is
+ * deduplicated under.
+ *
+ * A form that is submitted twice — a double click, a back button, a retry from
+ * a phone that lost its connection — sends the same idempotency key both
+ * times. If the id is fresh on each attempt, the second attempt is a different
+ * record and gets written as one: two issues from one intent. Deriving the id
+ * from the key makes the replay byte-identical, so it lands on the record the
+ * first attempt already made and updates it instead (FLW-033).
+ */
+export const commandRecordId = (namespace: string, key: string): string => {
+  const hex = createHash('sha256').update(`${namespace}\n${key}`).digest('hex')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
+}
 
 export const commandKey = (value: unknown): string | null => {
   const key = String(value ?? '').trim()
@@ -777,12 +794,39 @@ export async function dependenciesFor(
   issueIds: readonly string[],
   includeExternalTargets = false,
 ): Promise<Row[]> {
-  const ids = [...new Set(issueIds.map(String))].slice(0, DEPENDENCY_BATCH)
+  const asked = [...new Set(issueIds.map(String))].slice(0, DEPENDENCY_BATCH)
+  if (!asked.length) return []
+  // The ids arrive from the caller, not from a query this function ran, so the
+  // membership rule has to be applied to them here. Without it, naming an issue
+  // in somebody else's project answered whether it had blockers — a small
+  // answer, and still an answer about a project that is supposed to be
+  // invisible (FLW-018).
+  const I = ctx.table('flow.Issue')
+  const visible = await visibleProjects(ctx)
+  const readable = await ctx.db.all(
+    restrictToVisible(from(I).select(I.id).where(inArray(I.id, asked)), I.projectId, visible),
+  )
+  const ids = readable.map((row) => String(row.id))
   if (!ids.length) return []
   const D = ctx.table('flow.IssueDependency')
   const held = new Set(ids)
   const rows = await ctx.db.all(from(D).where(inArray(D.issueId, ids), eq(D.relation, 'blocks')))
-  return includeExternalTargets ? rows : rows.filter((row) => held.has(String(row.dependsOnIssueId)))
+  // An external target is an issue outside the set that was asked about, which
+  // the map draws an arrow to. It may still be one the caller cannot read, so
+  // the far end is filtered the same way the near end was.
+  if (!includeExternalTargets) return rows.filter((row) => held.has(String(row.dependsOnIssueId)))
+  const targets = [...new Set(rows.map((row) => String(row.dependsOnIssueId)))].filter((id) => !held.has(id))
+  if (!targets.length) return rows
+  const reachable = new Set(
+    (
+      await ctx.db.all(
+        restrictToVisible(from(I).select(I.id).where(inArray(I.id, targets)), I.projectId, visible),
+      )
+    ).map((row) => String(row.id)),
+  )
+  return rows.filter(
+    (row) => held.has(String(row.dependsOnIssueId)) || reachable.has(String(row.dependsOnIssueId)),
+  )
 }
 
 export type SaveIssueInput = {
@@ -1360,6 +1404,20 @@ export async function following(ctx: Ctx, issueId: string): Promise<boolean> {
   return rows.length > 0
 }
 
+/**
+ * Contend on one row per project, so an invariant that spans rows has
+ * something a database can serialize — see `flow.ProjectGuard`.
+ *
+ * The row is made on first use rather than with the project: a project that
+ * never starts a sprint never needs one, and creating it here means projects
+ * that predate this code get one the first time it matters.
+ */
+async function serializeProject(ctx: Ctx, projectId: string): Promise<void> {
+  const id = `guard:${projectId}`
+  await ctx.db.insertIfAbsent('flow.ProjectGuard', { id, projectId, updatedAt: now() })
+  await ctx.db.update('flow.ProjectGuard', { id }, { updatedAt: now() })
+}
+
 export async function startSprint(
   ctx: Ctx,
   input: { id: string; idempotencyKey: string },
@@ -1371,6 +1429,11 @@ export async function startSprint(
     const held = await readableRow(tx, 'flow.Sprint', input.id)
     if (!held) return invalid(issue('id', 'flow.error.notFound'))
     if (held.state !== 'planned') return invalid(issue('id', 'flow.error.invalidSprintState'))
+    // Take the project's guard row before reading, so a second caller doing
+    // the same thing waits here rather than racing past the check below. The
+    // read after it is a new statement and so takes a fresh snapshot, which is
+    // what lets it see a sprint the other transaction has just started.
+    await serializeProject(tx, String(held.projectId))
     // A project runs at most one active sprint at a time, which is what makes
     // "the current sprint" a well-defined thing for the board to show.
     const active = await tx.db.select('flow.Sprint', { projectId: held.projectId, state: 'active' })

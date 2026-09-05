@@ -16,7 +16,7 @@ import {
   stack,
   Tabs,
 } from '../../../ui/index.ts'
-import type { Frame, Tone } from '../../../ui/index.ts'
+import type { Frame, Pager, Tone } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
 import type { AnyRow } from './shared.tsx'
 import { empty } from './shared.tsx'
@@ -30,7 +30,14 @@ const STATE_TONE: Record<string, Tone> = {
 
 export type ProjectsOverview = {
   rows: AnyRow[]
+  /**
+   * Every project this reader has, not the length of the page in front of
+   * them. The two used to be the same number and were not the same thing: a
+   * company past the page size was told a figure that was simply wrong, and
+   * the projects past it had no link to reach them by (FLW-039).
+   */
   projectCount: number
+  pager?: Pager | null
   issueCount: number
   issuesDone: number
   activeCount: number
@@ -217,6 +224,35 @@ export const projectsListScreen = (
             )
           }
         />,
+        // Rendered here rather than handed to `ListPage`, which has no pager of
+        // its own — that belongs to the workspace chrome the board screens use.
+        // A truncated list that looks complete is the failure being fixed, so
+        // the links go somewhere visible rather than nowhere at all.
+        overview.pager
+          ? inline([
+              `${overview.pager.from}–${overview.pager.to} / ${overview.pager.total}`,
+              overview.pager.prev ? (
+                <LinkButton
+                  label={_('flow_backend.action.previous')}
+                  href={overview.pager.prev}
+                  variant="secondary"
+                  size="compact"
+                />
+              ) : (
+                ''
+              ),
+              overview.pager.next ? (
+                <LinkButton
+                  label={_('flow_backend.action.next')}
+                  href={overview.pager.next}
+                  variant="secondary"
+                  size="compact"
+                />
+              ) : (
+                ''
+              ),
+            ])
+          : '',
       ])}
     />,
     { ...frame, chrome: null, topbar: false },
