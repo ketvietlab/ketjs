@@ -337,7 +337,7 @@ const sources = {
   },
   flow: {
     posture: 'permission-bearing',
-    bundles: ['author', 'configure', 'operate', 'project-access', 'view'],
+    bundles: ['author', 'configure', 'operate', 'project-access', 'project-delete', 'view'],
     functions: {
       'board.remember': ['operate', 'operate'],
       'board.scope': ['read', 'view'],
@@ -393,6 +393,11 @@ const sources = {
       'project.access.grant': ['security', 'project-access', 'flow.domain-policy'],
       'project.access.list': ['sensitive', 'project-access', 'flow.domain-policy'],
       'project.access.revoke': ['security', 'project-access', 'flow.domain-policy'],
+      // Ending a project is not configuring one. Its own capability so that a
+      // role which reshapes boards every week cannot destroy one by accident,
+      // and its own policy authority because the act does not come back.
+      'project.delete': ['security', 'project-delete', 'flow.domain-policy'],
+      'project.deletion.list': ['sensitive', 'project-delete', 'flow.domain-policy'],
       'project.editContent': ['operate', 'author'],
       'project.get': ['read', 'view'],
       'project.list': ['read', 'view'],
@@ -1398,6 +1403,7 @@ const capabilityLabels: Record<string, { en: string; vi: string }> = {
   'order-operate': { en: 'Operate orders', vi: 'Vận hành đơn hàng' },
   operate: { en: 'Operate', vi: 'Vận hành' },
   'project-access': { en: 'Read every project', vi: 'Đọc mọi dự án' },
+  'project-delete': { en: 'Delete projects for good', vi: 'Xóa hẳn dự án' },
   'property-reference': { en: 'Reference properties', vi: 'Tham chiếu cơ sở lưu trú' },
   reconcile: { en: 'Reconcile', vi: 'Đối soát' },
   refund: { en: 'Refund', vi: 'Hoàn tiền' },

@@ -2412,6 +2412,7 @@ export const routes: Record<string, RouteEntry> = {
       let fieldErrors: string[] = []
       let tagErrors: string[] = []
       let memberErrors: string[] = []
+      let deleteErrors: string[] = []
       let submitted: Record<string, string> = {}
       let forcedEditor: SettingsEditorKind | undefined
       const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/settings`
@@ -2533,6 +2534,26 @@ export const routes: Record<string, RouteEntry> = {
           fieldErrors = errorsOf(result, _)
           submitted = form
           forcedEditor = 'field'
+        } else if (form.action === 'deleteProject') {
+          // The one command on this screen that does not come back. It answers
+          // to its own authority, not to `flow.configure`, and it refuses
+          // unless the name typed above matches the project's own.
+          const destroyed = (await ctx.call(
+            'flow.project.delete',
+            {
+              projectId,
+              confirmName: form.confirmName ?? '',
+              idempotencyKey: form.idempotencyKey || `${projectId}:delete:${randomUUID()}`,
+            },
+            url,
+            req,
+          )) as AnyRow
+          // Back to the list rather than to this screen: the project this page
+          // is about is on its way out, and reloading it would render a page
+          // for something that will not be there.
+          if (destroyed.ok) return seeOther(inLocale(url, '/admin/flow/projects'))
+          deleteErrors = errorsOf(destroyed, _)
+          submitted = form
         } else if (form.action === 'addMember' || form.action === 'removeMember') {
           // Who may read the project, decided from the project's own screen.
           // Adding is idempotent and carries a key; removing names a person and
@@ -2794,6 +2815,9 @@ export const routes: Record<string, RouteEntry> = {
             memberPicker,
             memberErrors: memberErrors.length ? memberErrors : undefined,
             memberIdempotencyKey: submitted.idempotencyKey || randomUUID(),
+            deleteName: String(project.name ?? ''),
+            deleteErrors: deleteErrors.length ? deleteErrors : undefined,
+            deleteIdempotencyKey: randomUUID(),
             tagUsage: Object.fromEntries(
               tags.map((tag) => [String(tag.id), Number((tag as AnyRow).usage ?? 0)]),
             ),

@@ -1,4 +1,4 @@
-import { asc, defineJob, eq, from, gt, inArray, isNull } from '@ketvietlab/ketjs'
+import { asc, defineJob, deleteFrom, eq, from, gt, inArray, isNull } from '@ketvietlab/ketjs'
 import type { JobContext, JobSpec } from '@ketvietlab/ketjs'
 import { inlineTypes, publicationKey } from './policy.ts'
 
@@ -140,4 +140,50 @@ export const jobs: Record<string, JobSpec> = {
       }
     },
   }),
+}
+
+/** Every effect a purge writes, including the bytes themselves. */
+export const purgeAttachmentEffects = [
+  'read:storage.Attachment',
+  'write:storage.Attachment',
+  'storage:remove',
+] as const
+
+/**
+ * Remove the attachments on a set of records, bytes and all.
+ *
+ * `sweep` already collects objects nothing references, but it waits out a
+ * grace period on purpose — an upload writes the bytes before it records the
+ * row, so collecting eagerly would take an object an in-flight request is
+ * about to point at. A caller deleting the records themselves is in a
+ * different position: the rows are going in the same breath, and somebody has
+ * asked for the data to be gone rather than to become unreachable.
+ *
+ * A `JobContext` because only a job reaches the blob store, which is the same
+ * reason a deletion this size is a job at all.
+ *
+ * Written to be run again. Removing an object that is already gone is not an
+ * error worth stopping for — a purge that crashed halfway has to be able to
+ * finish, and it finishes by repeating itself.
+ */
+export async function purgeAttachments(
+  ctx: JobContext,
+  resModel: string,
+  resIds: readonly string[],
+): Promise<number> {
+  const ids = [...new Set(resIds.map(String).filter(Boolean))]
+  if (!ids.length) return 0
+  const A = ctx.table('storage.Attachment')
+  const rows = await ctx.db.all(from(A).where(eq(A.resModel, resModel), inArray(A.resId, ids)))
+  if (!rows.length) return 0
+  for (const row of rows) {
+    if (ctx.signal.aborted) throw ctx.signal.reason
+    // The public projection is a copy of the same bytes under another key, so
+    // both go — leaving the published one behind would keep the file readable
+    // by anybody holding its URL, which is the opposite of what was asked.
+    for (const key of [row.storeKey, row.publicStoreKey])
+      if (key) await ctx.storage.remove(String(key)).catch(() => undefined)
+  }
+  await ctx.db.del(deleteFrom(A).where(eq(A.resModel, resModel), inArray(A.resId, ids)))
+  return rows.length
 }

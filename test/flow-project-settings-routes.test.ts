@@ -175,3 +175,54 @@ test('project settings route shows who is on the project and changes it', async 
   const without = await (await app.client.get(path)).text()
   assert.doesNotMatch(without, /Mai/)
 })
+
+/**
+ * The delete block, which is the screen half of FLW-DEC-018.
+ *
+ * A route test rather than a screen test because what makes the confirmation
+ * worth anything is that the wrong name is refused by the thing behind the
+ * button, not by the button.
+ */
+test('project settings route refuses a delete until the name is typed exactly', async (t) => {
+  const app = await boot(t)
+  const path = '/admin/flow/projects/platform/settings?lang=en'
+
+  const opened = await (await app.client.get(path)).text()
+  assert.match(opened, /Delete this project/)
+  assert.match(opened, /cannot be undone/)
+
+  // A near miss is a miss, and the screen comes back saying so rather than
+  // redirecting as though something happened.
+  const refused = await app.client.post(
+    path,
+    new URLSearchParams({
+      action: 'deleteProject',
+      confirmName: 'platform',
+      idempotencyKey: 'refuse-delete-1',
+    }),
+    post,
+  )
+  assert.equal(refused.status, 200)
+  const stillHere = await (await app.client.get(path)).text()
+  assert.match(stillHere, /Platform/)
+
+  // The right name sends the caller back to the list, because the page they
+  // were on is about to stop existing.
+  const accepted = await app.client.post(
+    path,
+    new URLSearchParams({
+      action: 'deleteProject',
+      confirmName: 'Platform',
+      idempotencyKey: 'accept-delete-1',
+    }),
+    post,
+  )
+  assert.equal(accepted.status, 303)
+  assert.equal(accepted.headers.get('location'), '/admin/flow/projects?lang=en')
+
+  // The record of the request is already there, before the queue has run.
+  const asked = (await app.client.call<Row[]>('flow.project.deletion.list', {})).value ?? []
+  assert.equal(asked.length, 1)
+  assert.equal(String(asked[0]?.projectName), 'Platform')
+  assert.equal(String(asked[0]?.state), 'requested')
+})
