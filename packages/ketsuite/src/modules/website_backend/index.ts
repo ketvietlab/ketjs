@@ -84,6 +84,9 @@ export default defineModule({
       'preview.revokeHint':
         'Mỗi lần mở màn hình này lại sinh thêm một token. Thu hồi sẽ vô hiệu toàn bộ liên kết đã phát cho trang này.',
       'field.search': 'Tìm theo tiêu đề',
+      'submissions.exportScoped': 'Chỉ xuất những dòng đang hiện theo bộ lọc trạng thái.',
+      'preflight.scopeAll': 'Mọi trang',
+      'preflight.scopePublished': 'Chỉ trang đã xuất bản',
       'publish.at': 'Xuất bản lúc',
       'publish.atHint': 'Để trống là xuất bản ngay. Đặt thời điểm tương lai để hẹn giờ.',
       'publish.downHint':
@@ -412,6 +415,9 @@ export default defineModule({
       'preview.revokeHint':
         'Every visit to this screen mints another token. Revoking calls back every link ever issued for this entry.',
       'field.search': 'Search titles',
+      'submissions.exportScoped': 'Only the rows the status filter is showing.',
+      'preflight.scopeAll': 'Every page',
+      'preflight.scopePublished': 'Published pages only',
       'publish.at': 'Publish at',
       'publish.atHint': 'Leave empty to publish now. Set a time in the future to schedule it.',
       'publish.downHint':
