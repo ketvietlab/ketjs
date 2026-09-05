@@ -190,3 +190,36 @@ test('an upgrade shows a field losing or gaining its classification', () => {
   assert.ok(gained)
   assert.match(gained.message, /now personal data/)
 })
+
+test("a module extending somebody else's model can classify what it adds", () => {
+  // A bridge is exactly the module that adds a phone number to another module's
+  // partner, so it is exactly the module that has to be able to say it is personal.
+  const bridge = defineModule({
+    name: 'bridge',
+    depends: ['plain'],
+    extend: { 'plain.Person': { phone: { type: 'text?', personal: true } } },
+  })
+  const manifest = compose([classified, bridge], { headless: true })
+  const phone = manifest.models['plain.Person']!.fields.phone!
+
+  assert.equal(phone.base, 'text')
+  assert.equal(phone.optional, true)
+  assert.equal(phone.by, 'bridge')
+  assert.equal(phone.personal, true)
+
+  const inventory = classificationInventory(manifest)
+  assert.ok(
+    inventory.personal.some((entry) => entry.field === 'phone' && entry.by === 'bridge'),
+    'the inventory names the module that contributed it, so an owner can be found',
+  )
+
+  const badExtension = defineModule({
+    name: 'sloppy',
+    depends: ['plain'],
+    extend: { 'plain.Person': { tag: { type: 'text?', persnal: true } as never } },
+  })
+  assert.throws(
+    () => compose([classified, badExtension], { headless: true }),
+    (error: unknown) => /unknown field key\(s\) persnal/.test(String((error as Error).message)),
+  )
+})
