@@ -10,6 +10,7 @@ import { sqliteStore } from './config.ts'
 import { jobDefinition } from './jobs.ts'
 import { createQueue, JOB_CHANNEL } from './queue.ts'
 import { claimDue } from './schedule.ts'
+import { pruneRateSlots } from './ratelimit.ts'
 import { KetError } from '../kernel/errors.ts'
 import { bootRuntime } from './runtime.ts'
 import { traceOf } from './log/index.ts'
@@ -200,6 +201,10 @@ export async function bootWorker(
   const refreshMs = spec.worker.tenantRefreshMs ?? 60_000
   const sweepMs = Math.max(1_000, spec.worker.scheduleSweepMs ?? 30_000)
   const scheduled = Object.values(manifest.jobs).some((meta) => meta.schedule)
+  // Only when the deployment actually limits something. Pruning unconditionally
+  // would create the table in every tenant that never wanted one.
+  const limited = Boolean(spec.serve?.rateLimit)
+  const pruneRateEveryMs = 3_600_000
   const leaseMs = spec.worker.leaseMs ?? 60_000
   const shutdownGrace = spec.worker.shutdownGraceMs ?? 15_000
   const maxConcurrency = spec.serve?.tenants ? (spec.serve.tenants.max ?? 32) : Infinity
@@ -218,6 +223,7 @@ export async function bootWorker(
   const controllers = new Map<string, AbortController>()
   const active = new Map<string, number>()
   const rescuedAt = new Map<string, number>()
+  const ratePrunedAt = new Map<string, number>()
   const totalActive = () => [...active.values()].reduce((sum, count) => sum + count, 0)
 
   const refresh = async () => {
@@ -469,6 +475,13 @@ export async function bootWorker(
         if (now().getTime() - (rescuedAt.get(key) ?? 0) >= Math.max(1_000, Math.floor(leaseMs / 3))) {
           await queue.rescue()
           rescuedAt.set(key, now().getTime())
+        }
+        // Counters for keys nobody will use again would otherwise grow forever.
+        // On the pass that already holds this tenant's lease, once an hour.
+        if (limited && now().getTime() - (ratePrunedAt.get(key) ?? 0) >= pruneRateEveryMs) {
+          ratePrunedAt.set(key, now().getTime())
+          const { removed } = await pruneRateSlots(tenant.adapter, { now: now() })
+          if (removed) logger.child({ tenant: key || null }).info('rate_pruned', { removed })
         }
         for (const [name, limit] of Object.entries(queues)) {
           const room = Math.min(limit - (active.get(name) ?? 0), maxConcurrency - totalActive())

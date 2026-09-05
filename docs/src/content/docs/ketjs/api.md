@@ -81,6 +81,7 @@ Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision
 | `createStreams`, `memoryStreamStore`, `dbStreamStore` | Create resumable stream writers and backing stores. |
 | `createQueue`, `queueFor`, `JOB_CHANNEL` | Manage durable job state and queue wake-up channels. |
 | `validateSchedule`, `tickAt`, `ticksBetween`, `parseEvery`, `claimDue` | Read a job schedule, and claim its due tick in one tenant. |
+| `claimRateSlot`, `pruneRateSlots` | Spend one slot of a durable per-caller allowance, and drop stale counters. |
 | `createIdempotency` | Persist and replay idempotent operation results. |
 | `effectTransport`, `memoryTransport`, `unavailableTransport` | Execute or test declared outbound messages. |
 | `validateOutboundMessage` | Validate an outbound transport payload. |

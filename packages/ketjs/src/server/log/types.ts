@@ -142,6 +142,8 @@ export const CORE_EVENTS = [
   'job_discarded',
   'job_cancelled',
   'job_ignored_abort',
+  'rate_limited',
+  'rate_pruned',
   'schedule_fired',
   'schedule_error',
   'worker_tick_error',

@@ -34,6 +34,7 @@ import { html, each, renderToString } from '@ketvietlab/ketjs-view'
 import { sqliteStore } from './config.ts'
 import { bootRuntime } from './runtime.ts'
 import { traceOf } from './log/index.ts'
+import type { RatePolicy } from './ratelimit.ts'
 import type { Logger, OpenLog } from './log/index.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
 import { namespacedStorage, storageFromConfig } from './storage/index.ts'
@@ -275,6 +276,14 @@ export type ServeSpec = {
   ) => string | null | Promise<string | null>
   /** Maximum buffered body accepted by the generic JSON function transport. */
   maxJsonBodyBytes?: number
+  /**
+   * A ceiling on how often one caller may reach a route, or null for no ceiling.
+   *
+   * Per-request rather than global on purpose: a durable check costs a database
+   * round trip, so pointing it at everything hands an attacker a lever. Name the
+   * routes where repetition is the abuse.
+   */
+  rateLimit?: (ctx: ServeContext, url: URL, req: IncomingMessage) => RatePolicy | null
   /**
    * Turn on sessions. Present means the X-Ket-Company shim is gone and identity
    * comes from a signed cookie; absent means the shim stays and the banner says so.
@@ -1002,6 +1011,7 @@ export async function bootDeployment(
       ? { resolveStream: (id, url, req) => serve.resolveStream!(ctx, id, url, req) }
       : {}),
     ...(serve.maxJsonBodyBytes !== undefined ? { maxJsonBodyBytes: serve.maxJsonBodyBytes } : {}),
+    ...(serve.rateLimit ? { rateLimit: (url, req) => serve.rateLimit!(ctx, url, req) } : {}),
     /**
      * The HTTP layer gets a pool whose leases go through the tenant runtime, not
      * the raw one.

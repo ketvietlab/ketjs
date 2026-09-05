@@ -2233,3 +2233,47 @@ see coming — mitigated only by the schedule being in the manifest and in the u
 
 **Reversible:** the schedule forms, yes — additive. The two events added to the log catalogue, no,
 by D69's argument.
+## D72 — One durable ceiling, applied where repetition is the abuse
+**The gap, found by counting.** Seventeen modules touched rate limiting and there were three
+incompatible implementations: a declarative `{ action, limit, windowMs }` on channel routes backed by
+`website.claimChannelRateSlot`, a `lockedUntil` column on the customer account, and a `blockedUntil`
+plus failure counter on the user. The first is the right shape and lives in the wrong place — it makes
+the API facade depend on the storefront module for a purely infrastructural concern.
+
+**Chosen:** `claimRateSlot(adapter, { action, key, limit, windowMs })` over a framework `ket_rate`
+table in the tenant's own database, plus a `serve.rateLimit` resolver the HTTP boundary enforces
+before a route is chosen.
+
+**Durable, because the alternative is a lie.** A Map in one process means two replicas enforce two
+independent limits and the real ceiling is whatever the load balancer decides.
+
+**Per-route rather than global, and this is the important part.** A durable check costs a database
+round trip. Applying it to all traffic would hand an attacker a cheaper lever than the one it removes,
+so the resolver returns null for almost everything. This limiter bounds what one *identified* caller
+may repeat; volume belongs in front of the process. Saying so plainly is better than shipping
+something that looks like DDoS protection and is not.
+
+**Fixed window, and the cost is stated** rather than hidden: a caller can spend a full allowance at
+the end of one window and another at the start of the next, so the worst case across a boundary is
+twice the limit. A token bucket removes that and quietly stops meaning `limit per windowMs`, which is
+what the existing contract says and what a person reading it expects.
+
+**The row is a counter, not a location record.** `key` — an account, a hashed address, a device — is
+hashed with the action before storage. The existing implementation stored it raw. A rate-limit table
+has no reason to also answer "who was here", and the same argument was already made for `trace` in D69.
+
+**Refusing under contention.** The read-then-compare-and-set retries, because every replica checking
+one counter at once is the situation the limiter exists for rather than a fault. After eight lost
+races it refuses: allowing would make contention a way through the limit.
+
+**What was deliberately left alone.** Account lockout — `user.blockedUntil`, `website.lockedUntil` —
+stays domain state. It is business data: an administrator unlocks it, a screen shows it, it belongs to
+the security model rather than to infrastructure. Moving it into a framework table would take it out of
+the data the domain can query. The line drawn here is that a ceiling on repetition is infrastructure
+and a locked account is a fact about an account.
+
+**Cost:** a database round trip on every limited route, one table per tenant that uses it, and a
+counter that has to be pruned — the worker does it hourly on a pass it already holds the lease for, so
+a deployment with no worker has to call `pruneRateSlots` itself.
+
+**Reversible:** yes. Nothing here is in the manifest, and the two log events are additive.
