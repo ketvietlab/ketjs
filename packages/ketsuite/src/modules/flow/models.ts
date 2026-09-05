@@ -151,6 +151,67 @@ export const models: Record<string, ModelDef> = {
    * When a second module needs it, that is the moment to lift it — not this
    * one.
    */
+  /**
+   * Who is on a project.
+   *
+   * The one thing that decides what a person sees. A permission bundle answers
+   * *what* somebody may do — read, work, write documents, configure — and this
+   * answers *which projects they may do it to*. Both have to be true, and they
+   * are separate questions: a project administrator is not automatically on
+   * every project, and being on a project does not make you able to reconfigure
+   * it (FLW-DEC-012, FLW-DEC-008).
+   *
+   * There is deliberately no role column. A second authority axis inside the
+   * project would have to be intersected with the bundles at every call site,
+   * which is a second place to get it wrong; if per-project roles are ever
+   * needed they are their own decision, not a field added quietly here.
+   *
+   * A project with no rows here is visible to nobody. Closed is the only safe
+   * default for a model whose whole purpose is to keep some projects unread.
+   */
+  ProjectMember: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      projectId: 'ref:flow.Project',
+      userId: 'ref:user.User',
+      /** When they joined, so a members list can be ordered by something real. */
+      addedAt: 'datetime',
+      addedByUserId: 'ref:user.User?',
+    },
+    indexes: {
+      // One row per person per project: adding somebody twice is the same fact.
+      member: { fields: ['companyId', 'projectId', 'userId'], unique: true },
+      // The hot read: every list screen starts from "which projects are mine".
+      mine: { fields: ['companyId', 'userId'] },
+    },
+  },
+
+  /**
+   * One person who reads every project in the company.
+   *
+   * The business-manager alternative to making somebody a technical superuser,
+   * and the same device `crm.AccessGrant` is. It exists so that membership can
+   * be administered by somebody who is not first a member of everything, and so
+   * that a project whose members have all left is not unreachable.
+   *
+   * A row, not a permission bundle: a domain function cannot ask the kernel what
+   * the caller may call, and a company-wide reach ought to be visible as data
+   * that somebody can list, grant and revoke.
+   */
+  ProjectAccessGrant: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      userId: 'ref:user.User',
+      addedAt: 'datetime',
+      addedByUserId: 'ref:user.User?',
+    },
+    indexes: {
+      holder: { fields: ['companyId', 'userId'], unique: true },
+    },
+  },
+
   BoardScope: {
     scope: 'company',
     fields: {

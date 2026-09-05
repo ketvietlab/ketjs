@@ -14,6 +14,7 @@ import { asc, desc, eq, from, ilike, inArray, isNull, or } from '@ketvietlab/ket
 import type { Ctx, Row } from '@ketvietlab/ketjs'
 import { actorRequired, commandKey, invalid, issue, n, now } from './operations.ts'
 import type { FlowResult } from './operations.ts'
+import { restrictToVisible, visibleProjects } from './membership.ts'
 
 export type SavePageInput = {
   id: string
@@ -339,11 +340,18 @@ export async function listPages(
   const matching = needle
     ? [or(ilike(P.title, `%${wildcard(needle)}%`, true), ilike(P.previewText, `%${wildcard(needle)}%`, true))]
     : []
+  // With a project named the function key has already checked it; without one
+  // this is a search across every project there is, and that is the shape the
+  // filter has to catch.
+  const visible = await visibleProjects(ctx)
   const rows = await ctx.db.all(
-    from(P)
-      .where(...where, ...matching)
-      .orderBy(...(args.projectId ? [asc(P.sequence), asc(P.title)] : [desc(P.updatedAt)]))
-      .limit(Math.max(1, Math.min(500, n(args.limit ?? 300)))),
+    restrictToVisible(
+      from(P)
+        .where(...where, ...matching)
+        .orderBy(...(args.projectId ? [asc(P.sequence), asc(P.title)] : [desc(P.updatedAt)])),
+      P.projectId,
+      visible,
+    ).limit(Math.max(1, Math.min(500, n(args.limit ?? 300)))),
   )
   // Counted over the branch as it really is, not over the rows that matched: a
   // page with three children has three whether or not the search kept them, and
@@ -388,19 +396,25 @@ export async function listAllPages(
 ): Promise<{ rows: Array<PageRow & { projectName: string }>; total: number }> {
   const P = ctx.table('flow.Page')
   const needle = String(args.search ?? '').trim()
-  const query = from(P)
-    .where(
-      eq(P.active, true),
-      ...(needle
-        ? [
-            or(
-              ilike(P.title, `%${wildcard(needle)}%`, true),
-              ilike(P.previewText, `%${wildcard(needle)}%`, true),
-            ),
-          ]
-        : []),
-    )
-    .orderBy(desc(P.updatedAt), asc(P.id))
+  // Every project's documents means every project this caller may see.
+  const visible = await visibleProjects(ctx)
+  const query = restrictToVisible(
+    from(P)
+      .where(
+        eq(P.active, true),
+        ...(needle
+          ? [
+              or(
+                ilike(P.title, `%${wildcard(needle)}%`, true),
+                ilike(P.previewText, `%${wildcard(needle)}%`, true),
+              ),
+            ]
+          : []),
+      )
+      .orderBy(desc(P.updatedAt), asc(P.id)),
+    P.projectId,
+    visible,
+  )
   const cursor = Math.max(0, n(args.cursor ?? 0))
   const limit = Math.max(1, Math.min(200, n(args.limit ?? 50)))
   const [total, rows] = await Promise.all([

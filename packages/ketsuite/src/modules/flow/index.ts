@@ -6,8 +6,9 @@ import { models } from './models.ts'
 export default defineModule({
   name: 'flow',
   // 0.2.0 adds the backlog index; no data change, so the migration is the
-  // index alone.
-  version: '0.2.0',
+  // index alone. 0.3.0 adds ProjectMember, which decides what anybody sees —
+  // an empty table means an empty Flow until somebody is added to a project.
+  version: '0.3.0',
   depends: ['company', 'user', 'mail', 'storage'],
   title: 'Flow',
   summary: 'Projects, issues, sprints, and epics.',

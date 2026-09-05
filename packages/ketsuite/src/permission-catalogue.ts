@@ -337,7 +337,7 @@ const sources = {
   },
   flow: {
     posture: 'permission-bearing',
-    bundles: ['author', 'configure', 'operate', 'view'],
+    bundles: ['author', 'configure', 'operate', 'project-access', 'view'],
     functions: {
       'board.remember': ['operate', 'operate'],
       'board.scope': ['read', 'view'],
@@ -386,6 +386,18 @@ const sources = {
       'page.reorder': ['operate', 'operate'],
       'page.restore': ['operate', 'operate'],
       'page.save': ['operate', 'operate'],
+      // Who is on a project decides what they may read, which is a decision
+      // about the project rather than a day of work in it.
+      'project.member.add': ['configure', 'configure', 'flow.configuration-audit'],
+      'project.member.remove': ['configure', 'configure', 'flow.configuration-audit'],
+      'project.member.list': ['read', 'view'],
+      // The widest reach Flow grants: reading every project regardless of who
+      // was added to it. Its own capability, so nobody holds it by holding
+      // something else, and a policy authority because it is the answer to
+      // "who can see the project we hid".
+      'project.access.grant': ['security', 'project-access', 'flow.domain-policy'],
+      'project.access.revoke': ['security', 'project-access', 'flow.domain-policy'],
+      'project.access.list': ['sensitive', 'project-access', 'flow.domain-policy'],
       'project.editContent': ['operate', 'author'],
       'project.get': ['read', 'view'],
       'project.list': ['read', 'view'],
@@ -1380,6 +1392,7 @@ const capabilityLabels: Record<string, { en: string; vi: string }> = {
   'night-audit': { en: 'Run night audit', vi: 'Chạy kiểm toán đêm' },
   'order-operate': { en: 'Operate orders', vi: 'Vận hành đơn hàng' },
   operate: { en: 'Operate', vi: 'Vận hành' },
+  'project-access': { en: 'Read every project', vi: 'Đọc mọi dự án' },
   'property-reference': { en: 'Reference properties', vi: 'Tham chiếu cơ sở lưu trú' },
   reconcile: { en: 'Reconcile', vi: 'Đối soát' },
   refund: { en: 'Refund', vi: 'Hoàn tiền' },

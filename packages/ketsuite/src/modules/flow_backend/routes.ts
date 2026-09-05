@@ -11,6 +11,7 @@ import { modalWorkspace } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
   assigneeControl,
+  memberControl,
   epicControl,
   issueControl,
   mentionControl,
@@ -2410,6 +2411,7 @@ export const routes: Record<string, RouteEntry> = {
       let typeErrors: string[] = []
       let fieldErrors: string[] = []
       let tagErrors: string[] = []
+      let memberErrors: string[] = []
       let submitted: Record<string, string> = {}
       let forcedEditor: SettingsEditorKind | undefined
       const endpoint = `/admin/flow/projects/${encodeURIComponent(projectId)}/settings`
@@ -2531,6 +2533,25 @@ export const routes: Record<string, RouteEntry> = {
           fieldErrors = errorsOf(result, _)
           submitted = form
           forcedEditor = 'field'
+        } else if (form.action === 'addMember' || form.action === 'removeMember') {
+          // Who may read the project, decided from the project's own screen.
+          // Adding is idempotent and carries a key; removing names a person and
+          // needs none of the retry protection, because taking somebody off
+          // twice is the same as taking them off once.
+          const adding = form.action === 'addMember'
+          const changed = (await ctx.call(
+            adding ? 'flow.project.member.add' : 'flow.project.member.remove',
+            {
+              projectId,
+              userId: form.userId ?? '',
+              idempotencyKey: form.idempotencyKey || randomUUID(),
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (changed.ok) return seeOther(inLocale(url, endpoint))
+          memberErrors = errorsOf(changed, _)
+          submitted = form
         } else if (form.action === 'archiveTag') {
           const archived = (await ctx.call('flow.tag.archive', { id: form.id ?? '' }, url, req)) as AnyRow
           if (archived.ok) return seeOther(inLocale(url, endpoint))
@@ -2571,11 +2592,12 @@ export const routes: Record<string, RouteEntry> = {
           forcedEditor = 'tag'
         } else return text('unknown action', { status: 400 })
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [columns, types, fields, tags] = await Promise.all([
+      const [columns, types, fields, tags, members] = await Promise.all([
         ctx.call('flow.column.list', { projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.issueType.list', { projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.field.list', { projectId }, url, req) as Promise<AnyRow[]>,
         ctx.call('flow.tag.list', {}, url, req) as Promise<AnyRow[]>,
+        ctx.call('flow.project.member.list', { projectId }, url, req) as Promise<AnyRow[]>,
       ])
       const editColumn = url.searchParams.get('editColumnId')
       const editType = url.searchParams.get('editTypeId')
@@ -2719,6 +2741,14 @@ export const routes: Record<string, RouteEntry> = {
             : editorKind === 'field'
               ? fieldErrors
               : tagErrors
+      // Resolved here rather than in the screen callback, which is not async —
+      // the same reason the brief is read here.
+      const memberPicker = await memberControl(ctx, url, req, _, {
+        id: 'flow-project-member',
+        // Nothing preloaded: the picker searches the company's users itself,
+        // and the people already on the project are the ones not worth offering.
+        users: [],
+      })
       const brief = await ctx.joint(url, req, 'flow_backend:screen.project', {
         docId: projectId,
         base: '/admin/flow/projects',
@@ -2760,6 +2790,10 @@ export const routes: Record<string, RouteEntry> = {
             ],
             archived: project.active === false,
             profileErrors: projectErrors.length ? projectErrors : undefined,
+            members,
+            memberPicker,
+            memberErrors: memberErrors.length ? memberErrors : undefined,
+            memberIdempotencyKey: submitted.idempotencyKey || randomUUID(),
             tagUsage: Object.fromEntries(
               tags.map((tag) => [String(tag.id), Number((tag as AnyRow).usage ?? 0)]),
             ),
