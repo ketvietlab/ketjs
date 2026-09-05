@@ -1,10 +1,42 @@
 import { KetError } from '../kernel/errors.ts'
+import { dateTimeFormatter } from '../kernel/i18n.ts'
 
 export type GroupInterval = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
+/**
+ * The closed set of bucketing intervals.
+ *
+ * `GroupInterval` is only a compile-time type: a value that arrives as JSON — a
+ * `listState.groupBy[].interval` an agent or a form sends — has never been checked
+ * against it by the time it reaches the query builder. The Postgres dialect
+ * interpolates the interval into `DATE_TRUNC('<interval>', …)` (SQLite binds it),
+ * so an unchecked string there is SQL, not data. This is the guard that keeps the
+ * type's promise at runtime, at the one boundary where being wrong is an injection.
+ */
+export const GROUP_INTERVALS: readonly GroupInterval[] = ['day', 'week', 'month', 'quarter', 'year']
+
+export const isGroupInterval = (value: unknown): value is GroupInterval =>
+  typeof value === 'string' && (GROUP_INTERVALS as readonly string[]).includes(value)
+
+export const assertGroupInterval = (value: unknown): GroupInterval => {
+  if (!isGroupInterval(value))
+    throw new KetError({
+      code: 'E_GROUP_INTERVAL',
+      message: `invalid group interval ${JSON.stringify(value)}`,
+      hint: `interval must be one of ${GROUP_INTERVALS.join(', ')}`,
+    })
+  return value
+}
+
+const validTimezones = new Set<string>()
+const datePartFormatters = new Map<string, Intl.DateTimeFormat>()
+const localPartFormatters = new Map<string, Intl.DateTimeFormat>()
+
 export const isTimezone = (value: string): boolean => {
+  if (validTimezones.has(value)) return true
   try {
-    new Intl.DateTimeFormat('en', { timeZone: value }).format()
+    dateTimeFormatter('en', { timeZone: value })
+    validTimezones.add(value)
     return true
   } catch {
     return false
@@ -17,18 +49,43 @@ export const assertTimezone = (value: string): string => {
   return value
 }
 
+const datePartFormatter = (timezone: string): Intl.DateTimeFormat => {
+  const held = datePartFormatters.get(timezone)
+  if (held) return held
+  const formatter = dateTimeFormatter('en-CA', {
+    timeZone: assertTimezone(timezone),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  datePartFormatters.set(timezone, formatter)
+  return formatter
+}
+
+const localPartFormatter = (timezone: string): Intl.DateTimeFormat => {
+  const held = localPartFormatters.get(timezone)
+  if (held) return held
+  const formatter = dateTimeFormatter('en-CA', {
+    timeZone: assertTimezone(timezone),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
+  localPartFormatters.set(timezone, formatter)
+  return formatter
+}
+
 const partsIn = (value: unknown, timezone: string): { year: number; month: number; day: number } | null => {
   if (value == null) return null
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value))
   if (dateOnly) return { year: Number(dateOnly[1]), month: Number(dateOnly[2]), day: Number(dateOnly[3]) }
   const date = new Date(String(value))
   if (Number.isNaN(date.getTime())) return null
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: assertTimezone(timezone),
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date)
+  const parts = datePartFormatter(timezone).formatToParts(date)
   const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value)
   return { year: get('year'), month: get('month'), day: get('day') }
 }
@@ -51,16 +108,7 @@ export function dateBucket(value: unknown, interval: GroupInterval, timezone = '
 }
 
 const localPartsAt = (instant: number, timezone: string) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: assertTimezone(timezone),
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date(instant))
+  const parts = localPartFormatter(timezone).formatToParts(new Date(instant))
   const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value)
   return {
     year: get('year'),

@@ -1,8 +1,74 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
-import type { Row } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { defineDeployment, defineFn, defineModule, type Row } from '@ketvietlab/ketjs'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import {
+  applyLoyaltyOrderReward,
+  finalizeOrderLoyalty,
+  loyaltyOrderFunctionSpecs,
+  loyaltyPosFunctionSpecs,
+  materializePosLoyaltyReward,
+  posLoyaltyOrderSnapshot,
+  reverseOrderLoyaltyPortion,
+} from '@ketvietlab/ketsuite'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
+
+const loyaltyTransactionBridge = defineModule({
+  name: 'loyalty_transaction_bridge_test',
+  depends: ['loyalty', 'pos', 'product'],
+  functions: {
+    finalize: defineFn({
+      input: { order: 'json' },
+      effects: [...(loyaltyOrderFunctionSpecs['order.finalize']?.effects ?? [])],
+      agent: true,
+      handler: (ctx, args) => ctx.tx((tx) => finalizeOrderLoyalty(tx, args, { inTransaction: true })),
+    }),
+    reversePortion: defineFn({
+      input: {
+        orderType: 'text',
+        orderId: 'text',
+        reversalId: 'text',
+        portion: 'decimal',
+        complete: 'bool?',
+      },
+      effects: [...(loyaltyOrderFunctionSpecs['order.reversePortion']?.effects ?? [])],
+      agent: true,
+      handler: (ctx, args) => ctx.tx((tx) => reverseOrderLoyaltyPortion(tx, args, { inTransaction: true })),
+    }),
+    applyPosReward: defineFn({
+      input: { orderId: 'id', programId: 'id', rewardId: 'id' },
+      effects: [
+        ...(loyaltyPosFunctionSpecs.applyReward?.effects ?? []),
+        ...(loyaltyOrderFunctionSpecs.applyReward?.effects ?? []),
+      ],
+      agent: true,
+      handler: (ctx, args) =>
+        ctx.tx(async (tx) => {
+          const order = await posLoyaltyOrderSnapshot(tx, String(args.orderId))
+          if (!order) return { ok: false }
+          const applied = await applyLoyaltyOrderReward(
+            tx,
+            { order, programId: args.programId, rewardId: args.rewardId },
+            { inTransaction: true },
+          )
+          if (applied.ok !== true) return applied
+          const materialized = await materializePosLoyaltyReward(
+            tx,
+            String(args.orderId),
+            String(args.programId),
+            applied.reward as Row,
+          )
+          return (materialized as Row).ok === true ? applied : materialized
+        }),
+    }),
+  },
+})
+
+const loyaltyTransactionDeployment = defineDeployment({
+  ...ketsuite,
+  name: 'loyalty_transaction_test',
+  modules: [...ketsuite.modules, loyaltyTransactionBridge],
+})
 
 type Call = <T = unknown>(
   name: string,
@@ -10,8 +76,8 @@ type Call = <T = unknown>(
   options?: { idempotencyKey?: string },
 ) => Promise<T>
 
-const bootLoyalty = async (t: TestContext, worker = false) => {
-  const e2e = await createTestApp(ketsuite, { worker })
+const bootLoyalty = async (t: TestContext, worker = false, deployment = ketsuite) => {
+  const e2e = await createTestDeployment(deployment, { worker })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branches: null }
   const fixture = (name: string, input: Record<string, unknown>, at = scope) =>
@@ -138,8 +204,8 @@ const snapshot = (orderId: string, total = 100, date = new Date().toISOString())
       id: `${orderId}:line`,
       productId: 'fruit-box',
       quantity: 1,
-      untaxed: total,
-      total,
+      untaxed: String(total),
+      total: String(total),
       lineKind: 'product',
     },
   ],
@@ -150,6 +216,22 @@ test('loyalty HTTP E2E: admin screens create, edit, archive and localize program
   const empty = await e2e.client.get('/admin/loyalty/programs')
   assert.equal(empty.status, 200)
   assert.match(await empty.text(), /Chương trình Loyalty/)
+
+  // Every list, on an empty database, before anything exists to show. The
+  // figures above each one are aggregate queries, and an aggregate the store
+  // refuses is a 500 nobody sees until they open the page — which is how the
+  // ledger shipped broken while every other loyalty test passed.
+  for (const path of [
+    '/admin/loyalty',
+    '/admin/loyalty/programs',
+    '/admin/loyalty/wallets',
+    '/admin/loyalty/memberships',
+    '/admin/loyalty/ledger',
+    '/admin/loyalty/ledger?period=all',
+  ]) {
+    const page = await e2e.client.get(path)
+    assert.equal(page.status, 200, `${path} answered ${page.status}`)
+  }
 
   const created = await e2e.client.post(
     '/admin/loyalty/programs',
@@ -187,9 +269,17 @@ test('loyalty HTTP E2E: admin screens create, edit, archive and localize program
     discountMode: 'percent',
     discountApplicability: 'order',
   })
+  // Rules and rewards are set up on separate occasions and each carries its own
+  // form, so each has its own tab — stacked, adding a reward meant scrolling past
+  // every rule to reach the form for it.
+  const rulesTab = await (await e2e.client.get(`${location}?tab=rules`)).text()
+  assert.match(rulesTab, />5</)
+  const rewardsTab = await (await e2e.client.get(`${location}?tab=rewards`)).text()
+  assert.match(rewardsTab, /Tặng giỏ trái cây/)
+  // And the counts are on the tabs themselves, so the overview says what is
+  // there without anyone opening either.
   const populated = await (await e2e.client.get(location)).text()
-  assert.match(populated, /Tặng giỏ trái cây/)
-  assert.match(populated, />5</)
+  assert.match(populated, /data-ui="tabs"/)
 
   await e2e.client.form(location, { action: 'archive' })
   const archived = await (await e2e.client.get(location)).text()
@@ -265,6 +355,35 @@ test('loyalty HTTP E2E: reservation, concurrent redeem, finalize retry and rever
   assert.equal((wallet.ledger as Row[]).filter((entry) => entry.operation === 'reverse').length, 2)
 })
 
+test('loyalty transaction helper joins a channel-owned transaction without nesting', async (t) => {
+  const { call } = await bootLoyalty(t, false, loyaltyTransactionDeployment)
+  assert.equal((await saveProgram(call)).ok, true)
+  assert.equal((await saveRule(call)).ok, true)
+
+  const finalized = await call<Row>('loyalty_transaction_bridge_test.finalize', {
+    order: snapshot('transaction-order'),
+  })
+  assert.equal(finalized.ok, true)
+  let wallet = await call<Row>('loyalty.wallet.get', {
+    partnerId: 'customer',
+    programId: 'program',
+  })
+  assert.equal(wallet.balance, 2)
+  assert.equal((wallet.ledger as Row[]).filter((entry) => entry.sourceId === 'transaction-order').length, 1)
+
+  const reversed = await call<Row>('loyalty_transaction_bridge_test.reversePortion', {
+    orderType: 'sale',
+    orderId: 'transaction-order',
+    reversalId: 'transaction-return',
+    portion: '1',
+    complete: true,
+  })
+  assert.equal(reversed.ok, true)
+  wallet = await call<Row>('loyalty.wallet.get', { id: wallet.id })
+  assert.equal(wallet.balance, 0)
+  assert.equal((wallet.ledger as Row[]).filter((entry) => entry.operation === 'reverse').length, 1)
+})
+
 test('loyalty HTTP E2E: promotion code is applied through the public HTTP boundary', async (t) => {
   const { call } = await bootLoyalty(t)
   await saveProgram(call, {
@@ -291,7 +410,7 @@ test('loyalty HTTP E2E: promotion code is applied through the public HTTP bounda
   assert.equal((applied.program as Row).programId, 'promo')
   const replay = await call<Row>(
     'loyalty.applyCode',
-    { order, code: 'KINGFRESH' },
+    { order, code: ' kingfresh ' },
     { idempotencyKey: 'promo-order:code' },
   )
   assert.equal(replay.ok, true)
@@ -459,10 +578,11 @@ test('loyalty HTTP E2E: tier window, stable earn-group priority and redeem cap a
 })
 
 test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the adapter', async (t) => {
-  const { e2e, call } = await bootLoyalty(t)
+  const { e2e, call } = await bootLoyalty(t, true, loyaltyTransactionDeployment)
   for (const [id, code, name, accountType] of [
     ['revenue', '5111', 'Doanh thu', 'income'],
     ['receivable', '131', 'Phải thu khách hàng', 'asset_receivable'],
+    ['tax', '3331', 'Thuế GTGT', 'liability_current'],
     ['cash', '1111', 'Tiền mặt', 'asset_cash'],
   ])
     await call<Row>('account.saveAccount', { id, code, name, accountType })
@@ -474,6 +594,14 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     type: 'cash',
     defaultAccountId: 'cash',
   })
+  await call<Row>('account.saveTax', {
+    id: 'vat10',
+    name: 'VAT 10%',
+    typeTaxUse: 'sale',
+    amountType: 'percent',
+    amount: '10',
+  })
+  await call<Row>('account.setProductTax', { templateId: 'goods', taxId: 'vat10' })
   await call<Row>('pos.saveConfig', {
     id: 'shop',
     name: 'Cửa hàng chính',
@@ -482,6 +610,7 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     salesJournalId: 'sales',
     revenueAccountId: 'revenue',
     receivableAccountId: 'receivable',
+    taxAccountId: 'tax',
   })
   await call<Row>('pos.savePaymentMethod', {
     id: 'cash-method',
@@ -504,6 +633,27 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
   await saveProgram(call, { id: 'pos-program', appliesOn: 'current', availableSale: false })
   await saveRule(call, { id: 'pos-rule', programId: 'pos-program', pointAmount: '5' })
   await saveReward(call, { id: 'pos-reward', programId: 'pos-program', requiredPoints: '5' })
+  await call<Row>('pos.createOrder', {
+    id: 'pos-bridge',
+    uuid: 'pos-bridge',
+    sessionId: 'session',
+    partnerId: 'customer',
+  })
+  await call<Row>('pos.addLine', {
+    id: 'pos-bridge-line',
+    orderId: 'pos-bridge',
+    productId: 'fruit-box',
+    productUomId: 'unit',
+    qty: '1',
+    priceUnit: '100',
+  })
+  const bridged = await call<Row>('loyalty_transaction_bridge_test.applyPosReward', {
+    orderId: 'pos-bridge',
+    programId: 'pos-program',
+    rewardId: 'pos-reward',
+  })
+  assert.equal(bridged.ok, true)
+  assert.equal(String((await call<Row>('pos.getOrder', { id: 'pos-bridge' })).amountTotal), '90')
   await call<Row>('pos.createOrder', {
     id: 'pos-loyalty',
     uuid: 'pos-loyalty',
@@ -529,21 +679,64 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     await (await e2e.client.get('/admin/loyalty/orders/pos/pos-loyalty')).text(),
     /undefined/,
   )
+  const discounted = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
+  const rewardLines = (discounted.lines as Row[]).filter((line) => line.lineKind === 'reward')
+  assert.equal(String(discounted.amountUntaxed), '82')
+  assert.equal(String(discounted.amountTax), '8')
+  assert.equal(String(discounted.amountTotal), '90')
+  assert.equal(rewardLines.length, 1)
+  assert.equal(rewardLines[0]?.taxId, 'vat10')
+  assert.deepEqual(rewardLines[0]?.taxIds, ['vat10'])
+  assert.equal(String(rewardLines[0]?.priceSubtotal), '-18')
+  assert.equal(String(rewardLines[0]?.priceSubtotalIncl), '-20')
   await call<Row>('pos.addPayment', {
     id: 'pos-payment',
     orderId: 'pos-loyalty',
     paymentMethodId: 'cash-method',
-    amount: '80',
+    amount: '90',
   })
   const beforePayment = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
-  assert.equal(Number(beforePayment.amountTotal), 80)
-  assert.equal(Number(beforePayment.amountPaid), 80)
+  assert.equal(Number(beforePayment.amountTotal), 90)
+  assert.equal(Number(beforePayment.amountPaid), 90)
+  const staleRemove = await call<Row>('loyalty_pos.removeReward', {
+    orderId: 'pos-loyalty',
+    programId: 'pos-program',
+    expectedRevision: Number(beforePayment.revision) - 1,
+  })
+  assert.equal(staleRemove.ok, false)
+  assert.equal(
+    ((await call<Row>('pos.getOrder', { id: 'pos-loyalty' })).lines as Row[]).some(
+      (line) => line.lineKind === 'reward',
+    ),
+    true,
+  )
+  await call<Row>('loyalty.reward.archive', { id: 'pos-reward', active: false })
+  const stale = await call<Row>('loyalty_pos.validateOrder', {
+    id: 'pos-loyalty',
+    expectedRevision: beforePayment.revision,
+  })
+  assert.equal(stale.ok, false)
+  const unchanged = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
+  assert.equal(unchanged.state, 'draft')
+  assert.equal(unchanged.pickingId, null)
+  assert.equal(unchanged.accountMoveId, null)
+  await call<Row>('loyalty.reward.archive', { id: 'pos-reward', active: true })
   const validated = await call<Row>('loyalty_pos.validateOrder', { id: 'pos-loyalty' })
   assert.equal(validated.ok, true, JSON.stringify(validated))
   await e2e.client.form('/admin/pos/orders/pos-loyalty', { action: 'validate' })
   let order = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
   assert.equal(order.state, 'paid', JSON.stringify(order))
   assert.equal(order.loyaltyState, 'finalized')
+  assert.equal(
+    (
+      await e2e.adapter!.all('SELECT quantity FROM stock_quant WHERE "productId" = ? AND "locationId" = ?', [
+        'fruit-box',
+        'wh:stock',
+      ])
+    )[0]!.quantity,
+    '19',
+    'discount reward lines must not create an extra stock move',
+  )
 
   await call<Row>('loyalty_pos.refundOrder', {
     id: 'pos-refund',
@@ -554,7 +747,7 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
     id: 'refund-payment',
     orderId: 'pos-refund',
     paymentMethodId: 'cash-method',
-    amount: '-80',
+    amount: '-90',
   })
   await call<Row>('loyalty_pos.validateOrder', { id: 'pos-refund' })
   order = await call<Row>('pos.getOrder', { id: 'pos-loyalty' })
@@ -562,11 +755,180 @@ test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the 
   assert.equal(refund.state, 'paid')
   assert.equal(refund.loyaltyState, 'reversed')
   assert.equal(order.loyaltyState, 'finalized')
+  assert.equal(
+    (
+      await e2e.adapter!.all('SELECT quantity FROM stock_quant WHERE "productId" = ? AND "locationId" = ?', [
+        'fruit-box',
+        'wh:stock',
+      ])
+    )[0]!.quantity,
+    '20',
+    'refund must return only the stock-relevant product line',
+  )
   const applications = (await call<Row>('loyalty.wallet.get', {
     partnerId: 'customer',
     programId: 'pos-program',
   })) as Row | null
   assert.equal(applications === null || Number(applications.balance) >= 0, true)
+
+  await saveProgram(call, { id: 'pos-return-program', appliesOn: 'future', availableSale: false })
+  await saveRule(call, {
+    id: 'pos-return-rule',
+    programId: 'pos-return-program',
+    pointAmount: '5',
+  })
+  await call<Row>('pos.createOrder', {
+    id: 'pos-partial-loyalty',
+    sessionId: 'session',
+    partnerId: 'customer',
+  })
+  await call<Row>('pos.addLine', {
+    id: 'pos-partial-loyalty-line',
+    orderId: 'pos-partial-loyalty',
+    productId: 'fruit-box',
+    productUomId: 'unit',
+    qty: '2',
+    priceUnit: '100',
+  })
+  await call<Row>('pos.addPayment', {
+    id: 'pos-partial-loyalty-pay',
+    orderId: 'pos-partial-loyalty',
+    paymentMethodId: 'cash-method',
+    amount: '220',
+  })
+  await call<Row>('loyalty_pos.validateOrder', { id: 'pos-partial-loyalty' })
+  const earned = await e2e.adapter!.all(
+    'SELECT id, "balanceDelta" FROM loyalty_ledger_entry WHERE "sourceType" = ? AND "sourceId" = ?',
+    ['pos', 'pos-partial-loyalty'],
+  )
+  const earnedTotal = earned.reduce((sum, entry) => sum + Number(entry.balanceDelta), 0)
+  assert.equal(earnedTotal > 0, true)
+
+  let returnEligibility = await call<Row>('pos.getReturnEligibility', { id: 'pos-partial-loyalty' })
+  await call<Row>('loyalty_pos.refundOrder', {
+    id: 'pos-partial-loyalty-return-1',
+    originalOrderId: 'pos-partial-loyalty',
+    sessionId: 'session',
+    expectedRevision: returnEligibility.revision,
+    lines: [{ lineId: 'pos-partial-loyalty-line', quantity: '1' }],
+  })
+  await call<Row>('pos.addPayment', {
+    id: 'pos-partial-loyalty-return-1-pay',
+    orderId: 'pos-partial-loyalty-return-1',
+    paymentMethodId: 'cash-method',
+    amount: '-110',
+  })
+  await call<Row>('loyalty_pos.validateOrder', { id: 'pos-partial-loyalty-return-1' })
+  const firstReversal = await e2e.adapter!.all(
+    'SELECT "balanceDelta" FROM loyalty_ledger_entry WHERE "sourceType" = ? AND "sourceId" = ?',
+    ['pos_return', 'pos-partial-loyalty-return-1'],
+  )
+  assert.equal(
+    firstReversal.reduce((sum, entry) => sum + Number(entry.balanceDelta), 0),
+    -earnedTotal / 2,
+  )
+  assert.equal(
+    (
+      await e2e.adapter!.all(
+        'SELECT state FROM loyalty_application WHERE "orderType" = ? AND "orderId" = ?',
+        ['pos', 'pos-partial-loyalty'],
+      )
+    )[0]!.state,
+    'finalized',
+  )
+  await call<Row>('loyalty_pos.validateOrder', { id: 'pos-partial-loyalty-return-1' })
+  assert.equal(
+    (
+      await e2e.adapter!.all(
+        'SELECT COUNT(*) AS n FROM loyalty_ledger_entry WHERE "sourceType" = ? AND "sourceId" = ?',
+        ['pos_return', 'pos-partial-loyalty-return-1'],
+      )
+    )[0]!.n,
+    firstReversal.length,
+  )
+
+  returnEligibility = await call<Row>('pos.getReturnEligibility', { id: 'pos-partial-loyalty' })
+  await call<Row>('loyalty_pos.refundOrder', {
+    id: 'pos-partial-loyalty-return-2',
+    originalOrderId: 'pos-partial-loyalty',
+    sessionId: 'session',
+    expectedRevision: returnEligibility.revision,
+    lines: [{ lineId: 'pos-partial-loyalty-line', quantity: '1' }],
+  })
+  await call<Row>('pos.addPayment', {
+    id: 'pos-partial-loyalty-return-2-pay',
+    orderId: 'pos-partial-loyalty-return-2',
+    paymentMethodId: 'cash-method',
+    amount: '-110',
+  })
+  await call<Row>('loyalty_pos.validateOrder', { id: 'pos-partial-loyalty-return-2' })
+  const allReversals = await e2e.adapter!.all(
+    'SELECT "balanceDelta" FROM loyalty_ledger_entry WHERE "reversedEntryId" IS NOT NULL AND "sourceType" = ? AND "sourceId" IN (?, ?)',
+    ['pos_return', 'pos-partial-loyalty-return-1', 'pos-partial-loyalty-return-2'],
+  )
+  assert.equal(
+    allReversals.reduce((sum, entry) => sum + Number(entry.balanceDelta), 0),
+    -earnedTotal,
+  )
+  assert.equal(
+    (
+      await e2e.adapter!.all(
+        'SELECT state FROM loyalty_application WHERE "orderType" = ? AND "orderId" = ?',
+        ['pos', 'pos-partial-loyalty'],
+      )
+    )[0]!.state,
+    'reversed',
+  )
+  const spend = await e2e.adapter!.all('SELECT amount FROM loyalty_spend_entry WHERE "sourceType" = ?', [
+    'pos_return:pos-partial-loyalty',
+  ])
+  assert.equal(
+    spend.reduce((sum, entry) => sum + Number(entry.amount), 0),
+    -220,
+  )
+
+  await call<Row>('pos.createOrder', {
+    id: 'pos-reconcile',
+    uuid: 'pos-reconcile',
+    sessionId: 'session',
+    partnerId: 'customer',
+  })
+  await call<Row>('pos.addLine', {
+    id: 'pos-reconcile-line',
+    orderId: 'pos-reconcile',
+    productId: 'fruit-box',
+    productUomId: 'unit',
+    qty: '1',
+    priceUnit: '100',
+  })
+  let pending = await call<Row>('pos.getOrder', { id: 'pos-reconcile' })
+  await call<Row>('loyalty_pos.applyReward', {
+    orderId: 'pos-reconcile',
+    programId: 'pos-program',
+    rewardId: 'pos-reward',
+    expectedRevision: pending.revision,
+  })
+  pending = await call<Row>('pos.getOrder', { id: 'pos-reconcile' })
+  await call<Row>('pos.addPayment', {
+    id: 'pos-reconcile-payment',
+    orderId: 'pos-reconcile',
+    paymentMethodId: 'cash-method',
+    amount: '90',
+  })
+  pending = await call<Row>('pos.getOrder', { id: 'pos-reconcile' })
+  const coreValidated = await call<Row>('pos.validateOrder', {
+    id: 'pos-reconcile',
+    expectedRevision: pending.revision,
+  })
+  assert.equal(coreValidated.ok, true)
+  const queued = await call<Row>('loyalty_pos.reconcileOrderAsync', {
+    orderId: 'pos-reconcile',
+    idempotencyKey: 'manual-recovery-1',
+  })
+  assert.equal(queued.ok, true)
+  assert.equal((await call<Row>('pos.getOrder', { id: 'pos-reconcile' })).loyaltyState, 'pending_reconcile')
+  assert.equal(await e2e.drainJobs(), 1)
+  assert.equal((await call<Row>('pos.getOrder', { id: 'pos-reconcile' })).loyaltyState, 'finalized')
 })
 
 test('loyalty HTTP E2E: Sale UI adapter, portal actor and company scope stay isolated', async (t) => {
@@ -677,4 +1039,127 @@ test('loyalty HTTP E2E: Sale UI adapter, portal actor and company scope stay iso
   await limited.login({ login: 'limited', password: 'correct horse' })
   const denied = await limited.get('/admin/loyalty/programs', { headers: { accept: 'application/json' } })
   assert.equal([400, 403].includes(denied.status), true)
+})
+
+test('loyalty Sale keeps percentage rewards and posted contra revenue exact beyond safe integers', async (t) => {
+  const { e2e, call } = await bootLoyalty(t)
+  for (const [id, code, name, accountType] of [
+    ['revenue', '5111', 'Doanh thu', 'income'],
+    ['receivable', '131', 'Phải thu khách hàng', 'asset_receivable'],
+  ])
+    await call<Row>('account.saveAccount', { id, code, name, accountType })
+  await call<Row>('account.saveJournal', {
+    id: 'sales-journal',
+    name: 'Bán hàng',
+    code: 'SAL',
+    type: 'sale',
+  })
+  await saveProgram(call, { id: 'exact-program', appliesOn: 'current' })
+  await saveRule(call, {
+    id: 'exact-rule',
+    programId: 'exact-program',
+    pointAmount: '5',
+    pointMode: 'order',
+  })
+  await saveReward(call, {
+    id: 'exact-reward',
+    programId: 'exact-program',
+    requiredPoints: '5',
+    discount: '10',
+    discountMode: 'percent',
+  })
+  await call<Row>('sale.createOrder', {
+    id: 'exact-order',
+    partnerId: 'customer',
+    warehouseId: 'wh',
+  })
+  await call<Row>('sale.addLine', {
+    id: 'exact-order:line',
+    orderId: 'exact-order',
+    productId: 'fruit-box',
+    productUomQty: '1',
+    productUomId: 'unit',
+    priceUnit: '9007199254740993',
+  })
+
+  const applied = await call<Row>('loyalty_sale.applyReward', {
+    orderId: 'exact-order',
+    programId: 'exact-program',
+    rewardId: 'exact-reward',
+  })
+  assert.equal(applied.ok, true, JSON.stringify(applied.errors))
+  assert.equal((applied.reward as Row).discountAmount, '900719925474099')
+  const order = await call<Row>('sale.getOrder', { id: 'exact-order' })
+  const rewardLine = (order.lines as Row[]).find((line) => line.lineKind === 'reward')!
+  assert.equal(String(rewardLine.priceUnit), '-900719925474099')
+  assert.equal(String(rewardLine.priceSubtotal), '-900719925474099')
+  assert.equal(String(order.amountTotal), '8106479329266894')
+
+  const confirmed = await call<Row>('loyalty_sale.confirmOrder', { id: 'exact-order' })
+  assert.equal(confirmed.ok, true, JSON.stringify(confirmed.errors))
+  const invoiced = await call<Row>('sale.createInvoice', {
+    id: 'exact-invoice',
+    orderId: 'exact-order',
+    journalId: 'sales-journal',
+    revenueAccountId: 'revenue',
+    receivableAccountId: 'receivable',
+  })
+  assert.equal(invoiced.ok, true, JSON.stringify(invoiced.errors))
+  assert.equal(invoiced.amountTotal, '8106479329266894')
+  const posted = await call<Row>('account.postMove', { id: 'exact-invoice' })
+  assert.equal(posted.ok, true, JSON.stringify(posted.errors))
+
+  const move = (
+    await e2e.adapter!.all('SELECT "amountUntaxed", "amountTotal" FROM account_move WHERE id = ?', [
+      'exact-invoice',
+    ])
+  )[0]!
+  assert.equal(String(move.amountUntaxed), '8106479329266894')
+  assert.equal(String(move.amountTotal), '8106479329266894')
+  const lines = await e2e.adapter!.all('SELECT debit, credit FROM account_move_line WHERE "moveId" = ?', [
+    'exact-invoice',
+  ])
+  const debit = lines.reduce((sum, line) => sum + BigInt(String(line.debit)), 0n)
+  const credit = lines.reduce((sum, line) => sum + BigInt(String(line.credit)), 0n)
+  assert.equal(debit, 9007199254740993n)
+  assert.equal(credit, debit)
+})
+
+test('loyalty Sale adapter keeps tax-inclusive points for legacy lines', async (t) => {
+  const { e2e, call } = await bootLoyalty(t)
+  await call('account.saveTax', {
+    id: 'vat10',
+    name: 'VAT 10%',
+    typeTaxUse: 'sale',
+    amountType: 'percent',
+    amount: '10',
+  })
+  await saveProgram(call, { id: 'legacy-program' })
+  await saveRule(call, {
+    id: 'legacy-rule',
+    programId: 'legacy-program',
+    pointAmount: '1',
+    pointMode: 'money',
+    taxMode: 'incl',
+  })
+  await call<Row>('sale.createOrder', {
+    id: 'legacy-order',
+    partnerId: 'customer',
+    warehouseId: 'wh',
+  })
+  await call<Row>('sale.addLine', {
+    id: 'legacy-line',
+    orderId: 'legacy-order',
+    productId: 'fruit-box',
+    productUomQty: '1',
+    productUomId: 'unit',
+    priceUnit: '100',
+    taxId: 'vat10',
+  })
+  await e2e.adapter!.run('UPDATE sale_order_line SET "priceSubtotalIncl" = NULL WHERE id = ?', [
+    'legacy-line',
+  ])
+
+  const evaluated = await call<Row>('loyalty_sale.evaluateOrder', { orderId: 'legacy-order' })
+  assert.equal(((evaluated.programs as Row[])[0]?.points as number) ?? 0, 110)
 })

@@ -1,0 +1,1435 @@
+@layer ket.app {
+  :where([data-kv-design-system])
+    :is([data-ui="list-page"], [data-ui="form-page"], [data-ui="dashboard-page"], [data-ui="board-page"]) {
+    --kv-page-title-size: 1.5rem;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-3);
+    padding: var(--kv-space-6) var(--kv-page-padding-x) var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-header"] {
+    min-width: 0;
+    padding-bottom: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-title-row"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-eyebrow"] {
+    margin: 0;
+    color: var(--kv-accent);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-bold);
+    letter-spacing: 0.09em;
+    line-height: var(--kv-leading-tight);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-title"] {
+    margin: 0;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: -0.025em;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-description"] {
+    max-width: 48rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-actions"] {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-toolbar"] {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-2);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-controls"] {
+    min-width: min(100%, 24rem);
+    flex: 1 1 40rem;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-status"] {
+    min-width: max-content;
+    flex: 0 0 auto;
+    padding-inline: var(--kv-space-2);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-body"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page-footer"] {
+    min-width: 0;
+    padding-top: var(--kv-space-3);
+    border-top: 1px solid var(--kv-panel-divider);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+  }
+
+  /* Application collections opt into the full operational workspace. This keeps
+     context, identity, command bar and results in distinct horizontal bands so
+     dense records remain the visual focus. */
+  :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0 0 var(--kv-space-10);
+    background: var(--kv-page-content-bg);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-header"] {
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-title-row"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--kv-space-5);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-actions"] {
+    justify-content: flex-end;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-toolbar"] {
+    padding: var(--kv-space-3) var(--kv-page-padding-x) var(--kv-space-2-5);
+    border: 0;
+    border-radius: 0;
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-controls"] {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-body"] {
+    padding-top: var(--kv-space-2);
+    padding-inline: var(--kv-page-padding-x);
+    background: var(--kv-page-content-bg);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-footer"] {
+    margin: var(--kv-space-3) var(--kv-page-padding-x) 0;
+    padding: var(--kv-space-2-5) var(--kv-space-3);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-body"]:has(> [data-ui="table-scroll"])
+    > [data-ui="table-scroll"] {
+    border-radius: var(--kv-radius-md) var(--kv-radius-md) 0 0;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-page-body"]:has(> [data-ui="table-scroll"])
+    + [data-ui="list-page-footer"] {
+    margin-top: -1px;
+    border-radius: 0 0 var(--kv-radius-md) var(--kv-radius-md);
+  }
+
+  /* Lists are page regions, not cards. More capable application tables may add
+     selection, grouping or configurable columns while retaining this surface. */
+  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="table-scroll"] {
+    margin: 0;
+    border-color: var(--kv-table-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-table-bg);
+    box-shadow: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="table"] th {
+    background: var(--kv-table-header-bg);
+    color: var(--kv-table-header-text);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="row"] td {
+    background: var(--kv-table-row-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="list-page"] [data-ui="row"]:hover td {
+    background: var(--kv-table-row-hover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="table-scroll"] {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-table-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="table"] {
+    width: 100%;
+    min-width: 38rem;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="table-caption"] {
+    padding: var(--kv-space-3);
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    text-align: left;
+  }
+
+  :where([data-kv-design-system]) [data-ui="col"] {
+    height: var(--kv-table-header-height);
+    padding: 0 var(--kv-space-3);
+    border-bottom: 1px solid var(--kv-table-border);
+    background: var(--kv-table-header-bg);
+    color: var(--kv-table-header-text);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0.035em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  :where([data-kv-design-system]) [data-ui="col"][data-align="end"],
+  :where([data-kv-design-system]) [data-ui="cell"][data-align="end"] {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  :where([data-kv-design-system]) [data-ui="row"] {
+    height: var(--kv-row-height);
+    transition: background var(--kv-motion-fast);
+  }
+
+  :where([data-kv-design-system]) [data-ui="row"]:hover {
+    background: transparent;
+  }
+
+  :where([data-kv-design-system]) [data-ui="row"]:hover [data-ui="cell"] {
+    background: var(--kv-table-row-hover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="row"][data-selected="true"] [data-ui="cell"] {
+    background: var(--kv-table-row-selected);
+  }
+
+  :where([data-kv-design-system]) [data-ui="cell"] {
+    max-width: 24rem;
+    height: var(--kv-row-height);
+    padding: 0.4375rem var(--kv-space-3);
+    border-bottom: 1px solid var(--kv-table-border);
+    background: var(--kv-table-row-bg);
+    color: var(--kv-text-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-kv-design-system]) [data-ui="cell"][data-priority="primary"] {
+    color: var(--kv-text-main);
+    font-weight: var(--kv-weight-semibold);
+  }
+
+  :where([data-kv-design-system]) [data-ui="row-link"] {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="row-link"]:hover {
+    color: var(--kv-color-accent);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-form"] {
+    display: grid;
+    gap: var(--kv-gap-field-group);
+  }
+
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="table-scroll"][data-responsive="stack"] {
+      overflow: hidden;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] > [data-ui="table"] {
+      display: block;
+      min-width: 0;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] > [data-ui="table"] > thead {
+      display: none;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] > [data-ui="table"] > tbody {
+      display: block;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="row"] {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      height: auto;
+      padding: var(--kv-space-3);
+      border-bottom: 1px solid var(--kv-table-border);
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="row"]:last-child {
+      border-bottom: 0;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="cell"] {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--kv-space-2);
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+      height: auto;
+      padding: var(--kv-space-2) 0;
+      border: 0;
+      white-space: normal;
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="cell"]::before {
+      content: attr(data-label);
+      color: var(--kv-text-muted);
+      font-size: var(--kv-text-sm);
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="cell"]:first-child {
+      display: block;
+      font-weight: var(--kv-weight-semibold);
+    }
+
+    :where([data-kv-design-system]) [data-responsive="stack"] [data-ui="cell"]:first-child::before {
+      display: none;
+    }
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-errors"] {
+    display: grid;
+    gap: var(--kv-space-1);
+    margin: 0;
+    padding: var(--kv-space-3) var(--kv-space-3) var(--kv-space-3) 2rem;
+    border: 1px solid var(--kv-color-danger);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-color-danger-soft);
+    color: var(--kv-color-danger);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-grid"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--kv-gap-form-row) var(--kv-gap-field-group);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-grid"] [data-ui="field"][data-span="full"] {
+    grid-column: 1 / -1;
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-actions"] {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: var(--kv-space-4);
+    border-top: 1px solid var(--kv-panel-divider);
+  }
+
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system]) [data-ui="form-grid"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-grid"] [data-ui="field"] {
+      grid-column: 1;
+    }
+  }
+
+  :where([data-kv-design-system]) [data-ui="modal-backdrop"] {
+    position: fixed;
+    z-index: var(--kv-z-modal);
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: var(--kv-space-4);
+    background: rgb(12 14 16 / 52%);
+    backdrop-filter: blur(3px);
+  }
+
+  :where([data-kv-design-system]) [data-ui="modal-backdrop"][data-mode="embedded"] {
+    position: relative;
+    min-height: 20rem;
+    inset: auto;
+    border-radius: var(--kv-radius-md);
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--kv-color-accent-soft) 60%, transparent), transparent),
+      var(--kv-color-canvas);
+    backdrop-filter: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="modal-sheet"] {
+    width: min(34rem, 100%);
+    max-height: calc(100dvh - 2rem);
+    overflow: auto;
+    border: 1px solid var(--kv-color-line-strong);
+    border-radius: var(--kv-radius-lg);
+    background: var(--kv-color-surface);
+    box-shadow: var(--kv-shadow-popover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="modal-head"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-4);
+    padding: var(--kv-space-4) var(--kv-space-5);
+    border-bottom: 1px solid var(--kv-color-line);
+  }
+
+  :where([data-kv-design-system]) [data-ui="modal-title"] {
+    margin-bottom: 0;
+    font-family: var(--kv-font-display);
+    font-size: var(--kv-text-lg);
+    font-weight: 650;
+  }
+
+  :where([data-kv-design-system]) [data-ui="modal-close"] {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--kv-color-ink-muted);
+    font-size: 1.4rem;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="modal-close"]:hover {
+    background: var(--kv-color-surface-hover);
+    color: var(--kv-color-ink);
+  }
+
+  :where([data-kv-design-system]) [data-ui="modal-body"] {
+    padding: var(--kv-space-5);
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="list-page"] {
+      gap: var(--kv-space-3);
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-header"] {
+      padding-bottom: var(--kv-space-1);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-toolbar"] {
+      gap: var(--kv-space-2);
+      padding: var(--kv-space-2);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-controls"] {
+      min-width: 0;
+      flex-basis: 15rem;
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] {
+      padding: 0 0 var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-heading"] {
+      display: flex;
+      flex-direction: column;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-title-row"] {
+      display: contents;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-title"] {
+      order: 1;
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-description"] {
+      order: 2;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"],
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"]
+      > [data-ui="inline"] {
+      width: 100%;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"] {
+      order: 3;
+      margin-top: var(--kv-space-2);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"]
+      [data-ui="action"][data-variant="primary"] {
+      min-height: 2.75rem;
+      flex: 1 1 auto;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-toolbar"] {
+      padding: var(--kv-space-3) var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      :is([data-ui="list-page-body"], [data-ui="list-page-footer"]) {
+      margin-inline: var(--kv-space-4);
+      padding-inline: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-footer"] {
+      padding: var(--kv-space-2-5) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] [data-ui="table"] {
+      min-width: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
+      [data-ui="table"]
+      :is(th, td):is([data-priority="secondary"], [data-priority="tertiary"]) {
+      display: none;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
+      [data-ui="table"]
+      :is(th, td)[data-priority="primary"][data-align="end"] {
+      width: 7rem;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table"]
+      :is([data-ui="col"], [data-ui="cell"]) {
+      padding-inline: var(--kv-space-2);
+    }
+  }
+
+  /* A process read left to right. The rail is drawn as two half-lines per step
+     rather than one line behind the row, so it starts at the first node and stops
+     at the last instead of running off both ends of the grid. */
+  :where([data-kv-design-system]) [data-ui="pipeline"] {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step"] {
+    position: relative;
+    display: grid;
+    padding-bottom: var(--kv-space-5);
+    justify-items: center;
+    gap: var(--kv-space-1);
+    text-align: center;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step"]::before,
+  :where([data-kv-design-system]) [data-ui="pipeline-step"]::after {
+    position: absolute;
+    bottom: 0.3125rem;
+    height: 1px;
+    background: var(--kv-color-line-strong);
+    content: "";
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step"]::before {
+    left: 0;
+    right: 50%;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step"]::after {
+    left: 50%;
+    right: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step"]:first-child::before,
+  :where([data-kv-design-system]) [data-ui="pipeline-step"]:last-child::after {
+    display: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step-node"] {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 50%;
+    background: var(--kv-text-muted);
+    translate: -50% 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step"][data-tone="info"] [data-ui="pipeline-step-node"] {
+    background: var(--kv-color-info);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="pipeline-step"][data-tone="positive"]
+    [data-ui="pipeline-step-node"] {
+    background: var(--kv-color-positive);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="pipeline-step"][data-tone="warning"]
+    [data-ui="pipeline-step-node"] {
+    background: var(--kv-color-warning);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="pipeline-step"][data-tone="danger"]
+    [data-ui="pipeline-step-node"] {
+    background: var(--kv-color-danger);
+  }
+
+  /* Two borders rotated into a chevron, sat on the column boundary. Drawn rather
+     than written, because the order is already in the markup and an arrow
+     character here would be read out between every pair of stages. */
+  :where([data-kv-design-system]) [data-ui="pipeline-arrow"] {
+    position: absolute;
+    top: 0.25rem;
+    left: 0;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-top: 1.5px solid var(--kv-text-muted);
+    border-right: 1.5px solid var(--kv-text-muted);
+    rotate: 45deg;
+    translate: -50% 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step"]:first-child [data-ui="pipeline-arrow"] {
+    display: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step-label"] {
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) a[data-ui="pipeline-step-label"]:hover {
+    color: var(--kv-text-main);
+    text-decoration: underline;
+  }
+
+  :where([data-kv-design-system]) [data-ui="pipeline-step-value"] {
+    color: var(--kv-text-main);
+    font-size: var(--kv-text-2xl);
+    font-weight: var(--kv-weight-bold);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+  }
+
+  /* Too narrow for four columns, so the rail turns and runs down the left. The
+     stages keep their order and their counts; only the axis changes. */
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="pipeline"] {
+      grid-auto-columns: auto;
+      grid-auto-flow: row;
+    }
+
+    :where([data-kv-design-system]) [data-ui="pipeline-step"] {
+      padding-bottom: var(--kv-space-3);
+      padding-left: var(--kv-space-6);
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      justify-items: start;
+      text-align: left;
+    }
+
+    :where([data-kv-design-system]) [data-ui="pipeline-step"]::before,
+    :where([data-kv-design-system]) [data-ui="pipeline-step"]::after {
+      left: 0.3125rem;
+      right: auto;
+      width: 1px;
+      height: 50%;
+    }
+
+    :where([data-kv-design-system]) [data-ui="pipeline-step"]::before {
+      top: 0;
+      bottom: auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="pipeline-step"]::after {
+      top: 50%;
+      bottom: auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="pipeline-step-node"] {
+      top: 50%;
+      bottom: auto;
+      left: 0.3125rem;
+      translate: -50% -50%;
+    }
+
+    :where([data-kv-design-system]) [data-ui="pipeline-arrow"] {
+      display: none;
+    }
+
+    :where([data-kv-design-system]) [data-ui="pipeline-step-value"] {
+      font-size: var(--kv-text-lg);
+    }
+  }
+}
+
+@layer ket.app {
+  /* Boards spend their space on the operational surface. Context, identity and
+     global controls stay in compact horizontal bands; the specialised board
+     owns its internal columns, timeline and scrolling behavior. */
+  :where([data-kv-design-system]) [data-ui="board-page"] {
+    display: grid;
+    min-width: 0;
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="board-page"][data-variant="operational"]
+    [data-ui="board-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-header"] {
+    display: grid;
+    min-width: 0;
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="board-page"][data-variant="operational"]
+    [data-ui="board-page-header"] {
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-eyebrow"] {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0.07em;
+    line-height: var(--kv-leading-normal);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-title-row"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: -0.025em;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-description"] {
+    max-width: 56rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-subline"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-status"],
+  :where([data-kv-design-system]) [data-ui="board-page-meta"] {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-actions"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-toolbar"] {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    padding: var(--kv-space-3) var(--kv-page-padding-x) var(--kv-space-2-5);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-controls"] {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-body"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-4);
+    padding: var(--kv-space-4) var(--kv-page-padding-x) var(--kv-space-8);
+  }
+
+  :where([data-kv-design-system]) [data-ui="board-page-body"] > [data-ui="stack"] {
+    gap: var(--kv-space-4);
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system])
+      [data-ui="board-page"][data-variant="operational"]
+      [data-ui="board-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-title-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-title"] {
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="board-page-toolbar"],
+    :where([data-kv-design-system]) [data-ui="board-page-body"] {
+      padding-inline: var(--kv-space-4);
+    }
+  }
+}
+
+@layer ket.app {
+  /* Dashboards are working canvases, not records. Their context and identity use
+     the same quiet bands as lists and forms; KPI, workflow and analytical blocks
+     own their surfaces on the grey page canvas below. Never paint the whole
+     workspace white: the gaps must separate independent cards and tables. */
+  :where([data-kv-design-system]) [data-ui="dashboard-page"] {
+    display: grid;
+    min-width: 0;
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0 0 var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="dashboard-page"][data-variant="operational"]
+    [data-ui="dashboard-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-header"] {
+    display: grid;
+    min-width: 0;
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="dashboard-page"][data-variant="operational"]
+    [data-ui="dashboard-page-header"] {
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-eyebrow"] {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0.07em;
+    line-height: var(--kv-leading-normal);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-title-row"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: -0.025em;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-description"] {
+    max-width: 56rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-subline"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-status"],
+  :where([data-kv-design-system]) [data-ui="dashboard-page-meta"] {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-body"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-6);
+    padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-toolbar"] {
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-body"] > [data-ui="stack"] {
+    gap: var(--kv-space-6);
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="dashboard-page"][data-variant="operational"] {
+      padding-bottom: var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="dashboard-page"][data-variant="operational"]
+      [data-ui="dashboard-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-title-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-title"] {
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] > [data-ui="inline"] {
+      width: 100%;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="dashboard-page-actions"]
+      [data-ui="action"][data-variant="primary"] {
+      min-height: 2.75rem;
+      flex: 1 1 auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-body"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-8);
+    }
+  }
+}
+
+@layer ket.app {
+  /* Operational forms read like one working sheet: identity and the primary
+     decision stay together, sections use rhythm instead of card nesting, and
+     durable context occupies a quiet rail when there is room. */
+  :where([data-kv-design-system]) [data-ui="form-page"] {
+    display: grid;
+    min-width: 0;
+    background: var(--kv-page-content-bg);
+  }
+
+  /* Operational forms share the same quiet location band as collections. The
+     form title remains compact: business fields, not chrome, own the viewport. */
+  :where([data-kv-design-system]) [data-ui="form-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0 0 var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="form-page"][data-variant="operational"]
+    [data-ui="form-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-header"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="form-page"][data-variant="operational"]
+    [data-ui="form-page-header"] {
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-title-row"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: -0.025em;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-status"] {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-subline"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-description"] {
+    max-width: 48rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-actions"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-meta"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-controller"] {
+    min-width: 0;
+    padding-inline: var(--kv-page-padding-x);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-controller"]:empty {
+    display: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-navigation"] {
+    min-width: 0;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-layout"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page"][data-has-aside="false"] [data-ui="form-page-layout"] {
+    grid-template-columns: minmax(0, 56rem);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-body"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-6);
+    padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
+    background: var(--kv-page-content-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-body"] > [data-ui="stack"] {
+    gap: var(--kv-space-6);
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-body"] > [data-ui="section"] > [data-ui="section-head"],
+  :where([data-kv-design-system])
+    [data-ui="form-page-body"]
+    > [data-ui="stack"]
+    > [data-ui="section"]
+    > [data-ui="section-head"] {
+    align-items: flex-start;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-body"] > [data-ui="stack"] > [data-ui="section"] {
+    padding-block: var(--kv-space-5);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="form-page-body"]
+    > [data-ui="stack"]
+    > [data-ui="section"]:first-child {
+    padding-block-start: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="form-page-aside"] {
+    position: sticky;
+    top: 0;
+    display: grid;
+    min-width: 0;
+    max-height: 100dvh;
+    align-content: start;
+    padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10) var(--kv-space-5);
+    overflow-y: auto;
+    border-left: 1px solid var(--kv-panel-divider);
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  /* Record forms use the compact ERP label/value rhythm while there is enough
+     room. Below 768 px the form becomes conventional vertical fields so labels
+     and controls never compete for the same narrow row. */
+  :where([data-kv-design-system])
+    [data-ui="form-page"]
+    [data-ui="record-form"]
+    [data-ui="field"]:not([data-kind="checkbox"]) {
+    grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="form-page"]
+    [data-ui="record-form"]
+    [data-ui="field"]:not([data-kind="checkbox"])
+    > [data-ui="field-label"] {
+    grid-column: 1;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="form-page"]
+    [data-ui="record-form"]
+    [data-ui="field"]:not([data-kind="checkbox"])
+    > :is(
+      [data-ui="field-control"],
+      [data-ui="field-options"],
+      [data-ui="field-help"],
+      [data-ui="field-error"]
+    ) {
+    grid-column: 2;
+  }
+
+  @media (max-width: 89.9375rem) {
+    :where([data-kv-design-system])
+      [data-ui="form-page"]
+      [data-ui="record-form"]
+      [data-ui="field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(6.5rem, 7.5rem) minmax(0, 1fr);
+      column-gap: var(--kv-space-2);
+    }
+  }
+
+  @media (max-width: 63.9375rem) {
+    :where([data-kv-design-system]) [data-ui="form-page-layout"] {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: var(--kv-space-5);
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-page-aside"] {
+      position: static;
+      max-height: none;
+      padding-top: var(--kv-space-5);
+      overflow: visible;
+      border-top: 1px solid var(--kv-panel-divider);
+      border-left: 0;
+    }
+  }
+
+  @media (max-width: 47.9375rem) {
+    :where([data-kv-design-system])
+      [data-ui="form-page"]
+      [data-ui="record-form"]
+      [data-ui="field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="form-page"]
+      [data-ui="record-form"]
+      [data-ui="field"]:not([data-kind="checkbox"])
+      > :is(
+        [data-ui="field-label"],
+        [data-ui="field-control"],
+        [data-ui="field-options"],
+        [data-ui="field-help"],
+        [data-ui="field-error"]
+      ) {
+      grid-column: 1;
+    }
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="form-page"][data-variant="operational"] {
+      padding-bottom: var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="form-page"][data-variant="operational"]
+      [data-ui="form-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-page-title-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-page-title"] {
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="form-page-actions"]
+      > :is([data-ui="action-group"], [data-ui="form-cluster"]) {
+      width: 100%;
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-page-meta"] {
+      padding-left: 0;
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-page-navigation"] {
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="form-page-body"],
+    :where([data-kv-design-system]) [data-ui="form-page-aside"],
+    :where([data-kv-design-system]) [data-ui="form-page-controller"] {
+      padding-inline: var(--kv-space-4);
+    }
+  }
+}

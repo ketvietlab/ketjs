@@ -1,0 +1,526 @@
+/* Shared record workspace and record summary components. */
+
+@layer ket.app {
+  /* Dense record workspace: identity and cross-record facts stay above the
+     fold, while collaboration remains visible beside the active business tab. */
+  [data-ui="record-workspace"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-areas:
+      "record-top record-top"
+      "record-navigation ."
+      "record-body record-aside";
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+    align-items: start;
+    gap: 0;
+  }
+  [data-ui="record-workspace"][data-has-aside="false"] {
+    grid-template-areas:
+      "record-top"
+      "record-navigation"
+      "record-body";
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Compatibility records keep their richer identity while the canonical page
+     supplies location and company context. Flatten the outer record body and
+     suppress only its duplicate heading. */
+  [data-ui="form-page"]:has(
+    > [data-ui="form-page-layout"] > [data-ui="form-page-body"] > [data-ui="record-workspace"]
+  ) > [data-ui="form-page-header"] {
+    display: none;
+  }
+  [data-ui="form-page"]:has(
+      > [data-ui="form-page-layout"] > [data-ui="form-page-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="form-page-layout"],
+  [data-ui="form-page"]:has(
+      > [data-ui="form-page-layout"] > [data-ui="form-page-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="form-page-layout"]
+    > [data-ui="form-page-body"] {
+    display: contents;
+  }
+
+  /* Analytical lists can carry the existing summary workspace as their result
+     body. Its identity replaces the list heading; the context strip remains. */
+  [data-ui="list-page"]:has(> [data-ui="list-page-body"] > [data-ui="record-workspace"])
+  > [data-ui="list-page-header"] {
+    display: none;
+  }
+  [data-ui="list-page"][data-variant="operational"]:has(
+      > [data-ui="list-page-body"] > [data-ui="record-workspace"]
+    )
+    > [data-ui="list-page-body"] {
+    padding-inline: 0;
+  }
+
+  /* Legacy page-frame nesting uses the same flattening rule until every rich
+     record has moved its summary and tabs directly onto RecordPage. */
+  [data-ui="record-workspace"][data-page-frame="true"]:has(
+    > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
+  ),
+  [data-ui="record-workspace"][data-page-frame="true"]:has(
+      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
+    )
+    > [data-ui="record-sheet"],
+  [data-ui="record-workspace"][data-page-frame="true"]:has(
+      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
+    )
+    > [data-ui="record-sheet"]
+    > [data-ui="record-body"] {
+    display: contents;
+  }
+  [data-ui="record-workspace"][data-page-frame="true"]:has(
+      > [data-ui="record-sheet"] > [data-ui="record-body"] [data-ui="record-workspace"]
+    )
+    > [data-ui="record-sheet"]
+    > [data-ui="record-top"] {
+    display: none;
+  }
+  [data-ui="record-sheet"] {
+    display: contents;
+    min-inline-size: 0;
+    /* Relation menus and other anchored controls may extend past the sheet.
+       Clipping here hides their options when a field sits near the last row. */
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  [data-ui="record-top"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-area: record-top;
+    grid-template-areas:
+      "breadcrumbs breadcrumbs"
+      "identity controller"
+      "facts facts"
+      "badges badges";
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--admin-gap-md);
+    padding: var(--admin-gap-md);
+    border-block-end: 1px solid var(--admin-divider-subtle);
+  }
+  [data-ui="record-top"] > [data-ui="record-header"] {
+    display: contents;
+  }
+  [data-ui="record-top"] > [data-ui="record-header"] > [data-ui="breadcrumbs"] {
+    grid-area: breadcrumbs;
+  }
+  [data-ui="record-identity"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-area: identity;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: var(--admin-gap);
+  }
+  [data-ui="record-heading"],
+  [data-ui="record-subtitle"] {
+    margin: 0;
+  }
+  [data-ui="record-heading"] {
+    overflow-wrap: anywhere;
+    color: var(--admin-ink);
+    font-size: clamp(1.25rem, 2vw, 1.75rem);
+    font-weight: 650;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+  }
+  [data-ui="record-heading-row"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-status"] {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+  [data-ui="record-subtitle"] {
+    margin-block-start: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+  }
+  [data-ui="record-badges"] {
+    display: flex;
+    min-inline-size: 0;
+    grid-area: badges;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--admin-gap);
+    padding-inline-start: calc(4.5rem + var(--admin-gap));
+    overflow-x: auto;
+  }
+  [data-ui="record-toggle"] {
+    display: inline-flex;
+    min-block-size: 1.5rem;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  [data-ui="record-toggle"][data-disabled="true"] {
+    cursor: default;
+  }
+  [data-ui="record-toggle-input"] {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin: 0;
+    accent-color: var(--admin-focus-border);
+  }
+  [data-ui="record-toggle-input"]:focus-visible {
+    outline: 2px solid var(--admin-focus-border);
+    outline-offset: 2px;
+  }
+  [data-ui="record-toggle-input"]:disabled {
+    opacity: 0.8;
+  }
+  [data-ui="record-toggle-label"] {
+    line-height: 1.2;
+  }
+  [data-ui="record-facts"] {
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    grid-area: facts;
+    align-items: stretch;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-card-raised);
+  }
+  [data-ui="record-fact"] {
+    display: grid;
+    min-inline-size: 5rem;
+    flex: 1 1 0;
+    align-content: center;
+    justify-items: center;
+    gap: 0.0625rem;
+    padding: var(--admin-gap-sm) var(--admin-gap);
+    color: var(--admin-ink);
+    text-align: center;
+    text-decoration: none;
+  }
+  [data-ui="record-fact"] + [data-ui="record-fact"] {
+    border-inline-start: 1px solid var(--admin-divider-subtle);
+  }
+  [data-ui="record-fact-value"] {
+    max-inline-size: 9rem;
+    overflow: hidden;
+    font-size: var(--admin-size-md);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="record-fact-label"] {
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-xs);
+    white-space: nowrap;
+  }
+  a[data-ui="record-fact"]:hover {
+    background: var(--admin-card-hover);
+    color: var(--admin-accent-text);
+  }
+  [data-ui="record-navigation"] {
+    min-inline-size: 0;
+    grid-area: record-navigation;
+    padding-inline: var(--admin-gap);
+  }
+  [data-ui="record-navigation"] [data-ui="tabs"] {
+    border-block-end: 0;
+  }
+  [data-ui="record-controller"] {
+    display: flex;
+    min-inline-size: 0;
+    grid-area: controller;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--admin-gap);
+    align-self: center;
+  }
+  [data-ui="record-controller"] > [data-ui="form-cluster"] {
+    inline-size: auto;
+  }
+  [data-ui="record-controller"]:has(> ket-island:not([hidden]) > :not([hidden])) {
+    align-self: stretch;
+  }
+  [data-ui="record-controller"] > ket-island {
+    display: contents;
+  }
+  [data-ui="record-body"] {
+    min-inline-size: 0;
+    grid-area: record-body;
+    padding: var(--admin-gap-md);
+    border-block-start: 1px solid var(--admin-divider-subtle);
+  }
+  [data-ui="record-aside"] {
+    position: sticky;
+    /* Content is the sticky scroll container and already starts below the
+       topbar. Any extra inset here moves collaboration below the record sheet. */
+    inset-block-start: 0;
+    display: grid;
+    min-inline-size: 0;
+    grid-area: record-aside;
+    max-block-size: calc(100dvh - 2 * var(--admin-gap));
+    align-content: start;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap-md);
+    overflow-y: auto;
+    border-inline-start: 1px solid var(--admin-divider-subtle);
+    background: var(--admin-rail-bg);
+  }
+  [data-ui="main"]:has(> [data-ui="topbar"] > *) [data-ui="record-aside"] {
+    max-block-size: calc(100dvh - var(--admin-topbar-height) - 2 * var(--admin-gap));
+  }
+  [data-ui="record-aside"] :is([data-ui="chatter"], [data-ui="activity-record"]) {
+    max-inline-size: none;
+    padding: var(--gap-section) 0;
+    border: 0;
+    border-block-end: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--radius-app-region);
+    background: transparent;
+    box-shadow: none;
+  }
+  [data-ui="record-aside"] :is([data-ui="chatter"], [data-ui="activity-record"]):first-child {
+    padding-block-start: 0;
+  }
+  [data-ui="record-aside"] :is([data-ui="chatter"], [data-ui="activity-record"]):last-child {
+    padding-block-end: 0;
+    border-block-end: 0;
+  }
+
+  /* Reusable supporting composition for record forms. Modules only provide
+     values; the kit preserves one rail, action and forward-field contract. */
+  [data-ui="record-field-grid"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--admin-gap-sm) var(--admin-gap-lg);
+  }
+  [data-ui="record-rail"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: 0;
+  }
+  [data-ui="record-rail-card"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+    padding: var(--gap-section) 0;
+    border: 0;
+    border-block-end: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--radius-app-region);
+    background: transparent;
+  }
+  [data-ui="record-rail-card"]:first-child {
+    padding-block-start: 0;
+  }
+  [data-ui="record-rail-card"]:last-child {
+    padding-block-end: 0;
+    border-block-end: 0;
+  }
+  [data-ui="record-system-facts"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+    margin: 0;
+  }
+  [data-ui="record-switches"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-switch"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap);
+  }
+  [data-ui="record-switch-input"] {
+    flex: none;
+  }
+  [data-ui="record-activity-list"] {
+    display: grid;
+    gap: var(--admin-gap);
+  }
+  [data-ui="record-activity-item"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-header-actions"] {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-more"] {
+    position: relative;
+    flex: 0 0 auto;
+  }
+  [data-ui="record-more-open"] {
+    display: inline-grid;
+    inline-size: var(--control-height-lg, 40px);
+    min-block-size: var(--control-height-lg, 40px);
+    padding: 0;
+    place-items: center;
+    border: 1px solid var(--admin-control-border);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-control-bg);
+    color: var(--admin-ink-secondary);
+    list-style: none;
+    cursor: pointer;
+  }
+  [data-ui="record-more-open"]::-webkit-details-marker {
+    display: none;
+  }
+  [data-ui="record-more-open"]:is(:hover, :focus-visible) {
+    border-color: var(--admin-control-border-hover);
+    background: var(--admin-control-hover);
+    color: var(--admin-ink);
+    outline: none;
+  }
+  [data-ui="record-more-open"]:focus-visible {
+    box-shadow: 0 0 0 3px var(--admin-focus-ring);
+  }
+  [data-ui="record-more-open"] [data-ui="icon"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+  [data-ui="record-more-menu"] {
+    position: absolute;
+    inset-block-start: calc(100% + var(--admin-gap-xs));
+    inset-inline-end: 0;
+    z-index: var(--z-dropdown, 40);
+    display: grid;
+    min-inline-size: 10rem;
+    padding: var(--admin-gap-xs);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-card-raised);
+    box-shadow: var(--shadow-popover, 0 12px 32px rgba(0, 0, 0, 0.42));
+  }
+  [data-ui="record-more-menu"] [data-ui="record-form"],
+  [data-ui="record-more-menu"] [data-ui="form-actions"],
+  [data-ui="record-more-menu"] [data-ui="action-group"],
+  [data-ui="record-more-menu"] [data-ui="form-cluster"] {
+    inline-size: 100%;
+  }
+  [data-ui="record-more-menu"] [data-ui="form-cluster"] {
+    display: grid;
+    align-items: stretch;
+  }
+  [data-ui="record-more-menu"] [data-ui="action"] {
+    inline-size: 100%;
+    justify-content: flex-start;
+  }
+  [data-ui="record-save-split"] {
+    display: inline-flex;
+  }
+  @media (min-width: 96rem) {
+    [data-ui="record-workspace"][data-has-aside="true"] {
+      grid-template-columns: minmax(0, 2fr) minmax(32rem, 1fr);
+    }
+  }
+  /* The sidebar already consumes part of the viewport. Below 1344px the main
+     column is too narrow for a business form and a 22rem collaboration rail to
+     coexist without the rail covering controls, so the rail follows the form. */
+  @media (max-width: 83.9375rem) {
+    [data-ui="record-workspace"] {
+      grid-template-areas:
+        "record-top"
+        "record-navigation"
+        "record-body"
+        "record-aside";
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--admin-gap);
+    }
+    [data-ui="record-aside"] {
+      position: static;
+      max-block-size: none;
+      padding: 0;
+      overflow: visible;
+      border-inline-start: 0;
+      background: transparent;
+    }
+  }
+  @media (max-width: 47.9375rem) {
+    [data-ui="record-top"] {
+      grid-template-areas:
+        "breadcrumbs"
+        "identity"
+        "controller"
+        "facts"
+        "badges";
+      grid-template-columns: minmax(0, 1fr);
+      padding: var(--admin-gap);
+    }
+    [data-ui="record-controller"] {
+      inline-size: 100%;
+      justify-content: stretch;
+    }
+    [data-ui="record-controller"] > [data-ui="form-cluster"],
+    [data-ui="record-controller"] [data-ui="action-group"] {
+      inline-size: 100%;
+    }
+    [data-ui="record-controller"] [data-ui="action"] {
+      flex: 1 1 9rem;
+    }
+    [data-ui="record-heading"] {
+      font-size: 1.25rem;
+    }
+    [data-ui="record-facts"] {
+      inline-size: 100%;
+      overflow-x: auto;
+    }
+    [data-ui="record-fact"] {
+      min-inline-size: 5.5rem;
+      flex: 1 0 auto;
+    }
+    [data-ui="record-badges"] {
+      gap: var(--admin-gap-sm);
+      padding-inline-start: 0;
+    }
+    [data-ui="record-toggle"] {
+      font-size: var(--admin-size-xs);
+    }
+    [data-ui="record-navigation"] {
+      padding-inline: var(--admin-gap-sm);
+    }
+    [data-ui="record-navigation"] [data-ui="tabs"] {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      overflow: visible;
+    }
+    [data-ui="record-navigation"] [data-ui="tabs"]:has(> [data-ui="tab"]:nth-child(3)) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    [data-ui="record-navigation"] [data-ui="tab"] {
+      gap: 0;
+      justify-content: center;
+      padding-inline: var(--admin-gap-xs);
+      font-size: var(--admin-size-xs);
+      line-height: 1.15;
+      text-align: center;
+      white-space: normal;
+    }
+    [data-ui="record-navigation"] [data-ui="tab"] > span {
+      display: none;
+    }
+    [data-ui="record-body"] {
+      padding: var(--admin-gap);
+    }
+    [data-ui="record-field-grid"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}

@@ -3,7 +3,7 @@ title: Testing
 description: Exercise KetJS applications through real HTTP, isolated datastores, sessions, tenants, and durable workers.
 ---
 
-`@ketvietlab/ketjs/testing` boots a real `AppSpec` on an ephemeral port and provides a cookie-aware HTTP client.
+`@ketvietlab/ketjs/testing` boots a real `DeploymentSpec` on an ephemeral port and provides a cookie-aware HTTP client.
 This boundary covers request parsing, tenant resolution, sessions, permissions, output projection, and
 error serialization. Direct `callFn()` tests remain useful integration tests, but they do not cover those
 HTTP seams.
@@ -11,13 +11,14 @@ HTTP seams.
 ## First end-to-end test
 
 ```ts
+// File: test/order.test.ts
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ordersApp } from '../app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ordersApp } from '../deployment.ts'
 
 test('an order can be listed', async (t) => {
-  const e2e = await createTestApp(ordersApp, {
+  const e2e = await createTestDeployment(ordersApp, {
     worker: false,
     client: { company: 'acme' },
   })
@@ -37,7 +38,7 @@ Always register `close()` with the test lifecycle or use `try/finally`. Cleanup 
 
 ## Isolation model
 
-Each `createTestApp()` call creates a private temporary directory containing:
+Each `createTestDeployment()` call creates a private temporary directory containing:
 
 - a file-backed SQLite database;
 - local object storage;
@@ -51,7 +52,8 @@ The harness does not inherit the host process environment by default. A develope
 silently redirect an isolated test to a real database.
 
 ```ts
-const e2e = await createTestApp(app, {
+// File: test/order.test.ts
+const e2e = await createTestDeployment(app, {
   env: { KET_QUEUE_NOTIFY: '0' },
   worker: false,
   keepArtifacts: true,
@@ -72,6 +74,7 @@ own the directory; `close()` does not remove caller-owned artifacts.
 - non-2xx parsed calls throw `TestHttpError` with `status`, `response`, and `body`.
 
 ```ts
+// File: test/order.test.ts
 import { TestHttpError } from '@ketvietlab/ketjs/testing'
 
 const response = await e2e.client.get('/health')
@@ -86,6 +89,7 @@ await assert.rejects(
 A function call returns the complete Ket result, including `value`, `writes`, `dryRun`, and `replayed`:
 
 ```ts
+// File: test/order.test.ts
 const preview = await e2e.client.call(
   'order.create',
   { id: 'order-1', customer: 'customer-1' },
@@ -105,6 +109,7 @@ await e2e.client.call('order.create', input, {
 Create immutable client variants for separate request identities:
 
 ```ts
+// File: test/order.test.ts
 const acme = e2e.client.as({
   company: 'acme',
   companies: ['acme', 'subsidiary'],
@@ -120,6 +125,7 @@ const customTenant = e2e.client.as({ tenant: 'acme', tenantHeader: 'x-database' 
 Apps with sessions ignore development company headers. Authenticate through the real route:
 
 ```ts
+// File: test/order.test.ts
 await e2e.client.login({ login: 'admin', password: 'secret' })
 await e2e.client.call('order.privateList')
 await e2e.client.logout()
@@ -129,6 +135,7 @@ The cookie jar captures cookies across same-origin redirects and applies deletio
 another client or save it with file mode `0600`:
 
 ```ts
+// File: test/order.test.ts
 import { CookieJar } from '@ketvietlab/ketjs/testing'
 
 await e2e.client.jar.save('.ket/admin.cookies.json')
@@ -146,6 +153,7 @@ Fixtures are an explicit setup bypass. They call declared Ket functions and reta
 validation, but they do not apply HTTP identity permissions.
 
 ```ts
+// File: test/order.test.ts
 await e2e.fixture.call(
   'user.create',
   { id: 'admin', login: 'admin' },
@@ -159,6 +167,7 @@ integration test rather than an end-to-end test.
 For an invariant with no public read function, inspect the selected tenant adapter:
 
 ```ts
+// File: test/order.test.ts
 await e2e.fixture.withTenant('', async ({ adapter }) => {
   const rows = await adapter.all('SELECT id FROM sales_order')
   assert.equal(rows.length, 1)
@@ -169,10 +178,11 @@ A multi-tenant fixture requires an explicit tenant key.
 
 ## Durable jobs
 
-When the app declares worker queues, the harness opens a worker handle against the same isolated database.
+When the deployment declares worker queues, the harness opens a worker handle against the same isolated database.
 It does not leave a polling loop running. Drain at the point where asynchronous work must settle:
 
 ```ts
+// File: test/order.test.ts
 await e2e.client.call('order.requestExport', {})
 const completed = await e2e.drainJobs()
 assert.equal(completed, 1)
@@ -185,6 +195,7 @@ Set `worker: false` for scenarios that cannot enqueue jobs. Calling `drainJobs()
 `ket test` delegates to Node's test runner and requires emitted JavaScript artifacts:
 
 ```bash
+# Run from: /path/to/example-app
 ket test dist/test
 ket test test/order.test.ts --out-dir dist
 ket test dist/test --test-name-pattern checkout
@@ -196,11 +207,38 @@ Authored `.ts` and `.tsx` paths are mapped to `--out-dir`, `.build`, and then `d
 build-first error when an artifact is absent; production-style tests never execute TypeScript implicitly.
 Pass additional Node test arguments after `--`.
 
+## Repository CI groups
+
+Pull requests do not run the repository's entire test suite as one job. CI discovers
+the authored files under `test/` and divides them into domain groups such as
+`identity`, `catalog`, `orders`, and `hospitality`. A change below
+`packages/ketsuite/src/modules/<module>/` selects the group that owns that module;
+a changed test selects the group that owns the test. Documentation-only changes do
+not schedule test jobs.
+
+Shared framework, UI, build, workflow, or tooling changes select every group. An
+unknown code path also selects every group, so adding a new area cannot silently
+skip tests. Tests and modules are classified by their names rather than a maintained
+file list, so adding another test or bridge module does not require editing CI.
+
+Inspect or run the same groups locally:
+
+```bash
+# Run from: /path/to/ketjs
+npm run test:groups
+npm run test:group -- catalog
+```
+
+Each selected group runs once with SQLite and once with PostgreSQL. The `framework`
+SQLite job also starts MinIO for the live S3 contract tests. `npm test` and
+`npm run verify` remain the explicit full-suite commands for release verification.
+
 ## Smoke-test a function
 
 `ket call` uses the same HTTP and cookie behavior:
 
 ```bash
+# Run from: /path/to/example-app
 ket call order.list \
   --against http://127.0.0.1:3000 \
   --company acme \
@@ -213,14 +251,14 @@ ket call order.create \
 ```
 
 Without `--against`, the CLI loads the workspace app on an ephemeral port and closes it after the request.
-That uses the app's configured datastore. Add `--isolated` for a temporary database and storage directory.
+That uses the deployment's configured datastore. Add `--isolated` for a temporary database and storage directory.
 
 ## Test boundary checklist
 
 - Use direct `callFn()` tests for operation logic and real HTTP for request behavior.
 - Use one isolated app per test or suite ownership boundary.
 - Exercise permission denial as well as success.
-- Test at least two companies or tenants when the app supports them.
+- Test at least two companies or tenants when the deployment supports them.
 - Drain jobs explicitly; do not wait with arbitrary sleeps.
 - Assert durable state or public output, not internal process timing.
 - Close every harness even when an assertion fails.

@@ -3,12 +3,22 @@ import type { ModelDef } from '@ketvietlab/ketjs'
 /**
  * Master data: one catalogue across every company in the tenant, by decision.
  *
- * The template/variant split follows Odoo, including the name `Product` for the
+ * The template/variant split follows the domain contract, including the name `Product` for the
  * variant. It reads oddly — a "product" here is one sellable combination, not the
  * thing a customer would call a product — but keeping the name makes the migration
  * map one to one, and a comment costs less than a translation table.
  */
 export const models: Record<string, ModelDef> = {
+  Brand: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      name: 'text',
+      active: 'bool',
+    },
+    indexes: { name: { fields: ['name'] } },
+  },
+
   Category: {
     scope: 'shared',
     fields: {
@@ -30,16 +40,19 @@ export const models: Record<string, ModelDef> = {
       // the column, because the type vocabulary is deliberately small.
       type: 'text',
       categoryId: 'ref:product.Category?',
+      brandId: 'ref:product.Brand?',
       uomId: 'ref:uom.Unit?',
+      origin: 'text?',
       description: 'text?',
       listPrice: 'decimal',
       saleOk: 'bool',
       purchaseOk: 'bool',
       active: 'bool',
     },
+    indexes: { name: { fields: ['name'] } },
   },
 
-  /** One sellable combination of a template. Odoo calls this product.product. */
+  /** One sellable combination of a template. the domain contract calls this product.product. */
   Product: {
     scope: 'shared',
     timestamps: true,
@@ -91,11 +104,16 @@ export const models: Record<string, ModelDef> = {
       createVariant: 'text',
       active: 'bool',
     },
+    indexes: { name: { fields: ['name'] } },
   },
 
   AttributeValue: {
     scope: 'shared',
     fields: { id: 'id', attributeId: 'ref:product.Attribute', name: 'text', sequence: 'int' },
+    indexes: {
+      attribute_name: { fields: ['attributeId', 'name'] },
+      name: { fields: ['name'] },
+    },
   },
 
   TemplateAttributeLine: {
@@ -107,7 +125,10 @@ export const models: Record<string, ModelDef> = {
   TemplateAttributeValue: {
     scope: 'shared',
     fields: { id: 'id', lineId: 'ref:product.TemplateAttributeLine', valueId: 'ref:product.AttributeValue' },
-    indexes: { line_value: { fields: ['lineId', 'valueId'], unique: true } },
+    indexes: {
+      line_value: { fields: ['lineId', 'valueId'], unique: true },
+      value: { fields: ['valueId'] },
+    },
   },
 
   /**
@@ -122,6 +143,9 @@ export const models: Record<string, ModelDef> = {
       productId: 'ref:product.Product',
       templateAttributeValueId: 'ref:product.TemplateAttributeValue',
     },
-    indexes: { product_value: { fields: ['productId', 'templateAttributeValueId'], unique: true } },
+    indexes: {
+      product_value: { fields: ['productId', 'templateAttributeValueId'], unique: true },
+      template_attribute_value: { fields: ['templateAttributeValueId'] },
+    },
   },
 }

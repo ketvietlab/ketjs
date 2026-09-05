@@ -1,4 +1,4 @@
-/* KetSuite Docs — the backend visual roles mapped onto Starlight.
+/* Ket Developer Docs — the backend visual roles mapped onto Starlight.
    Keep palette decisions in sync with packages/ketsuite/.../design/tokens.css. */
 
 :root {
@@ -117,8 +117,10 @@ header.header {
 }
 
 .site-title img {
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
+  inline-size: auto;
+  block-size: 2rem;
+  max-inline-size: 10.5rem;
+  object-fit: contain;
 }
 
 site-search button {
@@ -254,6 +256,10 @@ starlight-lang-select select {
   font-size: 0.8125rem;
 }
 
+.sl-markdown-content .expressive-code pre code {
+  font-size: 0.75rem;
+}
+
 .card-grid {
   gap: var(--ks-gap);
   margin-block-start: var(--ks-gap);
@@ -289,10 +295,25 @@ starlight-lang-select select {
 }
 
 .sl-markdown-content table {
+  display: table;
+  inline-size: 100%;
+  overflow: hidden;
   border: 1px solid var(--ks-line);
   border-radius: var(--ks-radius);
   background: var(--ks-surface);
   box-shadow: var(--ks-shadow-card);
+}
+
+.sl-markdown-content table :is(th, td) {
+  padding: 0.625rem 0.75rem;
+}
+
+.sl-markdown-content table :is(th, td):first-child {
+  padding-inline-start: 0.75rem;
+}
+
+.sl-markdown-content table :is(th, td):last-child {
+  padding-inline-end: 0.75rem;
 }
 
 .sl-markdown-content pre.mermaid {
@@ -319,11 +340,11 @@ starlight-lang-select select {
 
 #starlight__sidebar summary {
   padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   line-height: 1.2;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 #starlight__sidebar summary .group-label .large {
@@ -345,7 +366,7 @@ starlight-lang-select select {
 #starlight__sidebar a {
   padding: 0.3125rem 0.5rem;
   border-radius: var(--ks-radius-sm);
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
   line-height: 1.35;
 }
 
@@ -396,6 +417,11 @@ main footer .meta {
 }
 
 @media (max-width: 49.999rem) {
+  .sl-markdown-content table {
+    display: block;
+    overflow-x: auto;
+  }
+
   header.header {
     padding-inline: var(--ks-gap-sm);
   }

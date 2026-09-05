@@ -1,4 +1,4 @@
-import { asc, defineFn, eq, from } from '@ketvietlab/ketjs'
+import { asc, defineFn, eq, from, isTimezone } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
@@ -9,6 +9,7 @@ const issue = (field: string, code: string, params?: Record<string, unknown>): I
 })
 const invalid = (errors: Issue[]) => ({ ok: false, errors })
 const clean = (value: unknown): string => String(value ?? '').trim()
+const validTimezone = (value: string): boolean => !value || isTimezone(value)
 
 const companyParentIssue = async (ctx: Ctx, id: string, parentId?: unknown): Promise<Issue | null> => {
   if (!parentId) return null
@@ -60,8 +61,11 @@ export const functions: Record<string, FnSpec> = {
       partnerId: 'id',
       parentId: 'id?',
       currency: 'text',
+      accountingTimezone: 'text?',
+      currencyLocked: 'bool',
       rootBranchId: 'id?',
       active: 'bool',
+      version: 'int',
     },
     effects: ['read:company.Company', 'read:company.Branch', 'read:partner.Partner'],
     agent: true,
@@ -78,7 +82,13 @@ export const functions: Record<string, FnSpec> = {
       return rows.map((row) => ({
         ...row,
         name: String((row.partner as Row | null)?.name ?? row.code),
+        currencyLocked: row.currencyLocked === true,
+        accountingTimezone: row.accountingTimezone ?? null,
         rootBranchId: rootByCompany.get(String(row.id)) ?? null,
+        // Rows created before optimistic concurrency was introduced have no
+        // stored version. Expose that legacy baseline as zero so the first edit
+        // still participates in compare-and-set instead of silently opting out.
+        version: Number(row.version ?? 0),
       }))
     },
   }),
@@ -92,7 +102,10 @@ export const functions: Record<string, FnSpec> = {
       partnerId: 'id',
       parentId: 'id?',
       currency: 'text',
+      accountingTimezone: 'text?',
+      currencyLocked: 'bool',
       active: 'bool',
+      version: 'int',
       branches: 'json?',
     },
     effects: ['read:company.Company', 'read:company.Branch', 'read:partner.Partner'],
@@ -106,14 +119,25 @@ export const functions: Record<string, FnSpec> = {
       return {
         ...row,
         name: String((row.partner as Row | null)?.name ?? row.code),
+        currencyLocked: row.currencyLocked === true,
+        accountingTimezone: row.accountingTimezone ?? null,
+        version: Number(row.version ?? 0),
         branches: branches.map((branch) => ({ ...branch, isRoot: branch.rootKey === row.id })),
       }
     },
   }),
 
   saveCompany: defineFn({
-    input: { id: 'id', code: 'text?', partnerId: 'id', parentId: 'id?', currency: 'text' },
-    output: { ok: 'bool', id: 'id?', rootBranchId: 'id?', errors: 'json?' },
+    input: {
+      id: 'id',
+      code: 'text?',
+      partnerId: 'id',
+      parentId: 'id?',
+      currency: 'text',
+      accountingTimezone: 'text?',
+      expectedVersion: 'int?',
+    },
+    output: { ok: 'bool', id: 'id?', rootBranchId: 'id?', version: 'int?', errors: 'json?' },
     effects: [
       'read:partner.Partner',
       'read:company.Company',
@@ -127,11 +151,23 @@ export const functions: Record<string, FnSpec> = {
       const id = String(a.id)
       const C = ctx.table('company.Company')
       const existing = await ctx.db.one(from(C).where(eq(C.id, id)))
+      const currentVersion = Number(existing?.version ?? 0)
       const code = clean(a.code || existing?.code || id).toUpperCase()
       const currency = clean(a.currency).toUpperCase()
+      const accountingTimezone = clean(a.accountingTimezone ?? existing?.accountingTimezone) || null
       const errors: Issue[] = []
       if (!code) errors.push(issue('code', 'company.error.required'))
       if (!currency) errors.push(issue('currency', 'company.error.required'))
+      if (existing?.currencyLocked === true && existing.currency !== currency)
+        errors.push(issue('currency', 'company.error.currencyLocked'))
+      if (
+        existing?.currencyLocked === true &&
+        existing.accountingTimezone &&
+        existing.accountingTimezone !== accountingTimezone
+      )
+        errors.push(issue('accountingTimezone', 'company.error.accountingTimezoneLocked'))
+      if (accountingTimezone && !validTimezone(accountingTimezone))
+        errors.push(issue('accountingTimezone', 'company.error.accountingTimezoneInvalid'))
 
       const P = ctx.table('partner.Partner')
       const party = await ctx.db.one(from(P).where(eq(P.id, a.partnerId)))
@@ -146,17 +182,63 @@ export const functions: Record<string, FnSpec> = {
       if (partyOwner && partyOwner.id !== id) errors.push(issue('partnerId', 'company.error.partnerUnique'))
       if (errors.length) return invalid(errors)
 
+      const desired = {
+        code,
+        partnerId: String(a.partnerId),
+        parentId: a.parentId ? String(a.parentId) : null,
+        currency,
+        accountingTimezone,
+      }
+      if (
+        existing &&
+        existing.code === desired.code &&
+        existing.partnerId === desired.partnerId &&
+        (existing.parentId ?? null) === desired.parentId &&
+        existing.currency === desired.currency &&
+        (existing.accountingTimezone ?? null) === desired.accountingTimezone
+      )
+        return {
+          ok: true,
+          id,
+          rootBranchId: String((await rootFor(ctx, id))?.id ?? `root:${id}`),
+          version: currentVersion,
+        }
+      if (existing && a.expectedVersion != null && currentVersion !== Number(a.expectedVersion))
+        return invalid([issue('expectedVersion', 'company.error.versionConflict')])
+
       const rootId = `root:${id}`
       return ctx.tx(async (tx) => {
         if (existing) {
+          const version = currentVersion + 1
           const cs = tx
-            .change('company.Company', { ...a, code, currency }, existing)
-            .cast(['id', 'code', 'partnerId', 'parentId', 'currency'])
+            .change('company.Company', { id, ...desired }, existing)
+            .cast(['id', 'code', 'partnerId', 'parentId', 'currency', 'accountingTimezone'])
           if (!cs.valid) return invalid(cs.errors.map((error) => issue(error.field, 'company.error.invalid')))
-          await tx.db.commit(cs, { id })
+          const changed = await tx.db.compareAndSet(
+            'company.Company',
+            { id },
+            { version: existing.version ?? null },
+            { ...cs.changes, version },
+          )
+          if (!('dryRun' in changed) && !changed.matched) {
+            // Accounting locks the currency with the same version token. If it
+            // won after this command read the company, report the durable rule
+            // instead of asking the caller to retry a change that can never land.
+            const CurrentCompany = tx.table('company.Company')
+            const held = await tx.db.one(from(CurrentCompany).where(eq(CurrentCompany.id, id)))
+            if (held?.currencyLocked === true && held.currency !== desired.currency)
+              return invalid([issue('currency', 'company.error.currencyLocked')])
+            if (
+              held?.currencyLocked === true &&
+              held.accountingTimezone &&
+              held.accountingTimezone !== desired.accountingTimezone
+            )
+              return invalid([issue('accountingTimezone', 'company.error.accountingTimezoneLocked')])
+            return invalid([issue('expectedVersion', 'company.error.versionConflict')])
+          }
           const root = await rootFor(tx, id)
           if (root) await tx.db.update('company.Branch', { id: root.id }, { code, name: String(party!.name) })
-          return { ok: true, id, rootBranchId: String(root?.id ?? rootId) }
+          return { ok: true, id, rootBranchId: String(root?.id ?? rootId), version }
         }
 
         const inserted = await tx.db.insertIfAbsent('company.Company', {
@@ -165,7 +247,10 @@ export const functions: Record<string, FnSpec> = {
           partnerId: a.partnerId,
           parentId: a.parentId ?? null,
           currency,
+          accountingTimezone,
+          currencyLocked: false,
           active: true,
+          version: 1,
         })
         if (!('dryRun' in inserted) && !inserted.inserted)
           return invalid([issue('id', 'company.error.uniqueConflict')])
@@ -180,7 +265,7 @@ export const functions: Record<string, FnSpec> = {
         })
         if (!('dryRun' in root) && !root.inserted)
           return invalid([issue('code', 'company.error.rootConflict')])
-        return { ok: true, id, rootBranchId: rootId }
+        return { ok: true, id, rootBranchId: rootId, version: 1 }
       })
     },
   }),
@@ -261,8 +346,8 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   archiveCompany: defineFn({
-    input: { id: 'id', active: 'bool' },
-    output: { ok: 'bool', id: 'id?', active: 'bool?', errors: 'json?' },
+    input: { id: 'id', active: 'bool', expectedVersion: 'int?' },
+    output: { ok: 'bool', id: 'id?', active: 'bool?', version: 'int?', errors: 'json?' },
     effects: ['read:company.Company', 'write:company.Company'],
     idempotent: true,
     agent: true,
@@ -270,12 +355,24 @@ export const functions: Record<string, FnSpec> = {
       const C = ctx.table('company.Company')
       const row = await ctx.db.one(from(C).where(eq(C.id, a.id)))
       if (!row) return invalid([issue('id', 'company.error.missing')])
+      const currentVersion = Number(row.version ?? 0)
+      if (row.active === a.active) return { ok: true, id: a.id, active: row.active, version: currentVersion }
+      if (a.expectedVersion != null && currentVersion !== Number(a.expectedVersion))
+        return invalid([issue('expectedVersion', 'company.error.versionConflict')])
       if (a.active === false && ctx.manifest.models['user.User'])
         return invalid([issue('active', 'company.error.identityGuardRequired')])
       if (a.active === false && (await ctx.db.count(from(C).where(eq(C.active, true)))) <= 1)
         return invalid([issue('active', 'company.error.lastActive')])
-      await ctx.db.update('company.Company', { id: a.id }, { active: a.active } as Row)
-      return { ok: true, id: a.id, active: a.active }
+      const version = currentVersion + 1
+      const changed = await ctx.db.compareAndSet(
+        'company.Company',
+        { id: a.id },
+        { version: row.version ?? null },
+        { active: a.active, version } as Row,
+      )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid([issue('expectedVersion', 'company.error.versionConflict')])
+      return { ok: true, id: a.id, active: a.active, version }
     },
   }),
 

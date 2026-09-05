@@ -8,15 +8,15 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'company',
-  version: '0.1.0',
+  // 0.3.0 adds the company civil-date timezone and lets Accounting freeze it
+  // with the book currency without making this foundational module depend on Accounting.
+  version: '0.3.0',
   depends: ['partner'],
-  app: true,
   title: 'Công ty',
   summary: 'Pháp nhân và chi nhánh hạch toán độc lập.',
   category: 'Hệ thống',
   // Removing the register of legal entities would leave every company-scoped row
   // pointing at nothing nameable.
-  removable: false,
   models,
   relations,
   functions,

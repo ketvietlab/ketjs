@@ -1,5 +1,6 @@
 import { KetError } from '../kernel/errors.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
+import { findCallable, projectFields, visibleFields } from './viewmodel.ts'
 import type { Manifest } from '../types.ts'
 
 const scalarMatches = (base: string, value: unknown): boolean => {
@@ -38,12 +39,15 @@ export function contractProps(
   key: string,
   schema: Record<string, string>,
   input: Record<string, unknown>,
+  /** The module whose template is about to read these props. See `visibleFields`. */
+  reader?: string,
 ): Record<string, unknown> {
   for (const [name, value] of Object.entries(input)) {
-    if (typeof value === 'function') {
+    const callable = findCallable(value, name)
+    if (callable !== null) {
       throw new KetError({
         code: 'E_SCOPE_CALLABLE',
-        message: `${kind} "${key}" scope key "${name}" is a function`,
+        message: `${kind} "${key}" scope key "${callable}" is a function`,
         hint: 'extension scopes receive data only',
       })
     }
@@ -66,10 +70,20 @@ export function contractProps(
       })
     }
     const view = spec.endsWith('?') ? spec.slice(0, -1) : spec
+    const isView = !scalar.ok && !!manifest.views[view]
     const valid = scalar.ok
       ? scalarMatches(scalar.base, value)
-      : !!manifest.views[view] && typeof value === 'object'
-    if (!valid || !dataOnly(value)) {
+      : isView && typeof value === 'object' && !Array.isArray(value)
+    // A view-typed prop is projected, not merely type-checked. Declaring
+    // `product: 'catalog.product'` used to admit any object at all, so whatever
+    // row the caller happened to hold — vat number, cost price, internal notes —
+    // crossed into the theme intact. The declaration says which fields a theme may
+    // read; the only way for that to be true is for the other fields not to arrive.
+    const projected =
+      isView && valid
+        ? projectFields(value as Record<string, unknown>, visibleFields(manifest, view, reader))
+        : value
+    if (!valid || !dataOnly(projected)) {
       throw new KetError({
         code: kind === 'joint' ? 'E_JOINT_PROP' : 'E_ISLAND_PROP',
         message: valid
@@ -80,7 +94,26 @@ export function contractProps(
           : `received ${Array.isArray(value) ? 'array' : typeof value}`,
       })
     }
-    out[name] = value
+    out[name] = projected
   }
+  return Object.freeze(out)
+}
+
+/**
+ * A section placement's settings, projected to what the section declared.
+ *
+ * The write path already validates a layout against this schema
+ * (`validateLayout`), so this is the boundary rather than a second gate: a stored
+ * layout that predates a schema change, or one an import wrote straight into the
+ * database, still reaches the theme carrying only declared keys. Missing values
+ * arrive as null, exactly as a drop's do, so a template branches on absence
+ * instead of on undefined.
+ */
+export function sectionSettings(
+  schema: Record<string, string>,
+  settings: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = Object.create(null) as Record<string, unknown>
+  for (const name of Object.keys(schema)) out[name] = settings[name] ?? null
   return Object.freeze(out)
 }

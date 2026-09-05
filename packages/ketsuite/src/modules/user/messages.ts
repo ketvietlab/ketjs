@@ -1,6 +1,8 @@
 export const messages = {
   vi: {
     'login.title': 'Đăng nhập',
+    'login.subtitle': 'Đăng nhập để tiếp tục vào KetSuite.',
+    'login.brand': 'KetSuite — Extensible Open ERP',
     'login.login': 'Tên đăng nhập',
     'login.password': 'Mật khẩu',
     'login.submit': 'Đăng nhập',
@@ -38,6 +40,7 @@ export const messages = {
     'error.noLiveBranch': 'Session không còn chi nhánh hoạt động hợp lệ.',
     'error.required': 'Trường này là bắt buộc.',
     'error.loginUnique': 'Tên đăng nhập đã được sử dụng.',
+    'error.idConflict': 'Yêu cầu tạo người dùng xung đột với bản ghi đã có.',
     'error.accessKind': 'Loại truy cập không hợp lệ.',
     'error.timezone': 'Múi giờ phải là tên IANA hợp lệ.',
     'error.passwordLength': 'Mật khẩu phải có ít nhất 8 ký tự.',
@@ -58,6 +61,8 @@ export const messages = {
   },
   en: {
     'login.title': 'Sign in',
+    'login.subtitle': 'Sign in to continue to KetSuite.',
+    'login.brand': 'KetSuite — Extensible Open ERP',
     'login.login': 'Login',
     'login.password': 'Password',
     'login.submit': 'Sign in',
@@ -95,6 +100,7 @@ export const messages = {
     'error.noLiveBranch': 'The session no longer has a valid active branch.',
     'error.required': 'This field is required.',
     'error.loginUnique': 'That login is already in use.',
+    'error.idConflict': 'The user creation request conflicts with an existing record.',
     'error.accessKind': 'The access kind is invalid.',
     'error.timezone': 'Timezone must be a valid IANA name.',
     'error.passwordLength': 'The password must contain at least 8 characters.',

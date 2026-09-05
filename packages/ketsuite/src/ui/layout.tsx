@@ -4,72 +4,70 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
+import {
+  ListPage as DesignSystemListPage,
+  RecordPage as DesignSystemRecordPage,
+  WorkspacePage as DesignSystemWorkspacePage,
+} from '@ketvietlab/design-system'
 import { sidebar, sidebarMain } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
-import { actionButton } from './primitives.tsx'
-import { icon } from './icons.ts'
-import { recordWorkspace } from './record.tsx'
+import { pageContextFromFrame } from './navigation.tsx'
 
 export const HOOKS = [
   'shell',
   'main',
   'topbar',
-  'title',
   'content',
-  'app-groups',
-  'app-group',
   'group-title',
-  'app-grid',
-  'app-card',
-  'app-title',
-  'app-summary',
-  'app-meta',
-  'app-meta-value',
-  'app-actions',
   'tokens',
   'token-list',
   'token',
   'token-name',
   'token-value',
-  'context-switcher',
-  'context-company',
-  'context-branch',
 ] as const
 
 export type Extras = {
+  runtime?: JSXChild
   'topbar.end'?: JSXChild
   'sidebar.foot'?: JSXChild
-  'apps.footer'?: JSXChild
   'nav.items'?: JSXChild
-  'app-card.actions'?: Record<string, JSXChild>
 }
 
 export type Frame = {
   viewer?: Viewer | null
   indicators?: Indicator[]
   menuFilter?: string | null
+  /** How the shell offers the root sections; the deployment decides. */
+  rootList?: 'auto' | 'always' | 'never'
   extras?: Extras
   menu?: MenuNode[]
   chrome?: ListChrome | null
   navigation?: boolean
+  /** False when the body opens with its own heading, so the topbar does not repeat it. */
+  titled?: boolean
+  /** False when a self-titled workspace replaces the shared topbar. */
+  topbar?: boolean
 }
 
+/**
+ * The topbar shows the page's name only when nothing below it does.
+ *
+ * A framed screen already opens with `record-heading`, so putting the title in the
+ * bar too printed it twice, one line apart, in a different size — the second one
+ * adding nothing. A list's chrome owns the row instead.
+ */
 const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResult => {
-  const { viewer = null, extras = {} } = frame
+  const { extras = {} } = frame
   return (
     <>
-      {frame.chrome ? listChrome(_, title, frame.chrome) : <h1 data-ui="title">{title}</h1>}
-      {!!viewer?.contextPath && (
-        <a
-          data-ui="context-switcher"
-          href={viewer.contextPath}
-          title={`${viewer.companyName ?? viewer.company ?? ''}${viewer.branchName ? ` · ${viewer.branchName}` : ''}`}
-        >
-          <span data-ui="context-company">{viewer.companyName ?? viewer.company}</span>
-          {!!viewer.branchName && <span data-ui="context-branch">{viewer.branchName}</span>}
-        </a>
+      {frame.chrome ? (
+        listChrome(_, title, frame.chrome, frame.titled !== false)
+      ) : frame.titled === false ? (
+        ''
+      ) : (
+        <h1 data-ui="title">{title}</h1>
       )}
       {extras['topbar.end'] ?? ''}
     </>
@@ -88,6 +86,7 @@ export const shell = (
     viewer,
     indicators,
     menuFilter: frame.menuFilter,
+    rootList: frame.rootList,
     navItems: extras['nav.items'],
     footItems: extras['sidebar.foot'],
   }
@@ -95,17 +94,24 @@ export const shell = (
     return (
       <ket-fragments data-title={title}>
         <template data-ket-slot="backend.sidebar-main">{sidebarMain(_, sidebarOptions)}</template>
-        <template data-ket-slot="backend.topbar">{topbarContent(_, title, frame)}</template>
+        <template data-ket-slot="backend.topbar">
+          {frame.topbar === false ? '' : topbarContent(_, title, frame)}
+        </template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
   return (
-    <div data-ui="shell">
+    <div data-ui="shell" data-kv-design-system>
       {sidebar(_, sidebarOptions)}
       <main data-ui="main">
-        <header data-ui="topbar" data-ket-slot="backend.topbar">
-          {topbarContent(_, title, frame)}
-        </header>
+        {extras.runtime ?? ''}
+        {frame.topbar === false ? (
+          ''
+        ) : (
+          <header data-ui="topbar" data-ket-slot="backend.topbar">
+            {topbarContent(_, title, frame)}
+          </header>
+        )}
         <div data-ui="content" data-ket-slot="backend.content">
           {body}
         </div>
@@ -138,89 +144,118 @@ export const backendPage = async (
 }
 
 /**
- * Every operational page gets the same bordered header/body sheet as accounting.
- * A screen that already supplies a richer record workspace is flattened by CSS,
- * so its domain-specific identity, facts, tabs, and collaboration rail remain the
- * only visible workspace rather than being wrapped in a second card.
+ * Compatibility frame for operational screens that have not yet selected a more
+ * specific page pattern. It keeps the operational workspace semantics used by
+ * boards and reports, while the compact RecordWorkspace header avoids repeating
+ * the module identity as a breadcrumb, kicker and large glyph. A richer
+ * RecordWorkspace nested in the body keeps its own record header; the
+ * compatibility heading is flattened for that case in record.css.
  */
-export const framed = (_: Translator, title: string, frame: Frame, body: TemplateResult): TemplateResult =>
-  shell(
-    _,
-    title,
-    recordWorkspace({
-      pageFrame: true,
-      title,
-      imageFallback: icon('layout-grid'),
-      body,
-    }),
-    frame,
-  )
-
-/** JSX entry point for backend screens; `framed` remains for extension compatibility. */
-export const framedPage = (options: {
+export type OperationalScreenOptions = {
   translator: Translator
   title: string
   frame: Frame
   body: TemplateResult
-}): TemplateResult => framed(options.translator, options.title, options.frame, options.body)
+  /** The section above the title. Defaults to the active root's name. */
+  kicker?: string | null
+  /** One line on what this screen is for. Worth writing; there is no sensible default. */
+  subtitle?: string | null
+  /** A semantic glyph. Defaults to the active root's. */
+  icon?: string | null
+  /**
+   * A column beside the body, for what accompanies a screen rather than
+   * continues it — an activity feed, a summary. `recordWorkspace` has had the
+   * slot all along; this only passes it through, so a full-page screen can use
+   * the same rail a record detail does instead of stacking the aside under the
+   * content and calling it a sidebar.
+   */
+  aside?: JSXChild
+  asideLabel?: string | null
+  /**
+   * What this screen offers beside its title — the one thing you came here to
+   * start. It shares the row with a list's chrome rather than replacing it, so a
+   * screen can both filter and offer an action; a screen with neither leaves the
+   * row out entirely.
+   */
+  actions?: JSXChild
+}
 
-export type CardMeta = { term: string; value: string; kind: 'depends' | 'dependents' | 'neutral' }
+const operationalActions = (options: OperationalScreenOptions): JSXChild | undefined =>
+  options.frame.extras?.['topbar.end'] !== undefined || options.actions !== undefined ? (
+    <>
+      {options.actions ?? ''}
+      {options.frame.extras?.['topbar.end'] ?? ''}
+    </>
+  ) : undefined
 
-export const appCard = (options: {
-  key: string
-  state: string
-  title: string
-  summary: string
-  meta: CardMeta[]
-  action: { label: string; action: string; disabled?: boolean }
-  extra?: JSXChild
-}): TemplateResult => (
-  <article data-ui="app-card" data-state={options.state} data-app={options.key}>
-    <h3 data-ui="app-title">{options.title}</h3>
-    <p data-ui="app-summary">{options.summary}</p>
-    <dl data-ui="app-meta">
-      {each(
-        options.meta,
-        (item) => `${item.kind}:${item.term}`,
-        (item) => (
-          <>
-            <dt>{item.term}</dt>
-            <dd data-ui="app-meta-value" data-kind={item.kind}>
-              {item.value}
-            </dd>
-          </>
-        ),
-      )}
-    </dl>
-    <div data-ui="app-actions">
-      {actionButton(options.action)}
-      {options.extra ?? ''}
-    </div>
-  </article>
-)
+const operationalShell = (options: OperationalScreenOptions, body: TemplateResult): TemplateResult =>
+  shell(options.translator, options.title, body, { ...options.frame, titled: false, topbar: false })
 
-export const card = appCard
+export const listScreen = (options: OperationalScreenOptions): TemplateResult =>
+  operationalShell(
+    options,
+    <DesignSystemListPage
+      variant="operational"
+      context={pageContextFromFrame(options.title, options.frame)}
+      eyebrow={options.kicker}
+      title={options.title}
+      description={options.subtitle}
+      actions={operationalActions(options)}
+      controls={
+        options.frame.chrome
+          ? listChrome(options.translator, options.title, options.frame.chrome, false)
+          : undefined
+      }
+      body={options.body}
+    />,
+  )
 
-export const cardGroups = <T,>(options: {
-  groups: Array<{ key: string; title: string; items: readonly T[] }>
-  id: (item: T) => unknown
-  card: (item: T) => TemplateResult
-  footer?: JSXChild
-}): TemplateResult => (
-  <div data-ui="app-groups">
-    {each(
-      options.groups,
-      (group) => group.key,
-      (group) => (
-        <section data-ui="app-group" data-category={group.key}>
-          <h2 data-ui="group-title">{group.title}</h2>
-          <div data-ui="app-grid">{each(group.items, options.id, (item) => options.card(item))}</div>
-        </section>
-      ),
-    )}
-    {options.footer ?? ''}
-  </div>
-)
+export const recordScreen = (options: OperationalScreenOptions): TemplateResult =>
+  operationalShell(
+    options,
+    <DesignSystemRecordPage
+      variant="operational"
+      context={pageContextFromFrame(options.title, options.frame)}
+      title={options.title}
+      description={options.subtitle}
+      actions={operationalActions(options)}
+      controller={
+        options.frame.chrome
+          ? listChrome(options.translator, options.title, options.frame.chrome, false)
+          : undefined
+      }
+      body={options.body}
+      aside={options.aside}
+      asideLabel={options.asideLabel}
+    />,
+  )
+
+export const workspaceScreen = (
+  options: OperationalScreenOptions & { layout?: 'flow' | 'canvas' },
+): TemplateResult =>
+  operationalShell(
+    options,
+    <DesignSystemWorkspacePage
+      variant="operational"
+      layout={options.layout ?? 'flow'}
+      context={pageContextFromFrame(options.title, options.frame)}
+      eyebrow={options.kicker}
+      title={options.title}
+      description={options.subtitle}
+      actions={operationalActions(options)}
+      controls={
+        options.frame.chrome
+          ? listChrome(options.translator, options.title, options.frame.chrome, false)
+          : undefined
+      }
+      body={options.body}
+    />,
+  )
+
+/** @deprecated Select ListScreen, RecordScreen or WorkspaceScreen. */
+export const framedPage = (options: OperationalScreenOptions): TemplateResult => {
+  return workspaceScreen(options)
+}
 
 export const definitionList = (options: {
   title: string

@@ -9,12 +9,12 @@ const functions = withDeliveryStatus(
     targetEffect: 'read:product.Product',
     verify: async (ctx: Ctx, targetId: string) => {
       const P = ctx.table('product.Product')
-      const row = await ctx.db.one(from(P).where(eq(P.id, targetId), eq(P.active, true)))
+      const row = await ctx.db.one(from(P).where(eq(P.id, targetId)))
       if (!row)
         throw new KetError({
           code: 'E_PRODUCT_VARIANT_MAIL_TARGET',
           module: 'product_variant_mail_backend',
-          message: 'product variant is archived, missing, or unavailable in this tenant',
+          message: 'product variant is missing or unavailable in this tenant',
         })
       return { id: String(row.id), displayName: String(row.defaultCode || row.id) }
     },
@@ -25,7 +25,6 @@ export default defineModule({
   name: 'product_variant_mail_backend',
   version: '0.1.0',
   depends: ['product_backend', 'mail_backend', 'mail_transport'],
-  install: 'auto',
   functions,
   fills: {
     'product_backend:variant.collaboration': `{% island "mail.chatter" %}`,

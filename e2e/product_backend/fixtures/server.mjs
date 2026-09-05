@@ -13,7 +13,7 @@ import {
   registerFunctions,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
-import { ketsuite } from '../../../.build/apps/ketsuite/app.js'
+import { ketsuite } from '../../../.build/apps/ketsuite/deployment.js'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const runtime = mkdtempSync(join(tmpdir(), 'ketjs-product-list-e2e-'))
@@ -123,6 +123,7 @@ const seed = async () => {
     active: true,
   })
   await call('product.saveCategory', { id: 'workwear', name: 'Đồng phục vận hành' })
+  await call('product.saveBrand', { id: 'brand-ket', name: 'Kết Việt' })
   await call('product.saveAttribute', {
     id: 'color',
     name: 'Màu sắc',
@@ -143,17 +144,69 @@ const seed = async () => {
     name: 'Cam cảnh báo',
     sequence: 20,
   })
+  await call('product.saveAttribute', {
+    id: 'size',
+    name: 'Kích thước',
+    sequence: 20,
+    displayType: 'pills',
+    createVariant: 'always',
+    active: true,
+  })
+  for (const [index, name] of ['S', 'M', 'L', 'XL'].entries()) {
+    await call('product.saveAttributeValue', {
+      id: `size-${name.toLowerCase()}`,
+      attributeId: 'size',
+      name,
+      sequence: (index + 1) * 10,
+    })
+  }
+  await call('product.saveAttribute', {
+    id: 'material',
+    name: 'Chất liệu',
+    sequence: 30,
+    displayType: 'pills',
+    createVariant: 'always',
+    active: true,
+  })
+  for (const [index, name] of ['Cotton', 'Polyester', 'Nỉ'].entries()) {
+    await call('product.saveAttributeValue', {
+      id: `material-${index + 1}`,
+      attributeId: 'material',
+      name,
+      sequence: (index + 1) * 10,
+    })
+  }
+  await call('product.saveAttribute', {
+    id: 'season-note',
+    name: 'Mùa bán hàng',
+    sequence: 40,
+    displayType: 'select',
+    createVariant: 'no_variant',
+    active: true,
+  })
+  await call('product.saveAttributeValue', {
+    id: 'season-note-summer',
+    attributeId: 'season-note',
+    name: 'Mùa hè',
+    sequence: 10,
+  })
   await call('product.saveTemplate', {
     id: 'tpl-review',
     name: 'Áo khoác vận hành KETSUITE',
     type: 'goods',
     categoryId: 'workwear',
+    brandId: 'brand-ket',
     uomId: 'unit',
+    origin: 'Việt Nam',
     description: 'Sản phẩm fixture dùng để kiểm tra đủ ba tab chi tiết.',
     listPrice: '1299000',
     saleOk: true,
     purchaseOk: true,
+    defaultCode: 'JACKET-DEFAULT',
+    barcode: '8938500000000',
   })
+  const saleTaxes = await call('account.listTaxes', { typeTaxUse: 'sale' })
+  if (saleTaxes[0]) await call('account.setProductTax', { templateId: 'tpl-review', taxId: saleTaxes[0].id })
   await call('stock.configureProduct', {
     templateId: 'tpl-review',
     isStorable: true,
@@ -172,6 +225,42 @@ const seed = async () => {
     productId: 'variant-review',
     uomId: 'unit',
     barcode: '8938500000017-UOM',
+  })
+  await call('product.saveAttributeLine', {
+    id: 'tpl-review:color',
+    templateId: 'tpl-review',
+    attributeId: 'color',
+    valueIds: ['color-blue', 'color-orange'],
+  })
+  await call('product.saveAttributeLine', {
+    id: 'tpl-review:size',
+    templateId: 'tpl-review',
+    attributeId: 'size',
+    valueIds: ['size-s', 'size-m', 'size-l', 'size-xl'],
+  })
+  await call('product.saveAttributeLine', {
+    id: 'tpl-review:material',
+    templateId: 'tpl-review',
+    attributeId: 'material',
+    valueIds: ['material-1', 'material-2', 'material-3'],
+  })
+  await call('product.saveAttributeLine', {
+    id: 'tpl-review:season-note',
+    templateId: 'tpl-review',
+    attributeId: 'season-note',
+    valueIds: ['season-note-summer'],
+  })
+  await call('product.generateVariants', { templateId: 'tpl-review' })
+  const generatedVariant = (await call('product.listVariants', { templateId: 'tpl-review' })).find(
+    (variant) => variant.id !== 'variant-review',
+  )
+  // One explicit row beyond the 24 generated combinations and the base
+  // variant proves that the media table pages every variant instead of only
+  // showing variants that already have images.
+  await call('product.saveVariant', {
+    id: 'variant-review-extra',
+    templateId: 'tpl-review',
+    defaultCode: 'JACKET-REVIEW-EXTRA',
   })
   await attachment({
     id: 'media-primary',
@@ -203,6 +292,16 @@ const seed = async () => {
     alt: 'Biến thể áo khoác màu cam',
     sequence: 20,
   })
+  if (generatedVariant) {
+    await attachment({
+      id: 'generated-variant-media-primary',
+      source: join(root, 'e2e/product_backend/fixtures/product-secondary.png'),
+      productId: generatedVariant.id,
+      alt: 'Biến thể áo khoác màu cam',
+      primary: true,
+      sequence: 10,
+    })
+  }
 
   for (let index = 1; index <= 32; index += 1) {
     const suffix = String(index).padStart(2, '0')

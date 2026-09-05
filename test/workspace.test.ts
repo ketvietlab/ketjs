@@ -7,36 +7,36 @@ import {
   compose,
   composeWorkspace,
   compositionSchema,
-  defineApp,
+  defineDeployment,
   defineModule,
 } from '@ketvietlab/ketjs'
 import { catalog, defaultTheme as theme, inventory } from '@ketvietlab/ketsuite'
 
-test('umbrella: one codebase composes several apps from overlapping modules', () => {
+test('umbrella: one codebase composes several deployments from overlapping modules', () => {
   const ws = workspace()
-  assert.deepEqual(Object.keys(ws.apps).sort(), ['admin', 'storefront'])
+  assert.deepEqual(Object.keys(ws.deployments).sort(), ['admin', 'storefront'])
   assert.deepEqual(ws.shared, ['catalog', 'inventory'])
   assert.deepEqual(ws.soloed.admin, ['checkout'])
   assert.ok(
-    !('checkout.placeOrder' in ws.apps.storefront!.functions),
+    !('checkout.placeOrder' in ws.deployments.storefront!.functions),
     'storefront must not expose admin-only functions',
   )
-  assert.ok('checkout.placeOrder' in ws.apps.admin!.functions)
+  assert.ok('checkout.placeOrder' in ws.deployments.admin!.functions)
 })
 
-test('umbrella: apps sharing a datastore get one union schema', () => {
+test('umbrella: deployments sharing a datastore get one union schema', () => {
   const ws = workspace()
   const main = ws.datastores.main!
-  assert.deepEqual(main.apps.sort(), ['admin', 'storefront'])
+  assert.deepEqual(main.deployments.sort(), ['admin', 'storefront'])
   assert.ok('catalog_product' in main.schema.tables)
   assert.ok(
     'checkout_order' in main.schema.tables,
-    'a table only one app knows about still lives in the shared store',
+    'a table only one deployment knows about still lives in the shared store',
   )
   assert.ok('leadTimeDays' in main.schema.tables.catalog_product!.columns)
 })
 
-test('umbrella: two apps disagreeing about the same table is a build error', () => {
+test('umbrella: two deployments disagreeing about the same table is a build error', () => {
   const catalogV1 = defineModule({
     name: 'catalog',
     models: { Product: { scope: 'shared', fields: { id: 'id', price: 'int' } } },
@@ -45,26 +45,98 @@ test('umbrella: two apps disagreeing about the same table is a build error', () 
     name: 'catalog',
     models: { Product: { scope: 'shared', fields: { id: 'id', price: 'text' } } },
   })
-  const a = defineApp({ name: 'a', modules: [catalogV1], datastore: 'main', headless: true })
-  const b = defineApp({ name: 'b', modules: [catalogV2], datastore: 'main', headless: true })
+  const a = defineDeployment({ name: 'a', modules: [catalogV1], datastore: 'main', headless: true })
+  const b = defineDeployment({ name: 'b', modules: [catalogV2], datastore: 'main', headless: true })
   assert.throws(() => composeWorkspace([a, b]), /E_DATASTORE_COLUMN_CLASH|is int .* but text/)
+})
+
+test('umbrella: shared columns must agree on nullability and reference target', () => {
+  const deployment = (name: string, value: string, owner: string) =>
+    defineDeployment({
+      name,
+      datastore: 'main',
+      headless: true,
+      modules: [
+        defineModule({
+          name: 'shared_contract',
+          models: {
+            OwnerA: { scope: 'shared', fields: { id: 'id' } },
+            OwnerB: { scope: 'shared', fields: { id: 'id' } },
+            Entry: { scope: 'shared', fields: { id: 'id', value, owner } },
+          },
+        }),
+      ],
+    })
+
+  assert.throws(
+    () =>
+      composeWorkspace([
+        deployment('required', 'text', 'ref:shared_contract.OwnerA'),
+        deployment('optional', 'text?', 'ref:shared_contract.OwnerA'),
+      ]),
+    /E_DATASTORE_COLUMN_CLASH|text.*text\?/,
+  )
+  assert.throws(
+    () =>
+      composeWorkspace([
+        deployment('owner_a', 'text', 'ref:shared_contract.OwnerA'),
+        deployment('owner_b', 'text', 'ref:shared_contract.OwnerB'),
+      ]),
+    /E_DATASTORE_COLUMN_CLASH|OwnerA.*OwnerB/,
+  )
+})
+
+test('umbrella: shared datastore indexes are unioned and same-name conflicts are rejected', () => {
+  const deployment = (name: string, indexes: Record<string, { fields: string[]; unique?: boolean }>) =>
+    defineDeployment({
+      name,
+      datastore: 'main',
+      headless: true,
+      modules: [
+        defineModule({
+          name: 'indexed',
+          models: {
+            Entry: { scope: 'shared', fields: { id: 'id', code: 'text', label: 'text' }, indexes },
+          },
+        }),
+      ],
+    })
+
+  const union = composeWorkspace([
+    deployment('without_index', {}),
+    deployment('with_index', { code_unique: { fields: ['code'], unique: true } }),
+  ])
+  assert.deepEqual(union.datastores.main?.schema.tables.indexed_entry?.indexes.code_unique, {
+    fields: ['code'],
+    unique: true,
+    by: 'indexed',
+  })
+
+  assert.throws(
+    () =>
+      composeWorkspace([
+        deployment('code_index', { lookup: { fields: ['code'], unique: true } }),
+        deployment('label_index', { lookup: { fields: ['label'] } }),
+      ]),
+    /E_DATASTORE_INDEX_CLASH|index "indexed_entry.lookup"/,
+  )
 })
 
 test('umbrella: separate datastores keep separate schemas', () => {
   const ws = composeWorkspace([
-    defineApp({ name: 'one', modules: [catalog, inventory], theme, datastore: 'shop' }),
-    defineApp({ name: 'two', modules: [catalog], datastore: 'analytics', headless: true }),
+    defineDeployment({ name: 'one', modules: [catalog, inventory], theme, datastore: 'shop' }),
+    defineDeployment({ name: 'two', modules: [catalog], datastore: 'analytics', headless: true }),
   ])
   assert.deepEqual(Object.keys(ws.datastores).sort(), ['analytics', 'shop'])
   assert.equal('leadTimeDays' in ws.datastores.analytics!.schema.tables.catalog_product!.columns, false)
 })
 
-test('umbrella: a headless app renders nothing and may not install a theme', () => {
+test('umbrella: a headless deployment renders nothing and may not select a theme', () => {
   assert.equal(storefront.headless ?? false, false)
   assert.equal(admin.headless, true)
   assert.throws(
-    () => defineApp({ name: 'x', modules: [catalog], theme, headless: true }),
-    /headless but installs a theme/,
+    () => defineDeployment({ name: 'x', modules: [catalog], theme, headless: true }),
+    /headless but selects a theme/,
   )
 })
 
@@ -92,9 +164,59 @@ test('agent: the composition schema is the safe write surface', () => {
   assert.ok(cs.tokens.includes('color-accent'))
 })
 
-test('agent: one descriptor answers "what is this app and what may I do"', () => {
+test('agent: one descriptor answers "what is this deployment and what may I do"', () => {
   const d = agentDescriptor(compose([catalog, inventory, theme]))
   assert.ok(d.tools.length > 0)
   assert.equal(d.models['catalog.Product']!.leadTimeDays, 'int? (by inventory)')
   assert.ok('catalog.product' in d.views)
+})
+
+test('navigation: a deployment names where each kind of viewer lands', () => {
+  const app = defineDeployment({
+    name: 'landing',
+    modules: [catalog, inventory, theme],
+    navigation: {
+      home: [
+        { needs: 'inventory.adjust', path: '/admin/inventory' },
+        { needs: 'catalog.list', path: '/admin/catalog' },
+      ],
+    },
+    serve: {},
+  })
+  assert.deepEqual(
+    app.navigation?.home?.map((entry) => entry.path),
+    ['/admin/inventory', '/admin/catalog'],
+  )
+})
+
+test('navigation: a landing condition that is not a function key is refused at authoring time', () => {
+  assert.throws(
+    () =>
+      defineDeployment({
+        name: 'landing',
+        modules: [catalog, theme],
+        // A role name is the tempting thing to write here, and it is exactly what
+        // the server cannot resolve at request time.
+        navigation: { home: [{ needs: 'warehouse-operator', path: '/admin/catalog' }] },
+        serve: {},
+      }),
+    /invalid navigation.home condition/,
+  )
+})
+
+test('navigation: a landing page pointing outside the build fails composition, not production', () => {
+  const app = defineDeployment({
+    name: 'landing',
+    modules: [catalog, theme],
+    navigation: { home: [{ needs: 'checkout.placeOrder', path: '/admin/checkout' }] },
+    serve: {},
+  })
+  assert.throws(
+    () => composeWorkspace([app]),
+    (e: Error) => {
+      assert.match(e.message, /E_DEPLOYMENT_NAVIGATION_HOME_UNKNOWN_FUNCTION/)
+      assert.match(e.message, /E_DEPLOYMENT_NAVIGATION_HOME_UNROUTED/)
+      return true
+    },
+  )
 })

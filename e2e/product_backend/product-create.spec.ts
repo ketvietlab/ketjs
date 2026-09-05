@@ -12,7 +12,7 @@ const login = async (page: Page) => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('product-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => login(page))
 
 test('rejects invalid stock settings before creating a product', async ({ page }) => {
   const invalidName = 'Sản phẩm không hợp lệ E2E'
-  await page.goto('/admin/products/new?lang=vi')
+  await page.goto('/admin/product/templates/new?lang=vi')
   await expect(page.getByRole('heading', { name: 'Tạo sản phẩm' }).first()).toBeVisible()
 
   await page.locator('input[name="name"]').fill(invalidName)
@@ -29,20 +29,20 @@ test('rejects invalid stock settings before creating a product', async ({ page }
   await page.getByLabel('Truy xuất').selectOption('lot')
   await page.getByRole('button', { name: 'Tạo mới' }).click()
 
-  await expect(page).toHaveURL(/\/admin\/products\/new\?[^#]*invalid=1/)
+  await expect(page).toHaveURL(/\/admin\/product\/templates\/new\?[^#]*invalid=1/)
   await expect(page.getByRole('alert')).toContainText('Dữ liệu chưa hợp lệ')
-  await page.goto(`/admin/products?lang=vi&q=${encodeURIComponent(invalidName)}`)
+  await page.goto(`/admin/product/templates?lang=vi&q=${encodeURIComponent(invalidName)}`)
   await expect(page.locator('[data-ui="row"]')).toHaveCount(0)
 })
 
 test('creates a valid product and opens its detail screen', async ({ page }) => {
-  await page.goto('/admin/products/new?lang=vi')
+  await page.goto('/admin/product/templates/new?lang=vi')
   await page.locator('input[name="name"]').fill('Sản phẩm hợp lệ E2E')
   await page.getByLabel('Giá bán').fill('245000')
   await page.getByLabel('Truy xuất').selectOption('none')
   await page.getByRole('button', { name: 'Tạo mới' }).click()
 
-  await expect(page).toHaveURL(/\/admin\/products\/[^/?]+\?(?:[^#]*&)?lang=vi(?:&|$)/)
+  await expect(page).toHaveURL(/\/admin\/product\/templates\/[^/?]+\?(?:[^#]*&)?lang=vi(?:&|$)/)
   await expect(page.locator('input[name="name"]')).toHaveValue('Sản phẩm hợp lệ E2E')
   await expect(page.getByLabel('Giá bán')).toHaveValue('245000')
 })
@@ -54,7 +54,7 @@ for (const viewport of [
   for (const locale of ['vi', 'en'] as const) {
     test(`renders the ${locale} form correctly on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await page.goto(`/admin/products/new?lang=${locale}`)
+      await page.goto(`/admin/product/templates/new?lang=${locale}`)
       await expect(page.locator('[data-ui="main"]')).toBeVisible()
       await expect(page.locator('form[action="/login"]')).toHaveCount(0)
 
@@ -78,8 +78,10 @@ for (const viewport of [
       })
 
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-      expect(metrics.input?.height).toBe(28)
-      expect(metrics.submitHeight).toBe(viewport.name === 'desktop' ? 28 : 44)
+      // A field is 32px on a touch screen and 28px with a cursor: a fingertip
+      // needs the target, a pointer does not.
+      expect(metrics.input?.height).toBe(34)
+      expect(metrics.submitHeight).toBe(34)
       if (viewport.name === 'desktop') {
         const inputCenter = metrics.input!.y + metrics.input!.height / 2
         const labelCenter = metrics.label!.y + metrics.label!.height / 2

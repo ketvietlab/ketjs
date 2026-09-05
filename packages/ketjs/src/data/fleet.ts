@@ -1,13 +1,15 @@
 // Migrating many databases from one manifest.
 //
-// Odoo lets each database install a different set of modules, so there is no single
+// the domain contract lets each database install a different set of modules, so there is no single
 // schema to reason about and every fleet upgrade is N unknown migrations. Ket takes
 // the opposite position: one manifest, many databases, the same target schema
 // everywhere. Each database records the schema it is actually on, so a tenant
 // created last year and one created today converge on the same shape.
 
-import { schemaFromManifest, planMigration, renderSql } from './migrate.ts'
+import { isDeepStrictEqual } from 'node:util'
+import { ManualMigrationRequiredError, schemaFromManifest, planMigration, renderSql } from './migrate.ts'
 import type { Schema, MigrationOp } from './migrate.ts'
+import { physicalSchemaIssues } from './physical.ts'
 import type { AdapterPool } from './pool.ts'
 import type { Adapter, Manifest } from '../types.ts'
 
@@ -28,9 +30,36 @@ CREATE TABLE IF NOT EXISTS ket_migration (
 
 export type MigrationResult = { datastore: string; ops: MigrationOp[]; applied: boolean; error?: string }
 
-async function readApplied(adapter: Adapter): Promise<Schema | null> {
+/** Read-only comparison of a database catalog, its applied marker, and the current manifest. */
+export type PhysicalSchemaVerification = {
+  /** True only when the marker and physical catalog both match the current manifest. */
+  ok: boolean
+  /** Schema recorded in `ket_migration`, or null when no marker exists. */
+  applied: Schema | null
+  /** Schema derived from the manifest supplied to {@link verifyPhysicalSchema}. */
+  target: Schema
+  /** Whether the applied marker is structurally equal to the current manifest. */
+  markerMatchesManifest: boolean
+  /** Physical differences from what the applied marker claims is present. */
+  markerIssues: string[]
+  /** Physical differences from the current manifest. */
+  manifestIssues: string[]
+}
+
+/** A manual migration was not eligible to advance the recorded schema. */
+export class ManualMigrationConfirmationError extends Error {
+  code = 'E_MANUAL_MIGRATION_CONFIRMATION'
+  issues: string[]
+  constructor(message: string, issues: string[] = []) {
+    super(issues.length ? `${message}:\n${issues.map((issue) => `  - ${issue}`).join('\n')}` : message)
+    this.issues = issues
+  }
+}
+
+async function readApplied(adapter: Adapter, ensureTable: boolean): Promise<Schema | null> {
   const pg = adapter.name === 'postgres'
-  await adapter.exec(pg ? MIGRATION_DDL_PG : MIGRATION_DDL)
+  if (ensureTable) await adapter.exec(pg ? MIGRATION_DDL_PG : MIGRATION_DDL)
+  else if (!Object.hasOwn(await adapter.introspect(), 'ket_migration')) return null
   const rows = await adapter.all(`SELECT schema FROM ket_migration WHERE id = 1`)
   const r = rows[0]
   return r ? (JSON.parse(String(r.schema)) as Schema) : null
@@ -52,18 +81,113 @@ async function writeApplied(adapter: Adapter, schema: Schema, now: string): Prom
   }
 }
 
+/**
+ * Verify a physical database without applying DDL or changing its migration marker.
+ *
+ * The two comparisons answer different operational questions. `markerIssues`
+ * detects legacy drift even when code and `ket_migration` agree, while
+ * `manifestIssues` describes what keeps the catalog from satisfying the current
+ * deployment. Callers should require `ok` before declaring a datastore healthy.
+ */
+export async function verifyPhysicalSchema(
+  adapter: Adapter,
+  manifest: Manifest,
+): Promise<PhysicalSchemaVerification> {
+  const target = schemaFromManifest(manifest)
+  const applied = await readApplied(adapter, false)
+  const markerMatchesManifest = applied !== null && isDeepStrictEqual(applied, target)
+  const markerIssues = applied
+    ? await physicalSchemaIssues(adapter, applied, applied)
+    : ['applied-schema marker is missing']
+  const manifestIssues = markerMatchesManifest
+    ? [...markerIssues]
+    : await physicalSchemaIssues(adapter, applied ?? { version: target.version, tables: {} }, target)
+  return {
+    ok: markerMatchesManifest && markerIssues.length === 0 && manifestIssues.length === 0,
+    applied,
+    target,
+    markerMatchesManifest,
+    markerIssues,
+    manifestIssues,
+  }
+}
+
 export async function migrateOne(
   adapter: Adapter,
   manifest: Manifest,
   o: { allowDestructive?: boolean; dryRun?: boolean; now?: () => string } = {},
 ): Promise<MigrationOp[]> {
   const target = schemaFromManifest(manifest)
-  const applied = await readApplied(adapter)
-  const ops = planMigration(applied, target, { allowDestructive: o.allowDestructive ?? false })
-  if (o.dryRun) return ops
-  for (const sql of renderSql(ops, adapter)) await adapter.exec(sql)
-  await writeApplied(adapter, target, (o.now ?? (() => new Date().toISOString()))())
-  return ops
+  if (o.dryRun) {
+    const applied = await readApplied(adapter, false)
+    return planMigration(applied, target, { allowDestructive: o.allowDestructive ?? false })
+  }
+
+  const apply = async (tx: Adapter): Promise<MigrationOp[]> => {
+    const applied = await readApplied(tx, true)
+    const ops = planMigration(applied, target, { allowDestructive: o.allowDestructive ?? false })
+    const sql = renderSql(ops, tx)
+    for (const statement of sql) await tx.exec(statement)
+    await writeApplied(tx, target, (o.now ?? (() => new Date().toISOString()))())
+    return ops
+  }
+
+  // DDL and the schema marker are one unit. Without this, a failed later
+  // statement leaves earlier columns/indexes in place while the old marker makes
+  // a retry replay them and fail on duplicates.
+  return adapter.transaction ? apply(adapter) : adapter.tx(apply)
+}
+
+/**
+ * Confirm an application-owned migration after checking the physical database.
+ *
+ * Call this on the transaction-scoped adapter after the manual DDL and backfill.
+ * The migration marker advances in that same transaction only when every modelled
+ * table, column type/nullability/primary key, and named index matches `manifest`.
+ */
+export async function confirmManualMigration(
+  adapter: Adapter,
+  manifest: Manifest,
+  o: { now?: () => string } = {},
+): Promise<MigrationOp[]> {
+  const target = schemaFromManifest(manifest)
+  const confirm = async (tx: Adapter): Promise<MigrationOp[]> => {
+    const applied = await readApplied(tx, false)
+    if (!applied)
+      throw new ManualMigrationConfirmationError(
+        'no applied-schema marker exists; run migrateOne before confirming a manual transition',
+      )
+
+    let manual: MigrationOp[]
+    try {
+      const generated = planMigration(applied, target, { allowDestructive: true })
+      throw new ManualMigrationConfirmationError(
+        generated.length
+          ? 'the pending schema difference contains no operation that requires a manual migration'
+          : 'the recorded schema already matches the target manifest',
+      )
+    } catch (error) {
+      if (!(error instanceof ManualMigrationRequiredError)) throw error
+      manual = error.ops
+    }
+
+    let issues: string[]
+    try {
+      issues = await physicalSchemaIssues(tx, applied, target)
+    } catch (error) {
+      throw new ManualMigrationConfirmationError((error as Error).message)
+    }
+    if (issues.length)
+      throw new ManualMigrationConfirmationError(
+        'the physical database does not match the target manifest; the applied-schema marker was not changed',
+        issues,
+      )
+
+    await writeApplied(tx, target, (o.now ?? (() => new Date().toISOString()))())
+    return manual
+  }
+
+  return adapter.transaction ? confirm(adapter) : adapter.tx(confirm)
 }
 
 /**

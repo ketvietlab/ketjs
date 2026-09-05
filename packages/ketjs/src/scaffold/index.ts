@@ -1,7 +1,7 @@
-// `ket new` — the smallest thing that is still a real app.
+// `ket new` — the smallest thing that is still a real deployment.
 //
 // A scaffold earns its place only if what it emits runs unedited, so this writes a
-// module with a model and a function, an app that serves it, and a workspace file
+// module with a model and a function, a deployment that serves it, and a workspace file
 // the CLI finds by convention. Nothing is a placeholder waiting to be filled in.
 //
 // The templates are files rather than string literals on purpose. A literal
@@ -13,10 +13,10 @@
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const VERSION = '0.1.2'
+const VERSION = '0.1.3'
 const TEMPLATES = new URL('./templates/', import.meta.url)
 
-/** Template file → path it is written to, relative to the new app's directory. */
+/** Template file → path it is written to, relative to the new project's directory. */
 const LAYOUT: Array<[string, (name: string) => string]> = [
   ['package.json.tmpl', () => 'package.json'],
   ['module.ts.tmpl', (n) => `modules/${n}.ts`],
@@ -24,7 +24,7 @@ const LAYOUT: Array<[string, (name: string) => string]> = [
   ['tsconfig.json.tmpl', () => 'tsconfig.json'],
   ['biome.json.tmpl', () => 'biome.json'],
   ['dev.mjs.tmpl', () => 'tools/dev.mjs'],
-  ['app.test.ts.tmpl', () => 'test/app.test.ts'],
+  ['deployment.test.ts.tmpl', () => 'test/deployment.test.ts'],
   ['gitignore.tmpl', () => '.gitignore'],
 ]
 
@@ -36,7 +36,7 @@ const render = (template: string, name: string): string =>
 export function scaffold(name: string, dir: string): string[] {
   if (!/^[a-z][a-z0-9_]*$/.test(name)) {
     throw new Error(
-      `invalid app name "${name}" — lowercase letters, digits and underscore, starting with a letter`,
+      `invalid deployment name "${name}" — lowercase letters, digits and underscore, starting with a letter`,
     )
   }
   const written = LAYOUT.map(([tpl, to]) => [to(name), render(tpl, name)] as const)

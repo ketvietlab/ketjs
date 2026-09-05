@@ -7,9 +7,8 @@ export default defineModule({
   name: 'pricing',
   version: '0.1.0',
   depends: ['product', 'company', 'uom'],
-  app: true,
   title: 'Bảng giá',
-  summary: 'Quy tắc giá theo Odoo 19 trong tiền tệ của company.',
+  summary: 'Quy tắc giá trong tiền tệ của công ty.',
   category: 'Bán hàng',
   models,
   relations,
@@ -17,12 +16,12 @@ export default defineModule({
   messages: {
     vi: {
       'app.title': 'Bảng giá',
-      'app.summary': 'Quy tắc giá theo Odoo 19 dùng tiền tệ của công ty.',
+      'app.summary': 'Quy tắc giá dùng tiền tệ của công ty.',
       'app.category': 'Bán hàng',
     },
     en: {
       'app.title': 'Pricing',
-      'app.summary': 'Odoo 19 pricing rules in the company currency.',
+      'app.summary': 'Pricing rules in the company currency.',
       'app.category': 'Sales',
     },
   },

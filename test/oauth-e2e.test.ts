@@ -4,8 +4,8 @@ import { generateKeyPairSync, randomBytes, sign } from 'node:crypto'
 import { test, type TestContext } from 'node:test'
 import type { AddressInfo } from 'node:net'
 import type { Row } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import { pkceChallenge } from '../packages/ketsuite/src/modules/oauth/protocol.ts'
 
 const fakeProvider = async (t: TestContext) => {
@@ -107,7 +107,7 @@ const fakeProvider = async (t: TestContext) => {
 
 const bootOauth = async (t: TestContext) => {
   const provider = await fakeProvider(t)
-  const e2e = await createTestApp(ketsuite, { worker: false })
+  const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
   const fixture = <T = Row>(name: string, input: Record<string, unknown>, actor?: string) =>

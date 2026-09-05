@@ -250,7 +250,7 @@ export function createIslandManager(
         if (options.strict === false) continue
         throw new IslandError({
           code: 'E_UNKNOWN_ISLAND',
-          message: `the page places island "${identity.name}", which no installed module provides`,
+          message: `the page places island "${identity.name}", which no composed module provides`,
           hint: `registered islands: ${Object.keys(registry).join(', ') || '(none)'}`,
         })
       }

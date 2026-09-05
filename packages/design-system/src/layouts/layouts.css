@@ -1,0 +1,332 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="stack"] {
+    display: grid;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="stack"][data-gap="compact"] {
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="stack"][data-gap="loose"] {
+    gap: var(--kv-space-8);
+  }
+
+  :where([data-kv-design-system]) [data-ui="inline"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="grid"] {
+    display: grid;
+    grid-template-columns: repeat(var(--kv-grid-columns, 3), minmax(0, 1fr));
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="grid"][data-columns="2"] {
+    --kv-grid-columns: 2;
+  }
+
+  :where([data-kv-design-system]) [data-ui="grid"][data-columns="3"] {
+    --kv-grid-columns: 3;
+  }
+
+  :where([data-kv-design-system]) [data-ui="grid"][data-columns="4"] {
+    --kv-grid-columns: 4;
+  }
+
+  :where([data-kv-design-system]) [data-ui="surface"] {
+    min-width: 0;
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="surface"][data-tone="subtle"] {
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  :where([data-kv-design-system]) [data-ui="surface"][data-tone="raised"] {
+    background: var(--kv-surface-raised);
+    box-shadow: var(--kv-shadow-md);
+  }
+
+  :where([data-kv-design-system]) [data-ui="surface"][data-padding="compact"] {
+    padding: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="surface"][data-padding="default"] {
+    padding: var(--kv-space-5);
+  }
+
+  :where([data-kv-design-system]) [data-ui="disclosure"] {
+    min-width: 0;
+    overflow: clip;
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  :where([data-kv-design-system]) [data-ui="disclosure-summary"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-3);
+    padding: var(--kv-space-3) var(--kv-space-4);
+    color: var(--kv-color-ink-secondary);
+    font-size: var(--kv-text-sm);
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="disclosure-summary"]::-webkit-details-marker {
+    display: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="disclosure-summary"]::after {
+    content: "+";
+    flex: 0 0 auto;
+    color: var(--kv-color-ink-muted);
+    font-family: var(--kv-font-mono);
+    font-weight: 600;
+    transition: transform var(--kv-motion-fast);
+  }
+
+  :where([data-kv-design-system]) [data-ui="disclosure"][open] > [data-ui="disclosure-summary"] {
+    border-bottom: 1px solid var(--kv-color-line);
+  }
+
+  :where([data-kv-design-system]) [data-ui="disclosure"][open] > [data-ui="disclosure-summary"]::after {
+    transform: rotate(45deg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="disclosure-body"] {
+    min-width: 0;
+    padding: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="section"] {
+    display: grid;
+    gap: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="section-head"] {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: var(--kv-space-4);
+    padding-bottom: var(--kv-space-3);
+    border-bottom: 1px solid var(--kv-color-line);
+  }
+
+  :where([data-kv-design-system]) [data-ui="section-eyebrow"] {
+    margin-bottom: var(--kv-space-1);
+    color: var(--kv-color-accent);
+    font-family: var(--kv-font-mono);
+    font-size: var(--kv-text-xs);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="section-title"] {
+    margin-bottom: 0;
+    font-size: var(--kv-text-md);
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="section-description"] {
+    max-width: 52rem;
+    margin: var(--kv-space-1) 0 0;
+    color: var(--kv-color-ink-muted);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="section-actions"] {
+    flex: 0 0 auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="section-body"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="content-card"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-3);
+    padding: var(--kv-space-4);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    transition:
+      border-color var(--kv-motion-fast),
+      background var(--kv-motion-fast);
+  }
+
+  :where([data-kv-design-system]) [data-ui="content-card"][data-interactive="true"]:hover {
+    border-color: var(--kv-border-default);
+    background: var(--kv-surface-raised);
+  }
+
+  :where([data-kv-design-system]) [data-ui="content-card"][data-selected="true"] {
+    border-color: var(--kv-accent-border);
+    background: var(--kv-accent-subtle);
+  }
+
+  :where([data-kv-design-system]) [data-ui="card-head"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="card-title"] {
+    margin-bottom: 0;
+    font-size: var(--kv-text-base);
+  }
+
+  :where([data-kv-design-system]) [data-ui="card-title"] a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="card-summary"] {
+    margin: var(--kv-space-1) 0 0;
+    color: var(--kv-color-ink-muted);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="card-body"] {
+    color: var(--kv-color-ink-secondary);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="card-meta"] {
+    align-self: end;
+  }
+
+  :where([data-kv-design-system]) [data-ui="card-actions"] {
+    padding-top: var(--kv-space-3);
+    border-top: 1px solid var(--kv-color-line);
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric"] {
+    display: grid;
+    min-width: 0;
+    min-height: 6.75rem;
+    align-content: start;
+    gap: var(--kv-space-1);
+    padding: var(--kv-space-4);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+  }
+
+  /* A metric with a glyph puts it in a tile on the left and lets the figure keep
+     the rest of the row, so a grid of four stays scannable by position. */
+  :where([data-kv-design-system]) [data-ui="metric"]:has(> [data-ui="metric-icon"]) {
+    grid-template-columns: auto 1fr;
+    column-gap: var(--kv-space-3);
+  }
+
+  /* The figures are pinned to the text column: auto-placement would wrap them
+     back under the tile as soon as a card carried a third line. */
+  :where([data-kv-design-system])
+    [data-ui="metric"]:has(> [data-ui="metric-icon"])
+    > :not([data-ui="metric-icon"]) {
+    grid-column: 2;
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric-icon"] {
+    display: grid;
+    grid-row: 1 / 3;
+    grid-column: 1;
+    align-self: center;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-accent-subtle);
+    color: var(--kv-accent);
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric-icon"] svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+
+  :where([data-kv-design-system]) a[data-ui="metric"] {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) a[data-ui="metric"]:hover {
+    border-color: var(--kv-color-line-strong);
+    background: var(--kv-color-surface-hover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric-label"] {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0;
+    gap: var(--kv-space-2);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-xs);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* Drawn only for a metric that was given a tone. A grey bullet in front of
+     every label would be decoration; here it is the one place a KPI row carries
+     state, which is why the figure beside it stays in the page's ink. */
+  :where([data-kv-design-system]) [data-ui="metric"][data-dot="true"] [data-ui="metric-label"]::before {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: none;
+    border-radius: 50%;
+    background: var(--kv-text-muted);
+    content: "";
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric"][data-tone="info"] [data-ui="metric-label"]::before {
+    background: var(--kv-color-info);
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric"][data-tone="positive"] [data-ui="metric-label"]::before {
+    background: var(--kv-color-positive);
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric"][data-tone="warning"] [data-ui="metric-label"]::before {
+    background: var(--kv-color-warning);
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric"][data-tone="danger"] [data-ui="metric-label"]::before {
+    background: var(--kv-color-danger);
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric-value"] {
+    margin-bottom: 0;
+    font-size: var(--kv-text-2xl);
+    font-weight: var(--kv-weight-bold);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+  }
+
+  :where([data-kv-design-system]) [data-ui="metric-detail"] {
+    margin: 0;
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+  }
+
+  @media (max-width: 48rem) {
+    :where([data-kv-design-system]) [data-ui="grid"] {
+      grid-template-columns: 1fr;
+    }
+
+    :where([data-kv-design-system]) [data-ui="section-head"] {
+      align-items: start;
+      flex-direction: column;
+    }
+  }
+}

@@ -35,6 +35,21 @@ export const models: Record<string, ModelDef> = {
       routing: { fields: ['companyId', 'teamId', 'active', 'sequence'] },
     },
   },
+  AccessGrant: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      userId: 'ref:user.User',
+      viewScope: 'text',
+      editScope: 'text',
+      assignScope: 'text',
+      active: 'bool',
+      version: 'int',
+    },
+    indexes: {
+      user: { fields: ['companyId', 'userId'], unique: true },
+    },
+  },
   GamificationProfile: {
     scope: 'company',
     fields: {
@@ -87,6 +102,15 @@ export const models: Record<string, ModelDef> = {
       contactName: 'text?',
       email: 'text?',
       phone: 'text?',
+      /**
+       * The phone with the formatting taken out.
+       *
+       * Duplicate detection has to treat `+84 90 123 4567` and `0901234567` as
+       * one number, and it cannot do that from SQL against the text a user
+       * typed. Derived on write and indexed, so the match is a lookup rather
+       * than a scan over whatever page the list function happened to return.
+       */
+      phoneDigits: 'text?',
       teamId: 'ref:crm.Team?',
       assigneeUserId: 'ref:user.User?',
       stageId: 'ref:crm.Stage',
@@ -112,6 +136,7 @@ export const models: Record<string, ModelDef> = {
       assignee: { fields: ['companyId', 'assigneeUserId', 'active', 'updatedAt'] },
       partner: { fields: ['companyId', 'partnerId', 'active'] },
       email: { fields: ['companyId', 'email', 'active'] },
+      phone: { fields: ['companyId', 'phoneDigits', 'active'] },
     },
   },
   CaseTag: {

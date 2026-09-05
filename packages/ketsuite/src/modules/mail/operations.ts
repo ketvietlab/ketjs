@@ -330,3 +330,78 @@ export async function unreadNotifications(ctx: Ctx, userId: string, limit = 50):
       .limit(Math.max(1, Math.min(100, limit))),
   )
 }
+
+/** Every effect a full thread purge writes — declare these or the kernel refuses. */
+export const purgeThreadEffects = [
+  'read:mail.Thread',
+  'write:mail.Thread',
+  'read:mail.Message',
+  'write:mail.Message',
+  'read:mail.Follower',
+  'write:mail.Follower',
+  'write:mail.FollowerSubtype',
+  'write:mail.Mention',
+  'write:mail.Notification',
+  'write:mail.TrackingValue',
+  'write:mail.MessageAttachment',
+] as const
+
+/**
+ * Take threads out of existence, with everything hanging off them.
+ *
+ * Mail's own tables, deleted by mail. A caller that owns the records a thread
+ * is about — Flow deleting a project, say — knows which threads to name and
+ * nothing about what mail keeps beside them; the day mail grows an eighth
+ * table, that caller should not have to hear about it.
+ *
+ * Ordered children first so a crash halfway leaves rows that still point at
+ * something, and written to be run again: every step is a delete by id set,
+ * which is the same statement whether it has run before or not.
+ *
+ * Returns how many threads went, so a job can say what it did.
+ */
+export async function purgeThreads(ctx: Ctx, threadIds: readonly string[]): Promise<number> {
+  const ids = unique(threadIds.map(String))
+  if (!ids.length) return 0
+
+  const M = ctx.table('mail.Message')
+  const messages = await ctx.db.all(from(M).select(M.id).where(inArray(M.threadId, ids)))
+  const messageIds = unique(messages.map((row) => String(row.id)))
+
+  if (messageIds.length) {
+    for (const model of ['mail.Mention', 'mail.Notification', 'mail.TrackingValue'] as const) {
+      const T = ctx.table(model)
+      await ctx.db.del(deleteFrom(T).where(inArray(T.messageId, messageIds)))
+    }
+    // The join row goes; the attachment itself belongs to storage, which
+    // collects what nothing references any more.
+    const MA = ctx.table('mail.MessageAttachment')
+    await ctx.db.del(deleteFrom(MA).where(inArray(MA.messageId, messageIds)))
+  }
+
+  const F = ctx.table('mail.Follower')
+  const followers = await ctx.db.all(from(F).select(F.id).where(inArray(F.threadId, ids)))
+  const followerIds = unique(followers.map((row) => String(row.id)))
+  if (followerIds.length) {
+    const FS = ctx.table('mail.FollowerSubtype')
+    await ctx.db.del(deleteFrom(FS).where(inArray(FS.followerId, followerIds)))
+  }
+  await ctx.db.del(deleteFrom(F).where(inArray(F.threadId, ids)))
+
+  // Replies point at a parent message in the same thread, so the whole set goes
+  // in one statement rather than one row at a time in some order.
+  await ctx.db.del(deleteFrom(M).where(inArray(M.threadId, ids)))
+
+  const T = ctx.table('mail.Thread')
+  await ctx.db.del(deleteFrom(T).where(inArray(T.id, ids)))
+  return ids.length
+}
+
+/** The threads about a set of records — what a caller deleting them has to name. */
+export async function threadsFor(ctx: Ctx, resModel: string, resIds: readonly string[]): Promise<string[]> {
+  const ids = unique(resIds.map(String))
+  if (!ids.length) return []
+  const T = ctx.table('mail.Thread')
+  const rows = await ctx.db.all(from(T).select(T.id).where(eq(T.resModel, resModel), inArray(T.resId, ids)))
+  return rows.map((row) => String(row.id))
+}

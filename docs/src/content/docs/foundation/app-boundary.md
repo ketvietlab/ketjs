@@ -1,11 +1,11 @@
 ---
-title: Docs application boundary
-description: Why KetSuite Docs owns its dependency graph and build lifecycle.
+title: Documentation application boundary
+description: Why the Ket developer documentation owns its dependency graph and build lifecycle.
 sidebar:
   order: 1
 ---
 
-KetSuite Docs is a standalone application inside the KetJS repository. It is not a package in the
+The Ket developer documentation is a standalone application inside the KetJS repository. It is not a package in the
 root npm workspace.
 
 | Scope | Owner |

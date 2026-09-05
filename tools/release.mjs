@@ -1,5 +1,5 @@
 // Release preparation is executable evidence, not a checklist someone can forget.
-// It verifies the four public workspaces, packs exactly what npm would receive,
+// It verifies the five public workspaces, packs exactly what npm would receive,
 // installs those tarballs into a clean consumer, and boots a generated project.
 
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -16,9 +16,16 @@ const command = process.argv[2] ?? 'check'
 
 const workspaces = [
   { name: '@ketvietlab/ketjs-view', dir: 'packages/ketjs-view', maxPackedBytes: 100_000 },
-  { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 500_000 },
+  {
+    name: '@ketvietlab/design-system',
+    dir: 'packages/design-system',
+    maxPackedBytes: 150_000,
+  },
+  // KetJS intentionally embeds the three Inter faces used by its deterministic PDF renderer.
+  // Keep a measured ceiling above that fixed payload while still catching accidental package growth.
+  { name: '@ketvietlab/ketjs', dir: 'packages/ketjs', maxPackedBytes: 1_200_000 },
   { name: '@ketvietlab/ketjs-postgres', dir: 'packages/ketjs-postgres', maxPackedBytes: 50_000 },
-  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 2_000_000 },
+  { name: '@ketvietlab/ketsuite', dir: 'packages/ketsuite', maxPackedBytes: 4_000_000 },
 ]
 
 /** @param {string} message @returns {never} */
@@ -108,6 +115,9 @@ const verifyMetadata = () => {
   const scaffold = readFileSync(join(ROOT, 'packages/ketjs/src/scaffold/index.ts'), 'utf8')
   if (!scaffold.includes(`const VERSION = '${version}'`))
     fail(`ket new does not scaffold the release version ${version}`)
+  const suiteScaffold = readFileSync(join(ROOT, 'packages/ketsuite/src/scaffold/index.ts'), 'utf8')
+  if (!suiteScaffold.includes(`const VERSION = '${version}'`))
+    fail(`ketsuite new does not scaffold the release version ${version}`)
   const lock = readJson(join(ROOT, 'package-lock.json'))
   if (lock.version !== undefined && lock.version !== version) fail(`package-lock root is ${lock.version}`)
   for (const workspace of workspaces) {
@@ -139,7 +149,11 @@ const pack = (destination, version) => {
     if (result.size > workspace.maxPackedBytes)
       fail(`${workspace.name} grew to ${result.size} packed bytes (limit ${workspace.maxPackedBytes})`)
     const paths = new Set(result.files.map((file) => file.path))
-    for (const required of ['LICENSE', 'README.md', 'package.json', 'dist/index.js', 'dist/index.d.ts'])
+    const requiredPaths = ['LICENSE', 'README.md', 'package.json', 'dist/index.js', 'dist/index.d.ts']
+    if (workspace.name === '@ketvietlab/design-system') {
+      requiredPaths.push('dist/styles.css', 'dist/foundations/tokens.css')
+    }
+    for (const required of requiredPaths)
       if (!paths.has(required)) {
         fail(`${workspace.name} tarball omitted ${required}`)
       }
@@ -182,7 +196,7 @@ const smoke = (tarballs, version, parent) => {
     [
       '--input-type=module',
       '--eval',
-      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend')])`,
+      `await Promise.all([import('@ketvietlab/ketjs-view'), import('@ketvietlab/design-system'), import('@ketvietlab/design-system/contract'), import('@ketvietlab/design-system/catalogue'), import('@ketvietlab/ketjs'), import('@ketvietlab/ketjs/theme'), import('@ketvietlab/ketjs/testing'), import('@ketvietlab/ketjs-postgres'), import('@ketvietlab/ketsuite'), import('@ketvietlab/ketsuite/deployment'), import('@ketvietlab/ketsuite/ui'), import('@ketvietlab/ketsuite/backend')])`,
     ],
     { cwd: consumer },
   )
@@ -220,7 +234,39 @@ const smoke = (tarballs, version, parent) => {
   run(node, ['tools/dev.mjs'], { cwd: generated })
   run(npm, ['run', 'check'], { cwd: generated })
   run(npm, ['test'], { cwd: generated })
-  console.log('tarball consumer imports and generated application smoke test passed')
+
+  const generatedSuite = join(parent, 'generated-suite')
+  run(node, [
+    join(consumer, 'node_modules/@ketvietlab/ketsuite/dist/cli.js'),
+    'new',
+    'release_suite',
+    '--dir',
+    generatedSuite,
+  ])
+  const generatedSuitePackage = readJson(join(generatedSuite, 'package.json'))
+  if (generatedSuitePackage.dependencies?.['@ketvietlab/ketsuite'] !== `^${version}`)
+    fail(
+      `ketsuite new generated @ketvietlab/ketsuite dependency ${generatedSuitePackage.dependencies?.['@ketvietlab/ketsuite']}`,
+    )
+  run(
+    npm,
+    [
+      'install',
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      '--package-lock=false',
+      tarball('@ketvietlab/ketjs-view'),
+      tarball('@ketvietlab/design-system'),
+      tarball('@ketvietlab/ketjs'),
+      tarball('@ketvietlab/ketsuite'),
+    ],
+    { cwd: generatedSuite },
+  )
+  run(node, [join(generatedSuite, 'node_modules/@ketvietlab/ketsuite/dist/cli.js'), '--help'], {
+    cwd: generatedSuite,
+  })
+  console.log('tarball consumer imports and both generated application smoke tests passed')
 }
 
 /** @param {string} name @param {string} version */

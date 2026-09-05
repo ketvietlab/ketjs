@@ -1,6 +1,6 @@
 // Headless end-to-end testing.
 //
-// This deliberately goes through bootApp and HTTP. Calling callFn directly is a
+// This deliberately goes through bootDeployment and HTTP. Calling callFn directly is a
 // useful integration test, but it skips request parsing, tenant resolution,
 // sessions, permissions and response serialization — the exact seams an end-to-
 // end test exists to exercise.
@@ -8,12 +8,12 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { bootApp, type BootedApp } from './server/boot.ts'
+import { bootDeployment, type BootedDeployment } from './server/boot.ts'
 import { bootWorker, type BootedWorker } from './server/worker.ts'
 import type { WorkerLog } from './server/worker.ts'
 import { callFn, type CallResult } from './server/fn.ts'
-import type { AppSpec } from './kernel/workspace.ts'
-import type { AppRegistry } from './kernel/apps.ts'
+import { memoryLog, traceOf, type MemoryLog } from './server/log/index.ts'
+import type { DeploymentSpec } from './kernel/workspace.ts'
 import type { Adapter, Manifest, Scope } from './types.ts'
 
 export type TestIdentity = {
@@ -362,7 +362,7 @@ export class TestClient {
   }
 }
 
-export type CreateTestAppOptions = {
+export type CreateTestDeploymentOptions = {
   /** Explicit runtime variables. Host process variables are ignored unless inheritEnv is true. */
   env?: Record<string, string | undefined>
   inheritEnv?: boolean
@@ -370,11 +370,19 @@ export type CreateTestAppOptions = {
   artifactsDir?: string
   /** Keep the automatically-created database and storage for debugging. */
   keepArtifacts?: boolean
-  /** Boot a worker handle when the app declares queues. Defaults to true. */
+  /** Boot a worker handle when the deployment declares queues. Defaults to true. */
   worker?: boolean
   /** Harness progress. Silent by default so test reporter output stays readable. */
   log?: (line: string) => void
+  /** Intercept worker events instead of recording them. Absent keeps `records`. */
   workerLog?: (entry: WorkerLog) => void
+  /**
+   * The worker's clock.
+   *
+   * A schedule is the one thing a test cannot hurry along by draining a queue, so
+   * without this a ten-second interval costs ten seconds of CI. Advance it instead.
+   */
+  workerNow?: () => Date
   client?: TestClientOptions
   port?: number
 }
@@ -386,13 +394,13 @@ export type TestFixtureCallOptions = {
   allow?: readonly string[] | null
   dryRun?: boolean
   idempotencyKey?: string | null
+  correlationId?: string | null
 }
 
 export type TestFixtureTenant = {
   key: string
   adapter: Adapter
   manifest: Manifest
-  apps: AppRegistry
 }
 
 export type TestFixtures = {
@@ -411,8 +419,8 @@ export type TestFixtures = {
   withTenant<T>(tenant: string, fn: (tenant: TestFixtureTenant) => Promise<T>): Promise<T>
 }
 
-export type TestApp = {
-  app: BootedApp
+export type TestDeployment = {
+  deployment: BootedDeployment
   worker: BootedWorker | null
   client: TestClient
   baseUrl: string
@@ -420,19 +428,30 @@ export type TestApp = {
   artifactsDir: string
   databasePath: string | null
   env: Readonly<Record<string, string | undefined>>
+  /**
+   * Every operational record this deployment and its worker emitted.
+   *
+   * Captured rather than printed, so a suite stays readable and so a security
+   * contract can assert that a denial was *observable* — a denial nobody can see
+   * is a denial nobody can alert on.
+   */
+  records: MemoryLog
   fixture: TestFixtures
   drainJobs(): Promise<number>
   close(): Promise<void>
 }
 
 /**
- * Boot a real app on an ephemeral port with isolated database and storage.
+ * Boot a real deployment on an ephemeral port with isolated database and storage.
  *
  * No browser is involved, but every TestClient call crosses the real HTTP
  * boundary. The host environment is ignored by default so a developer cannot
  * accidentally point an end-to-end suite at their normal or production database.
  */
-export async function createTestApp(spec: AppSpec, options: CreateTestAppOptions = {}): Promise<TestApp> {
+export async function createTestDeployment(
+  spec: DeploymentSpec,
+  options: CreateTestDeploymentOptions = {},
+): Promise<TestDeployment> {
   const ownedArtifacts = options.artifactsDir === undefined
   const artifactsDir = options.artifactsDir
     ? isAbsolute(options.artifactsDir)
@@ -456,21 +475,37 @@ export async function createTestApp(spec: AppSpec, options: CreateTestAppOptions
   env.KET_SECRET ??= `ket-e2e-${spec.name}`
   env.KET_QUEUE_NOTIFY ??= '0'
 
-  let app: BootedApp | null = null
+  const records = memoryLog()
+  const openLog = () => records
+
+  let deployment: BootedDeployment | null = null
   let worker: BootedWorker | null = null
   try {
-    app = await bootApp(spec, { env, port: options.port ?? 0, log: options.log ?? (() => {}) })
+    deployment = await bootDeployment(spec, {
+      env,
+      port: options.port ?? 0,
+      log: options.log ?? (() => {}),
+      openLog,
+    })
     const wantsWorker = options.worker ?? true
     if (wantsWorker && spec.worker)
-      worker = await bootWorker(spec, { env, log: options.workerLog ?? (() => {}) })
+      worker = await bootWorker(spec, {
+        env,
+        openLog,
+        ...(options.workerNow ? { now: options.workerNow } : {}),
+        // Only when the caller asked. This used to default to a no-op because the
+        // alternative was console output; now the default goes to the captured
+        // sink, and a no-op here would suppress exactly what a test came to assert.
+        ...(options.workerLog ? { log: options.workerLog } : {}),
+      })
   } catch (error) {
     await worker?.close().catch(() => {})
-    await app?.close().catch(() => {})
+    await deployment?.close().catch(() => {})
     if (ownedArtifacts && !options.keepArtifacts) await rm(artifactsDir, { recursive: true, force: true })
     throw error
   }
 
-  const booted = app
+  const booted = deployment
   const baseUrl = `http://127.0.0.1:${booted.port}`
   const client = new TestClient(baseUrl, options.client)
   let closed = false
@@ -478,7 +513,7 @@ export async function createTestApp(spec: AppSpec, options: CreateTestAppOptions
   const fixture: TestFixtures = {
     withTenant: (tenant, fn) =>
       booted.tenants.with(tenant, (selected) =>
-        fn({ key: selected.key, adapter: selected.adapter, manifest: selected.live, apps: selected.apps }),
+        fn({ key: selected.key, adapter: selected.adapter, manifest: selected.live }),
       ),
     call: async <T = unknown>(
       name: string,
@@ -486,7 +521,7 @@ export async function createTestApp(spec: AppSpec, options: CreateTestAppOptions
       callOptions: TestFixtureCallOptions = {},
     ) => {
       if (booted.adapter === null && callOptions.tenant === undefined)
-        throw new Error(`fixture call on multi-tenant app "${spec.name}" requires options.tenant`)
+        throw new Error(`fixture call on multi-tenant deployment "${spec.name}" requires options.tenant`)
       return booted.tenants.with(
         callOptions.tenant ?? '',
         async (selected) =>
@@ -498,24 +533,35 @@ export async function createTestApp(spec: AppSpec, options: CreateTestAppOptions
             allow: callOptions.allow,
             dryRun: callOptions.dryRun,
             idempotencyKey: callOptions.idempotencyKey,
+            correlationId: callOptions.correlationId,
             queueNotify: false,
+            // A fixture call is not HTTP traffic and says so, but it is still a
+            // call: it goes through the same pipeline rather than around it.
+            log: booted.logger.child({
+              process: 'test',
+              tenant: callOptions.tenant ?? null,
+              trace: traceOf(callOptions.correlationId, booted.config.secret),
+              actor: traceOf(callOptions.actor, booted.config.secret),
+              company: callOptions.scope?.company ?? null,
+            }),
           }) as Promise<CallResult & { value: T }>,
       )
     },
   }
 
   return {
-    app: booted,
+    deployment: booted,
     worker,
     client,
     baseUrl,
     adapter: booted.adapter,
     artifactsDir,
+    records,
     databasePath,
     env: Object.freeze({ ...env }),
     fixture,
     async drainJobs() {
-      if (!worker) throw new Error(`app "${spec.name}" has no test worker`)
+      if (!worker) throw new Error(`deployment "${spec.name}" has no test worker`)
       return worker.drain()
     },
     async close() {
@@ -526,7 +572,7 @@ export async function createTestApp(spec: AppSpec, options: CreateTestAppOptions
       await booted.close().catch((error) => errors.push(error))
       if (ownedArtifacts && !options.keepArtifacts)
         await rm(artifactsDir, { recursive: true, force: true }).catch((error) => errors.push(error))
-      if (errors.length) throw new AggregateError(errors, `failed to close test app "${spec.name}"`)
+      if (errors.length) throw new AggregateError(errors, `failed to close test deployment "${spec.name}"`)
     },
   }
 }

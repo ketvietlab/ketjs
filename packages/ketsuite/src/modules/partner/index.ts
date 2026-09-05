@@ -11,7 +11,6 @@ export default defineModule({
   name: 'partner',
   version: '0.1.0',
   depends: ['address'],
-  app: true,
   title: 'Đối tác',
   summary: 'Khách hàng, nhà cung cấp, liên hệ và địa chỉ — dùng chung toàn hệ thống.',
   category: 'Bán hàng',

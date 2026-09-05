@@ -20,7 +20,13 @@ export const HOOKS = [
   'form-cluster',
 ] as const
 
-export type FormOption = { value: string; label: string }
+export type FormOption = {
+  value: string
+  label: string
+  /** Checkbox groups may submit independent boolean fields from one visual control. */
+  name?: string
+  checked?: boolean
+}
 export type FormField = {
   name: string
   label: string
@@ -28,6 +34,8 @@ export type FormField = {
   control?: JSXChild
   type?:
     | 'text'
+    | 'email'
+    | 'tel'
     | 'password'
     | 'number'
     | 'decimal'
@@ -35,9 +43,12 @@ export type FormField = {
     | 'color'
     | 'date'
     | 'datetime-local'
+    | 'month'
+    | 'week'
     | 'select'
     | 'radio'
     | 'checkbox'
+    | 'checkbox-group'
     | 'textarea'
   value?: string | number | boolean | null
   placeholder?: string | null
@@ -96,6 +107,7 @@ const control = (field: FormField, id: string, describedBy: string | null): Temp
         id={id}
         type="checkbox"
         name={field.name}
+        autocomplete="off"
         value="1"
         checked={field.value === true || field.value === '1'}
         disabled={field.disabled === true}
@@ -109,6 +121,7 @@ const control = (field: FormField, id: string, describedBy: string | null): Temp
       id={id}
       type={field.type === 'decimal' ? 'number' : (field.type ?? 'text')}
       name={field.name}
+      autocomplete="off"
       value={String(field.value ?? '')}
       placeholder={field.placeholder ?? null}
       required={field.required === true}
@@ -155,7 +168,7 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
     action={o.action}
   >
     {Object.entries(o.hidden ?? {}).map(([name, value]) => (
-      <input type="hidden" name={name} value={value} />
+      <input type="hidden" name={name} value={value} autocomplete="off" />
     ))}
     {!!o.errors?.length && (
       <ul data-ui="form-errors" role="alert">
@@ -188,6 +201,56 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
               )}
             </span>
           )
+          if (field.type === 'checkbox-group')
+            return (
+              <div
+                data-ui="form-field"
+                data-span={field.span ?? 'half'}
+                data-kind="checkbox-group"
+                data-invalid={String(!!field.error)}
+              >
+                <span data-ui="form-label" id={`${id}-label`}>
+                  {field.label}
+                  {field.required && (
+                    <span data-ui="form-required" aria-hidden="true">
+                      {' *'}
+                    </span>
+                  )}
+                </span>
+                <div data-ui="form-options" role="group" aria-labelledby={`${id}-label`}>
+                  {each(
+                    field.options ?? [],
+                    (option) => option.name ?? option.value,
+                    (option) => (
+                      <label data-ui="form-option">
+                        <input
+                          data-ui="form-option-input"
+                          type="checkbox"
+                          name={option.name ?? `${field.name}[]`}
+                          autocomplete="off"
+                          value={option.value}
+                          checked={option.checked === true}
+                          disabled={field.disabled === true}
+                          aria-invalid={field.error ? 'true' : null}
+                          aria-describedby={describedBy}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ),
+                  )}
+                </div>
+                {!!field.help && (
+                  <small data-ui="form-help" id={helpId ?? undefined}>
+                    {field.help}
+                  </small>
+                )}
+                {!!field.error && (
+                  <small data-ui="form-error" id={errorId ?? undefined}>
+                    {field.error}
+                  </small>
+                )}
+              </div>
+            )
           if (field.type === 'radio')
             return (
               <div
@@ -214,6 +277,7 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
                           data-ui="form-option-input"
                           type="radio"
                           name={field.name}
+                          autocomplete="off"
                           value={option.value}
                           checked={String(field.value ?? '') === option.value}
                           required={field.required === true}
@@ -340,7 +404,7 @@ export const recordActions = (o: {
   return (
     <form data-ui="record-form" data-layout="actions" method="post" action={o.action}>
       {Object.entries(o.hidden ?? {}).map(([name, value]) => (
-        <input type="hidden" name={name} value={value} />
+        <input type="hidden" name={name} value={value} autocomplete="off" />
       ))}
       {actionGroup({
         label: o.label,

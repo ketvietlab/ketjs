@@ -5,8 +5,6 @@ export default defineModule({
   name: 'account_partner',
   version: '0.1.0',
   depends: ['account', 'partner'],
-  install: 'auto',
-  app: true,
   title: 'Kế toán đối tác',
   summary: 'Điều khoản thanh toán và tài khoản công nợ theo pháp nhân.',
   category: 'Kế toán',

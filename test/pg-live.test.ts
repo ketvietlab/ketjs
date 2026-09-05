@@ -5,16 +5,20 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import {
+  asc,
   callFn,
   compose,
   createAdapterPool,
   createQueue,
   createStreams,
   dbStreamStore,
+  defineModule,
+  desc,
   eq,
   formatFleet,
   from,
   gte,
+  lte,
   migrateFleet,
   planMigration,
   migrateOne,
@@ -23,13 +27,14 @@ import {
   schemaFromManifest,
   table,
 } from '@ketvietlab/ketjs'
-import type { Adapter } from '@ketvietlab/ketjs'
+import type { Adapter, Row } from '@ketvietlab/ketjs'
 import {
   account,
   catalog,
   checkout,
   company,
   defaultTheme as theme,
+  hospitalityCore,
   inventory,
   oauth,
   partner,
@@ -39,19 +44,84 @@ import {
   sale,
   pos,
   stock,
-  TT99_ACCOUNTS,
+  storage,
   uom,
   user,
-  VIETNAM_TAXES,
 } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
+import backend from '@ketvietlab/ketsuite/backend'
 
 /** Every request acts as some company; these tests act as one. */
 const SCOPE = { company: 'c1', branch: 'main', branches: null }
 
-const URL = process.env.KET_TEST_PG ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
+const URL =
+  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
 const mods = [catalog, inventory, checkout, theme]
 const manifest = compose(mods)
+
+const decimalLive = defineModule({
+  name: 'decimal_live',
+  models: {
+    Entry: {
+      scope: 'shared',
+      fields: { id: 'id', amount: 'decimal?', note: 'text' },
+    },
+  },
+  functions: {
+    summarize: {
+      input: { note: 'text' },
+      effects: ['read:decimal_live.Entry'],
+      handler: (ctx, args) => {
+        const Entry = ctx.table('decimal_live.Entry')
+        return ctx.db.group(
+          from(Entry)
+            .where(eq(Entry.note!, args.note))
+            .groupBy({ col: Entry.note! })
+            .aggregate(
+              { fn: 'count', as: 'rows' },
+              { fn: 'countDistinct', col: Entry.amount!, as: 'distinctAmounts' },
+              { fn: 'sum', col: Entry.amount!, as: 'total' },
+              { fn: 'min', col: Entry.amount!, as: 'minimum' },
+              { fn: 'max', col: Entry.amount!, as: 'maximum' },
+            ),
+        )
+      },
+    },
+    groupAmounts: {
+      input: { note: 'text' },
+      effects: ['read:decimal_live.Entry'],
+      handler: (ctx, args) => {
+        const Entry = ctx.table('decimal_live.Entry')
+        return ctx.db.group(
+          from(Entry)
+            .where(eq(Entry.note!, args.note))
+            .groupBy({ col: Entry.amount! })
+            .orderGroupsBy({ by: 'key', dir: 'asc' }),
+        )
+      },
+    },
+    average: {
+      input: { note: 'text', scale: 'int' },
+      effects: ['read:decimal_live.Entry'],
+      handler: (ctx, args) => {
+        const Entry = ctx.table('decimal_live.Entry')
+        return ctx.db.group(
+          from(Entry)
+            .where(eq(Entry.note!, args.note))
+            .groupBy({ col: Entry.note! })
+            .aggregate({
+              fn: 'avg',
+              col: Entry.amount!,
+              as: 'average',
+              scale: Number(args.scale),
+              rounding: 'half-away-from-zero',
+            }),
+        )
+      },
+    },
+  },
+})
+const decimalManifest = compose([decimalLive], { headless: true })
 
 const reachable = await (async () => {
   const a = postgresAdapter(URL)
@@ -88,6 +158,7 @@ async function fresh(): Promise<Adapter> {
     'ket_idem',
     'checkout_order',
     'catalog_product',
+    'decimal_live_entry',
   ]) {
     await a.exec(`DROP TABLE IF EXISTS "${t}" CASCADE`)
   }
@@ -322,6 +393,12 @@ test('live pg: idempotency is settled by the primary key across concurrent calls
 
 test('live pg: a database per tenant, migrated as a fleet', live, async () => {
   const base = URL.replace(/\/[^/]*$/, '')
+  // Provisioned here rather than assumed. Expecting a developer's own databases
+  // to exist is what kept this one from running anywhere but one laptop.
+  const admin = postgresAdapter(URL, { max: 1 })
+  await admin.open()
+  for (const db of ['ketjs_t1', 'ketjs_t2']) await admin.run(`CREATE DATABASE "${db}"`).catch(() => undefined)
+  await admin.close()
   const pool = createAdapterPool({ create: (key) => postgresAdapter(`${base}/${key}`), max: 4 })
   try {
     for (const db of ['ketjs_t1', 'ketjs_t2']) {
@@ -411,7 +488,11 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
 
       const cols = (await a.introspect())['uom_unit']!
       assert.equal(cols['relativeFactor'], 'numeric')
-      assert.equal(cols['absoluteFactor'], 'numeric', 'exact decimal storage, as Odoo uses for quantities')
+      assert.equal(
+        cols['absoluteFactor'],
+        'numeric',
+        'exact decimal storage, as the domain contract uses for quantities',
+      )
       assert.equal(cols['rounding'], 'numeric')
 
       registerFunctions([uom])
@@ -437,9 +518,9 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
           { rootId: 'root' },
           { adapter: a, manifest: m, scope: { company: 'acme', branches: null } },
         )
-      ).value as Array<{ id: string; absoluteFactor: number }>
+      ).value as Array<{ id: string; absoluteFactor: string }>
       for (const [i, factor] of awkward.entries()) {
-        assert.equal(rows.find((r) => r.id === `u${i}`)!.absoluteFactor, Number(factor))
+        assert.equal(rows.find((r) => r.id === `u${i}`)!.absoluteFactor, factor)
       }
 
       // And the driver hands NUMERIC over as a string, which is what keeps it exact
@@ -454,6 +535,156 @@ test('live pg: a decimal column is NUMERIC, and gives back exactly what it was g
   } finally {
     await pool.close()
   }
+})
+
+test('live pg: exact decimal queries and aggregates match the portable contract', live, async () => {
+  await withPg(async (a) => {
+    const schema = schemaFromManifest(decimalManifest)
+    for (const sql of renderSql(planMigration(null, schema), a)) await a.exec(sql)
+    registerFunctions([decimalLive])
+
+    const entries = [
+      ['rank-00', '-9007199254740993.2', 'rank'],
+      ['rank-01', '-10', 'rank'],
+      ['rank-02', '-2', 'rank'],
+      ['rank-03', '0', 'rank'],
+      ['rank-04', '0.01', 'rank'],
+      ['rank-05', '2', 'rank'],
+      ['rank-06', '10', 'rank'],
+      ['rank-07', '9007199254740992.1', 'rank'],
+      ['rank-08', '9007199254740992.2', 'rank'],
+      ['rank-09', '9007199254740993.1', 'rank'],
+      ['rank-null', null, 'rank'],
+      ['aggregate-00', '-9007199254740990.3', 'aggregate'],
+      ['aggregate-01', '9007199254740992.1', 'aggregate'],
+      ['aggregate-02', '0.2', 'aggregate'],
+      ['aggregate-03', '1.0', 'aggregate'],
+      ['aggregate-04', '1.00', 'aggregate'],
+      ['aggregate-05', '-0.0', 'aggregate'],
+      ['aggregate-06', '0.000', 'aggregate'],
+      ['aggregate-07', '-2.00', 'aggregate'],
+      ['aggregate-08', '10', 'aggregate'],
+      ['aggregate-09', '2.0', 'aggregate'],
+      ['third-00', '1', 'third'],
+      ['third-01', '0', 'third'],
+      ['third-02', '0', 'third'],
+      ['third-null', null, 'third'],
+      ['negative-00', '-1', 'negative'],
+      ['negative-01', '0', 'negative'],
+    ] as const
+    for (const row of entries)
+      await a.run('INSERT INTO decimal_live_entry (id, amount, note) VALUES ($1, $2, $3)', [...row])
+
+    const Entry = table(decimalManifest, 'decimal_live.Entry')
+    const execute = async (query: ReturnType<typeof from>) => {
+      const { text, params } = query.toSQL('postgres')
+      return { text, rows: await a.all(text, params) }
+    }
+
+    const equivalent = await execute(
+      from(Entry).where(eq(Entry.note!, 'aggregate'), eq(Entry.amount!, '1')).orderBy(asc(Entry.id!)),
+    )
+    assert.deepEqual(
+      equivalent.rows.map((row) => row.id),
+      ['aggregate-03', 'aggregate-04'],
+      'NUMERIC equality treats equivalent decimal spellings as one value',
+    )
+
+    const range = await execute(
+      from(Entry)
+        .where(
+          eq(Entry.note!, 'rank'),
+          gte(Entry.amount!, '9007199254740992.15'),
+          lte(Entry.amount!, '9007199254740993.1'),
+        )
+        .orderBy(asc(Entry.amount!)),
+    )
+    assert.deepEqual(
+      range.rows.map((row) => row.id),
+      ['rank-08', 'rank-09'],
+      'range comparisons stay exact beyond Number.MAX_SAFE_INTEGER',
+    )
+
+    const ascending = await execute(from(Entry).where(eq(Entry.note!, 'rank')).orderBy(asc(Entry.amount!)))
+    assert.match(ascending.text, /"amount" ASC NULLS LAST/)
+    assert.deepEqual(
+      ascending.rows.map((row) => row.id),
+      [...entries.slice(0, 10).map((row) => row[0]), 'rank-null'],
+    )
+
+    const descending = await execute(from(Entry).where(eq(Entry.note!, 'rank')).orderBy(desc(Entry.amount!)))
+    assert.match(descending.text, /"amount" DESC NULLS FIRST/)
+    assert.deepEqual(
+      descending.rows.map((row) => row.id),
+      [
+        'rank-null',
+        ...entries
+          .slice(0, 10)
+          .map((row) => row[0])
+          .reverse(),
+      ],
+    )
+
+    const options = { adapter: a, manifest: decimalManifest, scope: SCOPE }
+    const summary = (
+      (await callFn('decimal_live.summarize', { note: 'aggregate' }, options)).value as Array<{
+        key: unknown[]
+        count: number
+        aggregates: Record<string, unknown>
+      }>
+    )[0]!
+    assert.deepEqual(summary.key, ['aggregate'])
+    assert.equal(summary.count, 10)
+    assert.equal(Number(summary.aggregates.rows), 10)
+    assert.equal(Number(summary.aggregates.distinctAmounts), 8)
+    assert.equal(summary.aggregates.total, '14')
+    assert.equal(summary.aggregates.minimum, '-9007199254740990.3')
+    assert.equal(summary.aggregates.maximum, '9007199254740992.1')
+
+    const grouped = (await callFn('decimal_live.groupAmounts', { note: 'aggregate' }, options))
+      .value as Array<{ key: unknown[]; count: number }>
+    assert.deepEqual(
+      grouped.map((row) => [row.key[0], row.count]),
+      [
+        ['-9007199254740990.3', 1],
+        ['-2', 1],
+        ['0', 2],
+        ['0.2', 1],
+        ['1', 2],
+        ['2', 1],
+        ['10', 1],
+        ['9007199254740992.1', 1],
+      ],
+      'grouping collapses numerically equivalent spellings',
+    )
+
+    const thirds = (
+      (await callFn('decimal_live.average', { note: 'third', scale: 2 }, options)).value as Array<{
+        count: number
+        aggregates: Record<string, unknown>
+      }>
+    )[0]!
+    assert.equal(thirds.count, 4)
+    assert.equal(thirds.aggregates.average, '0.33', 'one third is rounded to the requested finite scale')
+
+    const preciseThird = (
+      (await callFn('decimal_live.average', { note: 'third', scale: 30 }, options)).value as Array<{
+        aggregates: Record<string, unknown>
+      }>
+    )[0]!
+    assert.equal(
+      preciseThird.aggregates.average,
+      `0.${'3'.repeat(30)}`,
+      'exact quotient/remainder arithmetic keeps every requested digit',
+    )
+
+    const negativeTie = (
+      (await callFn('decimal_live.average', { note: 'negative', scale: 0 }, options)).value as Array<{
+        aggregates: Record<string, unknown>
+      }>
+    )[0]!
+    assert.equal(negativeTie.aggregates.average, '-1', 'negative ties round away from zero')
+  })
 })
 
 test('live pg: concurrent partner defaults, roles and terms stay unique', live, async () => {
@@ -726,57 +957,44 @@ test('live pg: concurrent admin provisioning creates exactly one complete bootst
   })
 })
 
-test('live pg: concurrent TT99 initialization converges on one complete company setup', live, async () => {
-  await withPg(async (a) => {
-    const accountModules = [address, partner, company, uom, product, account]
-    const accountManifest = compose(accountModules, { headless: true })
-    const accountSchema = schemaFromManifest(accountManifest)
-    for (const tableName of Object.keys(accountSchema.tables))
-      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
-    for (const sql of renderSql(planMigration(null, accountSchema), a)) await a.exec(sql)
-    registerFunctions(accountModules)
-    const options = { adapter: a, manifest: accountManifest, scope: SCOPE }
-    await callFn(
-      'partner.savePartner',
-      { id: 'company-party', kind: 'company', name: 'Công ty Việt Nam' },
-      options,
-    )
-    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
+test(
+  'live pg: concurrent ledger-core initialization converges without choosing a localization',
+  live,
+  async () => {
+    await withPg(async (a) => {
+      const accountModules = [address, partner, company, uom, product, account]
+      const accountManifest = compose(accountModules, { headless: true })
+      const accountSchema = schemaFromManifest(accountManifest)
+      for (const tableName of Object.keys(accountSchema.tables))
+        await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+      for (const sql of renderSql(planMigration(null, accountSchema), a)) await a.exec(sql)
+      registerFunctions(accountModules)
+      const options = { adapter: a, manifest: accountManifest, scope: SCOPE }
+      await callFn(
+        'partner.savePartner',
+        { id: 'company-party', kind: 'company', name: 'Công ty Việt Nam' },
+        options,
+      )
+      await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
 
-    const peers = [a, postgresAdapter(URL), postgresAdapter(URL), postgresAdapter(URL)]
-    await Promise.all(peers.slice(1).map((adapter) => adapter.open()))
-    try {
-      await Promise.all(
-        peers.map((adapter) => callFn('account.initializeCompany', {}, { ...options, adapter })),
-      )
-      assert.equal(Number((await a.all('SELECT COUNT(*) AS count FROM account_setup'))[0]!.count), 1)
-      assert.equal(
-        Number((await a.all('SELECT COUNT(*) AS count FROM account_account'))[0]!.count),
-        TT99_ACCOUNTS.length,
-      )
-      assert.equal(
-        Number((await a.all('SELECT COUNT(*) AS count FROM account_tax'))[0]!.count),
-        VIETNAM_TAXES.length,
-      )
-      assert.equal(
-        Number((await a.all(`SELECT COUNT(*) AS count FROM account_tax WHERE name = 'KKKNT'`))[0]!.count),
-        2,
-      )
-      assert.equal(
-        Number(
-          (
-            await a.all('SELECT COUNT(DISTINCT code) AS count FROM account_account WHERE "companyId" = $1', [
-              'c1',
-            ])
-          )[0]!.count,
-        ),
-        TT99_ACCOUNTS.length,
-      )
-    } finally {
-      await Promise.all(peers.slice(1).map((adapter) => adapter.close()))
-    }
-  })
-})
+      const peers = [a, postgresAdapter(URL), postgresAdapter(URL), postgresAdapter(URL)]
+      await Promise.all(peers.slice(1).map((adapter) => adapter.open()))
+      try {
+        await Promise.all(
+          peers.map((adapter) => callFn('account.initializeCompany', {}, { ...options, adapter })),
+        )
+        assert.equal(Number((await a.all('SELECT COUNT(*) AS count FROM account_setup'))[0]!.count), 1)
+        assert.equal(Number((await a.all('SELECT COUNT(*) AS count FROM account_account'))[0]!.count), 0)
+        assert.equal(Number((await a.all('SELECT COUNT(*) AS count FROM account_tax'))[0]!.count), 0)
+        const setup = (await a.all('SELECT standard, "countryCode" FROM account_setup'))[0]!
+        assert.equal(setup.standard, 'custom')
+        assert.equal(setup.countryCode, 'XX')
+      } finally {
+        await Promise.all(peers.slice(1).map((adapter) => adapter.close()))
+      }
+    })
+  },
+)
 
 test('live pg: concurrent stock reservations never over-reserve one quant', live, async () => {
   await withPg(async (a) => {
@@ -894,6 +1112,99 @@ test('live pg: concurrent accounting posts assign one gapless journal sequence',
       posted.map((result) => String((result.value as { name: string }).name)).sort(),
       Array.from({ length: 8 }, (_, index) => `MISC/2026/${String(index + 1).padStart(5, '0')}`),
     )
+
+    await callFn(
+      'account.createMove',
+      {
+        id: 'entry-shared',
+        journalId: 'general',
+        moveType: 'entry',
+        date: '2026-08-20T00:00:00.000Z',
+      },
+      options,
+    )
+    await callFn(
+      'account.addMoveLine',
+      {
+        id: 'entry-shared:debit',
+        moveId: 'entry-shared',
+        name: 'Debit',
+        accountId: 'bank',
+        debit: '1',
+      },
+      options,
+    )
+    await callFn(
+      'account.addMoveLine',
+      {
+        id: 'entry-shared:credit',
+        moveId: 'entry-shared',
+        name: 'Credit',
+        accountId: 'revenue',
+        credit: '1',
+      },
+      options,
+    )
+    const sameMove = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        callFn('account.postMove', { id: 'entry-shared', expectedRevision: 2 }, options),
+      ),
+    )
+    assert.ok(sameMove.every((result) => (result.value as { ok: boolean }).ok))
+    assert.deepEqual(
+      [...new Set(sameMove.map((result) => String((result.value as { name: string }).name)))],
+      ['MISC/2026/00009'],
+      'CAS losers observe the winner and complete as idempotent retries',
+    )
+
+    await callFn(
+      'account.createMove',
+      {
+        id: 'entry-race',
+        journalId: 'general',
+        moveType: 'entry',
+        date: '2026-08-20T00:00:00.000Z',
+      },
+      options,
+    )
+    await callFn(
+      'account.addMoveLine',
+      { id: 'entry-race:debit', moveId: 'entry-race', name: 'Debit', accountId: 'bank', debit: '1' },
+      options,
+    )
+    await callFn(
+      'account.addMoveLine',
+      {
+        id: 'entry-race:credit',
+        moveId: 'entry-race',
+        name: 'Credit',
+        accountId: 'revenue',
+        credit: '1',
+      },
+      options,
+    )
+    const [postRace, lineRace] = await Promise.all([
+      callFn('account.postMove', { id: 'entry-race' }, options),
+      callFn(
+        'account.addMoveLine',
+        { id: 'entry-race:late', moveId: 'entry-race', name: 'Late', accountId: 'bank', debit: '1' },
+        options,
+      ),
+    ])
+    const raced = (await callFn('account.getMove', { id: 'entry-race' }, options)).value as {
+      state: string
+      lines: unknown[]
+    }
+    if (raced.state === 'posted') {
+      assert.equal((postRace.value as { ok: boolean }).ok, true)
+      assert.equal((lineRace.value as { ok: boolean }).ok, false)
+      assert.equal(raced.lines.length, 2, 'a posted entry never admits the late line')
+    } else {
+      assert.equal(raced.state, 'draft')
+      assert.equal((postRace.value as { ok: boolean }).ok, false)
+      assert.equal((lineRace.value as { ok: boolean }).ok, true)
+      assert.equal(raced.lines.length, 3, 'posting must revalidate after the line wins the revision')
+    }
   })
 })
 
@@ -975,61 +1286,253 @@ test('live pg: concurrent quotations assign one gapless sales sequence', live, a
   })
 })
 
+const setupLivePos = async (a: Adapter) => {
+  const posModules = [address, partner, company, user, uom, product, pricing, stock, account, pos]
+  const posManifest = compose(posModules, { headless: true })
+  const posSchema = schemaFromManifest(posManifest)
+  for (const tableName of Object.keys(posSchema.tables))
+    await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+  for (const sql of renderSql(planMigration(null, posSchema), a)) await a.exec(sql)
+  registerFunctions(posModules)
+  const options = { adapter: a, manifest: posManifest, scope: SCOPE }
+  const call = (name: string, input: Record<string, unknown>) => callFn(name, input, options)
+
+  await call('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' })
+  await call('partner.savePartner', { id: 'customer', kind: 'person', name: 'Customer' })
+  await call('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' })
+  await call('user.createUser', {
+    id: 'cashier',
+    login: 'cashier',
+    password: 'correct horse',
+    name: 'Cashier',
+    defaultCompanyId: 'c1',
+  })
+  await call('uom.saveUnit', { id: 'unit', name: 'Unit', relativeFactor: '1' })
+  await call('product.saveTemplate', {
+    id: 'goods',
+    name: 'Goods',
+    type: 'goods',
+    uomId: 'unit',
+    listPrice: '100',
+    saleOk: true,
+  })
+  await call('product.saveVariant', {
+    id: 'goods-1',
+    templateId: 'goods',
+    defaultCode: 'G1',
+    combinationKey: '',
+  })
+  await call('stock.configureProduct', { templateId: 'goods', isStorable: true, tracking: 'none' })
+  await call('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' })
+  await call('stock.saveLocation', { id: 'inventory', name: 'Inventory', usage: 'inventory' })
+  await call('stock.adjustInventory', {
+    id: 'adjust',
+    productId: 'goods-1',
+    locationId: 'wh:stock',
+    inventoryLocationId: 'inventory',
+    countedQuantity: '100',
+    productUomId: 'unit',
+  })
+  for (const [id, code, name, accountType] of [
+    ['revenue', '5111', 'Revenue', 'income'],
+    ['receivable', '131', 'Receivable', 'asset_receivable'],
+    ['cash', '1111', 'Cash', 'asset_cash'],
+  ])
+    await call('account.saveAccount', { id, code, name, accountType })
+  await call('account.saveJournal', { id: 'sales', name: 'Sales', code: 'SAL', type: 'sale' })
+  await call('account.saveJournal', {
+    id: 'cash-journal',
+    name: 'Cash',
+    code: 'CSH',
+    type: 'cash',
+    defaultAccountId: 'cash',
+  })
+  await call('pricing.savePricelist', { id: 'retail', name: 'Retail', currency: 'VND' })
+  await call('pricing.savePricelistItem', {
+    id: 'retail:goods',
+    pricelistId: 'retail',
+    appliedOn: '0_product_variant',
+    productId: 'goods-1',
+    computePrice: 'fixed',
+    fixedPrice: '100',
+  })
+  await call('pos.saveConfig', {
+    id: 'shop',
+    name: 'Shop',
+    warehouseId: 'wh',
+    pricelistId: 'retail',
+    salesJournalId: 'sales',
+    revenueAccountId: 'revenue',
+    receivableAccountId: 'receivable',
+  })
+  await call('pos.savePaymentMethod', {
+    id: 'cash-method',
+    name: 'Cash',
+    journalId: 'cash-journal',
+    isCash: true,
+  })
+  await call('pos.linkPaymentMethod', {
+    id: 'shop:cash',
+    configId: 'shop',
+    paymentMethodId: 'cash-method',
+  })
+  return call
+}
+
 test('live pg: concurrent POS orders assign one session-unique gapless sequence', live, async () => {
   await withPg(async (a) => {
-    const posModules = [address, partner, company, user, uom, product, pricing, stock, account, pos]
-    const posManifest = compose(posModules, { headless: true }),
-      posSchema = schemaFromManifest(posManifest)
-    for (const tableName of Object.keys(posSchema.tables))
-      await a.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
-    for (const sql of renderSql(planMigration(null, posSchema), a)) await a.exec(sql)
-    registerFunctions(posModules)
-    const options = { adapter: a, manifest: posManifest, scope: SCOPE }
-    await callFn('partner.savePartner', { id: 'company-party', kind: 'company', name: 'ACME' }, options)
-    await callFn('company.saveCompany', { id: 'c1', partnerId: 'company-party', currency: 'VND' }, options)
-    await callFn(
-      'user.createUser',
-      { id: 'cashier', login: 'cashier', password: 'correct horse', name: 'Cashier', defaultCompanyId: 'c1' },
-      options,
-    )
-    await callFn('stock.saveWarehouse', { id: 'wh', name: 'Main', code: 'WH' }, options)
-    await callFn(
-      'account.saveAccount',
-      { id: 'revenue', code: '5111', name: 'Revenue', accountType: 'income' },
-      options,
-    )
-    await callFn(
-      'account.saveAccount',
-      { id: 'receivable', code: '131', name: 'Receivable', accountType: 'asset_receivable' },
-      options,
-    )
-    await callFn('account.saveJournal', { id: 'sales', name: 'Sales', code: 'SAL', type: 'sale' }, options)
-    await callFn(
-      'pos.saveConfig',
-      {
-        id: 'shop',
-        name: 'Shop',
-        warehouseId: 'wh',
-        salesJournalId: 'sales',
-        revenueAccountId: 'revenue',
-        receivableAccountId: 'receivable',
-      },
-      options,
-    )
-    await callFn('pos.createSession', { id: 'session', configId: 'shop', userId: 'cashier' }, options)
-    await callFn('pos.openSession', { id: 'session' }, options)
+    const call = await setupLivePos(a)
+    await call('pos.createSession', { id: 'session', configId: 'shop', userId: 'cashier' })
+    await call('pos.openSession', { id: 'session' })
     const created = await Promise.all(
       Array.from({ length: 8 }, (_, index) =>
-        callFn(
-          'pos.createOrder',
-          { id: `pos-${index + 1}`, uuid: `offline-${index + 1}`, sessionId: 'session' },
-          options,
-        ),
+        call('pos.createOrder', {
+          id: `pos-${index + 1}`,
+          uuid: `offline-${index + 1}`,
+          sessionId: 'session',
+        }),
       ),
     )
     assert.deepEqual(
       created.map((result) => String((result.value as { name: string }).name)).sort(),
       Array.from({ length: 8 }, (_, index) => `Order ${String(index + 1).padStart(5, '0')}`),
+    )
+  })
+})
+
+test(
+  'live pg: concurrent POS shift, cart, tender and finalization commands converge once',
+  live,
+  async () => {
+    await withPg(async (a) => {
+      const call = await setupLivePos(a)
+      await call('pos.createSession', { id: 'race-shift', configId: 'shop', userId: 'cashier' })
+      const opened = await Promise.all([
+        call('pos.openSession', { id: 'race-shift', expectedRevision: 0 }),
+        call('pos.openSession', { id: 'race-shift', expectedRevision: 0 }),
+      ])
+      assert.equal(opened.filter((result) => (result.value as Row).ok === true).length, 2)
+      const [shift] = await a.all('SELECT state, revision FROM pos_session WHERE id = $1', ['race-shift'])
+      assert.equal(shift?.state, 'opened')
+      assert.equal(shift?.revision, '1')
+
+      await call('pos.createOrder', { id: 'race-order', sessionId: 'race-shift', partnerId: 'customer' })
+      await call('pos.addLine', {
+        id: 'race-line',
+        orderId: 'race-order',
+        productId: 'goods-1',
+        productUomId: 'unit',
+        qty: '1',
+        expectedRevision: 0,
+      })
+      const updates = await Promise.all([
+        call('pos.updateLine', {
+          id: 'race-line',
+          orderId: 'race-order',
+          qty: '2',
+          expectedRevision: 1,
+        }),
+        call('pos.updateLine', {
+          id: 'race-line',
+          orderId: 'race-order',
+          qty: '3',
+          expectedRevision: 1,
+        }),
+      ])
+      assert.equal(updates.filter((result) => (result.value as Row).ok === true).length, 1)
+      assert.equal(updates.filter((result) => (result.value as Row).ok === false).length, 1)
+      const order = (await call('pos.getOrder', { id: 'race-order' })).value as Row
+      assert.equal(order.revision, '2')
+      const tendered = await Promise.all([
+        call('pos.addPayment', {
+          id: 'race-tender',
+          orderId: 'race-order',
+          paymentMethodId: 'cash-method',
+          tenderedAmount: order.amountTotal,
+          expectedRevision: 2,
+        }),
+        call('pos.addPayment', {
+          id: 'race-tender',
+          orderId: 'race-order',
+          paymentMethodId: 'cash-method',
+          tenderedAmount: order.amountTotal,
+          expectedRevision: 2,
+        }),
+      ])
+      assert.ok(tendered.some((result) => (result.value as Row).ok === true))
+      assert.equal(
+        (await a.all('SELECT COUNT(*) AS n FROM pos_payment WHERE id = $1', ['race-tender']))[0]!.n,
+        '1',
+      )
+
+      const paid = await Promise.all([
+        call('pos.validateOrder', { id: 'race-order', expectedRevision: 3 }),
+        call('pos.validateOrder', { id: 'race-order', expectedRevision: 3 }),
+      ])
+      assert.ok(paid.some((result) => (result.value as Row).ok === true))
+      const [finalized] = await a.all('SELECT state, revision FROM pos_order WHERE id = $1', ['race-order'])
+      assert.equal(finalized?.state, 'paid')
+      assert.equal(finalized?.revision, '4')
+      assert.equal(
+        (await a.all('SELECT COUNT(*) AS n FROM account_move WHERE id = $1', ['race-order:account']))[0]!.n,
+        '1',
+      )
+      assert.equal(
+        (await a.all('SELECT COUNT(*) AS n FROM stock_picking WHERE id = $1', ['race-order:picking']))[0]!.n,
+        '1',
+      )
+    })
+  },
+)
+
+test('live pg: concurrent POS partial returns reserve one quantity budget', live, async () => {
+  await withPg(async (a) => {
+    const call = await setupLivePos(a)
+    await call('pos.createSession', { id: 'return-shift', configId: 'shop', userId: 'cashier' })
+    await call('pos.openSession', { id: 'return-shift' })
+    await call('pos.createOrder', { id: 'return-sale', sessionId: 'return-shift', partnerId: 'customer' })
+    await call('pos.addLine', {
+      id: 'return-line',
+      orderId: 'return-sale',
+      productId: 'goods-1',
+      productUomId: 'unit',
+      qty: '3',
+      expectedRevision: 0,
+    })
+    const sale = (await call('pos.getOrder', { id: 'return-sale' })).value as Row
+    await call('pos.addPayment', {
+      id: 'return-payment',
+      orderId: 'return-sale',
+      paymentMethodId: 'cash-method',
+      tenderedAmount: sale.amountTotal,
+      expectedRevision: 1,
+    })
+    await call('pos.validateOrder', { id: 'return-sale', expectedRevision: 2 })
+    const eligibility = (await call('pos.getReturnEligibility', { id: 'return-sale' })).value as Row
+    const returns = await Promise.all([
+      call('pos.refundOrder', {
+        id: 'return-a',
+        originalOrderId: 'return-sale',
+        sessionId: 'return-shift',
+        expectedRevision: eligibility.revision,
+        lines: [{ lineId: 'return-line', quantity: '2' }],
+      }),
+      call('pos.refundOrder', {
+        id: 'return-b',
+        originalOrderId: 'return-sale',
+        sessionId: 'return-shift',
+        expectedRevision: eligibility.revision,
+        lines: [{ lineId: 'return-line', quantity: '2' }],
+      }),
+    ])
+    assert.equal(returns.filter((result) => (result.value as Row).ok === true).length, 1)
+    assert.equal(returns.filter((result) => (result.value as Row).ok === false).length, 1)
+    const remaining = (await call('pos.getReturnEligibility', { id: 'return-sale' })).value as Row
+    assert.equal((remaining.lines as Row[])[0]!.remainingQuantity, '1')
+    assert.equal(
+      (await a.all('SELECT COUNT(*) AS n FROM pos_order WHERE "refundedOrderId" = $1', ['return-sale']))[0]!
+        .n,
+      '1',
     )
   })
 })
@@ -1198,4 +1701,106 @@ test('live pg: OAuth provider, identity and transaction races settle atomically'
       1,
     )
   })
+})
+
+test('live pg: concurrent online reservations admit one winner without overselling', live, async () => {
+  const first = postgresAdapter(URL, { max: 4 })
+  const second = postgresAdapter(URL, { max: 2 })
+  const future = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+  const checkIn = future(10)
+  const checkOut = future(12)
+  await first.open()
+  await second.open()
+  try {
+    const hospitalityModules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
+    const hospitalityManifest = compose(hospitalityModules, { headless: true })
+    const schema = schemaFromManifest(hospitalityManifest)
+    for (const tableName of Object.keys(schema.tables))
+      await first.exec(`DROP TABLE IF EXISTS "${tableName}" CASCADE`)
+    for (const sql of renderSql(planMigration(null, schema), first)) await first.exec(sql)
+    registerFunctions(hospitalityModules)
+    const options = (adapter: Adapter) => ({
+      adapter,
+      manifest: hospitalityManifest,
+      scope: { company: 'hotel-company', companies: ['hotel-company'], branches: null },
+      actor: 'website-bff',
+    })
+    await callFn(
+      'partner.savePartner',
+      { id: 'hotel-company-party', kind: 'company', name: 'Hotel Company' },
+      options(first),
+    )
+    await callFn(
+      'company.saveCompany',
+      {
+        id: 'hotel-company',
+        code: 'HOTEL',
+        partnerId: 'hotel-company-party',
+        currency: 'VND',
+      },
+      options(first),
+    )
+    await callFn(
+      'partner.savePartner',
+      { id: 'web-guest', kind: 'person', name: 'Web Guest' },
+      options(first),
+    )
+    await callFn(
+      'hospitality_core.saveProperty',
+      { id: 'hotel', code: 'HOTEL', name: 'Hotel', accommodationType: 'hotel' },
+      options(first),
+    )
+    await callFn(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'deluxe',
+        propertyId: 'hotel',
+        code: 'DLX',
+        name: 'Deluxe',
+        baseRate: '1000000',
+        published: true,
+      },
+      options(first),
+    )
+    await callFn(
+      'hospitality_core.saveRoom',
+      { id: '101', propertyId: 'hotel', roomTypeId: 'deluxe', code: '101', name: '101' },
+      options(first),
+    )
+    const create = (adapter: Adapter, id: string) =>
+      callFn(
+        'hospitality_core.createOnlineReservation',
+        {
+          id,
+          requestKey: id,
+          propertyId: 'hotel',
+          roomTypeId: 'deluxe',
+          partnerId: 'web-guest',
+          checkIn,
+          checkOut,
+          adults: 2,
+        },
+        options(adapter),
+      )
+    const attempts = await Promise.all([create(first, 'web-race-a'), create(second, 'web-race-b')])
+    const values = attempts.map((attempt) => attempt.value as Record<string, unknown>)
+    assert.equal(values.filter((value) => value.ok === true).length, 1)
+    assert.equal(
+      values.filter(
+        (value) =>
+          value.ok === false &&
+          (value.errors as Array<Record<string, unknown>>).some(
+            (error) => error.messageKey === 'hospitality_core.error.inventoryUnavailable',
+          ),
+      ).length,
+      1,
+    )
+    assert.equal(Number((await first.all('SELECT COUNT(*) AS n FROM hospitality_core_reservation'))[0]?.n), 1)
+    const ledger = await first.all('SELECT sold, total, available FROM hospitality_core_availability_ledger')
+    assert.ok(
+      ledger.every((row) => Number(row.sold) === 1 && Number(row.total) === 1 && Number(row.available) === 0),
+    )
+  } finally {
+    await Promise.all([first.close().catch(() => {}), second.close().catch(() => {})])
+  }
 })

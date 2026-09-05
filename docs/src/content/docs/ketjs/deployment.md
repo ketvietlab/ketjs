@@ -10,6 +10,7 @@ over the same composed manifest and datastore.
 ## Release pipeline
 
 ```mermaid
+%% File: docs/src/content/docs/ketjs/deployment.md
 flowchart LR
   source["TypeScript source"] --> build["Emit JavaScript"]
   build --> check["ket check"]
@@ -30,11 +31,12 @@ route, job, and tenant provider to paths that remain valid in the deployment art
 An application normally provides project-specific scripts around this sequence:
 
 ```bash
+# Run from: /path/to/example-app
 npm ci
 npm run build
 ket check --workspace dist/ket.workspace.js
 ket test dist/test
-ket migrate --app erp --workspace dist/ket.workspace.js
+ket migrate --deployment erp --workspace dist/ket.workspace.js
 ```
 
 Use `ket snapshot` and `ket diff` when a release process reviews manifest changes. Treat a clean manifest
@@ -50,8 +52,9 @@ controlled boot migrate before normal replicas start.
 For a tenant fleet, the CLI opens each database and owns the apply step:
 
 ```bash
-ket migrate --app erp --workspace dist/ket.workspace.js --all --dry-run
-ket migrate --app erp --workspace dist/ket.workspace.js --all
+# Run from: /path/to/ketjs
+ket migrate --deployment erp --workspace dist/ket.workspace.js --all --dry-run
+ket migrate --deployment erp --workspace dist/ket.workspace.js --all
 ```
 
 Set `KET_MIGRATE=0` on normal application pods after the release system owns migration order. This prevents
@@ -61,8 +64,9 @@ many replicas from racing to alter the same schema during rollout. Destructive p
 ## Run separate roles
 
 ```bash
-ket serve --app erp --workspace dist/ket.workspace.js
-ket worker --app erp --workspace dist/ket.workspace.js
+# Run from: /path/to/example-app
+ket serve --deployment erp --workspace dist/ket.workspace.js
+ket worker --deployment erp --workspace dist/ket.workspace.js
 ```
 
 Scale HTTP replicas for request load. Scale worker replicas for queue throughput; each replica still follows
@@ -82,7 +86,7 @@ Before starting traffic, decide and configure:
 - local or S3-compatible object storage;
 - worker queues, concurrency, timeouts, retries, and shutdown grace;
 - tenant catalogue and bounded adapter pool for tenant deployments;
-- module bootstrap and auto-install policy;
+- the exact module composition for each deployment;
 - logs, metrics, readiness, backups, and disaster recovery.
 
 Do not place durable local SQLite or object-storage files in an ephemeral container layer. Mount persistent
@@ -90,13 +94,14 @@ storage or choose external services.
 
 ## PostgreSQL
 
-Install the optional driver in the application and make adapter ownership explicit:
+Install the optional driver in the deployment package and make adapter ownership explicit:
 
 ```ts
-import { defineApp } from '@ketvietlab/ketjs'
+// File: src/app.ts
+import { defineDeployment } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
-export const erp = defineApp({
+export const erp = defineDeployment({
   name: 'erp',
   modules: [core],
   headless: true,
@@ -129,6 +134,7 @@ data between environments.
 Expose a small application route for readiness, for example:
 
 ```ts
+// File: src/app.ts
 serve: {
   routes: () => ({
     '/health': () => json({ ok: true }),
@@ -147,7 +153,7 @@ On shutdown:
 4. close sessions, storage/provider resources, adapters, and sockets;
 5. let expired job leases become retryable if a worker cannot finish.
 
-Configure the platform termination grace period longer than the app's worker `shutdownGraceMs`.
+Configure the platform termination grace period longer than the deployment worker's `shutdownGraceMs`.
 
 ## Rollback strategy
 

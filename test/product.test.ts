@@ -6,7 +6,6 @@ import {
   defineModule,
   migrateOne,
   registerFunctions,
-  restrictManifest,
   sqliteAdapter,
   translator,
 } from '@ketvietlab/ketjs'
@@ -68,7 +67,14 @@ test('product: a template carries its variants, on request', async () => {
   assert.equal(bare[0]!.variants, undefined, 'nothing arrives unless it was asked for')
 
   const full = (await call('product.listTemplates', { withVariants: true }, db)).value as Row[]
-  assert.deepEqual((full[0]!.variants as Row[]).map((v) => v.defaultCode).sort(), ['AO-M', 'AO-S'])
+  assert.deepEqual(
+    (full[0]!.variants as Row[]).map((variant) => [variant.combinationKey, variant.defaultCode]),
+    [
+      ['', null],
+      ['manual:v-m', 'AO-M'],
+      ['manual:v-s', 'AO-S'],
+    ],
+  )
   await db.close()
 })
 
@@ -117,7 +123,50 @@ test('product: a template carries its category, and the category its children', 
   await call('product.saveTemplate', { id: 'tpl', name: 'Áo thun', type: 'goods', categoryId: 'c1' }, db)
   const t = (await call('product.getTemplate', { id: 'tpl' }, db)).value as Row
   assert.equal((t.category as Row).name, 'Áo')
-  assert.deepEqual(t.variants, [])
+  assert.deepEqual(
+    (t.variants as Row[]).map((variant) => variant.combinationKey),
+    [''],
+  )
+  await db.close()
+})
+
+test('product: brand, origin and product-level identifiers belong to the default variant', async () => {
+  const db = await boot()
+  await call('product.saveBrand', { id: 'ket', name: 'Kết Việt' }, db)
+  const saved = await call(
+    'product.saveTemplate',
+    {
+      id: 'tpl',
+      name: 'Áo khoác',
+      type: 'goods',
+      brandId: 'ket',
+      origin: 'Việt Nam',
+      defaultCode: 'JACKET-01',
+      barcode: '8938500000100',
+    },
+    db,
+  )
+  assert.equal((saved.value as Row).ok, true)
+
+  const template = (await call('product.getTemplate', { id: 'tpl' }, db)).value as Row
+  assert.equal(template.origin, 'Việt Nam')
+  assert.equal((template.brand as Row).name, 'Kết Việt')
+  assert.deepEqual(
+    (template.variants as Row[]).map((variant) => ({
+      combinationKey: variant.combinationKey,
+      defaultCode: variant.defaultCode,
+      barcode: variant.barcode,
+      active: variant.active,
+    })),
+    [
+      {
+        combinationKey: '',
+        defaultCode: 'JACKET-01',
+        barcode: '8938500000100',
+        active: true,
+      },
+    ],
+  )
   await db.close()
 })
 
@@ -166,21 +215,6 @@ test('product: the type labels are translated, the data is not', () => {
   }
   // The stored value stays a stable key; only its label moves between languages.
   assert.equal(manifest.models['product.Template']!.fields.type!.base, 'text')
-})
-
-test('product: switching the app off takes its functions with it, not its rows', async () => {
-  const db = await boot()
-  await call('product.saveTemplate', { id: 'tpl', name: 'Áo', type: 'goods' }, db)
-  const off = restrictManifest(manifest, new Set<string>())
-  await assert.rejects(
-    () => callFn('product.listTemplates', {}, { adapter: db, manifest: off, scope: SCOPE }),
-    (e: unknown) => {
-      assert.equal((e as { code: string }).code, 'E_APP_NOT_INSTALLED')
-      return true
-    },
-  )
-  assert.equal((await db.all('SELECT * FROM product_template', [])).length, 1)
-  await db.close()
 })
 
 test('product: a required self-reference would have been refused', () => {
@@ -278,5 +312,193 @@ test('product: timestamp fields are added without inventing history for old migr
   const row = ((await call('product.listTemplates', {}, db)).value as Row[])[0]!
   assert.equal(typeof row.createdAt, 'string')
   assert.equal(row.createdAt, row.updatedAt)
+  await db.close()
+})
+
+/**
+ * A session can read several companies while writing to exactly one. Every
+ * company-scoped lookup below therefore has to name the active company: reads
+ * span the readable set, writes are pinned, and a lookup that ignores the
+ * difference finds a row it can never write.
+ */
+const BOTH = { company: 'acme', companies: ['acme', 'globex'], branches: null }
+
+const seedVariant = async (db: Adapter): Promise<void> => {
+  await call('uom.saveUnit', { id: 'ea', name: 'Each', relativeFactor: '1' }, db)
+  await call('product.saveTemplate', { id: 'tpl', name: 'Tpl', type: 'goods', uomId: 'ea' }, db)
+  await call('product.saveVariant', { id: 'var', templateId: 'tpl' }, db)
+}
+
+test('product: a cost is written to the active company, not to whichever one is readable', async () => {
+  const db = await boot()
+  await seedVariant(db)
+  // globex prices the shared variant first.
+  await call('product.setCost', { productId: 'var', standardPrice: '99' }, db, OTHER)
+  // acme now prices it while globex is still in its readable set.
+  const mine = await call('product.setCost', { productId: 'var', standardPrice: '42' }, db, BOTH)
+  assert.equal((mine.value as { ok: boolean }).ok, true)
+
+  const acme = (await call('product.getVariant', { id: 'var' }, db, BOTH)).value as {
+    cost: Row | null
+  }
+  const globex = (await call('product.getVariant', { id: 'var' }, db, OTHER)).value as {
+    cost: Row | null
+  }
+  assert.equal(Number(acme.cost?.standardPrice), 42, 'the active company stores its own price')
+  assert.equal(Number(globex.cost?.standardPrice), 99, "and does not overwrite its sibling's")
+  await db.close()
+})
+
+test('product: two companies can hold the same unit for one shared variant', async () => {
+  const db = await boot()
+  await seedVariant(db)
+  const first = await call('product.addProductUom', { productId: 'var', uomId: 'ea' }, db)
+  const second = await call('product.addProductUom', { productId: 'var', uomId: 'ea' }, db, OTHER)
+  assert.equal((first.value as { ok: boolean }).ok, true)
+  assert.equal((second.value as { ok: boolean }).ok, true)
+  assert.notEqual(
+    (first.value as { id: string }).id,
+    (second.value as { id: string }).id,
+    'a tenant-global id would have collided on the primary key',
+  )
+  for (const scope of [SCOPE, OTHER]) {
+    const seen = (await call('product.getVariant', { id: 'var' }, db, scope)).value as { uoms: Row[] }
+    assert.equal(seen.uoms.length, 1, 'each company sees only its own unit')
+  }
+  await db.close()
+})
+
+test('product: setting a variant unit replaces the previous one instead of adding to it', async () => {
+  const db = await boot()
+  await seedVariant(db)
+  await call('uom.saveUnit', { id: 'box', name: 'Box', relativeUomId: 'ea', relativeFactor: '12' }, db)
+
+  await call('product.setProductUom', { productId: 'var', uomId: 'ea' }, db)
+  await call('product.setProductUom', { productId: 'var', uomId: 'box' }, db)
+  const after = (await call('product.getVariant', { id: 'var' }, db)).value as { uoms: Row[] }
+  assert.equal(after.uoms.length, 1, 'switching the unit does not accumulate rows')
+  assert.equal(after.uoms[0]!.uomId, 'box')
+
+  // The form's empty option means "no unit", so a null clears it.
+  await call('product.setProductUom', { productId: 'var', uomId: null }, db)
+  const cleared = (await call('product.getVariant', { id: 'var' }, db)).value as { uoms: Row[] }
+  assert.deepEqual(cleared.uoms, [])
+  await db.close()
+})
+
+test('product: a partial list state narrows nothing rather than throwing', async () => {
+  const db = await boot()
+  await call('product.saveTemplate', { id: 'p1', name: 'One', type: 'goods' }, db)
+  await call('product.saveTemplate', { id: 'p2', name: 'Two', type: 'service' }, db)
+  for (const state of [{}, { filters: null }, { sort: [] }, { groupBy: 'nonsense' }]) {
+    const rows = (await call('product.listTemplates', { state }, db)).value as Row[]
+    assert.equal(rows.length, 2, `state ${JSON.stringify(state)} should list everything`)
+    const count = (await call('product.countTemplates', { state }, db)).value as { count: number }
+    assert.equal(count.count, 2)
+  }
+  await db.close()
+})
+
+test('product: a search term is matched literally, wildcards included', async () => {
+  const db = await boot()
+  await call('product.saveTemplate', { id: 'a', name: 'Discount 50% off', type: 'goods' }, db)
+  await call('product.saveTemplate', { id: 'b', name: 'Discount 5000 off', type: 'goods' }, db)
+  const hits = (await call('product.listTemplates', { search: '50%' }, db)).value as Row[]
+  assert.deepEqual(
+    hits.map((row) => row.id),
+    ['a'],
+    'an unescaped % would have matched both',
+  )
+  await db.close()
+})
+
+test('product: relation pickers get the search and limit they always send', async () => {
+  const db = await boot()
+  for (const [id, name] of [
+    ['cat-root', 'Trang phục'],
+    ['cat-shirt', 'Áo sơ mi'],
+  ] as const)
+    await call(
+      'product.saveCategory',
+      { id, name, ...(id === 'cat-shirt' ? { parentId: 'cat-root' } : {}) },
+      db,
+    )
+  await call('product.saveAttribute', { id: 'size', name: 'Kích cỡ' }, db)
+  await call('product.saveAttributeValue', { id: 'size-m', attributeId: 'size', name: 'M' }, db)
+  await call('product.saveAttributeValue', { id: 'size-l', attributeId: 'size', name: 'L' }, db)
+  await call('uom.saveUnit', { id: 'ea', name: 'Each', relativeFactor: '1' }, db)
+
+  // The picker sends both on every keystroke; an unknown input is a hard error,
+  // so accepting them is what makes these functions usable as a listFunction.
+  for (const [fn, args] of [
+    ['product.listCategories', { search: '', limit: 80 }],
+    ['product.listAttributes', { search: '', limit: 80 }],
+    ['product.listAttributeValues', { search: '', limit: 80 }],
+    ['uom.listUnits', { search: '', limit: 80 }],
+  ] as const) {
+    const rows = (await call(fn, args, db)).value as Row[]
+    assert.ok(Array.isArray(rows), `${fn} should accept search and limit`)
+  }
+
+  const narrowed = (await call('product.listCategories', { search: 'sơ mi' }, db)).value as Row[]
+  assert.deepEqual(
+    narrowed.map((row) => row.id),
+    ['cat-shirt'],
+  )
+  const capped = (await call('product.listAttributeValues', { limit: 1 }, db)).value as Row[]
+  assert.equal(capped.length, 1)
+  const scoped = (await call('product.listAttributeValues', { attributeId: 'size' }, db)).value as Row[]
+  assert.deepEqual(scoped.map((row) => row.id).sort(), ['size-l', 'size-m'])
+  await db.close()
+})
+
+test('product: a category carries its ancestry so a flat picker stays unambiguous', async () => {
+  const db = await boot()
+  await call('product.saveCategory', { id: 'top', name: 'Trang phục' }, db)
+  await call('product.saveCategory', { id: 'mid', name: 'Áo', parentId: 'top' }, db)
+  await call('product.saveCategory', { id: 'leaf', name: 'Sơ mi', parentId: 'mid' }, db)
+  const rows = (await call('product.listCategories', {}, db)).value as Row[]
+  const paths = new Map(rows.map((row) => [String(row.id), String(row.path)]))
+  assert.equal(paths.get('leaf'), 'Trang phục / Áo / Sơ mi')
+  assert.equal(paths.get('top'), 'Trang phục')
+  // Searching matches the ancestry too, so typing a parent finds its children.
+  const byParent = (await call('product.listCategories', { search: 'Trang phục' }, db)).value as Row[]
+  assert.equal(byParent.length, 3)
+  await db.close()
+})
+
+test('product: the unit picker can be held to one tree', async () => {
+  const db = await boot()
+  await call('uom.saveUnit', { id: 'ea', name: 'Each', relativeFactor: '1' }, db)
+  await call('uom.saveUnit', { id: 'box', name: 'Box', relativeUomId: 'ea', relativeFactor: '12' }, db)
+  await call('uom.saveUnit', { id: 'kg', name: 'Kilogram', relativeFactor: '1' }, db)
+  const tree = (await call('uom.listUnits', { rootId: 'ea', search: '', limit: 80 }, db)).value as Row[]
+  assert.deepEqual(
+    tree.map((row) => row.id).sort(),
+    ['box', 'ea'],
+    'a unit from another tree would be refused by setProductUom, so it is not offered',
+  )
+  await db.close()
+})
+
+test('product: a variant keeps its unit barcode when the unit itself changes', async () => {
+  const db = await boot()
+  await seedVariant(db)
+  await call('uom.saveUnit', { id: 'box', name: 'Box', relativeUomId: 'ea', relativeFactor: '12' }, db)
+  await call('product.setProductUom', { productId: 'var', uomId: 'ea', barcode: 'SKU-1' }, db)
+
+  // The row holding SKU-1 is the one this call replaces, so it must not be read
+  // as a collision with itself.
+  const moved = await call('product.setProductUom', { productId: 'var', uomId: 'box', barcode: 'SKU-1' }, db)
+  assert.equal((moved.value as { ok: boolean; errors?: unknown }).ok, true, JSON.stringify(moved.value))
+  const after = (await call('product.getVariant', { id: 'var' }, db)).value as { uoms: Row[] }
+  assert.equal(after.uoms.length, 1)
+  assert.equal(after.uoms[0]!.uomId, 'box')
+  assert.equal(after.uoms[0]!.barcode, 'SKU-1')
+
+  // A barcode held by a different variant is still a genuine collision.
+  await call('product.saveVariant', { id: 'var2', templateId: 'tpl' }, db)
+  const clash = await call('product.setProductUom', { productId: 'var2', uomId: 'ea', barcode: 'SKU-1' }, db)
+  assert.equal((clash.value as { ok: boolean }).ok, false)
   await db.close()
 })

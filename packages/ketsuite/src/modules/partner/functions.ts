@@ -1,4 +1,4 @@
-import { asc, defineFn, deleteFrom, eq, from, like } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, like, inArray, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { ADDRESS_USES, PARTNER_KINDS, PARTNER_ROLES } from './types.ts'
 import { resolveAddress, snapshotAddress, validateAddress } from '../address/format.ts'
@@ -15,6 +15,23 @@ const changeIssues = (errors: Array<{ field: string }>): Issue[] =>
   errors.map((error) => issue(error.field, 'partner.error.invalid'))
 
 type AddressArgs = Record<string, unknown>
+const normalizedEmail = (value: unknown): string | null => {
+  const email = String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+  return email || null
+}
+const normalizedPhone = (value: unknown): string | null => {
+  const raw = String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+  if (!raw) return null
+  const international = raw.startsWith('+') || raw.startsWith('00')
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return null
+  return international ? `+${digits.replace(/^00/, '')}` : digits
+}
 const canonicalAddress = (args: AddressArgs) => ({
   street1: String(args.street1 ?? args.street ?? '').trim(),
   street2: args.street2 ? String(args.street2).trim() : null,
@@ -165,6 +182,11 @@ export const functions: Record<string, FnSpec> = {
       role: 'text?',
       kind: 'text?',
       search: 'text?',
+      // Exactly these partners, for screens that already know who they need.
+      // A list of orders wants the names behind its five hundred partnerIds,
+      // and loading every partner in the tenant to build that map does not
+      // survive a customer base imported from a chat-commerce channel.
+      ids: 'json?',
       includeArchived: 'bool?',
       limit: 'int?',
       offset: 'int?',
@@ -176,16 +198,33 @@ export const functions: Record<string, FnSpec> = {
       ref: 'text?',
       email: 'text?',
       phone: 'text?',
+      contactConsent: 'bool?',
       active: 'bool',
     },
     effects: ['read:partner.Partner', 'read:partner.Role'],
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const P = ctx.table('partner.Partner')
-      let q = from(P).select(P.id, P.kind, P.name, P.ref, P.email, P.phone, P.active).orderBy(asc(P.name))
+      let q = from(P)
+        .select(P.id, P.kind, P.name, P.ref, P.email, P.phone, P.contactConsent, P.active)
+        .orderBy(asc(P.name))
       if (a.includeArchived !== true) q = q.where(eq(P.active, true))
       if (a.kind) q = q.where(eq(P.kind, a.kind))
-      if (a.search) q = q.where(like(P.name, `%${String(a.search)}%`))
+      if (a.search) {
+        const search = String(a.search).normalize('NFKC').trim()
+        const phone = normalizedPhone(search)
+        q = q.where(
+          or(
+            like(P.name, `%${search}%`),
+            like(P.email, `%${normalizedEmail(search) ?? search}%`),
+            like(P.phone, `%${phone ?? search}%`),
+          ),
+        )
+      }
+      if (Array.isArray(a.ids)) {
+        if (!a.ids.length) return []
+        q = q.where(inArray(P.id, a.ids.slice(0, 2_000).map(String)))
+      }
       if (!a.role) {
         if (typeof a.limit === 'number') q = q.limit(a.limit)
         if (typeof a.offset === 'number') q = q.offset(a.offset)
@@ -238,6 +277,7 @@ export const functions: Record<string, FnSpec> = {
       ref: 'text?',
       email: 'text?',
       phone: 'text?',
+      contactConsent: 'bool?',
       lang: 'text?',
       active: 'bool',
       addresses: 'json?',
@@ -331,6 +371,7 @@ export const functions: Record<string, FnSpec> = {
       ref: 'text?',
       email: 'text?',
       phone: 'text?',
+      contactConsent: 'bool?',
       lang: 'text?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
@@ -351,9 +392,25 @@ export const functions: Record<string, FnSpec> = {
       }
       if (errors.length) return invalid(errors)
       const existing = await ctx.db.one(from(P).where(eq(P.id, a.id)))
+      const contactConsent =
+        typeof a.contactConsent === 'boolean'
+          ? a.contactConsent
+          : typeof existing?.contactConsent === 'boolean'
+            ? existing.contactConsent
+            : Boolean(a.email || a.phone)
       let cs = ctx
-        .change('partner.Partner', { ...a, name: String(a.name).trim() }, existing)
-        .cast(['id', 'kind', 'name', 'parentId', 'vat', 'ref', 'email', 'phone', 'lang'])
+        .change(
+          'partner.Partner',
+          {
+            ...a,
+            name: String(a.name).trim(),
+            email: contactConsent ? normalizedEmail(a.email) : null,
+            phone: contactConsent ? normalizedPhone(a.phone) : null,
+            contactConsent,
+          },
+          existing,
+        )
+        .cast(['id', 'kind', 'name', 'parentId', 'vat', 'ref', 'email', 'phone', 'contactConsent', 'lang'])
       if (!existing) cs = cs.put('active', true)
       if (!cs.valid) return invalid(changeIssues(cs.errors))
       await ctx.db.commit(cs, existing ? { id: a.id } : undefined)
@@ -370,6 +427,29 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx: Ctx, a) => {
       await ctx.db.update('partner.Partner', { id: a.id }, { active: a.active } as Row)
       return { id: a.id, active: a.active }
+    },
+  }),
+
+  archivePartners: defineFn({
+    input: { ids: 'json', active: 'bool' },
+    output: { ok: 'bool', updated: 'int?', errors: 'json?' },
+    effects: ['read:partner.Partner', 'write:partner.Partner'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, a) => {
+      if (
+        !Array.isArray(a.ids) ||
+        !a.ids.length ||
+        a.ids.length > 2_000 ||
+        a.ids.some((id) => typeof id !== 'string' || !id.trim())
+      )
+        return invalid([issue('ids', 'partner.error.invalid')])
+      const ids = [...new Set(a.ids.map((id) => id.trim()))]
+      const P = ctx.table('partner.Partner')
+      const rows = await ctx.db.all(from(P).select(P.id).where(inArray(P.id, ids)))
+      for (const row of rows)
+        await ctx.db.update('partner.Partner', { id: row.id }, { active: a.active } as Row)
+      return { ok: true, updated: rows.length }
     },
   }),
 

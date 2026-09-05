@@ -1,18 +1,16 @@
-import { defineApp, json } from '@ketvietlab/ketjs'
+import { defineDeployment, json } from '@ketvietlab/ketjs'
 import __NAME__ from './modules/__NAME__.ts'
 
-// One codebase, many apps. `ket serve` runs the first one that declares `serve`.
-export const app = defineApp({
+// A deployment is the complete module composition that migrates and runs.
+export const deployment = defineDeployment({
   name: '__NAME__',
   modules: [__NAME__],
   headless: true,
   serve: {
-    // Installed on an empty database so a first run has something to look at.
-    bootstrap: ['__NAME__'],
     routes: (ctx) => ({
       '/': async (url, req) => json(await ctx.call('__NAME__.list', {}, url, req)),
     }),
   },
 })
 
-export const apps = [app]
+export const deployments = [deployment]

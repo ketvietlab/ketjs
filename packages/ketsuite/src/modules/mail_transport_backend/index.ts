@@ -5,21 +5,10 @@ export default defineModule({
   name: 'mail_transport_backend',
   version: '0.1.0',
   depends: ['mail_transport', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Hộp thư đi',
   summary: 'Theo dõi delivery, lỗi gửi và retry vận hành.',
   category: 'Năng suất',
   routes,
-  menus: {
-    outbox: {
-      label: 'menu.app',
-      icon: 'send',
-      path: '/admin/outbox',
-      sequence: 16,
-      needs: 'mail_transport.listOutbox',
-    },
-  },
   messages: {
     vi: {
       'app.title': 'Hộp thư đi',
@@ -27,6 +16,7 @@ export default defineModule({
       'app.category': 'Năng suất',
       'menu.app': 'Hộp thư đi',
       title: 'Hộp thư đi',
+      subtitle: 'Theo dõi trạng thái delivery, lỗi gửi và thao tác vận hành email.',
       empty: 'Chưa có email nào trong outbox.',
       emptyHint: 'Delivery snapshot sẽ xuất hiện ở đây ngay khi được ghi cùng giao dịch nghiệp vụ.',
       direct: 'Nội dung trực tiếp',
@@ -48,6 +38,7 @@ export default defineModule({
       'app.category': 'Productivity',
       'menu.app': 'Outbox',
       title: 'Outbox',
+      subtitle: 'Monitor delivery states, failures and operational email actions.',
       empty: 'No email is in the outbox.',
       emptyHint: 'A delivery snapshot appears here as soon as its business transaction commits.',
       direct: 'Direct content',
@@ -67,4 +58,4 @@ export default defineModule({
 })
 
 export { routes } from './routes.ts'
-export { outboxScreen } from './screens.tsx'
+export { outboxScreen } from './screens/index.ts'

@@ -120,8 +120,6 @@ export default defineModule({
   name: 'calendar_mail_transport',
   version: '0.1.0',
   depends: ['calendar', 'mail_transport'],
-  install: 'auto',
-  app: true,
   title: 'Email lịch',
   summary: 'Producer tường minh tạo delivery snapshot cho từng lời mời lịch.',
   category: 'Năng suất',

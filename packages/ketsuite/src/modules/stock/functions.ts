@@ -1,7 +1,10 @@
-import { defineFn, eq, from } from '@ketvietlab/ketjs'
+import { createHash } from 'node:crypto'
+import { defineFn, deleteFrom, desc, eq, from, inArray } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { compareQty } from '../uom/convert.ts'
 import { pushFromCompletedMove } from './routing.ts'
+import { company, ours } from './scope.ts'
+import { toProductUnit } from './units.ts'
 
 export const RECEPTION_STEPS = ['one_step', 'two_steps', 'three_steps'] as const
 export const DELIVERY_STEPS = ['ship_only', 'pick_ship', 'pick_pack_ship'] as const
@@ -28,9 +31,29 @@ export const PICKING_STATES = ['draft', 'waiting', 'confirmed', 'assigned', 'don
 export const TRACKING = ['none', 'lot', 'serial'] as const
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
-const company = (ctx: Ctx): string => {
-  if (!ctx.scope.company) throw new Error('stock operation requires a company in scope')
-  return ctx.scope.company
+const n = (value: unknown): number => Number(value ?? 0)
+const companyKey = (ctx: Ctx, ...parts: unknown[]): string => [company(ctx), ...parts.map(String)].join(':')
+
+class InventoryRefused extends Error {
+  result: Row
+  constructor(result: Row) {
+    super('inventory operation refused')
+    this.result = result
+  }
+}
+
+class PickingConflict extends Error {}
+
+const claimInventoryRevision = async (ctx: Ctx, template: Row, expected: unknown): Promise<boolean> => {
+  const revision = n(template.inventoryRevision)
+  if (revision !== n(expected)) return false
+  const changed = await ctx.db.compareAndSet(
+    'product.Template',
+    { id: template.id },
+    { inventoryRevision: template.inventoryRevision ?? null },
+    { inventoryRevision: revision + 1 },
+  )
+  return 'dryRun' in changed || changed.matched
 }
 const lotKey = (lotId: unknown): string => (lotId == null ? '' : String(lotId))
 const quantId = (ctx: Ctx, productId: unknown, locationId: unknown, lotId: unknown): string =>
@@ -52,13 +75,22 @@ async function isStorable(ctx: Ctx, productId: unknown): Promise<boolean> {
 
 async function mutateQuant(
   ctx: Ctx,
-  args: { productId: unknown; locationId: unknown; lotId?: unknown; quantity: number; reserved: number },
+  args: {
+    productId: unknown
+    locationId: unknown
+    lotId?: unknown
+    quantity: number
+    reserved: number
+    expectedVersion?: number
+  },
 ): Promise<Row> {
   const id = quantId(ctx, args.productId, args.locationId, args.lotId)
   for (let attempt = 0; attempt < 8; attempt++) {
-    const current = (await ctx.db.select('stock.Quant', { id }))[0]
+    const current = (await ours(ctx, 'stock.Quant', { id }))[0]
+    if (args.expectedVersion !== undefined && n(current?.version ?? -1) !== args.expectedVersion)
+      throw new InventoryRefused(invalid('stockRevision', 'stock position changed'))
     if (!current) {
-      // Odoo keeps the other side of completed moves on supplier, customer and
+      // the domain contract keeps the other side of completed moves on supplier, customer and
       // inventory locations as well. Those virtual locations legitimately carry
       // negative quantities; only a positive physical balance can be reserved.
       if (args.reserved < 0 || args.reserved > Math.max(args.quantity, 0))
@@ -88,7 +120,7 @@ async function mutateQuant(
           reservedQuantity: args.reserved,
           version: 0,
         }
-      if (inserted.inserted) return (await ctx.db.select('stock.Quant', { id }))[0]!
+      if (inserted.inserted) return (await ours(ctx, 'stock.Quant', { id }))[0]!
       continue
     }
     const quantity = Number(current.quantity) + args.quantity
@@ -111,6 +143,8 @@ async function mutateQuant(
     )
     if ('dryRun' in changed || changed.matched)
       return { ...current, quantity, reservedQuantity, version: Number(current.version) + 1 }
+    if (args.expectedVersion !== undefined)
+      throw new InventoryRefused(invalid('stockRevision', 'stock position changed'))
   }
   throw new Error(`concurrent quant update did not settle for ${id}`)
 }
@@ -123,17 +157,44 @@ async function reservedOn(
   lotId: unknown,
 ): Promise<number> {
   const id = quantId(ctx, productId, locationId, lotId)
-  const quant = (await ctx.db.select('stock.Quant', { id }))[0]
+  const quant = (await ours(ctx, 'stock.Quant', { id }))[0]
   return quant ? Number(quant.reservedQuantity) : 0
 }
 
+/**
+ * The locations a move may draw from: the one it names, and everything beneath it.
+ *
+ * `forecast` already rolls a location up through `parentPath` — the replenishment
+ * screen asks it for an orderpoint's location, which is a parent with the real
+ * shelves under it. Reserving only from the named location meant that stock was
+ * reported as available and then refused, leaving the move `confirmed` with no
+ * reason given. The named location comes first so a move still empties the shelf
+ * it was written against before reaching into the children.
+ */
+async function sourcesUnder(ctx: Ctx, locationId: unknown): Promise<string[]> {
+  const locations = await ours(ctx, 'stock.Location')
+  const anchor = locations.find((location) => String(location.id) === String(locationId))
+  if (!anchor) return [String(locationId)]
+  const path = String(anchor.parentPath)
+  return [
+    String(anchor.id),
+    ...locations
+      .filter(
+        (location) =>
+          String(location.id) !== String(anchor.id) && String(location.parentPath).startsWith(path),
+      )
+      .sort((a, b) => String(a.parentPath).localeCompare(String(b.parentPath)))
+      .map((location) => String(location.id)),
+  ]
+}
+
 async function updatePickingState(ctx: Ctx, pickingId: unknown): Promise<void> {
-  const picking = (await ctx.db.select('stock.Picking', { id: pickingId }))[0]
+  const picking = (await ours(ctx, 'stock.Picking', { id: pickingId }))[0]
   // draft belongs to confirmPicking and cancel is terminal. Deriving a state from the
   // moves and writing it unconditionally let a reservation confirm a draft transfer
   // and resurrect a cancelled one.
   if (!picking || picking.state === 'draft' || picking.state === 'cancel') return
-  const moves = await ctx.db.select('stock.Move', { pickingId })
+  const moves = await ours(ctx, 'stock.Move', { pickingId })
   const live = moves.filter((move) => move.state !== 'cancel')
   let state = 'confirmed'
   if (moves.length && !live.length) state = 'cancel'
@@ -143,6 +204,267 @@ async function updatePickingState(ctx: Ctx, pickingId: unknown): Promise<void> {
   else if (live.some((move) => move.state === 'waiting')) state = 'waiting'
   await ctx.db.update('stock.Picking', { id: pickingId }, { state })
 }
+
+type TrackedSelection = { lotId: string; quantity: number; stockRevision: string }
+
+const stockRevision = (rows: Row[]): string =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(
+        rows
+          .map((row) => ({
+            id: String(row.id),
+            quantity: String(row.quantity),
+            reservedQuantity: String(row.reservedQuantity),
+            version: n(row.version),
+          }))
+          .sort((left, right) => left.id.localeCompare(right.id)),
+      ),
+    )
+    .digest('hex')
+
+const availabilityAt = async (
+  ctx: Ctx,
+  args: { productId: unknown; warehouseId: unknown; at?: unknown },
+): Promise<Row> => {
+  const tracking = await trackingOf(ctx, args.productId)
+  const pickingType = (
+    await ours(ctx, 'stock.PickingType', {
+      id: `${String(args.warehouseId)}:outgoing`,
+    })
+  )[0]
+  if (!pickingType?.defaultLocationSrcId) return { tracking, sourceLocationId: null, lots: [] }
+  const sources = new Set(await sourcesUnder(ctx, pickingType.defaultLocationSrcId))
+  const quants = (await ours(ctx, 'stock.Quant', { productId: args.productId })).filter((quant) =>
+    sources.has(String(quant.locationId)),
+  )
+  const lots = await ours(ctx, 'stock.Lot', { productId: args.productId })
+  const at = new Date(String(args.at ?? new Date().toISOString())).getTime()
+  return {
+    tracking,
+    sourceLocationId: String(pickingType.defaultLocationSrcId),
+    lots: lots
+      .map((lot) => {
+        const positions = quants.filter((quant) => String(quant.lotId ?? '') === String(lot.id))
+        const available = positions.reduce(
+          (sum, quant) => sum + Math.max(0, n(quant.quantity) - n(quant.reservedQuantity)),
+          0,
+        )
+        const expiration = lot.expirationDate == null ? null : String(lot.expirationDate)
+        const expired = expiration !== null && Number.isFinite(at) && new Date(expiration).getTime() <= at
+        const serialConflict =
+          tracking === 'serial' && positions.reduce((sum, quant) => sum + n(quant.quantity), 0) > 1
+        return {
+          lotId: String(lot.id),
+          name: String(lot.name),
+          expirationDate: expiration,
+          availableQuantity: String(expired || serialConflict || lot.active === false ? 0 : available),
+          stockRevision: stockRevision(positions),
+          selectable: lot.active !== false && !expired && !serialConflict && available > 0,
+        }
+      })
+      .sort((left, right) => left.name.localeCompare(right.name) || left.lotId.localeCompare(right.lotId)),
+  }
+}
+
+const parsedSelections = (value: unknown): TrackedSelection[] | null => {
+  if (!Array.isArray(value)) return null
+  const selections = value.map((entry) => {
+    const row = entry as Row
+    return {
+      lotId: String(row.lotId ?? ''),
+      quantity: n(row.quantity),
+      stockRevision: String(row.stockRevision ?? ''),
+    }
+  })
+  return selections.every((selection) => selection.lotId && selection.quantity > 0 && selection.stockRevision)
+    ? selections
+    : null
+}
+
+const reserveMoveInContext = async (ctx: Ctx, move: Row, requestedSelections?: unknown): Promise<Row> => {
+  if (!(await isStorable(ctx, move.productId)))
+    return invalid('productId', 'chỉ sản phẩm lưu kho mới được reserve')
+  if (['done', 'cancel'].includes(String(move.state))) return invalid('state', 'move đã kết thúc')
+  if (move.state === 'draft') return invalid('state', 'xác nhận transfer trước khi reserve')
+  const demand = Number(move.productUomQty)
+  const existingLines = await ours(ctx, 'stock.MoveLine', { moveId: move.id })
+  let reserved = existingLines.reduce((sum, line) => sum + Number(line.quantity), 0)
+  let state = 'confirmed'
+  const tracking = await trackingOf(ctx, move.productId)
+  const sources = await sourcesUnder(ctx, move.locationId)
+  const sourceOrder = new Map(sources.map((id, index) => [id, index]))
+  const quants = (await ours(ctx, 'stock.Quant', { productId: move.productId }))
+    .filter((quant) => sourceOrder.has(String(quant.locationId)))
+    .sort(
+      (left, right) =>
+        sourceOrder.get(String(left.locationId))! - sourceOrder.get(String(right.locationId))! ||
+        String(left.lotKey).localeCompare(String(right.lotKey)),
+    )
+  const selections = requestedSelections === undefined ? undefined : parsedSelections(requestedSelections)
+  if (requestedSelections !== undefined && !selections)
+    return invalid('selections', 'lot/serial selection is malformed')
+  if (selections) {
+    if (tracking === 'none') return invalid('selections', 'untracked product must not select a lot')
+    if (move.pickingId) {
+      const picking = (await ours(ctx, 'stock.Picking', { id: move.pickingId }))[0]
+      const pickingType = picking
+        ? (await ours(ctx, 'stock.PickingType', { id: picking.pickingTypeId }))[0]
+        : null
+      // trackedAvailability hashes quants below the outgoing type's default source.
+      // A selected move must reserve below that exact same root; otherwise every
+      // refreshed revision would be computed from a permanently different set.
+      if (
+        !pickingType?.defaultLocationSrcId ||
+        String(pickingType.defaultLocationSrcId) !== String(move.locationId)
+      )
+        return invalid('locationId', 'tracked selection source does not match its picking type')
+    }
+    if (new Set(selections.map((selection) => selection.lotId)).size !== selections.length)
+      return invalid('selections', 'a lot/serial can only be selected once per line')
+    if (
+      tracking === 'serial' &&
+      selections.some((selection) => compareQty(selection.quantity, 1, 0.000001) !== 0)
+    )
+      return invalid('selections', 'every selected serial must have quantity 1')
+    if (
+      compareQty(
+        selections.reduce((sum, selection) => sum + selection.quantity, 0),
+        demand,
+        0.000001,
+      ) !== 0
+    )
+      return invalid('selections', 'selected lot/serial quantity must equal line quantity')
+    if (existingLines.length) {
+      const held = new Map<string, number>()
+      for (const line of existingLines)
+        held.set(String(line.lotId ?? ''), (held.get(String(line.lotId ?? '')) ?? 0) + n(line.quantity))
+      const same =
+        compareQty(reserved, demand, 0.000001) === 0 &&
+        selections.every(
+          (selection) => compareQty(held.get(selection.lotId) ?? 0, selection.quantity, 0.000001) === 0,
+        )
+      if (!same) return invalid('selections', 'move already holds a different lot/serial selection')
+      // This is a completed idempotent replay, not a new stock claim. The original
+      // revisions were consumed when these move lines reserved the quants, so a
+      // later retry intentionally compares the immutable selection instead.
+      await ctx.db.update('stock.Move', { id: move.id }, { state: 'assigned', quantity: String(reserved) })
+      if (move.pickingId) await updatePickingState(ctx, move.pickingId)
+      return { ok: true, reserved: String(reserved), state: 'assigned' }
+    }
+    for (const selection of selections) {
+      const positions = quants.filter((quant) => String(quant.lotId ?? '') === selection.lotId)
+      if (stockRevision(positions) !== selection.stockRevision)
+        return invalid('stockRevision', 'stock position changed; reload lot availability')
+      const lot = (await ours(ctx, 'stock.Lot', { id: selection.lotId }))[0]
+      if (!lot || lot.productId !== move.productId || lot.active === false)
+        return invalid('lotId', 'lot/serial is not available for this product')
+      if (lot.expirationDate && new Date(String(lot.expirationDate)).getTime() <= Date.now())
+        return invalid('lotId', 'expired lot/serial cannot be sold')
+      if (tracking === 'serial' && positions.reduce((sum, quant) => sum + n(quant.quantity), 0) > 1)
+        return invalid('lotId', 'duplicate serial stock must be reconciled before sale')
+      let remaining = selection.quantity
+      for (const quant of positions) {
+        if (remaining <= 0.000001) break
+        const available = n(quant.quantity) - n(quant.reservedQuantity)
+        if (available <= 0) continue
+        const take = Math.min(available, remaining)
+        await mutateQuant(ctx, {
+          productId: move.productId,
+          locationId: quant.locationId,
+          lotId: quant.lotId,
+          quantity: 0,
+          reserved: take,
+          expectedVersion: n(quant.version),
+        })
+        await ctx.db.insert('stock.MoveLine', {
+          id: `${String(move.id)}:reserve:${String(quant.id)}`,
+          moveId: move.id,
+          pickingId: move.pickingId,
+          productId: move.productId,
+          productUomId: move.productUomId,
+          quantity: String(take),
+          quantityProductUom: String(take),
+          locationId: quant.locationId,
+          locationDestId: move.locationDestId,
+          lotId: quant.lotId,
+          picked: false,
+        })
+        remaining -= take
+        reserved += take
+      }
+      if (remaining > 0.000001)
+        return invalid('stock', `insufficient stock for lot/serial ${selection.lotId}`)
+    }
+  } else {
+    for (const quant of quants) {
+      if (reserved >= demand) break
+      if (tracking !== 'none' && !quant.lotId) continue
+      const available = Number(quant.quantity) - Number(quant.reservedQuantity)
+      if (available <= 0) continue
+      const take = Math.min(
+        available,
+        demand - reserved,
+        tracking === 'serial' ? 1 : Number.POSITIVE_INFINITY,
+      )
+      await mutateQuant(ctx, {
+        productId: move.productId,
+        locationId: quant.locationId,
+        lotId: quant.lotId,
+        quantity: 0,
+        reserved: take,
+      })
+      const lineId = `${String(move.id)}:reserve:${String(quant.id)}`
+      const line = (await ours(ctx, 'stock.MoveLine', { id: lineId }))[0]
+      if (line)
+        await ctx.db.update(
+          'stock.MoveLine',
+          { id: lineId },
+          { quantity: String(Number(line.quantity) + take) },
+        )
+      else
+        await ctx.db.insert('stock.MoveLine', {
+          id: lineId,
+          moveId: move.id,
+          pickingId: move.pickingId,
+          productId: move.productId,
+          productUomId: move.productUomId,
+          quantity: String(take),
+          quantityProductUom: String(take),
+          locationId: quant.locationId,
+          locationDestId: move.locationDestId,
+          lotId: quant.lotId,
+          picked: false,
+        })
+      reserved += take
+    }
+  }
+  state =
+    compareQty(reserved, demand, 0.000001) >= 0
+      ? 'assigned'
+      : reserved > 0
+        ? 'partially_available'
+        : 'confirmed'
+  await ctx.db.update('stock.Move', { id: move.id }, { state, quantity: String(reserved) })
+  if (move.pickingId) await updatePickingState(ctx, move.pickingId)
+  return { ok: true, reserved: String(reserved), state }
+}
+
+const reserveEffects = [
+  'read:stock.Move',
+  'write:stock.Move',
+  'read:stock.Picking',
+  'write:stock.Picking',
+  'read:stock.PickingType',
+  'read:stock.MoveLine',
+  'write:stock.MoveLine',
+  'read:stock.Quant',
+  'write:stock.Quant',
+  'read:stock.Location',
+  'read:stock.Lot',
+  'read:product.Product',
+  'read:product.Template',
+]
 
 export const functions: Record<string, FnSpec> = {
   listStorableProducts: defineFn({
@@ -171,8 +493,29 @@ export const functions: Record<string, FnSpec> = {
             templateId: args.templateId,
             isStorable: Boolean(template.isStorable),
             tracking: String(template.tracking ?? 'none'),
+            inventoryRevision: n(template.inventoryRevision),
           }
         : null
+    },
+  }),
+  /** Batch companion to getProductConfig for bounded catalogue projections. */
+  listProductConfigs: defineFn({
+    input: { templateIds: 'json' },
+    effects: ['read:product.Template'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const ids = [...new Set(Array.isArray(args.templateIds) ? args.templateIds.map(String) : [])]
+      if (!ids.length) return []
+      // Reading every template in the tenant to answer for twenty of them is the
+      // shape a batch companion exists to avoid; getProductConfig above filters
+      // in the query and so does this.
+      const T = ctx.table('product.Template')
+      return (await ctx.db.all(from(T).where(inArray(T.id, ids)))).map((template) => ({
+        templateId: String(template.id),
+        isStorable: Boolean(template.isStorable),
+        tracking: String(template.tracking ?? 'none'),
+        inventoryRevision: n(template.inventoryRevision),
+      }))
     },
   }),
   configureProduct: defineFn({
@@ -196,33 +539,298 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.templateId }
     },
   }),
+  saveInventoryProduct: defineFn({
+    input: {
+      id: 'id',
+      templateId: 'id',
+      create: 'bool?',
+      expectedRevision: 'int?',
+      name: 'text',
+      kind: 'text',
+      uomId: 'id',
+      categoryId: 'id?',
+      salePrice: 'decimal',
+      cost: 'decimal',
+      saleOk: 'bool',
+      purchaseOk: 'bool',
+      pointOfSale: 'bool',
+      tracking: 'text',
+      sku: 'text?',
+      barcode: 'text?',
+    },
+    output: { ok: 'bool', id: 'id?', templateId: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:product.Template',
+      'write:product.Template',
+      'read:product.Product',
+      'write:product.Product',
+      'read:product.Cost',
+      'write:product.Cost',
+      'read:product.Category',
+      'read:uom.Unit',
+      'write:uom.Unit',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const name = String(args.name ?? '').trim()
+      const sku = args.sku == null || String(args.sku).trim() === '' ? null : String(args.sku).trim()
+      const barcode =
+        args.barcode == null || String(args.barcode).trim() === '' ? null : String(args.barcode).trim()
+      const kind = String(args.kind)
+      const tracking = String(args.tracking)
+      if (!name || name.length > 200) return invalid('name', 'name needs 1 to 200 characters')
+      if (sku && sku.length > 100) return invalid('sku', 'SKU cannot exceed 100 characters')
+      if (barcode && barcode.length > 100) return invalid('barcode', 'barcode cannot exceed 100 characters')
+      if (!['storable', 'consumable'].includes(kind))
+        return invalid('kind', 'kind must be storable or consumable')
+      if (!TRACKING.includes(tracking as never))
+        return invalid('tracking', `tracking must be: ${TRACKING.join(', ')}`)
+      if (kind !== 'storable' && tracking !== 'none')
+        return invalid('tracking', 'a consumable product must use tracking none')
+      if (args.pointOfSale !== args.saleOk)
+        return invalid('pointOfSale', 'point of sale currently follows sales eligibility')
+      if (n(args.salePrice) < 0 || n(args.cost) < 0)
+        return invalid('salePrice', 'sale price and cost cannot be negative')
+      if (!(await ctx.db.select('uom.Unit', { id: args.uomId }))[0])
+        return invalid('uomId', 'unit of measure does not exist')
+      if (args.categoryId && !(await ctx.db.select('product.Category', { id: args.categoryId }))[0])
+        return invalid('categoryId', 'product category does not exist')
+      if (barcode) {
+        const collision = (await ctx.db.select('product.Product', { barcode }))[0]
+        if (collision && collision.id !== args.id)
+          return invalid('barcode', 'barcode is already assigned to another product')
+      }
+
+      try {
+        await ctx.tx(async (tx) => {
+          const product = (await tx.db.select('product.Product', { id: args.id }))[0]
+          const template = product
+            ? (await tx.db.select('product.Template', { id: product.templateId }))[0]
+            : (await tx.db.select('product.Template', { id: args.templateId }))[0]
+          if (args.create && product && template) return
+          if (args.create) {
+            if (product || template)
+              throw new InventoryRefused(invalid('id', 'product identity is already in use'))
+            await tx.db.insert('product.Template', {
+              id: args.templateId,
+              name,
+              type: 'goods',
+              categoryId: args.categoryId ?? null,
+              uomId: args.uomId,
+              description: null,
+              listPrice: args.salePrice,
+              saleOk: args.saleOk,
+              purchaseOk: args.purchaseOk,
+              active: true,
+              isStorable: kind === 'storable',
+              tracking,
+              inventoryRevision: 0,
+            })
+            await tx.db.insert('product.Product', {
+              id: args.id,
+              templateId: args.templateId,
+              defaultCode: sku,
+              barcode,
+              weight: '0',
+              volume: '0',
+              combinationKey: `manual:${String(args.id)}`,
+              active: true,
+            })
+          } else {
+            if (!product || !template)
+              throw new InventoryRefused(invalid('id', 'inventory product does not exist'))
+            if (args.expectedRevision === undefined)
+              throw new InventoryRefused(invalid('expectedRevision', 'product version is required'))
+            if (!(await claimInventoryRevision(tx, template, args.expectedRevision)))
+              throw new InventoryRefused(invalid('expectedRevision', 'inventory product changed'))
+            await tx.db.update(
+              'product.Template',
+              { id: template.id },
+              {
+                name,
+                categoryId: args.categoryId ?? null,
+                uomId: args.uomId,
+                listPrice: args.salePrice,
+                saleOk: args.saleOk,
+                purchaseOk: args.purchaseOk,
+                isStorable: kind === 'storable',
+                tracking,
+              },
+            )
+            await tx.db.update('product.Product', { id: product.id }, { defaultCode: sku, barcode })
+          }
+          const costId = companyKey(tx, args.id)
+          const existingCost = (await tx.db.select('product.Cost', { id: costId }))[0]
+          if (existingCost) await tx.db.update('product.Cost', { id: costId }, { standardPrice: args.cost })
+          else
+            await tx.db.insert('product.Cost', {
+              id: costId,
+              productId: args.id,
+              standardPrice: args.cost,
+            })
+          await tx.db.update('uom.Unit', { id: args.uomId }, { locked: true })
+        })
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
+      const product = (await ctx.db.select('product.Product', { id: args.id }))[0]
+      const template = product && (await ctx.db.select('product.Template', { id: product.templateId }))[0]
+      return {
+        ok: true,
+        id: args.id,
+        templateId: template?.id ?? args.templateId,
+        revision: n(template?.inventoryRevision),
+      }
+    },
+  }),
+  setInventoryProductActive: defineFn({
+    input: { id: 'id', active: 'bool', expectedRevision: 'int' },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:product.Template',
+      'write:product.Template',
+      'read:product.Product',
+      'write:product.Product',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      try {
+        await ctx.tx(async (tx) => {
+          const product = (await tx.db.select('product.Product', { id: args.id }))[0]
+          const template = product && (await tx.db.select('product.Template', { id: product.templateId }))[0]
+          if (!product || !template)
+            throw new InventoryRefused(invalid('id', 'inventory product does not exist'))
+          if (Boolean(product.active) === args.active && Boolean(template.active) === args.active)
+            throw new InventoryRefused(invalid('active', 'inventory product is already in that state'))
+          if (!(await claimInventoryRevision(tx, template, args.expectedRevision)))
+            throw new InventoryRefused(invalid('expectedRevision', 'inventory product changed'))
+          await tx.db.update('product.Template', { id: template.id }, { active: args.active })
+          for (const variant of await tx.db.select('product.Product', { templateId: template.id }))
+            await tx.db.update('product.Product', { id: variant.id }, { active: args.active })
+        })
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
+      const product = (await ctx.db.select('product.Product', { id: args.id }))[0]
+      const template = product && (await ctx.db.select('product.Template', { id: product.templateId }))[0]
+      return { ok: true, id: args.id, revision: n(template?.inventoryRevision) }
+    },
+  }),
+  /**
+   * Withheld from the public surface until it can refuse a referenced product.
+   *
+   * The guard below sees stock history and nothing else, because this module
+   * cannot read sale, purchase or account tables. A product named only by a
+   * draft quotation therefore passes it, and deleting one leaves the order line
+   * pointing at a row that no longer exists — proven, not supposed. Until the
+   * reference check exists this stays off HTTP and off the agent surface, where
+   * it would answer without even the channel's CSRF and rate limit.
+   */
+  deleteInventoryProduct: defineFn({
+    exposure: 'internal',
+    input: { id: 'id', expectedRevision: 'int' },
+    output: { ok: 'bool', id: 'id?', deleted: 'bool?', errors: 'json?' },
+    effects: [
+      'read:product.Template',
+      'write:product.Template',
+      'read:product.Product',
+      'write:product.Product',
+      'read:product.Cost',
+      'write:product.Cost',
+      'read:product.TemplateUom',
+      'write:product.TemplateUom',
+      'read:product.ProductUom',
+      'write:product.ProductUom',
+      'read:product.TemplateAttributeLine',
+      'write:product.TemplateAttributeLine',
+      'read:product.TemplateAttributeValue',
+      'write:product.TemplateAttributeValue',
+      'read:product.ProductValue',
+      'write:product.ProductValue',
+      'read:stock.Quant',
+      'read:stock.Move',
+    ],
+    idempotent: true,
+    handler: async (ctx, args) => {
+      try {
+        await ctx.tx(async (tx) => {
+          const product = (await tx.db.select('product.Product', { id: args.id }))[0]
+          const template = product && (await tx.db.select('product.Template', { id: product.templateId }))[0]
+          if (!product || !template)
+            throw new InventoryRefused(invalid('id', 'inventory product does not exist'))
+          if (!(await claimInventoryRevision(tx, template, args.expectedRevision)))
+            throw new InventoryRefused(invalid('expectedRevision', 'inventory product changed'))
+          const variants = await tx.db.select('product.Product', { templateId: template.id })
+          for (const variant of variants) {
+            if ((await ours(tx, 'stock.Quant', { productId: variant.id })).length)
+              throw new InventoryRefused(invalid('id', 'a product with stock history cannot be deleted'))
+            if ((await ours(tx, 'stock.Move', { productId: variant.id })).length)
+              throw new InventoryRefused(invalid('id', 'a product with movement history cannot be deleted'))
+          }
+          const ProductValue = tx.table('product.ProductValue')
+          const ProductUom = tx.table('product.ProductUom')
+          const Cost = tx.table('product.Cost')
+          const Line = tx.table('product.TemplateAttributeLine')
+          const Value = tx.table('product.TemplateAttributeValue')
+          const TemplateUom = tx.table('product.TemplateUom')
+          const Product = tx.table('product.Product')
+          const Template = tx.table('product.Template')
+          const productIds = variants.map((variant) => String(variant.id))
+          const lines = await tx.db.select('product.TemplateAttributeLine', {
+            templateId: template.id,
+          })
+          const lineIds = lines.map((line) => String(line.id))
+          if (productIds.length) {
+            await tx.db.del(deleteFrom(ProductValue).where(inArray(ProductValue.productId, productIds)))
+            await tx.db.del(deleteFrom(ProductUom).where(inArray(ProductUom.productId, productIds)))
+            await tx.db.del(deleteFrom(Cost).where(inArray(Cost.productId, productIds)))
+          }
+          if (lineIds.length) await tx.db.del(deleteFrom(Value).where(inArray(Value.lineId, lineIds)))
+          await tx.db.del(deleteFrom(Line).where(eq(Line.templateId, String(template.id))))
+          await tx.db.del(deleteFrom(TemplateUom).where(eq(TemplateUom.templateId, String(template.id))))
+          if (productIds.length) await tx.db.del(deleteFrom(Product).where(inArray(Product.id, productIds)))
+          const deleted = await tx.db.del(deleteFrom(Template).where(eq(Template.id, String(template.id))))
+          if (deleted.changes !== 1)
+            throw new InventoryRefused(invalid('id', 'inventory product could not be deleted'))
+        })
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
+      return { ok: true, id: args.id, deleted: true }
+    },
+  }),
   listWarehouses: defineFn({
     input: {},
     effects: ['read:stock.Warehouse'],
     agent: true,
-    handler: (ctx) => ctx.db.select('stock.Warehouse', { active: true }),
+    handler: (ctx) => ours(ctx, 'stock.Warehouse', { active: true }),
   }),
   listPickings: defineFn({
     input: { state: 'text?' },
     effects: ['read:stock.Picking'],
     agent: true,
     handler: async (ctx, args) =>
-      args.state ? ctx.db.select('stock.Picking', { state: args.state }) : ctx.db.select('stock.Picking'),
+      args.state ? ours(ctx, 'stock.Picking', { state: args.state }) : ours(ctx, 'stock.Picking'),
   }),
   getPicking: defineFn({
     input: { id: 'id' },
     effects: ['read:stock.Picking', 'read:stock.Move', 'read:stock.MoveLine'],
     agent: true,
     handler: async (ctx, args) => {
-      const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+      const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
       if (!picking) return null
-      const moves = await ctx.db.select('stock.Move', { pickingId: args.id })
+      const moves = await ours(ctx, 'stock.Move', { pickingId: args.id })
       return {
         ...picking,
         moves: await Promise.all(
           moves.map(async (move) => ({
             ...move,
-            lines: await ctx.db.select('stock.MoveLine', { moveId: move.id }),
+            lines: await ours(ctx, 'stock.MoveLine', { moveId: move.id }),
           })),
         ),
       }
@@ -233,26 +841,44 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:stock.Location'],
     agent: true,
     handler: (ctx, args) =>
-      ctx.db.select('stock.Location', args.warehouseId ? { warehouseId: args.warehouseId } : {}),
+      ours(ctx, 'stock.Location', args.warehouseId ? { warehouseId: args.warehouseId } : {}),
   }),
   listPickingTypes: defineFn({
     input: {},
     effects: ['read:stock.PickingType'],
     agent: true,
-    handler: (ctx) => ctx.db.select('stock.PickingType', { active: true }),
+    handler: (ctx) => ours(ctx, 'stock.PickingType', { active: true }),
   }),
   listLots: defineFn({
     input: { productId: 'id?' },
     effects: ['read:stock.Lot'],
     agent: true,
-    handler: (ctx, args) => ctx.db.select('stock.Lot', args.productId ? { productId: args.productId } : {}),
+    handler: (ctx, args) => ours(ctx, 'stock.Lot', args.productId ? { productId: args.productId } : {}),
+  }),
+  trackedAvailability: defineFn({
+    input: { productId: 'id', warehouseId: 'id', at: 'datetime?' },
+    effects: [
+      'read:product.Product',
+      'read:product.Template',
+      'read:stock.PickingType',
+      'read:stock.Location',
+      'read:stock.Quant',
+      'read:stock.Lot',
+    ],
+    agent: true,
+    handler: (ctx, args) =>
+      availabilityAt(ctx, {
+        productId: args.productId,
+        warehouseId: args.warehouseId,
+        at: args.at,
+      }),
   }),
   listQuants: defineFn({
     input: { productId: 'id?', locationId: 'id?' },
     effects: ['read:stock.Quant'],
     agent: true,
     handler: (ctx, args) =>
-      ctx.db.select('stock.Quant', {
+      ours(ctx, 'stock.Quant', {
         ...(args.productId ? { productId: args.productId } : {}),
         ...(args.locationId ? { locationId: args.locationId } : {}),
       }),
@@ -284,7 +910,7 @@ export const functions: Record<string, FnSpec> = {
         return invalid('receptionSteps', `phải là: ${RECEPTION_STEPS.join(', ')}`)
       if (!DELIVERY_STEPS.includes(deliverySteps as never))
         return invalid('deliverySteps', `phải là: ${DELIVERY_STEPS.join(', ')}`)
-      const existing = (await ctx.db.select('stock.Warehouse', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.Warehouse', { id: args.id }))[0]
       const values = { ...args, receptionSteps, deliverySteps, active: true }
       const cs = ctx
         .change('stock.Warehouse', values, existing ?? null)
@@ -345,7 +971,7 @@ export const functions: Record<string, FnSpec> = {
             warehouseId: args.id,
             active: location.active,
           }
-          const found = (await tx.db.select('stock.Location', { id }))[0]
+          const found = (await ours(tx, 'stock.Location', { id }))[0]
           if (found) await tx.db.update('stock.Location', { id }, values)
           else await tx.db.insert('stock.Location', { id, ...values })
         }
@@ -422,7 +1048,7 @@ export const functions: Record<string, FnSpec> = {
             createBackorder: 'ask',
             active: type.active ?? true,
           }
-          const found = (await tx.db.select('stock.PickingType', { id: type.id }))[0]
+          const found = (await ours(tx, 'stock.PickingType', { id: type.id }))[0]
           if (found) await tx.db.update('stock.PickingType', { id: type.id }, values)
           else await tx.db.insert('stock.PickingType', { id: type.id, ...values })
         }
@@ -435,7 +1061,7 @@ export const functions: Record<string, FnSpec> = {
           { id: deliveryRouteId, name: `${String(args.name)}: ${deliverySteps}`, sequence: 60 },
         ]
         for (const route of routes) {
-          const found = (await tx.db.select('stock.Route', { id: route.id }))[0]
+          const found = (await ours(tx, 'stock.Route', { id: route.id }))[0]
           const values = { name: route.name, sequence: route.sequence, active: true }
           if (found) await tx.db.update('stock.Route', { id: route.id }, values)
           else await tx.db.insert('stock.Route', { id: route.id, ...values })
@@ -448,7 +1074,7 @@ export const functions: Record<string, FnSpec> = {
 
         // The subset executes route chains backwards from demand, so each leg is
         // represented as a pull rule. The resulting locations and operation types
-        // match Odoo 19's receipt/delivery topology.
+        // match the domain contract's receipt/delivery topology.
         const ruleDefinitions = [
           {
             id: `${warehouseId}:receipt:supplier-stock`,
@@ -555,7 +1181,7 @@ export const functions: Record<string, FnSpec> = {
             procureMethod: rule.procureMethod ?? 'make_to_order',
             active: rule.active,
           }
-          const found = (await tx.db.select('stock.Rule', { id: rule.id }))[0]
+          const found = (await ours(tx, 'stock.Rule', { id: rule.id }))[0]
           if (found) await tx.db.update('stock.Rule', { id: rule.id }, values)
           else await tx.db.insert('stock.Rule', { id: rule.id, ...values })
         }
@@ -576,20 +1202,39 @@ export const functions: Record<string, FnSpec> = {
       if (args.parentId === args.id) return invalid('parentId', 'location không thể là cha của chính nó')
       let parentPath = `${String(args.id)}/`
       if (args.parentId) {
-        const parent = (await ctx.db.select('stock.Location', { id: args.parentId }))[0]
+        const parent = (await ours(ctx, 'stock.Location', { id: args.parentId }))[0]
         if (!parent) return invalid('parentId', 'location cha không tồn tại')
         if (String(parent.parentPath).split('/').includes(String(args.id)))
           return invalid('parentId', 'cây location có vòng lặp')
         parentPath = `${String(parent.parentPath)}${String(args.id)}/`
       }
-      const existing = (await ctx.db.select('stock.Location', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.Location', { id: args.id }))[0]
       const values = { ...args, parentPath, active: true }
       const cs = ctx
         .change('stock.Location', values, existing ?? null)
         .cast(['id', 'name', 'usage', 'parentId', 'parentPath', 'warehouseId', 'active'])
         .required(['name', 'usage'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
-      await ctx.db.commit(cs, existing ? { id: args.id } : undefined)
+      // Re-parenting moves a whole subtree, and every row under it stores the path
+      // it reaches the root by. Writing only this row left descendants pointing
+      // through the old ancestor, and `forecast` anchors on exactly that path — so
+      // one location was counted inside its old warehouse and outside its new one.
+      // uom.saveUnit rebuilds its tree for the same reason.
+      const moved = existing ? String(existing.parentPath) !== parentPath : false
+      await ctx.tx(async (tx) => {
+        await tx.db.commit(cs, existing ? { id: args.id } : undefined)
+        if (!moved) return
+        const previous = String(existing!.parentPath)
+        for (const descendant of await ours(tx, 'stock.Location')) {
+          const path = String(descendant.parentPath)
+          if (descendant.id === args.id || !path.startsWith(previous)) continue
+          await tx.db.update(
+            'stock.Location',
+            { id: descendant.id },
+            { parentPath: `${parentPath}${path.slice(previous.length)}` },
+          )
+        }
+      })
       return { ok: true, id: args.id }
     },
   }),
@@ -614,7 +1259,7 @@ export const functions: Record<string, FnSpec> = {
       const createBackorder = String(args.createBackorder ?? 'ask')
       if (!['ask', 'always', 'never'].includes(createBackorder))
         return invalid('createBackorder', 'phải là ask, always hoặc never')
-      const existing = (await ctx.db.select('stock.PickingType', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.PickingType', { id: args.id }))[0]
       const values = { ...args, createBackorder, active: true }
       const cs = ctx
         .change('stock.PickingType', values, existing ?? null)
@@ -636,7 +1281,14 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   createLot: defineFn({
-    input: { id: 'id', productId: 'id', name: 'text', ref: 'text?', note: 'text?' },
+    input: {
+      id: 'id',
+      productId: 'id',
+      name: 'text',
+      ref: 'text?',
+      note: 'text?',
+      expirationDate: 'datetime?',
+    },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:product.Product', 'write:stock.Lot'],
     idempotent: true,
@@ -667,7 +1319,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const type = (await ctx.db.select('stock.PickingType', { id: args.pickingTypeId }))[0]
+      const type = (await ours(ctx, 'stock.PickingType', { id: args.pickingTypeId }))[0]
       if (!type) return invalid('pickingTypeId', 'operation type không tồn tại')
       const locationId = args.locationId ?? type.defaultLocationSrcId
       const locationDestId = args.locationDestId ?? type.defaultLocationDestId
@@ -707,13 +1359,17 @@ export const functions: Record<string, FnSpec> = {
       origin: 'text?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:stock.Picking', 'read:product.Product', 'read:uom.Unit', 'write:stock.Move'],
+    effects: [
+      'read:stock.Picking',
+      'read:product.Product',
+      'read:product.Template',
+      'read:uom.Unit',
+      'write:stock.Move',
+    ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const picking = args.pickingId
-        ? (await ctx.db.select('stock.Picking', { id: args.pickingId }))[0]
-        : null
+      const picking = args.pickingId ? (await ours(ctx, 'stock.Picking', { id: args.pickingId }))[0] : null
       if (args.pickingId && !picking) return invalid('pickingId', 'transfer không tồn tại')
       if (picking && ['done', 'cancel'].includes(String(picking.state)))
         return invalid('pickingId', 'không thể thêm move vào transfer đã kết thúc')
@@ -722,6 +1378,12 @@ export const functions: Record<string, FnSpec> = {
       if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
         return invalid('productUomId', 'đơn vị không tồn tại')
       if (!(Number(args.productUomQty) > 0)) return invalid('productUomQty', 'phải lớn hơn 0')
+      // The caller may speak in boxes; the ledger does not. Everything behind
+      // this door — quants, reservations, the forecast — compares plain numbers
+      // and is only right when they all share the product's unit.
+      const based = await toProductUnit(ctx, args.productId, args.productUomId, Number(args.productUomQty))
+      if (based === null)
+        return invalid('productUomId', 'đơn vị không cùng hệ đo với đơn vị gốc của sản phẩm')
       const locationId = args.locationId ?? picking?.locationId
       const locationDestId = args.locationDestId ?? picking?.locationDestId
       if (!locationId || !locationDestId) return invalid('locationId', 'cần source và destination location')
@@ -733,8 +1395,8 @@ export const functions: Record<string, FnSpec> = {
         name: args.name,
         pickingId: args.pickingId ?? null,
         productId: args.productId,
-        productUomId: args.productUomId,
-        productUomQty: args.productUomQty,
+        productUomId: based.uomId,
+        productUomQty: String(based.quantity),
         quantity: '0',
         locationId,
         locationDestId,
@@ -755,105 +1417,63 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+      const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
       if (!picking) return invalid('id', 'transfer không tồn tại')
       if (picking.state === 'done' || picking.state === 'cancel')
         return invalid('state', 'transfer đã kết thúc')
       await ctx.db.update('stock.Picking', { id: args.id }, { state: 'confirmed' })
-      for (const move of await ctx.db.select('stock.Move', { pickingId: args.id }))
+      for (const move of await ours(ctx, 'stock.Move', { pickingId: args.id }))
         if (move.state === 'draft') await ctx.db.update('stock.Move', { id: move.id }, { state: 'confirmed' })
       return { ok: true, id: args.id }
     },
   }),
 
   reserveMove: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', selections: 'json?' },
     output: { ok: 'bool', reserved: 'decimal?', state: 'text?', errors: 'json?' },
-    effects: [
-      'read:stock.Move',
-      'write:stock.Move',
-      'read:stock.Picking',
-      'write:stock.Picking',
-      'read:stock.MoveLine',
-      'write:stock.MoveLine',
-      'read:stock.Quant',
-      'write:stock.Quant',
-      'read:product.Product',
-      'read:product.Template',
-    ],
+    effects: reserveEffects,
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const move = (await ctx.db.select('stock.Move', { id: args.id }))[0]
+      const move = (await ours(ctx, 'stock.Move', { id: args.id }))[0]
       if (!move) return invalid('id', 'move không tồn tại')
-      if (!(await isStorable(ctx, move.productId)))
-        return invalid('productId', 'chỉ sản phẩm lưu kho mới được reserve')
-      if (['done', 'cancel'].includes(String(move.state))) return invalid('state', 'move đã kết thúc')
-      if (move.state === 'draft') return invalid('state', 'xác nhận transfer trước khi reserve')
-      const demand = Number(move.productUomQty)
-      let reserved = (await ctx.db.select('stock.MoveLine', { moveId: move.id }))
-        .filter((line) => !line.picked)
-        .reduce((sum, line) => sum + Number(line.quantity), 0)
-      let state = 'confirmed'
-      const tracking = await trackingOf(ctx, move.productId)
-      const quants = (
-        await ctx.db.select('stock.Quant', { productId: move.productId, locationId: move.locationId })
-      ).sort((a, b) => String(a.lotKey).localeCompare(String(b.lotKey)))
-      await ctx.tx(async (tx) => {
-        for (const quant of quants) {
-          if (reserved >= demand) break
-          if (tracking !== 'none' && !quant.lotId) continue
-          const available = Number(quant.quantity) - Number(quant.reservedQuantity)
-          if (available <= 0) continue
-          const take = Math.min(
-            available,
-            demand - reserved,
-            tracking === 'serial' ? 1 : Number.POSITIVE_INFINITY,
-          )
-          await mutateQuant(tx, {
-            productId: move.productId,
-            locationId: move.locationId,
-            lotId: quant.lotId,
-            quantity: 0,
-            reserved: take,
-          })
-          const lineId = `${String(move.id)}:reserve:${String(quant.id)}`
-          const line = (await tx.db.select('stock.MoveLine', { id: lineId }))[0]
-          if (line)
-            await tx.db.update(
-              'stock.MoveLine',
-              { id: lineId },
-              { quantity: String(Number(line.quantity) + take) },
-            )
-          else
-            await tx.db.insert('stock.MoveLine', {
-              id: lineId,
-              moveId: move.id,
-              pickingId: move.pickingId,
-              productId: move.productId,
-              productUomId: move.productUomId,
-              quantity: String(take),
-              quantityProductUom: String(take),
-              locationId: move.locationId,
-              locationDestId: move.locationDestId,
-              lotId: quant.lotId,
-              picked: false,
-            })
-          reserved += take
-        }
-        state =
-          compareQty(reserved, demand, 0.000001) >= 0
-            ? 'assigned'
-            : reserved > 0
-              ? 'partially_available'
-              : 'confirmed'
-        await tx.db.update('stock.Move', { id: move.id }, { state, quantity: String(reserved) })
-        if (move.pickingId) await updatePickingState(tx, move.pickingId)
-      })
-      // The state that was written, not a second derivation of it: the tolerant
-      // compareQty above and a bare `reserved >= demand` disagree inside 1e-6, and
-      // the caller was being told the opposite of what landed in the row.
-      return { ok: true, reserved: String(reserved), state }
+      try {
+        return await ctx.tx((tx) => reserveMoveInContext(tx, move, args.selections))
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
+    },
+  }),
+
+  reserveMoves: defineFn({
+    input: { moves: 'json', requireFull: 'bool?' },
+    output: { ok: 'bool', results: 'json?', errors: 'json?' },
+    effects: reserveEffects,
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      if (!Array.isArray(args.moves) || !args.moves.length)
+        return invalid('moves', 'at least one move reservation is required')
+      try {
+        const results = await ctx.tx(async (tx) => {
+          const held: Row[] = []
+          for (const entry of args.moves as Row[]) {
+            const move = (await ours(tx, 'stock.Move', { id: entry.id }))[0]
+            if (!move) throw new InventoryRefused(invalid('moves', `move ${String(entry.id)} does not exist`))
+            const result = await reserveMoveInContext(tx, move, entry.selections)
+            if (result.ok !== true) throw new InventoryRefused(result)
+            if (args.requireFull && result.state !== 'assigned')
+              throw new InventoryRefused(invalid('stock', `insufficient stock for move ${String(move.id)}`))
+            held.push({ id: String(move.id), reserved: result.reserved, state: result.state })
+          }
+          return held
+        })
+        return { ok: true, results }
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
     },
   }),
 
@@ -874,7 +1494,7 @@ export const functions: Record<string, FnSpec> = {
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const move = (await ctx.db.select('stock.Move', { id: args.moveId }))[0]
+      const move = (await ours(ctx, 'stock.Move', { id: args.moveId }))[0]
       if (!move) return invalid('moveId', 'move không tồn tại')
       if (['done', 'cancel'].includes(String(move.state)))
         return invalid('moveId', 'không thể sửa dòng của move đã kết thúc')
@@ -887,11 +1507,11 @@ export const functions: Record<string, FnSpec> = {
       if (tracking === 'serial' && args.picked && compareQty(Number(args.quantity), 1, 0.000001) !== 0)
         return invalid('quantity', 'serial đã pick phải có quantity đúng 1')
       if (args.lotId) {
-        const lot = (await ctx.db.select('stock.Lot', { id: args.lotId }))[0]
+        const lot = (await ours(ctx, 'stock.Lot', { id: args.lotId }))[0]
         if (!lot || lot.productId !== move.productId)
           return invalid('lotId', 'lot/serial không thuộc sản phẩm')
       }
-      const existing = (await ctx.db.select('stock.MoveLine', { id: args.id }))[0]
+      const existing = (await ours(ctx, 'stock.MoveLine', { id: args.id }))[0]
       const values = {
         id: args.id,
         moveId: move.id,
@@ -923,9 +1543,16 @@ export const functions: Record<string, FnSpec> = {
         .required(['moveId', 'productId', 'productUomId', 'quantity', 'locationId', 'locationDestId'])
       if (!cs.valid) return { ok: false, errors: cs.errors }
       await ctx.tx(async (tx) => {
-        const source = (await tx.db.select('stock.Location', { id: move.locationId }))[0]
+        const source = (await ours(tx, 'stock.Location', { id: move.locationId }))[0]
         if (source && ['internal', 'transit'].includes(String(source.usage))) {
-          const oldQuantity = existing && !existing.picked ? Number(existing.quantity) : 0
+          // A picked line still holds its reservation — completePicking and
+          // cancelPicking both release it on the way out — so what the row holds
+          // today is its quantity whether or not it has been picked. Excluding a
+          // picked line here made re-saving one add its quantity to the quant a
+          // second time: pressing the pick button twice reserved ten for a line
+          // of five, or threw `cannot become over-reserved` when the quant had
+          // nothing left to give.
+          const oldQuantity = existing ? Number(existing.quantity) : 0
           const newQuantity = Number(args.quantity)
           if (existing && lotKey(existing.lotId) !== lotKey(args.lotId) && oldQuantity)
             await mutateQuant(tx, {
@@ -977,145 +1604,179 @@ export const functions: Record<string, FnSpec> = {
       'read:stock.MoveLink',
       'write:stock.MoveLink',
     ],
+    idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+      const completedResult = async (): Promise<Row> => {
+        const backorder = (await ours(ctx, 'stock.Picking', { backorderId: args.id }))[0]
+        return { ok: true, id: args.id, ...(backorder ? { backorderId: backorder.id } : {}) }
+      }
+      const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
       if (!picking) return invalid('id', 'transfer không tồn tại')
-      if (picking.state === 'done') return { ok: true, id: args.id }
+      if (picking.state === 'done') return completedResult()
       if (picking.state === 'cancel') return invalid('state', 'transfer đã hủy')
       const requested = new Map<string, number>()
       if (Array.isArray(args.quantities))
         for (const entry of args.quantities as Array<{ moveLineId: string; quantity: number }>)
           requested.set(String(entry.moveLineId), Number(entry.quantity))
-      const moves = await ctx.db.select('stock.Move', { pickingId: args.id })
-      const remaining: Array<{ move: Row; quantity: number }> = []
-      await ctx.tx(async (tx) => {
-        for (const move of moves) {
-          const tracking = await trackingOf(tx, move.productId)
-          const source = (await tx.db.select('stock.Location', { id: move.locationId }))[0]!
-          const destination = (await tx.db.select('stock.Location', { id: move.locationDestId }))[0]!
-          const lines = await tx.db.select('stock.MoveLine', { moveId: move.id })
-          let done = 0
-          for (const line of lines) {
-            const reserved = Number(line.quantity)
-            if (args.pickedOnly && !line.picked) {
-              if ((source.usage === 'internal' || source.usage === 'transit') && reserved)
+      let alreadyDone = false
+      let backorderId: string | null = null
+      try {
+        await ctx.tx(async (tx) => {
+          const current = (await ours(tx, 'stock.Picking', { id: args.id }))[0]
+          if (!current) throw new Error('transfer disappeared while completing')
+          if (current.state === 'done') {
+            alreadyDone = true
+            return
+          }
+          if (current.state === 'cancel') throw new Error('transfer đã hủy')
+          const moves = await ours(tx, 'stock.Move', { pickingId: args.id })
+          const remaining: Array<{ move: Row; quantity: number }> = []
+          for (const move of moves) {
+            const tracking = await trackingOf(tx, move.productId)
+            const destination = (await ours(tx, 'stock.Location', { id: move.locationDestId }))[0]!
+            const lines = await ours(tx, 'stock.MoveLine', { moveId: move.id })
+            let done = 0
+            for (const line of lines) {
+              // A line records the location its goods actually sit in, which is the
+              // sub-location reserveMove drew them from rather than the parent the
+              // move names. Releasing and deducting at the move's location would
+              // touch a quant the line never held.
+              const source = (await ours(tx, 'stock.Location', { id: line.locationId }))[0]!
+              const reserved = Number(line.quantity)
+              if (args.pickedOnly && !line.picked) {
+                if ((source.usage === 'internal' || source.usage === 'transit') && reserved)
+                  await mutateQuant(tx, {
+                    productId: move.productId,
+                    locationId: line.locationId,
+                    lotId: line.lotId,
+                    quantity: 0,
+                    reserved: -reserved,
+                  })
+                await tx.db.update(
+                  'stock.MoveLine',
+                  { id: line.id },
+                  { quantity: '0', quantityProductUom: '0', picked: true },
+                )
+                continue
+              }
+              const quantity = requested.has(String(line.id))
+                ? requested.get(String(line.id))!
+                : requested.size
+                  ? 0
+                  : reserved
+              if (quantity < 0 || quantity > reserved)
+                throw new Error(`invalid done quantity for ${String(line.id)}`)
+              if (tracking !== 'none' && !line.lotId)
+                throw new Error(`${tracking} tracked product requires a lot/serial`)
+              if (tracking === 'serial' && quantity > 0 && compareQty(quantity, 1, 0.000001) !== 0)
+                throw new Error('serial picked move line quantity must equal 1')
+              if (source.usage === 'internal' || source.usage === 'transit') {
+                // Release what this line holds, capped at what the quant has left to
+                // release. Both reserveMove and saveMoveLine reserve as they write a
+                // line, so the two agree in normal operation; the cap is a floor
+                // against a ledger already off, where releasing the full quantity
+                // would drive the mirror negative and throw, leaving the transfer
+                // impossible to complete by any later call.
+                const held = await reservedOn(tx, move.productId, line.locationId, line.lotId)
                 await mutateQuant(tx, {
                   productId: move.productId,
-                  locationId: move.locationId,
+                  locationId: line.locationId,
                   lotId: line.lotId,
-                  quantity: 0,
-                  reserved: -reserved,
+                  quantity: -quantity,
+                  reserved: -Math.min(reserved, held),
+                })
+              } else {
+                await mutateQuant(tx, {
+                  productId: move.productId,
+                  locationId: line.locationId,
+                  lotId: line.lotId,
+                  quantity: -quantity,
+                  reserved: 0,
+                })
+              }
+              // Keep both sides of every completed move in the quant ledger. The
+              // forecast still counts only internal/transit locations.
+              if (destination)
+                await mutateQuant(tx, {
+                  productId: move.productId,
+                  locationId: move.locationDestId,
+                  lotId: line.lotId,
+                  quantity,
+                  reserved: 0,
                 })
               await tx.db.update(
                 'stock.MoveLine',
                 { id: line.id },
-                { quantity: '0', quantityProductUom: '0', picked: true },
+                { quantity: String(quantity), quantityProductUom: String(quantity), picked: true },
               )
-              continue
+              done += quantity
             }
-            const quantity = requested.has(String(line.id))
-              ? requested.get(String(line.id))!
-              : requested.size
-                ? 0
-                : reserved
-            if (quantity < 0 || quantity > reserved)
-              throw new Error(`invalid done quantity for ${String(line.id)}`)
-            if (tracking !== 'none' && !line.lotId)
-              throw new Error(`${tracking} tracked product requires a lot/serial`)
-            if (tracking === 'serial' && quantity > 0 && compareQty(quantity, 1, 0.000001) !== 0)
-              throw new Error('serial picked move line quantity must equal 1')
-            if (source.usage === 'internal' || source.usage === 'transit') {
-              // Release only what this line actually holds. A line written by
-              // saveMoveLine never incremented the quant's reservedQuantity, so
-              // releasing its full quantity drove the mirror negative and threw —
-              // leaving the transfer impossible to complete by any later call.
-              const held = await reservedOn(tx, move.productId, move.locationId, line.lotId)
-              await mutateQuant(tx, {
-                productId: move.productId,
-                locationId: move.locationId,
-                lotId: line.lotId,
-                quantity: -quantity,
-                reserved: -Math.min(reserved, held),
-              })
-            } else {
-              await mutateQuant(tx, {
-                productId: move.productId,
-                locationId: move.locationId,
-                lotId: line.lotId,
-                quantity: -quantity,
-                reserved: 0,
-              })
-            }
-            // Keep both sides of every completed move in the quant ledger. The
-            // forecast still counts only internal/transit locations.
-            if (destination)
-              await mutateQuant(tx, {
-                productId: move.productId,
-                locationId: move.locationDestId,
-                lotId: line.lotId,
-                quantity,
-                reserved: 0,
-              })
+            if (done > Number(move.productUomQty) + 0.000001)
+              throw new Error(`done quantity exceeds demand for ${String(move.id)}`)
             await tx.db.update(
-              'stock.MoveLine',
-              { id: line.id },
-              { quantity: String(quantity), quantityProductUom: String(quantity), picked: true },
+              'stock.Move',
+              { id: move.id },
+              { quantity: String(done), picked: true, state: 'done' },
             )
-            done += quantity
+            await pushFromCompletedMove(tx, move, done)
+            const left = Math.max(0, Number(move.productUomQty) - done)
+            if (left > 0) remaining.push({ move, quantity: left })
           }
-          await tx.db.update(
-            'stock.Move',
-            { id: move.id },
-            { quantity: String(done), picked: true, state: 'done' },
+          const finishedAt = new Date().toISOString()
+          const completed = await tx.db.compareAndSet(
+            'stock.Picking',
+            { id: args.id },
+            { state: current.state },
+            { state: 'done', dateDone: finishedAt },
           )
-          await pushFromCompletedMove(tx, move, done)
-          const left = Math.max(0, Number(move.productUomQty) - done)
-          if (left > 0) remaining.push({ move, quantity: left })
-        }
-        await tx.db.update(
-          'stock.Picking',
-          { id: args.id },
-          { state: 'done', dateDone: new Date().toISOString() },
-        )
-      })
+          if (!('dryRun' in completed) && !completed.matched) throw new PickingConflict()
 
-      const type = (await ctx.db.select('stock.PickingType', { id: picking.pickingTypeId }))[0]
-      const shouldBackorder =
-        remaining.length > 0 && (args.createBackorder ?? type?.createBackorder !== 'never')
-      let backorderId: string | null = null
-      if (shouldBackorder) {
-        backorderId = `${String(args.id)}:backorder:${Date.now()}`
-        await ctx.db.insert('stock.Picking', {
-          id: backorderId,
-          name: `${String(picking.name)} backorder`,
-          pickingTypeId: picking.pickingTypeId,
-          locationId: picking.locationId,
-          locationDestId: picking.locationDestId,
-          moveType: picking.moveType,
-          state: 'confirmed',
-          backorderId: picking.id,
-          scheduledDate: new Date().toISOString(),
-          dateDone: null,
+          const type = (await ours(tx, 'stock.PickingType', { id: current.pickingTypeId }))[0]
+          const shouldBackorder =
+            remaining.length > 0 && (args.createBackorder ?? type?.createBackorder !== 'never')
+          if (shouldBackorder) {
+            backorderId = companyKey(ctx, String(args.id), 'backorder')
+            await tx.db.insertIfAbsent('stock.Picking', {
+              id: backorderId,
+              name: `${String(current.name)} backorder`,
+              pickingTypeId: current.pickingTypeId,
+              locationId: current.locationId,
+              locationDestId: current.locationDestId,
+              moveType: current.moveType,
+              state: 'confirmed',
+              backorderId: current.id,
+              scheduledDate: finishedAt,
+              dateDone: null,
+            })
+            for (const { move, quantity } of remaining) {
+              const id = companyKey(ctx, String(move.id), 'backorder')
+              await tx.db.insertIfAbsent('stock.Move', {
+                ...Object.fromEntries(Object.entries(move).filter(([key]) => key !== 'companyId')),
+                id,
+                pickingId: backorderId,
+                productUomQty: String(quantity),
+                quantity: '0',
+                state: 'confirmed',
+                picked: false,
+              })
+              await tx.db.insertIfAbsent('stock.MoveLink', {
+                id: `${String(move.id)}:${id}`,
+                originMoveId: move.id,
+                destinationMoveId: id,
+              })
+            }
+          }
         })
-        for (const { move, quantity } of remaining) {
-          const id = `${String(move.id)}:backorder:${Date.now()}`
-          await ctx.db.insert('stock.Move', {
-            ...Object.fromEntries(Object.entries(move).filter(([key]) => key !== 'companyId')),
-            id,
-            pickingId: backorderId,
-            productUomQty: String(quantity),
-            quantity: '0',
-            state: 'confirmed',
-            picked: false,
-          })
-          await ctx.db.insertIfAbsent('stock.MoveLink', {
-            id: `${String(move.id)}:${id}`,
-            originMoveId: move.id,
-            destinationMoveId: id,
-          })
+      } catch (error) {
+        if (error instanceof PickingConflict) {
+          const latest = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
+          if (latest?.state === 'done') return completedResult()
+          return invalid('state', 'transfer đã thay đổi, hãy tải lại')
         }
+        throw error
       }
+      if (alreadyDone) return completedResult()
       return { ok: true, id: args.id, backorderId }
     },
   }),
@@ -1129,6 +1790,8 @@ export const functions: Record<string, FnSpec> = {
       countedQuantity: 'decimal',
       lotId: 'id?',
       productUomId: 'id',
+      expectedQuantRevision: 'int?',
+      reason: 'text?',
     },
     output: { ok: 'bool', pickingId: 'id?', moveId: 'id?', difference: 'decimal?', errors: 'json?' },
     effects: [
@@ -1143,6 +1806,7 @@ export const functions: Record<string, FnSpec> = {
       'write:stock.MoveLine',
       'read:product.Product',
       'read:product.Template',
+      'read:uom.Unit',
     ],
     idempotent: true,
     agent: true,
@@ -1157,91 +1821,157 @@ export const functions: Record<string, FnSpec> = {
       if (tracking === 'serial' && compareQty(Number(args.countedQuantity), 1, 0.000001) > 0)
         return invalid('countedQuantity', 'mỗi serial chỉ có thể có số lượng 0 hoặc 1')
       if (args.lotId) {
-        const lot = (await ctx.db.select('stock.Lot', { id: args.lotId }))[0]
+        const lot = (await ours(ctx, 'stock.Lot', { id: args.lotId }))[0]
         if (!lot || lot.productId !== args.productId)
           return invalid('lotId', 'lot/serial không thuộc sản phẩm')
       }
+      // The count may be spoken in boxes; the quant it corrects is not.
+      // Comparing them unconverted turned "counted two boxes" into a shortfall
+      // of twenty-two pieces.
+      const counted = await toProductUnit(
+        ctx,
+        args.productId,
+        args.productUomId,
+        Number(args.countedQuantity),
+      )
+      if (counted === null)
+        return invalid('productUomId', 'đơn vị không cùng hệ đo với đơn vị gốc của sản phẩm')
       const current = (
-        await ctx.db.select('stock.Quant', {
+        await ours(ctx, 'stock.Quant', {
           productId: args.productId,
           locationId: args.locationId,
           lotKey: lotKey(args.lotId),
         })
       )[0]
-      const difference = Number(args.countedQuantity) - Number(current?.quantity ?? 0)
+      const currentRevision = current ? n(current.version) : -1
+      if (args.expectedQuantRevision !== undefined && currentRevision !== n(args.expectedQuantRevision))
+        return invalid('expectedQuantRevision', 'stock position changed')
+      const difference = counted.quantity - Number(current?.quantity ?? 0)
       if (Math.abs(difference) < 1e-12) return { ok: true, moveId: args.id, difference: '0' }
+      // Counting below what is reserved is a real thing to want to say — the shelf
+      // is short and a transfer is holding stock that is not there — but it is not
+      // something this function can carry out. mutateQuant would refuse it by
+      // throwing, which reached the operator as a server error naming neither the
+      // reservation nor the transfer holding it. Say so as a field error instead.
+      const reserved = Number(current?.reservedQuantity ?? 0)
+      if (reserved - counted.quantity > 1e-12)
+        return invalid(
+          'countedQuantity',
+          `không thể kiểm kê xuống dưới ${String(reserved)} đang được reserve; hủy hoặc hoàn tất transfer giữ số này trước`,
+        )
       const incoming = difference > 0
       const source = incoming ? args.inventoryLocationId : args.locationId
       const destination = incoming ? args.locationId : args.inventoryLocationId
       const pickingTypeId = `${String(args.inventoryLocationId)}:adjustment`
       const pickingId = `${String(args.id)}:picking`
-      await ctx.tx(async (tx) => {
-        await mutateQuant(tx, {
-          productId: args.productId,
-          locationId: source,
-          lotId: args.lotId,
-          quantity: -Math.abs(difference),
-          reserved: 0,
+      try {
+        await ctx.tx(async (tx) => {
+          if (args.expectedQuantRevision !== undefined) {
+            const live = (
+              await ours(tx, 'stock.Quant', {
+                productId: args.productId,
+                locationId: args.locationId,
+                lotKey: lotKey(args.lotId),
+              })
+            )[0]
+            if (currentRevision === -1) {
+              if (live) throw new InventoryRefused(invalid('expectedQuantRevision', 'stock position changed'))
+              const inserted = await tx.db.insertIfAbsent('stock.Quant', {
+                id: quantId(tx, args.productId, args.locationId, args.lotId),
+                productId: args.productId,
+                locationId: args.locationId,
+                lotId: args.lotId ?? null,
+                lotKey: lotKey(args.lotId),
+                quantity: '0',
+                reservedQuantity: '0',
+                inDate: new Date().toISOString(),
+                version: 0,
+              })
+              if (!('dryRun' in inserted) && !inserted.inserted)
+                throw new InventoryRefused(invalid('expectedQuantRevision', 'stock position changed'))
+            } else {
+              if (!live)
+                throw new InventoryRefused(invalid('expectedQuantRevision', 'stock position changed'))
+              const claimed = await tx.db.compareAndSet(
+                'stock.Quant',
+                { id: live.id },
+                { version: currentRevision },
+                { version: currentRevision + 1 },
+              )
+              if (!('dryRun' in claimed) && !claimed.matched)
+                throw new InventoryRefused(invalid('expectedQuantRevision', 'stock position changed'))
+            }
+          }
+          await mutateQuant(tx, {
+            productId: args.productId,
+            locationId: source,
+            lotId: args.lotId,
+            quantity: -Math.abs(difference),
+            reserved: 0,
+          })
+          await mutateQuant(tx, {
+            productId: args.productId,
+            locationId: destination,
+            lotId: args.lotId,
+            quantity: Math.abs(difference),
+            reserved: 0,
+          })
+          await tx.db.insertIfAbsent('stock.PickingType', {
+            id: pickingTypeId,
+            name: 'Inventory Adjustments',
+            code: 'internal',
+            warehouseId: null,
+            defaultLocationSrcId: args.inventoryLocationId,
+            defaultLocationDestId: args.locationId,
+            createBackorder: 'never',
+            active: true,
+          })
+          await tx.db.insertIfAbsent('stock.Picking', {
+            id: pickingId,
+            name: `Inventory ${String(args.id)}`,
+            pickingTypeId,
+            locationId: source,
+            locationDestId: destination,
+            moveType: 'direct',
+            state: 'done',
+            backorderId: null,
+            scheduledDate: new Date().toISOString(),
+            dateDone: new Date().toISOString(),
+          })
+          await tx.db.insertIfAbsent('stock.Move', {
+            id: args.id,
+            name: String(args.reason ?? 'Inventory adjustment'),
+            pickingId,
+            productId: args.productId,
+            productUomId: counted.uomId,
+            productUomQty: String(Math.abs(difference)),
+            quantity: String(Math.abs(difference)),
+            locationId: source,
+            locationDestId: destination,
+            state: 'done',
+            picked: true,
+            procureMethod: 'make_to_stock',
+            ruleId: null,
+            origin: 'inventory',
+          })
+          await tx.db.insertIfAbsent('stock.MoveLine', {
+            id: `${args.id}:line`,
+            moveId: args.id,
+            pickingId,
+            productId: args.productId,
+            productUomId: counted.uomId,
+            quantity: String(Math.abs(difference)),
+            quantityProductUom: String(Math.abs(difference)),
+            locationId: source,
+            locationDestId: destination,
+            lotId: args.lotId ?? null,
+            picked: true,
+          })
         })
-        await mutateQuant(tx, {
-          productId: args.productId,
-          locationId: destination,
-          lotId: args.lotId,
-          quantity: Math.abs(difference),
-          reserved: 0,
-        })
-        await tx.db.insertIfAbsent('stock.PickingType', {
-          id: pickingTypeId,
-          name: 'Inventory Adjustments',
-          code: 'internal',
-          warehouseId: null,
-          defaultLocationSrcId: args.inventoryLocationId,
-          defaultLocationDestId: args.locationId,
-          createBackorder: 'never',
-          active: true,
-        })
-        await tx.db.insertIfAbsent('stock.Picking', {
-          id: pickingId,
-          name: `Inventory ${String(args.id)}`,
-          pickingTypeId,
-          locationId: source,
-          locationDestId: destination,
-          moveType: 'direct',
-          state: 'done',
-          backorderId: null,
-          scheduledDate: new Date().toISOString(),
-          dateDone: new Date().toISOString(),
-        })
-        await tx.db.insertIfAbsent('stock.Move', {
-          id: args.id,
-          name: 'Inventory adjustment',
-          pickingId,
-          productId: args.productId,
-          productUomId: args.productUomId,
-          productUomQty: String(Math.abs(difference)),
-          quantity: String(Math.abs(difference)),
-          locationId: source,
-          locationDestId: destination,
-          state: 'done',
-          picked: true,
-          procureMethod: 'make_to_stock',
-          ruleId: null,
-          origin: 'inventory',
-        })
-        await tx.db.insertIfAbsent('stock.MoveLine', {
-          id: `${args.id}:line`,
-          moveId: args.id,
-          pickingId,
-          productId: args.productId,
-          productUomId: args.productUomId,
-          quantity: String(Math.abs(difference)),
-          quantityProductUom: String(Math.abs(difference)),
-          locationId: source,
-          locationDestId: destination,
-          lotId: args.lotId ?? null,
-          picked: true,
-        })
-      })
+      } catch (error) {
+        if (error instanceof InventoryRefused) return error.result
+        throw error
+      }
       return { ok: true, pickingId, moveId: args.id, difference: String(difference) }
     },
   }),
@@ -1261,7 +1991,7 @@ export const functions: Record<string, FnSpec> = {
     effects: ['read:stock.Quant', 'read:stock.Move', 'read:stock.Location'],
     agent: true,
     handler: async (ctx, args) => {
-      const locations = await ctx.db.select('stock.Location')
+      const locations = await ours(ctx, 'stock.Location')
       const anchor = args.locationId ? locations.find((location) => location.id === args.locationId) : null
       const inside = new Set(
         locations
@@ -1273,18 +2003,25 @@ export const functions: Record<string, FnSpec> = {
           })
           .map((location) => String(location.id)),
       )
-      const quants = (await ctx.db.select('stock.Quant', { productId: args.productId })).filter((quant) =>
+      const quants = (await ours(ctx, 'stock.Quant', { productId: args.productId })).filter((quant) =>
         inside.has(String(quant.locationId)),
       )
       const onHand = quants.reduce((sum, quant) => sum + Number(quant.quantity), 0)
       const reserved = quants.reduce((sum, quant) => sum + Number(quant.reservedQuantity), 0)
-      const moves = (await ctx.db.select('stock.Move', { productId: args.productId })).filter(
+      const moves = (await ours(ctx, 'stock.Move', { productId: args.productId })).filter(
         (move) => !['done', 'cancel', 'draft'].includes(String(move.state)),
       )
       let incoming = 0,
         outgoing = 0
       for (const move of moves) {
-        const remaining = Math.max(0, Number(move.productUomQty) - Number(move.quantity))
+        // The whole demand of an open move is still to come. `move.quantity` is
+        // what has been reserved, not what has shipped — completePicking is the
+        // only writer that turns it into a done quantity, and it sets state to
+        // `done` in the same update, which this filter has already excluded. Using
+        // it as progress made a fully reserved outgoing move count for nothing, so
+        // the screen reported `available 0` beside `forecast 10` for the same
+        // product, and replenishment never saw the committed demand.
+        const remaining = Number(move.productUomQty)
         const sourceInside = inside.has(String(move.locationId))
         const destinationInside = inside.has(String(move.locationDestId))
         if (!sourceInside && destinationInside) incoming += remaining
@@ -1321,9 +2058,9 @@ functions.savePicking = defineFn({
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
-    const type = (await ctx.db.select('stock.PickingType', { id: args.pickingTypeId }))[0]
+    const type = (await ours(ctx, 'stock.PickingType', { id: args.pickingTypeId }))[0]
     if (!type) return invalid('pickingTypeId', 'operation type không tồn tại')
-    const existing = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+    const existing = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
     const values = {
       ...args,
       locationId: args.locationId ?? type.defaultLocationSrcId,
@@ -1374,9 +2111,9 @@ functions.saveLot = defineFn({
   handler: async (ctx, args) => {
     if (!(await ctx.db.select('product.Product', { id: args.productId }))[0])
       return invalid('productId', 'biến thể không tồn tại')
-    const existing = (await ctx.db.select('stock.Lot', { id: args.id }))[0]
+    const existing = (await ours(ctx, 'stock.Lot', { id: args.id }))[0]
     if (existing && existing.productId !== args.productId) {
-      const moveLines = await ctx.db.select('stock.MoveLine', { lotId: args.id })
+      const moveLines = await ours(ctx, 'stock.MoveLine', { lotId: args.id })
       if (moveLines.length)
         return invalid(
           'productId',
@@ -1397,36 +2134,26 @@ functions.saveLot = defineFn({
 functions.assignPicking = defineFn({
   input: { id: 'id' },
   output: { ok: 'bool', state: 'text?', allocations: 'json?', shortages: 'json?', errors: 'json?' },
-  effects: [
-    'read:stock.Picking',
-    'write:stock.Picking',
-    'read:stock.Move',
-    'write:stock.Move',
-    'read:stock.MoveLine',
-    'write:stock.MoveLine',
-    'read:stock.Quant',
-    'write:stock.Quant',
-    'read:product.Product',
-    'read:product.Template',
-  ],
+  // It reserves every move of the transfer, so it needs what reserveMove needs.
+  effects: [...(functions.reserveMove!.effects ?? []), 'read:stock.Picking', 'write:stock.Picking'],
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
-    const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+    const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
     if (!picking) return invalid('id', 'transfer không tồn tại')
     if (picking.state === 'draft') return invalid('state', 'xác nhận transfer trước khi giữ hàng')
     if (picking.state === 'done' || picking.state === 'cancel')
       return invalid('state', 'transfer đã kết thúc')
     const allocations: Row[] = []
     const shortages: Row[] = []
-    for (const move of await ctx.db.select('stock.Move', { pickingId: args.id })) {
+    for (const move of await ours(ctx, 'stock.Move', { pickingId: args.id })) {
       const result = (await functions.reserveMove!.handler(ctx, { id: move.id })) as Row
       const reserved = Number(result.reserved ?? 0)
-      allocations.push(...(await ctx.db.select('stock.MoveLine', { moveId: move.id })))
+      allocations.push(...(await ours(ctx, 'stock.MoveLine', { moveId: move.id })))
       const shortage = Math.max(0, Number(move.productUomQty) - reserved)
       if (shortage) shortages.push({ moveId: move.id, quantity: String(shortage) })
     }
-    const updated = (await ctx.db.select('stock.Picking', { id: args.id }))[0]!
+    const updated = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]!
     return { ok: true, state: updated.state, allocations, shortages }
   },
 })
@@ -1448,17 +2175,19 @@ functions.cancelPicking = defineFn({
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
-    const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+    const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
     if (!picking) return invalid('id', 'transfer không tồn tại')
     if (picking.state === 'done') return invalid('state', 'transfer đã hoàn thành')
     await ctx.tx(async (tx) => {
-      for (const move of await tx.db.select('stock.Move', { pickingId: args.id })) {
-        const source = (await tx.db.select('stock.Location', { id: move.locationId }))[0]
-        for (const line of await tx.db.select('stock.MoveLine', { moveId: move.id })) {
+      for (const move of await ours(tx, 'stock.Move', { pickingId: args.id })) {
+        for (const line of await ours(tx, 'stock.MoveLine', { moveId: move.id })) {
+          // Per line, for the same reason completePicking works per line: the
+          // goods sit where the line says, not where the move does.
+          const source = (await ours(tx, 'stock.Location', { id: line.locationId }))[0]
           if (!line.picked && source && ['internal', 'transit'].includes(String(source.usage)))
             await mutateQuant(tx, {
               productId: move.productId,
-              locationId: move.locationId,
+              locationId: line.locationId,
               lotId: line.lotId,
               quantity: 0,
               reserved: -Number(line.quantity),
@@ -1490,12 +2219,17 @@ functions.reconcileReservations = defineFn({
   idempotent: true,
   agent: true,
   handler: async (ctx, args) => {
-    const moves = new Map((await ctx.db.select('stock.Move')).map((move) => [String(move.id), move]))
+    // Every read here is narrowed to the company being written to, and quantId
+    // keys on that same company. Read across the whole readable set instead — as
+    // an unnarrowed select does — and another company's lines land under keys no
+    // quant of theirs carries: their expectation reads as zero and this function
+    // strips reservations it was asked to repair.
+    const moves = new Map((await ours(ctx, 'stock.Move')).map((move) => [String(move.id), move]))
     const locations = new Map(
-      (await ctx.db.select('stock.Location')).map((location) => [String(location.id), location]),
+      (await ours(ctx, 'stock.Location')).map((location) => [String(location.id), location]),
     )
     const wanted = new Map<string, number>()
-    for (const line of await ctx.db.select('stock.MoveLine')) {
+    for (const line of await ours(ctx, 'stock.MoveLine')) {
       const move = moves.get(String(line.moveId))
       const location = locations.get(String(line.locationId))
       if (
@@ -1512,7 +2246,7 @@ functions.reconcileReservations = defineFn({
       wanted.set(id, (wanted.get(id) ?? 0) + Number(line.quantity))
     }
     let changed = 0
-    for (const quant of await ctx.db.select('stock.Quant')) {
+    for (const quant of await ours(ctx, 'stock.Quant')) {
       if (args.productId && quant.productId !== args.productId) continue
       if (args.locationId && quant.locationId !== args.locationId) continue
       const expected = wanted.get(String(quant.id)) ?? 0
@@ -1538,13 +2272,13 @@ functions.validatePicking = defineFn({
   effects: functions.completePicking!.effects,
   agent: true,
   handler: async (ctx, args) => {
-    const picking = (await ctx.db.select('stock.Picking', { id: args.id }))[0]
+    const picking = (await ours(ctx, 'stock.Picking', { id: args.id }))[0]
     if (!picking) return invalid('id', 'transfer không tồn tại')
-    const type = (await ctx.db.select('stock.PickingType', { id: picking.pickingTypeId }))[0]
-    const moves = await ctx.db.select('stock.Move', { pickingId: args.id })
+    const type = (await ours(ctx, 'stock.PickingType', { id: picking.pickingTypeId }))[0]
+    const moves = await ours(ctx, 'stock.Move', { pickingId: args.id })
     let hasRemaining = false
     for (const move of moves) {
-      const done = (await ctx.db.select('stock.MoveLine', { moveId: move.id }))
+      const done = (await ours(ctx, 'stock.MoveLine', { moveId: move.id }))
         .filter((line) => line.picked)
         .reduce((sum, line) => sum + Number(line.quantity), 0)
       if (done + 1e-12 < Number(move.productUomQty)) hasRemaining = true
@@ -1561,5 +2295,244 @@ functions.validatePicking = defineFn({
       createBackorder,
       pickedOnly: true,
     })
+  },
+})
+
+const pickingViewEffects = [
+  'read:stock.Picking',
+  'read:stock.PickingType',
+  'read:stock.Warehouse',
+  'read:stock.Location',
+  'read:stock.Move',
+  'read:stock.MoveLine',
+  'read:stock.Lot',
+  'read:product.Product',
+  'read:product.Template',
+]
+
+const rowsBy = (rows: Row[], key: string): Map<string, Row[]> => {
+  const grouped = new Map<string, Row[]>()
+  for (const row of rows) {
+    const id = String(row[key])
+    grouped.set(id, [...(grouped.get(id) ?? []), row])
+  }
+  return grouped
+}
+
+/**
+ * Load the transfer aggregate and the stock-owned labels around it in batches.
+ *
+ * Staff and backend clients need the same picking/type/location/move graph. Keeping
+ * the joins here prevents every facade from growing an N+1 query per transfer.
+ * Product display names and company labels stay with their owning modules.
+ */
+const pickingViews = async (ctx: Ctx, pickings: Row[]): Promise<Row[]> => {
+  if (!pickings.length) return []
+  const pickingIds = pickings.map((row) => String(row.id))
+  const pickingTypeIds = [...new Set(pickings.map((row) => String(row.pickingTypeId)))]
+  const locationIds = [
+    ...new Set(pickings.flatMap((row) => [String(row.locationId), String(row.locationDestId)])),
+  ]
+  const PT = ctx.table('stock.PickingType')
+  const L = ctx.table('stock.Location')
+  const M = ctx.table('stock.Move')
+  const ML = ctx.table('stock.MoveLine')
+  const mine = company(ctx)
+  const [pickingTypes, locations, moves, lines] = await Promise.all([
+    ctx.db.all(from(PT).where(eq(PT.companyId, mine), inArray(PT.id, pickingTypeIds))),
+    ctx.db.all(from(L).where(eq(L.companyId, mine), inArray(L.id, locationIds))),
+    ctx.db.all(from(M).where(eq(M.companyId, mine), inArray(M.pickingId, pickingIds))),
+    ctx.db.all(from(ML).where(eq(ML.companyId, mine), inArray(ML.pickingId, pickingIds))),
+  ])
+  const warehouseIds = [
+    ...new Set(
+      pickingTypes
+        .map((row) => row.warehouseId)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ]
+  const productIds = [...new Set(moves.map((row) => String(row.productId)))]
+  const lotIds = [
+    ...new Set(
+      lines
+        .map((row) => row.lotId)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ]
+  const W = ctx.table('stock.Warehouse')
+  const Lot = ctx.table('stock.Lot')
+  const Product = ctx.table('product.Product')
+  const [warehouses, lots, products] = await Promise.all([
+    warehouseIds.length ? ctx.db.all(from(W).where(eq(W.companyId, mine), inArray(W.id, warehouseIds))) : [],
+    lotIds.length ? ctx.db.all(from(Lot).where(eq(Lot.companyId, mine), inArray(Lot.id, lotIds))) : [],
+    productIds.length ? ctx.db.all(from(Product).where(inArray(Product.id, productIds))) : [],
+  ])
+  const templateIds = [...new Set(products.map((row) => String(row.templateId)))]
+  const Template = ctx.table('product.Template')
+  const templates = templateIds.length
+    ? await ctx.db.all(from(Template).where(inArray(Template.id, templateIds)))
+    : []
+  const byId = (rows: Row[]): Map<string, Row> => new Map(rows.map((row) => [String(row.id), row]))
+  const typeById = byId(pickingTypes)
+  const locationById = byId(locations)
+  const warehouseById = byId(warehouses)
+  const lotById = byId(lots)
+  const productById = byId(products)
+  const templateById = byId(templates)
+  const movesByPicking = rowsBy(moves, 'pickingId')
+  const linesByMove = rowsBy(lines, 'moveId')
+
+  return pickings.map((picking) => {
+    const pickingType = typeById.get(String(picking.pickingTypeId)) ?? null
+    const warehouse = pickingType?.warehouseId
+      ? (warehouseById.get(String(pickingType.warehouseId)) ?? null)
+      : null
+    return {
+      ...picking,
+      pickingType,
+      warehouse,
+      sourceLocation: locationById.get(String(picking.locationId)) ?? null,
+      destinationLocation: locationById.get(String(picking.locationDestId)) ?? null,
+      moves: (movesByPicking.get(String(picking.id)) ?? [])
+        .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+        .map((move) => {
+          const product = productById.get(String(move.productId))
+          const template = product ? templateById.get(String(product.templateId)) : null
+          return {
+            ...move,
+            tracking: String(template?.tracking ?? 'none'),
+            lines: (linesByMove.get(String(move.id)) ?? [])
+              .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+              .map((line) => ({
+                ...line,
+                lot: line.lotId ? (lotById.get(String(line.lotId)) ?? null) : null,
+              })),
+          }
+        }),
+    }
+  })
+}
+
+functions.listPickingViews = defineFn({
+  input: { state: 'text?', limit: 'int?', offset: 'int?' },
+  effects: pickingViewEffects,
+  agent: true,
+  handler: async (ctx, args) => {
+    const P = ctx.table('stock.Picking')
+    const limit = Math.max(1, Math.min(Math.trunc(Number(args.limit) || 20), 101))
+    const rows = await ctx.db.all(
+      from(P)
+        .where(eq(P.companyId, company(ctx)), ...(args.state ? [eq(P.state, String(args.state))] : []))
+        .orderBy(desc(P.scheduledDate), desc(P.id))
+        .limit(limit)
+        .offset(Math.max(0, Math.trunc(Number(args.offset) || 0))),
+    )
+    return pickingViews(ctx, rows)
+  },
+})
+
+functions.getPickingView = defineFn({
+  input: { id: 'id' },
+  effects: pickingViewEffects,
+  agent: true,
+  handler: async (ctx, args) => {
+    const P = ctx.table('stock.Picking')
+    const row = await ctx.db.one(from(P).where(eq(P.companyId, company(ctx)), eq(P.id, String(args.id))))
+    return row ? (await pickingViews(ctx, [row]))[0] : null
+  },
+})
+
+functions.listProductAvailability = defineFn({
+  input: { productIds: 'json', warehouseId: 'id?' },
+  output: { productId: 'id', available: 'decimal' },
+  effects: ['read:stock.Quant', 'read:stock.Location'],
+  agent: true,
+  handler: async (ctx, args) => {
+    const productIds = [
+      ...new Set(Array.isArray(args.productIds) ? args.productIds.map(String).slice(0, 2_000) : []),
+    ]
+    if (!productIds.length) return []
+    const mine = company(ctx)
+    const Q = ctx.table('stock.Quant')
+    const L = ctx.table('stock.Location')
+    const [quants, locations] = await Promise.all([
+      ctx.db.all(from(Q).where(eq(Q.companyId, mine), inArray(Q.productId, productIds))),
+      ctx.db.all(from(L).where(eq(L.companyId, mine), inArray(L.usage, ['internal', 'transit']))),
+    ])
+    const inside = new Set(
+      locations
+        .filter((row) => !args.warehouseId || row.warehouseId === args.warehouseId)
+        .map((row) => String(row.id)),
+    )
+    const available = new Map(productIds.map((id) => [id, 0]))
+    for (const quant of quants) {
+      if (!inside.has(String(quant.locationId))) continue
+      const id = String(quant.productId)
+      available.set(id, (available.get(id) ?? 0) + Number(quant.quantity) - Number(quant.reservedQuantity))
+    }
+    return productIds.map((productId) => ({
+      productId,
+      available: String(available.get(productId) ?? 0),
+    }))
+  },
+})
+
+functions.getProductStockView = defineFn({
+  input: { productId: 'id' },
+  effects: ['read:stock.Quant', 'read:stock.Location', 'read:stock.Lot'],
+  agent: true,
+  handler: async (ctx, args) => {
+    const mine = company(ctx)
+    const Q = ctx.table('stock.Quant')
+    const L = ctx.table('stock.Location')
+    const Lot = ctx.table('stock.Lot')
+    const quants = await ctx.db.all(
+      from(Q).where(eq(Q.companyId, mine), eq(Q.productId, String(args.productId))),
+    )
+    const locationIds = [...new Set(quants.map((row) => String(row.locationId)))]
+    const lotIds = [
+      ...new Set(
+        quants
+          .map((row) => row.lotId)
+          .filter(Boolean)
+          .map(String),
+      ),
+    ]
+    const [locations, lots] = await Promise.all([
+      locationIds.length ? ctx.db.all(from(L).where(eq(L.companyId, mine), inArray(L.id, locationIds))) : [],
+      lotIds.length ? ctx.db.all(from(Lot).where(eq(Lot.companyId, mine), inArray(Lot.id, lotIds))) : [],
+    ])
+    const locationById = new Map(locations.map((row) => [String(row.id), row]))
+    const lotById = new Map(lots.map((row) => [String(row.id), row]))
+    const positions = quants
+      .flatMap((quant) => {
+        const location = locationById.get(String(quant.locationId))
+        if (
+          !location ||
+          !['internal', 'transit'].includes(String(location.usage)) ||
+          Number(quant.quantity) <= 0
+        )
+          return []
+        return [
+          {
+            quant,
+            location,
+            lot: quant.lotId ? (lotById.get(String(quant.lotId)) ?? null) : null,
+          },
+        ]
+      })
+      .sort(
+        (left, right) =>
+          String(left.location.name).localeCompare(String(right.location.name)) ||
+          String(left.lot?.name ?? '').localeCompare(String(right.lot?.name ?? '')) ||
+          String(left.quant.id).localeCompare(String(right.quant.id)),
+      )
+    const available = positions.reduce(
+      (sum, entry) => sum + Number(entry.quant.quantity) - Number(entry.quant.reservedQuantity),
+      0,
+    )
+    return { productId: String(args.productId), available: String(available), positions }
   },
 })

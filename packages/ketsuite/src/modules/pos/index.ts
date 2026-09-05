@@ -7,9 +7,8 @@ export default defineModule({
   name: 'pos',
   version: '0.1.0',
   depends: ['company', 'partner', 'user', 'product', 'uom', 'pricing', 'stock', 'account'],
-  app: true,
   title: 'Điểm bán hàng',
-  summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ theo Odoo 19.',
+  summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',
   category: 'Bán hàng',
   models,
   extend: {
@@ -21,14 +20,20 @@ export default defineModule({
   messages: {
     vi: {
       'app.title': 'Điểm bán hàng',
-      'app.summary': 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ theo Odoo 19.',
+      'app.summary': 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',
       'app.category': 'Bán hàng',
     },
     en: {
       'app.title': 'Point of Sale',
-      'app.summary': 'Odoo 19 retail sessions, payments, stock, and accounting.',
+      'app.summary': 'Retail sessions, payments, stock, and accounting.',
       'app.category': 'Sales',
     },
   },
 })
-export { POS_ORDER_STATES, POS_SESSION_STATES, POS_INVOICE_STATUSES } from './functions.ts'
+export {
+  POS_INVOICE_STATUSES,
+  POS_ORDER_STATES,
+  POS_PAYMENT_SETTLEMENT_KINDS,
+  POS_SESSION_STATES,
+} from './functions.ts'
+export { functions as posFunctionSpecs } from './functions.ts'

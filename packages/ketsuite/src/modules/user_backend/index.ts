@@ -7,8 +7,6 @@ export default defineModule({
   name: 'user_backend',
   version: '0.1.0',
   depends: ['user', 'company', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Người dùng và phân quyền',
   summary: 'Quản lý tài khoản, vai trò, session và vòng đời truy cập.',
   category: 'Hệ thống',
@@ -27,6 +25,7 @@ export {
   profileScreen,
   roleScreen,
   rolesScreen,
+  sessionsScreen,
   userFormScreen,
   usersScreen,
-} from './screens.tsx'
+} from './screens/index.ts'

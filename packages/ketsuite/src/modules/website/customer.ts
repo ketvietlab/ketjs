@@ -1,10 +1,13 @@
-import { createHash } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { defineFn, eq, from } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { CUSTOMER_DUMMY_HASH, hashCustomerPassword, verifyCustomerPassword } from './customer-password.ts'
 
 const DEFAULT_IDLE_SECONDS = 7 * 24 * 60 * 60
 const DEFAULT_ABSOLUTE_SECONDS = 30 * 24 * 60 * 60
+const ACCESS_SECONDS = 15 * 60
+/** How long a lost response may be retried before a spent token reads as theft. */
+const REPLAY_GRACE_MS = 60_000
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const digest = (value: string): string => createHash('sha256').update(value).digest('hex')
@@ -17,6 +20,15 @@ const accountView = (account: Row) => ({
   displayName: account.displayName,
   status: account.status,
   securityVersion: account.securityVersion,
+})
+
+const tokenGrantView = (grant: Row, account: Row) => ({
+  id: grant.id,
+  realmId: grant.realmId,
+  account: accountView(account),
+  accessExpiresAt: grant.accessExpiresAt,
+  refreshExpiresAt: grant.refreshExpiresAt,
+  version: grant.version,
 })
 
 export const normalizeCustomerEmail = (value: unknown): string =>
@@ -43,6 +55,7 @@ export const ensureCustomerRealm = async (ctx: Ctx, siteId: string, name: string
   const realmId = `site:${ctx.scope.company ?? 'default'}:${siteId}`
   await ctx.db.insertIfAbsent('website.CustomerRealm', {
     id: realmId,
+    key: realmId,
     name,
     active: true,
     sessionIdleSeconds: DEFAULT_IDLE_SECONDS,
@@ -117,6 +130,35 @@ const sessionOutput = {
 } as const
 
 export const customerFunctions: Record<string, FnSpec> = {
+  customerRealmByKey: defineFn({
+    exposure: 'internal',
+    anonymous: true,
+    input: { key: 'text' },
+    output: { id: 'id', key: 'text', name: 'text' },
+    effects: ['read:website.CustomerRealm'],
+    handler: async (ctx, args) => {
+      const realm = (
+        await ctx.db.select('website.CustomerRealm', { key: String(args.key).trim(), active: true })
+      )[0]
+      return realm ? { id: realm.id, key: realm.key, name: realm.name } : null
+    },
+  }),
+  primaryCustomerSiteForRealm: defineFn({
+    exposure: 'internal',
+    anonymous: true,
+    input: { realmId: 'id' },
+    output: { siteId: 'id', realmId: 'id' },
+    effects: ['read:website.CustomerRealmSite'],
+    handler: async (ctx, args) => {
+      const Link = ctx.table('website.CustomerRealmSite')
+      const primary = await ctx.db.one(
+        from(Link).where(eq(Link.realmId, args.realmId), eq(Link.primary, true), eq(Link.active, true)),
+      )
+      if (primary) return { siteId: primary.siteId, realmId: primary.realmId }
+      const active = await ctx.db.one(from(Link).where(eq(Link.realmId, args.realmId), eq(Link.active, true)))
+      return active ? { siteId: active.siteId, realmId: active.realmId } : null
+    },
+  }),
   customerRealmForSite: defineFn({
     anonymous: true,
     exposure: 'internal',
@@ -407,6 +449,226 @@ export const customerFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  issueCustomerTokenGrant: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { id: 'id', accountId: 'id', accessDigest: 'text', refreshDigest: 'text' },
+    output: {
+      id: 'id',
+      realmId: 'id',
+      account: 'json',
+      accessExpiresAt: 'datetime',
+      refreshExpiresAt: 'datetime',
+      version: 'int',
+    },
+    effects: ['read:website.CustomerAccount', 'write:website.CustomerTokenGrant'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const account = (await ctx.db.select('website.CustomerAccount', { id: args.accountId }))[0]
+      if (account?.status !== 'active') return null
+      const now = new Date()
+      const grant = {
+        id: args.id,
+        realmId: account.realmId,
+        accountId: account.id,
+        accessDigest: args.accessDigest,
+        refreshDigest: args.refreshDigest,
+        rotationSecret: randomBytes(32).toString('base64url'),
+        previousRefreshDigest: null,
+        securityVersion: account.securityVersion,
+        version: 1,
+        createdAt: now.toISOString(),
+        accessExpiresAt: new Date(now.getTime() + ACCESS_SECONDS * 1000).toISOString(),
+        refreshExpiresAt: new Date(now.getTime() + DEFAULT_ABSOLUTE_SECONDS * 1000).toISOString(),
+        lastRotatedAt: now.toISOString(),
+      }
+      await ctx.db.insert('website.CustomerTokenGrant', grant)
+      return tokenGrantView(grant, account)
+    },
+  }),
+
+  resolveCustomerAccessToken: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { accessDigest: 'text' },
+    output: {
+      id: 'id',
+      realmId: 'id',
+      account: 'json',
+      accessExpiresAt: 'datetime',
+      refreshExpiresAt: 'datetime',
+      version: 'int',
+    },
+    effects: ['read:website.CustomerTokenGrant', 'read:website.CustomerAccount'],
+    handler: async (ctx: Ctx, args) => {
+      const Grant = ctx.table('website.CustomerTokenGrant')
+      const grant = await ctx.db.one(from(Grant).where(eq(Grant.accessDigest, args.accessDigest)))
+      if (!grant || grant.revokedAt || new Date(String(grant.accessExpiresAt)) <= new Date()) return null
+      const account = (await ctx.db.select('website.CustomerAccount', { id: grant.accountId }))[0]
+      if (account?.status !== 'active' || Number(account.securityVersion) !== Number(grant.securityVersion))
+        return null
+      return tokenGrantView(grant, account)
+    },
+  }),
+
+  /**
+   * Spend one slot of a named allowance, for callers outside the auth screens.
+   *
+   * The same window the login throttle uses, opened up so the facade can put a
+   * ceiling on anything a signed-in customer can repeat — placing orders, asking
+   * for a fresh token, editing a cart. Registration and sign-in were throttled
+   * from the start; nothing else was, which left every authenticated write as
+   * fast as the client cared to send it.
+   */
+  claimChannelRateSlot: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { realmId: 'id', action: 'text', key: 'text', limit: 'int', windowMs: 'int' },
+    output: { ok: 'bool' },
+    effects: ['read:website.CustomerAuthRateLimit', 'write:website.CustomerAuthRateLimit'],
+    handler: async (ctx: Ctx, args) => ({
+      ok: await claimRateSlot(
+        ctx,
+        String(args.realmId),
+        `channel:${String(args.action).slice(0, 60)}`,
+        String(args.key).slice(0, 256),
+        Math.max(1, Number(args.limit)),
+        Math.max(1_000, Number(args.windowMs)),
+        new Date(),
+      ),
+    }),
+  }),
+
+  /**
+   * Rotate a refresh grant, and notice when a spent one comes back.
+   *
+   * The new pair is derived rather than random because rotation has to be
+   * replayable: a client whose response was lost retries with the same key and
+   * must be handed the same tokens, and the server only keeps digests so it
+   * cannot simply look them up. Derived from the old token alone it was equally
+   * derivable by anyone holding that token, so the secret on the grant is what
+   * makes the chain unguessable from the outside.
+   *
+   * Replaying a spent refresh token is how a stolen one shows up, so the family
+   * is revoked — RFC 9700. A retry inside the grace window is the far likelier
+   * explanation of the same request, and it recomputes to the same pair, so it
+   * is answered rather than punished.
+   */
+  rotateCustomerTokenGrant: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { refreshDigest: 'text', requestKey: 'text' },
+    output: {
+      id: 'id',
+      realmId: 'id',
+      account: 'json?',
+      accessToken: 'text?',
+      refreshToken: 'text?',
+      accessExpiresAt: 'datetime?',
+      refreshExpiresAt: 'datetime?',
+      version: 'int?',
+      reused: 'bool?',
+    },
+    effects: [
+      'read:website.CustomerTokenGrant',
+      'write:website.CustomerTokenGrant',
+      'read:website.CustomerAccount',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      const Grant = ctx.table('website.CustomerTokenGrant')
+      const now = new Date()
+      const mint = (grant: Row, purpose: string): string =>
+        createHmac('sha256', String(grant.rotationSecret))
+          .update(`${purpose}\n${args.refreshDigest}\n${args.requestKey}`)
+          .digest('base64url')
+
+      const grant = await ctx.db.one(from(Grant).where(eq(Grant.refreshDigest, args.refreshDigest)))
+      if (!grant) {
+        // Nothing holds this digest. If a grant rotated away from it, the token
+        // is spent and someone is presenting it a second time.
+        const spent = await ctx.db.one(from(Grant).where(eq(Grant.previousRefreshDigest, args.refreshDigest)))
+        if (!spent || spent.revokedAt) return null
+        const rotatedAt = new Date(String(spent.lastRotatedAt)).getTime()
+        if (now.getTime() - rotatedAt <= REPLAY_GRACE_MS) {
+          // The lost-response retry: the same inputs recompute the same pair, and
+          // the digests already stored are the ones it hands back.
+          const account = (await ctx.db.select('website.CustomerAccount', { id: spent.accountId }))[0]
+          if (account?.status !== 'active') return null
+          return {
+            id: spent.id,
+            realmId: spent.realmId,
+            account: accountView(account),
+            accessToken: mint(spent, 'access'),
+            refreshToken: mint(spent, 'refresh'),
+            accessExpiresAt: spent.accessExpiresAt,
+            refreshExpiresAt: spent.refreshExpiresAt,
+            version: spent.version,
+          }
+        }
+        await ctx.db.update(
+          'website.CustomerTokenGrant',
+          { id: spent.id },
+          { revokedAt: now.toISOString(), revokeReason: 'refresh-token-reuse' },
+        )
+        return { id: spent.id, realmId: spent.realmId, reused: true }
+      }
+      if (grant.revokedAt || new Date(String(grant.refreshExpiresAt)) <= now) return null
+      const account = (await ctx.db.select('website.CustomerAccount', { id: grant.accountId }))[0]
+      if (account?.status !== 'active' || Number(account.securityVersion) !== Number(grant.securityVersion))
+        return null
+      const accessToken = mint(grant, 'access')
+      const refreshToken = mint(grant, 'refresh')
+      const patch = {
+        accessDigest: digest(accessToken),
+        refreshDigest: digest(refreshToken),
+        previousRefreshDigest: String(grant.refreshDigest),
+        accessExpiresAt: new Date(now.getTime() + ACCESS_SECONDS * 1000).toISOString(),
+        lastRotatedAt: now.toISOString(),
+        version: Number(grant.version) + 1,
+      }
+      const changed = await ctx.db.compareAndSet(
+        'website.CustomerTokenGrant',
+        { id: grant.id },
+        { version: grant.version, refreshDigest: grant.refreshDigest },
+        patch,
+      )
+      if (!('dryRun' in changed) && !changed.matched) return null
+      return {
+        id: grant.id,
+        realmId: grant.realmId,
+        account: accountView(account),
+        accessToken,
+        refreshToken,
+        accessExpiresAt: patch.accessExpiresAt,
+        refreshExpiresAt: grant.refreshExpiresAt,
+        version: patch.version,
+      }
+    },
+  }),
+
+  revokeCustomerTokenGrant: defineFn({
+    anonymous: true,
+    exposure: 'internal',
+    input: { accessDigest: 'text', reason: 'text?' },
+    output: { ok: 'bool' },
+    effects: ['read:website.CustomerTokenGrant', 'write:website.CustomerTokenGrant'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const Grant = ctx.table('website.CustomerTokenGrant')
+      const grant = await ctx.db.one(from(Grant).where(eq(Grant.accessDigest, args.accessDigest)))
+      if (grant && !grant.revokedAt)
+        await ctx.db.update(
+          'website.CustomerTokenGrant',
+          { id: grant.id },
+          {
+            revokedAt: new Date().toISOString(),
+            revokeReason: String(args.reason ?? 'logout').slice(0, 100),
+          },
+        )
+      return { ok: true }
+    },
+  }),
+
   revokeAllCustomerSessions: defineFn({
     anonymous: true,
     exposure: 'internal',
@@ -417,6 +679,8 @@ export const customerFunctions: Record<string, FnSpec> = {
       'write:website.CustomerAccount',
       'read:website.CustomerSession',
       'write:website.CustomerSession',
+      'read:website.CustomerTokenGrant',
+      'write:website.CustomerTokenGrant',
     ],
     handler: async (ctx: Ctx, args) => {
       const account = (await ctx.db.select('website.CustomerAccount', { id: args.accountId }))[0]
@@ -431,6 +695,14 @@ export const customerFunctions: Record<string, FnSpec> = {
             await tx.db.update(
               'website.CustomerSession',
               { id: session.id },
+              { revokedAt, revokeReason: String(args.reason ?? 'logout-all').slice(0, 100) },
+            )
+        const grants = await tx.db.select('website.CustomerTokenGrant', { accountId: account.id })
+        for (const grant of grants)
+          if (!grant.revokedAt)
+            await tx.db.update(
+              'website.CustomerTokenGrant',
+              { id: grant.id },
               { revokedAt, revokeReason: String(args.reason ?? 'logout-all').slice(0, 100) },
             )
       })
@@ -470,6 +742,8 @@ export const customerFunctions: Record<string, FnSpec> = {
       'write:website.CustomerCredential',
       'read:website.CustomerSession',
       'write:website.CustomerSession',
+      'read:website.CustomerTokenGrant',
+      'write:website.CustomerTokenGrant',
     ],
     handler: async (ctx: Ctx, args) => {
       const account = (await ctx.db.select('website.CustomerAccount', { id: args.accountId }))[0]
@@ -500,6 +774,14 @@ export const customerFunctions: Record<string, FnSpec> = {
             await tx.db.update(
               'website.CustomerSession',
               { id: session.id },
+              { revokedAt: now, revokeReason: 'password-change' },
+            )
+        const grants = await tx.db.select('website.CustomerTokenGrant', { accountId: account.id })
+        for (const grant of grants)
+          if (!grant.revokedAt)
+            await tx.db.update(
+              'website.CustomerTokenGrant',
+              { id: grant.id },
               { revokedAt: now, revokeReason: 'password-change' },
             )
       })

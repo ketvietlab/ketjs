@@ -89,13 +89,17 @@ test('table: the column menu is links, because a checkbox would need a handler',
 })
 
 test('table: choosing a column keeps the page you are on', () => {
-  const url = new URL('/admin/products?q=xoai&page=3', 'http://x')
+  const url = new URL('/admin/product/templates?q=xoai&page=3', 'http://x')
   assert.equal(
     colsHref(url)(['id']),
-    '/admin/products?q=xoai&page=3&cols=id',
+    '/admin/product/templates?q=xoai&page=3&cols=id',
     'showing one more column is not a new filter, so page three is still page three',
   )
-  assert.equal(colsHref(url)([]), '/admin/products?q=xoai&page=3', 'and the last one off leaves a clean URL')
+  assert.equal(
+    colsHref(url)([]),
+    '/admin/product/templates?q=xoai&page=3',
+    'and the last one off leaves a clean URL',
+  )
 })
 
 test('table: an open group renders its own pager without client state', () => {
@@ -149,4 +153,29 @@ test('avatar: the name is on the wrapper, so a screen reader is not read initial
   const html = renderToString(person('Nguyễn Quản Trị'))
   assert.match(html, /data-ui="avatar" title="Nguyễn Quản Trị" aria-hidden="true"/)
   assert.match(html, /data-ui="person-name">[\s\S]*Nguyễn Quản Trị/)
+})
+
+test('table: a scrolling row keeps its header, a stacked row carries its own labels', () => {
+  const scrolling = render()
+  assert.match(scrolling, /data-ui="table-scroll"[^>]*data-responsive="scroll"/, 'scrolling is the default')
+  assert.doesNotMatch(scrolling, /data-label=/, 'a cell under a visible header needs no label of its own')
+
+  const stacked = render({ responsive: 'stack' })
+  assert.match(stacked, /data-ui="table-scroll"[^>]*data-responsive="stack"/)
+  // Stacking hides the header row, so a cell that does not name itself is a
+  // value with nothing to say what it is.
+  for (const [key, label] of [
+    ['name', 'Tên'],
+    ['qty', 'SL'],
+  ] as const)
+    assert.match(
+      stacked,
+      new RegExp(`data-ui="cell" data-col="${key}"[^>]*data-label="${label}"`),
+      `${key} carries its label`,
+    )
+})
+
+test('table: stacking labels every column the reader can actually see', () => {
+  const stacked = renderToString(dataTable(_, table({ responsive: 'stack', shown: ['name', 'qty', 'id'] })))
+  assert.match(stacked, /data-col="id"[^>]*data-label="Mã"/, 'an optional column turned on is labelled too')
 })

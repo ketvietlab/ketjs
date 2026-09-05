@@ -114,7 +114,16 @@ export function agentDescriptor(manifest: Manifest) {
       Object.entries(manifest.models).map(([k, m]) => [
         k,
         Object.fromEntries(
-          Object.entries(m.fields).map(([f, d]) => [f, `${d.base}${d.optional ? '?' : ''} (by ${d.by})`]),
+          Object.entries(m.fields)
+            // A sensitive field is withheld rather than annotated. The descriptor is
+            // the agent's map of what it may do, and a value it must never write does
+            // not belong on that map; an insert that omits one fails loudly at
+            // validation, which is the right way to find out.
+            .filter(([, d]) => !d.sensitive)
+            .map(([f, d]) => [
+              f,
+              `${d.base}${d.optional ? '?' : ''} (by ${d.by})${d.personal ? ' [personal]' : ''}`,
+            ]),
         ),
       ]),
     ),

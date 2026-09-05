@@ -2,24 +2,44 @@
 // configuration, build artifact, module graph and executable registries; only
 // their outer loops differ.
 
+import { fingerprintAssets } from './assets.ts'
 import { compose } from '../kernel/compose.ts'
 import { readConfig } from './config.ts'
 import { registerFunctions } from './fn.ts'
 import { registerJobs } from './jobs.ts'
-import type { AppSpec } from '../kernel/workspace.ts'
+import { consoleLog, createLogger, isolatedLog, leveledLog, logFromConfig, redactLog } from './log/index.ts'
+import type { LogDriver, LogProcess, Logger, OpenLog } from './log/index.ts'
+import type { DeploymentSpec } from '../kernel/workspace.ts'
 import type { KetModule, Manifest } from '../types.ts'
 import type { RuntimeConfig } from './config.ts'
 
 export type BootedRuntime = {
-  spec: AppSpec
+  spec: DeploymentSpec
   config: RuntimeConfig
   modules: KetModule[]
   manifest: Manifest
+  /** The sink, already level-filtered and redacted. Closed last on shutdown. */
+  log: LogDriver
+  /** Carries this deployment and process role; narrow it with `child`. */
+  logger: Logger
 }
 
 export async function bootRuntime(
-  spec: AppSpec,
-  options: { env?: Record<string, string | undefined>; port?: number } = {},
+  spec: DeploymentSpec,
+  options: {
+    env?: Record<string, string | undefined>
+    port?: number
+    /** Which process role this is. A low-cardinality field on every record. */
+    role?: LogProcess
+    /**
+     * Override the deployment's sink for this process.
+     *
+     * A host that boots a deployment it did not author — a test harness, an
+     * embedding process — can redirect records without editing the spec, the same
+     * way it already overrides the port.
+     */
+    openLog?: OpenLog
+  } = {},
 ): Promise<BootedRuntime> {
   const config = readConfig(options.env ?? process.env, {
     sqliteFile: `.ket/${spec.name}.db`,
@@ -27,12 +47,44 @@ export async function bootRuntime(
     ...(options.port === undefined ? {} : { port: options.port }),
   })
   if (options.port !== undefined) config.port = options.port
+
+  // Redaction and isolation are applied here rather than left to whoever opened the
+  // driver, so a deployment's own sink is held to the same rules as the built-in
+  // ones. Isolation sits innermost, against the sink itself: a record is emitted
+  // after a function has already committed and after an idempotency key has been
+  // marked done, so a throw from a sink would report a failure for work that
+  // succeeded. "A sink never breaks the work it describes" has to be structural
+  // rather than something every deployment remembers. The level filter is
+  // outermost, so a record nobody will keep is never redacted at all.
+  const opened = await (options.openLog ?? spec.serve?.openLog ?? logFromConfig)(config)
+  const log = leveledLog(redactLog(isolatedLog(opened, consoleLog())), config.logLevel)
+  const logger = createLogger(log, { deployment: spec.name, process: options.role ?? 'http' })
+
   const modules = [...spec.modules, ...(spec.theme ? [spec.theme] : []), ...(spec.themes ?? [])]
   const manifest = compose(modules, {
-    appRequires: spec.requires ?? [],
+    requiredRegions: spec.requires ?? [],
     headless: spec.headless ?? false,
+    requirePermissionCoverage: spec.permissions?.requireCoverage,
+    modulePermissionDeclarations: spec.permissions?.modules,
+    roleTemplates: spec.permissions?.roleTemplates,
   })
+  // Asset URLs carry their file's digest from here on, so a browser and
+  // anything in front of it may keep them until the bytes change.
+  await fingerprintAssets(manifest)
   registerFunctions(modules)
   registerJobs(modules)
-  return { spec, config, modules, manifest }
+
+  logger.info('boot', {
+    driver: opened.name,
+    level: config.logLevel,
+    modules: modules.length,
+    functions: Object.keys(manifest.functions).length,
+    jobs: Object.keys(manifest.jobs).length,
+    // False means correlation is hashed with a bare digest instead of a keyed one,
+    // so a low-entropy command key is guessable and the web and worker processes
+    // cannot derive the same trace for one request.
+    traceKeyed: Boolean(config.secret),
+  })
+
+  return { spec, config, modules, manifest, log, logger }
 }

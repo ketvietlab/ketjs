@@ -36,6 +36,23 @@ async function boot(): Promise<Adapter> {
     adapter,
   )
   await call(
+    'product.saveTemplate',
+    {
+      id: 'water-template',
+      name: 'Nước suối',
+      type: 'goods',
+      uomId: 'unit',
+      listPrice: '15',
+      saleOk: true,
+    },
+    adapter,
+  )
+  await call(
+    'product.saveVariant',
+    { id: 'water', templateId: 'water-template', defaultCode: 'WATER', combinationKey: '' },
+    adapter,
+  )
+  await call(
     'hospitality_core.saveProperty',
     { id: 'hotel', code: 'HCM', name: 'Két Hotel', accommodationType: 'hotel', timezone: 'UTC' },
     adapter,
@@ -182,6 +199,130 @@ test('hospitality services: once and per-night materialisation is idempotent and
     assert.equal(
       resetLines.every((line) => line.materializedCount === 0),
       true,
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality services: product-backed minibar charges require external stock fulfilment evidence', async () => {
+  const adapter = await boot()
+  try {
+    const folioId = String((await adapter.all('SELECT id FROM hospitality_core_folio'))[0]!.id)
+    const base = {
+      id: 'minibar-water',
+      folioId,
+      description: 'Nước suối minibar',
+      type: 'minibar',
+      quantity: '2',
+      unitPrice: '15',
+      sourceKey: 'stock-authority:movement-1',
+    }
+
+    const missingProduct = (await call('hospitality_core.addCharge', base, adapter)).value as Row
+    assert.equal(missingProduct.ok, false)
+    assert.equal((missingProduct.errors as Row[])[0]!.code, 'minibar_product_required')
+
+    const serviceProduct = (
+      await call('hospitality_core.addCharge', { ...base, productId: 'breakfast' }, adapter)
+    ).value as Row
+    assert.equal(serviceProduct.ok, false)
+    assert.equal(
+      (serviceProduct.errors as Row[]).some((problem) => problem.code === 'minibar_goods_required'),
+      true,
+    )
+
+    const missingFulfilment = (
+      await call('hospitality_core.addCharge', { ...base, productId: 'water', uomId: 'unit' }, adapter)
+    ).value as Row
+    assert.equal(missingFulfilment.ok, false)
+    assert.equal(
+      (missingFulfilment.errors as Row[]).some((problem) => problem.code === 'minibar_fulfillment_required'),
+      true,
+    )
+
+    const posted = (
+      await call(
+        'hospitality_core.addCharge',
+        {
+          ...base,
+          productId: 'water',
+          uomId: 'unit',
+          fulfillmentKind: 'external_stock',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(posted.ok, true, JSON.stringify(posted.errors))
+    const charge = (
+      await adapter.all(
+        'SELECT "productId", "uomId", type, "fulfillmentKind", amount FROM hospitality_core_charge WHERE id = ?',
+        [base.id],
+      )
+    )[0]!
+    assert.deepEqual(
+      { ...charge },
+      {
+        productId: 'water',
+        uomId: 'unit',
+        type: 'minibar',
+        fulfillmentKind: 'external_stock',
+        amount: '30',
+      },
+    )
+
+    const changedReplay = (
+      await call(
+        'hospitality_core.addCharge',
+        {
+          ...base,
+          productId: 'water',
+          uomId: 'unit',
+          fulfillmentKind: 'external_stock',
+          quantity: '3',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(changedReplay.ok, false)
+    assert.equal((changedReplay.errors as Row[])[0]!.code, 'charge_id_reused')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality services: externally fulfilled extra lines cannot bypass their connector', async () => {
+  const adapter = await boot()
+  try {
+    const saved = (
+      await call(
+        'hospitality_core.saveExtraLine',
+        {
+          id: 'minibar-intent',
+          reservationId: 'reservation',
+          productId: 'water',
+          chargeType: 'minibar',
+          fulfillmentKind: 'external_stock',
+          recurrence: 'once',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(saved.ok, true, JSON.stringify(saved.errors))
+
+    const direct = (await call('hospitality_core.materializeExtraLine', { id: 'minibar-intent' }, adapter))
+      .value as Row
+    assert.equal(direct.ok, false)
+    assert.equal((direct.errors as Row[])[0]!.code, 'external_fulfillment_required')
+    assert.equal(
+      Number(
+        (
+          await adapter.all('SELECT COUNT(*) AS count FROM hospitality_core_charge WHERE "extraLineId" = ?', [
+            'minibar-intent',
+          ])
+        )[0]!.count,
+      ),
+      0,
     )
   } finally {
     await adapter.close()

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const boot = async (t: TestContext) => {
-  const e2e = await createTestApp(ketsuite, { worker: false })
+  const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branches: null }
   const fixture = (name: string, input: Record<string, unknown>) =>
@@ -35,7 +35,7 @@ test('address HTTP: trusted settings route installs VN while generic transport h
   const before = await e2e.client.get('/admin/addresses', { headers: { accept: 'text/html' } })
   assert.equal(before.status, 200)
   assert.match(await before.text(), /Sẵn sàng cài/)
-  const partnerBefore = await e2e.client.get('/admin/partners/acme-party')
+  const partnerBefore = await e2e.client.get('/admin/partner/partners/acme-party/edit')
   assert.match(await partnerBefore.text(), /Catalog địa giới chưa được cài/)
 
   const hidden = await e2e.client.request('/_ket/fn/address.installCatalog', {
@@ -70,7 +70,7 @@ test('address HTTP: partner form renders and submits the Vietnam cascading selec
   await fixture('address.installCatalog', { countryCode: 'VN' })
   await fixture('partner.savePartner', { id: 'customer', kind: 'company', name: 'Công ty Minh An' })
   const saved = await e2e.client.post(
-    '/admin/partners/customer/addresses',
+    '/admin/partner/partners/customer/addresses',
     new URLSearchParams({
       use: 'delivery',
       street1: '12 Nguyễn Huệ',
@@ -82,21 +82,19 @@ test('address HTTP: partner form renders and submits the Vietnam cascading selec
   )
   assert.equal(saved.status, 303)
 
-  const detail = await e2e.client.get('/admin/partners/customer')
-  const html = await detail.text()
-  assert.equal(detail.status, 200)
+  const form = await e2e.client.get('/admin/partner/partners/customer')
+  const html = await form.text()
+  assert.equal(form.status, 200)
   assert.match(html, /12 Nguyễn Huệ/)
   assert.match(html, /Phường Ba Đình/)
   assert.match(html, /data-island="partner\.address-form"/)
   assert.match(html, /<form[^>]*data-layout="default"[^>]*data-has-fields="true"[^>]*data-address-form/)
   assert.match(html, /form="partner-identity-form"/)
   assert.equal(html.match(/>Lưu thông tin</g)?.length, 1)
-  assert.match(html, /Thiết lập kế toán/)
-  assert.match(html, /Lưu trữ đối tác/)
   assert.match(html, /name="divisionId"/)
   assert.doesNotMatch(html, /src="(?:undefined|null)?"/)
 
-  const english = await e2e.client.get('/admin/partners/customer?lang=en')
+  const english = await e2e.client.get('/admin/partner/partners/customer?lang=en')
   assert.equal(english.status, 200)
   assert.match(await english.text(), /Province\/City/)
 })

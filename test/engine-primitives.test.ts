@@ -53,6 +53,11 @@ const ledger = defineModule({
           { amount: a.amount, version: Number(a.version) + 1, marker: 'claimed' },
         ),
     }),
+    correlation: defineFn({
+      input: {},
+      effects: [],
+      handler: (ctx) => ctx.tx(async (inner) => ({ outer: ctx.correlationId, inner: inner.correlationId })),
+    }),
   },
 })
 
@@ -76,6 +81,19 @@ test('engine: named unique indexes are part of the schema and migration SQL', ()
   })
   const sql = renderSql(planMigration(null, schema), sqliteAdapter()).join('\n')
   assert.match(sql, /CREATE UNIQUE INDEX "ledger_balance__account_unique"/)
+})
+
+test('engine: scoped models receive a framework index when no authored index covers the scope', () => {
+  const scoped = defineModule({
+    name: 'scoped',
+    models: { Entry: { scope: 'company+branch', fields: { id: 'id', value: 'text' } } },
+  })
+  const indexes = Object.values(
+    schemaFromManifest(compose([scoped], { headless: true })).tables.scoped_entry!.indexes,
+  )
+  assert.ok(
+    indexes.some((index) => index.fields.join(',') === 'companyId,branchId' && index.by === '(framework)'),
+  )
 })
 
 test('engine: exact decimal strings are accepted and malformed decimals are rejected', async () => {
@@ -125,6 +143,27 @@ test('engine: insertIfAbsent and compareAndSet expose race outcomes without thro
     )
     assert.deepEqual(won.value, { changes: 1, matched: true })
     assert.deepEqual(stale.value, { changes: 0, matched: false })
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('engine: ephemeral correlation reaches a function and its transaction context', async () => {
+  const { adapter, manifest } = await boot()
+  try {
+    const result = await callFn(
+      'ledger.correlation',
+      {},
+      {
+        adapter,
+        manifest,
+        correlationId: 'request-or-command-id',
+      },
+    )
+    assert.deepEqual(result.value, {
+      outer: 'request-or-command-id',
+      inner: 'request-or-command-id',
+    })
   } finally {
     await adapter.close()
   }

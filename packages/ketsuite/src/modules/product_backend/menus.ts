@@ -13,14 +13,14 @@ export const menus: Record<string, MenuDef> = {
   'product.templates': {
     parent: 'product.catalogue',
     label: 'menu.templates',
-    path: '/admin/products',
+    path: '/admin/product/templates',
     needs: 'product.listTemplates',
     sequence: 10,
   },
   'product.attributes': {
     parent: 'product.catalogue',
     label: 'menu.attributes',
-    path: '/admin/product-attributes',
+    path: '/admin/product/attributes',
     needs: 'product.listAttributes',
     sequence: 20,
   },

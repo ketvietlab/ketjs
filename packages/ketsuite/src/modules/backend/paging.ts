@@ -7,7 +7,7 @@
 
 import type { Pager } from '../../ui/index.ts'
 
-/** Odoo's default, and about as many rows as fit a laptop screen. */
+/** the domain contract's default, and about as many rows as fit a laptop screen. */
 export const PAGE_SIZE = 30
 
 export const pageOf = (url: URL): number => {

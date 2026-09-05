@@ -19,28 +19,37 @@ import type {
   ServeContext,
 } from '@ketvietlab/ketjs'
 import {
-  favoriteScreen,
+  attributesScreen,
+  favoriteModal,
+  newProductScreen,
   PRODUCT_DETAIL_TABS,
   productDetailScreen,
   productsScreen,
   VARIANT_DETAIL_TABS,
   variantScreen,
   VIEWS,
-} from './screens.tsx'
-import { attributesScreen } from './attributes-screen.tsx'
-import { newProductScreen } from './create-screen.tsx'
-import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens.tsx'
-import { timezoneOf, viewerOf } from '../backend/routes.ts'
+} from './screens/index.ts'
+import {
+  attributeControl,
+  attributeValuesControl,
+  brandControl,
+  categoryControl,
+  uomControl,
+} from './relation-control.ts'
+import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens/index.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
-import type { Extras, SearchMenu, TableGroup } from '../../ui/index.ts'
-import { backendPage } from '../../ui/index.ts'
+import type { SearchMenu, TableGroup, TableSelection } from '../../ui/index.ts'
+import { backendPage, modalWorkspace } from '../../ui/index.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
 import { productListSearch } from '../product/search.ts'
+import { adminPage, frameOf, inLocale, localeQuery, timezoneOf } from '../backend/screen.ts'
 
 type MediaRow = {
   id: string
   attachmentId: string
+  templateId?: string | null
+  productId?: string | null
   alt?: string | null
   primary: boolean
   attachment?: { name?: string; mimetype?: string }
@@ -63,22 +72,37 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
   }
 }
 
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
+/**
+ * The two things every mutating route here has to establish before it reads a form.
+ *
+ * The admin authenticates with a session cookie, so a POST that arrives from
+ * another origin carries the signed-in user's credentials without their intent —
+ * which is why every write in this module refuses one, the same way user_backend,
+ * company_backend and oauth_backend do.
+ */
+const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
+  req.method !== 'POST'
+    ? text(accepts, { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
+
 const productTabOf = (url: URL): ProductDetailTab => {
   const asked = url.searchParams.get('tab')
   return (PRODUCT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
     ? (asked as ProductDetailTab)
     : 'general'
 }
+const MEDIA_VARIANT_PAGE_SIZE = 25
+const VARIANT_PAGE_SIZE = 10
+const positivePage = (value: string | null): number => {
+  const page = Number.parseInt(value ?? '1', 10)
+  return Number.isFinite(page) && page > 0 ? page : 1
+}
+const requestedVariantMediaPage = (url: URL): number => {
+  return positivePage(url.searchParams.get('variantPage'))
+}
+const requestedVariantPage = (url: URL): number => positivePage(url.searchParams.get('page'))
 const variantTabOf = (url: URL): VariantDetailTab => {
   const asked = url.searchParams.get('tab')
   return (VARIANT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
@@ -89,42 +113,75 @@ const isProductPartial = (req: Parameters<Route>[1], scope = 'product-detail'): 
   req.headers['x-ket-partial'] === scope
 const seeProduct = (id: string, url: URL, tab: ProductDetailTab = productTabOf(url)) =>
   withHeaders(text('', { status: 303 }), {
-    location: inLocale(url, `/admin/products/${id}?tab=${tab}`),
+    location: inLocale(url, `/admin/product/templates/${id}?tab=${tab}`),
   })
 const seeVariant = (
   templateId: string,
   productId: string,
   url: URL,
   tab: VariantDetailTab = variantTabOf(url),
-) => seeOther(inLocale(url, `/admin/products/${templateId}/variants/${productId}?tab=${tab}`))
-
-const frameFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-    'sidebar.foot':
-      req.headers['x-ket-navigation'] === 'fragment-v1'
-        ? undefined
-        : await ctx.joint(url, req, 'backend:sidebar.foot', {
-            lang: ctx.localeOf(url, req),
-          }),
-  },
-})
+) => seeOther(inLocale(url, `/admin/product/templates/${templateId}/variants/${productId}?tab=${tab}`))
 
 const optionsFor = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
-  const [units, categories, attributes] = (await Promise.all([
+  const live = await ctx.live(req)
+  const taxEnabled = Boolean(live.functions['account.listTaxes'])
+  const [units, categories, attributes, brands, taxes] = (await Promise.all([
     ctx.call('uom.listUnits', {}, url, req),
     ctx.call('product.listCategories', {}, url, req),
     ctx.call('product.listAttributes', {}, url, req),
-  ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>, Array<Record<string, unknown>>]
+    ctx.call('product.listBrands', {}, url, req),
+    taxEnabled ? ctx.call('account.listTaxes', { typeTaxUse: 'sale' }, url, req) : Promise.resolve([]),
+  ])) as [
+    Array<Record<string, unknown>>,
+    Array<Record<string, unknown>>,
+    Array<Record<string, unknown>>,
+    Array<Record<string, unknown>>,
+    Array<Record<string, unknown>>,
+  ]
+  const variantAttributes = attributes.filter((row) => row.createVariant !== 'no_variant')
   return {
+    // Kept raw alongside the options so a caller can reach `parentPath` and work
+    // out which unit tree a template sits in.
+    unitRows: units,
     uoms: units.map((row) => ({ value: String(row.id), label: String(row.name) })),
-    categories: categories.map((row) => ({ value: String(row.id), label: String(row.name) })),
-    attributes: attributes.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    categories: categories.map((row) => ({
+      value: String(row.id),
+      label: String(row.name),
+      // The ancestry, so two "Shirts" under different parents stay distinguishable.
+      description: row.path == null ? null : String(row.path),
+    })),
+    brands: brands.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    taxes: taxes.map((row) => ({ value: String(row.id), label: String(row.name) })),
+    taxEnabled,
+    variantAttributes: variantAttributes.map((row) => ({
+      value: String(row.id),
+      label: String(row.name),
+    })),
+    // Values come nested inside their attribute here, and carry the attribute's
+    // name as their description — the value picker spans every attribute, so
+    // "Đỏ" on its own would not say which attribute it belongs to.
+    attributeValues: variantAttributes.flatMap((attribute) =>
+      (Array.isArray(attribute.values) ? (attribute.values as Array<Record<string, unknown>>) : []).map(
+        (value) => ({
+          value: String(value.id),
+          label: String(value.name),
+          description: String(attribute.name),
+        }),
+      ),
+    ),
   }
+}
+
+/**
+ * The root of the unit tree a template's default unit belongs to.
+ *
+ * A variant's unit is refused unless it shares this root, so the picker is given
+ * the root and offers nothing that would be rejected.
+ */
+const unitRootOf = (units: Array<Record<string, unknown>>, uomId: unknown): string | null => {
+  if (uomId == null) return null
+  const unit = units.find((row) => String(row.id) === String(uomId))
+  return unit ? (String(unit.parentPath).split('/').filter(Boolean)[0] ?? null) : null
 }
 
 const invalidErrors = (url: URL, _: ReturnType<ServeContext['translate']>) =>
@@ -165,6 +222,7 @@ type ProductListRow = {
   type: string
   categoryId: string | null
   uomId: string | null
+  listPrice: number
   variants?: unknown[]
 }
 
@@ -174,6 +232,7 @@ const templateRow = (row: ProductListRow): TemplateRow => ({
   type: row.type,
   categoryId: row.categoryId,
   uomId: row.uomId,
+  listPrice: row.listPrice,
   variants: Array.isArray(row.variants) ? row.variants.length : 0,
 })
 
@@ -288,10 +347,8 @@ const productMenus = (
     }
   })
   const returnTo = encodeListState({ ...cloneState(state), favoriteId: undefined }, url)
-  const saveUrl = new URL('/admin/products/favorites/new', url)
-  saveUrl.searchParams.set('returnTo', returnTo)
-  const lang = url.searchParams.get('lang')
-  if (lang) saveUrl.searchParams.set('lang', lang)
+  const saveUrl = new URL(returnTo, url)
+  saveUrl.searchParams.set('modal', 'favorite')
   return [
     {
       id: 'filters',
@@ -387,7 +444,12 @@ const loadProductGroups = async (
   req: Parameters<Route>[1],
   state: ListState,
   timezone: string,
-  labels: { categories: Map<string, string>; units: Map<string, string> },
+  labels: {
+    categories: Map<string, string>
+    units: Map<string, string>
+    /** Names and thumbnails for a group's rows, batched the same way a page is. */
+    decorate: (rows: ProductListRow[]) => Promise<TemplateRow[]>
+  },
   path: unknown[] = [],
 ): Promise<TableGroup<TemplateRow>[]> => {
   const groups = (await ctx.call(
@@ -426,7 +488,7 @@ const loadProductGroups = async (
           : undefined
       const rows =
         open && path.length + 1 === state.groupBy.length
-          ? (
+          ? await labels.decorate(
               (await ctx.call(
                 'product.listTemplates',
                 {
@@ -439,8 +501,8 @@ const loadProductGroups = async (
                 },
                 url,
                 req,
-              )) as ProductListRow[]
-            ).map(templateRow)
+              )) as ProductListRow[],
+            )
           : undefined
       const pageKey = JSON.stringify(nextPath)
       const page = state.groupPages[pageKey] ?? 1
@@ -509,7 +571,7 @@ const ownsVariantMedia = async (
  * URL. Nothing here holds state between requests.
  */
 export const routes: Record<string, RouteEntry> = {
-  '/admin/products':
+  '/admin/product/templates':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -593,13 +655,12 @@ export const routes: Record<string, RouteEntry> = {
       const { count } = (await ctx.call('product.countTemplates', { state, timezone }, url, req)) as {
         count: number
       }
+      // The names are needed by every row, not only by a group header: a table
+      // that prints a category id where it means a category name is showing its
+      // own plumbing.
       const [categoryRows, unitRows] = (await Promise.all([
-        state.groupBy.some((group) => group.key === 'categoryId')
-          ? ctx.call('product.listCategories', {}, url, req)
-          : Promise.resolve([]),
-        state.groupBy.some((group) => group.key === 'uomId')
-          ? ctx.call('uom.listUnits', {}, url, req)
-          : Promise.resolve([]),
+        ctx.call('product.listCategories', {}, url, req),
+        ctx.call('uom.listUnits', {}, url, req),
       ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>]
       const categoryMap = new Map<string, string>()
       const collectCategories = (items: Array<Record<string, unknown>>) => {
@@ -609,74 +670,163 @@ export const routes: Record<string, RouteEntry> = {
         }
       }
       collectCategories(categoryRows)
+      const unitMap = new Map(unitRows.map((row) => [String(row.id), String(row.name)]))
+      const canReadStock = Boolean((await ctx.live(req)).functions['stock.listProductConfigs'])
+      /** One media call per batch of rows, whether that batch is a page or a group. */
+      const decorate = async (batch: ProductListRow[]): Promise<TemplateRow[]> => {
+        if (!batch.length) return []
+        const templateIds = batch.map((row) => row.id)
+        const [media, stockConfigs] = (await Promise.all([
+          ctx.call('product_media.listPrimaryMedia', { templateIds }, url, req),
+          canReadStock
+            ? ctx.call('stock.listProductConfigs', { templateIds }, url, req)
+            : Promise.resolve([]),
+        ])) as [Array<Record<string, unknown>>, Array<Record<string, unknown>>]
+        const images = new Map(media.map((row) => [String(row.templateId), String(row.attachmentId)]))
+        const inventory = new Map(
+          stockConfigs.map((row) => [String(row.templateId), Boolean(row.isStorable)]),
+        )
+        return batch.map((row) => {
+          const attachmentId = images.get(String(row.id))
+          return {
+            ...templateRow(row),
+            uomName: row.uomId ? (unitMap.get(String(row.uomId)) ?? null) : null,
+            categoryName: row.categoryId ? (categoryMap.get(String(row.categoryId)) ?? null) : null,
+            isStorable: canReadStock ? (inventory.get(String(row.id)) ?? false) : null,
+            image: attachmentId ? { src: `/files/${attachmentId}`, alt: row.name } : null,
+          }
+        })
+      }
+      const decoratedRows = await decorate(rows)
       const groups = grouped
         ? await loadProductGroups(ctx, url, req, state, timezone, {
             categories: categoryMap,
-            units: new Map(unitRows.map((row) => [String(row.id), String(row.name)])),
+            units: unitMap,
+            decorate,
           })
         : undefined
+      const selection: TableSelection | undefined =
+        view === 'list'
+          ? {
+              formId: 'product-template-bulk',
+              action: inLocale(url, '/admin/product/templates/bulk'),
+              hidden: { returnTo: `${url.pathname}${url.search}` },
+              actions: [
+                { id: 'archive', label: _('backend.chrome.archive') },
+                { id: 'delete', label: _('backend.chrome.delete'), tone: 'danger' },
+              ],
+            }
+          : undefined
+      const extensionActions = await ctx.joint(url, req, 'product_backend:catalogue.actions', {
+        locale: localeQuery(url),
+      })
 
-      const extras: Extras = {
-        'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-        'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-        'sidebar.foot':
-          req.headers['x-ket-navigation'] === 'fragment-v1'
-            ? undefined
-            : await ctx.joint(url, req, 'backend:sidebar.foot', { lang }),
-      }
-      return backendPage(ctx, req, {
-        lang,
+      return adminPage(ctx, url, req, {
         title: 'KetSuite',
-        body: productsScreen(
-          _,
-          rows.map(templateRow),
-          view,
-          {
-            navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-            viewer: await viewerOf(ctx, url, req),
-            extras,
-            menu: await ctx.menu(url, req),
-            menuFilter: url.searchParams.get('menu')?.trim() || null,
-            chrome: {
-              create: {
-                label: _('product_backend.action.create'),
-                path: inLocale(url, '/admin/products/new'),
+        translate: false,
+        body: (_, frame) => {
+          const workspace = productsScreen(
+            _,
+            decoratedRows,
+            view,
+            {
+              ...frame,
+              chrome: {
+                create: {
+                  label: _('product_backend.create.title'),
+                  path: inLocale(url, '/admin/product/templates/new'),
+                },
+                selection,
+                search: {
+                  name: 'q',
+                  value: state.q ?? '',
+                  placeholder: _('product_backend.chrome.search'),
+                  keep: keepForSearch(url),
+                  facets: productFacets(_, url, state, spec),
+                  menus: productMenus(_, url, state, spec, favorites),
+                },
+                pager: grouped ? null : pager(url, current, rows.length, count),
+                views: VIEWS.map((v) => ({
+                  id: v,
+                  label: _(`backend.chrome.view.${v}`),
+                  icon: v === 'kanban' ? 'layout-grid' : 'list',
+                  path: withParam(url, 'view', v),
+                  active: v === view,
+                })),
               },
-              search: {
-                name: 'q',
-                value: state.q ?? '',
-                placeholder: _('product_backend.chrome.search'),
-                keep: keepForSearch(url),
-                facets: productFacets(_, url, state, spec),
-                menus: productMenus(_, url, state, spec, favorites),
-              },
-              pager: grouped ? null : pager(url, current, rows.length, count),
-              views: VIEWS.map((v) => ({
-                id: v,
-                label: _(`backend.chrome.view.${v}`),
-                icon: v === 'kanban' ? 'layout-grid' : 'list',
-                path: withParam(url, 'view', v),
-                active: v === view,
-              })),
             },
-          },
-          { shown: colsOf(url), colsHref: colsHref(url), groups },
-          localeSuffix(url),
-        ),
+            { shown: colsOf(url), colsHref: colsHref(url), groups, selection },
+            localeQuery(url),
+            count,
+            extensionActions,
+          )
+          if (url.searchParams.get('modal') !== 'favorite') return workspace
+          const returnUrl = new URL(url)
+          returnUrl.searchParams.delete('modal')
+          returnUrl.searchParams.delete('favoriteError')
+          const returnTo = `${returnUrl.pathname}${returnUrl.search}`
+          return modalWorkspace(
+            workspace,
+            favoriteModal(
+              _,
+              returnTo,
+              localeQuery(url),
+              url.searchParams.has('favoriteError') ? [_('product_backend.favorite.invalid')] : undefined,
+            ),
+          )
+        },
       })
     },
-  '/admin/products/favorites/new':
+  '/admin/product/templates/bulk':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const denied = refusePost(req)
+      if (denied) return denied
+      const form = await readForm(req)
+      const ids = Object.keys(form)
+        .filter((key) => key.startsWith('selected.'))
+        .map((key) => key.slice('selected.'.length))
+        .filter(Boolean)
+      const fallback = inLocale(url, '/admin/product/templates')
+      const returnTo = form.returnTo?.startsWith('/admin/product/templates') ? form.returnTo : fallback
+      if (!ids.length) return seeOther(returnTo)
+      if (form.action === 'archive') {
+        for (const id of ids) await ctx.call('product.archiveTemplate', { id, active: false }, url, req)
+        return seeOther(returnTo)
+      }
+      if (form.action === 'delete') {
+        try {
+          await ctx.call('product.deleteTemplates', { ids }, url, req)
+          return seeOther(returnTo)
+        } catch {
+          const failed = new URL(returnTo, 'http://ket.local')
+          failed.searchParams.set('bulkError', 'delete')
+          return seeOther(`${failed.pathname}${failed.search}`)
+        }
+      }
+      return text('Unknown bulk action', { status: 400 })
+    },
+  '/admin/product/templates/favorites/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
-      const form = req.method === 'POST' ? await readForm(req) : null
-      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
       if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
-      const rawReturn = form?.returnTo ?? url.searchParams.get('returnTo') ?? '/admin/products'
+      // Refused before the body is read, not after.
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+      const form = req.method === 'POST' ? await readForm(req) : null
+      const rawReturn = form?.returnTo ?? url.searchParams.get('returnTo') ?? '/admin/product/templates'
       const source = new URL(rawReturn, 'http://ket.local')
       const returnTo =
-        source.pathname === '/admin/products' ? `${source.pathname}${source.search}` : '/admin/products'
+        source.pathname === '/admin/product/templates'
+          ? `${source.pathname}${source.search}`
+          : '/admin/product/templates'
+      const modalHref = (invalid = false) => {
+        const target = new URL(returnTo, 'http://ket.local')
+        target.searchParams.set('modal', 'favorite')
+        if (invalid) target.searchParams.set('favoriteError', '1')
+        return `${target.pathname}${target.search}`
+      }
       if (req.method === 'POST') {
         const spec = productListSearch(table(ctx.manifest, 'product.Template'))
         const state = parseListState(spec, new URL(returnTo, 'http://ket.local')).state
@@ -697,30 +847,21 @@ export const routes: Record<string, RouteEntry> = {
           state.favoriteId = id
           return seeOther(encodeListState(state, new URL(returnTo, 'http://ket.local')))
         }
-        return backendPage(ctx, req, {
-          lang,
-          title: _('product_backend.favorite.create'),
-          body: favoriteScreen(_, await frameFor(ctx, url, req), returnTo, localeSuffix(url), [
-            _('product_backend.favorite.invalid'),
-          ]),
-        })
+        return seeOther(modalHref(true))
       }
-      return backendPage(ctx, req, {
-        lang,
-        title: _('product_backend.favorite.create'),
-        body: favoriteScreen(_, await frameFor(ctx, url, req), returnTo, localeSuffix(url)),
-      })
+      return seeOther(modalHref())
     },
-  '/admin/products/new':
+  '/admin/product/templates/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const hasStock = await stockEnabled(ctx, req)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         if (hasStock && !validStockForm(form))
-          return seeOther(inLocale(url, '/admin/products/new?invalid=1&count=1'))
+          return seeOther(inLocale(url, '/admin/product/templates/new?invalid=1&count=1'))
         const id = randomUUID()
         const result = await ctx.call(
           'product.saveTemplate',
@@ -728,49 +869,66 @@ export const routes: Record<string, RouteEntry> = {
             id,
             name: form.name ?? '',
             type: form.type || 'goods',
-            ...(form.uomId ? { uomId: form.uomId } : {}),
-            ...(form.categoryId ? { categoryId: form.categoryId } : {}),
+            // Sent as null rather than omitted: an absent key is skipped by the
+            // changeset, so leaving it out would make the form's empty "—" option
+            // a no-op and the field impossible to clear once set.
+            uomId: form.uomId || null,
+            categoryId: form.categoryId || null,
+            brandId: form.brandId || null,
+            origin: form.origin || null,
             description: form.description || null,
             listPrice: form.listPrice || '0',
             saleOk: form.saleOk === '1',
             purchaseOk: form.purchaseOk === '1',
+            ...(Object.hasOwn(form, 'defaultCode') ? { defaultCode: form.defaultCode || null } : {}),
+            ...(Object.hasOwn(form, 'barcode') ? { barcode: form.barcode || null } : {}),
           },
           url,
           req,
         )
         if (!(result as { ok?: boolean }).ok)
-          return seeOther(inLocale(url, `/admin/products/new?invalid=1&count=${errorsOf(result).length}`))
+          return seeOther(
+            inLocale(url, `/admin/product/templates/new?invalid=1&count=${errorsOf(result).length}`),
+          )
         if (hasStock) {
           const stockResult = await configureStock(ctx, url, req, id, form)
           if (!(stockResult as { ok?: boolean }).ok)
             return seeOther(
-              inLocale(url, `/admin/products/${id}?invalid=1&count=${errorsOf(stockResult).length}`),
+              inLocale(url, `/admin/product/templates/${id}?invalid=1&count=${errorsOf(stockResult).length}`),
             )
         }
         return seeProduct(id, url)
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const options = await optionsFor(ctx, url, req)
-      return backendPage(ctx, req, {
-        lang,
-        title: _('product_backend.create.title'),
-        body: newProductScreen(
-          _,
-          { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _) },
-          await frameFor(ctx, url, req),
-          localeSuffix(url),
-        ),
+      const controls = {
+        uom: await uomControl(ctx, url, req, _, { id: 'product-create-uom', units: options.uoms }),
+        category: await categoryControl(ctx, url, req, _, {
+          id: 'product-create-category',
+          categories: options.categories,
+        }),
+      }
+      return adminPage(ctx, url, req, {
+        title: 'product_backend.create.title',
+        body: (_, frame) =>
+          newProductScreen(
+            _,
+            { ...options, stockEnabled: hasStock, errors: invalidErrors(url, _), controls },
+            frame,
+            localeQuery(url),
+          ),
       })
     },
-  '/admin/product-attributes':
+  '/admin/product/attributes':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const form = await readForm(req)
         const name = form.name?.trim()
-        if (!name) return seeOther(inLocale(url, '/admin/product-attributes?invalid=1'))
+        if (!name) return seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
         const result = await ctx.call(
           'product.saveAttribute',
           {
@@ -785,30 +943,24 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )
         return (result as { ok?: boolean }).ok
-          ? seeOther(inLocale(url, '/admin/product-attributes'))
-          : seeOther(inLocale(url, '/admin/product-attributes?invalid=1'))
+          ? seeOther(inLocale(url, '/admin/product/attributes'))
+          : seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('product.listAttributes', {}, url, req)) as Array<Record<string, unknown>>
-      return backendPage(ctx, req, {
-        lang,
-        title: _('product_backend.attributes.title'),
-        body: attributesScreen(
-          _,
-          rows,
-          await frameFor(ctx, url, req),
-          invalidErrors(url, _),
-          localeSuffix(url),
-        ),
+      return adminPage(ctx, url, req, {
+        title: 'product_backend.attributes.title',
+        body: (_, frame) => attributesScreen(_, rows, frame, invalidErrors(url, _), localeQuery(url)),
       })
     },
-  '/admin/product-attributes/{id}/values':
+  '/admin/product/attributes/{id}/values':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const form = await readForm(req)
       const name = form.name?.trim()
-      if (!name) return seeOther(inLocale(url, '/admin/product-attributes?invalid=1'))
+      if (!name) return seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
       const result = await ctx.call(
         'product.saveAttributeValue',
         {
@@ -821,18 +973,23 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther(inLocale(url, '/admin/product-attributes'))
-        : seeOther(inLocale(url, '/admin/product-attributes?invalid=1'))
+        ? seeOther(inLocale(url, '/admin/product/attributes'))
+        : seeOther(inLocale(url, '/admin/product/attributes?invalid=1'))
     },
-  '/admin/products/{id}':
+  '/admin/product/templates/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
+      const live = await ctx.live(req)
       const hasStock = await stockEnabled(ctx, req)
+      const hasProductTax = Boolean(
+        live.functions['account.getProductTax'] && live.functions['account.setProductTax'],
+      )
       const activeTab = productTabOf(url)
       let savedPartial = false
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const partial = isProductPartial(req)
         const form = await readForm(req)
         if (hasStock && !validStockForm(form)) {
@@ -841,7 +998,7 @@ export const routes: Record<string, RouteEntry> = {
               { ok: false, message: _('product_backend.error.invalid'), errors: ['tracking'] },
               { status: 422 },
             )
-          return seeOther(inLocale(url, `/admin/products/${params.id}?invalid=1&count=1`))
+          return seeOther(inLocale(url, `/admin/product/templates/${params.id}?invalid=1&count=1`))
         }
         const result = await ctx.call(
           'product.saveTemplate',
@@ -849,12 +1006,19 @@ export const routes: Record<string, RouteEntry> = {
             id: params.id,
             name: form.name ?? '',
             type: form.type || 'goods',
-            ...(form.uomId ? { uomId: form.uomId } : {}),
-            ...(form.categoryId ? { categoryId: form.categoryId } : {}),
+            // Sent as null rather than omitted: an absent key is skipped by the
+            // changeset, so leaving it out would make the form's empty "—" option
+            // a no-op and the field impossible to clear once set.
+            uomId: form.uomId || null,
+            categoryId: form.categoryId || null,
+            brandId: form.brandId || null,
+            origin: form.origin || null,
             description: form.description || null,
             listPrice: form.listPrice || '0',
             saleOk: form.saleOk === '1',
             purchaseOk: form.purchaseOk === '1',
+            ...(Object.hasOwn(form, 'defaultCode') ? { defaultCode: form.defaultCode || null } : {}),
+            ...(Object.hasOwn(form, 'barcode') ? { barcode: form.barcode || null } : {}),
           },
           url,
           req,
@@ -866,7 +1030,7 @@ export const routes: Record<string, RouteEntry> = {
               { status: 422 },
             )
           return seeOther(
-            inLocale(url, `/admin/products/${params.id}?invalid=1&count=${errorsOf(result).length}`),
+            inLocale(url, `/admin/product/templates/${params.id}?invalid=1&count=${errorsOf(result).length}`),
           )
         }
         if (hasStock) {
@@ -882,7 +1046,35 @@ export const routes: Record<string, RouteEntry> = {
                 { status: 422 },
               )
             return seeOther(
-              inLocale(url, `/admin/products/${params.id}?invalid=1&count=${errorsOf(stockResult).length}`),
+              inLocale(
+                url,
+                `/admin/product/templates/${params.id}?invalid=1&count=${errorsOf(stockResult).length}`,
+              ),
+            )
+          }
+        }
+        if (hasProductTax && Object.hasOwn(form, 'taxId')) {
+          const taxResult = await ctx.call(
+            'account.setProductTax',
+            { templateId: params.id, taxId: form.taxId || null },
+            url,
+            req,
+          )
+          if (!(taxResult as { ok?: boolean }).ok) {
+            if (partial)
+              return json(
+                {
+                  ok: false,
+                  message: _('product_backend.error.invalid'),
+                  errors: errorsOf(taxResult),
+                },
+                { status: 422 },
+              )
+            return seeOther(
+              inLocale(
+                url,
+                `/admin/product/templates/${params.id}?invalid=1&count=${errorsOf(taxResult).length}`,
+              ),
             )
           }
         }
@@ -898,31 +1090,117 @@ export const routes: Record<string, RouteEntry> = {
         listPrice: number
         uomId: string | null
         categoryId?: string | null
+        brandId?: string | null
+        origin?: string | null
         saleOk?: boolean
         purchaseOk?: boolean
+        active?: boolean
+        variants?: Array<{
+          id: string
+          defaultCode?: string | null
+          barcode?: string | null
+          combinationKey?: string | null
+          active?: boolean
+        }>
+        createdAt?: string | Date | null
+        updatedAt?: string | Date | null
       } | null
       if (!row) return text('Product not found', { status: 404 })
-      const [mediaRows, variants, options, stockConfig] = await Promise.all([
-        mediaFor(ctx, url, req, row.id),
-        ctx.call('product.listVariants', { templateId: row.id }, url, req) as Promise<
-          Array<{ id: string; defaultCode?: string | null; barcode?: string | null; active?: boolean }>
-        >,
-        optionsFor(ctx, url, req),
-        hasStock
-          ? ctx.call('stock.getProductConfig', { templateId: row.id }, url, req)
-          : Promise.resolve(null),
-      ])
+      const [mediaRows, listedVariants, options, stockConfig, attributeLines, currentTax] = await Promise.all(
+        [
+          mediaFor(ctx, url, req, row.id),
+          ctx.call('product.listVariants', { templateId: row.id }, url, req) as Promise<
+            Array<{
+              id: string
+              name?: string | null
+              defaultCode?: string | null
+              barcode?: string | null
+              combinationKey?: string | null
+              active?: boolean
+              values?: Array<{ value?: string | null; attribute?: string | null }>
+            }>
+          >,
+          optionsFor(ctx, url, req),
+          hasStock
+            ? ctx.call('stock.getProductConfig', { templateId: row.id }, url, req)
+            : Promise.resolve(null),
+          ctx.call('product.listAttributeLines', { templateId: row.id }, url, req),
+          hasProductTax
+            ? ctx.call('account.getProductTax', { templateId: row.id }, url, req)
+            : Promise.resolve(null),
+        ],
+      )
+      const defaultVariant = (row.variants ?? []).find(
+        (variant) => String(variant.combinationKey ?? '') === '',
+      )
+      const variants = listedVariants.filter((variant) => String(variant.combinationKey ?? '') !== '')
+      const variantPageCount = Math.max(1, Math.ceil(variants.length / VARIANT_PAGE_SIZE))
+      const variantPage = Math.min(requestedVariantPage(url), variantPageCount)
+      const variantStart = (variantPage - 1) * VARIANT_PAGE_SIZE
+      const visibleVariants = variants.slice(variantStart, variantStart + VARIANT_PAGE_SIZE)
+      const stockByVariant = new Map<string, string>()
+      if (activeTab === 'variants' && hasStock && live.functions['stock.forecast']) {
+        const forecasts = await Promise.all(
+          visibleVariants.map(async (variant) => ({
+            id: variant.id,
+            forecast: (await ctx.call('stock.forecast', { productId: variant.id }, url, req)) as {
+              onHand?: string | number
+            },
+          })),
+        )
+        for (const entry of forecasts)
+          stockByVariant.set(String(entry.id), String(entry.forecast.onHand ?? '0'))
+      }
+      const variantMediaPageCount = Math.max(1, Math.ceil(variants.length / MEDIA_VARIANT_PAGE_SIZE))
+      const variantMediaPage = Math.min(requestedVariantMediaPage(url), variantMediaPageCount)
+      const variantMediaStart = (variantMediaPage - 1) * MEDIA_VARIANT_PAGE_SIZE
+      const visibleMediaVariants =
+        activeTab === 'media'
+          ? variants.slice(variantMediaStart, variantMediaStart + MEDIA_VARIANT_PAGE_SIZE)
+          : variants
+      const variantMediaRows =
+        activeTab === 'media'
+          ? ((await ctx.call(
+              'product_media.listMediaByProducts',
+              { productIds: visibleMediaVariants.map((variant) => variant.id) },
+              url,
+              req,
+            )) as MediaRow[])
+          : []
+      const variantMedia = visibleMediaVariants.map((variant) => ({
+        variantId: variant.id,
+        images: variantMediaRows
+          .filter((image) => image.productId === variant.id)
+          .map((image) => ({
+            id: image.id,
+            src: `/files/${image.attachmentId}`,
+            alt: image.alt || image.attachment?.name || variant.defaultCode || variant.name || variant.id,
+            primary: image.primary,
+            actions: {
+              remove: inLocale(
+                url,
+                `/admin/product/templates/${row.id}/variants/${variant.id}/media/${image.id}/remove?tab=media`,
+              ),
+            },
+          })),
+      }))
       const body = productDetailScreen(
         _,
-        { ...row, ...(stockConfig as Record<string, unknown> | null) },
+        {
+          ...row,
+          ...(stockConfig as Record<string, unknown> | null),
+          defaultCode: defaultVariant?.defaultCode ?? null,
+          barcode: defaultVariant?.barcode ?? null,
+          taxId: (currentTax as { taxId?: string | null } | null)?.taxId ?? null,
+        },
         {
           status: 'ready',
-          uploadAction: inLocale(url, `/admin/products/${row.id}/media?tab=media`),
+          uploadAction: inLocale(url, `/admin/product/templates/${row.id}/media?tab=media`),
           uploadControl: savedPartial
             ? ''
             : await ctx.joint(url, req, 'product_backend:media.upload', {
                 identity: `template:${row.id}`,
-                action: inLocale(url, `/admin/products/${row.id}/media?tab=media`),
+                action: inLocale(url, `/admin/product/templates/${row.id}/media?tab=media`),
                 label: _('product_backend.media.add'),
               }),
           images: mediaRows.map((image, index) => ({
@@ -931,18 +1209,24 @@ export const routes: Record<string, RouteEntry> = {
             alt: image.alt || image.attachment?.name || row.name,
             primary: image.primary,
             actions: {
-              primary: inLocale(url, `/admin/products/${row.id}/media/${image.id}/primary?tab=media`),
-              remove: inLocale(url, `/admin/products/${row.id}/media/${image.id}/remove?tab=media`),
+              primary: inLocale(
+                url,
+                `/admin/product/templates/${row.id}/media/${image.id}/primary?tab=media`,
+              ),
+              remove: inLocale(url, `/admin/product/templates/${row.id}/media/${image.id}/remove?tab=media`),
               ...(index > 0
                 ? {
-                    moveUp: inLocale(url, `/admin/products/${row.id}/media/${image.id}/move-up?tab=media`),
+                    moveUp: inLocale(
+                      url,
+                      `/admin/product/templates/${row.id}/media/${image.id}/move-up?tab=media`,
+                    ),
                   }
                 : {}),
               ...(index + 1 < mediaRows.length
                 ? {
                     moveDown: inLocale(
                       url,
-                      `/admin/products/${row.id}/media/${image.id}/move-down?tab=media`,
+                      `/admin/product/templates/${row.id}/media/${image.id}/move-down?tab=media`,
                     ),
                   }
                 : {}),
@@ -956,9 +1240,76 @@ export const routes: Record<string, RouteEntry> = {
         },
         {
           ...options,
-          variants,
+          variants: (activeTab === 'media'
+            ? visibleMediaVariants
+            : activeTab === 'variants'
+              ? visibleVariants
+              : variants
+          ).map((variant) => ({
+            ...variant,
+            ...(stockByVariant.has(String(variant.id))
+              ? { stock: stockByVariant.get(String(variant.id)) }
+              : {}),
+          })),
+          variantPage: {
+            page: variantPage,
+            pageSize: VARIANT_PAGE_SIZE,
+            total: variants.length,
+          },
+          variantMedia,
+          variantMediaPage: {
+            page: variantMediaPage,
+            pageSize: MEDIA_VARIANT_PAGE_SIZE,
+            total: variants.length,
+          },
+          attributeLines: (
+            attributeLines as Array<{
+              id: string
+              attributeId: string
+              attribute?: string | null
+              values: Array<{ id: string; name: string }>
+            }>
+          ).filter((line) =>
+            options.variantAttributes.some((attribute) => attribute.value === line.attributeId),
+          ),
           stockEnabled: hasStock,
           errors: invalidErrors(url, _),
+          actions: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:template.actions', {
+                templateId: row.id,
+                locale: localeQuery(url),
+              }),
+          controls: {
+            uom: await uomControl(ctx, url, req, _, {
+              id: `product-uom:${row.id}`,
+              value: row.uomId,
+              units: options.uoms,
+            }),
+            category: await categoryControl(ctx, url, req, _, {
+              id: `product-category:${row.id}`,
+              value: row.categoryId,
+              categories: options.categories,
+            }),
+            brand: await brandControl(ctx, url, req, _, {
+              id: `product-brand:${row.id}`,
+              value: row.brandId,
+              brands: options.brands,
+            }),
+            attribute: await attributeControl(ctx, url, req, _, {
+              id: `product-attribute:${row.id}`,
+              attributes: options.variantAttributes,
+              required: true,
+            }),
+            // The value picker cannot be scoped to an attribute yet — the two are
+            // separate fields and the attribute is only known once chosen — so it
+            // lists every value, each labelled with the attribute it belongs to.
+            attributeValues: await attributeValuesControl(ctx, url, req, _, {
+              id: `product-attribute-values:${row.id}`,
+              choices: options.attributeValues,
+              required: true,
+            }),
+          },
           editor: savedPartial
             ? ''
             : await ctx.joint(url, req, 'product_backend:template.editor', {
@@ -974,8 +1325,8 @@ export const routes: Record<string, RouteEntry> = {
               resId: row.id,
               lang,
             }),
-        savedPartial ? {} : await frameFor(ctx, url, req),
-        localeSuffix(url),
+        savedPartial ? {} : await frameOf(ctx, url, req),
+        localeQuery(url),
         activeTab,
         savedPartial,
       )
@@ -987,19 +1338,21 @@ export const routes: Record<string, RouteEntry> = {
         body,
       })
     },
-  '/admin/products/{id}/variants/generate':
+  '/admin/product/templates/{id}/variants/generate':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const result = await ctx.call('product.generateVariants', { templateId: params.id }, url, req)
       return (result as { ok?: boolean }).ok
         ? seeProduct(params.id, url)
-        : seeOther(inLocale(url, `/admin/products/${params.id}?invalid=1`))
+        : seeOther(inLocale(url, `/admin/product/templates/${params.id}?invalid=1`))
     },
-  '/admin/products/{id}/attribute-lines':
+  '/admin/product/templates/{id}/attribute-lines':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       const form = await readForm(req)
       const attributeId = form.attributeId ?? ''
       const result = await ctx.call(
@@ -1018,9 +1371,36 @@ export const routes: Record<string, RouteEntry> = {
       )
       return (result as { ok?: boolean }).ok
         ? seeProduct(params.id, url)
-        : seeOther(inLocale(url, `/admin/products/${params.id}?invalid=1`))
+        : seeOther(inLocale(url, `/admin/product/templates/${params.id}?invalid=1`))
     },
-  '/admin/products/{id}/variants/{variantId}':
+  '/admin/product/templates/{id}/archive':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const denied = refusePost(req)
+      if (denied) return denied
+      const form = await readForm(req)
+      await ctx.call('product.archiveTemplate', { id: params.id, active: form.active === '1' }, url, req)
+      return seeProduct(params.id, url)
+    },
+  '/admin/product/templates/{id}/attribute-lines/{lineId}/remove':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const denied = refusePost(req)
+      if (denied) return denied
+      // The line has to belong to the template in the path, or a POST could take
+      // an attribute off a product the reader never opened.
+      const lines = (await ctx.call(
+        'product.listAttributeLines',
+        { templateId: params.id },
+        url,
+        req,
+      )) as Array<{ id: string }>
+      if (!lines.some((line) => line.id === params.lineId))
+        return text('Attribute line not found', { status: 404 })
+      await ctx.call('product.removeAttributeLine', { id: params.lineId }, url, req)
+      return seeProduct(params.id, url)
+    },
+  '/admin/product/templates/{id}/variants/{variantId}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const lang = ctx.localeOf(url, req)
@@ -1033,6 +1413,7 @@ export const routes: Record<string, RouteEntry> = {
       if (!existing || existing.templateId !== params.id) return text('Variant not found', { status: 404 })
       let savedPartial = false
       if (req.method === 'POST') {
+        if (crossSite(req)) return text('Forbidden', { status: 403 })
         const partial = isProductPartial(req, 'product-variant')
         const form = await readForm(req)
         const saved = await ctx.call(
@@ -1055,7 +1436,7 @@ export const routes: Record<string, RouteEntry> = {
               { status: 422 },
             )
           return seeOther(
-            inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}?invalid=1`),
+            inLocale(url, `/admin/product/templates/${params.id}/variants/${params.variantId}?invalid=1`),
           )
         }
         const cost = await ctx.call(
@@ -1071,13 +1452,21 @@ export const routes: Record<string, RouteEntry> = {
               { status: 422 },
             )
           return seeOther(
-            inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}?invalid=1`),
+            inLocale(url, `/admin/product/templates/${params.id}/variants/${params.variantId}?invalid=1`),
           )
         }
-        if (form.uomId) {
+        {
+          // The form's unit is a single select, so the submission replaces what
+          // the variant has rather than adding to it — and an empty selection
+          // clears it. Adding would leave the previous unit in place, and the
+          // form would go on showing it.
           const productUom = await ctx.call(
-            'product.addProductUom',
-            { productId: params.variantId, uomId: form.uomId, barcode: form.uomBarcode || null },
+            'product.setProductUom',
+            {
+              productId: params.variantId,
+              uomId: form.uomId || null,
+              barcode: form.uomBarcode || null,
+            },
             url,
             req,
           )
@@ -1092,7 +1481,7 @@ export const routes: Record<string, RouteEntry> = {
                 { status: 422 },
               )
             return seeOther(
-              inLocale(url, `/admin/products/${params.id}/variants/${params.variantId}?invalid=1`),
+              inLocale(url, `/admin/product/templates/${params.id}/variants/${params.variantId}?invalid=1`),
             )
           }
         }
@@ -1108,12 +1497,27 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('product.getTemplate', { id: params.id }, url, req) as Promise<{
           id: string
           name: string
+          uomId?: string | null
         } | null>,
         optionsFor(ctx, url, req),
         variantMediaFor(ctx, url, req, params.variantId),
       ])
       if (!current || current.templateId !== params.id || !template)
         return text('Variant not found', { status: 404 })
+      // Both the picker and the plain select behind it are held to the template's
+      // unit tree, so a unit that `setProductUom` would refuse is never offered.
+      const unitRoot = unitRootOf(options.unitRows, template.uomId)
+      const treeUnits = unitRoot
+        ? options.uoms.filter((unit) => unitRootOf(options.unitRows, unit.value) === unitRoot)
+        : options.uoms
+      const variantUom = await uomControl(ctx, url, req, _, {
+        id: `variant-uom:${params.variantId}`,
+        value: Array.isArray(current.uoms)
+          ? ((current.uoms[0] as Record<string, unknown> | undefined)?.uomId as string | undefined)
+          : undefined,
+        units: treeUnits,
+        rootId: unitRoot,
+      })
       const body = variantScreen(
         _,
         params.id,
@@ -1122,7 +1526,7 @@ export const routes: Record<string, RouteEntry> = {
           status: 'ready',
           uploadAction: inLocale(
             url,
-            `/admin/products/${params.id}/variants/${params.variantId}/media?tab=media`,
+            `/admin/product/templates/${params.id}/variants/${params.variantId}/media?tab=media`,
           ),
           uploadControl: savedPartial
             ? ''
@@ -1130,29 +1534,32 @@ export const routes: Record<string, RouteEntry> = {
                 identity: `variant:${params.variantId}`,
                 action: inLocale(
                   url,
-                  `/admin/products/${params.id}/variants/${params.variantId}/media?tab=media`,
+                  `/admin/product/templates/${params.id}/variants/${params.variantId}/media?tab=media`,
                 ),
                 label: _('product_backend.media.add'),
               }),
           images: mediaRows.map((image, index) => ({
             id: image.id,
             src: `/files/${image.attachmentId}`,
-            alt: image.alt || image.attachment?.name || String(current.defaultCode || current.id),
+            alt:
+              image.alt ||
+              image.attachment?.name ||
+              String(current.name || current.defaultCode || current.id),
             primary: image.primary,
             actions: {
               primary: inLocale(
                 url,
-                `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/primary?tab=media`,
+                `/admin/product/templates/${params.id}/variants/${params.variantId}/media/${image.id}/primary?tab=media`,
               ),
               remove: inLocale(
                 url,
-                `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/remove?tab=media`,
+                `/admin/product/templates/${params.id}/variants/${params.variantId}/media/${image.id}/remove?tab=media`,
               ),
               ...(index > 0
                 ? {
                     moveUp: inLocale(
                       url,
-                      `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-up?tab=media`,
+                      `/admin/product/templates/${params.id}/variants/${params.variantId}/media/${image.id}/move-up?tab=media`,
                     ),
                   }
                 : {}),
@@ -1160,7 +1567,7 @@ export const routes: Record<string, RouteEntry> = {
                 ? {
                     moveDown: inLocale(
                       url,
-                      `/admin/products/${params.id}/variants/${params.variantId}/media/${image.id}/move-down?tab=media`,
+                      `/admin/product/templates/${params.id}/variants/${params.variantId}/media/${image.id}/move-down?tab=media`,
                     ),
                   }
                 : {}),
@@ -1172,7 +1579,7 @@ export const routes: Record<string, RouteEntry> = {
                 productId: params.variantId,
               }),
         },
-        options.uoms,
+        treeUnits,
         template,
         savedPartial
           ? ''
@@ -1181,9 +1588,9 @@ export const routes: Record<string, RouteEntry> = {
               resId: params.variantId,
               lang,
             }),
-        savedPartial ? {} : await frameFor(ctx, url, req),
+        savedPartial ? {} : await frameOf(ctx, url, req),
         invalidErrors(url, _),
-        localeSuffix(url),
+        localeQuery(url),
         savedPartial
           ? ''
           : await ctx.joint(url, req, 'product_backend:variant.editor', {
@@ -1193,19 +1600,21 @@ export const routes: Record<string, RouteEntry> = {
             }),
         activeTab,
         savedPartial,
+        variantUom,
       )
       if (savedPartial)
         return withHeaders(fragment(body, { type: NAVIGATION_TYPE }), { vary: 'X-Ket-Partial' })
       return backendPage(ctx, req, {
         lang,
-        title: String(current.defaultCode || current.id),
+        title: String(current.name || current.defaultCode || current.id),
         body,
       })
     },
-  '/admin/products/{id}/variants/{variantId}/media':
+  '/admin/product/templates/{id}/variants/{variantId}/media':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST multipart/form-data', { status: 405 })
+      const denied = refusePost(req, 'POST multipart/form-data')
+      if (denied) return denied
       const variant = (await ctx.call('product.getVariant', { id: params.variantId }, url, req)) as AnyVariant
       if (!variant || variant.templateId !== params.id) return text('Variant not found', { status: 404 })
       const attachment = await receiveAttachment(ctx, url, req, {
@@ -1232,36 +1641,39 @@ export const routes: Record<string, RouteEntry> = {
       }
       return seeVariant(params.id, params.variantId, url)
     },
-  '/admin/products/{id}/variants/{variantId}/media/{mediaId}/primary':
+  '/admin/product/templates/{id}/variants/{variantId}/media/{mediaId}/primary':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsVariantMedia(ctx, url, req, params.variantId, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.setPrimary', { id: params.mediaId }, url, req)
       return seeVariant(params.id, params.variantId, url)
     },
-  '/admin/products/{id}/variants/{variantId}/media/{mediaId}/remove':
+  '/admin/product/templates/{id}/variants/{variantId}/media/{mediaId}/remove':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsVariantMedia(ctx, url, req, params.variantId, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.removeMedia', { id: params.mediaId }, url, req)
       return seeVariant(params.id, params.variantId, url)
     },
-  '/admin/products/{id}/variants/{variantId}/media/{mediaId}/move-up':
+  '/admin/product/templates/{id}/variants/{variantId}/media/{mediaId}/move-up':
     (ctx: ServeContext): Route =>
     async (url, req, params) =>
       moveVariant(ctx, url, req, params.id, params.variantId, params.mediaId, -1),
-  '/admin/products/{id}/variants/{variantId}/media/{mediaId}/move-down':
+  '/admin/product/templates/{id}/variants/{variantId}/media/{mediaId}/move-down':
     (ctx: ServeContext): Route =>
     async (url, req, params) =>
       moveVariant(ctx, url, req, params.id, params.variantId, params.mediaId, 1),
-  '/admin/products/{id}/media':
+  '/admin/product/templates/{id}/media':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST multipart/form-data', { status: 405 })
+      const denied = refusePost(req, 'POST multipart/form-data')
+      if (denied) return denied
       const template = await ctx.call('product.getTemplate', { id: params.id }, url, req)
       if (!template) return text('Product not found', { status: 404 })
       const attachment = await receiveAttachment(ctx, url, req, {
@@ -1288,29 +1700,31 @@ export const routes: Record<string, RouteEntry> = {
       }
       return seeProduct(params.id, url)
     },
-  '/admin/products/{id}/media/{mediaId}/primary':
+  '/admin/product/templates/{id}/media/{mediaId}/primary':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsMedia(ctx, url, req, params.id, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.setPrimary', { id: params.mediaId }, url, req)
       return seeProduct(params.id, url)
     },
-  '/admin/products/{id}/media/{mediaId}/remove':
+  '/admin/product/templates/{id}/media/{mediaId}/remove':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const denied = refusePost(req)
+      if (denied) return denied
       if (!(await ownsMedia(ctx, url, req, params.id, params.mediaId)))
         return text('Media not found', { status: 404 })
       await ctx.call('product_media.removeMedia', { id: params.mediaId }, url, req)
       return seeProduct(params.id, url)
     },
-  '/admin/products/{id}/media/{mediaId}/move-up':
+  '/admin/product/templates/{id}/media/{mediaId}/move-up':
     (ctx: ServeContext): Route =>
     async (url, req, params) =>
       move(ctx, url, req, params.id, params.mediaId, -1),
-  '/admin/products/{id}/media/{mediaId}/move-down':
+  '/admin/product/templates/{id}/media/{mediaId}/move-down':
     (ctx: ServeContext): Route =>
     async (url, req, params) =>
       move(ctx, url, req, params.id, params.mediaId, 1),
@@ -1324,7 +1738,8 @@ const move = async (
   mediaId: string,
   delta: number,
 ) => {
-  if (req.method !== 'POST') return text('POST', { status: 405 })
+  const denied = refusePost(req)
+  if (denied) return denied
   const rows = await mediaFor(ctx, url, req, templateId)
   const index = rows.findIndex((row) => row.id === mediaId)
   if (index < 0) return text('Media not found', { status: 404 })
@@ -1346,7 +1761,8 @@ const moveVariant = async (
   mediaId: string,
   delta: number,
 ) => {
-  if (req.method !== 'POST') return text('POST', { status: 405 })
+  const denied = refusePost(req)
+  if (denied) return denied
   const rows = await variantMediaFor(ctx, url, req, productId)
   const index = rows.findIndex((row) => row.id === mediaId)
   if (index < 0) return text('Media not found', { status: 404 })

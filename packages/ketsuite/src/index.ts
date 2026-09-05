@@ -5,12 +5,53 @@
 // suite ever needs something deeper, so does everyone else — and it should be
 // exported rather than smuggled. The dependency audit enforces exactly that.
 
+export {
+  ketsuitePermissionModuleNames,
+  ketsuitePermissionModules,
+} from './permission-catalogue.ts'
+
 // website vertical
+export { default as channelApi } from './modules/channel_api/index.ts'
+export {
+  CHANNEL_API_VERSION,
+  authorizedChannelCapabilities,
+  channelCredentialFailure,
+  channelCommandId,
+  defineChannelRoute,
+  openApiDocument,
+  registerChannelCapabilityAuthorizer,
+  registerChannelIdentity,
+  registerChannelIdentityPresentation,
+  registerChannelRealm,
+  routesOf as channelRoutesOf,
+} from './modules/channel_api/index.ts'
+export type {
+  ChannelAccount,
+  AuthorizedChannelCapability,
+  ChannelCapability,
+  ChannelCapabilityAuthorizer,
+  ChannelCapabilityAuthorizerRegistration,
+  ChannelCredentialFailure,
+  ChannelIdentities,
+  ChannelIdentityFor,
+  ChannelIdentityPresentation,
+  ChannelIdentityPresentationResolver,
+  CustomerIdentity,
+  PosIdentity,
+  StaffIdentity,
+  ChannelAuth,
+  ChannelIdentity,
+  ChannelIdentityResolver,
+  ChannelProfile,
+  ChannelRequest,
+  ChannelRouteSpec,
+} from './modules/channel_api/index.ts'
 export { default as website } from './modules/website/index.ts'
 export { default as websiteMenu } from './modules/website_menu/index.ts'
 export { default as websiteSeo } from './modules/website_seo/index.ts'
 export { default as websiteSearch } from './modules/website_search/index.ts'
 export { default as websiteForm } from './modules/website_form/index.ts'
+export { default as websiteFormMail } from './modules/website_form_mail/index.ts'
 export { default as websiteBackend } from './modules/website_backend/index.ts'
 export { default as websiteHospitality } from './modules/website_hospitality/index.ts'
 export { default as websiteRetail } from './modules/website_retail/index.ts'
@@ -26,25 +67,93 @@ export type { Unit } from './modules/uom/convert.ts'
 
 // product vertical
 export { default as product } from './modules/product/index.ts'
+export { sellableProduct } from './modules/product/index.ts'
+export type { SellableProduct, SellableProductResult, SellableUom } from './modules/product/index.ts'
 export { default as productMedia } from './modules/product_media/index.ts'
 export { default as productBackend } from './modules/product_backend/index.ts'
 export { default as pricing } from './modules/pricing/index.ts'
+/** Stable extension boundary for private modules that compose Pricing queries in one transaction. */
+export { functions as pricingFunctionSpecs } from './modules/pricing/functions.ts'
 export { default as stock } from './modules/stock/index.ts'
+export { stockFunctionSpecs } from './modules/stock/index.ts'
 export { default as stockBackend } from './modules/stock_backend/index.ts'
+export { default as manufacturing } from './modules/manufacturing/index.ts'
+export { default as manufacturingBackend } from './modules/manufacturing_backend/index.ts'
+export { manufacturingFunctionSpecs } from './modules/manufacturing/index.ts'
+export {
+  BOM_TYPES,
+  PRODUCTION_STATES,
+  WORK_ORDER_STATES,
+} from './modules/manufacturing/index.ts'
+export type {
+  BomType,
+  ProductionState,
+  WorkOrderState,
+} from './modules/manufacturing/index.ts'
 export { default as pricingBackend } from './modules/pricing_backend/index.ts'
 export { default as account } from './modules/account/index.ts'
+/** Stable extension boundary for private modules that compose Account quotes in one transaction. */
+export { functions as accountFunctionSpecs } from './modules/account/functions.ts'
+export { default as accountStaffChannel } from './modules/account_staff_channel/index.ts'
+export { default as hospitalityStaffChannel } from './modules/hospitality_staff_channel/index.ts'
+export { default as report } from './modules/report/index.ts'
+export { REPORT_FILTERS } from './modules/report/routes.ts'
+export { default as reportBackend } from './modules/report_backend/index.ts'
 export { default as accountBackend } from './modules/account_backend/index.ts'
 export { default as purchase } from './modules/purchase/index.ts'
+export { default as purchaseStaffChannel } from './modules/purchase_staff_channel/index.ts'
 export { default as purchaseBackend } from './modules/purchase_backend/index.ts'
 export { default as sale } from './modules/sale/index.ts'
+export { default as saleStaffChannel } from './modules/sale_staff_channel/index.ts'
+export { default as stockStaffChannel } from './modules/stock_staff_channel/index.ts'
+export { default as inventoryStaffChannel } from './modules/inventory_staff_channel/index.ts'
+export { default as quality } from './modules/quality/index.ts'
+export { qualityFunctionSpecs } from './modules/quality/index.ts'
+export { default as qualityStaffChannel } from './modules/quality_staff_channel/index.ts'
+export { default as businessReportStaffChannel } from './modules/business_report_staff_channel/index.ts'
 export { default as saleBackend } from './modules/sale_backend/index.ts'
 export { default as pos } from './modules/pos/index.ts'
+export { default as posChannel } from './modules/pos_channel/index.ts'
+export {
+  posOfflineCommandDigest,
+  registerPosOfflineLeaseProvider,
+} from './modules/pos_channel/index.ts'
+export type {
+  PosOfflineCommandEvidence,
+  PosOfflineLease,
+  PosOfflineLeaseClaims,
+  PosOfflineLeaseProvider,
+} from './modules/pos_channel/index.ts'
 export { default as posBackend } from './modules/pos_backend/index.ts'
 export { default as loyalty } from './modules/loyalty/index.ts'
+export {
+  applyOrderReward as applyLoyaltyOrderReward,
+  finalizeOrderLoyalty,
+  orderFunctions as loyaltyOrderFunctionSpecs,
+  removeOrderReward as removeLoyaltyOrderReward,
+  reverseOrderLoyaltyPortion,
+} from './modules/loyalty/order-functions.ts'
+export {
+  expireStoredValue,
+  finalizeStoredValue,
+  issueStoredValue,
+  openStoredValueWallet,
+  refundStoredValue,
+  releaseStoredValue,
+  reserveStoredValue,
+  storedValueFunctions as loyaltyStoredValueFunctionSpecs,
+} from './modules/loyalty/stored-value.ts'
 export { default as loyaltySale } from './modules/loyalty_sale/index.ts'
 export { default as loyaltyPos } from './modules/loyalty_pos/index.ts'
+export {
+  functions as loyaltyPosFunctionSpecs,
+  materializePosLoyaltyReward,
+  posSnapshot as posLoyaltyOrderSnapshot,
+  preflightOrder as preflightPosLoyaltyOrder,
+} from './modules/loyalty_pos/functions.ts'
 export { default as loyaltyBackend } from './modules/loyalty_backend/index.ts'
 export { default as crm } from './modules/crm/index.ts'
+export { default as crmStaffChannel } from './modules/crm_staff_channel/index.ts'
 export { default as crmSale } from './modules/crm_sale/index.ts'
 export { default as crmBackend } from './modules/crm_backend/index.ts'
 export { default as crmWebsite } from './modules/crm_website/index.ts'
@@ -57,11 +166,23 @@ export {
   MESSAGE_VISIBILITIES,
   ASSIGNMENT_MODES,
 } from './modules/crm/types.ts'
+/**
+ * Storing an upload is the one piece of an attachment a module cannot sensibly
+ * reimplement — streaming, limits, checksums and object keys all live in
+ * `storage`. An extension that owns records with photographs needs it.
+ */
+export { receiveAttachment } from './modules/storage/routes.ts'
+export type { Attachment as StorageAttachment, UploadDefaults } from './modules/storage/routes.ts'
+
 export {
   actorRequired as crmActorRequired,
   activeStage as crmActiveStage,
   addCaseMessage as crmAddCaseMessage,
   addTimeline as crmAddTimeline,
+  canAssignCase as crmCanAssignCase,
+  canEditCase as crmCanEditCase,
+  canReadCase as crmCanReadCase,
+  caseAudience as crmCaseAudience,
   caseDetail as crmCaseDetail,
   commandKey as crmCommandKey,
   ensureCrmDefaults,
@@ -69,9 +190,20 @@ export {
   invalid as crmInvalid,
   issue as crmIssue,
   n as crmNumber,
+  normalized as crmNormalized,
   now as crmNow,
+  ownedKinds as crmOwnedKinds,
+  ownsKind as crmOwnsKind,
   saveCase as crmSaveCase,
+  reassignCase as crmReassignCase,
+  seededId as crmSeededId,
   serializeCaseList as crmSerializeCaseList,
+  visibleCases as crmVisibleCases,
+} from './modules/crm/index.ts'
+export type {
+  CaseAccessScope as CrmCaseAccessScope,
+  CaseAction as CrmCaseAction,
+  CaseAudience as CrmCaseAudience,
 } from './modules/crm/index.ts'
 export {
   APPLICATION_STATES,
@@ -112,20 +244,55 @@ export {
   JOURNAL_TYPES,
   MOVE_TYPES,
   MOVE_STATES,
+  PAYMENT_SETTLEMENT_KINDS,
   PAYMENT_STATES,
   TAX_USES,
   TAX_AMOUNT_TYPES,
+  DraftMoveBoundaryError,
+  insertDraftMove,
+  ledgerOf,
+  linesOfMoves,
+  postedMoves,
 } from './modules/account/functions.ts'
+export { analyticsFunctions as accountAnalyticsFunctions } from './modules/account/analytics.ts'
+/** Stable extension boundary for private bank, document, and reminder adapters. */
+export { cashReceivableFunctions as accountCashReceivableFunctions } from './modules/account/cash-receivables.ts'
+export { assetCostingFunctions as accountAssetCostingFunctions } from './modules/account/assets-costing.ts'
 export {
-  TT99_ACCOUNTS,
-  TT99_ACCOUNT_CHECKSUM,
-  TT99_CATALOG_CHECKSUM,
-  TT99_CODE,
-  VIETNAM_TAXES,
-} from './modules/account/tt99.ts'
+  absDecimalText,
+  addDecimals,
+  canonicalDecimalText,
+  MONEY_MAX_DIGITS,
+  MONEY_POLICY_VERSION,
+  multiplyDecimals,
+  negateDecimalText,
+  moneyText as quantizeMoneyText,
+  minorText,
+  moneyMinor,
+  scaleOf as currencyScale,
+  subtractDecimals,
+} from './modules/account/money.ts'
+export {
+  accountingDateText,
+  accountingFilterDateText,
+  addCivilDays,
+  assertAccountingTimezone,
+  civilDateAt,
+  DEFAULT_ACCOUNTING_TIMEZONE,
+  fiscalYearKey,
+  moveAccountingDate,
+  periodKey,
+  quarterKey,
+} from './modules/account/date.ts'
 export { PURCHASE_STATES, INVOICE_STATUSES, PURCHASE_METHODS } from './modules/purchase/functions.ts'
 export { SALE_STATES, SALE_INVOICE_STATUSES, INVOICE_POLICIES } from './modules/sale/functions.ts'
-export { POS_ORDER_STATES, POS_SESSION_STATES, POS_INVOICE_STATUSES } from './modules/pos/functions.ts'
+export {
+  POS_ORDER_STATES,
+  POS_PAYMENT_SETTLEMENT_KINDS,
+  POS_SESSION_STATES,
+  POS_INVOICE_STATUSES,
+  functions as posFunctionSpecs,
+} from './modules/pos/functions.ts'
 export { default as address } from './modules/address/index.ts'
 export {
   availableCatalogs as availableAddressCatalogs,
@@ -141,6 +308,7 @@ export type { AddressInput, AddressIssue, ResolvedAddress } from './modules/addr
 export { default as addressBackend } from './modules/address_backend/index.ts'
 export { default as partner } from './modules/partner/index.ts'
 export { default as partnerBackend } from './modules/partner_backend/index.ts'
+export { default as partnerMailBackend } from './modules/partner_mail_backend/index.ts'
 export { default as accountPartner } from './modules/account_partner/index.ts'
 export { default as accountPartnerBackend } from './modules/account_partner_backend/index.ts'
 export { default as company } from './modules/company/index.ts'
@@ -160,6 +328,20 @@ export { PERIOD_STATES, PUNCH_KINDS, PUNCH_SOURCES, REQUEST_STATES } from './mod
 export type { PeriodState, PunchKind, PunchSource, RequestState } from './modules/attendance/types.ts'
 export { default as storage } from './modules/storage/index.ts'
 export { default as hospitalityCore } from './modules/hospitality_core/index.ts'
+export { default as hospitalityBilling } from './modules/hospitality_billing/index.ts'
+/**
+ * The room-night primitives, so a channel adapter claims inventory through the
+ * same ledger the front desk does rather than counting rooms for itself. Two
+ * writers measuring availability two ways cannot block each other, whatever
+ * each one believes.
+ */
+export {
+  InventoryConflict,
+  occupancyDates,
+  replaceInventoryClaim,
+  restrictionIssues,
+} from './modules/hospitality_core/inventory.ts'
+export type { InventoryHold, InventoryIssue } from './modules/hospitality_core/inventory.ts'
 export {
   ACCOMMODATION_TYPES,
   AMENITY_SCOPES,
@@ -207,6 +389,7 @@ export { default as userBackend } from './modules/user_backend/index.ts'
 export { default as oauth } from './modules/oauth/index.ts'
 export { default as oauthBackend } from './modules/oauth_backend/index.ts'
 export { default as mail } from './modules/mail/index.ts'
+export { default as mailStaffChannel } from './modules/mail_staff_channel/index.ts'
 export { default as mailBackend } from './modules/mail_backend/index.ts'
 export { default as mailTransport } from './modules/mail_transport/index.ts'
 export { default as mailTransportBackend } from './modules/mail_transport_backend/index.ts'
@@ -231,9 +414,31 @@ export { default as calendar } from './modules/calendar/index.ts'
 export { default as calendarActivity } from './modules/calendar_activity/index.ts'
 export { default as calendarBackend } from './modules/calendar_backend/index.ts'
 export { default as calendarMailTransport } from './modules/calendar_mail_transport/index.ts'
-export { default as odooCollaborationImport } from './modules/odoo_collaboration_import/index.ts'
+export { default as livedoc } from './modules/livedoc/index.ts'
+export { documentRoutes } from './modules/livedoc/index.ts'
+export type { DocRef, DocumentOwner } from './modules/livedoc/index.ts'
+export { default as flow } from './modules/flow/index.ts'
+export { default as flowBackend } from './modules/flow_backend/index.ts'
+export { default as flowStaffChannel } from './modules/flow_staff_channel/index.ts'
+export { DEPENDENCY_RELATIONS, ISSUE_PRIORITIES, SPRINT_STATES } from './modules/flow/types.ts'
+export type { DependencyRelation, IssuePriority, SprintState } from './modules/flow/types.ts'
 export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
-export { permittedFor } from './modules/user/roles.ts'
+export { legacyPermissionCatalogue, legacyPresetFunctions, permittedFor } from './modules/user/roles.ts'
+export {
+  effectiveFunctionKeys,
+  normalizeAssignmentScope,
+  resolveEffectivePermissions,
+} from './modules/user/authorization.ts'
+export type {
+  AssignmentScope,
+  EffectiveAccess,
+  EffectivePermission,
+  EffectivePermissionPath,
+} from './modules/user/authorization.ts'
+export type {
+  LegacyPermissionCatalogueEntry,
+  LegacyPermissionTask,
+} from './modules/user/roles.ts'
 export { resolveUserSession } from './modules/user/session-context.ts'
 export {
   discoverOidc,

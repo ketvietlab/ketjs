@@ -2,10 +2,10 @@
 //
 //   node apps/admin/serve.ts
 //   http://127.0.0.1:4000/catalogue     every screen, every state
-//   http://127.0.0.1:4000/admin/apps    the real screen, on real data
+//   http://127.0.0.1:4000/admin/pages   a real screen, on real data
 //
-// The database is in memory and seeded on boot, so this is disposable: install
-// things, break things, restart. Nothing here talks to a real deployment.
+// The database is in memory and seeded on boot, so this is disposable: change
+// data, break things, restart. Nothing here talks to a real deployment.
 
 import {
   createKetServer,
@@ -13,8 +13,6 @@ import {
   sqliteAdapter,
   migrateOne,
   registerFunctions,
-  createAppRegistry,
-  restrictManifest,
   callFn,
   translator,
   PSEUDO_LOCALE,
@@ -25,20 +23,21 @@ import { html, each } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   address,
+  company,
   paperTheme,
   partner,
+  storage,
+  user,
   website,
   websiteMenu,
   websiteSearch,
   websiteSeo,
 } from '@ketvietlab/ketsuite'
 import backend, {
-  appsScreen,
   attachmentPanel,
   cataloguePage,
   modalSheet,
   pagesScreen,
-  settingsScreen,
   surface,
 } from '@ketvietlab/ketsuite/backend'
 import { fileURLToPath } from 'node:url'
@@ -54,18 +53,32 @@ const DESIGN = join(HERE, '../../packages/ketsuite/src/modules/backend/design')
  */
 const DEMO_SCOPE = { company: 'design', branches: null }
 
-const mods = [address, partner, website, websiteMenu, websiteSeo, websiteSearch, paperTheme, backend]
+// `user` is here for its message catalogue, not its routes: the catalogue renders
+// the sign-in screen, and without it every string on that case showed as its own key
+// — which is exactly what the pseudo-locale pass is supposed to make visible.
+// `user`, and the two modules it needs, are here for their message catalogues
+// rather than their routes: the catalogue renders the sign-in screen, and without
+// them every string on that case showed as its own key — which is exactly what the
+// pseudo-locale pass exists to make visible.
+const mods = [
+  address,
+  partner,
+  company,
+  storage,
+  user,
+  website,
+  websiteMenu,
+  websiteSeo,
+  websiteSearch,
+  paperTheme,
+  backend,
+]
 const manifest = compose(mods)
 
 const db = sqliteAdapter()
 await db.open()
 await migrateOne(db, manifest)
 registerFunctions(mods)
-
-const apps = await createAppRegistry(manifest, db)
-await apps.install('website')
-await apps.install('theme_paper')
-await apps.install('backend')
 
 for (const [id, path, title, published] of [
   ['home', '/', 'Trang chủ', true],
@@ -90,8 +103,16 @@ for (const [id, path, title, published] of [
 const localeOf = (url: URL) => url.searchParams.get('lang') ?? 'vi'
 const LOCALES = ['vi', 'en', PSEUDO_LOCALE]
 
-/** One wrapper for every page, so the stylesheets are loaded exactly once. */
-const STYLES = html`<link rel="stylesheet" href="/design/tokens.css"><link rel="stylesheet" href="/design/admin.css">`
+/** One wrapper for every page, in the same cascade order as the backend module. */
+const STYLES = html`<link rel="stylesheet" href="/design/tokens.css">
+  <link rel="stylesheet" href="/design/foundation.css">
+  <link rel="stylesheet" href="/design/lists.css">
+  <link rel="stylesheet" href="/design/responsive.css">
+  <link rel="stylesheet" href="/design/auth.css">
+  <link rel="stylesheet" href="/design/controls.css">
+  <link rel="stylesheet" href="/design/record.css">
+  <link rel="stylesheet" href="/design/forms.css">
+  <link rel="stylesheet" href="/design/content.css">`
 
 const route =
   (build: (t: ReturnType<typeof translator>, url: URL) => Promise<TemplateResult> | TemplateResult) =>
@@ -121,9 +142,7 @@ const app = await createKetServer({
         <li><a href="/catalogue">State catalogue — every screen, every state</a></li>
         <li><a href="/catalogue/attachments">Attachment primitive</a></li>
         <li><a href="/catalogue/modal">Modal primitive</a></li>
-        <li><a href="/admin/apps">Apps (real data)</a></li>
         <li><a href="/admin/pages">Pages (real data)</a></li>
-        <li><a href="/admin/settings">Settings (real data)</a></li>
       </ul>
       <p>Switch language with <code>?lang=</code>:
         ${each(
@@ -179,15 +198,12 @@ const app = await createKetServer({
       }),
     ),
 
-    '/admin/apps': route(async (t) => appsScreen(t, await apps.list())),
-
     '/admin/pages': route(async (t) => {
-      const restricted = restrictManifest(manifest, await apps.enabled())
       const rows = (
         await callFn(
           'website.listPages',
           { includeDrafts: true },
-          { adapter: db, manifest: restricted, scope: DEMO_SCOPE },
+          { adapter: db, manifest, scope: DEMO_SCOPE },
         )
       ).value
       return pagesScreen(
@@ -198,8 +214,6 @@ const app = await createKetServer({
         })),
       )
     }),
-
-    '/admin/settings': route((t) => settingsScreen(t, manifest.tokens)),
   },
 })
 
@@ -208,11 +222,10 @@ console.log(`
   KetSuite backend — the design entry point
 
     state catalogue     http://127.0.0.1:${port}/catalogue
-    real screens        http://127.0.0.1:${port}/admin/apps
+    real screen         http://127.0.0.1:${port}/admin/pages
     in English          http://127.0.0.1:${port}/catalogue?lang=en
     text overflow       http://127.0.0.1:${port}/catalogue?lang=${PSEUDO_LOCALE}
 
-  Edit these directly; a refresh is enough:
-    ${DESIGN}/tokens.css
-    ${DESIGN}/admin.css
+  Edit the token and component styles under:
+    ${DESIGN}
 `)

@@ -7,10 +7,12 @@ export const models: Record<string, ModelDef> = {
       id: 'id',
       siteId: 'ref:website.Site',
       propertyId: 'ref:hospitality_core.Property',
+      slug: 'text',
       active: 'bool',
     },
     indexes: {
       site_property: { fields: ['companyId', 'siteId', 'propertyId'], unique: true },
+      site_slug: { fields: ['companyId', 'siteId', 'slug'], unique: true },
     },
   },
   BookingLead: {

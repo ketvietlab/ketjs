@@ -1,0 +1,116 @@
+@layer ket.app {
+  [data-ui="partner-panel"] {
+    min-inline-size: 0;
+    padding: var(--admin-gap-md);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+  }
+  /* Partner is the first consumer of the shared FormPage baseline. The public
+     pattern owns page hierarchy and field responsiveness; this module only
+     adapts its domain sections. */
+  [data-ui="form-page"] [data-ui="section"] > [data-ui="section-body"] > [data-ui="surface"] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  [data-ui="form-page-body"] > [data-ui="section"] {
+    padding-block-end: var(--admin-gap-lg);
+    border-block-end: 1px solid var(--admin-divider-subtle);
+  }
+  [data-ui="form-page-body"] > [data-ui="stack"] {
+    gap: 0;
+  }
+  [data-ui="form-page-body"] > [data-ui="stack"] > [data-ui="section"] {
+    padding-block: var(--admin-gap-lg);
+    border-block-end: 1px solid var(--admin-divider-subtle);
+  }
+  [data-ui="form-page-body"] > [data-ui="stack"] > [data-ui="section"]:first-child {
+    padding-block-start: 0;
+  }
+  [data-ui="form-page-aside"] > [data-ui="partner-panel"] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  [data-ui="form-page-aside"] > :is(ket-island, [data-ui="chatter"]),
+  [data-ui="form-page-aside"] > ket-island > [data-ui="chatter"] {
+    inline-size: 100%;
+    max-inline-size: none;
+  }
+  [data-ui="form-page-aside"] > ket-island > [data-ui="chatter"] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  [data-ui="partner-panel-head"] {
+    margin-block-end: var(--admin-gap-md);
+  }
+  [data-ui="partner-panel"][id] {
+    scroll-margin-block-start: var(--admin-gap-md);
+  }
+  [data-ui="partner-panel-title"],
+  [data-ui="partner-panel-description"] {
+    margin: 0;
+  }
+  [data-ui="partner-panel-title"] {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-base);
+    font-weight: 700;
+  }
+  [data-ui="partner-panel-description"] {
+    margin-block-start: var(--admin-gap-xs);
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+  }
+  [data-ui="partner-facts"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--admin-gap) var(--admin-gap-lg);
+    margin: 0;
+  }
+  [data-ui="partner-fact"] {
+    display: grid;
+    grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 1.2fr);
+    gap: var(--admin-gap);
+  }
+  [data-ui="partner-fact"] dt,
+  [data-ui="partner-fact"] dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  [data-ui="partner-fact"] dt {
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+  }
+  :is([data-ui="record-aside"], [data-ui="form-page-aside"]) [data-ui="partner-facts"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :is([data-ui="record-aside"], [data-ui="form-page-aside"]) [data-ui="partner-fact"] {
+    grid-template-columns: minmax(6.5rem, 7.5rem) minmax(0, 1fr);
+  }
+  [data-ui="partner-fact"] dd {
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+  }
+  [data-ui="partner-initials"] {
+    display: grid;
+    inline-size: 100%;
+    block-size: 100%;
+    place-items: center;
+    background: linear-gradient(145deg, var(--admin-accent-hover), var(--admin-accent));
+    color: var(--admin-accent-ink);
+    font-size: var(--admin-size-xl);
+    font-weight: 700;
+  }
+  @media (max-width: 47.9375rem) {
+    [data-ui="partner-facts"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    [data-ui="partner-fact"] {
+      grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 1.2fr);
+    }
+  }
+}

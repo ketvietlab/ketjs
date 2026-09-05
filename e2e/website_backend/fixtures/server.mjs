@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
-import { ketsuite } from '../../../.build/apps/ketsuite/app.js'
+import { ketsuite } from '../../../.build/apps/ketsuite/deployment.js'
 
 const root = resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const runtime = mkdtempSync(join(tmpdir(), 'ketjs-website-backend-e2e-'))

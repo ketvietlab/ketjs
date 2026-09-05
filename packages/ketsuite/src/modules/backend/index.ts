@@ -4,7 +4,7 @@
 // written in a restricted language that cannot run (D3, D18). A backend screen is
 // ours: it needs forms, filters and real interaction, so it is written in `html`
 // with islands like any trusted view. Letting a third party replace a backend
-// template is precisely the mechanism that made Odoo's upgrades painful.
+// template is precisely the mechanism that made the domain contract's upgrades painful.
 //
 // What a third party — or a design team — does own here is the stylesheet and the
 // tokens. See design/HANDOFF.md.
@@ -19,38 +19,70 @@ import { savedSearchFunctions, savedSearchModels } from './saved-searches.ts'
 
 export default defineModule({
   name: 'backend',
-  version: '0.1.0',
-  app: true,
+  version: '0.2.0',
   title: 'Quản trị',
-  summary: 'Màn hình quản lý ứng dụng, trang và cài đặt.',
+  summary: 'Khung quản trị và cấu hình hệ thống.',
   category: 'Hệ thống',
-  // The screen you would use to put something back. A deployment that let you
-  // remove it would let you remove your way out of ever fixing it.
-  removable: false,
-  // Its own files, its own stylesheets, its own routes. The app used to name all
-  // three by reaching into this directory, which meant it went on serving them
-  // after the module was switched off.
+  // Its own files, stylesheets, and routes stay together so a deployment only
+  // selects this module; it never reaches into the module's file layout.
   assets: new URL('./design/', import.meta.url),
-  styles: ['tokens.css', 'admin.css'],
+  styles: [
+    'design-system.css',
+    'tokens.css',
+    'foundation.css',
+    'lists.css',
+    'responsive.css',
+    'auth.css',
+    'controls.css',
+    'record.css',
+    'forms.css',
+    'content.css',
+    'charts.css',
+  ],
   routes,
   models: savedSearchModels,
   functions: savedSearchFunctions,
   menus,
   joints,
   islands,
-  fills: { 'backend:relation.select': `{% island "backend.relation-select" %}` },
+  fills: {
+    'backend:relation.select': `{% island "backend.relation-select" %}`,
+    'backend:runtime': `{% island "backend.table-selection" %}`,
+    'backend:screen.chart': `{% island "backend.chart" %}`,
+  },
   messages,
 })
 
 // The screens this module owns: data assembly, no markup.
-export { appsScreen, pagesScreen, pageColumns, settingsScreen } from './screens.tsx'
-export type { AppRow, PageRow, Screen } from './screens.tsx'
+export { pagesScreen, pageColumns } from './screens.tsx'
+export type { PageRow, Screen } from './screens.tsx'
 export { PAGE_SIZE, colsHref, colsOf, pageOf, pager, searchOf, withParam } from './paging.ts'
 export { joints } from './joints.ts'
 export { menus } from './menus.ts'
 export { CASES, cataloguePage } from './catalogue.ts'
 export { messages } from './messages.ts'
-export { routes, viewerOf, timezoneOf } from './routes.ts'
+export { routes } from './routes.ts'
+/**
+ * The shell every backend screen sits in, and the small helpers a route needs
+ * before it can render one. A module composes these instead of writing its own
+ * frame: see the note at the top of `screen.ts` for what went wrong when it did.
+ */
+export {
+  adminPage,
+  choices,
+  frameOf,
+  inLocale,
+  localeQuery,
+  localized,
+  optional,
+  resultErrors,
+  screen,
+  selectionLabel,
+  selectionOptions,
+  timezoneOf,
+  viewerOf,
+} from './screen.ts'
+export type { AnyRow, FrameOptions, Req, ScreenOptions } from './screen.ts'
 export { relationControl, relationLabels } from './relation-select.ts'
 export type {
   RelationEditorField,
@@ -72,9 +104,14 @@ export { readForm, seeOther } from './forms.ts'
 export {
   backendPage,
   shell,
+  formatDateTime,
   formatMoney,
-  framed,
+  Framed,
+  ListScreen,
+  RecordScreen,
+  WorkspaceScreen,
   listChrome,
+  timeframeFilter,
   topbarSearch,
   emptyState,
   errorState,
@@ -82,15 +119,19 @@ export {
   visibleColumns,
   badge,
   avatar,
+  thumbnail,
   person,
   initials,
   icon,
   hasIcon,
-  appCard,
-  card,
-  cardGroups,
   definitionList,
-  actionButton,
+  progressBar,
+  gantt,
+  chart,
+  barChart,
+  delta,
+  changeOf,
+  axisCeiling,
   code,
   qrCode,
   inline,
@@ -102,21 +143,32 @@ export {
   countBadge,
   notice,
   loadingState,
+  loginScreen,
   stack,
+  columns,
   section,
   surface,
   cardGrid,
   contentCard,
   metric,
+  docTree,
   kanbanCard,
   kanbanGrid,
+  deadline,
   recordList,
   recordWorkspace,
   recordToggle,
+  readonlyField,
+  readonlyTextarea,
+  recordFieldGrid,
+  recordRail,
+  recordHeaderActions,
   breadcrumbs,
+  pageContext,
   tabs,
   mediaPanel,
   attachmentPanel,
+  modalForm,
   modalSheet,
   recordForm,
   formCluster,
@@ -131,6 +183,8 @@ export {
 } from '../../ui/index.ts'
 export type {
   Cell,
+  ChartBar,
+  ChartKey,
   Column,
   DataTable,
   TableGroup,
@@ -143,9 +197,9 @@ export type {
   ViewKind,
   SearchMenu,
   SearchMenuItem,
+  TailMenu,
   Indicator,
   Viewer,
-  CardMeta,
   ActionVariant,
   ActionSize,
   ButtonSpec,
@@ -167,4 +221,7 @@ export type {
   ScheduleTone,
   RecordSummaryItem,
   RecordWorkspaceSlots,
+  RecordRailFact,
+  RecordRailSwitch,
+  RecordRailActivity,
 } from '../../ui/index.ts'

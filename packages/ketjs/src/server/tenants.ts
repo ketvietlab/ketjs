@@ -1,25 +1,12 @@
-// One deployment, many databases.
-//
-// This is Odoo's model and it is the one that makes per-tenant module sets work at
-// all: the code ships with the deployment, the decision about what is switched on
-// lives in each database. `ket_app` per database is `ir_module_module` per
-// database, and D7 makes it cheaper here — every schema exists everywhere, so
-// enabling a module for a tenant is one UPDATE rather than a migration. Measured:
-// 400 empty tables cost 17 MB, and adding a column across all of them 43 ms.
-//
-// What this file exists to prevent is subtler than a missing feature. Until now
-// `bootApp` opened one adapter and built one AppRegistry at boot, so `live()` —
-// the restricted manifest — was computed once. Serving two tenants through that
-// would not crash; it would show tenant B the module set of tenant A. Wrong
-// answers are worse than errors, so the registry is per datastore and the manifest
-// is resolved per request.
+// One deployment, many databases. A DeploymentSpec is immutable: every tenant
+// receives the same composed manifest and schema. Tenant resolution chooses data,
+// never a second module lifecycle.
 
-import { createAppRegistry, restrictManifest } from '../kernel/apps.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { AdapterPool } from '../data/pool.ts'
-import type { AppRegistry } from '../kernel/apps.ts'
-import type { Adapter, Manifest } from '../types.ts'
+import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
+import { scopeForSession } from './session.ts'
 import type { Sessions } from './session.ts'
 import type { Joints } from '../theme/joints.ts'
 import type { IncomingMessage } from 'node:http'
@@ -32,8 +19,16 @@ export type TenantSpec = {
    * tenant is how one customer's request quietly reads another's data.
    */
   resolve: (url: URL, req: IncomingMessage) => string | null
-  /** Open the datastore for one tenant. The app's, because drivers are the app's. */
+  /**
+   * Create a fresh adapter for one tenant. The pool owns open/close; do not hand
+   * back an adapter object that a prior pool entry already closed.
+   */
   open: (key: string, config: RuntimeConfig) => Adapter | Promise<Adapter>
+  /**
+   * Check that a tenant datastore already exists without creating or opening it.
+   * Required by read-only fleet inspection commands such as `ket schema verify`.
+   */
+  exists?: (key: string, config: RuntimeConfig) => boolean | Promise<boolean>
   /**
    * Every tenant this deployment serves. Needed to migrate the fleet, and to fail
    * at boot rather than at 3am if one of them cannot be opened.
@@ -44,19 +39,18 @@ export type TenantSpec = {
   idleMs?: number
 }
 
-/** What a request resolves to: its database, and what is switched on in it. */
+/** What a request resolves to: its database and the deployment manifest. */
 export type Tenant = {
   key: string
   adapter: Adapter
-  apps: AppRegistry
   live: Manifest
-  /** Compiled against what this tenant has installed, and cached with it. */
+  /** Compiled against the deployment manifest and cached per tenant. */
   theme: ThemeRuntime | null
   /**
    * Extension points for one locale.
    *
    * KTL binds its `_` filter when it compiles, so a runtime is per language as
-   * well as per installed set — one bound to the deployment default made every
+   * well as per tenant — one bound to the deployment default made every
    * fill answer in that language while the page around it answered in the
    * reader's, which is what a sidebar entry in the wrong language looks like.
    */
@@ -64,11 +58,11 @@ export type Tenant = {
   /**
    * Whose logins these are.
    *
-   * Per tenant when the tenant is known before the cookie is read — which it is
-   * when tenants arrive by subdomain, because the Host says so. An app on one
-   * domain for every tenant cannot do that (reading the session needs the
-   * database, knowing the database needs the session), and supplies one shared
-   * store instead. Both are expressible; neither is assumed.
+   * Per tenant when the tenant is known before the cookie is read — for example
+   * from a subdomain, a trusted gateway assertion, or an explicit path/header.
+   * Deployments whose tenants share one domain may supply a shared identity store,
+   * but each record remains tenant-bound; a session is never allowed to select a
+   * different datastore by itself.
    */
   sessions: Sessions | null
 }
@@ -89,45 +83,81 @@ export type Tenants = {
   close: () => Promise<void>
 }
 
+type SessionFacadePolicy = {
+  storeName: string
+  tenant?: string
+  ephemeralSecret: boolean
+  clearCookie: string
+  anonymous: Scope | null
+}
+
+const sessionFacadePolicy = (sessions: Sessions): SessionFacadePolicy => ({
+  storeName: sessions.store.name,
+  ...(sessions.tenant === undefined ? {} : { tenant: sessions.tenant }),
+  ephemeralSecret: sessions.ephemeralSecret,
+  clearCookie: sessions.clearCookie(),
+  anonymous: scopeForSession(null, { anonymous: sessions.scopeOf(null) }),
+})
+
+const scopePolicyKey = (scope: Scope | null): string => JSON.stringify(scope)
+
+const assertSessionFacadePolicy = (key: string, expected: SessionFacadePolicy, sessions: Sessions): void => {
+  const actual = sessionFacadePolicy(sessions)
+  const changed = [
+    ...(actual.storeName === expected.storeName ? [] : ['store.name']),
+    ...(actual.tenant === expected.tenant ? [] : ['tenant']),
+    ...(actual.ephemeralSecret === expected.ephemeralSecret ? [] : ['ephemeralSecret']),
+    ...(actual.clearCookie === expected.clearCookie ? [] : ['clearCookie']),
+    ...(scopePolicyKey(actual.anonymous) === scopePolicyKey(expected.anonymous) ? [] : ['anonymous']),
+  ]
+  if (!changed.length) return
+  throw new KetError({
+    code: 'E_SESSION_POLICY_DRIFT',
+    message: `session policy for tenant "${key}" changed after its adapter was replaced`,
+    hint: `sessions(adapter, key) must keep adapter-independent policy stable; changed: ${changed.join(', ')}`,
+  })
+}
+
 export function createTenants(o: {
   spec: TenantSpec
   pool: AdapterPool
   manifest: Manifest
-  autoInstall: boolean
   /**
    * Run once per datastore, before anything reads it — this is where the schema
    * arrives. A tenant database nobody migrated is a tenant with no tables, and
    * every query against it fails in a way that looks like a bug in the query.
    */
   prepare?: (key: string, adapter: Adapter) => Promise<void>
-  /** Run once, after the registry exists: the bootstrap set for a new tenant. */
-  onFirstTouch?: (key: string, apps: AppRegistry, adapter: Adapter) => Promise<void>
   /**
-   * Compiles the theme for one tenant's installed set. Cached, because compiling
+   * Compiles the theme for one tenant. Cached, because compiling
    * every template on every request would be the most expensive thing here.
    */
   theme?: (live: Manifest) => ThemeRuntime
   joints: (live: Manifest, locale: string) => Joints
-  /** Built once per tenant, against that tenant's own datastore. */
-  sessions?: (adapter: Adapter) => Promise<Sessions>
+  /** Built against the current adapter; the returned facade reacquires a lease per operation. */
+  sessions?: (adapter: Adapter, key: string) => Promise<Sessions>
 }): Tenants {
-  // One registry per datastore, kept: building it runs DDL, and doing that per
-  // request would put a CREATE TABLE IF NOT EXISTS in front of every page.
-  const registries = new Map<string, Promise<AppRegistry>>()
-  const registryFor = (key: string, adapter: Adapter): Promise<AppRegistry> => {
-    let r = registries.get(key)
-    if (!r) {
-      r = (async () => {
-        await o.prepare?.(key, adapter)
-        const made = await createAppRegistry(o.manifest, adapter, { autoInstall: o.autoInstall })
-        await o.onFirstTouch?.(key, made, adapter)
-        return made
-      })()
-      // Cached before it resolves, so two concurrent first requests for one tenant
-      // do not both run the DDL and both try to install the bootstrap set.
-      registries.set(key, r)
-    }
-    return r
+  // Adapter-owned work must not keep a closed pool entry alive. WeakMap has the
+  // ephemeron semantics needed here even though the promise itself closes over
+  // the adapter while preparation is running.
+  const prepared = new WeakMap<Adapter, Promise<void>>()
+  const prepare = (key: string, adapter: Adapter): Promise<void> => {
+    const cached = prepared.get(adapter)
+    if (cached) return cached
+
+    // A key may be evicted and later reopened as a different adapter. Preparation
+    // belongs to that concrete connection/datastore instance, not to the key for
+    // the lifetime of the process (notably for SQLite :memory: databases).
+    const promise = Promise.resolve().then(async () => {
+      await o.prepare?.(key, adapter)
+    })
+    prepared.set(adapter, promise)
+    void promise.catch(() => {
+      // A failed migration/init is retryable. Do not let an older rejected promise
+      // delete a newer attempt on the same adapter.
+      if (prepared.get(adapter) === promise) prepared.delete(adapter)
+    })
+    return promise
   }
 
   const keyOf = (url: URL, req: IncomingMessage): string => {
@@ -143,54 +173,100 @@ export function createTenants(o: {
   }
 
   /**
-   * Both caches are keyed by tenant AND by what is installed, so switching an app
-   * on rebuilds rather than serving a stale answer until restart.
-   *
-   * The restricted manifest is worth caching for the same reason the theme is,
-   * and it always was: 0.015 ms a call against KetSuite's manifest, which is
-   * nothing until it is every request, and 0.0003 ms once kept. A deployment with
-   * one database benefits most, because its installed set almost never changes.
+   * Theme and joint runtimes are keyed by tenant (and locale for joints). Module
+   * composition is immutable for the lifetime of this deployment process.
    */
-  const lives = new Map<string, Manifest>()
   const themes = new Map<string, ThemeRuntime>()
   const jointsBy = new Map<string, Joints>()
-  const sessions = new Map<string, Promise<Sessions>>()
+  const sessionManagers = new WeakMap<Adapter, Promise<Sessions>>()
+  const sessionFacades = new Map<string, Promise<Sessions>>()
+  const managerFor = (key: string, adapter: Adapter): Promise<Sessions> => {
+    const cached = sessionManagers.get(adapter)
+    if (cached) return cached
+    const value = (o.sessions as NonNullable<typeof o.sessions>)(adapter, key)
+    sessionManagers.set(adapter, value)
+    void value.catch(() => {
+      if (sessionManagers.get(adapter) === value) sessionManagers.delete(adapter)
+    })
+    return value
+  }
   const sessionsFor = (key: string, adapter: Adapter): Promise<Sessions> | null => {
     if (!o.sessions) return null
-    let s = sessions.get(key)
-    if (!s) {
-      s = o.sessions(adapter)
-      sessions.set(key, s)
-    }
-    return s
+    const cached = sessionFacades.get(key)
+    if (cached) return cached
+
+    let made!: Promise<Sessions>
+    made = managerFor(key, adapter)
+      .then((seed) => {
+        // Snapshot only adapter-free values. In particular, do not close over the
+        // first Sessions/SessionStore: it owns the adapter that eviction just closed.
+        const policy = sessionFacadePolicy(seed)
+        const withManager = <T>(body: (sessions: Sessions) => Promise<T>): Promise<T> =>
+          o.pool.with(key, async (current) => {
+            await prepare(key, current)
+            const sessions = await managerFor(key, current)
+            assertSessionFacadePolicy(key, policy, sessions)
+            return body(sessions)
+          })
+        return {
+          ...(policy.tenant === undefined ? {} : { tenant: policy.tenant }),
+          store: {
+            name: policy.storeName,
+            init: () => withManager((sessions) => sessions.store.init()),
+            create: (record) => withManager((sessions) => sessions.store.create(record)),
+            read: (id) => withManager((sessions) => sessions.store.read(id)),
+            touch: (id, expiresAt) => withManager((sessions) => sessions.store.touch(id, expiresAt)),
+            updateContext: (id, expectedRevision, context) =>
+              withManager((sessions) => sessions.store.updateContext(id, expectedRevision, context)),
+            destroy: (id) => withManager((sessions) => sessions.store.destroy(id)),
+            listUser: (userId) => withManager((sessions) => sessions.store.listUser(userId)),
+            destroyUser: (userId) => withManager((sessions) => sessions.store.destroyUser(userId)),
+            destroyUserExcept: (userId, keepId) =>
+              withManager((sessions) => sessions.store.destroyUserExcept(userId, keepId)),
+            sweep: (at) => withManager((sessions) => sessions.store.sweep(at)),
+          },
+          ephemeralSecret: policy.ephemeralSecret,
+          start: (options) => withManager((sessions) => sessions.start(options)),
+          of: (req) => withManager((sessions) => sessions.of(req)),
+          end: (req) => withManager((sessions) => sessions.end(req)),
+          endUser: (userId) => withManager((sessions) => sessions.endUser(userId)),
+          endUserExcept: (userId, keepId) =>
+            withManager((sessions) => sessions.endUserExcept(userId, keepId)),
+          update: (record, context) => withManager((sessions) => sessions.update(record, context)),
+          clearCookie: () => policy.clearCookie,
+          scopeOf: (record) =>
+            scopeForSession(record, {
+              ...(policy.tenant === undefined ? {} : { tenant: policy.tenant }),
+              anonymous: policy.anonymous,
+            }),
+          sweep: () => withManager((sessions) => sessions.sweep()),
+        }
+      })
+      .catch((error) => {
+        if (sessionFacades.get(key) === made) sessionFacades.delete(key)
+        throw error
+      })
+    sessionFacades.set(key, made)
+    return made
   }
-  const themeFor = (key: string, live: Manifest): ThemeRuntime | null => {
+  const themeFor = (key: string): ThemeRuntime | null => {
     if (!o.theme) return null
-    const stamp = `${key}::${live.order.join(',')}`
-    let t = themes.get(stamp)
+    let t = themes.get(key)
     if (!t) {
-      t = o.theme(live)
-      themes.set(stamp, t)
+      t = o.theme(o.manifest)
+      themes.set(key, t)
     }
     return t
   }
 
   const withTenant = <T>(key: string, fn: (t: Tenant) => Promise<T>): Promise<T> =>
     o.pool.with(key, async (adapter) => {
-      const apps = await registryFor(key, adapter)
-      // Resolved per request. The whole reason this file exists: computing it once
-      // would show one tenant the module set of another.
-      const stamp = `${key}::${[...(await apps.enabled())].sort().join(',')}`
-      let live = lives.get(stamp)
-      if (!live) {
-        live = restrictManifest(o.manifest, await apps.enabled())
-        lives.set(stamp, live)
-      }
+      await prepare(key, adapter)
       const jointsFor = (locale: string): Joints => {
-        const k = `${stamp}::${locale}`
+        const k = `${key}::${locale}`
         let made = jointsBy.get(k)
         if (!made) {
-          made = o.joints(live, locale)
+          made = o.joints(o.manifest, locale)
           jointsBy.set(k, made)
         }
         return made
@@ -198,9 +274,8 @@ export function createTenants(o: {
       return fn({
         key,
         adapter,
-        apps,
-        live,
-        theme: themeFor(key, live),
+        live: o.manifest,
+        theme: themeFor(key),
         joints: jointsFor,
         sessions: await (sessionsFor(key, adapter) ?? Promise.resolve(null)),
       })
@@ -226,32 +301,20 @@ export function createTenants(o: {
  */
 export function singleTenant(o: {
   adapter: Adapter
-  apps: AppRegistry
   manifest: Manifest
   theme?: (live: Manifest) => ThemeRuntime
   joints: (live: Manifest, locale: string) => Joints
   sessions?: Sessions | null
 }): Tenants {
-  const lives = new Map<string, Manifest>()
-  const themes = new Map<string, ThemeRuntime>()
+  let theme: ThemeRuntime | null | undefined
   const jointsBy = new Map<string, Joints>()
   const run = async <T>(key: string, fn: (t: Tenant) => Promise<T>): Promise<T> => {
-    const stamp = [...(await o.apps.enabled())].sort().join(',')
-    let live = lives.get(stamp)
-    if (!live) {
-      live = restrictManifest(o.manifest, await o.apps.enabled())
-      lives.set(stamp, live)
-    }
-    let theme: ThemeRuntime | null = null
-    if (o.theme) {
-      theme = themes.get(stamp) ?? o.theme(live)
-      themes.set(stamp, theme)
-    }
+    theme ??= o.theme?.(o.manifest) ?? null
     const jointsFor = (locale: string): Joints => {
-      const k = `${stamp}::${locale}`
+      const k = locale
       let made = jointsBy.get(k)
       if (!made) {
-        made = o.joints(live, locale)
+        made = o.joints(o.manifest, locale)
         jointsBy.set(k, made)
       }
       return made
@@ -259,8 +322,7 @@ export function singleTenant(o: {
     return fn({
       key,
       adapter: o.adapter,
-      apps: o.apps,
-      live,
+      live: o.manifest,
       theme,
       joints: jointsFor,
       sessions: o.sessions ?? null,

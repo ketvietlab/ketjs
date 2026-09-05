@@ -5,13 +5,12 @@ export default defineModule({
   name: 'account_partner_backend',
   version: '0.1.0',
   depends: ['account_partner', 'partner_backend', 'backend'],
-  install: 'auto',
   title: 'Kế toán đối tác trong quản trị',
   summary: 'Nối điều khoản và tài khoản công nợ vào hồ sơ đối tác.',
   category: 'Kế toán',
   routes,
   fills: {
-    'partner_backend:record.actions': `<a data-ui="action" data-variant="secondary" href="/admin/partners/{{ partnerId }}/accounting{{ locale }}"><span data-ui="action-label">{{ 'account_partner_backend.action.open' | _ }}</span></a>`,
+    'partner_backend:record.actions': `<a data-ui="action" data-variant="secondary" href="/admin/partner/partners/{{ partnerId }}/accounting{{ locale }}"><span data-ui="action-label">{{ 'account_partner_backend.action.open' | _ }}</span></a>`,
   },
   messages: {
     vi: {
@@ -47,4 +46,9 @@ export default defineModule({
   },
 })
 
-export { accountingTermsScreen } from './screens.tsx'
+export {
+  type AccountingTerms,
+  type AccountingTermsOptions,
+  type AccountingTermsPartner,
+  accountingTermsScreen,
+} from './screens/index.ts'

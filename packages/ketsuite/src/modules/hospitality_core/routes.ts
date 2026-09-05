@@ -1,9 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { text } from '@ketvietlab/ketjs'
-import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
+import { dateTimeFormatter, text } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext, Translator } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import {
@@ -38,7 +35,7 @@ import {
   servicesScreen,
   nightAuditScreen,
   stayNoticesScreen,
-} from './screens.tsx'
+} from './screens/index.ts'
 import type {
   AmenityRow,
   BuildingDetail,
@@ -80,31 +77,10 @@ import type {
   NightAuditPreview,
   NightAuditRow,
   StayNoticeRow,
-} from './screens.tsx'
+} from './screens/index.ts'
 import { addCalendarDays, calendarRange, dateKeyIn, zonedDateTime } from './calendar.ts'
 import { CLEANING_TASK_STATES, ROOM_STATUSES, STAY_NOTICE_STATES } from './types.ts'
-
-const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  menuFilter: url.searchParams.get('menu')?.trim() || null,
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Parameters<Route>[1],
-  title: string,
-  body: TemplateResult,
-) => {
-  const lang = ctx.localeOf(url, req)
-  return backendPage(ctx, req, { lang, title, body })
-}
+import { adminPage } from '../backend/screen.ts'
 
 type OperationResult = {
   ok?: boolean
@@ -156,7 +132,17 @@ const renderReservationDetail = async (
     req,
   )) as ReservationDetail | null
   if (!reservation) return text('Not found', { status: 404 })
-  if (reservation.stayId) {
+  const permissions = {
+    amend: await ctx.allows('hospitality_core.amendReservation', url, req),
+    checkIn: await ctx.allows('hospitality_core.checkIn', url, req),
+    holdRoom: await ctx.allows('hospitality_core.holdRoom', url, req),
+    adjustDeparture: await ctx.allows('hospitality_core.adjustStayDeparture', url, req),
+    checkOut: await ctx.allows('hospitality_core.checkOut', url, req),
+    cancel: await ctx.allows('hospitality_core.cancelReservation', url, req),
+    noShow: await ctx.allows('hospitality_core.markNoShow', url, req),
+    readStay: await ctx.allows('hospitality_core.getStay', url, req),
+  }
+  if (reservation.stayId && permissions.readStay) {
     reservation.stay = (await ctx.call(
       'hospitality_core.getStay',
       { id: reservation.stayId },
@@ -166,7 +152,7 @@ const renderReservationDetail = async (
   }
   const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
   const [allRooms, roomTypes, partners] = (await Promise.all([
-    reservation.state === 'confirmed'
+    reservation.state === 'confirmed' && permissions.checkIn
       ? ctx.call(
           'hospitality_core.listRooms',
           { propertyId: reservation.propertyId, status: 'available' },
@@ -189,26 +175,26 @@ const renderReservationDetail = async (
     children: attempted?.children ?? reservation.children,
     rate: attempted?.rate ?? String(reservation.rate),
   }
-  return document(
-    ctx,
-    url,
-    req,
-    _('hospitality_core.reservation.detail.title', { code: reservation.code }),
-    reservationDetailScreen(
-      _,
-      reservation,
-      rooms,
-      roomTypes,
-      partners,
-      amendment,
-      attemptedDeparture ?? localDateTime(new Date(reservation.checkOut), timezone),
-      lang,
-      timezone,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: _('hospitality_core.reservation.detail.title', { code: reservation.code }),
+    translate: false,
+    body: (_, frame) =>
+      reservationDetailScreen(
+        _,
+        reservation,
+        rooms,
+        roomTypes,
+        partners,
+        amendment,
+        attemptedDeparture ?? localDateTime(new Date(reservation.checkOut), timezone),
+        lang,
+        timezone,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+        permissions,
+      ),
+  })
 }
 
 const renderStayDetail = async (
@@ -228,25 +214,24 @@ const renderStayDetail = async (
   const timezone = await propertyTimezone(ctx, stay.propertyId, url, req)
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  return document(
-    ctx,
-    url,
-    req,
-    _('hospitality_core.stay.detail.title', { code: stay.code }),
-    stayDetailScreen(
-      _,
-      stay,
-      rooms,
-      partners,
-      documents,
-      randomUUID(),
-      lang,
-      timezone,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: _('hospitality_core.stay.detail.title', { code: stay.code }),
+    translate: false,
+    body: (_, frame) =>
+      stayDetailScreen(
+        _,
+        stay,
+        rooms,
+        partners,
+        documents,
+        randomUUID(),
+        lang,
+        timezone,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+      ),
+  })
 }
 
 const renderFolioDetail = async (
@@ -261,22 +246,21 @@ const renderFolioDetail = async (
   const timezone = await propertyTimezone(ctx, folio.propertyId, url, req)
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  return document(
-    ctx,
-    url,
-    req,
-    _('hospitality_core.folio.detail.title', { code: folio.code }),
-    folioDetailScreen(
-      _,
-      folio,
-      lang,
-      timezone,
-      await frame(ctx, url, req),
-      randomUUID(),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: _('hospitality_core.folio.detail.title', { code: folio.code }),
+    translate: false,
+    body: (_, frame) =>
+      folioDetailScreen(
+        _,
+        folio,
+        lang,
+        timezone,
+        frame,
+        randomUUID(),
+        url.searchParams.get('status'),
+        errors,
+      ),
+  })
 }
 
 const renderCleaningTaskDetail = async (
@@ -296,21 +280,26 @@ const renderCleaningTaskDetail = async (
   const timezone = await propertyTimezone(ctx, task.propertyId, url, req)
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  return document(
-    ctx,
-    url,
-    req,
-    _('hospitality_core.housekeeping.detail.title', { code: task.code }),
-    cleaningTaskDetailScreen(
-      _,
-      task,
-      lang,
-      timezone,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  const permissions = {
+    start: await ctx.allows('hospitality_core.startCleaningTask', url, req),
+    complete: await ctx.allows('hospitality_core.completeCleaningTask', url, req),
+    cancel: await ctx.allows('hospitality_core.cancelCleaningTask', url, req),
+  }
+  return adminPage(ctx, url, req, {
+    title: _('hospitality_core.housekeeping.detail.title', { code: task.code }),
+    translate: false,
+    body: (_, frame) =>
+      cleaningTaskDetailScreen(
+        _,
+        task,
+        lang,
+        timezone,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+        permissions,
+      ),
+  })
 }
 
 const renderHousekeepingRoomDetail = async (
@@ -331,22 +320,21 @@ const renderHousekeepingRoomDetail = async (
   const timezone = await propertyTimezone(ctx, room.propertyId, url, req)
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  return document(
-    ctx,
-    url,
-    req,
-    _('hospitality_core.housekeeping.rooms.detail.title', { code: room.code }),
-    housekeepingRoomDetailScreen(
-      _,
-      room,
-      tasks,
-      lang,
-      timezone,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: _('hospitality_core.housekeeping.rooms.detail.title', { code: room.code }),
+    translate: false,
+    body: (_, frame) =>
+      housekeepingRoomDetailScreen(
+        _,
+        room,
+        tasks,
+        lang,
+        timezone,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+      ),
+  })
 }
 
 const selectedProperty = async (
@@ -374,6 +362,50 @@ const redirected = (
   return seeOther(`${url.pathname}?${params.toString()}`)
 }
 
+const modalHref = (url: URL, open: boolean, remove: readonly string[] = []): string => {
+  const params = new URLSearchParams(url.searchParams)
+  if (open) params.set('create', '1')
+  else params.delete('create')
+  params.delete('status')
+  if (!open) params.delete('preview')
+  for (const key of remove) params.delete(key)
+  const query = params.toString()
+  return `${url.pathname}${query ? `?${query}` : ''}`
+}
+
+const modalAction = (url: URL): string => {
+  const params = new URLSearchParams(url.searchParams)
+  params.set('create', '1')
+  return `${url.pathname}?${params.toString()}`
+}
+
+const modalErrors = (url: URL, _: Translator): readonly string[] | undefined =>
+  url.searchParams.get('status') === 'invalid' ? [_('hospitality_core.feedback.invalid')] : undefined
+
+const modalValues = (url: URL, keys: readonly string[]): Record<string, string> =>
+  Object.fromEntries(
+    keys.flatMap((key) => (url.searchParams.has(key) ? [[key, url.searchParams.get(key)!]] : [])),
+  )
+
+const modalResultRedirect = (
+  url: URL,
+  ok: boolean,
+  success: 'saved' | 'created',
+  values: Record<string, string | undefined> = {},
+  removeOnSuccess: readonly string[] = [],
+) => {
+  const params = new URLSearchParams(url.searchParams)
+  if (ok) params.delete('create')
+  else params.set('create', '1')
+  params.set('status', ok ? success : 'invalid')
+  for (const [key, value] of Object.entries(values)) {
+    if (value) params.set(key, value)
+    else params.delete(key)
+  }
+  if (ok) for (const key of removeOnSuccess) params.delete(key)
+  return seeOther(`${url.pathname}?${params.toString()}`)
+}
+
 const integer = (value: string | undefined, fallback = 0): number => {
   const parsed = Number(value ?? fallback)
   return Number.isInteger(parsed) ? parsed : -1
@@ -384,7 +416,7 @@ const optionalInteger = (value: string | undefined): number | undefined =>
 
 const localDateTime = (value: Date, timezone: string): string => {
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en', {
+    dateTimeFormatter('en', {
       timeZone: timezone,
       hourCycle: 'h23',
       hour: '2-digit',
@@ -491,6 +523,9 @@ const defaultPropertyValues = (id: string): PropertyFormValues => ({
   defaultCheckIn: '14:00',
   defaultCheckOut: '12:00',
   enforceTimes: true,
+  allowHourly: true,
+  allowWeekly: false,
+  allowMonthly: false,
   longStayBillOnCheckIn: true,
   starRating: 0,
   description: null,
@@ -515,6 +550,9 @@ const propertyFormValues = (
   defaultCheckIn: form.defaultCheckIn?.trim() ?? current?.defaultCheckIn ?? '14:00',
   defaultCheckOut: form.defaultCheckOut?.trim() ?? current?.defaultCheckOut ?? '12:00',
   enforceTimes: form.enforceTimes === '1',
+  allowHourly: form.allowHourly === '1',
+  allowWeekly: form.allowWeekly === '1',
+  allowMonthly: form.allowMonthly === '1',
   longStayBillOnCheckIn: form.longStayBillOnCheckIn === '1',
   starRating: integer(form.starRating, current?.starRating ?? 0),
   description: form.description?.trim() || null,
@@ -555,23 +593,22 @@ const renderPropertyDetail = async (
   ])) as [PropertyDetail | null, PolicyRow[], BranchChoice[]]
   if (!property) return text('Not found', { status: 404 })
   const lang = ctx.localeOf(url, req)
-  return document(
-    ctx,
-    url,
-    req,
-    property.name,
-    propertyDetailScreen(
-      ctx.translate(lang),
-      property,
-      policies,
-      branches,
-      lang,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-      attempted,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: property.name,
+    translate: false,
+    body: (_, frame) =>
+      propertyDetailScreen(
+        ctx.translate(lang),
+        property,
+        policies,
+        branches,
+        lang,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+        attempted,
+      ),
+  })
 }
 
 const defaultRoomTypeValues = (id: string, propertyId: string): RoomTypeFormValues => ({
@@ -589,6 +626,10 @@ const defaultRoomTypeValues = (id: string, propertyId: string): RoomTypeFormValu
   sizeSqm: null,
   viewType: null,
   sharedBathroom: false,
+  allowHourly: true,
+  allowWeekly: false,
+  allowMonthly: false,
+  minHourlyHours: 2,
   baseRate: '0',
   color: '#2563eb',
   cancellationPolicyId: null,
@@ -614,6 +655,10 @@ const roomTypeFormValues = (
   sizeSqm: form.sizeSqm?.trim() || null,
   viewType: form.viewType?.trim() || null,
   sharedBathroom: form.sharedBathroom === '1',
+  allowHourly: form.allowHourly === '1',
+  allowWeekly: form.allowWeekly === '1',
+  allowMonthly: form.allowMonthly === '1',
+  minHourlyHours: integer(form.minHourlyHours, current?.minHourlyHours ?? 2),
   baseRate: form.baseRate?.trim() ?? String(current?.baseRate ?? '0'),
   color: form.color?.trim() || null,
   cancellationPolicyId: form.cancellationPolicyId?.trim() || null,
@@ -648,23 +693,22 @@ const renderRoomTypeDetail = async (
   if (!roomType) return text('Not found', { status: 404 })
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  return document(
-    ctx,
-    url,
-    req,
-    roomType.name,
-    roomTypeDetailScreen(
-      _,
-      roomType,
-      properties,
-      policies,
-      lang,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-      attempted,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: roomType.name,
+    translate: false,
+    body: (_, frame) =>
+      roomTypeDetailScreen(
+        _,
+        roomType,
+        properties,
+        policies,
+        lang,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+        attempted,
+      ),
+  })
 }
 
 const buildingFormValues = (
@@ -690,21 +734,20 @@ const renderBuildingDetail = async (
   const building = (await ctx.call('hospitality_core.getBuilding', { id }, url, req)) as BuildingDetail | null
   if (!building) return text('Not found', { status: 404 })
   const lang = ctx.localeOf(url, req)
-  return document(
-    ctx,
-    url,
-    req,
-    building.name,
-    buildingDetailScreen(
-      ctx.translate(lang),
-      building,
-      attempted ?? building,
-      lang,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: building.name,
+    translate: false,
+    body: (_, frame) =>
+      buildingDetailScreen(
+        ctx.translate(lang),
+        building,
+        attempted ?? building,
+        lang,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+      ),
+  })
 }
 
 const floorFormValues = (
@@ -731,21 +774,20 @@ const renderFloorDetail = async (
   const floor = (await ctx.call('hospitality_core.getFloor', { id }, url, req)) as FloorDetail | null
   if (!floor) return text('Not found', { status: 404 })
   const lang = ctx.localeOf(url, req)
-  return document(
-    ctx,
-    url,
-    req,
-    floor.name,
-    floorDetailScreen(
-      ctx.translate(lang),
-      floor,
-      attempted ?? floor,
-      lang,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: floor.name,
+    translate: false,
+    body: (_, frame) =>
+      floorDetailScreen(
+        ctx.translate(lang),
+        floor,
+        attempted ?? floor,
+        lang,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+      ),
+  })
 }
 
 const roomFormValues = (
@@ -845,20 +887,18 @@ const renderRooms = async (
     : [[], [], []]
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  return document(
-    ctx,
-    url,
-    req,
-    _('hospitality_core.screen.rooms.title'),
-    roomsScreen(
-      _,
-      { rows, ...options, buildings, floors },
-      lang,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: 'hospitality_core.screen.rooms.title',
+    body: (_, frame) =>
+      roomsScreen(
+        _,
+        { rows, ...options, buildings, floors },
+        lang,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+      ),
+  })
 }
 
 const renderRoomDetail = async (
@@ -873,25 +913,24 @@ const renderRoomDetail = async (
   if (!room) return text('Not found', { status: 404 })
   const options = await roomOptions(ctx, url, req, room.propertyId, true)
   const lang = ctx.localeOf(url, req)
-  return document(
-    ctx,
-    url,
-    req,
-    room.name,
-    roomDetailScreen(
-      ctx.translate(lang),
-      room,
-      attempted ?? room,
-      options.properties,
-      options.roomTypes,
-      options.buildings,
-      options.floors,
-      lang,
-      await frame(ctx, url, req),
-      url.searchParams.get('status'),
-      errors,
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: room.name,
+    translate: false,
+    body: (_, frame) =>
+      roomDetailScreen(
+        ctx.translate(lang),
+        room,
+        attempted ?? room,
+        options.properties,
+        options.roomTypes,
+        options.buildings,
+        options.floors,
+        lang,
+        frame,
+        url.searchParams.get('status'),
+        errors,
+      ),
+  })
 }
 
 export const routes: Record<string, RouteEntry> = {
@@ -902,39 +941,59 @@ export const routes: Record<string, RouteEntry> = {
       const _ = ctx.translate(lang)
       const propertyId = await selectedProperty(ctx, url, req)
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
-      const range = calendarRange(url.searchParams.get('date'), 1, timezone)
-      const [stays, inHouseStays, openFolios] = (await Promise.all([
+      const requested = url.searchParams.get('date')?.slice(0, 10)
+      const day =
+        requested && /^\d{4}-\d{2}-\d{2}$/u.test(requested) ? requested : dateKeyIn(new Date(), timezone)
+      const range = calendarRange(day, 1, timezone)
+      // The landing screen is where a new deployment starts. Five zeroes and
+      // "nothing needs attention" is a true statement and useless advice when
+      // the property itself has not been created yet.
+      const configured = ((await ctx.call('hospitality_core.listProperties', {}, url, req)) as unknown[])
+        .length
+      const [stays, inHouseStays] = (await Promise.all([
         ctx.call('hospitality_core.listStays', { propertyId, from: range.from, to: range.to }, url, req),
         ctx.call('hospitality_core.listStays', { propertyId, state: 'checked_in' }, url, req),
-        ctx.call('hospitality_core.listFolios', { propertyId, state: 'open' }, url, req),
-      ])) as [StayRow[], StayRow[], FolioRow[]]
+      ])) as [StayRow[], StayRow[]]
+      // An auditor and a night auditor read this screen without doing desk
+      // work; the row action is for the people who do it.
+      const may = {
+        checkIn: await ctx.allows('hospitality_core.checkIn', url, req),
+        checkOut: await ctx.allows('hospitality_core.checkOut', url, req),
+      }
       const inRange = (value: string) => value >= range.from && value < range.to
       const now = new Date().toISOString()
       const overdue = inHouseStays
         .filter((stay) => stay.checkOut < now)
         .sort((left, right) => left.checkOut.localeCompare(right.checkOut))
       const overdueIds = new Set(overdue.map((stay) => stay.id))
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.frontDesk.title'),
-        frontDeskScreen(
-          _,
-          stays.filter((stay) => !overdueIds.has(stay.id)),
-          overdue,
-          {
-            arrivals: stays.filter((stay) => stay.state === 'draft' && inRange(stay.checkIn)).length,
-            inHouse: inHouseStays.length,
-            departures: stays.filter((stay) => stay.state === 'checked_in' && inRange(stay.checkOut)).length,
-            overdue: overdue.length,
-            openFolios: openFolios.length,
-          },
-          lang,
-          timezone,
-          await frame(ctx, url, req),
-        ),
-      )
+      // The desk works two queues today: who is coming in, and who is going
+      // out. A guest already late is in neither — they are the first thing the
+      // screen says, above both.
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.frontDesk.title',
+        body: (_, frame) =>
+          frontDeskScreen(
+            _,
+            {
+              day,
+              arrivals: stays
+                .filter((stay) => stay.state === 'draft' && inRange(stay.checkIn))
+                .sort((left, right) => left.checkIn.localeCompare(right.checkIn)),
+              departures: stays
+                .filter(
+                  (stay) => stay.state === 'checked_in' && inRange(stay.checkOut) && !overdueIds.has(stay.id),
+                )
+                .sort((left, right) => left.checkOut.localeCompare(right.checkOut)),
+              overdue,
+              inHouse: inHouseStays,
+            },
+            may,
+            lang,
+            timezone,
+            frame,
+            configured > 0,
+          ),
+      })
     },
 
   '/admin/hospitality/reservations':
@@ -958,6 +1017,7 @@ export const routes: Record<string, RouteEntry> = {
         const checkOut = instantFromLocal(form.checkOut, timezone)
         const values = {
           lang: form.lang,
+          create: '1',
           property: propertyId,
           preview: '1',
           id: form.id,
@@ -1011,9 +1071,24 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as { ok?: boolean }
-        return result.ok
-          ? redirected(url, 'saved', { lang: form.lang, property: propertyId })
-          : redirected(url, 'invalid', values)
+        return modalResultRedirect(
+          url,
+          Boolean(result.ok),
+          'saved',
+          result.ok ? { lang: form.lang, property: propertyId, preview: undefined } : values,
+          [
+            'id',
+            'code',
+            'partnerId',
+            'roomTypeId',
+            'bookingType',
+            'checkIn',
+            'checkOut',
+            'adults',
+            'children',
+            'rate',
+          ],
+        )
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
@@ -1103,20 +1178,47 @@ export const routes: Record<string, RouteEntry> = {
                 errors: [{ messageKey: 'hospitality_core.validation.datetime' }],
               }
       }
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.reservations.title'),
-        reservationsScreen(
-          _,
-          { rows, properties, roomTypes, partners, values, quote },
-          lang,
-          timezone,
-          await frame(ctx, url, req),
-          url.searchParams.get('status'),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.reservations.title',
+        body: (_, frame) =>
+          reservationsScreen(
+            _,
+            { rows, properties, roomTypes, partners, values, quote },
+            lang,
+            timezone,
+            frame,
+            url.searchParams.get('status'),
+            {
+              open: url.searchParams.get('create') === '1',
+              createHref: modalHref(url, true, [
+                'preview',
+                'id',
+                'code',
+                'partnerId',
+                'roomTypeId',
+                'bookingType',
+                'checkIn',
+                'checkOut',
+                'adults',
+                'children',
+                'rate',
+              ]),
+              closeHref: modalHref(url, false, [
+                'id',
+                'code',
+                'partnerId',
+                'roomTypeId',
+                'bookingType',
+                'checkIn',
+                'checkOut',
+                'adults',
+                'children',
+                'rate',
+              ]),
+              action: modalAction(url),
+            },
+          ),
+      })
     },
 
   '/admin/hospitality/reservations/{id}':
@@ -1142,6 +1244,8 @@ export const routes: Record<string, RouteEntry> = {
         | 'amended'
         | 'no-show'
         | 'departure-adjusted'
+        | 'room-held'
+        | 'room-hold-released'
       if (form.operation === 'amend') {
         const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
         const checkIn = instantFromLocal(form.checkIn, timezone)
@@ -1201,6 +1305,30 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )) as OperationResult
         status = 'checked-in'
+      } else if (form.operation === 'hold-room') {
+        if (!reservation.stayId || !form.roomId)
+          return renderReservationDetail(ctx, url, req, params.id, [
+            ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.no_available_room'),
+          ])
+        result = (await ctx.call(
+          'hospitality_core.holdRoom',
+          { stayId: reservation.stayId, roomId: form.roomId },
+          url,
+          req,
+        )) as OperationResult
+        status = 'room-held'
+      } else if (form.operation === 'release-room-hold') {
+        if (!reservation.stayId)
+          return renderReservationDetail(ctx, url, req, params.id, [
+            ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.stay_missing'),
+          ])
+        result = (await ctx.call(
+          'hospitality_core.releaseRoomHold',
+          { stayId: reservation.stayId },
+          url,
+          req,
+        )) as OperationResult
+        status = 'room-hold-released'
       } else if (form.operation === 'adjust-departure') {
         if (!reservation.stayId)
           return renderReservationDetail(ctx, url, req, params.id, [
@@ -1288,13 +1416,10 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )) as StayRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.stays.title'),
-        staysScreen(_, rows, lang, timezone, await frame(ctx, url, req)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.stays.title',
+        body: (_, frame) => staysScreen(_, rows, lang, timezone, frame),
+      })
     },
 
   '/admin/hospitality/stays/{id}':
@@ -1384,13 +1509,10 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )) as FolioRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.folios.title'),
-        foliosScreen(_, rows, lang, timezone, await frame(ctx, url, req)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.folios.title',
+        body: (_, frame) => foliosScreen(_, rows, lang, timezone, frame),
+      })
     },
 
   '/admin/hospitality/folios/{id}':
@@ -1457,13 +1579,13 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )) as TapeChart
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.tapeChart.title'),
-        tapeChartScreen(_, chart, lang, await frame(ctx, url, req)),
-      )
+      // The board is for looking at; the one thing it offers to start is a
+      // booking, and only to somebody who may make one.
+      const may = { book: await ctx.allows('hospitality_core.createReservation', url, req) }
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.tapeChart.title',
+        body: (_, frame) => tapeChartScreen(_, chart, may, lang, frame),
+      })
     },
 
   '/admin/hospitality/properties':
@@ -1473,23 +1595,21 @@ export const routes: Record<string, RouteEntry> = {
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const properties = (await ctx.call('hospitality_core.listProperties', {}, url, req)) as PropertyRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.properties.title'),
-        propertiesScreen(
-          _,
-          properties,
-          {
-            rooms: properties.reduce((sum, property) => sum + property.rooms, 0),
-            available: properties.reduce((sum, property) => sum + property.availableRooms, 0),
-            attention: properties.reduce((sum, property) => sum + property.attentionRooms, 0),
-          },
-          lang,
-          await frame(ctx, url, req),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.properties.title',
+        body: (_, frame) =>
+          propertiesScreen(
+            _,
+            properties,
+            {
+              rooms: properties.reduce((sum, property) => sum + property.rooms, 0),
+              available: properties.reduce((sum, property) => sum + property.availableRooms, 0),
+              attention: properties.reduce((sum, property) => sum + property.attentionRooms, 0),
+            },
+            lang,
+            frame,
+          ),
+      })
     },
 
   '/admin/hospitality/properties/new':
@@ -1509,13 +1629,10 @@ export const routes: Record<string, RouteEntry> = {
         : []
       if (req.method === 'GET') {
         const values = defaultPropertyValues(randomUUID())
-        return document(
-          ctx,
-          url,
-          req,
-          _('hospitality_core.property.create.title'),
-          newPropertyScreen(_, values, policies, branches, lang, await frame(ctx, url, req)),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'hospitality_core.property.create.title',
+          body: (_, frame) => newPropertyScreen(_, values, policies, branches, lang, frame),
+        })
       }
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       const form = await readForm(req)
@@ -1527,21 +1644,19 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as OperationResult
       if (!result.ok)
-        return document(
-          ctx,
-          url,
-          req,
-          _('hospitality_core.property.create.title'),
-          newPropertyScreen(
-            _,
-            values,
-            policies,
-            branches,
-            lang,
-            await frame(ctx, url, req),
-            operationErrors(ctx, url, req, result),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'hospitality_core.property.create.title',
+          body: (_, frame) =>
+            newPropertyScreen(
+              _,
+              values,
+              policies,
+              branches,
+              lang,
+              frame,
+              operationErrors(ctx, url, req, result),
+            ),
+        })
       const query = new URLSearchParams({ status: 'created', lang })
       return seeOther(`/admin/hospitality/properties/${encodeURIComponent(values.id)}?${query.toString()}`)
     },
@@ -1710,22 +1825,20 @@ export const routes: Record<string, RouteEntry> = {
         return seeOther(`/admin/hospitality/rooms?lang=${encodeURIComponent(lang)}`)
       if (req.method === 'GET') {
         const values = defaultRoomValues(randomUUID(), initial.propertyId, initial.roomTypes[0]!.id)
-        return document(
-          ctx,
-          url,
-          req,
-          _('hospitality_core.room.create.title'),
-          newRoomScreen(
-            _,
-            values,
-            initial.properties,
-            initial.roomTypes,
-            initial.buildings,
-            initial.floors,
-            lang,
-            await frame(ctx, url, req),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'hospitality_core.room.create.title',
+          body: (_, frame) =>
+            newRoomScreen(
+              _,
+              values,
+              initial.properties,
+              initial.roomTypes,
+              initial.buildings,
+              initial.floors,
+              lang,
+              frame,
+            ),
+        })
       }
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       const form = await readForm(req)
@@ -1733,23 +1846,21 @@ export const routes: Record<string, RouteEntry> = {
       const options = await roomOptions(ctx, url, req, values.propertyId)
       const result = (await ctx.call('hospitality_core.saveRoom', values, url, req)) as OperationResult
       if (!result.ok)
-        return document(
-          ctx,
-          url,
-          req,
-          _('hospitality_core.room.create.title'),
-          newRoomScreen(
-            _,
-            values,
-            options.properties,
-            options.roomTypes,
-            options.buildings,
-            options.floors,
-            lang,
-            await frame(ctx, url, req),
-            operationErrors(ctx, url, req, result),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'hospitality_core.room.create.title',
+          body: (_, frame) =>
+            newRoomScreen(
+              _,
+              values,
+              options.properties,
+              options.roomTypes,
+              options.buildings,
+              options.floors,
+              lang,
+              frame,
+              operationErrors(ctx, url, req, result),
+            ),
+        })
       const query = new URLSearchParams({ status: 'created', lang })
       return seeOther(`/admin/hospitality/rooms/${encodeURIComponent(values.id)}?${query.toString()}`)
     },
@@ -1813,13 +1924,10 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )) as RoomTypeRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.roomTypes.title'),
-        roomTypesScreen(_, rows, properties, propertyId, lang, await frame(ctx, url, req)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.roomTypes.title',
+        body: (_, frame) => roomTypesScreen(_, rows, properties, propertyId, lang, frame),
+      })
     },
 
   '/admin/hospitality/room-types/new':
@@ -1835,43 +1943,35 @@ export const routes: Record<string, RouteEntry> = {
       const propertyId = properties.find((row) => row.id === requestedProperty)?.id ?? properties[0]?.id ?? ''
       if (req.method === 'GET') {
         const values = defaultRoomTypeValues(randomUUID(), propertyId)
-        return document(
-          ctx,
-          url,
-          req,
-          _('hospitality_core.roomType.create.title'),
-          newRoomTypeScreen(_, values, properties, policies, lang, await frame(ctx, url, req)),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'hospitality_core.roomType.create.title',
+          body: (_, frame) => newRoomTypeScreen(_, values, properties, policies, lang, frame),
+        })
       }
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       const form = await readForm(req)
       const values = roomTypeFormValues(randomUUID(), form)
       const inputErrors = roomTypeInputErrors(ctx, url, req, values)
       if (inputErrors.length)
-        return document(
-          ctx,
-          url,
-          req,
-          _('hospitality_core.roomType.create.title'),
-          newRoomTypeScreen(_, values, properties, policies, lang, await frame(ctx, url, req), inputErrors),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'hospitality_core.roomType.create.title',
+          body: (_, frame) => newRoomTypeScreen(_, values, properties, policies, lang, frame, inputErrors),
+        })
       const result = (await ctx.call('hospitality_core.saveRoomType', values, url, req)) as OperationResult
       if (!result.ok)
-        return document(
-          ctx,
-          url,
-          req,
-          _('hospitality_core.roomType.create.title'),
-          newRoomTypeScreen(
-            _,
-            values,
-            properties,
-            policies,
-            lang,
-            await frame(ctx, url, req),
-            operationErrors(ctx, url, req, result),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'hospitality_core.roomType.create.title',
+          body: (_, frame) =>
+            newRoomTypeScreen(
+              _,
+              values,
+              properties,
+              policies,
+              lang,
+              frame,
+              operationErrors(ctx, url, req, result),
+            ),
+        })
       const query = new URLSearchParams({ status: 'created', lang })
       return seeOther(`/admin/hospitality/room-types/${encodeURIComponent(values.id)}?${query.toString()}`)
     },
@@ -1924,7 +2024,26 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as { ok?: boolean }
-        return redirected(url, result.ok ? 'saved' : 'invalid', { property: form.propertyId })
+        const values = {
+          property: form.propertyId,
+          roomTypeId: form.roomTypeId,
+          code: form.code,
+          name: form.name,
+          rateType: form.rateType,
+          amount: form.amount,
+          mealPlan: form.mealPlan,
+          minStay: form.minStay,
+          maxStay: form.maxStay,
+          isDefault: form.isDefault,
+          active: form.active,
+        }
+        return modalResultRedirect(
+          url,
+          Boolean(result.ok),
+          'saved',
+          values,
+          Object.keys(values).filter((key) => key !== 'property'),
+        )
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
@@ -1938,21 +2057,51 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('hospitality_core.listRatePlans', { propertyId }, url, req),
         ctx.call('hospitality_core.listRoomTypes', { propertyId }, url, req),
       ])) as [RatePlanRow[], RoomTypeRow[]]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.ratePlans.title'),
-        ratePlansScreen(
-          _,
-          rows,
-          properties,
-          roomTypes,
-          propertyId,
-          await frame(ctx, url, req),
-          url.searchParams.get('status'),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.ratePlans.title',
+        body: (_, frame) =>
+          ratePlansScreen(_, rows, properties, roomTypes, propertyId, frame, url.searchParams.get('status'), {
+            open: url.searchParams.get('create') === '1',
+            createHref: modalHref(url, true, [
+              'roomTypeId',
+              'code',
+              'name',
+              'rateType',
+              'amount',
+              'mealPlan',
+              'minStay',
+              'maxStay',
+              'isDefault',
+              'active',
+            ]),
+            closeHref: modalHref(url, false, [
+              'roomTypeId',
+              'code',
+              'name',
+              'rateType',
+              'amount',
+              'mealPlan',
+              'minStay',
+              'maxStay',
+              'isDefault',
+              'active',
+            ]),
+            action: modalAction(url),
+            errors: modalErrors(url, _),
+            values: modalValues(url, [
+              'roomTypeId',
+              'code',
+              'name',
+              'rateType',
+              'amount',
+              'mealPlan',
+              'minStay',
+              'maxStay',
+              'isDefault',
+              'active',
+            ]),
+          }),
+      })
     },
 
   '/admin/hospitality/inventory':
@@ -2034,21 +2183,19 @@ export const routes: Record<string, RouteEntry> = {
             req,
           )) as InventoryRow[])
         : []
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.inventory.title'),
-        inventoryScreen(
-          _,
-          rows,
-          properties,
-          roomTypes,
-          { propertyId, roomTypeId, from, to },
-          await frame(ctx, url, req),
-          url.searchParams.get('status'),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.inventory.title',
+        body: (_, frame) =>
+          inventoryScreen(
+            _,
+            rows,
+            properties,
+            roomTypes,
+            { propertyId, roomTypeId, from, to },
+            frame,
+            url.searchParams.get('status'),
+          ),
+      })
     },
 
   '/admin/hospitality/services':
@@ -2152,29 +2299,27 @@ export const routes: Record<string, RouteEntry> = {
           })),
       ]
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.services.title'),
-        servicesScreen(
-          _,
-          {
-            properties,
-            propertyId,
-            products,
-            targets,
-            propertyCharges,
-            extraLines,
-            charges,
-            ids: { propertyCharge: randomUUID(), extraLine: randomUUID(), requestKey: randomUUID() },
-          },
-          lang,
-          timezone,
-          await frame(ctx, url, req),
-          url.searchParams.get('status'),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.services.title',
+        body: (_, frame) =>
+          servicesScreen(
+            _,
+            {
+              properties,
+              propertyId,
+              products,
+              targets,
+              propertyCharges,
+              extraLines,
+              charges,
+              ids: { propertyCharge: randomUUID(), extraLine: randomUUID(), requestKey: randomUUID() },
+            },
+            lang,
+            timezone,
+            frame,
+            url.searchParams.get('status'),
+          ),
+      })
     },
 
   '/admin/hospitality/night-audit':
@@ -2213,19 +2358,17 @@ export const routes: Record<string, RouteEntry> = {
             ctx.call('hospitality_core.listNightAudits', { propertyId, limit: 30 }, url, req),
           ])) as [NightAuditPreview, NightAuditRow[]])
         : [undefined, []]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.nightAudit.title'),
-        nightAuditScreen(
-          _,
-          { properties, propertyId, auditDate, today, preview, runs },
-          lang,
-          await frame(ctx, url, req),
-          url.searchParams.get('status'),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.nightAudit.title',
+        body: (_, frame) =>
+          nightAuditScreen(
+            _,
+            { properties, propertyId, auditDate, today, preview, runs },
+            lang,
+            frame,
+            url.searchParams.get('status'),
+          ),
+      })
     },
 
   '/admin/hospitality/stay-notices':
@@ -2293,20 +2436,18 @@ export const routes: Record<string, RouteEntry> = {
       const selectedId = url.searchParams.get('notice')?.trim()
       const selected = rows.find((row) => row.id === selectedId)
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.stayNotices.title'),
-        stayNoticesScreen(
-          _,
-          { properties, propertyId, state, rows, selected },
-          lang,
-          timezone,
-          await frame(ctx, url, req),
-          url.searchParams.get('status'),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.stayNotices.title',
+        body: (_, frame) =>
+          stayNoticesScreen(
+            _,
+            { properties, propertyId, state, rows, selected },
+            lang,
+            timezone,
+            frame,
+            url.searchParams.get('status'),
+          ),
+      })
     },
 
   '/admin/hospitality/housekeeping':
@@ -2330,11 +2471,23 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )) as OperationResult
-        return redirected(url, result.ok ? 'created' : 'invalid', {
-          property: form.propertyId,
-          state: form.state === 'all' ? undefined : form.state,
-          lang: form.lang,
-        })
+        return modalResultRedirect(
+          url,
+          Boolean(result.ok),
+          'created',
+          {
+            property: form.propertyId,
+            state: form.state === 'all' ? undefined : form.state,
+            lang: form.lang,
+            room: result.ok ? undefined : form.roomId,
+            roomId: form.roomId,
+            taskType: form.taskType,
+            priority: form.priority,
+            assigneeId: form.assigneeId,
+            notes: form.notes,
+          },
+          ['roomId', 'taskType', 'priority', 'assigneeId', 'notes'],
+        )
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const lang = ctx.localeOf(url, req)
@@ -2348,6 +2501,7 @@ export const routes: Record<string, RouteEntry> = {
       const state = CLEANING_TASK_STATES.includes(requestedState as (typeof CLEANING_TASK_STATES)[number])
         ? requestedState!
         : 'all'
+      const canCreate = await ctx.allows('hospitality_core.createCleaningTask', url, req)
       const [rows, rooms, summary] = propertyId
         ? ((await Promise.all([
             ctx.call(
@@ -2356,38 +2510,49 @@ export const routes: Record<string, RouteEntry> = {
               url,
               req,
             ),
-            ctx.call('hospitality_core.listRooms', { propertyId }, url, req),
+            canCreate
+              ? ctx.call('hospitality_core.listRooms', { propertyId }, url, req)
+              : Promise.resolve([]),
             ctx.call('hospitality_core.cleaningTaskSummary', { propertyId }, url, req),
           ])) as [CleaningTaskRow[], RoomRow[], CleaningTaskSummary])
         : [[], [], { todo: 0, inProgress: 0, done: 0, cancelled: 0 }]
       const timezone = await propertyTimezone(ctx, propertyId, url, req)
       const taskId = randomUUID()
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.cleaningTasks.title'),
-        cleaningTasksScreen(
-          _,
-          {
-            rows,
-            properties,
-            propertyId,
-            state,
-            rooms,
-            summary,
-            id: taskId,
-            code: `HK-${taskId.slice(0, 12).toUpperCase()}`,
-            selectedRoomId: rooms.some((room) => room.id === url.searchParams.get('room'))
-              ? url.searchParams.get('room')!
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.cleaningTasks.title',
+        body: (_, frame) =>
+          cleaningTasksScreen(
+            _,
+            {
+              rows,
+              properties,
+              propertyId,
+              state,
+              rooms,
+              summary,
+              id: taskId,
+              code: `HK-${taskId.slice(0, 12).toUpperCase()}`,
+              selectedRoomId: rooms.some((room) => room.id === url.searchParams.get('room'))
+                ? url.searchParams.get('room')!
+                : undefined,
+            },
+            lang,
+            timezone,
+            frame,
+            url.searchParams.get('status'),
+            canCreate
+              ? {
+                  open: url.searchParams.get('create') === '1',
+                  createHref: modalHref(url, true),
+                  closeHref: modalHref(url, false, ['room']),
+                  action: modalAction(url),
+                  errors: modalErrors(url, _),
+                  values: modalValues(url, ['roomId', 'taskType', 'priority', 'assigneeId', 'notes']),
+                }
               : undefined,
-          },
-          lang,
-          timezone,
-          await frame(ctx, url, req),
-          url.searchParams.get('status'),
-        ),
-      )
+            canCreate,
+          ),
+      })
     },
 
   '/admin/hospitality/housekeeping/tasks/{id}':
@@ -2458,18 +2623,11 @@ export const routes: Record<string, RouteEntry> = {
             ctx.call('hospitality_core.roomStatusSummary', { propertyId }, url, req),
           ])) as [RoomRow[], RoomStatusSummary])
         : [[], { available: 0, occupied: 0, dirty: 0, cleaning: 0, maintenance: 0, outOfOrder: 0 }]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.housekeepingRooms.title'),
-        housekeepingRoomsScreen(
-          _,
-          { rows, properties, propertyId, state, summary },
-          lang,
-          await frame(ctx, url, req),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.housekeepingRooms.title',
+        body: (_, frame) =>
+          housekeepingRoomsScreen(_, { rows, properties, propertyId, state, summary }, lang, frame),
+      })
     },
 
   '/admin/hospitality/housekeeping/rooms/{id}':
@@ -2529,29 +2687,27 @@ export const routes: Record<string, RouteEntry> = {
             images.length > 0,
           ]
       const completed = checks.filter(Boolean).length
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.content.title'),
-        contentScreen(
-          _,
-          selection.properties,
-          selection.roomTypes,
-          selection.propertyId,
-          selection.target,
-          images,
-          {
-            completed,
-            total: checks.length,
-            percent: checks.length ? Math.round((completed / checks.length) * 100) : 0,
-          },
-          lang,
-          contentQuery(url, selection),
-          await frame(ctx, url, req),
-          url.searchParams.get('status'),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.content.title',
+        body: (_, frame) =>
+          contentScreen(
+            _,
+            selection.properties,
+            selection.roomTypes,
+            selection.propertyId,
+            selection.target,
+            images,
+            {
+              completed,
+              total: checks.length,
+              percent: checks.length ? Math.round((completed / checks.length) * 100) : 0,
+            },
+            lang,
+            contentQuery(url, selection),
+            frame,
+            url.searchParams.get('status'),
+          ),
+      })
     },
 
   '/admin/hospitality/content/upload':
@@ -2648,31 +2804,115 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/hospitality/amenities':
     (ctx: ServeContext): Route =>
     async (url, req) => {
-      const lang = ctx.localeOf(url, req)
-      const _ = ctx.translate(lang)
-      const rows = (await ctx.call('hospitality_core.listAmenities', {}, url, req)) as AmenityRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.amenities.title'),
-        amenitiesScreen(_, rows, await frame(ctx, url, req)),
-      )
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.operation !== 'save-amenity') return text('unknown action', { status: 400 })
+        const result = (await ctx.call(
+          'hospitality_core.saveAmenity',
+          {
+            id: randomUUID(),
+            code: form.code ?? '',
+            name: form.name ?? '',
+            scope: form.scope ?? 'property',
+            categoryId: form.categoryId || undefined,
+            sequence: integer(form.sequence),
+          },
+          url,
+          req,
+        )) as { ok?: boolean }
+        const values = {
+          code: form.code,
+          name: form.name,
+          scope: form.scope,
+          categoryId: form.categoryId,
+          sequence: form.sequence,
+        }
+        return modalResultRedirect(url, Boolean(result.ok), 'saved', values, Object.keys(values))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const [rows, categories] = (await Promise.all([
+        ctx.call('hospitality_core.listAmenities', {}, url, req),
+        ctx.call('hospitality_core.listAmenityCategories', {}, url, req),
+      ])) as [AmenityRow[], Array<{ id: string; name: string }>]
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.amenities.title',
+        body: (_, frame) =>
+          amenitiesScreen(_, rows, categories, frame, url.searchParams.get('status'), {
+            open: url.searchParams.get('create') === '1',
+            createHref: modalHref(url, true, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+            closeHref: modalHref(url, false, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+            action: modalAction(url),
+            errors: modalErrors(url, _),
+            values: modalValues(url, ['code', 'name', 'scope', 'categoryId', 'sequence']),
+          }),
+      })
     },
 
   '/admin/hospitality/policies':
     (ctx: ServeContext): Route =>
     async (url, req) => {
-      const lang = ctx.localeOf(url, req)
-      const _ = ctx.translate(lang)
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        if (form.operation !== 'save-policy') return text('unknown action', { status: 400 })
+        const result = (await ctx.call(
+          'hospitality_core.saveCancellationPolicy',
+          {
+            id: randomUUID(),
+            code: form.code ?? '',
+            name: form.name ?? '',
+            type: form.type ?? 'flexible',
+            description: form.description || undefined,
+            freeCancellationHours: integer(form.freeCancellationHours),
+            penaltyPercent: form.penaltyPercent ?? '0',
+          },
+          url,
+          req,
+        )) as { ok?: boolean }
+        const values = {
+          code: form.code,
+          name: form.name,
+          type: form.type,
+          description: form.description,
+          freeCancellationHours: form.freeCancellationHours,
+          penaltyPercent: form.penaltyPercent,
+        }
+        return modalResultRedirect(url, Boolean(result.ok), 'saved', values, Object.keys(values))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const rows = (await ctx.call('hospitality_core.listCancellationPolicies', {}, url, req)) as PolicyRow[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('hospitality_core.screen.policies.title'),
-        policiesScreen(_, rows, await frame(ctx, url, req)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'hospitality_core.screen.policies.title',
+        body: (_, frame) =>
+          policiesScreen(_, rows, frame, url.searchParams.get('status'), {
+            open: url.searchParams.get('create') === '1',
+            createHref: modalHref(url, true, [
+              'code',
+              'name',
+              'type',
+              'description',
+              'freeCancellationHours',
+              'penaltyPercent',
+            ]),
+            closeHref: modalHref(url, false, [
+              'code',
+              'name',
+              'type',
+              'description',
+              'freeCancellationHours',
+              'penaltyPercent',
+            ]),
+            action: modalAction(url),
+            errors: modalErrors(url, _),
+            values: modalValues(url, [
+              'code',
+              'name',
+              'type',
+              'description',
+              'freeCancellationHours',
+              'penaltyPercent',
+            ]),
+          }),
+      })
     },
 }
 

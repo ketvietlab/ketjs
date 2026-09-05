@@ -8,16 +8,70 @@
 import { topoSort } from './graph.ts'
 import { Diagnostics } from './errors.ts'
 import { parseType } from './types.ts'
-import type { KetModule, Manifest, ComposedModel } from '../types.ts'
+import { validateSchedule } from './schedule.ts'
+import type { KetModule, Manifest, ComposedModel, ModulePermissionsDef } from '../types.ts'
 import { ambiguousRoutes, parseRoutePattern } from './routes.ts'
 import type { RoutePattern } from './routes.ts'
+import { tableNameFor } from '../data/migrate.ts'
+import { compilePermissionBundles } from './permissions.ts'
+import type { RoleTemplateDef } from '../types.ts'
+
+const FIELD_KEYS = new Set(['type', 'personal', 'sensitive'])
+
+type NormalizedField =
+  | { ok: true; type: string; personal: boolean; sensitive: boolean }
+  | { ok: false; code: string; reason: string }
+
+/**
+ * Accept both field forms.
+ *
+ * The vocabulary is closed: a key nobody knows is a build error rather than a flag
+ * that silently does nothing, which is how a field ends up believed to be protected
+ * when it is not.
+ */
+function normalizeField(declared: string | import('../types.ts').FieldDef): NormalizedField {
+  if (typeof declared === 'string') {
+    return { ok: true, type: declared, personal: false, sensitive: false }
+  }
+  if (declared === null || typeof declared !== 'object') {
+    return { ok: false, code: 'E_BAD_FIELD', reason: 'a field is a type string or an object with a type' }
+  }
+  const unknown = Object.keys(declared).filter((k) => !FIELD_KEYS.has(k))
+  if (unknown.length) {
+    return {
+      ok: false,
+      code: 'E_BAD_FIELD',
+      reason: `unknown field key(s) ${unknown.join(', ')} (accepted: ${[...FIELD_KEYS].join(', ')})`,
+    }
+  }
+  if (typeof declared.type !== 'string') {
+    return { ok: false, code: 'E_BAD_FIELD', reason: 'a field object needs a type string' }
+  }
+  for (const flag of ['personal', 'sensitive'] as const) {
+    if (declared[flag] !== undefined && typeof declared[flag] !== 'boolean') {
+      return { ok: false, code: 'E_BAD_FIELD', reason: `"${flag}" must be a boolean` }
+    }
+  }
+  return {
+    ok: true,
+    type: declared.type,
+    personal: declared.personal === true,
+    sensitive: declared.sensitive === true,
+  }
+}
 
 const qualify = (mod: string, name: string) => `${mod}.${name}`
 const jointKey = (mod: string, name: string) => `${mod}:${name}`
 
 export function compose(
   modules: KetModule[],
-  opts: { appRequires?: string[]; headless?: boolean } = {},
+  opts: {
+    requiredRegions?: string[]
+    headless?: boolean
+    requirePermissionCoverage?: boolean
+    roleTemplates?: Record<string, RoleTemplateDef>
+    modulePermissionDeclarations?: Record<string, ModulePermissionsDef>
+  } = {},
 ): Manifest {
   const diag = new Diagnostics()
   const order = topoSort(modules)
@@ -32,9 +86,20 @@ export function compose(
     joints: {},
     fills: [],
     functions: {},
+    permissions: {
+      version: 1,
+      digest: '',
+      coverageRequired: false,
+      modules: {},
+      bundles: {},
+      functions: {},
+      exemptions: {},
+      roleTemplates: {},
+    },
     jobs: {},
     views: {},
-    regions: { required: [...(opts.appRequires ?? [])], provided: {} },
+    reports: {},
+    regions: { required: [...(opts.requiredRegions ?? [])], provided: {} },
     islands: {},
     sections: {},
     contentTypes: {},
@@ -44,8 +109,69 @@ export function compose(
     assets: {},
     styles: [],
     routes: {},
+    routePrefixes: {},
     patches: [],
     messages: {},
+  }
+
+  for (const m of order) {
+    for (const raw of m.reserves ?? []) {
+      const prefix = raw.trim()
+      if (!prefix.startsWith('/') || !prefix.endsWith('/') || prefix.includes('{')) {
+        diag.add({
+          code: 'E_ROUTE_PREFIX',
+          module: m.name,
+          message: `"${m.name}" reserves invalid route prefix "${raw}"`,
+          hint: 'a reserved prefix is an absolute static path ending in /',
+        })
+        continue
+      }
+      const conflict = Object.entries(manifest.routePrefixes).find(
+        ([other]) => prefix.startsWith(other) || other.startsWith(prefix),
+      )
+      if (conflict) {
+        diag.add({
+          code: 'E_ROUTE_PREFIX_CLASH',
+          module: m.name,
+          message: `"${m.name}" and "${conflict[1]}" reserve overlapping prefixes "${prefix}" and "${conflict[0]}"`,
+          hint: 'one module must own the whole public namespace',
+        })
+        continue
+      }
+      manifest.routePrefixes[prefix] = m.name
+    }
+  }
+
+  const major = (version: string): number | null => {
+    const match = /^(?:\^)?(\d+)(?:\.|$)/.exec(version.trim())
+    return match ? Number(match[1]) : null
+  }
+  for (const m of order) {
+    for (const [dependency, range] of Object.entries(m.compatible ?? {})) {
+      if (!m.depends.includes(dependency)) {
+        diag.add({
+          code: 'E_MODULE_COMPATIBILITY_DEPENDENCY',
+          module: m.name,
+          message: `"${m.name}" declares compatibility with "${dependency}" without depending on it`,
+          hint: `add "${dependency}" to depends`,
+        })
+        continue
+      }
+      const actual = order.find((candidate) => candidate.name === dependency)?.version
+      const wantedMajor = major(range)
+      const actualMajor = actual ? major(actual) : null
+      const matches = range.startsWith('^')
+        ? wantedMajor != null && actualMajor === wantedMajor
+        : actual === range
+      if (!matches) {
+        diag.add({
+          code: 'E_MODULE_VERSION_SKEW',
+          module: m.name,
+          message: `"${m.name}" requires "${dependency}" ${range}, but the deployment has ${actual ?? 'nothing'}`,
+          hint: 'upgrade the extension and its contract owner together',
+        })
+      }
+    }
   }
 
   for (const m of order) {
@@ -53,20 +179,17 @@ export function compose(
       version: m.version,
       kind: m.kind,
       depends: [...m.depends],
-      app: m.app,
       title: m.title,
       summary: m.summary,
       category: m.category,
-      install: m.install ?? 'manual',
-      removable: m.removable !== false,
     }
   }
 
   // --- the served surface -------------------------------------------------
   //
   // Assets, stylesheets and routes are composed for the same reason models are:
-  // otherwise the app hand-assembles them, which means knowing another module's
-  // file layout and going on serving it after that module is switched off.
+  // otherwise the deployment hand-assembles them, which means knowing another module's
+  // file layout and going on serving it after that module leaves the composition.
   //
   // `order` is dependency order, so a module that extends another contributes its
   // stylesheet after it and can override it. That ordering is the point.
@@ -102,6 +225,21 @@ export function compose(
         })
         continue
       }
+      const reservation = Object.entries(manifest.routePrefixes).find(([prefix]) => path.startsWith(prefix))
+      if (reservation) {
+        const [prefix, owner] = reservation
+        const contribution = typeof make === 'function' ? null : make.through
+        const allowed = m.name === owner || (contribution === owner && m.depends.includes(owner))
+        if (!allowed) {
+          diag.add({
+            code: 'E_ROUTE_RESERVED',
+            module: m.name,
+            message: `"${m.name}" claims "${path}", inside the prefix reserved by "${owner}"`,
+            hint: `depend on "${owner}" and use its published route factory for "${prefix}"`,
+          })
+          continue
+        }
+      }
       const taken = manifest.routes[path]
       if (taken) {
         diag.add({
@@ -128,14 +266,33 @@ export function compose(
       manifest.routes[path] =
         typeof make === 'function'
           ? { by: m.name, anonymous: false, make }
-          : { by: m.name, anonymous: make.anonymous === true, make: make.handler }
+          : {
+              by: m.name,
+              anonymous: make.anonymous === true,
+              ...(make.through ? { through: make.through } : {}),
+              ...(make.contract ? { contract: make.contract } : {}),
+              make: make.handler,
+            }
     }
   }
 
   // --- models -------------------------------------------------------------
+  const physicalTables = new Map<string, string>()
   for (const m of order) {
     for (const [modelName, def] of Object.entries(m.models)) {
       const key = qualify(m.name, modelName)
+      const physicalTable = tableNameFor(key)
+      const existingPhysicalModel = physicalTables.get(physicalTable)
+      if (existingPhysicalModel && existingPhysicalModel !== key) {
+        diag.add({
+          code: 'E_TABLE_NAME_COLLISION',
+          module: m.name,
+          message: `models "${existingPhysicalModel}" and "${key}" both map to table "${physicalTable}"`,
+          hint: 'rename one model or module so every composed model has a unique physical table',
+        })
+      } else {
+        physicalTables.set(physicalTable, key)
+      }
       if (manifest.models[key]) {
         diag.add({
           code: 'E_MODEL_DUPLICATE',
@@ -174,7 +331,7 @@ export function compose(
         fields['createdAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
         fields['updatedAt'] = { base: 'datetime', optional: true, by: '(timestamps)' }
       }
-      for (const [fname, tspec] of Object.entries(def.fields ?? {})) {
+      for (const [fname, declared] of Object.entries(def.fields ?? {})) {
         if (def.timestamps && (fname === 'createdAt' || fname === 'updatedAt')) {
           diag.add({
             code: 'E_TIMESTAMP_FIELD_RESERVED',
@@ -184,6 +341,14 @@ export function compose(
           })
           continue
         }
+        // A field is a type string, or an object when it has more to say. The two
+        // forms compose to the same thing, so nothing downstream learns the difference.
+        const spec = normalizeField(declared)
+        if (!spec.ok) {
+          diag.add({ code: spec.code, module: m.name, message: `${key}.${fname}: ${spec.reason}` })
+          continue
+        }
+        const tspec = spec.type
         const t = parseType(tspec)
         if (!t.ok) {
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key}.${fname}: ${t.reason}` })
@@ -198,7 +363,14 @@ export function compose(
           })
           continue
         }
-        fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
+        fields[fname] = {
+          base: t.base,
+          optional: t.optional,
+          target: t.target,
+          by: m.name,
+          ...(spec.personal ? { personal: true } : {}),
+          ...(spec.sensitive ? { sensitive: true } : {}),
+        }
       }
       const indexes: ComposedModel['indexes'] = {}
       for (const [indexName, index] of Object.entries(def.indexes ?? {})) {
@@ -237,6 +409,7 @@ export function compose(
         owner: m.name,
         scope: def.scope,
         timestamps: def.timestamps === true,
+        append: def.append === true,
         fields,
         indexes,
       }
@@ -265,7 +438,7 @@ export function compose(
         })
         continue
       }
-      for (const [fname, tspec] of Object.entries(addl)) {
+      for (const [fname, declared] of Object.entries(addl)) {
         // Checked ahead of the collision below so the message names the real cause:
         // these columns are the isolation boundary, not a name somebody took first.
         if (fname === 'companyId' || fname === 'branchId') {
@@ -287,6 +460,15 @@ export function compose(
           })
           continue
         }
+        // Extension takes both field forms too. A bridge is exactly the module that
+        // adds a phone number to somebody else's partner, so it is exactly the module
+        // that has to be able to say the column is personal data.
+        const spec = normalizeField(declared)
+        if (!spec.ok) {
+          diag.add({ code: spec.code, module: m.name, message: `${target}.${fname}: ${spec.reason}` })
+          continue
+        }
+        const tspec = spec.type
         const t = parseType(tspec)
         if (!t.ok) {
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${target}.${fname}: ${t.reason}` })
@@ -303,7 +485,14 @@ export function compose(
           })
           continue
         }
-        model.fields[fname] = { base: t.base, optional: t.optional, target: t.target, by: m.name }
+        model.fields[fname] = {
+          base: t.base,
+          optional: t.optional,
+          target: t.target,
+          by: m.name,
+          ...(spec.personal ? { personal: true } : {}),
+          ...(spec.sensitive ? { sensitive: true } : {}),
+        }
       }
     }
   }
@@ -452,7 +641,7 @@ export function compose(
         diag.add({
           code: 'E_FILL_UNKNOWN_JOINT',
           module: m.name,
-          message: `fills joint "${key}", which no installed module publishes`,
+          message: `fills joint "${key}", which no composed module publishes`,
           hint: near.length
             ? `did you mean "${near[0]}"?`
             : `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
@@ -492,7 +681,7 @@ export function compose(
         diag.add({
           code: 'E_OMIT_UNKNOWN_JOINT',
           module: m.name,
-          message: `omits joint "${key}", which no installed module publishes`,
+          message: `omits joint "${key}", which no composed module publishes`,
           hint: `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
         })
         continue
@@ -560,6 +749,57 @@ export function compose(
     }
   }
 
+  manifest.permissions = compilePermissionBundles(order, manifest, {
+    requireCoverage: opts.requirePermissionCoverage,
+    roleTemplates: opts.roleTemplates,
+    moduleDeclarations: opts.modulePermissionDeclarations,
+  })
+
+  // --- printable reports ---------------------------------------------------
+  for (const m of order) {
+    for (const [name, def] of Object.entries(m.reports ?? {})) {
+      const id = qualify(m.name, name)
+      if (!/^[a-z][a-zA-Z0-9_]*$/.test(name)) {
+        diag.add({ code: 'E_REPORT_NAME', module: m.name, message: `invalid report name "${name}"` })
+        continue
+      }
+      if (!manifest.models[def.target]) {
+        diag.add({
+          code: 'E_REPORT_UNKNOWN_MODEL',
+          module: m.name,
+          message: `report "${id}" targets unknown model "${def.target}"`,
+        })
+        continue
+      }
+      const source = manifest.functions[def.source]
+      if (!source) {
+        diag.add({
+          code: 'E_REPORT_UNKNOWN_SOURCE',
+          module: m.name,
+          message: `report "${id}" uses unknown function "${def.source}"`,
+        })
+        continue
+      }
+      if (source.effects.some((effect) => effect.startsWith('write:') || effect.startsWith('enqueue:'))) {
+        diag.add({
+          code: 'E_REPORT_SOURCE_WRITES',
+          module: m.name,
+          message: `report "${id}" source "${def.source}" is not read-only`,
+        })
+        continue
+      }
+      if (!def.template.trim()) {
+        diag.add({
+          code: 'E_REPORT_TEMPLATE_EMPTY',
+          module: m.name,
+          message: `report "${id}" has no template`,
+        })
+        continue
+      }
+      manifest.reports[id] = { ...def, by: m.name, id }
+    }
+  }
+
   // --- background jobs -----------------------------------------------------
   //
   // Jobs run later and often on another process, but they touch the same data.
@@ -606,6 +846,36 @@ export function compose(
         if (!parsed.ok)
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key} input ${input}: ${parsed.reason}` })
       }
+      if (def.schedule) {
+        try {
+          validateSchedule(def.schedule)
+        } catch (error) {
+          diag.add({
+            code: 'E_BAD_SCHEDULE',
+            module: m.name,
+            message: `job "${key}": ${(error as Error).message}`,
+            hint: (error as { hint?: string | null }).hint ?? null,
+          })
+          continue
+        }
+        // Nobody is there to supply arguments to a schedule, so a required input is
+        // a job that can only ever fail validation at three in the morning.
+        const required = Object.entries(def.input ?? {})
+          .filter(([, spec]) => {
+            const parsed = parseType(spec)
+            return parsed.ok && !parsed.optional
+          })
+          .map(([name]) => name)
+        if (required.length) {
+          diag.add({
+            code: 'E_SCHEDULED_JOB_INPUT',
+            module: m.name,
+            message: `scheduled job "${key}" requires input ${required.join(', ')}`,
+            hint: 'a schedule enqueues no arguments — make them optional, or drop the schedule',
+          })
+          continue
+        }
+      }
       for (const effect of def.effects ?? []) {
         // Enqueue targets are validated after every job has been collected, so a
         // producer may refer to a job contributed later in dependency order.
@@ -644,6 +914,7 @@ export function compose(
         idempotent: true,
         maxAttempts,
         timeoutMs,
+        ...(def.schedule ? { schedule: def.schedule } : {}),
       }
     }
   }
@@ -956,7 +1227,7 @@ export function compose(
     }
   }
 
-  // --- theme <-> app region contract ---------------------------------------
+  // --- theme <-> deployment region contract --------------------------------
   for (const m of order) {
     for (const r of m.provides) (manifest.regions.provided[r] ??= []).push(m.name)
     for (const name of Object.keys(m.templates)) {
@@ -965,7 +1236,7 @@ export function compose(
     }
     for (const r of m.requires) if (!manifest.regions.required.includes(r)) manifest.regions.required.push(r)
   }
-  // A headless app renders nothing, so the region contract does not apply to it.
+  // A headless deployment renders nothing, so the region contract does not apply to it.
   // Requirements are still recorded, so adding a theme later checks them.
   for (const r of opts.headless ? [] : manifest.regions.required) {
     if (!manifest.regions.provided[r]) {

@@ -11,12 +11,10 @@ export default defineModule({
   name: 'user',
   version: '0.1.0',
   depends: ['partner', 'company'],
-  app: true,
   title: 'Người dùng',
   summary: 'Tài khoản đăng nhập và những công ty mỗi tài khoản được vào.',
   category: 'Hệ thống',
   // Removing the accounts would remove every way back in.
-  removable: false,
   models,
   relations,
   functions,
@@ -32,5 +30,17 @@ export default defineModule({
 export { hashPassword, verifyPassword, needsRehash } from './password.ts'
 export { routes } from './routes.ts'
 export { loginScreen } from './login.ts'
-export { permittedFor } from './roles.ts'
+export { legacyPermissionCatalogue, legacyPresetFunctions, permittedFor } from './roles.ts'
+export type { LegacyPermissionCatalogueEntry, LegacyPermissionTask } from './roles.ts'
+export {
+  effectiveFunctionKeys,
+  normalizeAssignmentScope,
+  resolveEffectivePermissions,
+} from './authorization.ts'
+export type {
+  AssignmentScope,
+  EffectiveAccess,
+  EffectivePermission,
+  EffectivePermissionPath,
+} from './authorization.ts'
 export { resolveUserSession } from './session-context.ts'

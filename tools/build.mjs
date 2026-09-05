@@ -18,6 +18,10 @@ import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildBackendClients } from './build-backend-client.mjs'
+import { buildBackendDesignSystem } from './build-backend-design-system.mjs'
+import { buildChartClient } from './build-chart-client.mjs'
+import { buildFlowClient } from './build-flow-client.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, '.build')
@@ -26,7 +30,12 @@ const PACKAGES = join(ROOT, 'packages')
 const LOCK = join(ROOT, '.ket-build.lock')
 const FINGERPRINT = '.ket-build-fingerprint'
 const packageNames = readdirSync(PACKAGES, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
+  .filter(
+    (entry) =>
+      entry.isDirectory() &&
+      existsSync(join(PACKAGES, entry.name, 'package.json')) &&
+      existsSync(join(PACKAGES, entry.name, 'src')),
+  )
   .map((entry) => entry.name)
 
 const tsc = join(ROOT, 'node_modules', '.bin', 'tsc')
@@ -108,6 +117,9 @@ const sourceFingerprint = () => {
 
 const artifactsExist = () =>
   existsSync(join(BUILD, 'ket.workspace.js')) &&
+  existsSync(
+    join(BUILD, 'packages', 'ketsuite', 'src', 'modules', 'backend', 'design', 'design-system.css'),
+  ) &&
   packageNames.every(
     (name) =>
       existsSync(join(BUILD, 'packages', name, 'src', 'index.js')) &&
@@ -142,6 +154,13 @@ function copyAssets(source, destinations) {
 
 await acquireLock()
 try {
+  // Regenerated before the fingerprint hash runs, so the bundle it produces is
+  // itself part of what the fingerprint covers — a fresh checkout and a
+  // no-op rebuild both land on a self-consistent state.
+  await buildBackendClients()
+  await buildBackendDesignSystem()
+  await buildChartClient()
+  await buildFlowClient()
   const fingerprint = sourceFingerprint()
   const current = existsSync(join(BUILD, FINGERPRINT)) ? readFileSync(join(BUILD, FINGERPRINT), 'utf8') : null
   if (current === fingerprint && artifactsExist()) {
@@ -190,8 +209,10 @@ try {
         cpSync(join(stageDist, name), dist, { recursive: true })
       }
 
-      const cli = join(PACKAGES, 'ketjs', 'dist', 'cli.js')
-      if (existsSync(cli)) chmodSync(cli, 0o755)
+      for (const name of ['ketjs', 'ketsuite']) {
+        const cli = join(PACKAGES, name, 'dist', 'cli.js')
+        if (existsSync(cli)) chmodSync(cli, 0o755)
+      }
       console.log(`built ${packageNames.length} packages and workspace runtime into .build`)
     } finally {
       rmSync(stage, { recursive: true, force: true })

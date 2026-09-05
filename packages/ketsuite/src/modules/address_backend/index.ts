@@ -5,8 +5,6 @@ export default defineModule({
   name: 'address_backend',
   version: '0.1.0',
   depends: ['address', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Dữ liệu địa chỉ',
   summary: 'Cài đặt và kiểm tra catalog địa giới theo quốc gia.',
   category: 'Danh bạ',
@@ -88,4 +86,4 @@ export default defineModule({
   },
 })
 
-export { catalogsScreen, countryScreen } from './screens.tsx'
+export { catalogsScreen, countryScreen } from './screens/index.ts'

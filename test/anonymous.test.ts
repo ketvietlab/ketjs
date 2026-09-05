@@ -1,8 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootApp, callFn, compose, defineApp, defineModule, json, text } from '@ketvietlab/ketjs'
+import {
+  bootDeployment,
+  callFn,
+  compose,
+  defineDeployment,
+  defineModule,
+  json,
+  text,
+} from '@ketvietlab/ketjs'
 import type { Ctx, RouteEntry, ServeContext, Route } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 /**
  * A request with no session is a stranger, not an unrestricted caller.
@@ -14,7 +22,8 @@ import { ketsuite } from '../apps/ketsuite/app.ts'
  * catastrophically wrong about strangers.
  */
 
-const boot = () => bootApp(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'x' }, port: 0 })
+const boot = () =>
+  bootDeployment(ketsuite, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_SECRET: 'x' }, port: 0 })
 const post = (port: number, fn: string, body: unknown, cookie?: string) =>
   fetch(`http://127.0.0.1:${port}/_ket/fn/${fn}`, {
     method: 'POST',
@@ -70,7 +79,7 @@ test('anonymous: may read a published page, because a storefront is public', asy
 
 test('routes: the backend is closed to a stranger, and says so rather than rendering', async () => {
   const b = await boot()
-  for (const p of ['/admin', '/admin/apps', '/admin/pages', '/admin/settings']) {
+  for (const p of ['/admin']) {
     const r = await fetch(`http://127.0.0.1:${b.port}${p}`)
     assert.equal(r.status, 401, p)
     assert.ok(!(await r.text()).includes('data-ui="app-grid"'), `${p} rendered the screen anyway`)
@@ -81,7 +90,6 @@ test('routes: the backend is closed to a stranger, and says so rather than rende
 test('routes: the storefront stays open, which is the point of the distinction', async () => {
   const b = await boot()
   try {
-    await b.apps!.install('website_search')
     const full = await fetch(`http://127.0.0.1:${b.port}/`)
     assert.equal(full.status, 200)
     const fullHtml = await full.text()
@@ -178,8 +186,8 @@ test('declaration: an app with no sessions is unaffected, since there is no logi
           json(await ctx.call('solo.list', {}, url, req)),
     },
   })
-  const app = defineApp({ name: 'nologin', modules: [solo], headless: true, serve: { bootstrap: ['solo'] } })
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const app = defineDeployment({ name: 'nologin', modules: [solo], headless: true, serve: {} })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   assert.equal((await fetch(`http://127.0.0.1:${b.port}/things`)).status, 200)
   await b.close()
 })
@@ -192,22 +200,20 @@ test('routes: anonymous policy also applies to dynamic paths', async () => {
       text(`${label}:${params.slug}`)
   const catalog = defineModule({
     name: 'catalog_routes',
-    app: true,
     routes: {
       '/private/{slug}': route('private'),
       '/public/{slug}': { anonymous: true, handler: route('public') },
     },
   })
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'route_access',
     modules: [catalog],
     headless: true,
     serve: {
-      bootstrap: ['catalog_routes'],
       sessions: { secret: 'test-only', anonymous: { company: 'public' } },
     },
   })
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}`
   assert.equal((await fetch(`${at}/private/ao`)).status, 401)
   const open = await fetch(`${at}/public/%C3%A1o`)

@@ -1,4 +1,4 @@
-// Upgrade diff — the thing Odoo, WordPress and Shopify structurally cannot do.
+// Upgrade diff — the thing the domain contract, WordPress and Shopify structurally cannot do.
 //
 // Because the manifest records every joint, field and signature with provenance,
 // two manifests can be compared and every downstream breakage named BEFORE deploy
@@ -21,9 +21,7 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
       'breaking',
       'JOINT_REMOVED',
       `joint "${key}" was removed`,
-      users.length
-        ? `still filled by: ${users.join(', ')}`
-        : 'no installed module fills it - safe to proceed',
+      users.length ? `still filled by: ${users.join(', ')}` : 'no composed module fills it - safe to proceed',
     )
   }
 
@@ -35,6 +33,16 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
         'MODEL_SCOPE_CHANGED',
         `model "${mkey}" moved from ${bmodel.scope} to ${amodel.scope}`,
         'existing rows carry the old shape; widening leaks and narrowing hides data',
+      )
+    }
+    if (amodel && Boolean(amodel.append) !== Boolean(bmodel.append)) {
+      push(
+        'risky',
+        'MODEL_APPEND_CHANGED',
+        `model "${mkey}" is ${amodel.append ? 'now' : 'no longer'} append-only`,
+        amodel.append
+          ? 'code that updated these rows will now be refused at runtime'
+          : 'a record whose value was that it never changed can now be edited',
       )
     }
     if (!amodel) {
@@ -78,6 +86,24 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
           'FIELD_NOW_REQUIRED',
           `field "${mkey}.${fname}" became required`,
           'existing NULL rows violate it - backfill first',
+        )
+      } else if (Boolean(f.sensitive) !== Boolean(af.sensitive)) {
+        push(
+          'risky',
+          'FIELD_SENSITIVITY_CHANGED',
+          `field "${mkey}.${fname}" is ${af.sensitive ? 'now' : 'no longer'} sensitive`,
+          af.sensitive
+            ? 'values already written to write records and idempotency rows are not masked retroactively'
+            : 'its values will now reach write records, the agent descriptor and dry-run previews',
+        )
+      } else if (Boolean(f.personal) !== Boolean(af.personal)) {
+        push(
+          'risky',
+          'FIELD_CLASSIFICATION_CHANGED',
+          `field "${mkey}.${fname}" is ${af.personal ? 'now' : 'no longer'} personal data`,
+          af.personal
+            ? 'existing rows are in scope for export and erasure from this version on'
+            : 'check that the obligation really ended rather than the declaration being dropped',
         )
       }
     }
@@ -161,6 +187,31 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
         'JOB_QUEUE_CHANGED',
         `"${key}" moved from queue "${job.queue}" to "${next.queue}"`,
         `existing records remain in "${job.queue}" until drained or retried`,
+      )
+  }
+
+  for (const [key, report] of Object.entries(before.reports ?? {})) {
+    const next = after.reports?.[key]
+    if (!next) {
+      push(
+        'breaking',
+        'REPORT_REMOVED',
+        `report "${key}" was removed`,
+        'saved templates and print actions no longer resolve',
+      )
+      continue
+    }
+    if (report.target !== next.target)
+      push(
+        'breaking',
+        'REPORT_TARGET_CHANGED',
+        `report "${key}" moved from ${report.target} to ${next.target}`,
+      )
+    if (report.source !== next.source)
+      push(
+        'risky',
+        'REPORT_SOURCE_CHANGED',
+        `report "${key}" changed source from ${report.source} to ${next.source}`,
       )
   }
 

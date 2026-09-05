@@ -1,48 +1,124 @@
 import { randomUUID } from 'node:crypto'
 import { NAVIGATION_TYPE, defineModule, fragment, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import type { FormField, Frame } from '../../ui/index.ts'
-import { backendPage } from '../../ui/index.ts'
+import type { FormField } from '../../ui/index.ts'
+import { backendPage, modalWorkspace } from '../../ui/index.ts'
 import { errorsOf, readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
 import { partnerRelationControl } from '../partner_backend/relation-control.ts'
+import { templateRelationControl, variantRelationControl } from '../product_backend/relation-control.ts'
 import { INVOICE_POLICIES } from '../sale/functions.ts'
 import { islands } from './islands.ts'
-import { invoicingPoliciesScreen } from './invoicing-policies-screen.tsx'
-import { orderDetailScreen } from './order-detail-screen.tsx'
-import { quotationsScreen } from './quotations-screen.tsx'
-import { salesOrdersScreen } from './sales-orders-screen.tsx'
-import { dashboard, labelOf } from './screens.tsx'
+import {
+  invoicingPoliciesListScreen,
+  invoicingPolicyCreateModal,
+  labelOf,
+  orderDetailScreen,
+  overviewScreen,
+  quotationCreateScreen,
+  quotationsListScreen,
+  salesOrdersListScreen,
+} from './screens/index.ts'
+import type { SaleCounts } from './screens/index.ts'
+import {
+  accountOptions,
+  accountRelationControl,
+  taxRelationControl,
+} from '../account_backend/relation-control.ts'
+import {
+  adminPage,
+  choices,
+  frameOf,
+  localeQuery,
+  needs,
+  optional,
+  printGroup,
+  timezoneOf,
+} from '../backend/screen.ts'
+import type { AnyRow } from '../backend/screen.ts'
 
-type AnyRow = Record<string, unknown>
+/** How many sales orders the overview shows before handing over to the list. */
+const RECENT_ORDERS = 5
+
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * A cross-origin POST carries the signed-in user's session cookie without their
+ * intent, and every write behind these routes acts on money, stock or customer
+ * records. Refused the way user_backend, company_backend, oauth_backend,
+ * product_backend and stock_backend already refuse it.
+ */
+
 type Translator = ReturnType<ServeContext['translate']>
-const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<Frame> => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-const document = async (
+const redirect = (result: unknown, ok: string) =>
+  (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
+const quotationListQuery = (url: URL): string => {
+  const query = new URLSearchParams(url.searchParams)
+  query.delete('invalid')
+  const value = query.toString()
+  return value ? `?${value}` : ''
+}
+const quotationListPath = (url: URL): string => `/admin/sales/quotations${quotationListQuery(url)}`
+const quotationCreatePath = (url: URL): string => `/admin/sales/quotations/new${quotationListQuery(url)}`
+const invoicingPoliciesPath = (url: URL): string => `/admin/sales/invoicing-policies${localeQuery(url)}`
+const invoicingPolicyModalPath = (url: URL, invalid = false): string => {
+  const target = new URL(invoicingPoliciesPath(url), 'http://ket.local')
+  target.searchParams.set('create', '1')
+  if (invalid) target.searchParams.set('invalid', '1')
+  return `${target.pathname}${target.search}`
+}
+const safeInvoicingPoliciesReturnTo = (url: URL): string => {
+  const fallback = invoicingPoliciesPath(url)
+  const raw = url.searchParams.get('returnTo')
+  if (!raw) return fallback
+  const candidate = new URL(raw, 'http://ket.local')
+  return candidate.origin === 'http://ket.local' && candidate.pathname === '/admin/sales/invoicing-policies'
+    ? `${candidate.pathname}${candidate.search}`
+    : fallback
+}
+const invoicingPolicyCreatePath = (url: URL, returnTo: string): string => {
+  const target = new URL(`/admin/sales/invoicing-policies/new${localeQuery(url)}`, 'http://ket.local')
+  target.searchParams.set('returnTo', returnTo)
+  return `${target.pathname}${target.search}`
+}
+const setInvoicingPolicy = async (
   ctx: ServeContext,
   url: URL,
   req: Parameters<Route>[1],
-  title: string,
-  body: (_: Translator, frame: Frame) => TemplateResult | Promise<TemplateResult>,
-) => {
-  const lang = ctx.localeOf(url, req),
-    _ = ctx.translate(lang)
-  return backendPage(ctx, req, {
-    lang,
-    title: _(title),
-    body: await body(_, await frame(ctx, url, req)),
-  })
+): Promise<unknown> => {
+  const form = await readForm(req)
+  return ctx.call(
+    'sale.setInvoicePolicy',
+    { templateId: form.templateId ?? '', invoicePolicy: form.invoicePolicy ?? '' },
+    url,
+    req,
+  )
 }
-const redirect = (result: unknown, ok: string) =>
-  (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
+const createQuotation = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<unknown> => {
+  const form = await readForm(req)
+  return ctx.call(
+    'sale.createOrder',
+    {
+      id: randomUUID(),
+      partnerId: form.partnerId ?? '',
+      warehouseId: form.warehouseId ?? '',
+      ...optional(form, 'clientOrderRef'),
+      ...optional(form, 'pricelistId'),
+      ...optional(form, 'paymentTermId'),
+      ...optional(form, 'validityDate'),
+      ...optional(form, 'notes'),
+    },
+    url,
+    req,
+  )
+}
 const callIfInstalled = async (
   ctx: ServeContext,
   url: URL,
@@ -51,26 +127,18 @@ const callIfInstalled = async (
   fallback: string,
   input: Record<string, unknown>,
 ) => ctx.call((await ctx.live(req)).functions[preferred] ? preferred : fallback, input, url, req)
-const optional = (form: Record<string, string>, name: string) => (form[name] ? { [name]: form[name] } : {})
-const localeSuffix = (url: URL) => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
 const orderPath = (order: AnyRow, url: URL) =>
-  `${['draft', 'sent'].includes(String(order.state)) ? '/admin/sales/quotations' : '/admin/sales/orders'}/${String(order.id)}${localeSuffix(url)}`
-const choices = (rows: AnyRow[], empty = false) => [
-  ...(empty ? [{ value: '', label: '—' }] : []),
-  ...rows.map((r) => ({
-    value: String(r.id),
-    label: `${String(r.code ?? '')}${r.code ? ' · ' : ''}${String(r.name)}`,
-  })),
-]
+  `${['draft', 'sent', 'cancel'].includes(String(order.state)) ? '/admin/sales/quotations' : '/admin/sales/orders'}/${String(order.id)}${localeQuery(url)}`
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [partners, companies, templates, units, warehouses, pricelists, taxes, journals, accounts, terms] =
     await Promise.all([
-      ctx.call('partner.listPartners', {}, url, req) as Promise<AnyRow[]>,
+      // Capped: these render the <select> fallbacks and seed the pickers, and
+      // the pickers search server-side past the cap. Uncapped, a customer base
+      // imported from a chat channel put every partner in the tenant into
+      // memory on every sale page.
+      ctx.call('partner.listPartners', { limit: 200 }, url, req) as Promise<AnyRow[]>,
       ctx.call('company.listCompanies', {}, url, req) as Promise<AnyRow[]>,
-      ctx.call('product.listTemplates', { withVariants: true }, url, req) as Promise<AnyRow[]>,
+      ctx.call('product.listTemplates', { withVariants: true, limit: 200 }, url, req) as Promise<AnyRow[]>,
       ctx.call('uom.listUnits', {}, url, req) as Promise<AnyRow[]>,
       ctx.call('stock.listWarehouses', {}, url, req) as Promise<AnyRow[]>,
       ctx.call('pricing.listPricelists', {}, url, req) as Promise<AnyRow[]>,
@@ -98,6 +166,25 @@ const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) =>
     terms,
   }
 }
+const partnerNames = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Parameters<Route>[1],
+  rows: AnyRow[],
+): Promise<Map<string, unknown>> => {
+  const ids = [...new Set(rows.map((r) => String(r.partnerId)).filter(Boolean))]
+  if (!ids.length) return new Map()
+  // The picker list is capped, so it can no longer double as a name lookup: a
+  // page of orders names exactly the partners it shows, however many the
+  // tenant holds.
+  const partners = (await ctx.call(
+    'partner.listPartners',
+    { ids, includeArchived: true },
+    url,
+    req,
+  )) as AnyRow[]
+  return new Map(partners.map((r) => [String(r.id), r.name]))
+}
 const orderFields = async (
   ctx: ServeContext,
   url: URL,
@@ -121,13 +208,16 @@ const orderFields = async (
     required: true,
   },
   { name: 'clientOrderRef', label: _('sale_backend.field.clientOrderRef') },
-  {
-    name: 'warehouseId',
-    label: _('sale_backend.field.warehouse'),
-    type: 'select',
-    options: choices(d.warehouses, true),
-    required: true,
-  },
+  needs(
+    {
+      name: 'warehouseId',
+      label: _('sale_backend.field.warehouse'),
+      type: 'select',
+      options: choices(d.warehouses, true),
+      required: true,
+    },
+    _('sale_backend.setup.warehouse'),
+  ),
   {
     name: 'pricelistId',
     label: _('sale_backend.field.pricelist'),
@@ -149,6 +239,7 @@ const detail =
     const partial = req.headers['x-ket-partial'] === 'sale-order'
     let savedPartial = false
     if (req.method === 'POST') {
+      if (crossSite(req)) return text('Forbidden', { status: 403 })
       const form = await readForm(req)
       let result: unknown
       if (form.action === 'add-line')
@@ -167,6 +258,10 @@ const detail =
           url,
           req,
         )
+      else if (form.action === 'remove-line')
+        result = await ctx.call('sale.removeLine', { id: form.lineId ?? '' }, url, req)
+      else if (form.action === 'reset')
+        result = await ctx.call('sale.resetOrder', { id: params.id }, url, req)
       else if (form.action === 'send')
         result = await ctx.call('sale.sendQuotation', { id: params.id }, url, req)
       else if (form.action === 'confirm')
@@ -238,6 +333,13 @@ const detail =
         type: 'select',
         options: variants,
         required: true,
+        control: await variantRelationControl(ctx, url, req, _, {
+          id: 'sale-line-product',
+          name: 'productId',
+          label: _('sale_backend.field.product'),
+          variants,
+          required: true,
+        }),
       },
       {
         name: 'productUomQty',
@@ -246,13 +348,16 @@ const detail =
         value: 1,
         required: true,
       },
-      {
-        name: 'productUomId',
-        label: _('sale_backend.field.uom'),
-        type: 'select',
-        options: choices(d.units),
-        required: true,
-      },
+      needs(
+        {
+          name: 'productUomId',
+          label: _('sale_backend.field.uom'),
+          type: 'select',
+          options: choices(d.units),
+          required: true,
+        },
+        _('sale_backend.setup.uom'),
+      ),
       {
         name: 'priceUnit',
         label: _('sale_backend.field.priceUnit'),
@@ -260,22 +365,46 @@ const detail =
         help: _('sale_backend.help.pricelist'),
       },
       { name: 'discount', label: _('sale_backend.field.discount'), type: 'decimal' },
-      { name: 'taxId', label: _('sale_backend.field.tax'), type: 'select', options: choices(d.taxes, true) },
+      {
+        name: 'taxId',
+        label: _('sale_backend.field.tax'),
+        type: 'select',
+        options: choices(d.taxes, true),
+        control: await taxRelationControl(ctx, url, req, _, {
+          id: 'sale-line-tax',
+          name: 'taxId',
+          label: _('sale_backend.field.tax'),
+          taxes: choices(d.taxes),
+          allowEmpty: true,
+          typeTaxUse: 'sale',
+        }),
+      },
     ]
     const invoiceFields: FormField[] = [
-      {
-        name: 'journalId',
-        label: _('sale_backend.field.journal'),
-        type: 'select',
-        options: choices(d.journals),
-        required: true,
-      },
+      needs(
+        {
+          name: 'journalId',
+          label: _('sale_backend.field.journal'),
+          type: 'select',
+          options: choices(d.journals),
+          required: true,
+        },
+        _('sale_backend.setup.journal'),
+      ),
       {
         name: 'revenueAccountId',
         label: _('sale_backend.field.revenueAccount'),
         type: 'select',
         options: choices(d.accounts.filter((r) => String(r.accountType).startsWith('income'))),
         required: true,
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'sale-revenue-account',
+          name: 'revenueAccountId',
+          label: _('sale_backend.field.revenueAccount'),
+          accounts: accountOptions(d.accounts.filter((r) => String(r.accountType).startsWith('income'))),
+          accountTypes: ['income*'],
+          required: true,
+        }),
       },
       {
         name: 'receivableAccountId',
@@ -283,19 +412,47 @@ const detail =
         type: 'select',
         options: choices(d.accounts.filter((r) => r.accountType === 'asset_receivable')),
         required: true,
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'sale-receivable-account',
+          name: 'receivableAccountId',
+          label: _('sale_backend.field.receivableAccount'),
+          accounts: accountOptions(d.accounts.filter((r) => r.accountType === 'asset_receivable')),
+          accountTypes: ['asset_receivable'],
+          required: true,
+        }),
       },
       {
         name: 'taxAccountId',
         label: _('sale_backend.field.taxAccount'),
         type: 'select',
         options: choices(d.accounts, true),
+        control: await accountRelationControl(ctx, url, req, _, {
+          id: 'sale-tax-account',
+          name: 'taxAccountId',
+          label: _('sale_backend.field.taxAccount'),
+          accounts: accountOptions(d.accounts),
+          allowEmpty: true,
+        }),
       },
       { name: 'invoiceDate', label: _('sale_backend.field.invoiceDate'), type: 'date' },
     ]
     const integration = await ctx.joint(url, req, 'sale_backend:order.loyalty', {
       orderId: params.id,
-      locale: localeSuffix(url),
+      locale: localeQuery(url),
     })
+    // A cancelled order used to print nothing at all. It is listed with the
+    // quotations and returns to draft, so that is the document it prints as.
+    const reportIds =
+      {
+        draft: ['sale.quotation'],
+        sent: ['sale.quotation', 'sale.proforma'],
+        sale: ['sale.salesOrder', 'sale.proforma'],
+        cancel: ['sale.quotation'],
+      }[String(order.state)] ?? []
+    const printable = (await ctx.reportsOf(url, req, 'sale.Order')).filter((report) =>
+      reportIds.includes(report.id),
+    )
+    const printActions = printGroup(_, printable, String(order.id), url.search)
     const canonical = orderPath(order, url)
     const body = orderDetailScreen(
       _,
@@ -311,7 +468,8 @@ const detail =
         lineFields,
         invoiceFields,
         integration,
-        locale: localeSuffix(url),
+        printActions,
+        locale: localeQuery(url),
         collaboration: savedPartial
           ? ''
           : await ctx.joint(url, req, 'sale_backend:order.collaboration', {
@@ -328,7 +486,7 @@ const detail =
             }),
         errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
       },
-      savedPartial ? {} : await frame(ctx, url, req),
+      savedPartial ? {} : await frameOf(ctx, url, req),
       savedPartial,
     )
     if (savedPartial)
@@ -354,11 +512,26 @@ const vi = {
   'dashboard.sent': 'Báo giá đã gửi',
   'dashboard.toInvoice': 'Chờ lập hoá đơn',
   'dashboard.records': 'Bản ghi',
+  'dashboard.subtitle': 'Theo dõi báo giá, đơn bán và công việc cần xử lý.',
+  'dashboard.draftToday': '{count} mới hôm nay',
+  'dashboard.sentValue': '{amount} chờ phản hồi',
+  'dashboard.saleValue': '{amount} tổng giá trị',
+  'dashboard.toInvoiceValue': '{amount} cần xử lý',
+  'dashboard.flow.title': 'Dòng bán hàng',
+  'dashboard.flow.hint': 'Tiến độ từ báo giá đến lập hoá đơn',
+  'dashboard.recent.title': 'Đơn gần đây',
+  'dashboard.recent.hint': 'Các đơn bán được cập nhật mới nhất',
+  'dashboard.recent.all': 'Xem tất cả',
   'quotations.title': 'Báo giá',
   'quotation.kicker': 'Báo giá khách hàng',
   'quotation.title': 'Báo giá',
   'quotation.subtitle': 'Soạn, gửi và theo dõi báo giá trước khi xác nhận thành đơn bán hàng.',
   'quotation.summary.total': 'Tổng báo giá',
+  'setup.account': 'Chưa có tài khoản phù hợp. Tạo trong Kế toán › Hệ thống tài khoản.',
+  'setup.journal': 'Chưa có sổ nhật ký bán hàng. Tạo trong Kế toán › Sổ nhật ký.',
+  'setup.uom': 'Chưa có đơn vị tính. Tạo trong Cấu hình › Đơn vị tính.',
+  'setup.warehouse': 'Chưa có kho. Tạo trong Kho vận › Kho.',
+  'quotation.summary.cancelled': 'Đã huỷ',
   'quotation.summary.draft': 'Bản nháp',
   'quotation.summary.sent': 'Đã gửi',
   'quotation.create.title': 'Tạo báo giá',
@@ -395,7 +568,7 @@ const vi = {
   'policy.summary.order': 'Theo số lượng đặt',
   'policy.summary.delivery': 'Theo số lượng giao',
   'policy.edit.title': 'Cập nhật chính sách',
-  'policy.edit.hint': 'Theo Odoo 19, chính sách được lưu trên từng mẫu sản phẩm.',
+  'policy.edit.hint': 'Chính sách được lưu trên từng mẫu sản phẩm.',
   'policy.products.title': 'Chính sách theo sản phẩm',
   'policy.products.hint':
     'Số lượng đặt cho phép lập hoá đơn ngay; số lượng giao chỉ cho phép sau khi giao hàng.',
@@ -415,6 +588,8 @@ const vi = {
   emptyHint: 'Tạo bản ghi đầu tiên để bắt đầu.',
   'action.create': 'Tạo báo giá',
   'action.addLine': 'Thêm dòng',
+  'action.removeLine': 'Xoá',
+  'action.reset': 'Đưa về nháp',
   'action.send': 'Đánh dấu đã gửi',
   'action.confirm': 'Xác nhận',
   'action.sync': 'Đồng bộ giao hàng',
@@ -447,6 +622,7 @@ const vi = {
   'field.priceUnit': 'Đơn giá',
   'field.discount': 'Chiết khấu',
   'field.tax': 'Thuế bán hàng',
+  'field.actions': 'Thao tác',
   'field.subtotal': 'Thành tiền',
   'field.invoicePolicy': 'Cơ sở lập hoá đơn',
   'field.journal': 'Sổ nhật ký bán hàng',
@@ -482,11 +658,26 @@ const en = {
   'dashboard.sent': 'Quotation Sent',
   'dashboard.toInvoice': 'To Invoice',
   'dashboard.records': 'Records',
+  'dashboard.subtitle': 'Quotations, sales orders, and the work waiting on you.',
+  'dashboard.draftToday': '{count} new today',
+  'dashboard.sentValue': '{amount} awaiting a reply',
+  'dashboard.saleValue': '{amount} in total',
+  'dashboard.toInvoiceValue': '{amount} to handle',
+  'dashboard.flow.title': 'Sales flow',
+  'dashboard.flow.hint': 'From quotation through to invoicing',
+  'dashboard.recent.title': 'Recent orders',
+  'dashboard.recent.hint': 'The sales orders updated most recently',
+  'dashboard.recent.all': 'View all',
   'quotations.title': 'Quotations',
   'quotation.kicker': 'Customer quotations',
   'quotation.title': 'Quotations',
   'quotation.subtitle': 'Draft, send and track quotations before confirming a sales order.',
   'quotation.summary.total': 'Total quotations',
+  'setup.account': 'No matching account yet. Create one in Accounting \u203a Chart of accounts.',
+  'setup.journal': 'No sales journal yet. Create one in Accounting \u203a Journals.',
+  'setup.uom': 'No unit of measure yet. Create one in Configuration \u203a Units of measure.',
+  'setup.warehouse': 'No warehouse yet. Create one in Inventory \u203a Warehouses.',
+  'quotation.summary.cancelled': 'Cancelled',
   'quotation.summary.draft': 'Draft',
   'quotation.summary.sent': 'Sent',
   'quotation.create.title': 'Create quotation',
@@ -523,7 +714,7 @@ const en = {
   'policy.summary.order': 'Ordered quantities',
   'policy.summary.delivery': 'Delivered quantities',
   'policy.edit.title': 'Update a policy',
-  'policy.edit.hint': 'As in Odoo 19, the policy is stored on each product template.',
+  'policy.edit.hint': 'The policy is stored on each product template.',
   'policy.products.title': 'Policies by product',
   'policy.products.hint':
     'Ordered quantities invoice immediately; delivered quantities invoice only after delivery.',
@@ -543,6 +734,8 @@ const en = {
   emptyHint: 'Create the first record to get started.',
   'action.create': 'Create Quotation',
   'action.addLine': 'Add line',
+  'action.removeLine': 'Remove',
+  'action.reset': 'Set to draft',
   'action.send': 'Mark as Sent',
   'action.confirm': 'Confirm',
   'action.sync': 'Sync Deliveries',
@@ -575,6 +768,7 @@ const en = {
   'field.priceUnit': 'Unit Price',
   'field.discount': 'Discount',
   'field.tax': 'Sales Tax',
+  'field.actions': 'Actions',
   'field.subtotal': 'Subtotal',
   'field.invoicePolicy': 'Invoicing Policy',
   'field.journal': 'Sales Journal',
@@ -598,8 +792,6 @@ export default defineModule({
   name: 'sale_backend',
   version: '0.1.0',
   depends: ['sale', 'backend', 'partner_backend'],
-  install: 'auto',
-  app: true,
   assets: new URL('./client/', import.meta.url),
   islands,
   joints: {
@@ -614,7 +806,7 @@ export default defineModule({
   summary: 'Báo giá, đơn bán, giao hàng và hoá đơn khách hàng.',
   category: 'Hệ thống',
   menus: {
-    sale: { label: 'menu.app', icon: 'shopping-bag', sequence: 20 },
+    sale: { label: 'menu.app', icon: 'shopping-bag', sequence: 22 },
     'sale.dashboard': {
       parent: 'sale',
       label: 'menu.dashboard',
@@ -628,12 +820,14 @@ export default defineModule({
       label: 'menu.quotations',
       path: '/admin/sales/quotations',
       needs: 'sale.listOrders',
+      sequence: 10,
     },
     'sale.orders': {
       parent: 'sale.ordersGroup',
       label: 'menu.orders',
       path: '/admin/sales/orders',
       needs: 'sale.listOrders',
+      sequence: 20,
     },
     'sale.products': { parent: 'sale', label: 'menu.products', sequence: 20 },
     'sale.policies': {
@@ -641,131 +835,211 @@ export default defineModule({
       label: 'menu.policies',
       path: '/admin/sales/invoicing-policies',
       needs: 'sale.setInvoicePolicy',
+      sequence: 10,
     },
   },
   routes: {
     '/admin/sales':
       (ctx): Route =>
-      async (url, req) =>
-        req.method === 'GET'
-          ? document(ctx, url, req, 'sale_backend.dashboard.title', async (_, shell) =>
-              dashboard(
-                _,
-                (await ctx.call('sale.listOrders', {}, url, req)) as AnyRow[],
-                shell,
-                localeSuffix(url),
-              ),
-            )
-          : text('GET', { status: 405 }),
+      async (url, req) => {
+        if (req.method !== 'GET') return text('GET', { status: 405 })
+        // "New today" is the reader's today, so the counting happens in their
+        // timezone rather than the server's.
+        const [counts, recent] = await Promise.all([
+          ctx.call(
+            'sale.countOrders',
+            { timezone: await timezoneOf(ctx, url, req) },
+            url,
+            req,
+          ) as Promise<SaleCounts>,
+          // The last few, not a page of them: the overview links to the list for
+          // the rest, and a dashboard that loads five hundred rows to show five
+          // is the same mistake the counters were moved into the database to fix.
+          ctx.call('sale.listOrders', { state: 'sale', limit: RECENT_ORDERS }, url, req) as Promise<AnyRow[]>,
+        ])
+        const names = await partnerNames(ctx, url, req, recent)
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.dashboard.title',
+          body: async (_, shell) =>
+            overviewScreen(_, {
+              frame: shell,
+              counts,
+              recent: recent.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
+              localeQuery: localeQuery(url),
+            }),
+        })
+      },
     '/admin/sales/quotations':
       (ctx): Route =>
       async (url, req) => {
-        const detailSuffix = url.searchParams.get('lang')
-          ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
-          : ''
-        const quotationPath = `/admin/sales/quotations${detailSuffix}`
+        const detailSuffix = localeQuery(url)
+        const listPath = quotationListPath(url)
+        const createPath = quotationCreatePath(url)
         if (req.method === 'POST') {
-          const form = await readForm(req),
-            result = await ctx.call(
-              'sale.createOrder',
-              {
-                id: randomUUID(),
-                partnerId: form.partnerId ?? '',
-                warehouseId: form.warehouseId ?? '',
-                ...optional(form, 'clientOrderRef'),
-                ...optional(form, 'pricelistId'),
-                ...optional(form, 'paymentTermId'),
-                ...optional(form, 'validityDate'),
-                ...optional(form, 'notes'),
-              },
-              url,
-              req,
-            )
-          return redirect(result, quotationPath)
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const result = await createQuotation(ctx, url, req)
+          return (result as AnyRow).ok
+            ? seeOther(listPath)
+            : seeOther(`${createPath}${createPath.includes('?') ? '&' : '?'}invalid=1`)
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const [rows, d] = await Promise.all([
-            ctx.call('sale.listOrders', {}, url, req) as Promise<AnyRow[]>,
-            common(ctx, url, req),
-          ]),
-          state = url.searchParams.get('state'),
-          names = new Map(d.partners.map((r) => [String(r.id), r.name]))
-        return document(ctx, url, req, 'sale_backend.quotations.title', async (_, shell) =>
-          quotationsScreen(_, {
-            frame: shell,
-            fields: await orderFields(ctx, url, req, _, d),
-            rows: rows
-              .filter((r) => ['draft', 'sent'].includes(String(r.state)) && (!state || r.state === state))
-              .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-            action: quotationPath,
-            detailSuffix,
-            errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
-          }),
-        )
+        const state = url.searchParams.get('state')
+        const rows = (await ctx.call(
+          'sale.listOrders',
+          {
+            ...(state ? { state } : { states: ['draft', 'sent', 'cancel'] }),
+          },
+          url,
+          req,
+        )) as AnyRow[]
+        const names = await partnerNames(ctx, url, req, rows)
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.quotations.title',
+          body: async (_, shell) =>
+            quotationsListScreen(
+              _,
+              {
+                createHref: createPath,
+                printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
+                  (report) => report.id === 'sale.quotation',
+                ),
+                rows: rows
+                  .filter((r) => ['draft', 'sent', 'cancel'].includes(String(r.state)))
+                  .map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                detailSuffix,
+              },
+              shell,
+            ),
+        })
+      },
+    '/admin/sales/quotations/new':
+      (ctx): Route =>
+      async (url, req) => {
+        const listPath = quotationListPath(url)
+        const createPath = quotationCreatePath(url)
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const result = await createQuotation(ctx, url, req)
+          return (result as AnyRow).ok
+            ? seeOther(listPath)
+            : seeOther(`${createPath}${createPath.includes('?') ? '&' : '?'}invalid=1`)
+        }
+        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        const data = await common(ctx, url, req)
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.quotation.create.title',
+          body: async (_, shell) =>
+            quotationCreateScreen(
+              _,
+              {
+                fields: await orderFields(ctx, url, req, _, data),
+                action: createPath,
+                cancelHref: listPath,
+                errors:
+                  url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
+              },
+              shell,
+            ),
+        })
       },
     '/admin/sales/orders':
       (ctx): Route =>
       async (url, req) => {
         if (req.method !== 'GET') return text('GET', { status: 405 })
-        const detailSuffix = localeSuffix(url)
-        const [rows, d] = await Promise.all([
-            ctx.call('sale.listOrders', { state: 'sale' }, url, req) as Promise<AnyRow[]>,
-            common(ctx, url, req),
-          ]),
-          names = new Map(d.partners.map((r) => [String(r.id), r.name]))
-        return document(ctx, url, req, 'sale_backend.orders.title', (_, shell) =>
-          salesOrdersScreen(_, {
-            frame: shell,
-            rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
-            detailSuffix,
-          }),
-        )
+        const detailSuffix = localeQuery(url)
+        const rows = (await ctx.call('sale.listOrders', { state: 'sale' }, url, req)) as AnyRow[]
+        const names = await partnerNames(ctx, url, req, rows)
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.orders.title',
+          body: async (_, shell) =>
+            salesOrdersListScreen(
+              _,
+              {
+                printReport: (await ctx.reportsOf(url, req, 'sale.Order')).find(
+                  (report) => report.id === 'sale.salesOrder',
+                ),
+                rows: rows.map((r) => ({ ...r, partnerName: names.get(String(r.partnerId)) })),
+                detailSuffix,
+              },
+              shell,
+            ),
+        })
       },
     '/admin/sales/quotations/{id}': detail,
     '/admin/sales/orders/{id}': detail,
     '/admin/sales/invoicing-policies':
       (ctx): Route =>
       async (url, req) => {
+        const returnTo = invoicingPoliciesPath(url)
+        const createPath = invoicingPolicyCreatePath(url, returnTo)
         if (req.method === 'POST') {
-          const form = await readForm(req)
-          const target = `/admin/sales/invoicing-policies${localeSuffix(url)}`
-          return redirect(
-            await ctx.call(
-              'sale.setInvoicePolicy',
-              { templateId: form.templateId ?? '', invoicePolicy: form.invoicePolicy ?? '' },
-              url,
-              req,
-            ),
-            target,
-          )
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const result = await setInvoicingPolicy(ctx, url, req)
+          return (result as AnyRow).ok ? seeOther(returnTo) : seeOther(invoicingPolicyModalPath(url, true))
         }
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-        const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[],
-          _ = ctx.translate(ctx.localeOf(url, req))
-        return document(ctx, url, req, 'sale_backend.policies.title', (_, shell) =>
-          invoicingPoliciesScreen(_, {
-            frame: shell,
-            action: `/admin/sales/invoicing-policies${localeSuffix(url)}`,
-            errors: url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
-            fields: [
+        const rows = (await ctx.call('sale.listInvoicePolicies', {}, url, req)) as AnyRow[]
+        return adminPage(ctx, url, req, {
+          title: 'sale_backend.policies.title',
+          body: async (_, shell) => {
+            const workspace = invoicingPoliciesListScreen(
+              _,
               {
-                name: 'templateId',
-                label: _('sale_backend.field.product'),
-                type: 'select',
-                options: choices(rows),
-                required: true,
+                createHref: invoicingPolicyModalPath(url),
+                rows,
               },
-              {
-                name: 'invoicePolicy',
-                label: _('sale_backend.field.invoicePolicy'),
-                type: 'radio',
-                options: INVOICE_POLICIES.map((v) => ({ value: v, label: labelOf(_, 'invoicePolicy', v) })),
-                required: true,
-              },
-            ],
-            rows,
-          }),
-        )
+              shell,
+            )
+            if (url.searchParams.get('create') !== '1') return workspace
+            return modalWorkspace(
+              workspace,
+              invoicingPolicyCreateModal(_, {
+                action: createPath,
+                cancelHref: returnTo,
+                errors:
+                  url.searchParams.get('invalid') === '1' ? [_('sale_backend.error.invalid')] : undefined,
+                fields: [
+                  {
+                    name: 'templateId',
+                    label: _('sale_backend.field.product'),
+                    type: 'select',
+                    options: choices(rows),
+                    required: true,
+                    control: await templateRelationControl(ctx, url, req, _, {
+                      id: 'sale-invoicing-template',
+                      name: 'templateId',
+                      label: _('sale_backend.field.product'),
+                      templates: choices(rows),
+                      required: true,
+                    }),
+                  },
+                  {
+                    name: 'invoicePolicy',
+                    label: _('sale_backend.field.invoicePolicy'),
+                    type: 'radio',
+                    options: INVOICE_POLICIES.map((v) => ({
+                      value: v,
+                      label: labelOf(_, 'invoicePolicy', v),
+                    })),
+                    required: true,
+                  },
+                ],
+              }),
+            )
+          },
+        })
+      },
+    '/admin/sales/invoicing-policies/new':
+      (ctx): Route =>
+      async (url, req) => {
+        const returnTo = safeInvoicingPoliciesReturnTo(url)
+        if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
+          const result = await setInvoicingPolicy(ctx, url, req)
+          return (result as AnyRow).ok ? seeOther(returnTo) : seeOther(invoicingPolicyModalPath(url, true))
+        }
+        if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+        return seeOther(invoicingPolicyModalPath(url, url.searchParams.get('invalid') === '1'))
       },
   },
   messages: { vi, en },

@@ -7,12 +7,25 @@
 
 import { tableNameFor } from '../data/migrate.ts'
 import { table, type Query } from '../data/query.ts'
-import { eq, inArray } from '../data/expr.ts'
+import { eq, inArray, makeCol } from '../data/expr.ts'
 import { from } from '../data/query.ts'
-import { type Changeset, changeset, decimalText } from '../data/changeset.ts'
+import {
+  canonicalDecimal,
+  type Changeset,
+  changeset,
+  DECIMAL_MAX_CHARS,
+  parseDecimal,
+} from '../data/changeset.ts'
 import { KetError } from '../kernel/errors.ts'
+import { createLogger } from './log/logger.ts'
+import type { Logger } from './log/logger.ts'
+import { nullLog } from './log/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
+import { nextSequenceNumber } from './sequence.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
+
+/** What a sensitive value is replaced by everywhere a write record travels. */
+export const SENSITIVE_MASK = '[sensitive]'
 
 export function createContext(o: {
   adapter: Adapter
@@ -20,10 +33,17 @@ export function createContext(o: {
   fnKey: string
   dryRun?: boolean
   actor?: string | null
+  correlationId?: string | null
   scope?: Scope
   kind?: 'function' | 'job'
   queueNotify?: boolean
   writes?: WriteRecord[]
+  /**
+   * Where this call's operational log goes. Absent discards: a ctx built outside a
+   * booted runtime — a migration, a script — has no deployment to attribute records
+   * to, and inventing one would be worse than dropping them.
+   */
+  log?: Logger
 }): Ctx {
   const { adapter, manifest, fnKey } = o
   const scope: Scope = o.scope ?? { company: null, branches: null }
@@ -35,8 +55,51 @@ export function createContext(o: {
       message: `no ${o.kind === 'job' ? 'background job' : 'server function'} "${fnKey}"`,
     })
 
+  /**
+   * A model whose value is that it did not change afterwards.
+   *
+   * Refused on the way in rather than reviewed on the way out: both audit models
+   * in KetSuite promised this in a comment, and a promise a reviewer has to
+   * remember is one a refactor eventually breaks.
+   */
+  const refuseAppendOnly = (model: string, verb: string): void => {
+    if (!manifest.models[model]?.append) return
+    throw new KetError({
+      code: 'E_APPEND_ONLY',
+      module: operation.by,
+      message: `"${fnKey}" attempted to ${verb} ${model}, which is append-only`,
+      hint: 'insert a new row — a replay is answered by insertIfAbsent, never by editing what it wrote',
+    })
+  }
+
   const effects = new Set(operation.effects)
   const writes = o.writes ?? []
+
+  /**
+   * A write record is observational, and it travels: it is returned to the caller,
+   * shown by a dry-run, and stored verbatim in the durable idempotency row that
+   * answers a retry. A field declared `sensitive` must not make that trip, so its
+   * value is replaced before the record is kept rather than after.
+   */
+  const record = (write: WriteRecord): void => {
+    const model = manifest.models[write.model]
+    const mask = (row: Row | undefined): Row | undefined => {
+      if (!row || !model) return row
+      let masked: Row | undefined
+      for (const key of Object.keys(row)) {
+        if (!model.fields[key]?.sensitive) continue
+        masked ??= { ...row }
+        masked[key] = SENSITIVE_MASK
+      }
+      return masked ?? row
+    }
+    writes.push({
+      ...write,
+      ...(write.row === undefined ? {} : { row: mask(write.row) }),
+      ...(write.where === undefined ? {} : { where: mask(write.where) }),
+      ...(write.patch === undefined ? {} : { patch: mask(write.patch) }),
+    })
+  }
 
   const need = (effect: 'read' | 'write' | 'enqueue', target: string): void => {
     if (effects.has(`${effect}:${target}`)) return
@@ -88,7 +151,9 @@ export function createContext(o: {
   // place that can guarantee it.
   //
   // Branch is not a security boundary. Reading every branch of one company is
-  // ordinary, so an empty branch list means "all of them" rather than "none".
+  // ordinary, so null means unrestricted. An explicit empty set still means
+  // "none": treating it like null would turn a caller with no readable branches
+  // into one that can read every branch.
   // Writing somewhere you cannot read back is silent corruption: the row lands,
   // every later query filters it out, and nothing anywhere says why. So the two
   // halves of the scope have to agree before the first query runs.
@@ -103,20 +168,75 @@ export function createContext(o: {
 
   const scopeOf = (model: string) => manifest.models[model]?.scope ?? 'shared'
 
+  const validateFields = (model: string, row: Row, operationName: 'filter' | 'update'): void => {
+    const def = manifest.models[model]
+    if (!def) {
+      throw new KetError({
+        code: 'E_UNKNOWN_MODEL',
+        module: operation.by,
+        message: `no model "${model}"`,
+      })
+    }
+    const unknown = Object.keys(row).filter((key) => !def.fields[key])
+    if (unknown.length) {
+      throw new KetError({
+        code: 'E_UNKNOWN_FIELD',
+        module: operation.by,
+        message: `${model} has no field(s): ${unknown.join(', ')}`,
+        hint: `fields: ${Object.keys(def.fields).join(', ')}`,
+      })
+    }
+    if (operationName !== 'update') return
+    const protectedFields = def.scope === 'company+branch' ? ['companyId', 'branchId'] : ['companyId']
+    const attempted = protectedFields.filter((key) => key in row)
+    if (def.scope !== 'shared' && attempted.length) {
+      throw new KetError({
+        code: 'E_SCOPE_FIELD_WRITTEN',
+        module: operation.by,
+        message: `"${fnKey}" attempted to update ${model}.${attempted.join(', ')}`,
+        hint: 'scope columns are immutable after insert — move data with an explicitly cross-company administrative workflow',
+      })
+    }
+  }
+
   // ── decimal columns ────────────────────────────────────────────────────────
   //
-  // Both adapters store and return a decimal as a string, which is what keeps it
-  // exact across the round trip. Arithmetic still happens on numbers, as it does in
-  // Odoo — the conversion is here, in the one place that knows both the model and
-  // the row, rather than in the adapter, which sees only untyped columns.
+  // Both adapters store and return a decimal as a string, and it stays one all the
+  // way out. A write may hand in a number — arithmetic happens on numbers — and
+  // encodeRow renders it; a read never converts.
+  //
+  // It used to convert, and that quietly rewrote stored data. `{ ...row, note }`
+  // is how everyone edits one field, and it carries every other column along with
+  // it. With the decimal decoded to a number, an edit that never mentioned the
+  // amount wrote it back rounded: 12.50 became 12.5, and 1234567890123456.78
+  // became …6.8. Nothing failed. The column simply held a different number
+  // afterwards, which is the worst way for a ledger to be wrong.
   const decimalsOf = (model: string): string[] =>
     Object.entries(manifest.models[model]?.fields ?? {})
       .filter(([, f]) => f.base === 'decimal')
       .map(([n]) => n)
 
+  const normalizeDecimal = (model: string, field: string, value: unknown): string => {
+    const parsed = parseDecimal(value)
+    if (parsed.ok) return parsed.value
+    throw new KetError({
+      code: parsed.reason === 'size' ? 'E_DECIMAL_TOO_LONG' : 'E_INVALID_DECIMAL',
+      module: operation.by,
+      message:
+        parsed.reason === 'size'
+          ? `${model}.${field} exceeds the ${DECIMAL_MAX_CHARS}-character decimal limit`
+          : `${model}.${field} requires a finite number or plain decimal string`,
+    })
+  }
+
   const booleansOf = (model: string): string[] =>
     Object.entries(manifest.models[model]?.fields ?? {})
       .filter(([, f]) => f.base === 'bool')
+      .map(([n]) => n)
+
+  const datetimesOf = (model: string): string[] =>
+    Object.entries(manifest.models[model]?.fields ?? {})
+      .filter(([, f]) => f.base === 'datetime')
       .map(([n]) => n)
 
   const jsonOf = (model: string): string[] =>
@@ -126,19 +246,37 @@ export function createContext(o: {
 
   const encodeRow = (model: string, row: Row): Row => {
     const cols = decimalsOf(model)
-    if (!cols.length) return row
+    const stamps = datetimesOf(model)
+    if (!cols.length && !stamps.length) return row
     const out: Row = { ...row }
-    // decimalText, not String: a raw db.update never passes through a changeset, so
-    // this is the only place that can keep "1e-7" out of a decimal column.
-    for (const c of cols) if (out[c] != null) out[c] = decimalText(out[c] as number | string)
+    // A raw db.insert/update never passes through a changeset. Validate as well as
+    // render here so it cannot store exponent syntax or bypass the public budget.
+    for (const c of cols) if (out[c] != null) out[c] = normalizeDecimal(model, c, out[c])
+    /**
+     * One instant, one spelling.
+     *
+     * Postgres normalises a TIMESTAMPTZ to UTC whether or not it is asked, so a
+     * caller passing "+07:00" would leave a different string in SQLite than in
+     * Postgres for the same moment. Normalising here — the one place every write
+     * passes through — keeps the two datastores byte-identical, and makes the
+     * stored text sort chronologically, which is what a range query compares.
+     */
+    for (const c of stamps) {
+      const held = out[c]
+      if (held == null) continue
+      const at = held instanceof Date ? held : new Date(String(held))
+      if (!Number.isNaN(at.getTime())) out[c] = at.toISOString()
+    }
     return out
   }
 
+  const validateDecimalRow = (model: string, row: Row): void => {
+    for (const field of decimalsOf(model)) if (row[field] != null) normalizeDecimal(model, field, row[field])
+  }
+
   const decodeRows = (model: string, rows: Row[]): Row[] => {
-    const cols = decimalsOf(model)
     const bools = booleansOf(model)
     const json = dialect === 'sqlite' ? jsonOf(model) : []
-    for (const row of rows) for (const c of cols) if (row[c] != null) row[c] = Number(row[c])
     for (const row of rows) for (const c of bools) if (row[c] != null) row[c] = Boolean(row[c])
     for (const row of rows)
       for (const c of json) if (typeof row[c] === 'string') row[c] = JSON.parse(row[c] as string)
@@ -185,10 +323,10 @@ export function createContext(o: {
     if (operation.crossCompany) return q // declared, and visible in the manifest
 
     const cs = readCompanies(q.model)
-    const col = { model: q.model, name: 'companyId' }
+    const col = makeCol(q.model, 'companyId', 'text')
     let out = q.where(cs.length === 1 ? eq(col, cs[0] as string) : inArray(col, cs))
-    if (kind === 'company+branch' && scope.branches && scope.branches.length > 0) {
-      out = out.where(inArray({ model: q.model, name: 'branchId' }, scope.branches))
+    if (kind === 'company+branch' && scope.branches != null) {
+      out = out.where(inArray(makeCol(q.model, 'branchId', 'text'), scope.branches))
     }
     return out
   }
@@ -251,6 +389,14 @@ export function createContext(o: {
   const fresh = () => {
     n = 0
   }
+  const equalPredicate = (model: string, field: string, value: unknown): string => {
+    const column = adapter.quoteIdent(field)
+    if (value === null) return `${column} IS NULL`
+    const placeholder = ph()
+    return dialect === 'sqlite' && manifest.models[model]?.fields[field]?.base === 'decimal'
+      ? `ket_decimal_cmp(${column}, ${placeholder}) = 0`
+      : `${column} = ${placeholder}`
+  }
 
   /**
    * Fill in what a query asked to preload: one extra query per relation, never one
@@ -259,6 +405,27 @@ export function createContext(o: {
    */
   const fillPreloads = async (q: Query, rows: Row[]): Promise<Row[]> => {
     if (!q.preloads.length || !rows.length) return rows
+    const chunks = <T>(values: T[], size = 500): T[][] => {
+      const out: T[][] = []
+      for (let index = 0; index < values.length; index += size) out.push(values.slice(index, index + size))
+      return out
+    }
+    const loadChunks = async (model: string, field: string, values: unknown[]): Promise<Row[]> => {
+      const loaded: Row[] = []
+      const base = manifest.models[model]?.fields[field]?.base
+      if (!base)
+        throw new KetError({
+          code: 'E_UNKNOWN_FIELD',
+          module: operation.by,
+          message: `${model} has no field "${field}"`,
+        })
+      for (const batch of chunks(values)) {
+        loaded.push(
+          ...(await db.all(from(table(manifest, model)).where(inArray(makeCol(model, field, base), batch)))),
+        )
+      }
+      return loaded
+    }
 
     for (const { name } of q.preloads) {
       const rel = relationOf(q.model, name)
@@ -269,9 +436,7 @@ export function createContext(o: {
           for (const r of rows) r[name] = null
           continue
         }
-        const parents = await db.all(
-          from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: 'id' }, ids)),
-        )
+        const parents = await loadChunks(rel.target, 'id', ids)
         const byId = new Map(parents.map((p) => [p.id, p]))
         for (const r of rows) r[name] = byId.get(r[rel.by]) ?? null
       } else {
@@ -280,9 +445,7 @@ export function createContext(o: {
           for (const r of rows) r[name] = []
           continue
         }
-        const children = await db.all(
-          from(table(manifest, rel.target)).where(inArray({ model: rel.target, name: rel.by }, ids)),
-        )
+        const children = await loadChunks(rel.target, rel.by, ids)
         const grouped = new Map<unknown, Row[]>()
         for (const child of children) {
           const key = child[rel.by]
@@ -324,15 +487,29 @@ export function createContext(o: {
       const rows = await adapter.all(text, params)
       return rows.map((row) => {
         const aggregates: Record<string, unknown> = {}
-        for (const aggregate of grouped.aggregates) aggregates[aggregate.as] = row[aggregate.as]
+        for (const aggregate of grouped.aggregates) {
+          const value = row[aggregate.as]
+          const computedDecimal =
+            aggregate.col?.base === 'decimal' && aggregate.fn !== 'count' && aggregate.fn !== 'countDistinct'
+          aggregates[aggregate.as] =
+            value == null || !computedDecimal
+              ? value
+              : (canonicalDecimal(value) ?? normalizeDecimal(grouped.model, aggregate.col!.name, value))
+        }
         return {
-          key: grouped.groups.map((_, index) => row[`__group${index}`]),
+          key: grouped.groups.map((group, index) => {
+            const value = row[`__group${index}`]
+            return value == null || group.interval || group.col.base !== 'decimal'
+              ? value
+              : (canonicalDecimal(value) ?? normalizeDecimal(grouped.model, group.col.name, value))
+          }),
           count: Number(row.__count),
           aggregates,
         }
       })
     },
     async del(q) {
+      refuseAppendOnly(q.model, 'delete from')
       // A select passed to del renders as a select and deletes nothing — and the
       // effect check sees 'read', so a function that correctly declared 'write'
       // is refused for an effect it never wanted. website_menu.removeMenuItem was
@@ -346,7 +523,7 @@ export function createContext(o: {
         })
       }
       checkQuery(q)
-      writes.push({ op: 'update', model: q.model, where: {} })
+      record({ op: 'update', model: q.model, where: {} })
       if (dryRun) return { changes: 0 }
       const { text, params } = scoped(q).toSQL(dialect)
       return adapter.run(text, params)
@@ -372,17 +549,32 @@ export function createContext(o: {
     async select(model, where = {}) {
       need('read', model)
       const t = adapter.quoteIdent(tableNameFor(model))
-      const open = scopeOf(model) === 'shared' || operation.crossCompany
+      const kind = scopeOf(model)
+      const open = kind === 'shared' || operation.crossCompany
       const keys = Object.keys(where)
       fresh()
-      const conds = keys.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`)
-      const params: unknown[] = keys.map((k) => where[k])
+      const conds = keys.map((k) => equalPredicate(model, k, where[k]))
+      const params: unknown[] = keys
+        .filter((k) => where[k] !== null)
+        .map((k) =>
+          manifest.models[model]?.fields[k]?.base === 'decimal'
+            ? normalizeDecimal(model, k, where[k])
+            : where[k],
+        )
       if (!open) {
         // A set, not a value: this is the one place the convenience path has to
         // part company with a plain `column = ?` map.
         const cs = readCompanies(model)
         conds.push(`${adapter.quoteIdent('companyId')} IN (${cs.map(() => ph()).join(', ')})`)
         params.push(...cs)
+        if (kind === 'company+branch' && scope.branches != null) {
+          if (scope.branches.length) {
+            conds.push(`${adapter.quoteIdent('branchId')} IN (${scope.branches.map(() => ph()).join(', ')})`)
+            params.push(...scope.branches)
+          } else {
+            conds.push('1 = 0')
+          }
+        }
       }
       const sql = `SELECT * FROM ${t}` + (conds.length ? ` WHERE ${conds.join(' AND ')}` : '')
       return decodeRows(model, await adapter.all(sql, params))
@@ -399,7 +591,7 @@ export function createContext(o: {
         })
       }
       const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
-      writes.push({ op: 'insert', model, row: stamped })
+      record({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
       fresh()
@@ -421,7 +613,7 @@ export function createContext(o: {
         })
       }
       const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
-      writes.push({ op: 'insert', model, row: stamped })
+      record({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
       fresh()
@@ -433,29 +625,52 @@ export function createContext(o: {
       return { changes: result.changes, inserted: result.changes === 1 }
     },
     async update(model, where, patch) {
+      // compareAndSet and an updating changeset both land here, so this is the
+      // only place the refusal has to live.
+      refuseAppendOnly(model, 'update')
       need('write', model)
-      writes.push({ op: 'update', model, where, patch })
+      validateFields(model, where, 'filter')
+      validateFields(model, patch, 'update')
+      if (!Object.keys(where).length) {
+        throw new KetError({
+          code: 'E_UPDATE_NEEDS_WHERE',
+          module: operation.by,
+          message: `updating ${model} requires a non-empty where clause`,
+        })
+      }
+      if (!Object.keys(patch).length) return { changes: 0 }
+      // Dry-run returns before SQL encoding, but it is still a public write path and
+      // must reject values a real call could not store.
+      validateDecimalRow(model, where)
+      validateDecimalRow(model, patch)
+      record({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
-      const where3 = encodeRow(
-        model,
-        scopeOf(model) === 'shared' || operation.crossCompany
-          ? where
-          : { ...where, companyId: requireCompany(model) },
-      )
+      const kind = scopeOf(model)
+      const open = kind === 'shared' || operation.crossCompany
+      const where3 = encodeRow(model, open ? where : { ...where, companyId: requireCompany(model) })
       const patch2 = encodeRow(model, timestamped(model, patch, 'update'))
       const pk = Object.keys(patch2),
         wk = Object.keys(where3)
       fresh()
       const sets = pk.map((k) => `${adapter.quoteIdent(k)} = ${ph()}`).join(', ')
       const boundWhere = wk.filter((k) => where3[k] !== null)
-      const conds = wk
-        .map((k) =>
-          where3[k] === null ? `${adapter.quoteIdent(k)} IS NULL` : `${adapter.quoteIdent(k)} = ${ph()}`,
-        )
-        .join(' AND ')
+      const conds = wk.map((k) => equalPredicate(model, k, where3[k]))
+      const branchParams = !open && kind === 'company+branch' ? scope.branches : null
+      if (branchParams != null) {
+        if (branchParams.length) {
+          conds.push(`${adapter.quoteIdent('branchId')} IN (${branchParams.map(() => ph()).join(', ')})`)
+        } else {
+          conds.push('1 = 0')
+        }
+      }
       const sql =
-        `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` + (wk.length ? ` WHERE ${conds}` : '')
-      return adapter.run(sql, [...pk.map((k) => patch2[k]), ...boundWhere.map((k) => where3[k])])
+        `UPDATE ${adapter.quoteIdent(tableNameFor(model))} SET ${sets}` +
+        (conds.length ? ` WHERE ${conds.join(' AND ')}` : '')
+      return adapter.run(sql, [
+        ...pk.map((k) => patch2[k]),
+        ...boundWhere.map((k) => where3[k]),
+        ...(branchParams ?? []),
+      ])
     },
     async compareAndSet(model, where, expected, patch) {
       const result = await db.update(model, { ...expected, ...where }, patch)
@@ -464,8 +679,12 @@ export function createContext(o: {
     },
   }
 
+  const log = o.log ?? createLogger(nullLog(), { deployment: 'ketjs', process: 'cli', fn: fnKey, dryRun })
+
   const ctx: Ctx = {
     fnKey,
+    correlationId: o.correlationId ?? null,
+    log,
     manifest,
     scope,
     actor: o.actor ?? null,
@@ -478,24 +697,32 @@ export function createContext(o: {
         const meta = manifest.jobs[name]
         if (!meta) throw new KetError({ code: 'E_UNKNOWN_JOB', message: `no background job "${name}"` })
         need('enqueue', name)
-        if (manifest.disabledModules?.includes(meta.by)) {
-          throw new KetError({
-            code: 'E_APP_NOT_INSTALLED',
-            module: meta.by,
-            message: `job "${name}" belongs to a module that is not installed`,
-          })
-        }
         validateJobInput(name, manifest, args)
         const queue =
           o.queueNotify === undefined
             ? await queueFor(adapter)
             : await createQueue(adapter, { notify: o.queueNotify })
+        // Enqueueing into another company is the fan-out a scheduled job has to
+        // perform: the schedule runs once per tenant with no company, and the work
+        // belongs to legal entities. It is gated on the same declaration that let
+        // this operation see more than one company in the first place, so the
+        // capability is in the manifest rather than in this call.
+        const { company: target, ...rest } = options ?? {}
+        const named = target?.trim()
+        if (named && !operation.crossCompany) {
+          throw new KetError({
+            code: 'E_ENQUEUE_COMPANY_NOT_ALLOWED',
+            module: operation.by,
+            message: `"${fnKey}" enqueued "${name}" into company "${named}" without declaring crossCompany`,
+            hint: 'declare crossCompany: true if this really acts across legal entities, or drop the company',
+          })
+        }
         return queue.enqueue(name, args, {
-          ...options,
+          ...rest,
           queue: meta.queue,
           maxAttempts: meta.maxAttempts,
           actor: o.actor ?? null,
-          scope,
+          scope: named ? { company: named, companies: [named], branch: null, branches: null } : scope,
         })
       },
     },
@@ -510,6 +737,8 @@ export function createContext(o: {
       writes.push(...transactionWrites)
       return value
     },
+    sequence: (name: string, options = {}) =>
+      nextSequenceNumber(adapter, name, { ...options, scope, dryRun }),
     table: (model: string) => table(manifest, model),
     change: (model: string, params: Row, base: Row | null = null): Changeset =>
       changeset(manifest, model, params, base),

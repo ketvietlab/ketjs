@@ -1,3 +1,9 @@
 .astro/
 dist/
 node_modules/
+public/assets/**/*.gif
+public/assets/**/*.jpeg
+public/assets/**/*.jpg
+public/assets/**/*.png
+public/assets/**/*.webp
+public/screenshots/

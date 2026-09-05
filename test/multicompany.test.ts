@@ -1,10 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import {
-  bootApp,
+  bootDeployment,
   callFn,
   compose,
-  defineApp,
+  defineDeployment,
   defineModule,
   from,
   migrateOne,
@@ -17,7 +18,7 @@ import type { Adapter, Ctx, Manifest, Scope } from '@ketvietlab/ketjs'
 /**
  * Reads span a set of companies, writes go to exactly one.
  *
- * Odoo splits allowed_company_ids from company_id and the split is right: a report
+ * the domain contract splits readable company set from company_id and the split is right: a report
  * may span three legal entities, but an invoice belongs to one. Absent a set, reads
  * see only the company being written to — widening what you can see should take
  * saying so.
@@ -162,18 +163,32 @@ test('multi-company: crossCompany still means all of them, and still has to be d
 
 // ── over HTTP ────────────────────────────────────────────────────────────────
 
-const app = defineApp({
+const app = defineDeployment({
   name: 'booksapp',
   modules: [books],
   headless: true,
   serve: {
-    bootstrap: ['books'],
-    routes: (ctx) => ({ '/entries': async (url, req) => json(await ctx.call('books.list', {}, url, req)) }),
+    routes: (ctx) => ({
+      '/entries': async (url, req) => json(await ctx.call('books.list', {}, url, req)),
+      '/verified-company/{companyId}': async (url, req, params) =>
+        json(
+          await ctx.callUncheckedForVerifiedCompany(
+            'books.add',
+            { id: url.searchParams.get('id'), memo: 'verified callback' },
+            params.companyId,
+            url,
+            req,
+          ),
+        ),
+    }),
   },
 })
 
 test('multi-company: the server reads both headers, and the active company joins the set', async () => {
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:', KET_COMPANY: 'acme' }, port: 0 })
+  const b = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    port: 0,
+  })
   const at = `http://127.0.0.1:${b.port}`
   const post = (company: string, id: string) =>
     fetch(`${at}/_ket/fn/books.add`, {
@@ -193,4 +208,35 @@ test('multi-company: the server reads both headers, and the active company joins
   }).then((r) => r.json())
   assert.deepEqual(ids(many), ['a1', 'g1'])
   await b.close()
+})
+
+test('multi-company: verified callback dispatch ignores request headers and selects one company', async () => {
+  const b = await bootDeployment(app, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_COMPANY: 'acme' },
+    port: 0,
+  })
+  try {
+    const at = `http://127.0.0.1:${b.port}`
+    const callbackId = `callback-${randomUUID()}`
+    const dispatched = await fetch(`${at}/verified-company/globex?id=${callbackId}`, {
+      headers: {
+        'x-ket-company': 'acme',
+        'x-ket-companies': 'acme,initech',
+      },
+    })
+    assert.equal(dispatched.status, 200, await dispatched.text())
+
+    const acme = await fetch(`${at}/entries`, { headers: { 'x-ket-company': 'acme' } }).then((r) => r.json())
+    const globex = await fetch(`${at}/entries`, { headers: { 'x-ket-company': 'globex' } }).then((r) =>
+      r.json(),
+    )
+    const initech = await fetch(`${at}/entries`, { headers: { 'x-ket-company': 'initech' } }).then((r) =>
+      r.json(),
+    )
+    assert.equal(ids(acme).includes(callbackId), false)
+    assert.equal(ids(globex).includes(callbackId), true)
+    assert.equal(ids(initech).includes(callbackId), false)
+  } finally {
+    await b.close()
+  }
 })

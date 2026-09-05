@@ -11,6 +11,7 @@ asset, island, and agent endpoints; modules and the app may add routes through d
 Declare reusable routes on the module that owns them:
 
 ```ts
+// File: src/modules/sales/index.ts
 import { defineModule, json } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
@@ -30,11 +31,22 @@ claiming the same path fail during composition.
 Module route dispatch checks the live manifest. Disabling a module therefore returns `404` for its
 routes instead of leaving stale handlers mounted.
 
+## Reserved API prefixes
+
+A contract-owning module can reserve a static prefix such as `/api/customer/v1/`. Routes below a reserved
+prefix must come from the owner or from a dependent extension using the owner's route factory. KetJS records
+the route method, request schema, response schemas, capability, and idempotency behavior in the manifest so
+OpenAPI can be generated from the deployed composition rather than maintained as a separate document.
+
+See [HTTP contracts and OpenAPI](/ketjs/openapi/) for the framework contract fields, extension rules, and generator
+boundary.
+
 ## Anonymous routes
 
 Routes default to requiring a session. Public endpoints must opt in:
 
 ```ts
+// File: src/modules/order/routes.ts
 routes: {
   '/health': {
     anonymous: true,
@@ -52,9 +64,10 @@ declared `anonymous: true`.
 `serve.routes` is useful for application shell routes that do not belong to a reusable module:
 
 ```ts
-import { defineApp, json } from '@ketvietlab/ketjs'
+// File: src/app.ts
+import { defineDeployment, json } from '@ketvietlab/ketjs'
 
-const app = defineApp({
+const app = defineDeployment({
   name: 'orders_api',
   modules: [sales],
   headless: true,
@@ -79,19 +92,26 @@ Route factories receive live runtime services:
 | --- | --- |
 | `manifest` | Full manifest shipped by the deployment. |
 | `live(request)` | Manifest restricted to modules enabled for this request's tenant. |
+| `reportsOf(url, request, target)` | Installed reports for a model whose source the viewer may call. |
 | `appsOf(request)` | Installed/available module information for this tenant. |
 | `scopeOf(url, request)` | Company and branch scope resolved from the session or development shim. |
 | `call(name, input, url, request)` | Function call carrying tenant, session, permissions, actor, and scope. |
 | `callUnchecked(...)` | Internal authorization bootstrap only; deliberately easy to audit by name. |
+| `callUncheckedForVerifiedCompany(...)` | Exact-company function dispatch after an external credential has cryptographically authenticated that company. |
 | `sessionsOf(url, request)` | Session manager for the request's tenant, or `null`. |
 | `storageOf(url, request)` | Tenant-namespaced blob storage. |
 | `translate(locale)` | Translator for the composed message catalogue. |
-| `document(...)`, `styles(request)` | Safe document shell and installed module styles. |
+| `document(...)`, `styles(request)` | Safe document shell and composed module styles. |
 | `joint(...)`, `jointShows(...)` | Installed extension-point output. |
 | `menu(url, request)` | Navigation filtered by install state and function permissions. |
 
 Do not cache `live()` or a tenant-specific service globally. Which modules, sessions, and storage
 apply can change per request.
+
+Provider callbacks may arrive without a staff session even though their durable records are company-scoped.
+Authenticate the exact request bytes first, bind the credential to one company, and only then use
+`callUncheckedForVerifiedCompany()`. The method keeps the existing tenant lease and constructs an exact
+single-company scope; it does not make a path, query, header, or unsigned body company claim trustworthy.
 
 ## Response helpers
 
@@ -117,6 +137,7 @@ types so binary APIs cannot accidentally become a markup escape hatch.
 Use `html` from `@ketvietlab/ketjs-view` and `page` or `fragment` from `@ketvietlab/ketjs`:
 
 ```ts
+// File: src/modules/order/routes.ts
 import { page } from '@ketvietlab/ketjs'
 import { html } from '@ketvietlab/ketjs-view'
 
@@ -142,6 +163,7 @@ pass request data to it.
 Use `navigablePage()` when one GET route can return either a complete document or replaceable slots:
 
 ```ts
+// File: src/modules/order/routes.ts
 import { navigablePage } from '@ketvietlab/ketjs'
 
 return navigablePage(request, {
@@ -162,11 +184,13 @@ server does not construct them during internal navigation.
 The protocol is intentionally small:
 
 ```http
+# File: examples/request.http
 X-Ket-Navigation: fragment-v1
 Accept: text/vnd.ket.fragments+html
 ```
 
 ```html
+<!-- File: src/templates/example.html -->
 <ket-fragments data-title="Orders">
   <template data-ket-slot="backend.content">...</template>
 </ket-fragments>
@@ -196,6 +220,7 @@ backward compatible.
 Add response headers without reconstructing the branded object:
 
 ```ts
+// File: src/modules/order/routes.ts
 return withHeaders(json({ ok: true }), {
   'cache-control': 'no-store',
   'set-cookie': cookie,
@@ -209,6 +234,7 @@ Use `withHeaders()` rather than spreading a route result into a new plain object
 Serve an in-memory export:
 
 ```ts
+// File: src/modules/order/routes.ts
 return bytes(csvBytes, {
   type: 'text/csv; charset=utf-8',
   status: 200,
@@ -218,6 +244,7 @@ return bytes(csvBytes, {
 Serve large content with backpressure:
 
 ```ts
+// File: src/modules/order/routes.ts
 const stored = await ctx.storageOf(url, request).get(key)
 if (!stored) return text('Not found', { status: 404 })
 
@@ -233,6 +260,7 @@ The HTTP layer consumes the async iterable chunk by chunk instead of buffering t
 HTTP-exposed functions are callable at:
 
 ```text
+# File: docs/src/content/docs/ketjs/http.md
 POST /_ket/fn/<qualified-function-name>
 Content-Type: application/json
 ```
@@ -240,11 +268,66 @@ Content-Type: application/json
 Use `TestClient.call()` or `ket call` instead of manually constructing this transport. They preserve
 cookies, identity headers, dry-run, idempotency keys, and error parsing.
 
+The generic transport buffers at most 1 MiB of JSON by default. Configure `serve.maxJsonBodyBytes` (or
+`maxJsonBodyBytes` on `createKetServer`) when a deployment needs a smaller boundary. KetJS checks both
+`Content-Length` and streamed bytes before it runs scope, permission, or actor resolvers, so an
+unauthenticated request cannot make those paths retain an unbounded body first.
+
+## Rate limiting
+
+A deployment may put a ceiling on how often one caller reaches a route:
+
+```ts
+// File: src/deployment.ts
+serve: {
+  rateLimit: (ctx, url, req) =>
+    url.pathname === '/api/token'
+      ? { action: 'auth.refresh', key: callerOf(req), limit: 60, windowMs: 15 * 60_000 }
+      : null,
+}
+```
+
+A refusal is answered `429` with `retry-after`, before the route runs — refusing after doing the work
+is a limit that costs what it was meant to save. Each refusal leaves a `rate_limited` record.
+
+**Return null for almost everything.** The check is durable, which means a database round trip, so
+pointing it at all traffic hands an attacker a lever rather than taking one away. Name the routes where
+*repetition by one identified caller* is the abuse — signing in, refreshing a token, an expensive
+report. Volumetric floods belong to whatever sits in front of the process.
+
+`key` says who is being limited: an account id, a hashed address, a device. It is hashed with the
+action before storage, so the table holds a counter and not a record of who was where. `action` is
+kept, because it is low-cardinality and it is what an operator greps for.
+
+State lives in `ket_rate` in the tenant's own database, created the first time a policy is claimed —
+a deployment that limits nothing carries no limiter state. The worker prunes counters nobody has
+touched for a day; a deployment running no worker should call `pruneRateSlots` itself.
+
+The window is fixed rather than a token bucket, because `limit per windowMs` is what a person means
+and a bucket quietly changes it. The cost, stated: a caller can spend a full allowance at the end of
+one window and another at the start of the next, so the worst case across a boundary is twice the
+limit.
+
+`claimRateSlot` is exported for a module that needs the same ceiling somewhere other than a route.
+
 ## Error handling
 
 `KetError` values serialize their `code`, message, and optional hint. Use stable codes for machine
 decisions and messages for diagnostics. Unexpected errors remain server failures; do not convert every
 exception into a successful JSON body.
 
-Keep body-size limits and provider authentication on dedicated routes. Use [Storage, transport, and
-streams](/ketjs/integrations/) for bounded multipart uploads and webhook/service boundaries.
+Malformed request URLs, `Host` headers, percent encoding, and JSON bodies are client errors. KetJS
+answers them with HTTP `400` inside the normal JSON error boundary; they never escape from the async
+server listener. As an origin server, KetJS accepts only origin-form request targets (`/path?...`) and
+a `Host` authority without userinfo, path, query, fragment, encoded delimiters, or whitespace. Absolute
+and scheme-relative request targets are rejected before tenant resolution. Function bodies must be
+JSON objects rather than arrays or scalar values.
+
+`FormValidationError` and invalid generic function input use HTTP `422`. Their JSON includes flat
+`issues`, grouped `fieldErrors`, and whole-form `formErrors`. See [Form validation](/ketjs/form-validation/)
+for the shared browser/server contract. Other `KetError` values remain HTTP `400` unless a more specific
+transport status applies.
+
+The generic JSON limit is only a baseline. Keep content-specific limits and provider authentication on
+dedicated routes. Use [Storage, transport, and streams](/ketjs/integrations/) for bounded multipart
+uploads and webhook/service boundaries.

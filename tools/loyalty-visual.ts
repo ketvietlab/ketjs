@@ -4,7 +4,7 @@
 import { existsSync } from 'node:fs'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const path = process.env.KET_VISUAL_SQLITE
 if (!path) throw new Error('set KET_VISUAL_SQLITE to a new SQLite file')

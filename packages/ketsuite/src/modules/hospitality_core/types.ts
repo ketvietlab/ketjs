@@ -18,6 +18,12 @@ export const ROOM_STATUSES = [
   'out_of_order',
 ] as const
 
+/**
+ * Statuses that take a room out of the sellable pool. A dirty or occupied room
+ * is still sold tonight; a room under maintenance or out of order is not.
+ */
+export const OUT_OF_SERVICE_ROOM_STATUSES = ['maintenance', 'out_of_order'] as const
+
 export const ROOM_VIEW_TYPES = [
   'city',
   'sea',
@@ -47,12 +53,49 @@ export const BOOKING_TYPES = ['nightly', 'hourly', 'weekly', 'monthly'] as const
 export const RATE_TYPES = ['nightly', 'hourly', 'weekly', 'monthly'] as const
 export const MEAL_PLANS = ['RO', 'BB', 'HB', 'FB', 'AI'] as const
 export const BILLING_MODES = ['upfront', 'recurring'] as const
-export const RESERVATION_STATES = ['draft', 'confirmed', 'checked_in', 'checked_out', 'cancelled'] as const
-export const STAY_STATES = ['draft', 'checked_in', 'checked_out', 'cancelled'] as const
+export const RESERVATION_STATES = [
+  'draft',
+  'confirmed',
+  'checked_in',
+  'checked_out',
+  'no_show',
+  'cancelled',
+] as const
+export const STAY_STATES = ['draft', 'checked_in', 'checked_out', 'no_show', 'cancelled'] as const
 export const FOLIO_STATES = ['draft', 'open', 'closed', 'cancelled'] as const
-export const ASSIGNMENT_STATES = ['active', 'closed'] as const
-export const BOOKING_PROVIDERS = ['direct', 'booking', 'agoda', 'expedia', 'traveloka', 'airbnb'] as const
-export const CHARGE_TYPES = ['room', 'minibar', 'spa', 'restaurant', 'service', 'discount'] as const
+/**
+ * `held` is a room kept for a guest who has not arrived. It is not occupancy:
+ * the room stays sellable to nobody else for those nights, but its own status
+ * is untouched, because a room held for next Tuesday is still an ordinary
+ * available room today.
+ */
+export const ASSIGNMENT_STATES = ['held', 'active', 'closed'] as const
+export const BOOKING_PROVIDERS = [
+  'direct',
+  'website',
+  'booking',
+  'agoda',
+  'expedia',
+  'traveloka',
+  'airbnb',
+] as const
+export const CHARGE_TYPES = [
+  'room',
+  'minibar',
+  'spa',
+  'restaurant',
+  'service',
+  'cancellation',
+  'discount',
+] as const
+/**
+ * How a product-backed charge is fulfilled before it becomes active.
+ *
+ * `external_stock` deliberately names a boundary rather than a module: a
+ * private deployment connector may use a remote stock authority without
+ * making the public hospitality module depend on that datastore.
+ */
+export const CHARGE_FULFILLMENT_KINDS = ['none', 'external_stock'] as const
 export const PROPERTY_CHARGE_TYPES = ['parking', 'city_tax', 'internet', 'resort_fee', 'other'] as const
 export const EXTRA_RECURRENCES = ['once', 'per_night', 'per_unit'] as const
 export const DOCUMENT_TYPES = ['cccd', 'cmnd', 'passport', 'other'] as const
@@ -68,6 +111,7 @@ export const STAY_NOTICE_CHANNELS = ['online', 'vneid', 'email', 'phone', 'softw
 
 export type AccommodationType = (typeof ACCOMMODATION_TYPES)[number]
 export type RoomStatus = (typeof ROOM_STATUSES)[number]
+export type OutOfServiceRoomStatus = (typeof OUT_OF_SERVICE_ROOM_STATUSES)[number]
 export type RoomViewType = (typeof ROOM_VIEW_TYPES)[number]
 export type AmenityScope = (typeof AMENITY_SCOPES)[number]
 export type BedType = (typeof BED_TYPES)[number]
@@ -84,6 +128,7 @@ export type FolioState = (typeof FOLIO_STATES)[number]
 export type AssignmentState = (typeof ASSIGNMENT_STATES)[number]
 export type BookingProvider = (typeof BOOKING_PROVIDERS)[number]
 export type ChargeType = (typeof CHARGE_TYPES)[number]
+export type ChargeFulfillmentKind = (typeof CHARGE_FULFILLMENT_KINDS)[number]
 export type PropertyChargeType = (typeof PROPERTY_CHARGE_TYPES)[number]
 export type ExtraRecurrence = (typeof EXTRA_RECURRENCES)[number]
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]

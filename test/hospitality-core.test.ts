@@ -2048,3 +2048,111 @@ test('hospitality core: Vietnamese and English cover every UI and validation key
   assert.equal(vi('hospitality_core.value.hours', { count: 24 }), '24 giờ')
   assert.equal(en('hospitality_core.value.hours', { count: 24 }), '24 hours')
 })
+
+test('hospitality rooms: a room kept for an arriving guest is theirs, and is let go with them', async () => {
+  const adapter = await boot()
+  try {
+    await property(adapter)
+    await call(
+      'hospitality_core.saveRoomType',
+      { id: 'standard', propertyId: 'hotel', code: 'STD', name: 'Standard', baseRate: '100' },
+      adapter,
+    )
+    for (const code of ['101', '102'])
+      await call(
+        'hospitality_core.saveRoom',
+        { id: code, propertyId: 'hotel', roomTypeId: 'standard', code, name: code },
+        adapter,
+      )
+    await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Guest' }, adapter)
+    await call('partner.savePartner', { id: 'other', kind: 'person', name: 'Other' }, adapter)
+    const book = (id: string, partnerId: string, from: string, to: string) =>
+      call(
+        'hospitality_core.createReservation',
+        {
+          id,
+          propertyId: 'hotel',
+          roomTypeId: 'standard',
+          partnerId,
+          checkIn: `${from}T07:00:00.000Z`,
+          checkOut: `${to}T05:00:00.000Z`,
+          rate: '100',
+        },
+        adapter,
+      )
+    const hold = (stayId: string, roomId: string) =>
+      call('hospitality_core.holdRoom', { stayId, roomId }, adapter)
+    const heldRoom = async (stayId: string) =>
+      (
+        await adapter.all(
+          `SELECT "roomId" FROM hospitality_core_room_assignment WHERE "stayId" = '${stayId}' AND state = 'held'`,
+        )
+      )[0]?.roomId ?? null
+
+    assert.equal(((await book('first', 'guest', '2026-11-01', '2026-11-03')).value as Row).ok, true)
+    assert.equal(((await book('second', 'other', '2026-11-02', '2026-11-04')).value as Row).ok, true)
+
+    /* ── Keeping a room takes it from everybody else for those nights ─────── */
+
+    assert.equal(((await hold('first:stay', '101')).value as Row).ok, true)
+    assert.equal(await heldRoom('first:stay'), '101')
+
+    const clash = (await hold('second:stay', '101')).value as Row
+    assert.equal(clash.ok, false)
+    assert.equal((clash.errors as Row[])[0]?.code, 'room_already_held')
+
+    // But the room is still *sold* to nobody: availability counts room types,
+    // not rooms, so keeping 101 has not taken a room-night from anybody.
+    const ledger = await adapter.all(
+      `SELECT date, sold, total FROM hospitality_core_availability_ledger WHERE date = '2026-11-01'`,
+    )
+    assert.equal(Number(ledger[0]?.sold), 1, 'the reservation took one, the hold took none')
+    assert.equal(Number(ledger[0]?.total), 2)
+
+    // The second guest may have the other room over the same nights.
+    assert.equal(((await hold('second:stay', '102')).value as Row).ok, true)
+
+    /* ── Choosing again replaces the choice rather than keeping two rooms ─── */
+
+    assert.equal(((await hold('first:stay', '101')).value as Row).ok, true)
+    assert.equal(
+      Number(
+        (
+          await adapter.all(
+            `SELECT COUNT(*) AS n FROM hospitality_core_room_assignment WHERE "stayId" = 'first:stay' AND state = 'held'`,
+          )
+        )[0]?.n,
+      ),
+      1,
+      'one guest keeps one room',
+    )
+
+    /* ── Arriving uses the room that was kept, without being told which ──── */
+
+    // No `roomId`: the point is that the desk does not have to say it again.
+    const arrived = (
+      await call(
+        'hospitality_core.checkIn',
+        { stayId: 'first:stay', at: '2026-11-01T08:00:00.000Z' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(arrived.ok, true)
+    assert.equal(
+      arrived.roomId,
+      '101',
+      'the desk already decided; arriving is not the moment to decide again',
+    )
+    assert.equal(await heldRoom('first:stay'), null, 'the hold is spent, not left behind')
+
+    /* ── A guest who never comes does not keep the room ──────────────────── */
+
+    const gone = (
+      await call('hospitality_core.cancelReservation', { id: 'second', reason: 'Khách đổi ý' }, adapter)
+    ).value as Row
+    assert.equal(gone.ok, true)
+    assert.equal(await heldRoom('second:stay'), null, 'a cancelled stay lets its room go')
+  } finally {
+    await adapter.close()
+  }
+})

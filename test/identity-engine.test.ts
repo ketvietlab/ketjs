@@ -2,9 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   agentTools,
-  bootApp,
+  bootDeployment,
   compose,
-  defineApp,
+  defineDeployment,
   defineFn,
   defineModule,
   json,
@@ -15,7 +15,6 @@ import type { SessionContext } from '@ketvietlab/ketjs'
 test('identity engine: an internal function has no generic HTTP or agent surface', async () => {
   const identity = defineModule({
     name: 'identity_engine',
-    app: true,
     functions: {
       inspectCredential: defineFn({
         exposure: 'internal',
@@ -38,13 +37,13 @@ test('identity engine: an internal function has no generic HTTP or agent surface
     false,
   )
 
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'identity_engine_http',
     modules: [identity],
     headless: true,
-    serve: { bootstrap: ['identity_engine'] },
+    serve: {},
   })
-  const booted = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   try {
     const at = `http://127.0.0.1:${booted.port}`
     const hidden = await fetch(`${at}/_ket/fn/identity_engine.inspectCredential`, {
@@ -70,7 +69,6 @@ test('identity engine: live session resolution updates context and rejects a rev
   }
   const identity = defineModule({
     name: 'live_identity',
-    app: true,
     routes: {
       '/session/start': {
         anonymous: true,
@@ -90,17 +88,16 @@ test('identity engine: live session resolution updates context and rejects a rev
       '/session/scope': (ctx) => async (url, req) => json(await ctx.scopeOf(url, req)),
     },
   })
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'live_identity_http',
     modules: [identity],
     headless: true,
     serve: {
-      bootstrap: ['live_identity'],
       sessions: { secret: 'test' },
       resolveSession: async () => live,
     },
   })
-  const booted = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   try {
     const at = `http://127.0.0.1:${booted.port}`
     const started = await fetch(`${at}/session/start`)
@@ -126,6 +123,55 @@ test('identity engine: live session resolution updates context and rejects a rev
       headers: { cookie, accept: 'application/json' },
     })
     assert.equal(revoked.status, 401)
+  } finally {
+    await booted.close()
+  }
+})
+
+test('identity engine: a trusted request identity uses the normal actor, scope and permission pipeline', async () => {
+  const identity = defineModule({
+    name: 'request_identity',
+    functions: {
+      inspect: defineFn({
+        input: {},
+        output: { actor: 'text?', company: 'text?' },
+        effects: [],
+        handler: (ctx) => ({ actor: ctx.actor, company: ctx.scope.company }),
+      }),
+      denied: defineFn({ input: {}, output: { ok: 'bool' }, effects: [], handler: () => ({ ok: true }) }),
+    },
+    routes: {
+      '/who': (ctx) => async (url, req) => json(await ctx.call('request_identity.inspect', {}, url, req)),
+    },
+  })
+  const app = defineDeployment({
+    name: 'trusted_request_identity',
+    modules: [identity],
+    headless: true,
+    serve: {
+      resolveIdentity: async ({ req }) =>
+        req.headers['x-signed-identity'] === 'valid'
+          ? { userId: 'zitadel:u1', companies: ['default'], company: 'default' }
+          : null,
+      permissions: async () => ['request_identity.inspect'],
+    },
+  })
+  const booted = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
+  try {
+    const at = `http://127.0.0.1:${booted.port}`
+    assert.equal((await fetch(`${at}/who`, { headers: { accept: 'application/json' } })).status, 401)
+    const signed = { 'x-signed-identity': 'valid', accept: 'application/json' }
+    assert.deepEqual(await fetch(`${at}/who`, { headers: signed }).then((r) => r.json()), {
+      actor: 'zitadel:u1',
+      company: 'default',
+    })
+    const denied = await fetch(`${at}/_ket/fn/request_identity.denied`, {
+      method: 'POST',
+      headers: { ...signed, 'content-type': 'application/json' },
+      body: '{}',
+    })
+    assert.equal(denied.status, 403)
+    assert.equal(((await denied.json()) as { code: string }).code, 'E_FN_NOT_PERMITTED')
   } finally {
     await booted.close()
   }

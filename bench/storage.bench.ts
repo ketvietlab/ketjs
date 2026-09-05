@@ -5,9 +5,16 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bootApp, defineApp, s3Storage, sha256, signRequest, sqliteAdapter } from '@ketvietlab/ketjs'
+import {
+  bootDeployment,
+  defineDeployment,
+  s3Storage,
+  sha256,
+  signRequest,
+  sqliteAdapter,
+} from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
-import type { Adapter, BootedApp } from '@ketvietlab/ketjs'
+import type { Adapter, BootedDeployment } from '@ketvietlab/ketjs'
 import { company, partner, storage as storageModule } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 
@@ -30,7 +37,7 @@ const pgUrl = process.env.KET_BENCH_PG ?? 'postgres://dev:devpassword@127.0.0.1:
 const pgBase = pgUrl.replace(/\/[^/]*$/, '')
 let localDir: string | null = null
 let admin: Adapter | null = null
-let server: BootedApp | null = null
+let server: BootedDeployment | null = null
 const root = s3Storage({ endpoint, bucket, pathStyle: true, ...credentials })
 
 const open = (key: string): Adapter =>
@@ -77,12 +84,11 @@ const cleanup = async () => {
 
 try {
   await prepare()
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'storage_benchmark',
     modules: [address, partner, company, storageModule],
     headless: true,
     serve: {
-      bootstrap: ['storage'],
       tenants: {
         resolve: (_url, req) => {
           const key = String(req.headers['x-tenant'] ?? '')
@@ -94,7 +100,7 @@ try {
       },
     },
   })
-  server = await bootApp(app, {
+  server = await bootDeployment(app, {
     port: 0,
     env: {
       KET_STORAGE: 's3',

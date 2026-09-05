@@ -7,7 +7,7 @@ import {
   bootWorker,
   compose,
   createQueue,
-  defineApp,
+  defineDeployment,
   defineModule,
   effectTransport,
   memoryTransport,
@@ -57,7 +57,6 @@ test('outbound transport: worker retry reuses the stable key and undeclared send
   })
   const jobs = defineModule({
     name: 'transport_jobs',
-    app: true,
     jobs: {
       deliver: {
         queue: 'mail',
@@ -80,13 +79,12 @@ test('outbound transport: worker retry reuses the stable key and undeclared send
       },
     },
   })
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'transport_worker',
     modules: [jobs],
     headless: true,
     worker: { queues: { mail: 1 } },
     serve: {
-      bootstrap: ['transport_jobs'],
       openTransport: () => provider,
     },
   })
@@ -110,6 +108,7 @@ test('outbound transport: worker retry reuses the stable key and undeclared send
   const logs: WorkerLog[] = []
   const worker = await bootWorker(app, {
     env: {
+      KET_LOG: 'null',
       KET_SQLITE: database,
       KET_STORAGE_DIR: join(dir, 'storage'),
       KET_QUEUE_NOTIFY: '0',

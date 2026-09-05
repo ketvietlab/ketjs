@@ -1,38 +1,10 @@
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
 import { seeOther } from '../backend/forms.ts'
-import { catalogsScreen, countryScreen } from './screens.tsx'
-import type { CatalogRow, DivisionRow } from './screens.tsx'
-
-type Req = Parameters<Route>[1]
-type AnyRow = Record<string, unknown>
-const localeQuery = (url: URL): string =>
-  url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : ''
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
-const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  menuFilter: url.searchParams.get('menu')?.trim() || null,
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: Parameters<ServeContext['document']>[0]['body'],
-) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
+import { catalogsScreen, countryScreen } from './screens/index.ts'
+import type { CatalogRow, DivisionRow } from './screens/index.ts'
+import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
 
 const catalogRows = async (ctx: ServeContext, url: URL, req: Req): Promise<CatalogRow[]> => {
   const [available, statuses] = await Promise.all([
@@ -60,21 +32,25 @@ export const routes: Record<string, RouteEntry> = {
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const _ = ctx.translate(ctx.localeOf(url, req))
-      return document(
-        ctx,
-        url,
-        req,
-        _('address_backend.title'),
-        catalogsScreen(_, await catalogRows(ctx, url, req), await frameFor(ctx, url, req), localeQuery(url)),
-      )
+      const rows = await catalogRows(ctx, url, req)
+      return adminPage(ctx, url, req, {
+        title: 'address_backend.title',
+        active: '/admin/addresses',
+        body: (_, frame) =>
+          catalogsScreen(_, frame, {
+            rows: rows.map((row) => ({
+              ...row,
+              detailHref: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}`),
+              installAction: inLocale(url, `/admin/addresses/${encodeURIComponent(row.countryCode)}/install`),
+            })),
+          }),
+      })
     },
 
   '/admin/addresses/{countryCode}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const _ = ctx.translate(ctx.localeOf(url, req))
       const countryCode = params.countryCode.toUpperCase()
       const rows = await catalogRows(ctx, url, req)
       const status = rows.find((row) => row.countryCode === countryCode) ?? null
@@ -98,18 +74,12 @@ export const routes: Record<string, RouteEntry> = {
           parent = path.at(-1) ?? null
         }
       }
-      return document(
-        ctx,
-        url,
-        req,
-        countryCode,
-        countryScreen(
-          _,
-          { countryCode, status, divisions, parent },
-          await frameFor(ctx, url, req),
-          localeQuery(url),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: countryCode,
+        translate: false,
+        body: (_, frame) =>
+          countryScreen(_, { countryCode, status, divisions, parent }, frame, localeQuery(url)),
+      })
     },
 
   '/admin/addresses/{countryCode}/install':
@@ -130,6 +100,8 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )) as { ok?: boolean; errors?: unknown }
       if (!result.ok) return text(JSON.stringify(result.errors ?? []), { status: 400 })
-      return seeOther(inLocale(url, `/admin/addresses/${params.countryCode.toUpperCase()}`))
+      return seeOther(
+        inLocale(url, `/admin/addresses/${encodeURIComponent(params.countryCode.toUpperCase())}`),
+      )
     },
 }

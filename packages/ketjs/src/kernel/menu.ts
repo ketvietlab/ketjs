@@ -1,7 +1,6 @@
 // The navigation tree, as one viewer sees it.
 //
-// Three filters, applied in this order, because each depends on the one before:
-// what the deployment ships, what this database has switched on, and what this
+// Two filters, applied in this order: what the deployment composes and what this
 // viewer may call. The last is the one that matters most — a menu offering what it
 // cannot deliver is a menu that lies, and the 401 arrives after the click rather
 // than instead of it.
@@ -19,6 +18,11 @@ export type MenuNode = {
   icon: string | null
   /** True for the node whose path is showing, and for every heading above it. */
   active: boolean
+  /**
+   * True when this viewer may open the entry but the entry is not their work.
+   * The shell leaves these out of the main list; search still finds them.
+   */
+  secondary: boolean
   children: MenuNode[]
 }
 
@@ -27,6 +31,8 @@ export type MenuOptions = {
   allow?: readonly string[] | null
   /** Resolves a label. Given a key it does not know, it should return it unchanged. */
   translate?: (key: string) => string
+  /** The locale the labels come back in, so equal sequences sort the way it reads. */
+  locale?: string
   /** The path currently showing, used to mark the branch leading to it. */
   active?: string
   /**
@@ -34,13 +40,95 @@ export type MenuOptions = {
    * does, so filtering never orphans a leaf from the words above it.
    */
   q?: string
+  /**
+   * Mark entries this viewer may open but does not work on. Off by default:
+   * a caller that does not ask for the distinction gets the tree it always got.
+   *
+   * A viewer nothing is primary for keeps the whole permitted tree. An empty
+   * sidebar reads as a broken deployment, and telling a night auditor their
+   * work is nowhere is worse than showing them one screen too many.
+   */
+  intent?: boolean
+  /**
+   * The deployment's own grouping, applied before anything else is decided.
+   *
+   * Named entries move under the declared heading; the rest keep the heading
+   * their module gave them. A heading whose entries are all filtered away
+   * disappears like any other empty heading.
+   */
+  groups?: ReadonlyArray<{ id: string; label: string; icon?: string; items: readonly string[] }>
+  /** Menu ids to keep out of the main list whatever `for` says. */
+  demote?: readonly string[]
 }
 
-const order = (a: [string, MenuDef & { by: string }], b: [string, MenuDef & { by: string }]): number =>
-  (a[1].sequence ?? 100) - (b[1].sequence ?? 100) || a[1].label.localeCompare(b[1].label)
+/**
+ * The menu as this deployment arranges it.
+ *
+ * Regrouping happens on the declarations rather than on the built tree, so
+ * permission, intent, search and active-branch logic all keep working on one
+ * shape.
+ *
+ * Declaration order wins, for the groups and for the entries inside them. The
+ * first version of this inherited each group's position from the earliest entry
+ * it claimed, on the theory that module authors had already thought about order.
+ * They had — but within headings that regrouping dissolves. `sequence` 10 under
+ * "Operations" and `sequence` 10 under "Housekeeping" never had to compare, and
+ * once both headings are gone they compare as a tie broken by the alphabet. A
+ * hotel that listed its shifts in the order a shift runs got them back sorted by
+ * first letter.
+ */
+const regrouped = (
+  manifest: Manifest,
+  groups: MenuOptions['groups'],
+): Array<[string, MenuDef & { by: string }]> => {
+  const entries = Object.entries(manifest.menus)
+  if (!groups?.length) return entries
+
+  const claimed = new Map<
+    string,
+    { id: string; label: string; icon?: string; order: number; place: number }
+  >()
+  for (const [index, group] of groups.entries())
+    for (const [place, item] of group.items.entries())
+      claimed.set(item, { id: group.id, label: group.label, icon: group.icon, order: index, place })
+
+  const byId = new Map(entries)
+  // Spaced like module sequences so a declared group still interleaves sensibly
+  // with a heading the deployment left alone.
+  const groupSequence = (index: number): number => (index + 1) * 10
+
+  const out: Array<[string, MenuDef & { by: string }]> = []
+  const seen = new Set<string>()
+  for (const [id, def] of entries) {
+    const group = claimed.get(id)
+    if (!group) {
+      out.push([id, def])
+      continue
+    }
+    if (!seen.has(group.id)) {
+      seen.add(group.id)
+      out.push([
+        group.id,
+        {
+          by: def.by,
+          label: group.label,
+          ...(group.icon ? { icon: group.icon } : {}),
+          // The declared group stands where the module's heading stood, so a
+          // regrouped sidebar sits at the same level as the one it replaces.
+          // An entry hanging straight off a root has no heading to replace, and
+          // the group becomes that root's first heading instead.
+          parent: def.parent ? (byId.get(def.parent)?.parent ?? def.parent) : undefined,
+          sequence: groupSequence(group.order),
+        } as MenuDef & { by: string },
+      ])
+    }
+    out.push([id, { ...def, parent: group.id, sequence: group.place }])
+  }
+  return out
+}
 
 export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
-  const entries = Object.entries(manifest.menus)
+  const entries = regrouped(manifest, o.groups)
   const byParent = new Map<string | undefined, Array<[string, MenuDef & { by: string }]>>()
   for (const e of entries) {
     const list = byParent.get(e[1].parent) ?? []
@@ -53,6 +141,15 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
   const permitted = (def: MenuDef): boolean =>
     !def.needs || (!!manifest.functions[def.needs] && (!o.allow || o.allow.includes(def.needs)))
 
+  // `for` is about this viewer, not about this build: an entry naming a write
+  // the deployment does not compose is a declaration to fix, not a reason to
+  // demote the entry for everyone.
+  const demoted = new Set(o.demote ?? [])
+  let applyIntent = o.intent === true
+  const intended = (id: string, def: MenuDef): boolean =>
+    !applyIntent ||
+    (!demoted.has(id) && (!def.for?.length || def.for.some((key) => !o.allow || o.allow.includes(key))))
+
   const label = (def: MenuDef & { by: string }): string => {
     const key = `${def.by}.${def.label}`
     const out = o.translate?.(key)
@@ -60,6 +157,20 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
     // literal rather than a key gets the literal.
     return out && out !== key ? out : (o.translate?.(def.label) ?? def.label)
   }
+
+  /**
+   * Sequence first, then the words the reader actually sees.
+   *
+   * The tie-break used to compare `def.label`, which is the message *key*: every
+   * root often declares the same `menu.app` key, so equal sequences compared equal
+   * and the sidebar fell back to the order modules happened to be registered in.
+   * Below a heading it was worse — an untranslated key sorts in English, so the
+   * Vietnamese Purchasing menu read Đơn mua · RFQ · Bảng giá because `orders` <
+   * `rfqs` < `vendorPricelists`. Comparing the translation puts a Vietnamese menu
+   * in Vietnamese order, and `sequence` remains the way to say what you mean.
+   */
+  const order = (a: [string, MenuDef & { by: string }], b: [string, MenuDef & { by: string }]): number =>
+    (a[1].sequence ?? 100) - (b[1].sequence ?? 100) || label(a[1]).localeCompare(label(b[1]), o.locale)
 
   const needle = o.q?.trim().toLocaleLowerCase('vi') ?? ''
   const matches = (text: string): boolean => !needle || text.toLocaleLowerCase('vi').includes(needle)
@@ -85,15 +196,33 @@ export function buildMenu(manifest: Manifest, o: MenuOptions = {}): MenuNode[] {
       // arrives without the words that explain where it lives.
       if (needle && !children.length && !matches(label(def))) continue
       const active = (def.path !== undefined && def.path === activePath) || children.some((c) => c.active)
-      out.push({ id, label: label(def), path: def.path ?? null, icon: def.icon ?? null, active, children })
+      // A heading is secondary only when everything under it is: a group holding
+      // one entry that is someone's work still belongs in their sidebar.
+      const secondary = children.length ? children.every((c) => c.secondary) : !intended(id, def)
+      out.push({
+        id,
+        label: label(def),
+        path: def.path ?? null,
+        icon: def.icon ?? null,
+        active,
+        secondary,
+        children,
+      })
     }
     return out
   }
 
+  const tree = build(undefined, 0)
+  // Nobody gets an empty sidebar. If no entry claims this viewer, the distinction
+  // told us nothing about them and the permitted tree is the honest answer.
+  const anyPrimary = (nodes: MenuNode[]): boolean =>
+    nodes.some((node) => !node.secondary || anyPrimary(node.children))
+  if (!applyIntent || anyPrimary(tree)) return tree
+  applyIntent = false
   return build(undefined, 0)
 }
 
-/** The app a path belongs to: the root whose branch contains it. */
-export function activeApp(tree: MenuNode[]): MenuNode | null {
+/** The root navigation section a path belongs to. */
+export function activeMenuRoot(tree: MenuNode[]): MenuNode | null {
   return tree.find((n) => n.active) ?? null
 }

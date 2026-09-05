@@ -12,7 +12,7 @@ const login = async (page: Page) => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('stock-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -26,7 +26,7 @@ for (const viewport of [
   for (const locale of ['vi', 'en'] as const) {
     test(`renders transfers in ${locale} correctly on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await page.goto(`/admin/transfers?lang=${locale}`)
+      await page.goto(`/admin/stock/transfers?lang=${locale}`)
       await expect(page.locator('[data-ui="main"]')).toBeVisible()
       await expect(page.locator('form[action="/login"]')).toHaveCount(0)
       await expect(page.locator('#transfer-create-form')).toBeVisible()
@@ -44,7 +44,10 @@ for (const viewport of [
           .map((control) => control.getBoundingClientRect().height),
       }))
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-      expect(metrics.visibleControls.every((height) => height === 28)).toBe(true)
+      // A field is 32px on a touch screen and 28px with a cursor: a fingertip
+      // needs the target, a pointer does not.
+      const fieldHeight = 34
+      expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
       await page.screenshot({
         path: join(artifacts, `transfers-${locale}-${viewport.name}.png`),
         fullPage: true,
@@ -54,17 +57,17 @@ for (const viewport of [
 }
 
 test('creates a transfer and opens it from the list', async ({ page }) => {
-  await page.goto('/admin/transfers?lang=vi')
+  await page.goto('/admin/stock/transfers?lang=vi')
   await page.locator('input[name="name"]').fill('WH/OUT/E2E')
   await page.locator('select[name="pickingTypeId"]').selectOption('wh:outgoing')
   await page.locator('input[name="scheduledDate"]').fill('2026-08-22T09:15')
   await page.getByRole('button', { name: 'Tạo' }).click()
 
-  await expect(page).toHaveURL(/\/admin\/transfers\/[^?]+\?lang=vi$/)
-  await expect(page.locator('[data-ui="record-heading"]')).toHaveText('WH/OUT/E2E')
-  await page.goto('/admin/transfers?lang=vi')
+  await expect(page).toHaveURL(/\/admin\/stock\/transfers\/[^?]+\?lang=vi$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('WH/OUT/E2E')
+  await page.goto('/admin/stock/transfers?lang=vi')
   const transfer = page.getByRole('link', { name: 'WH/OUT/E2E' })
   await expect(transfer).toBeVisible()
   await transfer.click()
-  await expect(page.locator('[data-ui="record-heading"]')).toHaveText('WH/OUT/E2E')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('WH/OUT/E2E')
 })

@@ -7,10 +7,14 @@
     "node": ">=24.0.0"
   },
   "scripts": {
+    "generate:api": "npm --prefix .. run build --silent && node ../tools/generate-channel-openapi.mjs --output public/api/customer-v1.openapi.json && node ../tools/generate-channel-openapi.mjs --profile staff --output public/api/staff-v1.openapi.json && ../node_modules/.bin/biome format --write public/api/customer-v1.openapi.json public/api/staff-v1.openapi.json",
+    "predev": "npm run generate:api",
+    "prebuild": "npm run generate:api",
     "dev": "astro dev",
     "start": "astro dev",
-    "check": "astro check",
-    "build": "astro check && astro build",
+    "check:snippets": "node ../tools/docs-snippet-location-audit.mjs",
+    "check": "npm run check:snippets && astro check",
+    "build": "npm run check:snippets && astro check && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

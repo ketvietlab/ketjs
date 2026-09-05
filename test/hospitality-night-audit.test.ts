@@ -8,7 +8,7 @@ import {
   callFn,
   compose,
   createQueue,
-  defineApp,
+  defineDeployment,
   migrateOne,
   registerFunctions,
   sqliteAdapter,
@@ -53,13 +53,23 @@ const seedLongStay = async (adapter: Adapter): Promise<void> => {
       name: 'Két Hotel',
       accommodationType: 'hotel',
       timezone: 'UTC',
+      allowMonthly: true,
+      allowWeekly: true,
       longStayBillOnCheckIn: true,
     },
     adapter,
   )
   await call(
     'hospitality_core.saveRoomType',
-    { id: 'studio', propertyId: 'hotel', code: 'STD', name: 'Studio', baseRate: '300' },
+    {
+      id: 'studio',
+      propertyId: 'hotel',
+      code: 'STD',
+      name: 'Studio',
+      baseRate: '300',
+      allowMonthly: true,
+      allowWeekly: true,
+    },
     adapter,
   )
   await call(
@@ -111,11 +121,11 @@ const seedLongStay = async (adapter: Adapter): Promise<void> => {
 test('hospitality night audit: queue worker catches up rent and nightly services without duplicates', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'ket-hospitality-night-audit-'))
   const file = join(dir, 'hospitality.db')
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'hospitality_night_audit_test',
     modules,
     headless: true,
-    serve: { bootstrap: ['hospitality_core'] },
+    serve: {},
     worker: { queues: { maintenance: 1 } },
   })
   const producer = sqliteAdapter(file)
@@ -176,7 +186,7 @@ test('hospitality night audit: queue worker catches up rent and nightly services
     await producer.close()
 
     worker = await bootWorker(app, {
-      env: { KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
+      env: { KET_LOG: 'null', KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
       log: () => {},
     })
     assert.equal(await worker.drain(), 2, 'night audit and post-check-in stay-notice preparation both run')
@@ -284,13 +294,21 @@ test('hospitality night audit: a property can defer the first long-stay charge t
         name: 'Hà Nội Hotel',
         accommodationType: 'hotel',
         timezone: 'UTC',
+        allowWeekly: true,
         longStayBillOnCheckIn: false,
       },
       adapter,
     )
     await call(
       'hospitality_core.saveRoomType',
-      { id: 'weekly', propertyId: 'hotel', code: 'WK', name: 'Weekly', baseRate: '70' },
+      {
+        id: 'weekly',
+        propertyId: 'hotel',
+        code: 'WK',
+        name: 'Weekly',
+        baseRate: '70',
+        allowWeekly: true,
+      },
       adapter,
     )
     await call(

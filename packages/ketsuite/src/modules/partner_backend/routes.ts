@@ -1,41 +1,30 @@
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { viewerOf } from '../backend/routes.ts'
-import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
-import { newPartnerScreen, partnerDetailScreen, partnersScreen } from './screens.tsx'
+import { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/index.ts'
 import { partnerRelationControl } from './relation-control.ts'
+import { adminPage, inLocale } from '../backend/screen.ts'
+import type { AnyRow, Req } from '../backend/screen.ts'
+import type { TableSelection } from '../../ui/index.ts'
 
-type AnyRow = Record<string, unknown>
-type Req = Parameters<Route>[1]
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
+const crossSite = (req: Req): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
 }
 
-const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  menuFilter: url.searchParams.get('menu')?.trim() || null,
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: Parameters<ServeContext['document']>[0]['body'],
-) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
+const onlyPost = (req: Req) =>
+  req.method !== 'POST'
+    ? text('POST', { status: 405 })
+    : crossSite(req)
+      ? text('Forbidden', { status: 403 })
+      : null
 
 const partnerOptions = async (ctx: ServeContext, url: URL, req: Req, exclude?: string) =>
   (
@@ -84,15 +73,28 @@ const addressFormsFor = async (
   const _ = ctx.translate(ctx.localeOf(url, req))
   const installed = (await ctx.call('address.listCountries', {}, url, req)) as AnyRow[]
   const available = (await ctx.call('address.availableCatalogs', {}, url, req)) as AnyRow[]
-  const countryCodes = new Set([
-    ...installed.map((row) => String(row.code)),
-    ...available.map((row) => String(row.countryCode)),
-  ])
+  // Seed/demo records may bypass the address module's catalog validation. Never
+  // serialize those synthetic ids into every address island: besides presenting
+  // invalid choices, a large data-key can turn a small form into megabytes of
+  // hydration markup. Country codes accepted by the address domain are ISO 3166-1
+  // alpha-2 uppercase codes, so enforce the same boundary when composing the UI.
+  const countryCodeOf = (value: unknown) =>
+    String(value ?? '')
+      .trim()
+      .toUpperCase()
+  const isCountryCode = (value: string) => /^[A-Z]{2}$/.test(value)
+  const countryCodes = new Set(
+    [
+      ...installed.map((row) => countryCodeOf(row.code)),
+      ...available.map((row) => countryCodeOf(row.countryCode)),
+    ].filter(isCountryCode),
+  )
+  countryCodes.add('VN')
   const countries = [...countryCodes].sort().map((value) => ({
     value,
     label:
-      installed.find((row) => row.code === value)?.localName ||
-      installed.find((row) => row.code === value)?.name ||
+      installed.find((row) => countryCodeOf(row.code) === value)?.localName ||
+      installed.find((row) => countryCodeOf(row.code) === value)?.name ||
       (value === 'VN' ? _('partner_backend.address.country.VN') : value),
   }))
   const roots = new Map<string, AnyRow[]>()
@@ -149,8 +151,8 @@ const addressFormsFor = async (
     }
     const body = await ctx.joint(url, req, 'partner_backend:address.form', {
       action: isNew
-        ? inLocale(url, `/admin/partners/${partnerId}/addresses`)
-        : inLocale(url, `/admin/partners/${partnerId}/addresses/${address.id}`),
+        ? inLocale(url, `/admin/partner/partners/${partnerId}/addresses`)
+        : inLocale(url, `/admin/partner/partners/${partnerId}/addresses/${address.id}`),
       address,
       countries,
       provinces: await list(countryCode),
@@ -174,10 +176,17 @@ const addressFormsFor = async (
   ])
 }
 
-const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, errors?: string[]) => {
+export const renderPartnerForm = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  id: string,
+  errors?: string[],
+  overlay?: import('@ketvietlab/ketjs-view').JSXChild,
+) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  const [row, parents, terms, integration] = await Promise.all([
+  const [row, parents, terms, integration, collaboration] = await Promise.all([
     ctx.call('partner.getPartner', { id }, url, req) as Promise<AnyRow | null>,
     partnerOptions(ctx, url, req, id),
     ctx.call('partner.getTerms', { partnerId: id }, url, req) as Promise<AnyRow | null>,
@@ -186,6 +195,11 @@ const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, e
       locale: url.searchParams.get('lang')
         ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
         : '',
+    }),
+    ctx.joint(url, req, 'partner_backend:record.collaboration', {
+      resModel: 'partner.Partner',
+      resId: id,
+      lang,
     }),
   ])
   if (!row) return text(_('partner_backend.error.notFound'), { status: 404 })
@@ -201,23 +215,54 @@ const renderDetail = async (ctx: ServeContext, url: URL, req: Req, id: string, e
     id,
     Array.isArray(row.addresses) ? (row.addresses as AnyRow[]) : [],
   )
-  return document(
-    ctx,
-    url,
-    req,
-    String(row.name),
-    partnerDetailScreen(
-      _,
-      row as never,
-      { parents, terms: terms as never, errors, integration, addressForms, parentControl },
-      await frameFor(ctx, url, req),
-      url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-    ),
-  )
+  return adminPage(ctx, url, req, {
+    title: String(row.name),
+    translate: false,
+    body: (_, frame) =>
+      partnerFormScreen(
+        _,
+        row as never,
+        {
+          parents,
+          terms: terms as never,
+          errors,
+          integration,
+          collaboration,
+          addressForms,
+          parentControl,
+          overlay,
+        },
+        frame,
+        url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+      ),
+  })
 }
 
-const savePartner = (ctx: ServeContext, url: URL, req: Req, id: string, form: Record<string, string>) =>
-  ctx.call(
+const syncPartnerRoles = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  partnerId: string,
+  form: Record<string, string>,
+) => {
+  for (const role of ['customer', 'supplier', 'employee']) {
+    const result =
+      form[role] === '1'
+        ? await ctx.call('partner.grantRole', { id: randomUUID(), partnerId, role }, url, req)
+        : await ctx.call('partner.revokeRole', { partnerId, role }, url, req)
+    if ((result as { ok?: boolean }).ok === false) return result
+  }
+  return { ok: true }
+}
+
+const savePartner = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  id: string,
+  form: Record<string, string>,
+) => {
+  const result = await ctx.call(
     'partner.savePartner',
     {
       id,
@@ -233,9 +278,13 @@ const savePartner = (ctx: ServeContext, url: URL, req: Req, id: string, form: Re
     url,
     req,
   )
+  if ((result as { ok?: boolean }).ok === false) return result
+  const roles = await syncPartnerRoles(ctx, url, req, id, form)
+  return (roles as { ok?: boolean }).ok === false ? roles : result
+}
 
 export const routes: Record<string, RouteEntry> = {
-  '/admin/partners':
+  '/admin/partner/partners':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -246,7 +295,16 @@ export const routes: Record<string, RouteEntry> = {
       const role = url.searchParams.get('role') || undefined
       const includeArchived = url.searchParams.get('archived') === '1'
       const filter = { search, role, includeArchived }
-      const [rows, total] = await Promise.all([
+      const listHref = (changes: Record<string, string | null>) => {
+        const target = new URL(url)
+        target.searchParams.delete('page')
+        for (const [key, value] of Object.entries(changes)) {
+          if (value === null) target.searchParams.delete(key)
+          else target.searchParams.set(key, value)
+        }
+        return `${target.pathname}${target.search}`
+      }
+      const [rows, total, activeTotal, inclusiveTotal, customerTotal, supplierTotal] = await Promise.all([
         ctx.call(
           'partner.listPartners',
           { ...filter, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
@@ -254,43 +312,144 @@ export const routes: Record<string, RouteEntry> = {
           req,
         ) as Promise<AnyRow[]>,
         ctx.call('partner.countPartners', filter, url, req) as Promise<{ count: number }>,
+        ctx.call('partner.countPartners', { search, includeArchived: false }, url, req) as Promise<{
+          count: number
+        }>,
+        ctx.call('partner.countPartners', { search, includeArchived: true }, url, req) as Promise<{
+          count: number
+        }>,
+        ctx.call(
+          'partner.countPartners',
+          { search, role: 'customer', includeArchived: false },
+          url,
+          req,
+        ) as Promise<{ count: number }>,
+        ctx.call(
+          'partner.countPartners',
+          { search, role: 'supplier', includeArchived: false },
+          url,
+          req,
+        ) as Promise<{ count: number }>,
       ])
-      const frame = await frameFor(ctx, url, req)
-      return document(
-        ctx,
-        url,
-        req,
-        _('partner_backend.screen.title'),
-        partnersScreen(
-          _,
-          rows as never,
-          {
-            ...frame,
-            chrome: {
-              search: {
-                name: 'q',
-                value: search ?? '',
-                placeholder: _('partner_backend.chrome.search'),
-                keep: {
-                  ...(role ? { role } : {}),
-                  ...(includeArchived ? { archived: '1' } : {}),
-                  ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+      const selection: TableSelection = {
+        formId: 'partner-directory-bulk',
+        action: inLocale(url, '/admin/partner/partners/bulk'),
+        hidden: { returnTo: `${url.pathname}${url.search}` },
+        actions: [
+          { id: 'archive', label: _('partner_backend.action.bulkArchive') },
+          ...(includeArchived ? [{ id: 'restore', label: _('partner_backend.action.bulkRestore') }] : []),
+        ],
+      }
+      return adminPage(ctx, url, req, {
+        title: 'partner_backend.screen.title',
+        body: (_, frame) =>
+          partnersScreen(
+            _,
+            rows as never,
+            {
+              ...frame,
+              chrome: {
+                create: {
+                  label: _('partner_backend.action.create'),
+                  path: inLocale(url, '/admin/partner/partners/new'),
                 },
-                facets: role
-                  ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
-                  : [],
+                selection,
+                search: {
+                  name: 'q',
+                  value: search ?? '',
+                  placeholder: _('partner_backend.chrome.search'),
+                  keep: {
+                    ...(role ? { role } : {}),
+                    ...(includeArchived ? { archived: '1' } : {}),
+                    ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                  },
+                  facets: role
+                    ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
+                    : [],
+                  menus: [
+                    {
+                      id: 'filters',
+                      label: _('backend.chrome.filters'),
+                      items: [
+                        {
+                          id: 'customers',
+                          label: _('partner_backend.filter.customers'),
+                          path: withParam(url, 'role', role === 'customer' ? null : 'customer'),
+                          active: role === 'customer',
+                        },
+                        {
+                          id: 'suppliers',
+                          label: _('partner_backend.filter.suppliers'),
+                          path: withParam(url, 'role', role === 'supplier' ? null : 'supplier'),
+                          active: role === 'supplier',
+                        },
+                        {
+                          id: 'archived',
+                          label: _('partner_backend.filter.includeArchived'),
+                          path: withParam(url, 'archived', includeArchived ? null : '1'),
+                          active: includeArchived,
+                        },
+                      ],
+                    },
+                  ],
+                },
+                pager: pager(url, current, rows.length, total.count),
               },
-              pager: pager(url, current, rows.length, total.count),
             },
-          },
-          {},
-          url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-          includeArchived,
-        ),
-      )
+            { selection },
+            url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+            {
+              total: activeTotal.count,
+              customers: customerTotal.count,
+              suppliers: supplierTotal.count,
+              archived: Math.max(0, inclusiveTotal.count - activeTotal.count),
+              allHref: listHref({ role: null, archived: null }),
+              customersHref: listHref({ role: 'customer', archived: null }),
+              suppliersHref: listHref({ role: 'supplier', archived: null }),
+              archivedHref: listHref({ role: null, archived: '1' }),
+              active: includeArchived
+                ? 'archived'
+                : role === 'customer'
+                  ? 'customers'
+                  : role === 'supplier'
+                    ? 'suppliers'
+                    : 'all',
+            },
+            total.count,
+          ),
+      })
     },
 
-  '/admin/partners/new':
+  '/admin/partner/partners/bulk':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const denied = onlyPost(req)
+      if (denied) return denied
+      const form = await readForm(req)
+      const ids = Object.keys(form)
+        .filter((key) => key.startsWith('selected.'))
+        .map((key) => key.slice('selected.'.length))
+        .filter(Boolean)
+      const fallback = inLocale(url, '/admin/partner/partners')
+      const requested = new URL(form.returnTo || fallback, 'http://ket.local')
+      const returnTo =
+        requested.pathname === '/admin/partner/partners'
+          ? `${requested.pathname}${requested.search}`
+          : fallback
+      if (!ids.length) return seeOther(returnTo)
+      if (form.action !== 'archive' && form.action !== 'restore')
+        return text('Unknown bulk action', { status: 400 })
+      const result = (await ctx.call(
+        'partner.archivePartners',
+        { ids, active: form.action === 'restore' },
+        url,
+        req,
+      )) as { ok?: boolean }
+      if (result.ok === false) return text('Invalid bulk selection', { status: 400 })
+      return seeOther(returnTo)
+    },
+
+  '/admin/partner/partners/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const lang = ctx.localeOf(url, req)
@@ -299,52 +458,51 @@ export const routes: Record<string, RouteEntry> = {
         const form = await readForm(req)
         const id = randomUUID()
         const result = await savePartner(ctx, url, req, id, form)
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partners/${id}`))
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partner/partners/${id}`))
         const parents = await partnerOptions(ctx, url, req)
-        return document(
-          ctx,
-          url,
-          req,
-          _('partner_backend.create.title'),
-          newPartnerScreen(
-            _,
-            parents,
-            await frameFor(ctx, url, req),
-            translatedErrors(result, _),
-            url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-            await parentControlFor(ctx, url, req, _, parents, {
-              id: 'partner-parent-new',
-              value: form.parentId,
-            }),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'partner_backend.create.title',
+          body: async (_, frame) =>
+            newPartnerScreen(
+              _,
+              parents,
+              frame,
+              translatedErrors(result, _),
+              url.searchParams.get('lang')
+                ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
+                : '',
+              await parentControlFor(ctx, url, req, _, parents, {
+                id: 'partner-parent-new',
+                value: form.parentId,
+              }),
+            ),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const parents = await partnerOptions(ctx, url, req)
-      return document(
-        ctx,
-        url,
-        req,
-        _('partner_backend.create.title'),
-        newPartnerScreen(
-          _,
-          parents,
-          await frameFor(ctx, url, req),
-          undefined,
-          url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-          await parentControlFor(ctx, url, req, _, parents, { id: 'partner-parent-new' }),
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'partner_backend.create.title',
+        body: async (_, frame) =>
+          newPartnerScreen(
+            _,
+            parents,
+            frame,
+            undefined,
+            url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
+            await parentControlFor(ctx, url, req, _, parents, { id: 'partner-parent-new' }),
+          ),
+      })
     },
 
-  '/admin/partners/{id}':
+  '/admin/partner/partners/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method === 'GET') return renderDetail(ctx, url, req, params.id)
+      if (req.method === 'GET') return renderPartnerForm(ctx, url, req, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       const result = await savePartner(ctx, url, req, params.id, await readForm(req))
-      if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/partners/${params.id}`))
-      return renderDetail(
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
+      return renderPartnerForm(
         ctx,
         url,
         req,
@@ -353,29 +511,32 @@ export const routes: Record<string, RouteEntry> = {
       )
     },
 
-  '/admin/partners/{id}/roles':
+  '/admin/partner/partners/{id}/edit':
+    (_ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
+    },
+
+  '/admin/partner/partners/{id}/roles':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const form = await readForm(req)
-      for (const role of ['customer', 'supplier', 'employee']) {
-        if (form[role] === '1')
-          await ctx.call('partner.grantRole', { id: randomUUID(), partnerId: params.id, role }, url, req)
-        else await ctx.call('partner.revokeRole', { partnerId: params.id, role }, url, req)
-      }
-      return seeOther(inLocale(url, `/admin/partners/${params.id}`))
+      await syncPartnerRoles(ctx, url, req, params.id, form)
+      return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
     },
 
-  '/admin/partners/{id}/archive':
+  '/admin/partner/partners/{id}/archive':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
       const form = await readForm(req)
       await ctx.call('partner.archivePartner', { id: params.id, active: form.action === 'restore' }, url, req)
-      return seeOther(inLocale(url, `/admin/partners/${params.id}`))
+      return seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
     },
 
-  '/admin/partners/{id}/addresses':
+  '/admin/partner/partners/{id}/addresses':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -398,8 +559,8 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther(inLocale(url, `/admin/partners/${params.id}`))
-        : renderDetail(
+        ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
+        : renderPartnerForm(
             ctx,
             url,
             req,
@@ -408,7 +569,7 @@ export const routes: Record<string, RouteEntry> = {
           )
     },
 
-  '/admin/partners/{id}/addresses/{addressId}':
+  '/admin/partner/partners/{id}/addresses/{addressId}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -431,8 +592,8 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther(inLocale(url, `/admin/partners/${params.id}`))
-        : renderDetail(
+        ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
+        : renderPartnerForm(
             ctx,
             url,
             req,
@@ -441,7 +602,7 @@ export const routes: Record<string, RouteEntry> = {
           )
     },
 
-  '/admin/partners/{id}/terms':
+  '/admin/partner/partners/{id}/terms':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -458,8 +619,8 @@ export const routes: Record<string, RouteEntry> = {
         req,
       )
       return (result as { ok?: boolean }).ok
-        ? seeOther(inLocale(url, `/admin/partners/${params.id}`))
-        : renderDetail(
+        ? seeOther(inLocale(url, `/admin/partner/partners/${params.id}`))
+        : renderPartnerForm(
             ctx,
             url,
             req,

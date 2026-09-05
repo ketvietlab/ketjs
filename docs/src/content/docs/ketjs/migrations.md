@@ -3,13 +3,13 @@ title: Migrations and adapters
 description: Derive schemas, plan safe migrations, use SQLite or PostgreSQL, and migrate tenant fleets.
 ---
 
-KetJS derives the datastore schema from the complete composed manifest. Runtime module installation
-does not add or remove tables: every database in a deployment moves toward one known schema, while
-installed module state controls behavior.
+KetJS derives the datastore schema from the complete composed manifest. Every database in a deployment
+moves toward that one known schema, and the same selected module set owns runtime behavior.
 
 ## Schema pipeline
 
 ```ts
+// File: src/modules/example/models.ts
 import { planMigration, renderSql, schemaFromManifest, sqliteAdapter } from '@ketvietlab/ketjs'
 
 const next = schemaFromManifest(manifest)
@@ -22,13 +22,15 @@ for (const sql of renderSql(operations, adapter)) {
 ```
 
 Field provenance is retained in the schema. A destructive operation can therefore identify the module
-that contributed the affected field.
+that contributed the affected field. The derived schema includes framework-owned indexes for row scope
+and declared `hasMany` relation keys; these appear as ordinary non-destructive migration operations.
 
 ## Non-destructive by default
 
 `planMigration()` refuses data-losing operations unless explicitly allowed:
 
 ```ts
+// File: src/modules/example/models.ts
 const operations = planMigration(previous, next, {
   allowDestructive: true,
 })
@@ -36,6 +38,80 @@ const operations = planMigration(previous, next, {
 
 Without this flag, removing a table or column raises `DestructiveMigrationError` with code
 `E_DESTRUCTIVE_MIGRATION`. Review the provenance and data migration before enabling destructive SQL.
+
+Some changes cannot be derived safely from a manifest alone. Adding a required column to an existing
+table needs a backfill, changing nullability needs inspection of existing rows, and changing a type needs
+an explicit conversion. KetJS rejects these with `ManualMigrationRequiredError` and code
+`E_MANUAL_MIGRATION_REQUIRED`; it never records the target schema for an operation it could not enforce.
+
+Do not edit `ket_migration` directly after applying the SQL. Finish the DDL and backfill in one
+application-owned transaction, then call `confirmManualMigration()` on that transaction's adapter. This
+PostgreSQL example adds and backfills a required field:
+
+```ts
+// File: scripts/migrate-required-status.ts
+import { confirmManualMigration } from '@ketvietlab/ketjs'
+
+await adapter.tx(async (tx) => {
+  await tx.exec('ALTER TABLE "orders_order" ADD COLUMN "status" TEXT')
+  await tx.run('UPDATE "orders_order" SET "status" = $1 WHERE "status" IS NULL', ['draft'])
+  await tx.exec('ALTER TABLE "orders_order" ALTER COLUMN "status" SET NOT NULL')
+  await confirmManualMigration(tx, manifest)
+})
+```
+
+Confirmation is not an escape hatch for the planner. It requires an existing marker and at least one
+pending manual operation, then reads the physical database catalog. Every modelled table, column type,
+nullability, primary key, and named index must match the target manifest. A mismatch raises
+`ManualMigrationConfirmationError` (`E_MANUAL_MIGRATION_CONFIRMATION`). When it propagates from the shared
+transaction shown above, the DDL rolls back and the marker remains unchanged. SQLite and PostgreSQL
+catalogs are supported; a custom adapter is refused unless KetJS can verify it safely. A subsequent
+`migrateOne(adapter, manifest)` returns no operations after a successful confirmation.
+
+## Read-only physical verification
+
+An applied marker is a claim about the database, not proof that an older framework version enforced
+every constraint. Use `verifyPhysicalSchema()` to audit that claim without running DDL or changing
+`ket_migration`:
+
+```ts
+// File: scripts/verify-schema.ts
+import { verifyPhysicalSchema } from '@ketvietlab/ketjs'
+
+const report = await verifyPhysicalSchema(adapter, manifest)
+if (!report.ok) {
+  console.error({
+    markerMatchesManifest: report.markerMatchesManifest,
+    markerIssues: report.markerIssues,
+    manifestIssues: report.manifestIssues,
+  })
+  process.exitCode = 1
+}
+```
+
+`markerIssues` compares the physical catalog with the schema recorded in `ket_migration`. It detects
+legacy drift such as a marker declaring `optional: false` while the physical column remains nullable.
+`manifestIssues` compares the same catalog with the current composed manifest. `ok` is true only when
+the marker exists, matches that manifest, and both physical comparisons are clean. SQLite and PostgreSQL
+catalogs are supported. Run the verifier while no migration is concurrently changing the same database.
+
+The CLI opens the deployment's configured datastore and performs the same read-only audit:
+
+```bash
+# Run from: /path/to/example-app
+ket schema verify --deployment backoffice --workspace dist/ket.workspace.js
+ket schema verify --deployment erp --tenant acme --workspace dist/ket.workspace.js
+ket schema verify --deployment erp --all --workspace dist/ket.workspace.js
+```
+
+Tenant deployments must provide the non-mutating `serve.tenants.exists(key, config)` check. Verification
+calls it before `open()`, reports a missing datastore, and never creates an empty tenant database merely
+to inspect it.
+
+A failed comparison exits non-zero and prints physical-versus-marker and physical-versus-manifest
+differences separately. For the built-in SQLite store, verification refuses to create a missing database
+file. `physicalSchemaIssues()` is also exported for operational tooling that already owns explicit
+`Schema` values.
 
 Installing or removing a module at runtime is not a destructive migration. Disabled module data stays
 in place for a later reinstall.
@@ -46,8 +122,9 @@ For a single datastore, `ket migrate` compares the current manifest schema to it
 prints SQL, and updates `.ket/schema.<app>.json`:
 
 ```bash
-ket migrate --app backoffice --workspace dist/ket.workspace.js
-ket migrate --app backoffice --allow-destructive --workspace dist/ket.workspace.js
+# Run from: /path/to/ketjs
+ket migrate --deployment backoffice --workspace dist/ket.workspace.js
+ket migrate --deployment backoffice --allow-destructive --workspace dist/ket.workspace.js
 ```
 
 Treat the snapshot as planning state, not proof that SQL was applied to an external database. Normal
@@ -61,18 +138,20 @@ Programmatic code can apply one manifest with `migrateOne(adapter, manifest)`.
 SQLite is built into `@ketvietlab/ketjs` and requires no driver package:
 
 ```ts
+// File: src/modules/example/models.ts
 import { sqliteAdapter } from '@ketvietlab/ketjs'
 
-const adapter = sqliteAdapter('.ket/app.db')
+const adapter = sqliteAdapter('.ket/deployment.db')
 await adapter.open()
 ```
 
-Most apps need no explicit `openStore`; `sqliteStore` reads `KET_SQLITE` and is the default runtime
+Most deployments need no explicit `openStore`; `sqliteStore` reads `KET_SQLITE` and is the default runtime
 factory.
 
 Useful settings:
 
 ```bash
+# Run from: /path/to/example-app
 KET_SQLITE=.ket/orders.db ket serve
 KET_SQLITE=:memory: ket call public.health --isolated
 ```
@@ -85,16 +164,18 @@ to one connection and cannot represent cross-process visibility.
 Install the separate adapter and its optional driver:
 
 ```bash
+# Run from: /path/to/ketjs
 npm install @ketvietlab/ketjs-postgres postgres
 ```
 
 Wire it at the application boundary:
 
 ```ts
-import { defineApp } from '@ketvietlab/ketjs'
+// File: src/app.ts
+import { defineDeployment } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 
-export const app = defineApp({
+export const app = defineDeployment({
   name: 'orders',
   modules: [orders],
   headless: true,
@@ -111,6 +192,7 @@ export const app = defineApp({
 Then configure the connection:
 
 ```bash
+# Run from: /path/to/example-app
 DATABASE_URL=postgres://app:secret@db.example/orders ket serve
 ```
 
@@ -123,8 +205,10 @@ leases and polling remain the durability guarantee.
 Custom adapters implement the public `Adapter` interface:
 
 ```ts
+// File: src/modules/example/models.ts
 type Adapter = {
   name: string
+  readonly transaction?: boolean
   open(): Promise<void>
   close(): Promise<void>
   exec(sql: string): Promise<void>
@@ -139,24 +223,30 @@ type Adapter = {
 ```
 
 Call `assertAdapter()` during construction to catch missing methods. A transaction callback must
-receive an adapter bound to the transaction's connection. Optional notifications must never be the
-only job-delivery guarantee.
+receive an adapter bound to the transaction's connection and mark it with `transaction: true`; this
+lets framework operations join that transaction instead of trying to nest another one. Optional
+notifications must never be the only job-delivery guarantee.
 
 ## Tenant fleets
 
 Apps with `serve.tenants` expose a database list and an opener. Migrate every tenant with:
 
 ```bash
-ket migrate --all --workspace dist/ket.workspace.js
-ket migrate --all --dry-run --workspace dist/ket.workspace.js
-ket migrate --all --allow-destructive --workspace dist/ket.workspace.js
+# Run from: /path/to/ketjs
+ket migrate --deployment erp --all --workspace dist/ket.workspace.js
+ket migrate --deployment erp --all --dry-run --workspace dist/ket.workspace.js
+ket migrate --deployment erp --all --allow-destructive --workspace dist/ket.workspace.js
 ```
 
-The fleet runner uses a bounded adapter pool, continues after an individual tenant failure, and
-reports every result. A partial fleet is visible and retryable instead of being hidden behind the first
-exception.
+When a workspace has more than one tenant-fleet deployment, `--deployment` is required rather than
+guessing which product to migrate. The fleet runner uses a bounded adapter pool, continues after an
+individual tenant failure, and reports every result. Each tenant's DDL and applied-schema marker commit in
+one transaction, so a partial fleet is visible and retryable instead of being hidden behind the first
+exception. `--dry-run` reads the marker and plan without creating framework or application tables.
 
 Programmatic tooling can use `createAdapterPool()`, `migrateFleet()`, and `formatFleet()`.
+Closing an adapter pool is terminal and idempotent; create a new pool rather than acquiring from one whose
+shutdown has started.
 
 ## Deployment sequence
 

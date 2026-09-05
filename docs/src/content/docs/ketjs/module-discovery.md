@@ -4,12 +4,13 @@ description: Resolve selected KetJS modules from filesystem roots without making
 ---
 
 KetJS can compose modules imported by the workspace and modules selected by name from filesystem
-roots. The layout resembles an `addons_path`, but discovering a descriptor does not install, ship, or
+roots. The layout resembles module search paths, but discovering a descriptor does not select or
 execute that module.
 
 ```text
+# File: docs/src/content/docs/ketjs/module-discovery.md
 module roots → descriptor catalogue → selected names + dependency closure
-             → resolved apps → composition → runtime install state
+             → resolved deployments → immutable composition
 ```
 
 ## Root layout
@@ -17,6 +18,7 @@ module roots → descriptor catalogue → selected names + dependency closure
 A root contains one direct child per module:
 
 ```text
+# File: custom-addons
 custom-addons/
 ├── sale_discount/
 │   ├── ket.module.json
@@ -36,7 +38,8 @@ subdirectories for descriptors.
 
 `ket.module.json` intentionally contains only discovery metadata:
 
-```json
+```jsonc
+// File: custom-addons/sale_discount/ket.module.jsonc
 {
   "name": "sale_discount",
   "entry": "./dist/index.js"
@@ -49,12 +52,13 @@ subdirectories for descriptors.
 | `entry` | yes | Entry artifact relative to the module directory. |
 | `$schema` | no | Editor metadata, ignored by the runtime. |
 
-Version, dependencies, models, functions, and install policy stay in `defineModule()`. Keeping them
+Version, dependencies, models, and functions stay in `defineModule()`. Keeping them
 out of the descriptor prevents a second manifest from drifting away from executable code.
 
 The entry default-exports a normal module:
 
 ```ts
+// File: src/modules/sale_discount/index.ts
 import { defineModule } from '@ketvietlab/ketjs'
 
 export default defineModule({
@@ -75,7 +79,8 @@ restricted because its entry must export `defineTheme()`.
 Declare roots relative to the workspace artifact or as absolute deployment paths:
 
 ```ts
-import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
+// File: ket.workspace.ts
+import { defineDeployment, defineWorkspace } from '@ketvietlab/ketjs'
 import { pricing } from './modules/pricing.ts'
 
 export default defineWorkspace({
@@ -83,8 +88,8 @@ export default defineWorkspace({
     new URL('./custom-addons/', import.meta.url),
     '/opt/company/vendor-addons',
   ],
-  apps: [
-    defineApp({
+  deployments: [
+    defineDeployment({
       name: 'backoffice',
       modules: [pricing, 'sale_discount'],
       headless: true,
@@ -93,7 +98,7 @@ export default defineWorkspace({
 })
 ```
 
-Imported module objects and string references may appear in the same app. String references do not
+Imported module objects and string references may appear in the same deployment. String references do not
 survive past resolution; runtime and composition receive ordinary `KetModule` objects.
 
 Relative roots resolve from the loaded workspace artifact, not the current shell directory. If
@@ -105,6 +110,7 @@ Relative roots resolve from the loaded workspace artifact, not the current shell
 Supplement workspace roots at deployment time:
 
 ```bash
+# Run from: /path/to/example-app
 ket check \
   --workspace dist/ket.workspace.js \
   --module-path /opt/company-addons \
@@ -114,6 +120,7 @@ ket check \
 `--module-path` is repeatable. `KET_MODULE_PATH` uses the platform path separator:
 
 ```bash
+# Run from: /path/to/example-app
 KET_MODULE_PATH=/opt/company-addons:/opt/vendor-addons ket serve
 ```
 
@@ -123,10 +130,11 @@ override mechanism: duplicate module names fail regardless of precedence.
 Inspect the result with:
 
 ```bash
+# Run from: /path/to/example-app
 ket modules --workspace dist/ket.workspace.js
 ```
 
-The command prints canonical roots plus each shipped module's version, kind, consuming apps, and
+The command prints canonical roots plus each selected module's version, kind, consuming deployments, and
 source path.
 
 ## Selection and dependency closure
@@ -138,7 +146,6 @@ Scanning creates a catalogue. Only selected modules and their transitive depende
 | Present but not selected or required | yes | no | no |
 | Selected by the workspace | yes | yes | yes |
 | Dependency of a selected module | yes | yes | yes |
-| Shipped but disabled in one database | already built | already built | yes, behavior restricted |
 
 The descriptor catalogue itself must be structurally valid, but executable code is not imported until
 selection requires it. A file merely appearing in a root never changes the schema.
@@ -149,12 +156,13 @@ Production entries must use `.js`, `.mjs`, or `.cjs`. Build custom TypeScript be
 deploy its descriptor beside the emitted code. The `tsx` development path may additionally resolve
 `.ts`, `.tsx`, `.mts`, and `.cts` because that loader explicitly transforms source.
 
-Keep runtime imports resolvable from the module's deployed directory. A module outside the app tree
+Keep runtime imports resolvable from the module's deployed directory. A module outside the project tree
 usually needs its own dependencies, a package-manager link, or a bundled entry.
 
 Assets stay module-relative:
 
 ```ts
+// File: src/modules/sale_discount/index.ts
 export default defineModule({
   name: 'sale_discount',
   assets: new URL('../assets/', import.meta.url),
@@ -185,6 +193,7 @@ when KetJS can identify one.
 ## Programmatic resolution
 
 ```ts
+// File: ket.workspace.ts
 import { composeWorkspace, resolveWorkspace } from '@ketvietlab/ketjs'
 
 const resolved = await resolveWorkspace(workspace, {
@@ -193,7 +202,7 @@ const resolved = await resolveWorkspace(workspace, {
   allowSource: false,
 })
 
-const composed = composeWorkspace(resolved.apps)
+const composed = composeWorkspace(resolved.deployments)
 ```
 
 `resolved.modulePaths` and `resolved.modules` preserve source provenance for diagnostics and operator

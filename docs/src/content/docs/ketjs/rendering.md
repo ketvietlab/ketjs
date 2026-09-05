@@ -12,18 +12,24 @@ template structure, so updates touch only changed holes.
 `@ketvietlab/ketjs` already depends on `@ketvietlab/ketjs-view`. Applications may also install and use the view package alone:
 
 ```bash
+# Run from: /path/to/ketjs
 npm install @ketvietlab/ketjs-view
 ```
 
 ```ts
+// File: src/ui/order-page.ts
 import { each, html, signal, when } from '@ketvietlab/ketjs-view'
 ```
+
+An application that has both packages need not remember which half a name lives in:
+`@ketvietlab/ketjs` re-exports the view entrypoint whole, so the same import works from there.
 
 ## HTML templates
 
 `html` returns a `TemplateResult`; it does not concatenate a string:
 
 ```ts
+// File: src/ui/order-page.ts
 const orderCard = (order: Order) => html`
   <article class="order-card">
     <h2>${order.number}</h2>
@@ -39,6 +45,7 @@ site and subsequent renders update holes in place.
 Use `when()` for conditional templates:
 
 ```ts
+// File: src/ui/order-page.ts
 html`
   <section>
     ${when(order.overdue, () => html`<span class="danger">Overdue</span>`)}
@@ -49,6 +56,7 @@ html`
 Use keyed `each()` for collections:
 
 ```ts
+// File: src/ui/order-page.ts
 html`
   <ul>
     ${each(
@@ -67,6 +75,7 @@ Stable keys let the renderer move or update existing instances instead of rebuil
 Tagged templates use `on:<event>` attributes:
 
 ```ts
+// File: src/ui/order-page.ts
 const count = signal(0)
 
 const Counter = () => html`
@@ -82,6 +91,7 @@ current callback without detach/reattach churn.
 ## Signals
 
 ```ts
+// File: src/ui/order-page.ts
 import { batch, computed, effect, signal } from '@ketvietlab/ketjs-view'
 
 const quantity = signal(2)
@@ -113,6 +123,7 @@ total.dispose()
 Mount a reactive view into a DOM container:
 
 ```ts
+// File: src/ui/order-page.ts
 import { domHost, mount } from '@ketvietlab/ketjs-view'
 
 const mounted = mount(domHost(document), container, Counter)
@@ -126,6 +137,7 @@ mounted.dispose()
 ## Server rendering
 
 ```ts
+// File: src/ui/order-page.ts
 import { renderToString } from '@ketvietlab/ketjs-view'
 
 const markup = renderToString(orderCard(order))
@@ -147,7 +159,8 @@ different input.
 
 Configure TypeScript's automatic runtime:
 
-```json
+```jsonc
+// File: tsconfig.json
 {
   "compilerOptions": {
     "jsx": "react-jsx",
@@ -159,6 +172,7 @@ Configure TypeScript's automatic runtime:
 Then write TSX without React:
 
 ```tsx
+// File: src/ui/order-page.ts
 import { signal } from '@ketvietlab/ketjs-view'
 
 const count = signal(0)
@@ -179,6 +193,7 @@ An island is the boundary between server-rendered pages and browser behavior. A 
 behavior; a theme may place it but cannot write code.
 
 ```ts
+// File: src/modules/example/islands.ts
 import { defineModule } from '@ketvietlab/ketjs'
 import { html, signal } from '@ketvietlab/ketjs-view'
 import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
@@ -238,6 +253,7 @@ DOM node, signals, subscriptions, focus, and local state. If props changed, pres
 A factory may still return a plain view, or return a lifecycle controller:
 
 ```ts
+// File: src/ui/order-page.ts
 import type { IslandController, IslandFactory } from '@ketvietlab/ketjs-view'
 
 const cartCounter: IslandFactory = (initialProps) => {
@@ -266,6 +282,7 @@ always stops the reactive root first, then calls the controller cleanup once. An
 Framework pages normally load the generated bootstrap. Low-level applications can hydrate a registry:
 
 ```ts
+// File: src/ui/order-page.ts
 import { createIslandManager, domHost, hydrateIslands } from '@ketvietlab/ketjs-view'
 
 const live = hydrateIslands(domHost(document), document.body, registry)
@@ -308,6 +325,7 @@ Plain strings in template holes are escaped. `trustedMarkup()` exists for markup
 restricted compiler such as KTL:
 
 ```ts
+// File: src/ui/order-page.ts
 import { trustedMarkup } from '@ketvietlab/ketjs-view'
 
 html`<section>${trustedMarkup(compiledThemeOutput)}</section>`

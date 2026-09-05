@@ -2,6 +2,9 @@ import { each, html, signal } from '@ketvietlab/ketjs-view'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import { createActivityIndicatorView, createRecordActivityView } from './client/activity-view.mjs'
 
+// The controls inside these are `form-control`, the same hook the kit's forms use,
+// so they are not listed here: this file names what the activity island adds, not
+// what it borrows.
 export const HOOKS = [
   'activity-record',
   'activity-head',
@@ -9,10 +12,6 @@ export const HOOKS = [
   'activity-schedule-trigger',
   'activity-schedule',
   'activity-field',
-  'activity-type',
-  'activity-summary',
-  'activity-note',
-  'activity-date',
   'activity-schedule-actions',
   'activity-attachment',
   'activity-submit',
@@ -34,7 +33,6 @@ export const HOOKS = [
   'activity-action-field',
   'activity-action-label',
   'activity-complete',
-  'activity-feedback',
   'activity-reschedule',
   'activity-cancel',
   'activity-indicator',

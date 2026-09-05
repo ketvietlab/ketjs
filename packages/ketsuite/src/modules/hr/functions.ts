@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { assertTimezone, defineFn, deleteFrom, eq, from, localDateTimeToUtc } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { functions as partnerFunctions } from '../partner/functions.ts'
 import { LEAVE_PORTIONS } from './types.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
@@ -78,6 +79,68 @@ const saveSimple = (
     },
   })
 
+type EmployeeInput = {
+  id: unknown
+  code: unknown
+  partnerId: unknown
+  userId?: unknown
+  departmentId?: unknown
+  jobId?: unknown
+  homeBranchId: unknown
+  timezone: unknown
+  startDate: unknown
+  endDate?: unknown
+  active?: unknown
+}
+
+const saveEmployee = async (ctx: Ctx, a: EmployeeInput, transaction = true) => {
+  const code = clean(a.code).toUpperCase()
+  if (!code) return invalid(issue('code', 'hr.error.required'))
+  const partner = (await ctx.db.select('partner.Partner', { id: a.partnerId }))[0]
+  if (partner?.kind !== 'person') return invalid(issue('partnerId', 'hr.error.partner'))
+  if (!(await branchExists(ctx, a.homeBranchId))) return invalid(issue('homeBranchId', 'hr.error.branch'))
+  try {
+    assertTimezone(String(a.timezone))
+  } catch {
+    return invalid(issue('timezone', 'hr.error.timezone'))
+  }
+  const rows = await ctx.db.select('hr.Employee', {})
+  if (
+    rows.some(
+      (row) =>
+        row.id !== a.id &&
+        (row.code === code || row.partnerId === a.partnerId || (a.userId && row.userId === a.userId)),
+    )
+  )
+    return invalid(issue('code', 'hr.error.unique'))
+  const existing = rows.find((row) => row.id === a.id)
+  const values = {
+    code,
+    partnerId: a.partnerId,
+    userId: a.userId ?? null,
+    departmentId: a.departmentId ?? null,
+    jobId: a.jobId ?? null,
+    homeBranchId: a.homeBranchId,
+    timezone: a.timezone,
+    startDate: a.startDate,
+    endDate: a.endDate ?? null,
+    active: a.active ?? true,
+    updatedAt: now(),
+  }
+  const persist = async (tx: Ctx) => {
+    if (existing) await tx.db.update('hr.Employee', { id: a.id }, values)
+    else await tx.db.insert('hr.Employee', { id: a.id, ...values, createdAt: now() })
+    await tx.db.insertIfAbsent('partner.Role', {
+      id: `employee:${String(a.partnerId)}`,
+      partnerId: a.partnerId,
+      role: 'employee',
+    })
+  }
+  if (transaction) await ctx.tx(persist)
+  else await persist(ctx)
+  return { ok: true, id: a.id }
+}
+
 export const functions: Record<string, FnSpec> = {
   'department.save': saveSimple('hr.Department', ['name', 'parentId', 'active'], { active: true }),
   'job.save': saveSimple('hr.Job', ['name', 'active'], { active: true }),
@@ -115,6 +178,62 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  'employee.create': defineFn({
+    input: {
+      id: 'id',
+      code: 'text',
+      name: 'text',
+      userId: 'id?',
+      departmentId: 'id?',
+      jobId: 'id?',
+      homeBranchId: 'id',
+      timezone: 'text',
+      startDate: 'date',
+      endDate: 'date?',
+    },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: [
+      'read:hr.Employee',
+      'write:hr.Employee',
+      'read:partner.Partner',
+      'write:partner.Partner',
+      'read:partner.Role',
+      'write:partner.Role',
+      'read:company.Branch',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, a) => {
+      const name = clean(a.name)
+      if (!name) return invalid(issue('name', 'hr.error.required'))
+      const partnerId = `employee:${String(a.id)}:partner`
+      const rollback = new Error('rollback employee creation')
+      let failure: Row | null = null
+      try {
+        return await ctx.tx(async (tx) => {
+          const partner = (await partnerFunctions.savePartner!.handler(tx, {
+            id: partnerId,
+            kind: 'person',
+            name,
+          })) as Row
+          if (partner.ok !== true) {
+            failure = partner
+            throw rollback
+          }
+          const employee = (await saveEmployee(tx, { ...a, partnerId } as EmployeeInput, false)) as Row
+          if (employee.ok !== true) {
+            failure = employee
+            throw rollback
+          }
+          return employee
+        })
+      } catch (error) {
+        if (error === rollback && failure) return failure
+        throw error
+      }
+    },
+  }),
+
   'employee.save': defineFn({
     input: {
       id: 'id',
@@ -140,51 +259,7 @@ export const functions: Record<string, FnSpec> = {
     ],
     idempotent: true,
     agent: true,
-    handler: async (ctx: Ctx, a) => {
-      const code = clean(a.code).toUpperCase()
-      if (!code) return invalid(issue('code', 'hr.error.required'))
-      const partner = (await ctx.db.select('partner.Partner', { id: a.partnerId }))[0]
-      if (partner?.kind !== 'person') return invalid(issue('partnerId', 'hr.error.partner'))
-      if (!(await branchExists(ctx, a.homeBranchId))) return invalid(issue('homeBranchId', 'hr.error.branch'))
-      try {
-        assertTimezone(String(a.timezone))
-      } catch {
-        return invalid(issue('timezone', 'hr.error.timezone'))
-      }
-      const rows = await ctx.db.select('hr.Employee', {})
-      if (
-        rows.some(
-          (row) =>
-            row.id !== a.id &&
-            (row.code === code || row.partnerId === a.partnerId || (a.userId && row.userId === a.userId)),
-        )
-      )
-        return invalid(issue('code', 'hr.error.unique'))
-      const existing = rows.find((row) => row.id === a.id)
-      const values = {
-        code,
-        partnerId: a.partnerId,
-        userId: a.userId ?? null,
-        departmentId: a.departmentId ?? null,
-        jobId: a.jobId ?? null,
-        homeBranchId: a.homeBranchId,
-        timezone: a.timezone,
-        startDate: a.startDate,
-        endDate: a.endDate ?? null,
-        active: a.active ?? true,
-        updatedAt: now(),
-      }
-      await ctx.tx(async (tx) => {
-        if (existing) await tx.db.update('hr.Employee', { id: a.id }, values)
-        else await tx.db.insert('hr.Employee', { id: a.id, ...values, createdAt: now() })
-        await tx.db.insertIfAbsent('partner.Role', {
-          id: `employee:${a.partnerId}`,
-          partnerId: a.partnerId,
-          role: 'employee',
-        })
-      })
-      return { ok: true, id: a.id }
-    },
+    handler: (ctx: Ctx, a) => saveEmployee(ctx, a as EmployeeInput),
   }),
 
   'employee.myProfile': defineFn({

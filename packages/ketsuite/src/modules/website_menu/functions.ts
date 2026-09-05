@@ -1,4 +1,4 @@
-import { asc, defineFn, deleteFrom, eq, from } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, isNotNull, ne } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { canAccessSite, canManageStructure } from '../website/access.ts'
 
@@ -17,7 +17,162 @@ const validHref = (value: unknown): boolean => {
   }
 }
 
+/**
+ * How many ancestors an item may have. A menu deeper than this is a site map,
+ * and the limit is also what bounds the ancestor walk below.
+ */
+const MAX_MENU_ANCESTORS = 100
+
+const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+
+/** A trailing slash is the same page, and the root is the one path that keeps its slash. */
+const normalisePath = (value: string): string => {
+  const path = value.split('#')[0]?.split('?')[0] ?? ''
+  const trimmed = path.replace(/\/+$/, '')
+  return trimmed || '/'
+}
+
+/** The path an internal link names, or null when the link points off the site. */
+const internalPath = (href: unknown): string | null => {
+  const value = String(href ?? '').trim()
+  if (!value.startsWith('/') || value.startsWith('//')) return null
+  return normalisePath(value)
+}
+
 export const functions: Record<string, FnSpec> = {
+  /**
+   * The navigation a visitor sees.
+   *
+   * Separate from listMenu rather than loosening it: listMenu is the editor's
+   * view, scoped by site membership, and an anonymous caller has no membership
+   * to scope by. This one answers for a site that is actually being served, the
+   * same gate the sitemap and public search apply, and returns only what a
+   * theme needs to draw a link.
+   */
+  /**
+   * Freeze the navigation so it can go out with the pages it points at.
+   *
+   * The answer is handed to `website.preparePublication` as an attachment. Left
+   * out, a menu change reaches visitors on its own schedule: a link appears
+   * before the page it points at, or a page arrives with no way to reach it.
+   */
+  snapshotMenu: defineFn({
+    input: { siteId: 'id' },
+    output: { items: 'json' },
+    effects: ['read:website.SiteMember', 'read:website_menu.MenuItem'],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      if (!(await canAccessSite(ctx, args.siteId))) return { items: [] }
+      const M = ctx.table('website_menu.MenuItem')
+      const rows = await ctx.db.all(
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+      )
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          label: row.label,
+          href: row.href,
+          position: row.position,
+          parentId: row.parentId ?? null,
+        })),
+      }
+    },
+  }),
+
+  /**
+   * Which navigation links lead nowhere.
+   *
+   * `validHref` checks the shape of a link and stops there, so a menu item can
+   * point at a path no page serves and the site's own navigation walks a
+   * visitor into its own four-oh-four. Nothing noticed, because a menu item and
+   * the page it names are edited on different screens on different days.
+   *
+   * An internal link is satisfied by a **published** page at that path or by a
+   * route the deployment serves - `/robots.txt` and `/sitemap.xml` are links a
+   * menu may legitimately carry and neither is an entry. Anything external is
+   * left alone: whether another site answers is not a question this can ask,
+   * and pretending to answer it would be worse than saying nothing.
+   *
+   * This reports rather than refuses. A menu is built alongside the pages it
+   * points at, so a link that does not resolve yet is an ordinary state of an
+   * afternoon's work; the point is that nobody has to remember to look.
+   */
+  preflightMenu: defineFn({
+    input: { siteId: 'id' },
+    output: { ok: 'bool', checked: 'int?', dangling: 'json?' },
+    effects: ['read:website.SiteMember', 'read:website.Entry', 'read:website_menu.MenuItem'],
+    handler: async (ctx: Ctx, args) => {
+      if (!(await canAccessSite(ctx, args.siteId))) return { ok: true, checked: 0, dangling: [] }
+      const M = ctx.table('website_menu.MenuItem')
+      const items = await ctx.db.all(
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+      )
+      const Entry = ctx.table('website.Entry')
+      // Published, not merely present: a menu link to a draft is a link that
+      // answers for an editor and not for anyone else, which is the harder
+      // version of the bug to notice.
+      const pages = await ctx.db.all(
+        from(Entry)
+          .where(
+            eq(Entry.siteId, args.siteId),
+            isNotNull(Entry.publishedRevisionId),
+            ne(Entry.status, 'trash'),
+          )
+          .select(Entry.path)
+          .limit(5_000),
+      )
+      const served = new Set(pages.map((row) => normalisePath(String(row.path))))
+      for (const route of Object.keys(ctx.manifest.routes ?? {})) served.add(normalisePath(route))
+
+      const dangling = items
+        .filter((item) => {
+          const target = internalPath(item.href)
+          return target !== null && !served.has(target)
+        })
+        .map((item) => ({ id: String(item.id), label: String(item.label), href: String(item.href) }))
+
+      return { ok: dangling.length === 0, checked: items.length, dangling }
+    },
+  }),
+
+  publicMenu: defineFn({
+    anonymous: true,
+    input: { siteId: 'id' },
+    output: { id: 'id', label: 'text', href: 'text', position: 'int', parentId: 'id?' },
+    effects: ['read:website.Site', 'read:website.Publication', 'read:website_menu.MenuItem'],
+    handler: async (ctx: Ctx, args) => {
+      const Site = ctx.table('website.Site')
+      const site = await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true)))
+      if (!site) return []
+
+      // A site that publishes as a set reads the navigation that went out with
+      // the pages, not whatever the editor has saved since. A site that has
+      // never prepared a publication reads live rows, which is what every site
+      // did before publications existed.
+      if (site.activePublicationId) {
+        const P = ctx.table('website.Publication')
+        const publication = await ctx.db.one(
+          from(P).where(eq(P.id, site.activePublicationId), eq(P.state, 'active')),
+        )
+        const frozen = (publication?.attachments as { website_menu?: { items?: unknown } } | null)
+          ?.website_menu?.items
+        if (Array.isArray(frozen)) return frozen as Array<Record<string, unknown>>
+      }
+
+      const M = ctx.table('website_menu.MenuItem')
+      const rows = await ctx.db.all(
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+      )
+      return rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        href: row.href,
+        position: row.position,
+        parentId: row.parentId ?? null,
+      }))
+    },
+  }),
+
   listMenu: defineFn({
     input: { siteId: 'id?' },
     effects: ['read:website_menu.MenuItem', 'read:website.SiteMember'],
@@ -38,14 +193,42 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, args) => {
       if (ctx.actor && (!args.siteId || !(await canManageStructure(ctx, args.siteId))))
-        return { ok: false, errors: [{ field: 'siteId', message: 'website.error.forbidden' }] }
+        return invalid('siteId', 'website.error.forbidden')
       const existing = (await ctx.db.select('website_menu.MenuItem', { id: args.id }))[0]
       if (existing && existing.siteId !== (args.siteId ?? null))
-        return { ok: false, errors: [{ field: 'id', message: 'website.error.immutableOwnership' }] }
-      if (args.parentId) {
+        return invalid('id', 'website.error.immutableOwnership')
+      if (args.parentId != null) {
+        // The parent the caller named is the only one this edit is answerable
+        // for: it must exist and belong to the same site.
         const parent = (await ctx.db.select('website_menu.MenuItem', { id: args.parentId }))[0]
-        if (!parent || parent.siteId !== (args.siteId ?? null) || parent.id === args.id)
-          return { ok: false, errors: [{ field: 'parentId', message: 'website.error.invalidParent' }] }
+        if (!parent || parent.siteId !== (args.siteId ?? null))
+          return invalid('parentId', 'website.error.invalidParent')
+        if (parent.id === args.id) return invalid('parentId', 'website_menu.error.menuCycle')
+
+        // The rest of the chain is walked for one reason only: to see whether
+        // this edit would close a loop back to this item. Making A a child of B
+        // and then B a child of A used to produce a cycle that only the renderer
+        // would discover.
+        //
+        // Damage further up is deliberately not this edit's problem. Menus can
+        // hold chains broken by the orphaning delete this module used to allow,
+        // and rejecting an edit because of a missing row two levels above would
+        // report `parentId` as invalid while naming a parent that is fine — with
+        // nothing pointing at the row that actually needs repair. A chain that is
+        // already broken, or already looping above, cannot close a loop through
+        // this item either, so the walk stops instead of refusing.
+        const seen = new Set<string>()
+        let cursor: unknown = parent.parentId ?? null
+        for (let ancestors = 2; cursor != null; ancestors += 1) {
+          const key = String(cursor)
+          if (key === String(args.id)) return invalid('parentId', 'website_menu.error.menuCycle')
+          if (seen.has(key)) break
+          seen.add(key)
+          if (ancestors > MAX_MENU_ANCESTORS) return invalid('parentId', 'website_menu.error.menuTooDeep')
+          const ancestor = (await ctx.db.select('website_menu.MenuItem', { id: cursor }))[0]
+          if (!ancestor) break
+          cursor = ancestor.parentId ?? null
+        }
       }
       let cs = ctx
         .change('website_menu.MenuItem', args, existing)
@@ -66,11 +249,17 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const row = (await ctx.db.select('website_menu.MenuItem', { id: args.id }))[0]
-      if (!row) return { changes: 0 }
+      if (!row) return { ok: true, id: args.id }
       if (ctx.actor && (!row.siteId || !(await canManageStructure(ctx, row.siteId))))
-        return { ok: false, errors: [{ field: 'siteId', message: 'website.error.forbidden' }] }
+        return invalid('siteId', 'website.error.forbidden')
+      // Deleting a parent used to leave its children pointing at a row that no
+      // longer exists. website.deleteTerm refuses the same way rather than
+      // silently rehoming a subtree the editor cannot see.
+      const children = await ctx.db.select('website_menu.MenuItem', { parentId: args.id })
+      if (children.length) return invalid('id', 'website_menu.error.menuInUse')
       const M = ctx.table('website_menu.MenuItem')
-      return ctx.db.del(deleteFrom(M).where(eq(M.id, args.id)))
+      await ctx.db.del(deleteFrom(M).where(eq(M.id, args.id)))
+      return { ok: true, id: args.id }
     },
   }),
 }

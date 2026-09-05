@@ -18,6 +18,7 @@ export type Node =
   | { k: 'region'; name: string; line: number }
   | { k: 'island'; name: string; line: number }
   | { k: 'sections'; line: number }
+  | { k: 'slot'; name: string; line: number }
 
 const IDENT = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 // Property names that could reach the prototype chain are rejected at parse time,
@@ -206,6 +207,13 @@ export function parse(src: string): Node[] {
       }
       if (head === 'sections') {
         nodes.push({ k: 'sections', line: t.line })
+        i++
+        continue
+      }
+      if (head === 'slot') {
+        const m = /^slot\s+["']([A-Za-z][A-Za-z0-9_-]*)["']$/.exec(t.value)
+        if (!m) throw new KtlSyntaxError(`bad slot tag at line ${t.line}`, t.line)
+        nodes.push({ k: 'slot', name: m[1] as string, line: t.line })
         i++
         continue
       }

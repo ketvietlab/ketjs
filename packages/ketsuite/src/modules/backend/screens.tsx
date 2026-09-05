@@ -12,108 +12,12 @@
 
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
-import {
-  badge,
-  card,
-  cardGroups,
-  code,
-  dataTable,
-  definitionList,
-  emptyState,
-  framedPage as Framed,
-  shell,
-} from '../../ui/index.ts'
+import { badge, code, dataTable, emptyState, ListScreen } from '../../ui/index.ts'
 import type { Column, DataTable, Frame } from '../../ui/index.ts'
-
-export type AppRow = {
-  name: string
-  title: string
-  summary: string
-  category: string
-  state: 'available' | 'installed'
-  depends: string[]
-  dependents: string[]
-}
 
 export type PageRow = { id: string; path: string; title: string; published: boolean }
 
-export type Screen = 'apps' | 'pages' | 'settings'
-
-/**
- * An app's name, summary and category are declared as plain strings so a module
- * stays readable without a catalogue. A module that wants them translated adds
- * `app.title`, `app.summary` or `app.category` to its own messages, and this picks
- * the translation up when it exists.
- *
- * The convention beats a second declaration syntax: no module has to change, and
- * the pseudo-locale shows immediately which ones have not been translated yet.
- */
-const label = (
-  _: Translator,
-  module: string,
-  field: 'title' | 'summary' | 'category',
-  literal: string,
-): string => {
-  const key = `${module}.app.${field}`
-  const out = _(key)
-  return out === key ? literal : out
-}
-
-export const appsScreen = (_: Translator, apps: AppRow[], frame: Frame = {}): TemplateResult => {
-  const extras = frame.extras ?? {}
-  const categories = [...new Set(apps.map((a) => a.category))].sort()
-  const categoryLabel = (c: string): string => {
-    const owner = apps.find((a) => a.category === c)
-    return owner ? label(_, owner.name, 'category', c) : c
-  }
-  return shell(
-    _,
-    _('backend.apps.title'),
-    apps.length === 0
-      ? emptyState(_('backend.apps.empty.message'), _('backend.apps.empty.hint'))
-      : cardGroups({
-          groups: categories.map((c) => ({
-            key: c,
-            title: categoryLabel(c),
-            items: apps.filter((a) => a.category === c),
-          })),
-          id: (a) => a.name,
-          footer: extras['apps.footer'],
-          card: (app) =>
-            card({
-              key: app.name,
-              state: app.state,
-              title: label(_, app.name, 'title', app.title),
-              summary: label(_, app.name, 'summary', app.summary),
-              meta: [
-                {
-                  kind: 'depends' as const,
-                  term: _('backend.apps.depends'),
-                  value: app.depends.join(', ') || _('backend.apps.none'),
-                },
-                ...(app.dependents.length > 0
-                  ? [
-                      {
-                        kind: 'dependents' as const,
-                        term: _('backend.apps.dependents'),
-                        value: app.dependents.join(', '),
-                      },
-                    ]
-                  : []),
-              ],
-              // Uninstalling something another app needs would take that app with it, so
-              // the control says no rather than the failure arriving after the click.
-              action: {
-                action: app.state === 'installed' ? 'uninstall' : 'install',
-                label: app.state === 'installed' ? _('backend.apps.uninstall') : _('backend.apps.install'),
-                disabled: app.state === 'installed' && app.dependents.length > 0,
-              },
-              extra: extras['app-card.actions']?.[app.name],
-            }),
-        }),
-    frame,
-  )
-}
+export type Screen = 'pages'
 
 /**
  * The columns of the pages list, as data.
@@ -150,13 +54,23 @@ export const pageColumns = (_: Translator): Array<Column<PageRow>> => [
   },
 ]
 
+/**
+ * The list screen, as the design catalogue and the table contract exercise it.
+ *
+ * No route renders this: `website_backend` owns the product page list, which is
+ * site-scoped and carries revisions, preview and publish. This one used to be
+ * served at `/admin/pages` beside it, so the sidebar offered "Trang" twice, in two
+ * different apps, over the same rows. It stays because it is the smallest complete
+ * example of `dataTable` with chrome, and both `/catalogue` and the contract test
+ * are built on it.
+ */
 export const pagesScreen = (
   _: Translator,
   pages: PageRow[],
   frame: Frame = {},
   table: Partial<DataTable<PageRow>> = {},
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('backend.pages.title')}
     frame={frame}
@@ -168,20 +82,4 @@ export const pagesScreen = (
   />
 )
 
-export const settingsScreen = (
-  _: Translator,
-  tokens: Record<string, string>,
-  frame: Frame = {},
-): TemplateResult => (
-  <Framed
-    translator={_}
-    title={_('backend.settings.title')}
-    frame={frame}
-    body={definitionList({
-      title: _('backend.settings.tokens'),
-      items: Object.entries(tokens).map(([k, v]) => ({ key: k, term: `--ket-${k}`, value: v })),
-    })}
-  />
-)
-
-export const screens = { appsScreen, pagesScreen, settingsScreen, emptyState }
+export const screens = { pagesScreen, emptyState }

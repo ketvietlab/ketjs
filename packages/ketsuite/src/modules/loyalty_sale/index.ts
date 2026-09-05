@@ -5,8 +5,6 @@ export default defineModule({
   name: 'loyalty_sale',
   version: '0.1.0',
   depends: ['loyalty', 'sale'],
-  install: 'auto',
-  app: true,
   title: 'Loyalty trong bán hàng',
   summary: 'Áp ưu đãi, tích và đổi điểm trên báo giá và đơn bán.',
   category: 'Bán hàng',
