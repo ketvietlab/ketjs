@@ -1463,7 +1463,11 @@ const capabilityLabels: Record<string, { en: string; vi: string }> = {
   'night-audit': { en: 'Run night audit', vi: 'Chạy kiểm toán đêm' },
   'order-operate': { en: 'Operate orders', vi: 'Vận hành đơn hàng' },
   operate: { en: 'Operate', vi: 'Vận hành' },
-  'project-access': { en: 'Read every project', vi: 'Đọc mọi dự án' },
+  // Not "read every project" — that is the grant row this capability hands out,
+  // and holding the capability without a row of your own reads nothing. The
+  // label said otherwise, which would have told a role screen that ticking this
+  // box opens the projects; it opens the ability to open them for somebody.
+  'project-access': { en: 'Administer project access', vi: 'Quản trị quyền đọc dự án' },
   'project-delete': { en: 'Delete projects for good', vi: 'Xóa hẳn dự án' },
   'property-reference': { en: 'Reference properties', vi: 'Tham chiếu cơ sở lưu trú' },
   reconcile: { en: 'Reconcile', vi: 'Đối soát' },
