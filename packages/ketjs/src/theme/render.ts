@@ -92,16 +92,36 @@ export function createTheme(
   })
 
   /**
+   * Which placement is being rendered, so that a `slot` tag inside its template
+   * can find its children.
+   *
+   * A stack rather than a scope key: children are already-rendered markup, and
+   * a scope carries values a template may print. Putting markup where `{{ }}`
+   * can reach it would either escape it into visible tag soup or open a hole,
+   * and reserving a scope name would collide with a section that wanted it.
+   * Rendering is synchronous, so a stack is exact.
+   */
+  const openSlots: Array<{ slots: Record<string, unknown>; page: unknown }> = []
+
+  /**
    * A page's body is its layout: an ordered list of placements, each rendered by
    * the template named after its section type. The theme decides how a section
    * looks; the data decides which sections there are and in what order.
+   *
+   * A placement may carry children under the slot names its section declares.
+   * They render through this same path, so a nested section is rendered by the
+   * same template and checked against the same manifest as a top-level one.
    */
   const renderSectionsAt = (scope: Scope): string => {
     const layout = scope['sections']
     if (!Array.isArray(layout)) return ''
     const out: string[] = []
     for (const raw of layout) {
-      const placement = raw as { type?: string; settings?: Record<string, unknown> }
+      const placement = raw as {
+        type?: string
+        settings?: Record<string, unknown>
+        slots?: Record<string, unknown>
+      }
       if (!placement?.type) continue
       if (!manifest.sections[placement.type]) {
         throw new KetError({
@@ -110,16 +130,40 @@ export function createTheme(
           hint: `available sections: ${Object.keys(manifest.sections).join(', ') || '(none)'}`,
         })
       }
-      out.push(
-        renderRegion(placement.type, {
-          ...sectionSettings(manifest.sections[placement.type]?.settings ?? {}, placement.settings ?? {}),
-          // The one key a section gets that is not one of its settings: which page
-          // it sits on. Declared nowhere because it is not the author's to declare.
-          page: scope['page'],
-        }),
-      )
+      const slots =
+        placement.slots && typeof placement.slots === 'object' && !Array.isArray(placement.slots)
+          ? placement.slots
+          : {}
+      openSlots.push({ slots, page: scope['page'] })
+      try {
+        out.push(
+          renderRegion(placement.type, {
+            ...sectionSettings(manifest.sections[placement.type]?.settings ?? {}, placement.settings ?? {}),
+            // The one key a section gets that is not one of its settings: which page
+            // it sits on. Declared nowhere because it is not the author's to declare.
+            page: scope['page'],
+          }),
+        )
+      } finally {
+        openSlots.pop()
+      }
     }
     return out.join('')
+  }
+
+  /**
+   * The children a placement put in one of its slots.
+   *
+   * An empty slot renders nothing rather than raising: a container with an
+   * empty column is an ordinary state of a page being built, not a fault. A
+   * slot the section never declared is caught at the write by validateLayout,
+   * which is where an author can still do something about it.
+   */
+  const renderSlotAt = (name: string, _scope: Scope): string => {
+    const open = openSlots[openSlots.length - 1]
+    const children = open?.slots?.[name]
+    if (!Array.isArray(children) || !children.length) return ''
+    return renderSectionsAt({ sections: children, page: open?.page } as Scope)
   }
 
   const renderRegion = (name: string, scope: Scope): string => {
@@ -170,6 +214,7 @@ export function createTheme(
     renderIsland: wiring.renderIsland,
     renderRegion,
     renderSections: renderSectionsAt,
+    renderSlot: renderSlotAt,
     renderTemplate,
   }
 
