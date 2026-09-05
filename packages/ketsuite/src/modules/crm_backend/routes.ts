@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { encodeListState, parseListState, table, text } from '@ketvietlab/ketjs'
 import type { ListState, Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
-import { formatDateTime, formatMoney } from '../../ui/index.ts'
+import { formatDateTime, formatMoney, modalWorkspace } from '../../ui/index.ts'
 import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { choices, adminPage, inLocale, localeQuery, optional, timezoneOf } from '../backend/screen.ts'
@@ -22,6 +22,7 @@ import {
 } from './relation-control.ts'
 import {
   CONFIGURATION_TABS,
+  caseConvertModal,
   caseCreateScreen,
   caseDetailScreen,
   casesListScreen,
@@ -811,9 +812,16 @@ export const routes: Record<string, RouteEntry> = {
         const form = await readForm(req)
         const held = (await ctx.call('crm.case.get', { id: params.id }, url, req)) as AnyRow | null
         if (!held) return text('not found', { status: 404 })
+        // Falling back to the version just read made every compare-and-set
+        // behind these actions match by construction: a stale tab would win
+        // silently. A request that does not say which version it saw is refused
+        // instead of being handed the current one.
+        const VERSIONED = ['move', 'convert', 'won', 'lost', 'assign', 'merge']
+        if (VERSIONED.includes(String(form.action ?? '')) && !form.expectedVersion)
+          return text(_('crm_backend.convert.versionRequired'), { status: 422 })
         const base = {
           id: params.id,
-          expectedVersion: Number(form.expectedVersion ?? held.version ?? 0),
+          expectedVersion: Number(form.expectedVersion ?? 0),
           idempotencyKey: randomUUID(),
         }
         const call = (name: string, input: Record<string, unknown>) =>
@@ -823,8 +831,16 @@ export const routes: Record<string, RouteEntry> = {
           result = await call('crm.case.save', saveInput(params.id, form, String(held.kind)))
         else if (form.action === 'move')
           result = await call('crm.case.move', { ...base, stageId: form.stageId ?? '' })
-        else if (form.action === 'convert') result = await call('crm.case.convertLead', base)
-        else if (form.action === 'won') result = await call('crm.case.markWon', base)
+        else if (form.action === 'convert') {
+          // The checkbox in the confirmation step is a browser hint. This is the
+          // condition the record is actually converted under.
+          if (!form.confirm)
+            result = {
+              ok: false,
+              errors: [{ field: 'confirm', code: 'crm_backend.convert.confirmRequired' }],
+            }
+          else result = await call('crm.case.convertLead', { ...base, ...optional(form, 'stageId') })
+        } else if (form.action === 'won') result = await call('crm.case.markWon', base)
         else if (form.action === 'lost')
           result = await call('crm.case.markLost', { ...base, lostReason: form.lostReason ?? '' })
         else if (form.action === 'assign') {
@@ -910,8 +926,15 @@ export const routes: Record<string, RouteEntry> = {
         else if (form.action === 'refreshScore')
           result = await call('crm.case.refreshScore', { id: params.id, idempotencyKey: randomUUID() })
         else return text('unknown action', { status: 400 })
-        if (result.ok || result.activity || Array.isArray(result.activities))
-          return seeOther(inLocale(url, `${url.pathname}${url.search}`))
+        if (result.ok || result.activity || Array.isArray(result.activities)) {
+          // The confirmation step is owned by the URL, so a conversion that
+          // succeeded has to close it. Leaving it open reopens the question on
+          // a record that is already an opportunity.
+          const back = new URLSearchParams(url.searchParams)
+          back.delete('modal')
+          const query = back.toString()
+          return seeOther(inLocale(url, `${url.pathname}${query ? `?${query}` : ''}`))
+        }
         errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const [row, data] = await Promise.all([
@@ -925,9 +948,15 @@ export const routes: Record<string, RouteEntry> = {
           status: 404,
           body: (_, frame) => permissionScreen(_, frame),
         })
-      const stages = (data.config.stages ?? []).filter(
-        (item) => Array.isArray(item.allowedKinds) && (item.allowedKinds as unknown[]).includes(row.kind),
-      )
+      const stagesFor = (kind: string) =>
+        (data.config.stages ?? []).filter(
+          (item) => Array.isArray(item.allowedKinds) && (item.allowedKinds as unknown[]).includes(kind),
+        )
+      const stages = stagesFor(String(row.kind))
+      // Converting is confirmed in a step the URL owns, so the opportunity
+      // stages are only read when that step is open — and only for a lead.
+      const converting = row.kind === 'lead' && url.searchParams.get('modal') === 'convert'
+      const conversionStages = converting ? stagesFor('opportunity') : []
       const [warehouses, plans, activityTypes, duplicateResult, quotations, products] = await Promise.all([
         ctx.call('stock.listWarehouses', {}, url, req) as Promise<AnyRow[]>,
         ctx.call('activity.listPlans', {}, url, req) as Promise<AnyRow>,
@@ -949,6 +978,17 @@ export const routes: Record<string, RouteEntry> = {
         stage: false,
       })
       const controls: CaseDetailControls = {
+        ...(converting
+          ? {
+              convertStage: await stageControl(ctx, url, req, _, {
+                id: 'crm-case-convert-stage',
+                value: conversionStages[0] ? String(conversionStages[0].id) : null,
+                stages: options(conversionStages),
+                kind: 'opportunity',
+                required: true,
+              }),
+            }
+          : {}),
         stage: await stageControl(ctx, url, req, _, {
           id: 'crm-case-move-stage',
           value: String(row.stageId),
@@ -988,10 +1028,16 @@ export const routes: Record<string, RouteEntry> = {
             }
           : {}),
       }
+      const closeConvert = () => {
+        const back = new URLSearchParams(url.searchParams)
+        back.delete('modal')
+        const query = back.toString()
+        return `${url.pathname}${query ? `?${query}` : ''}`
+      }
       return adminPage(ctx, url, req, {
         title: 'crm_backend.case.detail',
-        body: (_, frame) =>
-          caseDetailScreen(_, frame, row, {
+        body: (_, frame) => {
+          const detail = caseDetailScreen(_, frame, row, {
             fields: caseFields(_, row, fieldControls),
             stages,
             users: data.users,
@@ -1002,12 +1048,28 @@ export const routes: Record<string, RouteEntry> = {
             duplicates: (duplicateResult.rows as AnyRow[]) ?? [],
             quotations,
             controls,
-            errors,
+            // A conversion that was refused belongs to the step that asked for
+            // it, not to the save form behind it.
+            errors: converting ? [] : errors,
             locale: localeQuery(url),
             tab: ['overview', 'sales', 'activities', 'timeline'].includes(url.searchParams.get('tab') ?? '')
               ? String(url.searchParams.get('tab'))
               : 'overview',
-          }),
+          })
+          return converting
+            ? modalWorkspace(
+                detail,
+                caseConvertModal(_, row, {
+                  // Posting back to the step keeps it open when the answer is
+                  // no, with the reason inside it rather than on the page behind.
+                  action: inLocale(url, `${url.pathname}?${url.searchParams.toString()}`),
+                  cancelHref: inLocale(url, closeConvert()),
+                  control: controls.convertStage,
+                  errors,
+                }),
+              )
+            : detail
+        },
       })
     },
 
