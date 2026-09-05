@@ -103,6 +103,7 @@ export type ComposedModel = {
   owner: string
   scope: ModelScope
   timestamps: boolean
+  append: boolean
   fields: Record<string, Field>
   indexes: Record<string, ComposedIndex>
 }
@@ -127,6 +128,18 @@ export type ModelDef = {
   scope: ModelScope
   /** Add optional createdAt/updatedAt fields and maintain them on every write path. */
   timestamps?: boolean
+  /**
+   * Rows may be inserted and read, and never changed or removed.
+   *
+   * For a record whose value is that it did not change afterwards: an audit
+   * timeline, a ledger entry, a delivered receipt. Both audit models in KetSuite
+   * already promised this in a comment and nothing held them to it — a promise a
+   * reviewer has to remember is one a refactor eventually breaks.
+   *
+   * Enforced on every write path a ctx offers, so `insertIfAbsent` remains the way
+   * a replay is answered and there is no way to edit what it already wrote.
+   */
+  append?: boolean
   /**
    * A type string, or an object when the field has something to declare beyond it.
    * `'text'` and `{ type: 'text' }` compose identically.

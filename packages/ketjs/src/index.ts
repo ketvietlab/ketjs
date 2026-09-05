@@ -174,6 +174,7 @@ export { classificationInventory, formatClassification } from './kernel/classifi
 export { MIN_EVERY_MS, parseEvery, tickAt, ticksBetween, validateSchedule } from './kernel/schedule.ts'
 export { claimDue } from './server/schedule.ts'
 export { claimRateSlot, pruneRateSlots } from './server/ratelimit.ts'
+export { auditHash, auditId } from './kernel/audit.ts'
 export { nextSequenceNumber, peekSequenceNumber, sequenceKey } from './server/sequence.ts'
 export type { SequenceOptions } from './server/sequence.ts'
 export type { RatePolicy, RateVerdict } from './server/ratelimit.ts'
