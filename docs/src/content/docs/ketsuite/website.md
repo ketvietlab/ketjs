@@ -443,6 +443,93 @@ Over HTTP the consent box is read as agreement for `on`, `true`, `yes` or `1`. A
 `<input type="checkbox" name="consent">` with no `value` attribute posts `on` — the HTML default —
 so accepting only `true`/`1` told a visitor who had ticked the box that they must agree.
 
+### A form is only as live as the site under it
+
+`getForm` and `submitForm` used to check `Form.active` and stop there. Deactivating a **site** — the
+way a whole website is withdrawn — reached its pages and left every form on it answering and
+accepting posts. Both now resolve `website.Site` and refuse unless the site is active too, which is
+the case the check exists for: the page is already sitting in a visitor's browser, the site is gone,
+and the submit button still worked.
+
+### A submission is personal data with a lifetime
+
+Everything below is one idea: the answers a visitor types have an owner, a shortest useful audience,
+and an end. What existed before was a table that only grew, readable in full by anyone who could
+arrange the site's menu.
+
+**Working the queue does not mean reading it.** `listSubmissions` no longer carries `payload`. It
+carries when a submission arrived, what state it is in, whether it is held, and `summary` — the
+answers the form itself declares safe to preview, in `Form.summaryFields`. That list is empty by
+default, and empty is workable: a queue that shows arrival and status can be triaged without showing
+what anyone wrote. `Form.summaryFields` is deliberately **not** part of `schemaVersion`: marking a
+field previewable changes nothing a visitor sees, and versioning it would invalidate every open page
+for an internal decision. It is also applied as it stands now rather than as it stood at collection
+time — someone who realises today that a field holds personal data expects yesterday's rows covered
+by that realisation, not exempt from it. Naming a field the schema does not declare is refused at
+save rather than dropped, because an editor who mistypes a name and sees an empty column concludes
+the feature is broken.
+
+**Opening one record is a separate, recorded act.** `readSubmission` returns the answers, requires
+site administration rather than structure management, and files a row in `FormSubmissionAudit`. A
+caller below the bar gets the same answer as a caller naming a row that does not exist, so the
+refusal never confirms the row. `countSubmissions` exists beside `listSubmissions` for the same
+reason `countSearchPublished` does: the list's output is a projection of submission rows and a total
+is not one of them.
+
+**An export names its fields.** There is no "export everything". `exportSubmissions` takes an explicit
+field list, checks it against the form's own schema, caps the result and reports `capped` rather than
+presenting a truncated file as the whole set — and writes exactly that field list and row count into
+the audit. An export is the one operation that puts personal data somewhere this system can no longer
+reach, so what it took has to be answerable later without guessing. The columns
+the export carries beside the answers are spelled `_id`, `_createdAt` and `_status` — a form field
+name must start with a letter, so an underscore is a key no form can ask for, and a form with a
+question named "status" cannot overwrite the row's real state with a visitor's answer. The submit
+route reserves `_schemaVersion` for the same reason.
+
+**Retention runs on its own.** `Form.retentionDays` is a window in days; absent means kept, which is
+the honest default — a form nobody has given a period has not been thought about, and erasing on a
+number this module invented would destroy records nobody agreed to lose. `website_form.retentionSweep`
+is scheduled `every: '24h'` rather than `dailyAt`, because an age in days has no opinion about what
+time it is anywhere and naming a wall clock would force a timezone into a decision that has none. It
+runs `crossCompany`, reads which companies have forms with a window, and hands each its own
+`purgeExpired` job keyed on the day. Passes are bounded: a form switched to ninety days after two
+years of collecting has a very large first pass, and a sweep that runs for an hour is a sweep that
+gets killed halfway and retried from the start for ever.
+
+**Erasure keeps the row.** A purge writes `payload: {}`, clears `source` and `fingerprint`, sets
+`status: 'purged'` and stamps `purgedAt`. It does not delete. Deleting would take the consent record
+with it — the one thing that says this person was asked and agreed — and would free `dedupeKey`, so a
+client replaying a months-old request would be accepted a second time as new. What the visitor is
+owed is that their answers stop existing, not that the fact they wrote to us is forgotten. Each row
+is erased under a compare-and-set on `purgedAt`, so the scheduled sweep and an administrator pressing
+the button cannot both count the same row, and one audit row is filed per pass rather than per
+submission — which rows went is written on the rows themselves.
+
+**A hold is a reason, not a flag.** `holdSubmission` keeps a row past its date and records why, so the
+row says who is relying on it; a hold with no reason is indistinguishable from one nobody remembers
+setting. Held rows are excluded in the retention query rather than skipped in the loop — filtered
+afterwards they would still fill the batch, and a form with five hundred held rows would make every
+pass do nothing and report nothing left. Releasing a hold returns the row to the ordinary queue
+rather than erasing it on the spot: releasing is not a request to delete.
+
+`FormSubmissionAudit` is append-only and separate from the submission it describes, because the point
+of the record is that it survives the erasure of what it describes. It stays in `website_form` rather
+than borrowing `user.SecurityAudit`: this is a record about site content, and reaching for the
+identity model would drag a dependency on `user` behind it.
+
+### The permission catalogue had a blind spot
+
+`website_form` shipped in the production deployment with **no permission declaration at all** —
+five functions, eleven after this change — and the coverage test could not see it. The check read
+`Object.entries(manifest.functions).filter(([, fn]) => coveredModules.has(fn.by))` — so a module
+absent from the catalogue removed its own functions from the set being checked, and the assertion
+passed on what was left. Twenty-one modules were in that gap.
+
+The test now checks owners first, against a named `UNGOVERNED` list. `website_form` and
+`website_menu` are declared and off it; the remaining nineteen are written down. The list may only
+shrink: adding a name is how that test stops meaning anything, and a new module that forgets its
+declaration now fails the same way a new function does.
+
 ## The storefront page scope
 
 `packages/ketjs/src/server/boot.ts` builds the scope a theme renders a public page against: `site`,

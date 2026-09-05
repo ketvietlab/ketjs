@@ -1,5 +1,6 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { functions } from './functions.ts'
+import { jobs } from './jobs.ts'
 import { models } from './models.ts'
 import { sections } from './sections.ts'
 import { routes } from './routes.ts'
@@ -41,6 +42,13 @@ export default defineModule({
       'error.consentRequired': 'Bạn cần đồng ý với thông báo trước khi gửi.',
       'error.consentVersionRequired':
         'Hãy tải lại trang trước khi gửi, để ghi nhận đúng thông báo bạn đã đồng ý.',
+      'error.invalidSummaryFields': 'Danh sách trường xem trước không hợp lệ.',
+      'error.unknownSummaryField': 'Trường xem trước không có trong biểu mẫu.',
+      'error.invalidRetention': 'Thời hạn lưu phải là số ngày từ 1 đến 3650.',
+      'error.noRetention': 'Biểu mẫu này chưa đặt thời hạn lưu.',
+      'error.exportFieldsRequired': 'Hãy chọn ít nhất một trường để xuất.',
+      'error.submissionNotFound': 'Không tìm thấy lượt gửi.',
+      'error.submissionPurged': 'Lượt gửi đã được xóa nội dung, không thể giữ lại.',
     },
     en: {
       'app.title': 'Website forms',
@@ -71,10 +79,18 @@ export default defineModule({
       'error.consentRequired': 'You must agree to the notice before submitting.',
       'error.consentVersionRequired':
         'Reload the page before submitting, so the notice you agreed to is recorded correctly.',
+      'error.invalidSummaryFields': 'The preview field list is invalid.',
+      'error.unknownSummaryField': 'The preview field is not declared in the form.',
+      'error.invalidRetention': 'Retention must be a whole number of days between 1 and 3650.',
+      'error.noRetention': 'This form has no retention period set.',
+      'error.exportFieldsRequired': 'Choose at least one field to export.',
+      'error.submissionNotFound': 'The submission was not found.',
+      'error.submissionPurged': 'This submission has been erased and cannot be held.',
     },
   },
   models,
   functions,
+  jobs,
   sections,
   routes,
 })
