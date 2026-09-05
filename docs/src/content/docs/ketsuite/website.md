@@ -116,6 +116,22 @@ way.
 
 A parent belonging to a different site remains `website.error.invalidParent`.
 
+### Navigation has to reach the page
+
+A theme draws `{% for item in menu %}`. Nothing ever put a menu in that scope, so every public page
+rendered an empty nav — the items were stored, editable, and invisible.
+
+Navigation belongs to the site rather than to the page, so it is resolved beside it:
+`serve.pages.menuResolve` names the function, the way `siteResolve` and `resolve` already do, and its
+answer reaches the theme as `menu`. The framework names no module; the deployment points it at
+`website_menu.publicMenu`, and a deployment that names a function no composed module declares fails at
+boot rather than rendering a blank nav.
+
+`publicMenu` is separate from `listMenu` rather than a loosening of it. `listMenu` is the editor's
+view, scoped by site membership, and a visitor has no membership to scope by. The public one answers
+only for a site that is actually being served — the same gate the sitemap and public search apply —
+and returns only what a theme needs to draw a link.
+
 ### Pre-existing damage is not this edit's problem
 
 Only the parent the caller named is validated. The rest of the chain is walked for one reason: to see
