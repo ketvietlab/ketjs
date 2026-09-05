@@ -268,6 +268,10 @@ export const contentScreen = (
           label: _('website_backend.action.taxonomies'),
           href: `/admin/website/taxonomies?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
         }),
+        linkButton({
+          label: _('website_backend.action.preflight'),
+          href: `/admin/website/preflight?site=${encodeURIComponent(siteId ?? '')}${locale ? `&${locale.slice(1)}` : ''}`,
+        }),
       ]),
       !siteId
         ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
@@ -967,6 +971,102 @@ export const mediaFormScreen = (
   )
 }
 
+export type DanglingLink = { id: string; label: string; href: string }
+
+export type PreflightResult = {
+  ok: boolean
+  checked: number
+  capped?: boolean
+  unrenderable: Array<{ entryId: string; path: string; errors: Array<{ message: string }> }>
+}
+
+/**
+ * What would break if this site were published now.
+ *
+ * Not on the content list, which renders on every visit: the check reads a
+ * revision per page, and a list that quietly costs a thousand reads is a list
+ * nobody should have to think about. It is a button, and this is where it
+ * lands.
+ */
+export const preflightScreen = (
+  _: Translator,
+  result: PreflightResult,
+  siteId: string,
+  frame: Frame,
+  locale = '',
+): TemplateResult => (
+  <RecordScreen
+    translator={_}
+    title={_('website_backend.preflight.title')}
+    frame={frame}
+    body={stack([
+      inline([
+        linkButton({
+          label: _('website_backend.action.backToContent'),
+          href: `/admin/website/pages?site=${encodeURIComponent(siteId)}${locale ? `&${locale.slice(1)}` : ''}`,
+        }),
+      ]),
+      ...(result.capped
+        ? [
+            <Notice
+              tone="warning"
+              title={_('website_backend.preflight.capped')}
+              message={_('website_backend.preflight.cappedHint')}
+            />,
+          ]
+        : []),
+      <Notice
+        tone={result.ok ? 'positive' : 'warning'}
+        title={result.ok ? _('website_backend.preflight.clean') : _('website_backend.preflight.broken')}
+        message={`${_('website_backend.preflight.checked')}: ${result.checked}`}
+      />,
+      ...(result.unrenderable.length
+        ? [
+            <Surface
+              body={dataTable(_, {
+                rows: result.unrenderable,
+                id: (row) => row.entryId,
+                columns: [
+                  {
+                    key: 'path',
+                    label: _('website_backend.field.path'),
+                    priority: 'primary',
+                    cell: (row) => row.path,
+                  },
+                  {
+                    key: 'why',
+                    label: _('website_backend.preflight.why'),
+                    cell: (row) => row.errors.map((error) => error.message).join(' · '),
+                  },
+                ],
+              })}
+            />,
+          ]
+        : []),
+    ])}
+  />
+)
+
+/**
+ * Links that lead nowhere, said on the screen where they are edited.
+ *
+ * A menu item and the page it names are edited on different screens on
+ * different days, so nobody was ever looking at both. The check has existed
+ * since website_menu.preflightMenu; this is it, where the links are.
+ */
+const danglingNotice = (_: Translator, dangling: DanglingLink[]): TemplateResult[] =>
+  dangling.length === 0
+    ? []
+    : [
+        <Notice
+          tone="warning"
+          title={_('website_backend.menus.dangling')}
+          message={`${_('website_backend.menus.danglingHint')} ${dangling
+            .map((item) => `${item.label} (${item.href})`)
+            .join(' · ')}`}
+        />,
+      ]
+
 export const menusScreen = (
   _: Translator,
   rows: MenuRow[],
@@ -974,6 +1074,7 @@ export const menusScreen = (
   siteId: string | null,
   frame: Frame,
   locale = '',
+  dangling: DanglingLink[] = [],
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
@@ -981,6 +1082,7 @@ export const menusScreen = (
     frame={frame}
     body={stack([
       siteSwitcher(_, '/admin/website/menus', sites, siteId, locale),
+      ...danglingNotice(_, dangling),
       inline([
         linkButton({
           label: _('website_backend.action.newMenuItem'),
