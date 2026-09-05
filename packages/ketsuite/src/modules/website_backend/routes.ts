@@ -6,7 +6,9 @@ import {
   contentScreen,
   entryFormScreen,
   formEditorScreen,
+  entrySeoSection,
   preflightScreen,
+  publicationsScreen,
   redirectsScreen,
   searchIndexScreen,
   siteDomainsScreen,
@@ -35,7 +37,9 @@ import type {
   FormRow,
   IndexState,
   MemberRow,
+  PublicationRow,
   RedirectRow,
+  SeoValues,
   PreflightResult,
   MenuRow,
   RevisionDiff,
@@ -219,12 +223,24 @@ const renderEntry = async (
   options: { values?: Record<string, string>; errors?: string[] } = {},
 ) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
+  // Read beside the entry rather than folded into getEntry: the head tags
+  // belong to website_seo, and the CMS does not get to decide what is public
+  // about a page on that module's behalf.
+  const seo = detail
+    ? ((await ctx.call(
+        'website_seo.getEntrySeo',
+        { entryId: detail.entry.id },
+        url,
+        req,
+      )) as SeoValues | null)
+    : null
   return adminPage(ctx, url, req, {
     title: detail?.entry.title ?? _(`website_backend.${kind.titleKey}.newTitle`),
     translate: false,
     body: (_, frame) =>
       entryFormScreen(_, detail, siteId, kind, frame, {
         ...options,
+        seo,
         locale: localeQuery(url),
       }),
   })
@@ -340,6 +356,22 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
         body: (_, frame) =>
           revisionsScreen(_, detail.entry, rows, frame, localeQuery(url), kind.basePath, diff),
       })
+    },
+
+  [`${kind.basePath}/{id}/revisions/{revisionId}/restore`]:
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = await ctx.call(
+        'website.restoreRevision',
+        { entryId: params.id, revisionId: params.revisionId },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      // Back to the entry, not to the list: a restore made a draft, and the
+      // draft is the thing the person now wants to look at.
+      return seeOther(inLocale(url, `${kind.basePath}/${params.id}`))
     },
 
   [`${kind.basePath}/{id}/preview`]:
@@ -716,6 +748,124 @@ export const routes: Record<string, RouteEntry> = {
    * preflightPublication reads a revision per page, so it is a button rather
    * than something the content list pays for on every render.
    */
+  /**
+   * The head tags for one page.
+   *
+   * saveEntrySeo has existed since the SEO module and no screen wrote to it,
+   * so a page's description, canonical and social image could only be set by
+   * an agent - and `noindex`, the one field that delists a page immediately,
+   * could not be reached at all.
+   */
+  '/admin/website/content/{id}/seo':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      const result = await ctx.call(
+        'website_seo.saveEntrySeo',
+        {
+          entryId: params.id,
+          metaDescription: (form.metaDescription ?? '').trim() || null,
+          canonical: (form.canonical ?? '').trim() || null,
+          ogImage: (form.ogImage ?? '').trim() || null,
+          noindex: !!form.noindex,
+        },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/pages/${params.id}`))
+    },
+
+  /**
+   * Publishing a set, from a screen.
+   *
+   * preparePublication freezes which revision of which page goes out and
+   * activatePublication moves all of them or none - the machinery that stops a
+   * menu link reaching visitors before the page it points at. It was reachable
+   * only by an agent, so the atomic path existed and the one-page-at-a-time
+   * path was the only one a person could take.
+   */
+  '/admin/website/publications':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const posted = req.method === 'POST' ? await readForm(req) : null
+      const siteId = posted?.siteId || selectedSite(url, sites)
+      const render = async (errors?: string[], notice?: string | null) => {
+        const [rows, entries] = siteId
+          ? await Promise.all([
+              ctx.call('website.listPublications', { siteId }, url, req) as Promise<PublicationRow[]>,
+              ctx.call('website.listEntries', { siteId, status: 'published' }, url, req) as Promise<
+                EntryRow[]
+              >,
+            ])
+          : [[], []]
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.publications.title',
+          body: (_, frame) =>
+            publicationsScreen(_, rows, entries, siteOptions(sites), siteId, frame, {
+              errors,
+              notice,
+              locale: localeQuery(url),
+            }),
+        })
+      }
+      if (req.method === 'GET') return render(undefined, url.searchParams.get('done'))
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      const entryIds = (posted?.entryIds ?? '')
+        .split(/[\s,]+/)
+        .map((id) => id.trim())
+        .filter(Boolean)
+      // The menu is frozen alongside the pages, so navigation and the pages it
+      // points at reach visitors together rather than on separate schedules.
+      const menu = await ctx.call('website_menu.snapshotMenu', { siteId }, url, req)
+      const result = await ctx.call(
+        'website.preparePublication',
+        { id: randomUUID(), siteId, entryIds, attachments: { website_menu: menu } },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/publications?site=${encodeURIComponent(siteId)}`))
+      return render(resultErrors(result, _))
+    },
+
+  '/admin/website/publications/{id}/activate':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = (await ctx.call('website.activatePublication', { id: params.id }, url, req)) as {
+        ok?: boolean
+        missingSections?: string[]
+      }
+      if (!result.ok) {
+        const missing = result.missingSections?.length
+          ? `${_('website_backend.publications.missing')}: ${result.missingSections.join(', ')}`
+          : resultErrors(result, _).join('; ')
+        return text(missing, { status: 400 })
+      }
+      return seeOther(inLocale(url, '/admin/website/publications'))
+    },
+
+  '/admin/website/publications/{id}/rollback':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const siteId = selectedSite(url, sites)
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      // A rollback prepares a new publication from the previous set; it does
+      // not activate it. Someone still presses activate, which is the same
+      // gate every other publication goes through.
+      const result = await ctx.call('website.rollbackPublication', { id: randomUUID(), siteId }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/publications?site=${encodeURIComponent(siteId)}`))
+    },
+
   '/admin/website/preflight':
     (ctx: ServeContext): Route =>
     async (url, req) => {
