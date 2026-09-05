@@ -26,6 +26,37 @@ const MAX_MENU_ANCESTORS = 100
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 
 export const functions: Record<string, FnSpec> = {
+  /**
+   * The navigation a visitor sees.
+   *
+   * Separate from listMenu rather than loosening it: listMenu is the editor's
+   * view, scoped by site membership, and an anonymous caller has no membership
+   * to scope by. This one answers for a site that is actually being served, the
+   * same gate the sitemap and public search apply, and returns only what a
+   * theme needs to draw a link.
+   */
+  publicMenu: defineFn({
+    anonymous: true,
+    input: { siteId: 'id' },
+    output: { id: 'id', label: 'text', href: 'text', position: 'int', parentId: 'id?' },
+    effects: ['read:website.Site', 'read:website_menu.MenuItem'],
+    handler: async (ctx: Ctx, args) => {
+      const Site = ctx.table('website.Site')
+      if (!(await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true))))) return []
+      const M = ctx.table('website_menu.MenuItem')
+      const rows = await ctx.db.all(
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+      )
+      return rows.map((row) => ({
+        id: row.id,
+        label: row.label,
+        href: row.href,
+        position: row.position,
+        parentId: row.parentId ?? null,
+      }))
+    },
+  }),
+
   listMenu: defineFn({
     input: { siteId: 'id?' },
     effects: ['read:website_menu.MenuItem', 'read:website.SiteMember'],
