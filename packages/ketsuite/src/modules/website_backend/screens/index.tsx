@@ -2954,3 +2954,108 @@ export const entrySeoSection = (
     }
   />
 )
+
+export type SiteHealth = {
+  siteId: string
+  title: string
+  active: boolean
+  /** Null when the site has no domain at all, which is its own problem. */
+  primaryHost: string | null
+  domainCount: number
+  indexState: string
+  indexCurrent: boolean
+  preparedCount: number
+  hasActivePublication: boolean
+}
+
+/** One row's worth of trouble, in the order somebody would act on it. */
+export const concernsOf = (
+  _: Translator,
+  health: SiteHealth,
+): Array<{ key: string; label: string; tone: 'warning' | 'danger' | 'info' }> => {
+  const concerns: Array<{ key: string; label: string; tone: 'warning' | 'danger' | 'info' }> = []
+  // A site with no host answers nowhere, which outranks anything about content.
+  if (health.domainCount === 0)
+    concerns.push({ key: 'noDomain', label: _('website_backend.health.noDomain'), tone: 'danger' })
+  else if (!health.primaryHost)
+    concerns.push({ key: 'noPrimary', label: _('website_backend.health.noPrimary'), tone: 'danger' })
+  if (!health.active)
+    concerns.push({ key: 'suspended', label: _('website_backend.health.suspended'), tone: 'warning' })
+  if (health.preparedCount > 0)
+    concerns.push({ key: 'prepared', label: _('website_backend.health.prepared'), tone: 'info' })
+  if (!health.indexCurrent && health.indexState !== 'absent')
+    concerns.push({ key: 'staleIndex', label: _('website_backend.health.staleIndex'), tone: 'warning' })
+  return concerns
+}
+
+/**
+ * Which site needs looking at, across all of them.
+ *
+ * Every other screen here is scoped to one site, because every contract behind
+ * them takes a `siteId`. That makes "is anything wrong" a question you can only
+ * answer by opening each site in turn and remembering - and the things worth
+ * knowing are exactly the ones nobody goes looking for: a site with no primary
+ * host publishing the wrong canonical to every crawler, a publication prepared
+ * last week and never activated, an index that has not caught up.
+ *
+ * Read-only and built from reads that already existed. It is a place to notice,
+ * and every row leads to the screen that fixes the thing.
+ */
+export const siteHealthScreen = (
+  _: Translator,
+  rows: SiteHealth[],
+  frame: Frame,
+  locale = '',
+): TemplateResult => {
+  const troubled = rows.filter((row) => concernsOf(_, row).length > 0)
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('website_backend.health.title')}
+      frame={frame}
+      body={stack([
+        rows.length === 0 ? (
+          emptyState(_('website_backend.sites.empty'), _('website_backend.sites.emptyHint'))
+        ) : troubled.length === 0 ? (
+          <Notice
+            tone="positive"
+            title={_('website_backend.health.allWell')}
+            message={_('website_backend.health.allWellHint')}
+          />
+        ) : (
+          dataTable(_, {
+            rows: troubled,
+            id: (row) => row.siteId,
+            rowHref: (row) => `/admin/website/sites/${row.siteId}${locale}`,
+            columns: [
+              {
+                key: 'site',
+                label: _('website_backend.field.site'),
+                priority: 'primary',
+                cell: (row) => row.title,
+              },
+              {
+                key: 'host',
+                label: _('website_backend.domains.host'),
+                kind: 'identifier',
+                cell: (row) =>
+                  row.primaryHost ? code(row.primaryHost) : badge(_('website_backend.health.none'), 'danger'),
+              },
+              {
+                key: 'concerns',
+                label: _('website_backend.health.concerns'),
+                cell: (row) =>
+                  inline(concernsOf(_, row).map((concern) => badge(concern.label, concern.tone))),
+              },
+            ],
+          })
+        ),
+        // The quiet sites are worth showing too: a list that only ever holds
+        // problems cannot tell "nothing is wrong" from "nothing was checked".
+        ...(rows.length
+          ? [<Notice tone="info" title={_('website_backend.health.checked')} message={`${rows.length}`} />]
+          : []),
+      ])}
+    />
+  )
+}
