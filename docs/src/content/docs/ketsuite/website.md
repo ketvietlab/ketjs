@@ -611,6 +611,57 @@ The test now checks owners first, against a named `UNGOVERNED` list. `website_fo
 shrink: adding a name is how that test stops meaning anything, and a new module that forgets its
 declaration now fails the same way a new function does.
 
+## Half a feature is a trap
+
+### assignTerm was a one-way door
+
+`website.assignTerm` shipped with the taxonomy model and nothing else in the module could see or
+undo what it did. There was no function that read an entry's terms, and none that removed one. So a
+term put on a page went invisible the moment it was assigned — and `deleteTerm` refuses while an
+assignment exists, which made the term itself permanent too. The only way out was raw SQL.
+
+`listEntryTerms` and `unassignTerm` close it. `listEntryTerms` returns the assignment's own id
+alongside the term, because that is the row a remove control has to name. `unassignTerm` answers
+`ok` for a term that was not assigned: removing something that is already gone is the state the
+caller asked for, and making a retry an error only punishes a double-submitted form.
+
+The lesson is not about taxonomy. A write with no matching read is not a feature that is merely
+incomplete — it is a feature that damages the data and hides the damage.
+
+### Preview links accumulate
+
+Every visit to an entry's preview screen mints another token. That is deliberate: a preview is
+cheap and short-lived. But the links are pasted into chats and tickets, where they outlive the
+reason they were shared, and `revokePreviewTokens` — which could always call all of them back —
+had no caller. The preview screen now offers it, and lands back on the entry afterwards rather
+than on the preview screen, which would immediately mint a fresh one.
+
+### A GET must not change anything
+
+Four routes added while building these screens changed state on a GET: activating a publication,
+rolling one back, removing a site member, and restoring a revision. Each was reached by an ordinary
+link, so a link prefetcher, a security scanner, or "open all in tabs" was enough to push content
+live or drop somebody's access. All four are POST controls now and all four routes answer 405 to
+anything else, which is what the three older delete routes in the same file already did.
+
+The test that holds this drives the routes with a real request rather than asserting they are
+composed. Removing one guard fails it; asserting composition would not have noticed.
+
+### A list has to say how much it is not showing
+
+`countEntries` and `countSubmissions` existed with no caller, so both screens read the first
+page of a list and presented it as the list. The pager is the shared one from `backend/paging.ts`,
+and it renders through `pagerBar` — extracted from `chromeTail` rather than copied, because the
+Website frames pass `chrome: null` and reach it through `ListPage`'s footer instead. Two call
+sites, one renderer, one thing to keep in step with the stylesheet.
+
+### Where a shared route sends the browser back to
+
+Three routes hang off an entry without caring whether it is a page or a post — the head tags, and
+now the two term routes. Each of them redirected to `/admin/website/pages/{id}`, which answers 404
+for a post, because that route refuses an entry of the other type. `entryHref` reads the entry and
+picks the right one.
+
 ## A layout has identity
 
 ### Where the builder document lives, and why it is not a new table
