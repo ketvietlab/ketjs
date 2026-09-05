@@ -1280,3 +1280,116 @@ test('hospitality housekeeping: a room stays cleaning until its last active task
     await adapter.close()
   }
 })
+
+test('check-out readiness answers before the button, not after it', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'hospitality_core.saveProperty',
+      {
+        id: 'hotel',
+        code: 'HCM',
+        name: 'Ket Hotel',
+        accommodationType: 'hotel',
+        enforceTimes: true,
+        defaultCheckOut: '12:00',
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoom',
+      { id: '401', propertyId: 'hotel', roomTypeId: 'deluxe', code: '401', name: '401' },
+      adapter,
+    )
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString()
+    const created = (
+      await call(
+        'hospitality_core.createReservation',
+        {
+          id: 'departing',
+          propertyId: 'hotel',
+          roomTypeId: 'deluxe',
+          partnerId: 'guest',
+          bookingType: 'nightly',
+          billingMode: 'upfront',
+          checkIn: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+          checkOut: yesterday,
+          rate: '200',
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(created.ok, true, JSON.stringify(created.errors))
+
+    // Before check-in there is nothing to check out of, and the reason is the
+    // same one `checkOut` would give — read rather than discovered.
+    const early = (await call('hospitality_core.checkOutReadiness', { stayId: 'departing:stay' }, adapter))
+      .value as Row
+    assert.equal(early.ready, false)
+    assert.deepEqual(
+      (early.blockers as Row[]).map((blocker) => blocker.code),
+      ['stay_cannot_check_out'],
+    )
+
+    await call(
+      'hospitality_core.checkIn',
+      {
+        stayId: 'departing:stay',
+        roomId: '401',
+        assignmentId: 'departing:assignment',
+        at: new Date(Date.now() - 3 * 86_400_000 + 3_600_000).toISOString(),
+      },
+      adapter,
+    )
+    const ready = (await call('hospitality_core.checkOutReadiness', { stayId: 'departing:stay' }, adapter))
+      .value as Row
+    assert.deepEqual(
+      {
+        ready: ready.ready,
+        room: ready.roomName,
+        guest: ready.guestName,
+        late: ready.late,
+        // The hour is past and this property enforces it, so the desk is told
+        // to write down why before it presses anything.
+        lateReasonRequired: ready.lateReasonRequired,
+        balance: ready.balance,
+        blockers: (ready.blockers as Row[]).length,
+      },
+      {
+        ready: true,
+        room: '401',
+        guest: 'Nguyễn An',
+        late: true,
+        lateReasonRequired: true,
+        balance: '400',
+        blockers: 0,
+      },
+    )
+    assert.equal((ready.charges as Row[]).length, 1, 'the room charge is on the bill')
+
+    // And the reason gets through: without it the operation is refused, which
+    // is exactly the dead end the desk used to hit with no way forward.
+    const refused = (await call('hospitality_core.checkOut', { stayId: 'departing:stay' }, adapter))
+      .value as Row
+    assert.equal(refused.ok, false)
+    assert.equal((refused.errors as Row[])[0]?.code, 'late_check_out')
+    const done = (
+      await call(
+        'hospitality_core.checkOut',
+        { stayId: 'departing:stay', lateReason: 'Khách chờ xe sân bay' },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(done.ok, true, JSON.stringify(done.errors))
+
+    const after = (await call('hospitality_core.checkOutReadiness', { stayId: 'departing:stay' }, adapter))
+      .value as Row
+    assert.equal(after.ready, false)
+    assert.deepEqual(
+      (after.blockers as Row[]).map((blocker) => blocker.code),
+      ['stay_already_checked_out'],
+    )
+  } finally {
+    await adapter.close()
+  }
+})

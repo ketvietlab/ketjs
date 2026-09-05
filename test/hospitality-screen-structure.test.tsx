@@ -22,7 +22,9 @@ translate.resolves = () => true
 test('Hospitality exports one focused module for every routed renderer', () => {
   const routedScreens = (screens: Record<string, unknown>) =>
     Object.keys(screens).filter((name) => /^[a-z].*Screen$/.test(name))
-  assert.equal(routedScreens(coreScreens).length, 31)
+  // 32 since the departure check got its own module rather than growing the
+  // reservation screen a fourth job.
+  assert.equal(routedScreens(coreScreens).length, 32)
   assert.equal(routedScreens(billingScreens).length, 2)
 })
 
