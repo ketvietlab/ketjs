@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { text } from '@ketvietlab/ketjs'
+import { text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import {
@@ -38,6 +38,7 @@ import type {
   SubmissionRow,
   TaxonomyRow,
 } from './screens/index.tsx'
+import { csvOf, safeFilename } from './csv.ts'
 import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
 import type { Req } from '../backend/screen.ts'
 
@@ -1103,6 +1104,55 @@ export const routes: Record<string, RouteEntry> = {
    * beside the answers rather than tucked away: a record of who looked is
    * worth more when the person looking can see it too.
    */
+  /**
+   * The answers, out of the system, named field by field.
+   *
+   * exportSubmissions refuses anything the form does not ask and writes the
+   * exact field list into the audit, so the record says what left rather than
+   * that something did.
+   */
+  '/admin/website/forms/{id}/submissions/export':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const fields = (url.searchParams.get('fields') ?? '')
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean)
+      if (!fields.length) return text(_('website_backend.error.invalid'), { status: 400 })
+      const result = (await ctx.call(
+        'website_form.exportSubmissions',
+        { formId: params.id, fields, reason: 'admin.export' },
+        url,
+        req,
+      )) as { ok?: boolean; fields?: string[]; rows?: Array<Record<string, unknown>> }
+      if (!result.ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      const columns = ['_id', '_createdAt', '_status', ...(result.fields ?? [])]
+      return withHeaders(text(csvOf(columns, result.rows ?? [])), {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': `attachment; filename="${safeFilename(params.id)}-submissions.csv"`,
+      })
+    },
+
+  /**
+   * Run the retention window now, once someone has said so out loud.
+   *
+   * A confirmation rather than a button, because an erasure cannot be undone
+   * and the answers are the one thing here that a person cannot recreate.
+   */
+  '/admin/website/forms/{id}/submissions/purge':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      if (!form.confirm) return text(_('website_backend.submissions.purgeUnconfirmed'), { status: 400 })
+      const result = await ctx.call('website_form.purgeSubmissions', { formId: params.id }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/forms/${params.id}/submissions`))
+    },
+
   '/admin/website/forms/{id}/submissions/{submissionId}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
@@ -1160,9 +1210,29 @@ export const routes: Record<string, RouteEntry> = {
         url,
         req,
       )) as SubmissionRow[]
+      const sites = await sitesOf(ctx, url, req)
+      const siteId = url.searchParams.get('site') || selectedSite(url, sites)
+      const forms = siteId
+        ? ((await ctx.call('website_form.listForms', { siteId }, url, req)) as FormRow[])
+        : []
+      const form = forms.find((row) => row.id === params.id)
+      // The export offers the form's own field names, so nobody has to
+      // remember them - and the erasure only appears where a window exists to
+      // enforce.
+      const schemaFields = Array.isArray((form?.schema as { fields?: unknown })?.fields)
+        ? ((form?.schema as { fields: Array<{ name?: unknown }> }).fields
+            .map((field) => field?.name)
+            .filter((name): name is string => typeof name === 'string') ?? [])
+        : []
       return adminPage(ctx, url, req, {
         title: 'website_backend.submissions.title',
-        body: (_, frame) => submissionsScreen(_, rows, frame),
+        body: (_, frame) =>
+          submissionsScreen(_, rows, frame, {
+            formId: params.id,
+            fields: form?.summaryFields?.length ? form.summaryFields : schemaFields,
+            retentionDays: form?.retentionDays ?? null,
+            locale: localeQuery(url),
+          }),
       })
     },
 }
