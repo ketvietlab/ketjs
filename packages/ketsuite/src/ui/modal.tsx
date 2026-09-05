@@ -26,8 +26,20 @@ export const modalSheet = (options: {
   body: JSXChild
   presentation?: 'sheet' | 'dialog'
   size?: 'default' | 'large'
+  /**
+   * What to ask before closing over unsaved input. Closing is a link, so it
+   * still works with scripting off — this catches the stray backdrop click, and
+   * is a guard rather than a lock. A modal that only shows things never asks,
+   * because it has nothing that could be unsaved.
+   */
+  unsavedPrompt?: string
 }): TemplateResult => (
-  <div data-ui="modal-layer" data-route-modal="true" data-presentation={options.presentation ?? 'sheet'}>
+  <div
+    data-ui="modal-layer"
+    data-route-modal="true"
+    data-presentation={options.presentation ?? 'sheet'}
+    data-unsaved-prompt={options.unsavedPrompt ?? null}
+  >
     <a data-ui="modal-backdrop" href={options.closeHref} aria-label={options.closeLabel}>
       <span>{options.closeLabel}</span>
     </a>
@@ -76,6 +88,7 @@ export const modalForm = (options: {
   form: RecordFormOptions
   presentation?: 'sheet' | 'dialog'
   size?: 'default' | 'large'
+  unsavedPrompt?: string
 }): TemplateResult =>
   modalSheet({
     id: options.id,
@@ -85,6 +98,7 @@ export const modalForm = (options: {
     closeLabel: options.closeLabel,
     presentation: options.presentation,
     size: options.size,
+    ...(options.unsavedPrompt ? { unsavedPrompt: options.unsavedPrompt } : {}),
     body: recordForm(options.form),
   })
 
