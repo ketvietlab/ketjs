@@ -32,13 +32,34 @@ export const propertiesScreen = (
     body={stack([
       <CardGrid
         items={[
-          { id: 'properties', label: _('hospitality_core.metric.properties'), value: rows.length },
-          { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: totals.rooms },
-          { id: 'available', label: _('hospitality_core.metric.available'), value: totals.available },
-          { id: 'attention', label: _('hospitality_core.metric.attention'), value: totals.attention },
+          {
+            id: 'properties',
+            label: _('hospitality_core.metric.properties'),
+            value: rows.length,
+            tone: 'neutral' as const,
+          },
+          {
+            id: 'rooms',
+            label: _('hospitality_core.metric.rooms'),
+            value: totals.rooms,
+            tone: 'neutral' as const,
+          },
+          {
+            id: 'available',
+            label: _('hospitality_core.metric.available'),
+            value: totals.available,
+            // No sellable room is not a small number, it is a stopped hotel.
+            tone: totals.rooms && !totals.available ? ('warning' as const) : ('neutral' as const),
+          },
+          {
+            id: 'attention',
+            label: _('hospitality_core.metric.attention'),
+            value: totals.attention,
+            tone: totals.attention ? ('danger' as const) : ('positive' as const),
+          },
         ]}
         id={(item) => item.id}
-        card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+        card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
       />,
       rows.length
         ? dataTable(_, {
