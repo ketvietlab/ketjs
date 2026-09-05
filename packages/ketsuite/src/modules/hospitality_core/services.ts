@@ -229,6 +229,16 @@ export const postCharge = async (
   }
 }
 
+/** The folio moved while a cancellation was being settled against it. */
+export class FolioConflict extends Error {
+  readonly problem: Issue
+
+  constructor(problem: Issue) {
+    super(problem.code)
+    this.problem = problem
+  }
+}
+
 /** What a cancelled booking still owes, and where the penalty came from. */
 export type CancellationSettlement = {
   folioId: unknown
@@ -244,6 +254,11 @@ export type CancellationSettlement = {
    * `provider` for an amount the channel decided. Rendered on the folio.
    */
   reason: string
+  /**
+   * Which event this was. A no-show is priced by the cancellation policy but
+   * is not a cancellation, and the folio should not tell the guest it was.
+   */
+  kind?: 'cancellation' | 'no_show'
   at: string
 }
 
@@ -278,7 +293,7 @@ export const settleCancelledFolio = async (ctx: Ctx, spec: CancellationSettlemen
     const values = {
       folioId: spec.folioId,
       stayId: spec.stayId ?? null,
-      description: `cancellation:${spec.reason}`,
+      description: `${spec.kind ?? 'cancellation'}:${spec.reason}`,
       type: 'cancellation',
       quantity: '1',
       unitPrice: spec.fee,
@@ -291,9 +306,10 @@ export const settleCancelledFolio = async (ctx: Ctx, spec: CancellationSettlemen
     else await ctx.db.insert('hospitality_core.Charge', { id: spec.chargeId, ...values })
   }
   const folio = await one(ctx, 'hospitality_core.Folio', spec.folioId)
-  await ctx.db.update(
+  const claim = await ctx.db.compareAndSet(
     'hospitality_core.Folio',
     { id: spec.folioId },
+    { state: folio?.state, version: folio?.version },
     {
       state: owed ? 'closed' : 'cancelled',
       amountTotal: spec.fee,
@@ -301,6 +317,14 @@ export const settleCancelledFolio = async (ctx: Ctx, spec: CancellationSettlemen
       version: Number(folio?.version ?? 0) + 1,
     },
   )
+  // A charge posted between the void above and this write would otherwise sit
+  // active on a closed folio, outside a total that no longer counts it.
+  if (!('dryRun' in claim) && !claim.matched)
+    throw new FolioConflict({
+      field: 'folioId',
+      code: 'transition_conflict',
+      messageKey: 'hospitality_core.validation.transition_conflict',
+    })
 }
 
 const extraOutput = {

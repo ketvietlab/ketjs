@@ -2457,6 +2457,8 @@ export const folioColumns = (_: Translator, locale: string, timezone: string): A
 export const chargeDescription = (_: Translator, charge: { type: string; description: string }): string => {
   if (charge.type === 'room' && charge.description.startsWith('room:'))
     return _('hospitality_core.folio.charge.roomDescription')
+  if (charge.type === 'cancellation' && charge.description.startsWith('no_show:'))
+    return _('hospitality_core.folio.charge.noShowDescription')
   if (charge.type === 'cancellation' && charge.description.startsWith('cancellation:')) {
     const reason = charge.description.slice('cancellation:'.length)
     if (reason === 'provider') return _('hospitality_core.folio.charge.cancellationByChannel')
