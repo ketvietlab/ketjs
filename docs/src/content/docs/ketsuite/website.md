@@ -268,6 +268,47 @@ way.
 
 A parent belonging to a different site remains `website.error.invalidParent`.
 
+### Navigation that points somewhere
+
+`validHref` checks the *shape* of a menu link — it starts with `/`, it has no backslash, no control
+characters, no credentials — and stops there. Nothing ever asked whether the path names a page.
+
+So a menu item could point at `/bang-gia` when no page serves that path, and the site's own navigation
+walked a visitor into its own 404. Nobody noticed, because a menu item and the page it names are
+edited on different screens on different days.
+
+`website_menu.preflightMenu` answers it. An internal link is satisfied by a **published** page at that
+path or by a route the deployment serves — `/robots.txt` and `/sitemap.xml` are links a menu may
+legitimately carry and neither is an entry. A trailing slash, a query and a fragment all name the same
+page.
+
+**Published, not merely present.** A link to a draft is the harder version of the bug: it answers for
+the editor, who is logged in and can see the draft, and 404s for everyone else.
+
+**External links are left alone.** Whether another site answers is not a question this can ask, and
+pretending to answer it would be worse than saying nothing.
+
+It reports rather than refuses, and names every broken link rather than the first. A menu is built
+alongside the pages it points at, so a link that does not resolve *yet* is an ordinary state of an
+afternoon's work — the point is that nobody has to remember to look.
+
+### Why this is not a gate on the publication
+
+`preparePublication` refuses a page it cannot draw, and it would be natural to expect it to refuse a
+publication whose navigation points outside the set it freezes. It cannot, and the reason is the shape
+of the publication itself.
+
+The frozen navigation lives in `Publication.attachments`, which is **opaque to `website` by design**:
+`website_menu` depends on `website` and not the other way round, so the module that owns a key is the
+only thing that reads it. Teaching `preparePublication` to read the menu attachment would invert the
+dependency the whole publication design rests on — the same constraint that put the navigation in an
+attachment rather than a column in the first place.
+
+So the check lives in the module that owns the data, and the two preflights are run side by side
+before preparing. That is honest about what it is: a thing you look at, not a thing that stops you.
+Closing it properly needs a way for a module to register a check against a publication it contributes
+an attachment to, which is a framework seam rather than a website change.
+
 ### Navigation has to reach the page
 
 A theme draws `{% for item in menu %}`. Nothing ever put a menu in that scope, so every public page

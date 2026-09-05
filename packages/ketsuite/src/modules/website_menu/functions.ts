@@ -1,4 +1,4 @@
-import { asc, defineFn, deleteFrom, eq, from } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, isNotNull, ne } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { canAccessSite, canManageStructure } from '../website/access.ts'
 
@@ -24,6 +24,20 @@ const validHref = (value: unknown): boolean => {
 const MAX_MENU_ANCESTORS = 100
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+
+/** A trailing slash is the same page, and the root is the one path that keeps its slash. */
+const normalisePath = (value: string): string => {
+  const path = value.split('#')[0]?.split('?')[0] ?? ''
+  const trimmed = path.replace(/\/+$/, '')
+  return trimmed || '/'
+}
+
+/** The path an internal link names, or null when the link points off the site. */
+const internalPath = (href: unknown): string | null => {
+  const value = String(href ?? '').trim()
+  if (!value.startsWith('/') || value.startsWith('//')) return null
+  return normalisePath(value)
+}
 
 export const functions: Record<string, FnSpec> = {
   /**
@@ -62,6 +76,62 @@ export const functions: Record<string, FnSpec> = {
           parentId: row.parentId ?? null,
         })),
       }
+    },
+  }),
+
+  /**
+   * Which navigation links lead nowhere.
+   *
+   * `validHref` checks the shape of a link and stops there, so a menu item can
+   * point at a path no page serves and the site's own navigation walks a
+   * visitor into its own four-oh-four. Nothing noticed, because a menu item and
+   * the page it names are edited on different screens on different days.
+   *
+   * An internal link is satisfied by a **published** page at that path or by a
+   * route the deployment serves - `/robots.txt` and `/sitemap.xml` are links a
+   * menu may legitimately carry and neither is an entry. Anything external is
+   * left alone: whether another site answers is not a question this can ask,
+   * and pretending to answer it would be worse than saying nothing.
+   *
+   * This reports rather than refuses. A menu is built alongside the pages it
+   * points at, so a link that does not resolve yet is an ordinary state of an
+   * afternoon's work; the point is that nobody has to remember to look.
+   */
+  preflightMenu: defineFn({
+    input: { siteId: 'id' },
+    output: { ok: 'bool', checked: 'int?', dangling: 'json?' },
+    effects: ['read:website.SiteMember', 'read:website.Entry', 'read:website_menu.MenuItem'],
+    handler: async (ctx: Ctx, args) => {
+      if (!(await canAccessSite(ctx, args.siteId))) return { ok: true, checked: 0, dangling: [] }
+      const M = ctx.table('website_menu.MenuItem')
+      const items = await ctx.db.all(
+        from(M).where(eq(M.siteId, args.siteId)).orderBy(asc(M.position)).limit(200),
+      )
+      const Entry = ctx.table('website.Entry')
+      // Published, not merely present: a menu link to a draft is a link that
+      // answers for an editor and not for anyone else, which is the harder
+      // version of the bug to notice.
+      const pages = await ctx.db.all(
+        from(Entry)
+          .where(
+            eq(Entry.siteId, args.siteId),
+            isNotNull(Entry.publishedRevisionId),
+            ne(Entry.status, 'trash'),
+          )
+          .select(Entry.path)
+          .limit(5_000),
+      )
+      const served = new Set(pages.map((row) => normalisePath(String(row.path))))
+      for (const route of Object.keys(ctx.manifest.routes ?? {})) served.add(normalisePath(route))
+
+      const dangling = items
+        .filter((item) => {
+          const target = internalPath(item.href)
+          return target !== null && !served.has(target)
+        })
+        .map((item) => ({ id: String(item.id), label: String(item.label), href: String(item.href) }))
+
+      return { ok: dangling.length === 0, checked: items.length, dangling }
     },
   }),
 
