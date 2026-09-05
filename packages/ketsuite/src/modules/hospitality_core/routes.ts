@@ -953,6 +953,12 @@ export const routes: Record<string, RouteEntry> = {
         ctx.call('hospitality_core.listStays', { propertyId, from: range.from, to: range.to }, url, req),
         ctx.call('hospitality_core.listStays', { propertyId, state: 'checked_in' }, url, req),
       ])) as [StayRow[], StayRow[]]
+      // An auditor and a night auditor read this screen without doing desk
+      // work; the row action is for the people who do it.
+      const may = {
+        checkIn: await ctx.allows('hospitality_core.checkIn', url, req),
+        checkOut: await ctx.allows('hospitality_core.checkOut', url, req),
+      }
       const inRange = (value: string) => value >= range.from && value < range.to
       const now = new Date().toISOString()
       const overdue = inHouseStays
@@ -980,6 +986,7 @@ export const routes: Record<string, RouteEntry> = {
               overdue,
               inHouse: inHouseStays,
             },
+            may,
             lang,
             timezone,
             frame,

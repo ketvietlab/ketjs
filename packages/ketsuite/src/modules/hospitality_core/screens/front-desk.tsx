@@ -34,6 +34,17 @@ export type FrontDeskToday = {
   inHouse: StayRow[]
 }
 
+/**
+ * What the viewer may do, not what they may see. A read-only viewer opens this
+ * screen legitimately — an auditor reads the shift, a night auditor reconciles
+ * it — and offering them a button for work the reservation screen will refuse
+ * is the same mistake the sidebar made before it separated the two.
+ */
+export type FrontDeskPermissions = {
+  checkIn: boolean
+  checkOut: boolean
+}
+
 const headcount = (rows: StayRow[]): number =>
   rows.reduce((total, row) => total + row.adults + row.children, 0)
 
@@ -106,30 +117,42 @@ const actionColumn = (_: Translator, label: string, locale: string): Column<Stay
   align: 'end',
 })
 
-const arrivalColumns = (_: Translator, locale: string, timezone: string): Array<Column<StayRow>> => [
+const arrivalColumns = (
+  _: Translator,
+  locale: string,
+  timezone: string,
+  permitted: boolean,
+): Array<Column<StayRow>> => [
   codeColumn(_, locale),
   guestColumn(_),
   roomTypeColumn(_),
   {
+    // Not `col.checkIn`: that reads "Nhận phòng", the same words as the button
+    // beside it, and the two mean different things — an hour and a job to do.
     key: 'checkIn',
-    label: _('hospitality_core.col.checkIn'),
+    label: _('hospitality_core.col.arrivalTime'),
     cell: (row) => dateTime(row.checkIn, locale, timezone),
     kind: 'date',
   },
-  actionColumn(_, _('hospitality_core.reservation.action.checkIn'), locale),
+  ...(permitted ? [actionColumn(_, _('hospitality_core.reservation.action.checkIn'), locale)] : []),
 ]
 
-const departureColumns = (_: Translator, locale: string, timezone: string): Array<Column<StayRow>> => [
+const departureColumns = (
+  _: Translator,
+  locale: string,
+  timezone: string,
+  permitted: boolean,
+): Array<Column<StayRow>> => [
   codeColumn(_, locale),
   guestColumn(_),
   roomColumn(_),
   {
     key: 'checkOut',
-    label: _('hospitality_core.col.checkOut'),
+    label: _('hospitality_core.col.departureTime'),
     cell: (row) => dateTime(row.checkOut, locale, timezone),
     kind: 'date',
   },
-  actionColumn(_, _('hospitality_core.reservation.action.checkOut'), locale),
+  ...(permitted ? [actionColumn(_, _('hospitality_core.reservation.action.checkOut'), locale)] : []),
 ]
 
 /**
@@ -145,6 +168,7 @@ const departureColumns = (_: Translator, locale: string, timezone: string): Arra
 export const frontDeskScreen = (
   _: Translator,
   today: FrontDeskToday,
+  may: FrontDeskPermissions,
   locale: string,
   timezone: string,
   frame: Frame,
@@ -217,7 +241,7 @@ export const frontDeskScreen = (
         ) : null,
         today.overdue.length
           ? dataTable(_, {
-              columns: departureColumns(_, locale, timezone),
+              columns: departureColumns(_, locale, timezone, may.checkOut),
               rows: today.overdue,
               id: (row) => row.id,
               responsive: 'stack',
@@ -246,7 +270,7 @@ export const frontDeskScreen = (
             body={
               today.arrivals.length
                 ? dataTable(_, {
-                    columns: arrivalColumns(_, locale, timezone),
+                    columns: arrivalColumns(_, locale, timezone, may.checkIn),
                     rows: today.arrivals,
                     id: (row) => row.id,
                     responsive: 'stack',
@@ -264,7 +288,7 @@ export const frontDeskScreen = (
             body={
               today.departures.length
                 ? dataTable(_, {
-                    columns: departureColumns(_, locale, timezone),
+                    columns: departureColumns(_, locale, timezone, may.checkOut),
                     rows: today.departures,
                     id: (row) => row.id,
                     responsive: 'stack',

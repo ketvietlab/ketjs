@@ -425,3 +425,57 @@ test('Hospitality focused roles render only actions present in their exact allow
   assert.match(reservation, /hospitality_core\.reservation\.action\.amend</)
   assert.doesNotMatch(reservation, /hospitality_core\.reservation\.action\.(?:cancel|checkIn|noShow)</)
 })
+
+test('the front desk offers the shift its work and a read-only viewer only the record', () => {
+  const stay = (id: string, state: string, checkOut: string) => ({
+    id,
+    code: id.toUpperCase(),
+    folioId: `${id}:folio`,
+    propertyId: 'hotel',
+    reservationId: `${id}:reservation`,
+    partnerId: 'guest',
+    roomTypeId: 'deluxe',
+    bookingType: 'nightly',
+    checkIn: '2026-09-05T07:00:00.000Z',
+    checkOut,
+    adults: 2,
+    children: 1,
+    billingMode: 'upfront',
+    rate: '100',
+    state,
+    partner: { name: 'Nguyễn An' },
+    roomType: { name: 'Deluxe' },
+  })
+  const today = {
+    day: '2026-09-05',
+    arrivals: [stay('arriving', 'draft', '2026-09-07T05:00:00.000Z')],
+    departures: [stay('leaving', 'checked_in', '2026-09-05T05:00:00.000Z')],
+    overdue: [],
+    inHouse: [stay('leaving', 'checked_in', '2026-09-05T05:00:00.000Z')],
+  }
+  const render = (may: { checkIn: boolean; checkOut: boolean }) =>
+    renderToString(coreScreens.frontDeskScreen(translate, today, may, 'vi', 'Asia/Ho_Chi_Minh', {} as never))
+
+  const desk = render({ checkIn: true, checkOut: true })
+  assert.match(desk, /hospitality_core\.reservation\.action\.checkIn/)
+  assert.match(desk, /hospitality_core\.reservation\.action\.checkOut/)
+  assert.match(desk, /hospitality_core\.col\.action/)
+  // The action is a link to where the work is done, not a form on this screen.
+  assert.match(desk, /\/admin\/hospitality\/reservations\/arriving%3Areservation/)
+
+  const auditor = render({ checkIn: false, checkOut: false })
+  assert.doesNotMatch(auditor, /hospitality_core\.reservation\.action\.checkIn/)
+  assert.doesNotMatch(auditor, /hospitality_core\.reservation\.action\.checkOut/)
+  assert.doesNotMatch(auditor, /hospitality_core\.col\.action/)
+  // They still read the shift: both queues, both records.
+  assert.match(auditor, /hospitality_core\.screen\.frontDesk\.arrivals/)
+  assert.match(auditor, /hospitality_core\.screen\.frontDesk\.departures/)
+  assert.match(auditor, /ARRIVING/)
+  assert.match(auditor, /LEAVING/)
+
+  // One permission at a time: a viewer who may check a guest out but not in
+  // sees exactly one of the two columns.
+  const departuresOnly = render({ checkIn: false, checkOut: true })
+  assert.doesNotMatch(departuresOnly, /hospitality_core\.reservation\.action\.checkIn/)
+  assert.match(departuresOnly, /hospitality_core\.reservation\.action\.checkOut/)
+})
