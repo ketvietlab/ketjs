@@ -594,3 +594,49 @@ test('a reservation row says how long the stay is, in the unit it is sold by', (
   const columns = coreScreens.reservationColumns(translate, 'vi', 'Asia/Ho_Chi_Minh').map((c) => c.key)
   assert.deepEqual(columns, ['code', 'guest', 'status', 'provider', 'roomType', 'stay', 'amount'])
 })
+
+test('the stay list leads with state and marks a guest still in the room past their hour', () => {
+  const hour = 3_600_000
+  const stay = (state: string, checkOut: number) => ({
+    id: 'st-1',
+    code: 'ST-1',
+    folioId: 'f-1',
+    propertyId: 'hotel',
+    partnerId: 'guest',
+    roomTypeId: 'deluxe',
+    bookingType: 'nightly',
+    checkIn: new Date(Date.now() - 48 * hour).toISOString(),
+    checkOut: new Date(Date.now() + checkOut).toISOString(),
+    adults: 2,
+    children: 1,
+    billingMode: 'upfront',
+    rate: '100',
+    state,
+  })
+
+  // Still in the room, two hours past the hour they were due out.
+  assert.equal(coreScreens.overdue(stay('checked_in', -2 * hour)), true)
+  // Due out later today: nothing to say yet.
+  assert.equal(coreScreens.overdue(stay('checked_in', 2 * hour)), false)
+  // Already gone. The dates are in the past; the guest is not.
+  assert.equal(coreScreens.overdue(stay('checked_out', -2 * hour)), false)
+  // Never arrived, and the same is true of a cancellation.
+  assert.equal(coreScreens.overdue(stay('no_show', -2 * hour)), false)
+  assert.equal(coreScreens.overdue(stay('cancelled', -2 * hour)), false)
+
+  const columns = coreScreens.stayColumns(translate, 'vi', 'Asia/Ho_Chi_Minh')
+  assert.deepEqual(
+    columns.map((c) => c.key),
+    ['code', 'guest', 'status', 'room', 'stay', 'guests'],
+  )
+  // A row with nothing to flag renders the dates as plain text; only the flagged
+  // one becomes markup, which is the difference the badge makes.
+  const dates = columns.find((c) => c.key === 'stay')!
+  const quiet = dates.cell(stay('checked_in', 2 * hour))
+  assert.equal(typeof quiet, 'string')
+  assert.match(quiet as string, /hospitality_core\.duration\.nightly/)
+  assert.match(
+    renderToString(dates.cell(stay('checked_in', -2 * hour)) as never),
+    /hospitality_core\.stayState\.overdue/,
+  )
+})
