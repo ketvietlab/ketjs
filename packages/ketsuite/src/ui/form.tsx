@@ -388,6 +388,8 @@ export const recordActions = (o: {
   action: string
   label?: string | null
   hidden?: Record<string, string>
+  /** Weight of every control in the group; `compact` for a control in a table cell. */
+  size?: ActionSize
   actions: ReadonlyArray<{
     value: string
     label: string
@@ -415,6 +417,7 @@ export const recordActions = (o: {
             name: 'action',
             value: action.value,
             variant: action.variant,
+            size: o.size,
             disabled: action.disabled,
           }),
         ),

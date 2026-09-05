@@ -401,15 +401,24 @@ const pagerStep = (
     </span>
   )
 
+/**
+ * The "1-30 / 84" and its arrows, on their own.
+ *
+ * A screen whose frame carries no chrome - the Website backend's, for one -
+ * still has a collection that runs past one page, and puts this in the list's
+ * footer instead.
+ */
+export const pagerBar = (_: Translator, pager: Pager): TemplateResult => (
+  <div data-ui="pager">
+    <span data-ui="pager-range">{pagerLabel(pager)}</span>
+    {pagerStep('prev', pager.prev, _('backend.chrome.previous'))}
+    {pagerStep('next', pager.next, _('backend.chrome.next'))}
+  </div>
+)
+
 const chromeTail = (_: Translator, chrome: ListChrome): TemplateResult => (
   <div data-ui="chrome-tail">
-    {!!chrome.pager && (
-      <div data-ui="pager">
-        <span data-ui="pager-range">{pagerLabel(chrome.pager)}</span>
-        {pagerStep('prev', chrome.pager.prev, _('backend.chrome.previous'))}
-        {pagerStep('next', chrome.pager.next, _('backend.chrome.next'))}
-      </div>
-    )}
+    {!!chrome.pager && pagerBar(_, chrome.pager)}
 
     {each(
       chrome.tailMenus ?? [],

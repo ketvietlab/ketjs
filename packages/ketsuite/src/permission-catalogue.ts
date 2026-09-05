@@ -1390,6 +1390,7 @@ const sources = {
       getTaxonomyTerm: ['read', 'view'],
       listDomains: ['read', 'view'],
       listEntries: ['read', 'view'],
+      listEntryTerms: ['read', 'view'],
       listMedia: ['read', 'view'],
       listPages: ['read', 'view'],
       listRedirects: ['read', 'view'],
@@ -1415,6 +1416,7 @@ const sources = {
       saveSite: ['configure', 'configure', 'website.configuration-audit'],
       saveSiteMember: ['configure', 'configure', 'website.configuration-audit'],
       saveTerm: ['configure', 'configure', 'website.configuration-audit'],
+      unassignTerm: ['configure', 'configure', 'website.configuration-audit'],
     },
     exemptions: {
       authenticateCustomer: ['anonymous', 'declared-public-or-cryptographic-realm-boundary'],
