@@ -11,6 +11,7 @@ import { join, normalize, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { callFn } from './fn.ts'
+import { partitionTokens, tokensToCss } from '../theme/tokens.ts'
 import { createStreams, dbStreamStore, memoryStreamStore } from './stream.ts'
 import type { StreamStore } from './stream.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
@@ -143,6 +144,13 @@ export type ServeOpts = {
    * whatever the reader clicks next.
    */
   pagePrivate?: (url: URL, req: IncomingMessage) => boolean
+  /**
+   * Per-site overrides of the theme's tokens, for the stylesheet the framework
+   * already links into every page. They land in `ket.app`, which the published
+   * layer order already puts above `ket.theme`, so two sites on one theme can
+   * differ without either of them forking it.
+   */
+  siteTokens?: (url: URL, req: IncomingMessage) => Promise<Record<string, string> | null>
   /** Theme region returned for progressive GET navigation. */
   pageRegion?: string
 }
@@ -728,7 +736,14 @@ export async function createKetServer(o: ServeOpts) {
           'content-type': contentType(theme ? 'text/css' : 'text/plain'),
           'cache-control': 'no-cache',
         })
-        return res.end(theme ? theme.tokensCss : 'not found')
+        if (!theme) return res.end('not found')
+        // The site's own layer comes after the theme's, so a site that
+        // overrides nothing serves exactly what it served before.
+        const overrides = (await o.siteTokens?.(url, req)) ?? null
+        const { safe } = partitionTokens(overrides ?? {})
+        return res.end(
+          Object.keys(safe).length ? `${theme.tokensCss}\n${tokensToCss(safe, 'ket.app')}` : theme.tokensCss,
+        )
       }
       if (url.pathname === '/_ket/islands.js') {
         route = url.pathname

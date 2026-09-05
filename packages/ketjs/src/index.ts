@@ -422,7 +422,7 @@ export { createJoints } from './theme/joints.ts'
 export type { Joints } from './theme/joints.ts'
 export { makeDrop, makeDrops, sealScope } from './theme/viewmodel.ts'
 export type { Drop } from './theme/viewmodel.ts'
-export { tokensToCss, scopedCss, LAYER_ORDER } from './theme/tokens.ts'
+export { tokensToCss, scopedCss, partitionTokens, isTokenValue, LAYER_ORDER } from './theme/tokens.ts'
 
 export { agentTools, agentDescriptor, compositionSchema } from './agent/capabilities.ts'
 export { generateDts } from './codegen/dts.ts'

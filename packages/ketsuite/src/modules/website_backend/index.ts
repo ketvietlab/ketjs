@@ -294,6 +294,9 @@ export default defineModule({
       'field.author': 'Tác giả',
       'field.createdAt': 'Thời điểm',
       'field.taxonomy': 'Taxonomy',
+      'field.tokens': 'Token giao diện',
+      'field.tokensHint':
+        'JSON khoá–giá trị, ghi đè token của theme cho riêng website này — ví dụ {"color-brand": "#0a7"}. Giá trị chỉ được chứa chữ, số, khoảng trắng và # . , % ( ) / + * -',
       'field.parent': 'Cấp cha',
       'field.description': 'Mô tả',
       'field.attachment': 'Tệp',
@@ -621,6 +624,9 @@ export default defineModule({
       'field.author': 'Author',
       'field.createdAt': 'Created',
       'field.taxonomy': 'Taxonomy',
+      'field.tokens': 'Theme tokens',
+      'field.tokensHint':
+        'Names and values as JSON, overriding the theme\'s own for this site — for example {"color-brand": "#0a7"}. A value may hold letters, digits, spaces and # . , % ( ) / + * -',
       'field.parent': 'Parent',
       'field.description': 'Description',
       'field.attachment': 'Attachment',

@@ -88,6 +88,22 @@ const parseJson = (value: string | undefined): { ok: true; value: unknown } | { 
   }
 }
 
+/**
+ * The tokens box, as the contract wants them.
+ *
+ * An empty box means "no overrides" rather than "leave whatever is stored":
+ * this is the only screen that writes them, so a blank field is a decision.
+ */
+const siteTokensOf = (value: string | undefined): unknown => {
+  if (!value?.trim()) return {}
+  const parsed = parseJson(value)
+  // Malformed JSON goes down as the string it is: saveSite answers
+  // `invalidTokens` for it, which is the message to show, and the screen shows
+  // domain errors already. Sending `{}` instead would erase the site's tokens
+  // because somebody mistyped a brace.
+  return parsed.ok ? parsed.value : value
+}
+
 const invalidJsonErrors = (form: Record<string, string>, _: ReturnType<ServeContext['translate']>) => {
   const errors: string[] = []
   if (!parseJson(form.layout).ok)
@@ -604,6 +620,7 @@ export const routes: Record<string, RouteEntry> = {
             title: form.title,
             defaultLocale: form.defaultLocale,
             theme: form.theme,
+            tokens: siteTokensOf(form.tokens),
             active: form.active === '1',
           },
           url,
@@ -646,6 +663,7 @@ export const routes: Record<string, RouteEntry> = {
             title: form.title,
             defaultLocale: form.defaultLocale,
             theme: form.theme,
+            tokens: siteTokensOf(form.tokens),
             active: form.active === '1',
           },
           url,

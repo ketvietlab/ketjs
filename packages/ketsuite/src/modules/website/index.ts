@@ -46,6 +46,9 @@ export default defineModule({
       'error.payloadTooLarge': 'Dữ liệu vượt quá giới hạn cho phép.',
       'error.duplicateName': 'Tên này đã được sử dụng.',
       'error.duplicateHost': 'Tên miền này đã được gán cho website khác.',
+      'error.invalidTokens': 'Token giao diện phải là một đối tượng khoá–giá trị.',
+      'error.invalidTokenValue':
+        'Có token mang tên hoặc giá trị không hợp lệ. Giá trị chỉ được chứa chữ, số, khoảng trắng và # . , % ( ) / + * -',
       'error.primaryDomainInUse':
         'Không thể gỡ tên miền chính khi website còn tên miền khác. Hãy đặt một tên miền khác làm chính trước.',
       'error.duplicateRedirect':
@@ -120,6 +123,9 @@ export default defineModule({
       'error.payloadTooLarge': 'The payload exceeds the allowed size.',
       'error.duplicateName': 'This name is already in use.',
       'error.duplicateHost': 'This domain is already assigned to another site.',
+      'error.invalidTokens': 'Theme tokens have to be an object of names and values.',
+      'error.invalidTokenValue':
+        'A token name or value is not allowed. A value may hold letters, digits, spaces and # . , % ( ) / + * -',
       'error.primaryDomainInUse':
         'The primary domain cannot be removed while the site has others. Make one of them primary first.',
       'error.duplicateRedirect':
