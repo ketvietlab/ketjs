@@ -53,6 +53,17 @@ export const menus: Record<string, MenuDef> = {
     sequence: 10,
   },
   /**
+   * Publishing a set is an everyday act, so it sits with the content rather
+   * than under configuration.
+   */
+  'website.publications': {
+    parent: 'website',
+    label: 'menu.publications',
+    path: '/admin/website/publications',
+    needs: 'website.listPublications',
+    sequence: 60,
+  },
+  /**
    * Redirects sit beside the sites rather than under one, because the question
    * "where did this address go" arrives without a site in mind.
    */

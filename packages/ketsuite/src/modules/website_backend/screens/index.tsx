@@ -333,7 +333,12 @@ export const entryFormScreen = (
   siteId: string,
   kind: EntryKind,
   frame: Frame,
-  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
+  options: {
+    values?: Record<string, string>
+    errors?: string[]
+    locale?: string
+    seo?: SeoValues | null
+  } = {},
 ): TemplateResult => {
   const entry = detail?.entry
   const revision = detail?.revision
@@ -460,6 +465,9 @@ export const entryFormScreen = (
               />,
             ]
           : []),
+        // Only on a page that exists: the head tags describe a revision, and
+        // there is no revision until the page has been saved once.
+        ...(existing && options.seo ? [entrySeoSection(_, entry.id, options.seo, options.locale ?? '')] : []),
       ])}
     />
   )
@@ -642,6 +650,20 @@ export const revisionsScreen = (
                 label: _('website_backend.field.createdAt'),
                 kind: 'date',
                 cell: (row) => row.createdAt,
+              },
+              {
+                // A restore makes a draft; it does not change what a visitor
+                // reads. That is why it is offered on every row, including a
+                // revision the current deployment can no longer draw - getting
+                // the content back is how it gets repaired.
+                key: 'restore',
+                label: _('website_backend.action.restore'),
+                cell: (row) =>
+                  linkButton({
+                    label: _('website_backend.action.restore'),
+                    href: `${basePath}/${entry.id}/revisions/${row.id}/restore${locale}`,
+                    size: 'compact',
+                  }),
               },
             ],
           }),
@@ -2150,5 +2172,195 @@ export const searchIndexScreen = (
         }
       />,
     ])}
+  />
+)
+
+export type PublicationRow = {
+  id: string
+  siteId: string
+  state: string
+  entryCount: number
+  contentHash: string
+  preparedAt: string
+  activatedAt?: string | null
+}
+
+export type SeoValues = {
+  metaDescription?: string | null
+  canonical?: string | null
+  noindex?: boolean | null
+  ogImage?: string | null
+}
+
+const publicationTone = (state: string): 'positive' | 'info' | 'neutral' =>
+  state === 'active' ? 'positive' : state === 'prepared' ? 'info' : 'neutral'
+
+/**
+ * Publishing a set, from a screen.
+ *
+ * `preparePublication` freezes which revision of which page goes out and
+ * `activatePublication` moves all of them or none — the machinery that stops a
+ * menu link reaching visitors before the page it points at. It was reachable
+ * only by an agent, so the atomic path existed and the one-page-at-a-time path
+ * was the only one a person could take.
+ */
+export const publicationsScreen = (
+  _: Translator,
+  rows: PublicationRow[],
+  entries: EntryRow[],
+  sites: FormOption[],
+  siteId: string | null,
+  frame: Frame,
+  options: { errors?: string[]; locale?: string; notice?: string | null } = {},
+): TemplateResult => (
+  <ListScreenFrame
+    translator={_}
+    title={_('website_backend.publications.title')}
+    frame={frame}
+    body={stack([
+      siteSwitcher(_, '/admin/website/publications', sites, siteId, options.locale ?? ''),
+      ...(options.notice
+        ? [<Notice tone="positive" title={_('website_backend.publications.done')} message={options.notice} />]
+        : []),
+      ...(siteId && entries.length
+        ? [
+            <Section
+              title={_('website_backend.publications.prepare')}
+              description={_('website_backend.publications.prepareHint')}
+              body={
+                <Surface
+                  body={
+                    <RecordForm
+                      action={`/admin/website/publications${options.locale ?? ''}`}
+                      hidden={{ siteId }}
+                      fields={[
+                        {
+                          name: 'entryIds',
+                          label: _('website_backend.publications.entries'),
+                          type: 'textarea',
+                          value: entries.map((entry) => entry.id).join('\n'),
+                          help: _('website_backend.publications.entriesHint'),
+                          span: 'full',
+                          required: true,
+                        },
+                      ]}
+                      submit={_('website_backend.publications.prepare')}
+                      submitVariant="primary"
+                      errors={options.errors}
+                    />
+                  }
+                />
+              }
+            />,
+          ]
+        : []),
+      !siteId
+        ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
+        : rows.length === 0
+          ? emptyState(_('website_backend.publications.empty'), _('website_backend.publications.emptyHint'))
+          : dataTable(_, {
+              rows,
+              id: (row) => row.id,
+              columns: [
+                {
+                  key: 'prepared',
+                  label: _('website_backend.publications.preparedAt'),
+                  kind: 'date',
+                  priority: 'primary',
+                  cell: (row) => row.preparedAt,
+                },
+                {
+                  key: 'state',
+                  label: _('website_backend.field.status'),
+                  cell: (row) =>
+                    badge(_(`website_backend.pubstate.${row.state}`), publicationTone(row.state)),
+                },
+                {
+                  key: 'count',
+                  label: _('website_backend.publications.entryCount'),
+                  kind: 'number',
+                  cell: (row) => String(row.entryCount),
+                },
+                {
+                  key: 'act',
+                  label: _('website_backend.publications.action'),
+                  cell: (row) =>
+                    row.state === 'prepared'
+                      ? linkButton({
+                          label: _('website_backend.action.activate'),
+                          href: `/admin/website/publications/${row.id}/activate${options.locale ?? ''}`,
+                          size: 'compact',
+                          variant: 'primary',
+                        })
+                      : row.state === 'active'
+                        ? linkButton({
+                            label: _('website_backend.action.rollback'),
+                            href: `/admin/website/publications/${row.id}/rollback${options.locale ?? ''}`,
+                            size: 'compact',
+                          })
+                        : '',
+                },
+              ],
+            }),
+    ])}
+  />
+)
+
+/**
+ * The head tags for one page, on the page's own screen.
+ *
+ * These four fields freeze into the publication alongside the revision they
+ * describe, so a description edited after publishing does not reach visitors
+ * until the next one. `noindex` is the exception and takes effect at once,
+ * because delisting a page is not a thing to make somebody wait for.
+ */
+export const entrySeoSection = (
+  _: Translator,
+  entryId: string,
+  seo: SeoValues,
+  locale = '',
+): TemplateResult => (
+  <Section
+    title={_('website_backend.seo.title')}
+    description={_('website_backend.seo.hint')}
+    body={
+      <Surface
+        body={
+          <RecordForm
+            action={`/admin/website/content/${entryId}/seo${locale}`}
+            fields={[
+              {
+                name: 'metaDescription',
+                label: _('website_backend.seo.description'),
+                type: 'textarea',
+                value: seo.metaDescription ?? '',
+                span: 'full',
+              },
+              {
+                name: 'canonical',
+                label: _('website_backend.seo.canonical'),
+                value: seo.canonical ?? '',
+                help: _('website_backend.seo.canonicalHint'),
+              },
+              {
+                name: 'ogImage',
+                label: _('website_backend.seo.ogImage'),
+                value: seo.ogImage ?? '',
+              },
+              {
+                name: 'noindex',
+                label: _('website_backend.seo.noindex'),
+                type: 'checkbox',
+                value: seo.noindex ?? false,
+                help: _('website_backend.seo.noindexHint'),
+                span: 'full',
+              },
+            ]}
+            submit={_('website_backend.action.save')}
+            submitVariant="secondary"
+          />
+        }
+      />
+    }
   />
 )
