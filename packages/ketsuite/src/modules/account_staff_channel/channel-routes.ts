@@ -7,7 +7,14 @@
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { compareDecimals } from '../account/money.ts'
-import { channelError, defineChannelRoute, routesOf, sha256, stableHash } from '../channel_api/core.ts'
+import {
+  channelError,
+  defineChannelRoute,
+  idempotencyKey,
+  routesOf,
+  sha256,
+  stableHash,
+} from '../channel_api/core.ts'
 
 type Req = Parameters<Route>[1]
 type Row = Record<string, unknown>
@@ -331,17 +338,6 @@ const commandParams = {
   additionalProperties: false,
   properties: { id: string, idempotencyKey: string },
   required: ['id', 'idempotencyKey'],
-}
-
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
-    }),
-  }
 }
 
 const requestVersion = (req: Req, body: Row): string | null => {

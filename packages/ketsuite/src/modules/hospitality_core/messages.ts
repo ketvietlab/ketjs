@@ -303,6 +303,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'screen.frontDesk.arrivals': 'Khách đến hôm nay',
     'screen.frontDesk.arrivalsEmpty': 'Hôm nay không có khách đến.',
     'screen.frontDesk.arrivalsEmptyHint': 'Khách đặt phòng cho hôm nay sẽ hiện ở đây trước khi nhận phòng.',
+    'screen.frontDesk.unassigned': 'Chưa phân phòng',
     'screen.frontDesk.departures': 'Khách rời hôm nay',
     'screen.frontDesk.departuresEmpty': 'Hôm nay không có khách rời.',
     'screen.frontDesk.departuresEmptyHint': 'Khách đến hạn trả phòng hôm nay sẽ hiện ở đây.',
@@ -776,6 +777,12 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.action.back': 'Quay lại danh sách',
     'reservation.action.checkIn': 'Nhận phòng',
     'reservation.action.checkInHint': 'Chọn một phòng sẵn sàng đúng loại đã đặt rồi xác nhận khách đến.',
+    'reservation.action.holdRoom': 'Giữ phòng',
+    'reservation.action.holdRoomChange': 'Đổi phòng giữ',
+    'reservation.action.holdRoomHint':
+      'Chọn trước phòng cho khách. Phòng vẫn bán được cho các đêm khác, chỉ khoá đúng kỳ lưu trú này.',
+    'reservation.action.holdRoomKept': 'Đang giữ phòng {room} cho khách.',
+    'reservation.action.releaseRoomHold': 'Bỏ giữ phòng',
     'reservation.action.checkOut': 'Trả phòng',
     'reservation.action.checkOutHint':
       'Đóng kỳ lưu trú, chuyển phòng sang chờ dọn và tạo công việc buồng phòng.',
@@ -1493,6 +1500,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'screen.frontDesk.arrivals': 'Arriving today',
     'screen.frontDesk.arrivalsEmpty': 'No arrivals today.',
     'screen.frontDesk.arrivalsEmptyHint': 'Guests booked for today appear here until they are checked in.',
+    'screen.frontDesk.unassigned': 'No room kept',
     'screen.frontDesk.departures': 'Departing today',
     'screen.frontDesk.departuresEmpty': 'No departures today.',
     'screen.frontDesk.departuresEmptyHint': 'Guests due to leave today appear here.',
@@ -1963,6 +1971,12 @@ export const messages: Record<string, Record<string, Message>> = {
     'reservation.action.back': 'Back to reservations',
     'reservation.action.checkIn': 'Check in',
     'reservation.action.checkInHint': 'Select a ready room matching the booked type, then confirm arrival.',
+    'reservation.action.holdRoom': 'Keep a room',
+    'reservation.action.holdRoomChange': 'Change the room kept',
+    'reservation.action.holdRoomHint':
+      'Choose the room now. It stays sellable on other nights; only these stay dates are taken.',
+    'reservation.action.holdRoomKept': 'Room {room} is being kept for this guest.',
+    'reservation.action.releaseRoomHold': 'Let the room go',
     'reservation.action.checkOut': 'Check out',
     'reservation.action.checkOutHint':
       'Close the stay, move the room to awaiting service, and create the housekeeping task.',

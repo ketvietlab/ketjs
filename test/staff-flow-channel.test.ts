@@ -323,3 +323,78 @@ test('staff Flow overview counts only what the caller carries', async (t) => {
   assert.equal(theirs.projectCount, 1)
   assert.equal(theirs.total, 1)
 })
+
+/**
+ * Somebody taken off a project while their phone is still open.
+ *
+ * The gap this closes is a timing one, and timing is the shape of gap a test
+ * that only checks "a stranger is refused" cannot see. A phone holds a screen
+ * for as long as it is in a pocket: the reads that filled it happened when the
+ * caller was still on the project, and the command they send afterwards
+ * happens when they are not. Every command here reads the issue again before
+ * it writes, so the answer arrives from the same gate the first read passed —
+ * but nothing proved that until now.
+ */
+test('losing access mid-flight stops the next command, not just the next read', async (t) => {
+  const e2e = await boot(t)
+  const worker = await asWorker(e2e)
+  const csrf = await csrfFor(e2e)
+  const post = (path: string, key: string, body: Row) =>
+    e2e.client.request(path, {
+      method: 'POST',
+      headers: mutation(csrf, key),
+      body: JSON.stringify(body),
+    })
+
+  // The screen the phone is holding: read while still a member.
+  const held = await e2e.client.json<Envelope<Row>>('/api/staff/v1/flow/issues/ours-1')
+  assert.equal(String(held.data.id), 'ours-1')
+  const version = Number(held.data.version)
+
+  // Taken off the project in between, by somebody at a desk.
+  await e2e.fixture.call(
+    'flow.project.member.remove',
+    { projectId: 'ours', userId: 'worker', idempotencyKey: 'remove-worker-mid' },
+    { actor: 'admin', scope: { company: 'acme', branches: null } },
+  )
+
+  // The command was composed against a version that was real, and is refused
+  // on the ground that matters: the issue is no longer theirs to reach. Not a
+  // version conflict — the version is still current — and not a 403, which
+  // would confirm the project is there.
+  const moved = await post('/api/staff/v1/flow/issues/ours-1/move', 'lost-access-move', {
+    columnId: 'ours-done',
+    expectedVersion: version,
+  })
+  assert.equal(moved.status, 404)
+
+  for (const [path, key, body] of [
+    [
+      '/api/staff/v1/flow/issues/ours-1/assign',
+      'lost-assign',
+      { assigneeUserId: null, expectedVersion: version },
+    ],
+    ['/api/staff/v1/flow/issues/ours-1/comment', 'lost-comment', { body: 'vẫn gửi được?' }],
+  ] as const)
+    assert.equal((await post(path, key, body as Row)).status, 404, path)
+
+  // And the reads close behind them too, so the next refresh shows the truth
+  // rather than a screen that still works until something is pressed.
+  assert.equal((await e2e.client.get('/api/staff/v1/flow/issues/ours-1')).status, 404)
+  assert.deepEqual(
+    (await e2e.client.json<Envelope<{ items: Row[] }>>('/api/staff/v1/flow/projects')).data.items,
+    [],
+  )
+
+  // Nothing happened to the issue: the person still on the project sees it
+  // where it was.
+  await asWorker(e2e, 'outsider')
+  await e2e.fixture.call(
+    'flow.project.member.add',
+    { projectId: 'ours', userId: 'outsider', idempotencyKey: 'add-outsider-check' },
+    { actor: 'admin', scope: { company: 'acme', branches: null } },
+  )
+  const after = await e2e.client.json<Envelope<Row>>('/api/staff/v1/flow/issues/ours-1')
+  assert.equal(String(after.data.columnId), 'ours-todo')
+  assert.equal(Number(after.data.version), version)
+})
