@@ -111,11 +111,14 @@ export const contentScreen = (
                     id: 'target',
                     label: _('hospitality_core.content.metric.target'),
                     value: selectedLabel,
+                    tone: 'neutral' as const,
                   },
                   {
                     id: 'images',
                     label: _('hospitality_core.content.metric.images'),
                     value: String(images.length),
+                    // A room nobody can see a picture of is a room nobody books.
+                    tone: images.length ? ('neutral' as const) : ('warning' as const),
                   },
                   {
                     id: 'complete',
@@ -125,6 +128,9 @@ export const contentScreen = (
                       completed: completeness.completed,
                       total: completeness.total,
                     }),
+                    // The one figure on this screen that is a score, so it says
+                    // whether it is finished.
+                    tone: completeness.percent >= 100 ? ('positive' as const) : ('warning' as const),
                   },
                 ]}
                 id={(item) => item.id}
@@ -133,7 +139,7 @@ export const contentScreen = (
                     label={item.label}
                     value={item.value}
                     detail={'detail' in item ? item.detail : null}
-                    tone={item.id}
+                    tone={item.tone}
                   />
                 )}
               />,

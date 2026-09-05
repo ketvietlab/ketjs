@@ -21,6 +21,7 @@ import { createLogger } from './log/logger.ts'
 import type { Logger } from './log/logger.ts'
 import { nullLog } from './log/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
+import { nextSequenceNumber } from './sequence.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
 /** What a sensitive value is replaced by everywhere a write record travels. */
@@ -715,6 +716,8 @@ export function createContext(o: {
       writes.push(...transactionWrites)
       return value
     },
+    sequence: (name: string, options = {}) =>
+      nextSequenceNumber(adapter, name, { ...options, scope, dryRun }),
     table: (model: string) => table(manifest, model),
     change: (model: string, params: Row, base: Row | null = null): Changeset =>
       changeset(manifest, model, params, base),
