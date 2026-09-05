@@ -36,6 +36,7 @@ import { addCalendarDays, dateKeyIn, zonedMidnight } from '../calendar.ts'
 import {
   ACCOMMODATION_TYPES,
   BOOKING_PROVIDERS,
+  CANCELLATION_POLICY_TYPES,
   CHARGE_TYPES,
   DOCUMENT_TYPES,
   GENDERS,
@@ -2445,6 +2446,27 @@ export const folioColumns = (_: Translator, locale: string, timezone: string): A
   },
 ]
 
+/**
+ * What a charge is, in words, when its description is a machine key.
+ *
+ * Room nights and cancellation penalties are written by code, so their
+ * description carries the reason rather than a sentence — `room:` and
+ * `cancellation:` followed by why it was charged. The type column already says
+ * what the charge is; this says why, and never shows the reader the key.
+ */
+export const chargeDescription = (_: Translator, charge: { type: string; description: string }): string => {
+  if (charge.type === 'room' && charge.description.startsWith('room:'))
+    return _('hospitality_core.folio.charge.roomDescription')
+  if (charge.type === 'cancellation' && charge.description.startsWith('cancellation:')) {
+    const reason = charge.description.slice('cancellation:'.length)
+    if (reason === 'provider') return _('hospitality_core.folio.charge.cancellationByChannel')
+    return CANCELLATION_POLICY_TYPES.includes(reason as (typeof CANCELLATION_POLICY_TYPES)[number])
+      ? _(`hospitality_core.policy.${reason}`)
+      : _('hospitality_core.folio.charge.cancellationByPolicy')
+  }
+  return charge.description
+}
+
 export const folioChargeColumns = (
   _: Translator,
   locale: string,
@@ -2460,10 +2482,7 @@ export const folioChargeColumns = (
   {
     key: 'description',
     label: _('hospitality_core.folio.charge.description'),
-    cell: (row) =>
-      row.type === 'room' && row.description.startsWith('room:')
-        ? _('hospitality_core.folio.charge.roomDescription')
-        : row.description,
+    cell: (row) => chargeDescription(_, row),
     priority: 'primary',
   },
   {

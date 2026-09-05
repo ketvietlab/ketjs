@@ -33,7 +33,7 @@ import {
   reserveInventory,
   restrictionIssues,
 } from './inventory.ts'
-import { postCharge } from './services.ts'
+import { postCharge, settleCancelledFolio } from './services.ts'
 import { initializeRecurringRent } from './night-audit.ts'
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
@@ -549,14 +549,6 @@ export const applyNoShow = async (
 }
 
 /**
- * A room is kept for one stay at a time over the nights it is kept for.
- *
- * Room `status` cannot carry this. A room held for next Tuesday is an ordinary
- * available room today and must stay sellable; `occupied` is about now, not
- * about a calendar. So the exclusion lives in the assignment schedule, and this
- * is the question every writer of one has to ask first.
- */
-/**
  * Put the room's own name on the assignments that carry only its id.
  *
  * `roomName` has been on the assignment row all along and nothing ever filled
@@ -579,6 +571,14 @@ const nameAssignedRooms = async (ctx: Ctx, stays: Row[]): Promise<Row[]> => {
   return stays
 }
 
+/**
+ * A room is kept for one stay at a time over the nights it is kept for.
+ *
+ * Room `status` cannot carry this. A room held for next Tuesday is an ordinary
+ * available room today and must stay sellable; `occupied` is about now, not
+ * about a calendar. So the exclusion lives in the assignment schedule, and this
+ * is the question every writer of one has to ask first.
+ */
 const roomTakenBetween = async (
   ctx: Ctx,
   roomId: unknown,
@@ -1131,39 +1131,15 @@ export const operations: Record<string, FnSpec> = {
               throw new TransitionConflict(issue('state', 'transition_conflict'))
             await closeHold(tx, reservation.stayId, 'room_hold_cancelled')
           }
-          const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
-          const C = tx.table('hospitality_core.Charge')
-          const charges = await tx.db.all(
-            from(C).where(eq(C.folioId, reservation.folioId), eq(C.state, 'active')),
-          )
-          for (const charge of charges)
-            await tx.db.update('hospitality_core.Charge', { id: charge.id }, { state: 'void' })
-          if (compareDecimals(fee.amount, '0') > 0)
-            await tx.db.insert('hospitality_core.Charge', {
-              id: `${String(reservation.id)}:cancellation`,
-              folioId: reservation.folioId,
-              stayId: reservation.stayId,
-              description: `cancellation:${fee.code}`,
-              type: 'cancellation',
-              quantity: '1',
-              unitPrice: fee.amount,
-              amount: fee.amount,
-              occurredAt: at,
-              sourceKey: `reservation:${String(reservation.id)}:cancellation`,
-              state: 'active',
-            })
-          // Money owed does not vanish because the stay did. A folio carrying a
-          // penalty closes; only a folio owing nothing is cancelled outright.
-          await tx.db.update(
-            'hospitality_core.Folio',
-            { id: reservation.folioId },
-            {
-              state: compareDecimals(fee.amount, '0') > 0 ? 'closed' : 'cancelled',
-              amountTotal: fee.amount,
-              closedAt: at,
-              version: Number(folio?.version ?? 0) + 1,
-            },
-          )
+          await settleCancelledFolio(tx, {
+            folioId: reservation.folioId,
+            stayId: reservation.stayId,
+            fee: fee.amount,
+            chargeId: `${String(reservation.id)}:cancellation`,
+            sourceKey: `reservation:${String(reservation.id)}:cancellation`,
+            reason: fee.code,
+            at,
+          })
           if (inventoryDates.length)
             await releaseInventory(
               tx,

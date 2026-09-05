@@ -342,6 +342,13 @@ export {
   restrictionIssues,
 } from './modules/hospitality_core/inventory.ts'
 export type { InventoryHold, InventoryIssue } from './modules/hospitality_core/inventory.ts'
+/**
+ * How a booking that will not happen settles. A cancellation arriving from a
+ * channel is the same event as one taken at the desk, and has to leave the
+ * folio in the same state, or the fee is never invoiced.
+ */
+export { settleCancelledFolio } from './modules/hospitality_core/services.ts'
+export type { CancellationSettlement } from './modules/hospitality_core/services.ts'
 export {
   ACCOMMODATION_TYPES,
   AMENITY_SCOPES,
