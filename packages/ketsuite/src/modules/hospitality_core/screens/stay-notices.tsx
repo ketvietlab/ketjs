@@ -4,6 +4,7 @@ import {
   choices,
   dataTable,
   DefinitionList,
+  noticeTone,
   emptyState,
   type Frame,
   WorkspaceScreen,
@@ -109,7 +110,7 @@ export const stayNoticesScreen = (
             <Metric
               label={_(`hospitality_core.stayNotice.state.${item.state}`)}
               value={String(item.count)}
-              tone={item.state}
+              tone={noticeTone(item.state)}
             />
           )}
         />,

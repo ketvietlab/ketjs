@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
 import { renderToString } from '@ketvietlab/ketjs-view'
@@ -639,4 +640,29 @@ test('the stay list leads with state and marks a guest still in the room past th
     renderToString(dates.cell(stay('checked_in', -2 * hour)) as never),
     /hospitality_core\.stayState\.overdue/,
   )
+})
+
+test('every Hospitality metric card asks for a tone the design system knows', () => {
+  const TONES = new Set(['neutral', 'info', 'positive', 'warning', 'danger'])
+  // Resolved from the repository root, not from this file: the test runs
+  // compiled, out of `.build/test`, where a relative path lands in the build
+  // output — a directory with no `.tsx` in it, so the check would pass by
+  // reading nothing. The count below is what makes that failure loud.
+  const dir = `${process.cwd()}/packages/ketsuite/src/modules/hospitality_core/screens`
+  const screens = readdirSync(dir).filter((file) => file.endsWith('.tsx'))
+  assert.ok(screens.length > 20, `expected the Hospitality screens, found ${screens.length} files`)
+  const offenders: string[] = []
+  for (const file of screens) {
+    const source = readFileSync(`${dir}/${file}`, 'utf8')
+    // `tone` is deliberately open in the KetSuite wrapper so a board can colour
+    // itself by a domain status, and the stylesheet draws a dot only for the
+    // five it knows. That is exactly why a wrong value is silent: the card
+    // simply stops saying anything. Passing a card's own id was the way this
+    // went unnoticed on nine screens at once.
+    for (const [, value] of source.matchAll(/tone=\{(?:'|")([a-z-]+)(?:'|")\}/g))
+      if (!TONES.has(value)) offenders.push(`${file}: tone="${value}"`)
+    for (const [, expression] of source.matchAll(/tone=\{(item\.[A-Za-z]+)\}/g))
+      if (expression !== 'item.tone') offenders.push(`${file}: tone={${expression}}`)
+  }
+  assert.deepEqual(offenders, [], 'a metric tone must be a design-system tone, not an id')
 })

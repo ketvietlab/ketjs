@@ -225,25 +225,31 @@ export const reservationsScreen = (
                     id: 'rate',
                     label: _('hospitality_core.reservation.quote.rate'),
                     value: formatMoney(_, quote.rate ?? 0),
+                    tone: 'neutral' as const,
                   },
                   {
                     id: 'quantity',
                     label: _('hospitality_core.reservation.quote.quantity'),
                     value: String(quote.quantity ?? 0),
+                    tone: 'neutral' as const,
                   },
                   {
                     id: 'availability',
                     label: _('hospitality_core.reservation.quote.availability'),
                     value: String(quote.minimumAvailable ?? 0),
+                    // The clerk is one button from confirming. Zero here is the
+                    // difference between a booking and an overbooking.
+                    tone: quote.minimumAvailable ? ('neutral' as const) : ('danger' as const),
                   },
                   {
                     id: 'total',
                     label: _('hospitality_core.reservation.quote.total'),
                     value: formatMoney(_, quote.amountTotal ?? 0),
+                    tone: 'neutral' as const,
                   },
                 ]}
                 id={(item) => item.id}
-                card={(item) => <Metric label={item.label} value={item.value} tone={item.id} />}
+                card={(item) => <Metric label={item.label} value={item.value} tone={item.tone} />}
               />,
               <RecordForm
                 action={modal.action}
