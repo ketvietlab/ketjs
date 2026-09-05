@@ -272,6 +272,7 @@ export {
   lte,
   numericCompare,
   like,
+  likeLiteral,
   ilike,
   inArray,
   isNull,
