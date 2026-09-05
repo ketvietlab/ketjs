@@ -2325,6 +2325,15 @@ export const reservationColumns = (
   },
 ]
 
+/**
+ * Still in the room after the hour they were due out.
+ *
+ * The front desk has said this since #358; the stay list is where somebody
+ * looks across every stay rather than today's, and there it was invisible.
+ */
+export const overdue = (row: { state: string; checkOut: string }): boolean =>
+  row.state === 'checked_in' && Date.parse(row.checkOut) < Date.now()
+
 export const stayColumns = (_: Translator, locale: string, timezone: string): Array<Column<StayRow>> => [
   {
     key: 'code',
@@ -2346,20 +2355,29 @@ export const stayColumns = (_: Translator, locale: string, timezone: string): Ar
     priority: 'primary',
   },
   {
+    key: 'status',
+    label: _('hospitality_core.col.status'),
+    cell: (row) => badge(_(`hospitality_core.stayState.${row.state}`), workflowTone(row.state), row.state),
+    kind: 'status',
+    priority: 'primary',
+  },
+  {
     key: 'room',
     label: _('hospitality_core.col.room'),
     cell: (row) => row.currentRoom?.name ?? row.currentRoom?.code ?? '—',
   },
   {
-    key: 'checkIn',
-    label: _('hospitality_core.col.checkIn'),
-    cell: (row) => dateTime(row.checkIn, locale, timezone),
-    kind: 'date',
-  },
-  {
-    key: 'checkOut',
-    label: _('hospitality_core.col.checkOut'),
-    cell: (row) => dateTime(row.checkOut, locale, timezone),
+    key: 'stay',
+    label: _('hospitality_core.col.stayDates'),
+    // The overdue mark rides with the dates because that is what it is about,
+    // and it is only true of somebody who is still in the room.
+    cell: (row) =>
+      overdue(row)
+        ? inline([
+            stayLength(_, row, locale, timezone),
+            badge(_('hospitality_core.stayState.overdue'), 'danger', 'overdue'),
+          ])
+        : stayLength(_, row, locale, timezone),
     kind: 'date',
   },
   {
@@ -2368,13 +2386,6 @@ export const stayColumns = (_: Translator, locale: string, timezone: string): Ar
     cell: (row) => String(row.adults + row.children),
     align: 'end',
     kind: 'number',
-  },
-  {
-    key: 'status',
-    label: _('hospitality_core.col.status'),
-    cell: (row) => badge(_(`hospitality_core.stayState.${row.state}`), workflowTone(row.state), row.state),
-    kind: 'status',
-    priority: 'primary',
   },
 ]
 
