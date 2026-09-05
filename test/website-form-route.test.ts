@@ -151,11 +151,15 @@ test('route: a form field named schemaVersion reaches the payload', async () => 
   assert.equal(res.status, 200, JSON.stringify(res.body))
 
   const rows = (await call(db, 'website_form.listSubmissions', { formId: 'f1' })) as Array<{
-    payload: Record<string, unknown>
+    id: string
     schemaVersion: number
   }>
-  assert.equal(rows[0]?.payload.schemaVersion, 'bản 3', "the visitor's answer is not the transport key")
   assert.equal(rows[0]?.schemaVersion, 1)
+  // The answers are not in the list any more. Opening the record is its own call.
+  const record = (await call(db, 'website_form.readSubmission', { id: rows[0]?.id })) as {
+    payload: Record<string, unknown>
+  }
+  assert.equal(record?.payload.schemaVersion, 'bản 3', "the visitor's answer is not the transport key")
 })
 
 test('route: a consenting post that names no version is told to reload', async () => {
