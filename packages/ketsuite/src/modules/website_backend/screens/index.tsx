@@ -964,9 +964,22 @@ export const menuFormScreen = (
   )
 }
 
+/** What listForms returns, named so a route can hand it over without a cast. */
+export type FormRow = {
+  id: string
+  name: string
+  active: boolean
+  schema?: unknown
+  successMessage?: string
+  notifyTo?: string | null
+  consentText?: string | null
+  summaryFields?: string[] | null
+  retentionDays?: number | null
+}
+
 export const formsScreen = (
   _: Translator,
-  rows: Array<{ id: string; name: string; active: boolean }>,
+  rows: FormRow[],
   siteId: string | null,
   frame: Frame,
   locale = '',
@@ -988,7 +1001,10 @@ export const formsScreen = (
         : dataTable(_, {
             rows,
             id: (row) => row.id,
-            rowHref: (row) => `/admin/website/forms/${row.id}/submissions${locale}`,
+            // The row opens the form, the way a row opens the record on every
+            // other list here. Submissions were the row's destination only
+            // because there was nothing else to open.
+            rowHref: (row) => `/admin/website/forms/${row.id}${locale}`,
             columns: [
               {
                 key: 'name',
@@ -1005,31 +1021,67 @@ export const formsScreen = (
                     row.active ? 'positive' : 'neutral',
                   ),
               },
+              {
+                key: 'retention',
+                label: _('website_backend.field.retentionDays'),
+                cell: (row) =>
+                  row.retentionDays == null
+                    ? badge(_('website_backend.state.kept'), 'neutral')
+                    : String(row.retentionDays),
+              },
+              {
+                key: 'submissions',
+                label: _('website_backend.submissions.title'),
+                cell: (row) =>
+                  linkButton({
+                    label: _('website_backend.action.open'),
+                    href: `/admin/website/forms/${row.id}/submissions${locale}`,
+                    size: 'compact',
+                  }),
+              },
             ],
           }),
     ])}
   />
 )
 
-export const formCreateScreen = (
+/**
+ * One editor, for a new form and an existing one.
+ *
+ * A form could be created and never edited: there was no route for it. So the
+ * privacy notice could not be set at all, and the versioned-consent machinery
+ * behind it was unreachable from the product. Retention has the same problem in
+ * a sharper form - it is decided after a privacy review, which is never the
+ * moment someone is typing a form's name.
+ */
+export const formEditorScreen = (
   _: Translator,
   siteId: string,
   frame: Frame,
-  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
+  options: {
+    id?: string | null
+    values?: Record<string, string>
+    errors?: string[]
+    locale?: string
+  } = {},
 ): TemplateResult => (
   <FormScreenFrame
     translator={_}
-    title={_('website_backend.forms.newTitle')}
+    title={_(options.id ? 'website_backend.forms.editTitle' : 'website_backend.forms.newTitle')}
     frame={frame}
     body={
       <Section
-        title={_('website_backend.forms.newTitle')}
+        title={_(options.id ? 'website_backend.forms.editTitle' : 'website_backend.forms.newTitle')}
         description={_('website_backend.forms.formHint')}
         body={
           <Surface
             body={
               <RecordForm
-                action={`/admin/website/forms/new${options.locale ?? ''}`}
+                action={
+                  options.id
+                    ? `/admin/website/forms/${encodeURIComponent(options.id)}${options.locale ?? ''}`
+                    : `/admin/website/forms/new${options.locale ?? ''}`
+                }
                 hidden={{ siteId }}
                 fields={[
                   {
@@ -1050,6 +1102,28 @@ export const formCreateScreen = (
                     value: options.values?.successMessage,
                     required: true,
                     span: 'full',
+                  },
+                  {
+                    name: 'consentText',
+                    label: _('website_backend.field.consentText'),
+                    type: 'textarea',
+                    value: options.values?.consentText,
+                    help: _('website_backend.help.consentText'),
+                    span: 'full',
+                  },
+                  {
+                    name: 'summaryFields',
+                    label: _('website_backend.field.summaryFields'),
+                    type: 'text',
+                    value: options.values?.summaryFields,
+                    help: _('website_backend.help.summaryFields'),
+                  },
+                  {
+                    name: 'retentionDays',
+                    label: _('website_backend.field.retentionDays'),
+                    type: 'number',
+                    value: options.values?.retentionDays,
+                    help: _('website_backend.help.retentionDays'),
                   },
                   {
                     name: 'schema',
