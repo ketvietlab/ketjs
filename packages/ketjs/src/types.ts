@@ -61,7 +61,42 @@ export type FieldBase = Scalar | 'ref'
 export type ParsedType = { base: FieldBase; optional: boolean; target?: string }
 export type TypeParse = ({ ok: true } & ParsedType) | { ok: false; reason: string }
 
-export type Field = ParsedType & { by: string }
+/**
+ * What a module may say about a field beyond its type.
+ *
+ * A field was a type string and nothing else, which left nowhere to record the two
+ * questions every deployment holding customer data eventually has to answer: which
+ * columns are personal data, and which must never leave the system at all. Both are
+ * properties of the data, not of its storage — the schema snapshot deliberately
+ * ignores them, so classifying a field is never a migration.
+ *
+ * The vocabulary is closed and an unknown key is a build error. Adding a key later
+ * is additive and safe; accepting anything today and narrowing later is not, which
+ * is the same argument D1 makes about joints.
+ */
+export type FieldDef = {
+  type: string
+  /**
+   * This column holds personal data about an identifiable person.
+   *
+   * Recorded so it can be enumerated: an obligation to export or erase somebody's
+   * data cannot be met against a schema nobody has classified. `ket classification`
+   * prints the inventory.
+   */
+  personal?: boolean
+  /**
+   * This value must never leave the system.
+   *
+   * Enforced, not advisory: the value is masked in the write records that reach the
+   * idempotency store and a dry-run preview, and the field is withheld from the
+   * agent capability descriptor. Secrets, tokens, card data.
+   */
+  sensitive?: boolean
+}
+
+export type FieldClassification = { personal?: boolean; sensitive?: boolean }
+
+export type Field = ParsedType & { by: string } & FieldClassification
 export type IndexDef = { fields: string[]; unique?: boolean }
 export type ComposedIndex = { fields: string[]; unique: boolean; by: string }
 export type ComposedModel = {
@@ -92,7 +127,11 @@ export type ModelDef = {
   scope: ModelScope
   /** Add optional createdAt/updatedAt fields and maintain them on every write path. */
   timestamps?: boolean
-  fields: Record<string, string>
+  /**
+   * A type string, or an object when the field has something to declare beyond it.
+   * `'text'` and `{ type: 'text' }` compose identically.
+   */
+  fields: Record<string, string | FieldDef>
   /** Named database indexes. Names are local to the model and remain stable across migrations. */
   indexes?: Record<string, IndexDef>
 }
@@ -424,7 +463,7 @@ export type ModuleSpec = ModuleMeta & {
   /** Version ranges required at compose time for published extension contracts. */
   compatible?: Record<string, string>
   models?: Record<string, ModelDef>
-  extend?: Record<string, Record<string, string>>
+  extend?: Record<string, Record<string, string | FieldDef>>
   /** Navigation entries this module contributes. Keys are ids other menus parent onto. */
   menus?: Record<string, MenuDef>
   joints?: Record<string, JointDef>
@@ -497,7 +536,7 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly depends: readonly string[]
   readonly compatible: Readonly<Record<string, string>>
   readonly models: Record<string, ModelDef>
-  readonly extend: Record<string, Record<string, string>>
+  readonly extend: Record<string, Record<string, string | FieldDef>>
   readonly menus: Record<string, MenuDef>
   readonly joints: Record<string, JointDef>
   readonly omits: readonly string[]

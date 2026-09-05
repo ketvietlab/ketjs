@@ -23,6 +23,9 @@ import { nullLog } from './log/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
+/** What a sensitive value is replaced by everywhere a write record travels. */
+export const SENSITIVE_MASK = '[sensitive]'
+
 export function createContext(o: {
   adapter: Adapter
   manifest: Manifest
@@ -53,6 +56,32 @@ export function createContext(o: {
 
   const effects = new Set(operation.effects)
   const writes = o.writes ?? []
+
+  /**
+   * A write record is observational, and it travels: it is returned to the caller,
+   * shown by a dry-run, and stored verbatim in the durable idempotency row that
+   * answers a retry. A field declared `sensitive` must not make that trip, so its
+   * value is replaced before the record is kept rather than after.
+   */
+  const record = (write: WriteRecord): void => {
+    const model = manifest.models[write.model]
+    const mask = (row: Row | undefined): Row | undefined => {
+      if (!row || !model) return row
+      let masked: Row | undefined
+      for (const key of Object.keys(row)) {
+        if (!model.fields[key]?.sensitive) continue
+        masked ??= { ...row }
+        masked[key] = SENSITIVE_MASK
+      }
+      return masked ?? row
+    }
+    writes.push({
+      ...write,
+      ...(write.row === undefined ? {} : { row: mask(write.row) }),
+      ...(write.where === undefined ? {} : { where: mask(write.where) }),
+      ...(write.patch === undefined ? {} : { patch: mask(write.patch) }),
+    })
+  }
 
   const need = (effect: 'read' | 'write' | 'enqueue', target: string): void => {
     if (effects.has(`${effect}:${target}`)) return
@@ -475,7 +504,7 @@ export function createContext(o: {
         })
       }
       checkQuery(q)
-      writes.push({ op: 'update', model: q.model, where: {} })
+      record({ op: 'update', model: q.model, where: {} })
       if (dryRun) return { changes: 0 }
       const { text, params } = scoped(q).toSQL(dialect)
       return adapter.run(text, params)
@@ -543,7 +572,7 @@ export function createContext(o: {
         })
       }
       const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
-      writes.push({ op: 'insert', model, row: stamped })
+      record({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
       fresh()
@@ -565,7 +594,7 @@ export function createContext(o: {
         })
       }
       const stamped = encodeRow(model, stamp(model, timestamped(model, row, 'insert')))
-      writes.push({ op: 'insert', model, row: stamped })
+      record({ op: 'insert', model, row: stamped })
       if (dryRun) return { dryRun: true }
       const ks = Object.keys(stamped)
       fresh()
@@ -592,7 +621,7 @@ export function createContext(o: {
       // must reject values a real call could not store.
       validateDecimalRow(model, where)
       validateDecimalRow(model, patch)
-      writes.push({ op: 'update', model, where, patch })
+      record({ op: 'update', model, where, patch })
       if (dryRun) return { dryRun: true }
       const kind = scopeOf(model)
       const open = kind === 'shared' || operation.crossCompany

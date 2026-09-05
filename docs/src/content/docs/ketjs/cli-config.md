@@ -32,6 +32,7 @@ before invoking them.
 | `ket agent --deployment NAME` | Print the machine-readable agent capability descriptor. |
 | `ket permissions` | List grantable functions and the data/effect reach of a grant set, module, or stored role. |
 | `ket permissions --json [--all]` | Emit a deterministic module/function inventory for one or every deployment. |
+| `ket classification [--json]` | List fields declared personal or sensitive, and the models that classify nothing. |
 
 Run `ket check` in CI before migrations or deployment. It catches dependency, extension, layout, route,
 queue, theme, model, and function-contract conflicts without starting a server.

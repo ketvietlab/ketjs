@@ -93,6 +93,66 @@ caller choice.
 `date` rejects impossible dates such as `2025-02-30`. Use `datetime` when an instant and timezone are
 part of the domain value.
 
+## Classify what the field holds
+
+A field is a type string, or an object when it has something to declare beyond its type. The two forms
+compose to exactly the same field.
+
+```ts
+// File: src/modules/user/models.ts
+export const models = {
+  User: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      name: { type: 'text', personal: true },
+      email: { type: 'text?', personal: true },
+      passwordHash: { type: 'text?', sensitive: true },
+      lang: 'text?',
+    },
+  },
+}
+```
+
+| Key | Means | Enforced by |
+| --- | --- | --- |
+| `personal` | Holds personal data about an identifiable person | recorded and enumerable; no automatic behaviour |
+| `sensitive` | Must never leave the system | masked in write records; withheld from the agent descriptor |
+
+**`sensitive` is enforced, not advisory.** A write record travels further than it looks: it is returned
+to the caller, shown by a dry-run, and stored verbatim in the durable idempotency row that answers a
+retry. A sensitive value is replaced with `[sensitive]` before the record is kept, and the field is left
+out of `ket agent` entirely — the descriptor is the agent's map of what it may do, and a value it must
+never write does not belong on that map.
+
+**`personal` is recorded, not restricted.** The application still has to serve the person the data is
+about, so nothing is hidden. What the declaration buys is the ability to answer a question that is
+otherwise unanswerable: which columns are in scope when somebody asks for their data to be exported or
+erased. Automatic export and erasure need one more thing — which person a given row belongs to — and
+that is a relationship, not a field property; it is not built.
+
+### Classifying a field is never a migration
+
+Classification describes the data, not its storage, so it is deliberately absent from the schema
+snapshot. Tagging a column plans no `ALTER` and needs no downtime. It does appear in `ket diff`: a field
+that gains or loses either flag is reported as risky, because dropping `sensitive` silently starts
+letting values through and dropping `personal` silently ends an obligation.
+
+The vocabulary is closed. An unrecognised key is a composition error rather than a flag that quietly does
+nothing, which is how a field ends up believed to be protected when it is not.
+
+### Reading the inventory
+
+```bash
+# Run from: your application
+npx ket classification
+npx ket classification --json
+```
+
+It prints every classified field with the module that contributed it — and every model that classifies
+nothing at all. That last list is the point: an inventory of only the fields somebody remembered to tag
+is the one thing worse than no inventory, because it looks complete.
+
 ## Scope is mandatory
 
 Every model selects one isolation scope:

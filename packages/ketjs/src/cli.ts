@@ -21,6 +21,7 @@ import {
   grantsOfRole,
   permissionInventory,
 } from './agent/permissions.ts'
+import { classificationInventory, formatClassification } from './kernel/classification.ts'
 import { readConfig, sqliteStore } from './server/config.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
 import { migrateOne, migrateFleet, formatFleet, verifyPhysicalSchema } from './data/fleet.ts'
@@ -184,6 +185,7 @@ const HELP = `ket — zero-dependency fullstack framework
   ket types [--deployment X]       generate .ket/types.d.ts from the manifest
   ket agent [--deployment X]       print the agent capability descriptor
   ket permissions           every function that exists to be granted
+  ket classification        which fields hold personal data, and which never leave
     --grant a,b,c           …or what a role granted exactly these can reach
     --module NAME           …or what granting one module's whole surface reaches
     --role NAME             …or what a role in the database actually grants
@@ -656,6 +658,11 @@ try {
       const [, m] = pickDeployment(ws)
       console.log(formatInventory(m))
     }
+  } else if (cmd === 'classification') {
+    const [, m] = pickDeployment(ws)
+    const inventory = classificationInventory(m)
+    // JSON for an audit that has to be filed; columns for a person reading it now.
+    console.log(flag('json') ? JSON.stringify(inventory, null, 2) : formatClassification(inventory))
   } else if (cmd === 'agent') {
     const [, m] = pickDeployment(ws)
     console.log(JSON.stringify(agentDescriptor(m), null, 2))
