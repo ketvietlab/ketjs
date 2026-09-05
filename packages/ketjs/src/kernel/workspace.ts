@@ -25,6 +25,14 @@ export type WorkerSpec = {
   tenantRefreshMs?: number
   leaseMs?: number
   shutdownGraceMs?: number
+  /**
+   * How often to look for a due schedule, in every tenant database.
+   *
+   * The sweep is one small statement per scheduled job per tenant, so the cost is
+   * tenants times schedules divided by this. A deployment with many tenants and a
+   * minute of tolerance should raise it.
+   */
+  scheduleSweepMs?: number
 }
 
 /**
