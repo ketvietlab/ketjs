@@ -46,6 +46,33 @@ await ctx.call('website.activatePublication', {
 Both paths stay. A site that publishes one page at a time is not doing anything wrong, and this does
 not take that away.
 
+### What else goes out with the pages
+
+A publication carries an `attachments` bag keyed by module name, and `website` does not read it. The
+navigation has to be able to go out with the pages it points at — otherwise a link appears before the
+page it points at, or a page arrives with no way to reach it — but `website_menu` depends on
+`website`, not the other way round. So the slot is opaque, and the module that owns a key is the only
+thing that reads it.
+
+```ts
+// File: examples/website/publish-with-menu.ts
+const menu = await ctx.call('website_menu.snapshotMenu', { siteId: 'moc' })
+await ctx.call('website.preparePublication', {
+  id: 'pub-2026-09-05',
+  siteId: 'moc',
+  entryIds: ['gioi-thieu'],
+  attachments: { website_menu: menu },
+})
+```
+
+`website_menu.publicMenu` then reads the frozen navigation while that publication is active, and an
+edit made afterwards stays in the editor's view until the next publication carries it out. A site that
+has never prepared a publication reads live rows, which is what every site did before publications
+existed.
+
+Attachments are part of the content hash, so the same pages with a different menu is a different
+publication rather than a replay.
+
 ### The site pointer is the concurrency token
 
 Activation moves `Site.activePublicationId` under compare-and-set **before** it touches any entry.
