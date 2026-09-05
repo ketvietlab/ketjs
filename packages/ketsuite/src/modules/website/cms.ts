@@ -993,6 +993,49 @@ export const cmsFunctions: Record<string, FnSpec> = {
   }),
 
   /**
+   * The inverse of publishEntry, which never had one.
+   *
+   * A page could go live and never come back down: nothing set `status` back,
+   * and the public resolver's per-entry fallback reads `publishedRevisionId`,
+   * which nothing ever cleared. A page published by mistake, an event that is
+   * over, a takedown - all of them had only `noindex`, which asks crawlers to
+   * forget the page while every visitor with the address still reads it.
+   *
+   * This is also how a schedule is cancelled: `publishScheduled` re-reads
+   * `status` before it publishes, so a scheduled page moved back to draft
+   * stays there and the queued job returns without doing anything.
+   *
+   * What it does not do is take a page out of an *active publication*. That
+   * set is frozen by design, and the way to change what it contains is to
+   * prepare and activate another one.
+   */
+  unpublishEntry: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.id)
+      if (!entry || !(await canPublishEntry(ctx, entry))) return forbidden()
+      if (entry.status === 'draft') return { ok: true, id: args.id, status: 'draft' }
+      await ctx.db.update(
+        'website.Entry',
+        { id: args.id },
+        {
+          status: 'draft',
+          publishedRevisionId: null,
+          scheduledRevisionId: null,
+          publishAt: null,
+        },
+      )
+      // publishedAt stays: it is the record of when the page was last live,
+      // and clearing it would lose that to no purpose.
+      return { ok: true, id: args.id, status: 'draft' }
+    },
+  }),
+
+  /**
    * What would break if this went live now.
    *
    * The same check the publish paths run, without the publish - so an editor

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { PAGE_SIZE, pageOf, pager } from '../backend/paging.ts'
+import { PAGE_SIZE, pageOf, pager, searchOf } from '../backend/paging.ts'
 import {
   contentScreen,
   entryFormScreen,
@@ -273,15 +273,26 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
       const current = pageOf(url)
+      // `listEntries` and `countEntries` have taken both of these since they
+      // were written and no screen passed either, so a site with three hundred
+      // pages could only be read one page of thirty at a time, in date order.
+      const search = searchOf(url)
+      const status = url.searchParams.get('status')
+      const filter = {
+        siteId,
+        type,
+        ...(search ? { search } : {}),
+        ...(status && status !== 'all' ? { status } : {}),
+      }
       const [rows, total] = siteId
         ? await Promise.all([
             ctx.call(
               'website.listEntries',
-              { siteId, type, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
+              { ...filter, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
               url,
               req,
             ) as Promise<EntryRow[]>,
-            ctx.call('website.countEntries', { siteId, type }, url, req) as Promise<{ count: number }>,
+            ctx.call('website.countEntries', filter, url, req) as Promise<{ count: number }>,
           ])
         : [[] as EntryRow[], { count: 0 }]
       return adminPage(ctx, url, req, {
@@ -297,6 +308,7 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
             localeQuery(url),
             kind,
             pager(url, current, rows.length, total.count),
+            { search, status: status ?? 'all' },
           ),
       })
     },
@@ -362,7 +374,14 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const form = await readForm(req)
       const result = await ctx.call(
         'website.publishEntry',
-        { id: params.id, expectedRevisionId: form.expectedRevisionId || null },
+        {
+          id: params.id,
+          expectedRevisionId: form.expectedRevisionId || null,
+          // A blank field means now, which is what the contract's optional
+          // `publishAt` has always meant. A datetime-local value carries no
+          // zone, so it is read in the server's, same as the job that fires it.
+          publishAt: form.publishAt?.trim() ? new Date(form.publishAt).toISOString() : null,
+        },
         url,
         req,
       )
@@ -393,6 +412,27 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
         body: (_, frame) =>
           revisionsScreen(_, detail.entry, rows, frame, localeQuery(url), kind.basePath, diff),
       })
+    },
+
+  /**
+   * Taking a page back down, and cancelling a schedule.
+   *
+   * publishEntry had no inverse: nothing set `status` back and nothing cleared
+   * `publishedRevisionId`, which is what the public resolver's per-entry
+   * fallback reads. A page published by mistake had only `noindex`, which
+   * asks crawlers to forget it while every visitor with the address reads on.
+   */
+  [`${kind.basePath}/{id}/unpublish`]:
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const detail = await entryOf(ctx, url, req, params.id)
+      if (!detail || detail.entry.type !== type)
+        return text(_('website_backend.error.notFound'), { status: 404 })
+      const result = await ctx.call('website.unpublishEntry', { id: params.id }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `${kind.basePath}/${params.id}`))
     },
 
   [`${kind.basePath}/{id}/revisions/{revisionId}/restore`]:
