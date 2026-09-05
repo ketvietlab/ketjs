@@ -1344,6 +1344,7 @@ const sources = {
     functions: {
       addMenuItem: ['configure', 'configure', 'website.configuration-audit'],
       listMenu: ['read', 'view'],
+      preflightMenu: ['read', 'view'],
       removeMenuItem: ['configure', 'configure', 'website.configuration-audit'],
       snapshotMenu: ['configure', 'configure', 'website.configuration-audit'],
     },
