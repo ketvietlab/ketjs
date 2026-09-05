@@ -135,6 +135,7 @@ const renderReservationDetail = async (
   const permissions = {
     amend: await ctx.allows('hospitality_core.amendReservation', url, req),
     checkIn: await ctx.allows('hospitality_core.checkIn', url, req),
+    holdRoom: await ctx.allows('hospitality_core.holdRoom', url, req),
     adjustDeparture: await ctx.allows('hospitality_core.adjustStayDeparture', url, req),
     checkOut: await ctx.allows('hospitality_core.checkOut', url, req),
     cancel: await ctx.allows('hospitality_core.cancelReservation', url, req),
@@ -1243,6 +1244,8 @@ export const routes: Record<string, RouteEntry> = {
         | 'amended'
         | 'no-show'
         | 'departure-adjusted'
+        | 'room-held'
+        | 'room-hold-released'
       if (form.operation === 'amend') {
         const timezone = await propertyTimezone(ctx, reservation.propertyId, url, req)
         const checkIn = instantFromLocal(form.checkIn, timezone)
@@ -1302,6 +1305,30 @@ export const routes: Record<string, RouteEntry> = {
           req,
         )) as OperationResult
         status = 'checked-in'
+      } else if (form.operation === 'hold-room') {
+        if (!reservation.stayId || !form.roomId)
+          return renderReservationDetail(ctx, url, req, params.id, [
+            ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.no_available_room'),
+          ])
+        result = (await ctx.call(
+          'hospitality_core.holdRoom',
+          { stayId: reservation.stayId, roomId: form.roomId },
+          url,
+          req,
+        )) as OperationResult
+        status = 'room-held'
+      } else if (form.operation === 'release-room-hold') {
+        if (!reservation.stayId)
+          return renderReservationDetail(ctx, url, req, params.id, [
+            ctx.translate(ctx.localeOf(url, req))('hospitality_core.validation.stay_missing'),
+          ])
+        result = (await ctx.call(
+          'hospitality_core.releaseRoomHold',
+          { stayId: reservation.stayId },
+          url,
+          req,
+        )) as OperationResult
+        status = 'room-hold-released'
       } else if (form.operation === 'adjust-departure') {
         if (!reservation.stayId)
           return renderReservationDetail(ctx, url, req, params.id, [
