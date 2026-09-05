@@ -740,6 +740,48 @@ and the sitemap are built from the primary, so a site left with hosts and no pri
 wrong address to every crawler that asks; promote another one first. The last host goes freely,
 primary or not — a site with no domains is a site nobody has pointed anywhere yet.
 
+### A field that was stored, returned, and dropped
+
+`Site.tokens` could be written, `resolveSite` answered with it, and the storefront threw it away: the
+scope it builds for the theme is `{ id, title, theme }`. So the column existed, the contract accepted
+it, and no page ever looked different for it. Two sites on one theme were the same site in two
+colours of nothing.
+
+The mechanism was already there and already published. `tokensToCss` writes `--ket-*` custom
+properties into a cascade layer, and the declared order is `ket.reset < ket.theme < ket.app <
+ket.user`. A site's overrides go into `ket.app`, which already beats the theme's own `ket.theme` —
+so a site that sets nothing renders exactly as before, and a site that sets one colour changes one
+colour rather than forking the theme.
+
+The tokens stylesheet is already a per-request route, so it is the natural place: it resolves the
+site alongside the theme and appends the site's layer.
+
+#### A person's typing, in a stylesheet on every page
+
+This is the part that needed care. Theme tokens are written by whoever wrote the theme; site tokens
+are typed into an admin form. `tokensToCss` sanitised the *name* into a custom property and passed
+the **value** through untouched — which was fine while nothing untrusted reached it, and is not fine
+now. A value of `#0a7 } :root { display: none` closes the declaration, closes the rule, and hands the
+rest of the document to whoever typed it.
+
+`partitionTokens` answers with the pairs that are safe to render and the names of those that are not,
+and the two sides of the boundary use it differently on purpose:
+
+- **`saveSite` refuses.** A value that cannot be rendered is not stored, so the question never
+  reaches the reader.
+- **The stylesheet drops.** A row that predates the check, or arrives another way, degrades the
+  branding rather than serving a broken stylesheet or a blank page.
+
+An empty tokens box means "no overrides", not "keep what is stored" — this is the only screen that
+writes them, so a blank field is a decision. Malformed JSON goes down to the contract as the string
+it is, and comes back as `invalidTokens`: sending `{}` instead would erase a site's branding because
+somebody mistyped a brace.
+
+`Site.siteGroup` is the other half of this finding and is **not** fixed here: it is written by the
+contract and read by nothing at all. Removing a column is a migration, and it may yet be what a
+deployment groups sites by; it is written down here so the next person does not have to rediscover
+it.
+
 ### The index that was still a scan
 
 `SearchDocument` exists so "a search is a lookup rather than a scan", and `haystack` — title and

@@ -20,6 +20,8 @@ import type { FormOption, Frame, Pager } from '../../../ui/index.ts'
 import { FormScreenFrame, ListScreenFrame } from './page-frame.tsx'
 
 export type SiteRow = {
+  /** Per-site overrides of the theme's own tokens, rendered into `ket.app`. */
+  tokens?: Record<string, string> | null
   id: string
   name: string
   title: string
@@ -223,6 +225,17 @@ export const siteFormScreen = (
                       value: row.theme,
                       options: themes,
                       required: true,
+                    },
+                    {
+                      // The layer order already puts a site above its theme, so
+                      // these override rather than replace: a site that sets
+                      // nothing looks exactly as it did.
+                      name: 'tokens',
+                      label: _('website_backend.field.tokens'),
+                      type: 'textarea',
+                      value: JSON.stringify(row.tokens ?? {}, null, 2),
+                      help: _('website_backend.field.tokensHint'),
+                      span: 'full',
                     },
                     {
                       name: 'active',

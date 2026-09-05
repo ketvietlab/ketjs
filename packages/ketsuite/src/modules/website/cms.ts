@@ -13,6 +13,7 @@ import {
   diffPlacements,
   isPlacementId,
   ne,
+  partitionTokens,
   placementIdErrors,
   validateLayout,
   withPlacementIds,
@@ -454,6 +455,13 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale))
         return invalid('defaultLocale', 'website.error.invalidLocale')
       if (jsonBytes(args.tokens ?? {}) > 64 * 1024) return invalid('tokens', 'website.error.payloadTooLarge')
+      const tokens = args.tokens
+      if (tokens != null && (typeof tokens !== 'object' || Array.isArray(tokens)))
+        return invalid('tokens', 'website.error.invalidTokens')
+      if (tokens) {
+        const { rejected } = partitionTokens(tokens as Record<string, unknown>)
+        if (rejected.length) return invalid('tokens', 'website.error.invalidTokenValue')
+      }
       const duplicate = (await ctx.db.select('website.Site')).find(
         (site) => site.id !== args.id && String(site.name).toLowerCase() === name.toLowerCase(),
       )
