@@ -7,6 +7,10 @@ import {
   entryFormScreen,
   formEditorScreen,
   preflightScreen,
+  redirectsScreen,
+  searchIndexScreen,
+  siteDomainsScreen,
+  siteMembersScreen,
   submissionRecordScreen,
   formsScreen,
   mediaFormScreen,
@@ -27,7 +31,11 @@ import type {
   EntryRow,
   MediaRow,
   DanglingLink,
+  DomainRow,
   FormRow,
+  IndexState,
+  MemberRow,
+  RedirectRow,
   PreflightResult,
   MenuRow,
   RevisionDiff,
@@ -746,6 +754,179 @@ export const routes: Record<string, RouteEntry> = {
         body: (_, frame) =>
           menusScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url), check?.dangling ?? []),
       })
+    },
+
+  /**
+   * Who may work on this site.
+   *
+   * Membership decided every authorization decision in the module and could
+   * only be changed by calling the function directly. A permission that can be
+   * granted and never reviewed is the kind that outlives its reason.
+   */
+  '/admin/website/sites/{id}/members':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const site = (await sitesOf(ctx, url, req)).find((row) => row.id === params.id)
+      if (!site) return text(_('website_backend.error.notFound'), { status: 404 })
+      const render = async (values?: Record<string, string>, errors?: string[]) => {
+        const rows = (await ctx.call(
+          'website.listSiteMembers',
+          { siteId: params.id },
+          url,
+          req,
+        )) as MemberRow[]
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.members.title',
+          body: (_, frame) =>
+            siteMembersScreen(_, site, rows, frame, { values, errors, locale: localeQuery(url) }),
+        })
+      }
+      if (req.method === 'GET') return render()
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const result = await ctx.call(
+        'website.saveSiteMember',
+        { id: randomUUID(), siteId: params.id, userId: form.userId, role: form.role },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/sites/${params.id}/members`))
+      return render(form, resultErrors(result, _))
+    },
+
+  '/admin/website/sites/{id}/members/{memberId}/remove':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = await ctx.call('website.removeSiteMember', { id: params.memberId }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/sites/${params.id}/members`))
+    },
+
+  /**
+   * Which hosts answer for this site, and which one the others defer to.
+   *
+   * The primary is not decoration: canonical URLs and the sitemap are built
+   * from it, so the wrong primary publishes the wrong address to every crawler
+   * that asks.
+   */
+  '/admin/website/sites/{id}/domains':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const site = (await sitesOf(ctx, url, req)).find((row) => row.id === params.id)
+      if (!site) return text(_('website_backend.error.notFound'), { status: 404 })
+      const render = async (values?: Record<string, string>, errors?: string[]) => {
+        const rows = (await ctx.call('website.listDomains', { siteId: params.id }, url, req)) as DomainRow[]
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.domains.title',
+          body: (_, frame) =>
+            siteDomainsScreen(_, site, rows, frame, { values, errors, locale: localeQuery(url) }),
+        })
+      }
+      if (req.method === 'GET') return render()
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const result = await ctx.call(
+        'website.saveDomain',
+        {
+          id: randomUUID(),
+          siteId: params.id,
+          host: form.host,
+          primary: !!form.primary,
+          redirectToPrimary: !!form.redirectToPrimary,
+        },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/sites/${params.id}/domains`))
+      return render(form, resultErrors(result, _))
+    },
+
+  /**
+   * Whether search answers from the content that is actually live.
+   *
+   * The index rebuilds itself when a reader notices it is behind, so nobody
+   * has to press this. It is here because "the site found nothing" and "the
+   * index has not caught up" look identical from outside, and only one of them
+   * is a content problem.
+   */
+  '/admin/website/sites/{id}/index':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const site = (await sitesOf(ctx, url, req)).find((row) => row.id === params.id)
+      if (!site) return text(_('website_backend.error.notFound'), { status: 404 })
+      let built: { written: number; done: boolean } | null = null
+      if (req.method === 'POST') {
+        built = (await ctx.call('website_search.reindexSite', { siteId: params.id }, url, req)) as {
+          written: number
+          done: boolean
+        }
+      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const status = (await ctx.call(
+        'website_search.indexStatus',
+        { siteId: params.id },
+        url,
+        req,
+      )) as IndexState
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.index.title',
+        body: (_, frame) => searchIndexScreen(_, site, status, frame, { built, locale: localeQuery(url) }),
+      })
+    },
+
+  /**
+   * Where an address that used to work now goes.
+   *
+   * The cycle guard and the path rules were written and no screen used them,
+   * so the one operation that keeps old links alive after a restructure could
+   * only be performed by an agent.
+   */
+  '/admin/website/redirects':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const posted = req.method === 'POST' ? await readForm(req) : null
+      const siteId = posted?.siteId || selectedSite(url, sites)
+      const render = async (values?: Record<string, string>, errors?: string[]) => {
+        const rows = siteId
+          ? ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[])
+          : []
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.redirects.title',
+          body: (_, frame) =>
+            redirectsScreen(_, rows, siteOptions(sites), siteId, frame, {
+              values,
+              errors,
+              locale: localeQuery(url),
+            }),
+        })
+      }
+      if (req.method === 'GET') return render()
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      const form = posted ?? {}
+      const result = await ctx.call(
+        'website.saveRedirect',
+        {
+          id: randomUUID(),
+          siteId,
+          fromPath: form.fromPath,
+          toPath: form.toPath,
+          permanent: !!form.permanent,
+          active: true,
+        },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/redirects?site=${encodeURIComponent(siteId)}`))
+      return render(form, resultErrors(result, _))
     },
 
   '/admin/website/taxonomies/new':

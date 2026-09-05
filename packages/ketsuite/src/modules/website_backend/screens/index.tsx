@@ -159,7 +159,28 @@ export const siteFormScreen = (
       translator={_}
       title={existing ? String(row.title ?? row.name) : _('website_backend.sites.newTitle')}
       frame={frame}
-      body={
+      body={stack([
+        // Only on a site that exists: membership, domains and the index all
+        // need something to hang off, and offering them while creating would
+        // be offering to configure a thing that is not there yet.
+        ...(existing
+          ? [
+              inline([
+                linkButton({
+                  label: _('website_backend.members.title'),
+                  href: `/admin/website/sites/${row.id}/members${options.locale ?? ''}`,
+                }),
+                linkButton({
+                  label: _('website_backend.domains.title'),
+                  href: `/admin/website/sites/${row.id}/domains${options.locale ?? ''}`,
+                }),
+                linkButton({
+                  label: _('website_backend.index.title'),
+                  href: `/admin/website/sites/${row.id}/index${options.locale ?? ''}`,
+                }),
+              ]),
+            ]
+          : []),
         <Section
           eyebrow={_('website_backend.sites.eyebrow')}
           title={existing ? String(row.title ?? row.name) : _('website_backend.sites.newTitle')}
@@ -217,8 +238,8 @@ export const siteFormScreen = (
               }
             />
           }
-        />
-      }
+        />,
+      ])}
     />
   )
 }
@@ -1734,6 +1755,400 @@ export const submissionsScreen = (
               },
             ],
           }),
+    ])}
+  />
+)
+
+export type MemberRow = { id: string; siteId: string; userId: string; role: string }
+export type DomainRow = {
+  id: string
+  siteId: string
+  host: string
+  primary: boolean
+  redirectToPrimary: boolean
+}
+export type RedirectRow = {
+  id: string
+  siteId: string
+  fromPath: string
+  toPath: string
+  permanent: boolean
+  active: boolean
+}
+export type IndexState = {
+  state: string
+  current: boolean
+  documentCount: number
+  publicationId?: string | null
+  completedAt?: string | null
+}
+
+/** The four site roles the access layer recognises, in the order they widen. */
+const SITE_ROLES = ['contributor', 'author', 'editor', 'administrator'] as const
+
+/**
+ * Who may work on this site.
+ *
+ * Membership decided every authorization in the module and could only be
+ * changed by calling the function directly. A permission that can be granted
+ * and never reviewed is the kind that quietly outlives the reason for it.
+ */
+export const siteMembersScreen = (
+  _: Translator,
+  site: SiteRow,
+  rows: MemberRow[],
+  frame: Frame,
+  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
+): TemplateResult => (
+  <ListScreenFrame
+    translator={_}
+    title={_('website_backend.members.title')}
+    frame={frame}
+    body={stack([
+      inline([
+        linkButton({
+          label: _('website_backend.action.backToSite'),
+          href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
+        }),
+      ]),
+      <Section
+        title={_('website_backend.members.add')}
+        description={_('website_backend.members.addHint')}
+        body={
+          <Surface
+            padding="compact"
+            body={
+              <RecordForm
+                action={`/admin/website/sites/${site.id}/members${options.locale ?? ''}`}
+                layout="inline"
+                fields={[
+                  {
+                    name: 'userId',
+                    label: _('website_backend.members.user'),
+                    value: options.values?.userId,
+                    required: true,
+                  },
+                  {
+                    name: 'role',
+                    label: _('website_backend.members.role'),
+                    type: 'select',
+                    value: options.values?.role ?? 'editor',
+                    options: SITE_ROLES.map((role) => ({
+                      value: role,
+                      label: _(`website_backend.role.${role}`),
+                    })),
+                  },
+                ]}
+                submit={_('website_backend.action.save')}
+                submitVariant="primary"
+                errors={options.errors}
+              />
+            }
+          />
+        }
+      />,
+      rows.length === 0
+        ? emptyState(_('website_backend.members.empty'), _('website_backend.members.emptyHint'))
+        : dataTable(_, {
+            rows,
+            id: (row) => row.id,
+            columns: [
+              {
+                key: 'user',
+                label: _('website_backend.members.user'),
+                priority: 'primary',
+                cell: (row) => row.userId,
+              },
+              {
+                key: 'role',
+                label: _('website_backend.members.role'),
+                cell: (row) => badge(_(`website_backend.role.${row.role}`), 'info'),
+              },
+              {
+                key: 'remove',
+                label: _('website_backend.action.remove'),
+                cell: (row) =>
+                  linkButton({
+                    label: _('website_backend.action.remove'),
+                    href: `/admin/website/sites/${site.id}/members/${row.id}/remove${options.locale ?? ''}`,
+                    size: 'compact',
+                  }),
+              },
+            ],
+          }),
+    ])}
+  />
+)
+
+/**
+ * Which hosts answer for this site, and which one the others defer to.
+ *
+ * A primary domain is not decoration: canonical URLs and the sitemap are built
+ * from it, so a site with the wrong primary publishes the wrong address to
+ * every crawler that asks.
+ */
+export const siteDomainsScreen = (
+  _: Translator,
+  site: SiteRow,
+  rows: DomainRow[],
+  frame: Frame,
+  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
+): TemplateResult => (
+  <ListScreenFrame
+    translator={_}
+    title={_('website_backend.domains.title')}
+    frame={frame}
+    body={stack([
+      inline([
+        linkButton({
+          label: _('website_backend.action.backToSite'),
+          href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
+        }),
+      ]),
+      <Section
+        title={_('website_backend.domains.add')}
+        description={_('website_backend.domains.addHint')}
+        body={
+          <Surface
+            padding="compact"
+            body={
+              <RecordForm
+                action={`/admin/website/sites/${site.id}/domains${options.locale ?? ''}`}
+                layout="inline"
+                fields={[
+                  {
+                    name: 'host',
+                    label: _('website_backend.domains.host'),
+                    value: options.values?.host,
+                    required: true,
+                  },
+                  {
+                    name: 'primary',
+                    label: _('website_backend.domains.primary'),
+                    type: 'checkbox',
+                    help: _('website_backend.domains.primaryHint'),
+                  },
+                  {
+                    name: 'redirectToPrimary',
+                    label: _('website_backend.domains.redirect'),
+                    type: 'checkbox',
+                  },
+                ]}
+                submit={_('website_backend.action.save')}
+                submitVariant="primary"
+                errors={options.errors}
+              />
+            }
+          />
+        }
+      />,
+      rows.length === 0
+        ? emptyState(_('website_backend.domains.empty'), _('website_backend.domains.emptyHint'))
+        : dataTable(_, {
+            rows,
+            id: (row) => row.id,
+            columns: [
+              {
+                key: 'host',
+                label: _('website_backend.domains.host'),
+                priority: 'primary',
+                cell: (row) => row.host,
+              },
+              {
+                key: 'primary',
+                label: _('website_backend.domains.primary'),
+                cell: (row) =>
+                  row.primary
+                    ? badge(_('website_backend.state.yes'), 'positive')
+                    : badge(_('website_backend.state.no'), 'neutral'),
+              },
+              {
+                key: 'redirect',
+                label: _('website_backend.domains.redirect'),
+                cell: (row) =>
+                  badge(
+                    row.redirectToPrimary ? _('website_backend.state.yes') : _('website_backend.state.no'),
+                    'neutral',
+                  ),
+              },
+            ],
+          }),
+    ])}
+  />
+)
+
+/**
+ * Where an address that used to work now goes.
+ *
+ * The cycle guard and the path rules were written and there was no screen, so
+ * the one operation that keeps old links alive after a restructure could only
+ * be performed by an agent.
+ */
+export const redirectsScreen = (
+  _: Translator,
+  rows: RedirectRow[],
+  sites: FormOption[],
+  siteId: string | null,
+  frame: Frame,
+  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
+): TemplateResult => (
+  <ListScreenFrame
+    translator={_}
+    title={_('website_backend.redirects.title')}
+    frame={frame}
+    body={stack([
+      siteSwitcher(_, '/admin/website/redirects', sites, siteId, options.locale ?? ''),
+      ...(siteId
+        ? [
+            <Section
+              title={_('website_backend.redirects.add')}
+              description={_('website_backend.redirects.addHint')}
+              body={
+                <Surface
+                  padding="compact"
+                  body={
+                    <RecordForm
+                      action={`/admin/website/redirects${options.locale ?? ''}`}
+                      hidden={{ siteId }}
+                      layout="inline"
+                      fields={[
+                        {
+                          name: 'fromPath',
+                          label: _('website_backend.redirects.from'),
+                          value: options.values?.fromPath,
+                          required: true,
+                        },
+                        {
+                          name: 'toPath',
+                          label: _('website_backend.redirects.to'),
+                          value: options.values?.toPath,
+                          required: true,
+                        },
+                        {
+                          name: 'permanent',
+                          label: _('website_backend.redirects.permanent'),
+                          type: 'checkbox',
+                          help: _('website_backend.redirects.permanentHint'),
+                        },
+                      ]}
+                      submit={_('website_backend.action.save')}
+                      submitVariant="primary"
+                      errors={options.errors}
+                    />
+                  }
+                />
+              }
+            />,
+          ]
+        : []),
+      !siteId
+        ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
+        : rows.length === 0
+          ? emptyState(_('website_backend.redirects.empty'), _('website_backend.redirects.emptyHint'))
+          : dataTable(_, {
+              rows,
+              id: (row) => row.id,
+              columns: [
+                {
+                  key: 'from',
+                  label: _('website_backend.redirects.from'),
+                  priority: 'primary',
+                  cell: (row) => row.fromPath,
+                },
+                { key: 'to', label: _('website_backend.redirects.to'), cell: (row) => row.toPath },
+                {
+                  key: 'kind',
+                  label: _('website_backend.redirects.permanent'),
+                  cell: (row) =>
+                    badge(
+                      row.permanent
+                        ? _('website_backend.redirects.p301')
+                        : _('website_backend.redirects.p302'),
+                      row.permanent ? 'info' : 'neutral',
+                    ),
+                },
+                {
+                  key: 'status',
+                  label: _('website_backend.field.status'),
+                  cell: (row) =>
+                    badge(
+                      row.active ? _('website_backend.state.active') : _('website_backend.state.inactive'),
+                      row.active ? 'positive' : 'neutral',
+                    ),
+                },
+              ],
+            }),
+    ])}
+  />
+)
+
+/**
+ * Whether search is answering from the content that is actually live.
+ *
+ * The index rebuilds itself when a reader notices it is behind, so this is not
+ * a button anyone must press. It is here because "the site says it found
+ * nothing" and "the index has not caught up yet" look identical from outside,
+ * and only one of them is a content problem.
+ */
+export const searchIndexScreen = (
+  _: Translator,
+  site: SiteRow,
+  status: IndexState,
+  frame: Frame,
+  options: { built?: { written: number; done: boolean } | null; locale?: string } = {},
+): TemplateResult => (
+  <RecordScreen
+    translator={_}
+    title={_('website_backend.index.title')}
+    frame={frame}
+    body={stack([
+      inline([
+        linkButton({
+          label: _('website_backend.action.backToSite'),
+          href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
+        }),
+      ]),
+      ...(options.built
+        ? [
+            <Notice
+              tone={options.built.done ? 'positive' : 'info'}
+              title={
+                options.built.done
+                  ? _('website_backend.index.rebuilt')
+                  : _('website_backend.index.rebuilding')
+              }
+              message={`${_('website_backend.index.written')}: ${options.built.written}`}
+            />,
+          ]
+        : []),
+      <Notice
+        tone={status.current ? 'positive' : 'warning'}
+        title={status.current ? _('website_backend.index.current') : _('website_backend.index.stale')}
+        message={`${_('website_backend.index.documents')}: ${status.documentCount}`}
+      />,
+      <Surface
+        body={
+          <RecordForm
+            action={`/admin/website/sites/${site.id}/index${options.locale ?? ''}`}
+            fields={[
+              {
+                name: 'state',
+                label: _('website_backend.field.status'),
+                value: status.state,
+                disabled: true,
+              },
+              {
+                name: 'completedAt',
+                label: _('website_backend.index.completedAt'),
+                value: status.completedAt ?? '—',
+                disabled: true,
+              },
+            ]}
+            submit={_('website_backend.index.rebuild')}
+            submitVariant="secondary"
+          />
+        }
+      />,
     ])}
   />
 )
