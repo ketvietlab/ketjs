@@ -1048,7 +1048,9 @@ export const routes: Record<string, RouteEntry> = {
             duplicates: (duplicateResult.rows as AnyRow[]) ?? [],
             quotations,
             controls,
-            errors,
+            // A conversion that was refused belongs to the step that asked for
+            // it, not to the save form behind it.
+            errors: converting ? [] : errors,
             locale: localeQuery(url),
             tab: ['overview', 'sales', 'activities', 'timeline'].includes(url.searchParams.get('tab') ?? '')
               ? String(url.searchParams.get('tab'))
@@ -1058,7 +1060,9 @@ export const routes: Record<string, RouteEntry> = {
             ? modalWorkspace(
                 detail,
                 caseConvertModal(_, row, {
-                  action: inLocale(url, url.pathname),
+                  // Posting back to the step keeps it open when the answer is
+                  // no, with the reason inside it rather than on the page behind.
+                  action: inLocale(url, `${url.pathname}?${url.searchParams.toString()}`),
                   cancelHref: inLocale(url, closeConvert()),
                   control: controls.convertStage,
                   errors,

@@ -58,12 +58,15 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   // Converting is confirmed, not clicked. The acknowledgement is checked on the
   // server, so a post without it leaves a lead as a lead.
   const unconfirmed = await app.client.post(
-    `/admin/crm/cases/${id}?lang=en`,
+    `/admin/crm/cases/${id}?lang=en&modal=convert`,
     new URLSearchParams({ action: 'convert', expectedVersion: String(row.version) }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(unconfirmed.status, 200)
-  assert.match(await unconfirmed.text(), /Confirm the need before converting/u)
+  const refused = await unconfirmed.text()
+  assert.match(refused, /Confirm the need before converting/u)
+  // The reason stays inside the step that asked, which is still open.
+  assert.match(refused, /Convert lead to opportunity/u)
   assert.equal((await call<Row>('crm.case.get', { id })).kind, 'lead')
 
   // And it says which version it saw. Without that the compare-and-set behind
@@ -82,6 +85,8 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   const stepHtml = await step.text()
   assert.match(stepHtml, /Convert lead to opportunity/u)
   assert.match(stepHtml, /No second customer and no second case are created/u)
+  // The step posts back to itself, so a refusal lands with the step still open.
+  assert.match(stepHtml, /<form[^>]*action="[^"]*modal=convert[^"]*"/u)
 
   const converted = await app.client.post(
     `/admin/crm/cases/${id}?lang=en`,
