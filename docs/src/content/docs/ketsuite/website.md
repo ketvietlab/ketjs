@@ -628,6 +628,41 @@ caller asked for, and making a retry an error only punishes a double-submitted f
 The lesson is not about taxonomy. A write with no matching read is not a feature that is merely
 incomplete — it is a feature that damages the data and hides the damage.
 
+### publishEntry had no inverse
+
+A page could go live and never come back down. Nothing set `Entry.status` back, and nothing cleared
+`publishedRevisionId` — which is precisely what the public resolver's per-entry fallback reads to
+decide a page is live. A page published by mistake, an event that is over, a takedown request: the
+only lever was `noindex`, which asks crawlers to forget the page while every visitor holding the
+address reads on.
+
+`unpublishEntry` clears `status`, `publishedRevisionId`, `scheduledRevisionId` and `publishAt`, and
+keeps `publishedAt` — that field is the record of when the page was last live, and clearing it would
+lose that to no purpose while doing nothing to take the page down.
+
+It is also how a schedule is cancelled. `publishScheduled` re-reads `status` before it publishes, so
+a scheduled page moved back to draft stays there and the queued job returns having done nothing.
+Nothing has to reach into the queue and withdraw the job.
+
+What it does not do is take a page out of an **active publication**. That set is frozen by design;
+the way to change what it contains is to prepare and activate another one. The screen says so on the
+control rather than leaving an editor to discover it.
+
+### The schedule was in the contract and not on the screen
+
+`publishEntry` has taken an optional `publishAt` since it was written: a time in the future moves the
+entry to `scheduled` and enqueues `website.publishScheduled` with a unique key. No screen ever offered
+the field, so a page could only go live at the moment somebody pressed the button. The publish control
+is a form with a `datetime-local` field now — empty means now, which is what the contract's optional
+argument has always meant.
+
+### A list you cannot search is a list of the first thirty
+
+`listEntries` and `countEntries` have both taken `search` and `status` since they were written, and no
+screen passed either. With paging added, a site with three hundred pages could be read thirty at a
+time in date order and no other way. Both filters are on the list now, in one GET form together with
+the site switcher — three separate forms would each drop the other two's state on submit.
+
 ### A redirect could be created but never corrected
 
 `saveRedirect` is an upsert and the screen minted a fresh id on every submit, so nothing could reach
