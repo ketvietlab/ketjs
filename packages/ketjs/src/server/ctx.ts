@@ -55,6 +55,23 @@ export function createContext(o: {
       message: `no ${o.kind === 'job' ? 'background job' : 'server function'} "${fnKey}"`,
     })
 
+  /**
+   * A model whose value is that it did not change afterwards.
+   *
+   * Refused on the way in rather than reviewed on the way out: both audit models
+   * in KetSuite promised this in a comment, and a promise a reviewer has to
+   * remember is one a refactor eventually breaks.
+   */
+  const refuseAppendOnly = (model: string, verb: string): void => {
+    if (!manifest.models[model]?.append) return
+    throw new KetError({
+      code: 'E_APPEND_ONLY',
+      module: operation.by,
+      message: `"${fnKey}" attempted to ${verb} ${model}, which is append-only`,
+      hint: 'insert a new row — a replay is answered by insertIfAbsent, never by editing what it wrote',
+    })
+  }
+
   const effects = new Set(operation.effects)
   const writes = o.writes ?? []
 
@@ -492,6 +509,7 @@ export function createContext(o: {
       })
     },
     async del(q) {
+      refuseAppendOnly(q.model, 'delete from')
       // A select passed to del renders as a select and deletes nothing — and the
       // effect check sees 'read', so a function that correctly declared 'write'
       // is refused for an effect it never wanted. website_menu.removeMenuItem was
@@ -607,6 +625,9 @@ export function createContext(o: {
       return { changes: result.changes, inserted: result.changes === 1 }
     },
     async update(model, where, patch) {
+      // compareAndSet and an updating changeset both land here, so this is the
+      // only place the refusal has to live.
+      refuseAppendOnly(model, 'update')
       need('write', model)
       validateFields(model, where, 'filter')
       validateFields(model, patch, 'update')
