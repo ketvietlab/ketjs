@@ -34,6 +34,11 @@ import type { Ctx, Row } from '@ketvietlab/ketjs'
  * Keyed weakly by the context, so it lives exactly as long as the call does and
  * a transaction's own context — `ctx.tx` hands the body a different one — gets
  * its own answer rather than inheriting a stale one.
+ *
+ * The consequence to know: a call that adds or removes a member does not see
+ * its own change. No command does that today — each one gates first and writes
+ * after — but a command that wanted to would have to ask the tables itself
+ * rather than expect this to have noticed.
  */
 const answered = new WeakMap<Ctx, Promise<string[] | null>>()
 
@@ -107,6 +112,12 @@ export const restrictToVisible = <T extends { where(...clauses: never[]): T }>(
  *
  * For the paths that do not build a query — `db.select` with a plain filter —
  * so they filter through the same rule rather than through a copy of it.
+ *
+ * The filtering happens here rather than in SQL, so the table is read whole
+ * first. That is fine for epics, which a project has a handful of, and would
+ * not be fine for issues: a table that grows with the work belongs behind
+ * `restrictToVisible`, which puts the filter in the query where the planner
+ * can use it.
  */
 export async function visibleRows(ctx: Ctx, model: string, where: Row = {}): Promise<Row[]> {
   const visible = await visibleProjects(ctx)
