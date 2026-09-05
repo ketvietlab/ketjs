@@ -1,5 +1,6 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { functions } from './functions.ts'
+import { flowJobs } from './jobs.ts'
 import { messages } from './messages.ts'
 import { models } from './models.ts'
 
@@ -8,13 +9,16 @@ export default defineModule({
   // 0.2.0 adds the backlog index; no data change, so the migration is the
   // index alone. 0.3.0 adds ProjectMember, which decides what anybody sees —
   // an empty table means an empty Flow until somebody is added to a project.
-  version: '0.3.0',
+  // 0.4.0 adds ProjectDeletion and the purge job behind it: the record of a
+  // deletion has to outlive the project, so it is a table rather than a flag.
+  version: '0.4.0',
   depends: ['company', 'user', 'mail', 'storage'],
   title: 'Flow',
   summary: 'Projects, issues, sprints, and epics.',
   category: 'Productivity',
   models,
   functions,
+  jobs: flowJobs,
   messages,
 })
 

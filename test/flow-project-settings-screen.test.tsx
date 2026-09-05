@@ -31,6 +31,8 @@ const options = {
   members: [],
   memberPicker: '',
   memberIdempotencyKey: 'member-key',
+  deleteName: 'Platform',
+  deleteIdempotencyKey: 'delete-key',
   tagUsage: {},
 }
 
