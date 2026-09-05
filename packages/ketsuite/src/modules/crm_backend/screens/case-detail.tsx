@@ -101,6 +101,9 @@ export const caseConvertModal = (
     closeHref: options.cancelHref,
     closeLabel: _('crm_backend.action.cancel'),
     presentation: 'dialog',
+    // The step asks for a stage and an acknowledgement; closing over either by
+    // a stray backdrop click loses a decision the reader had started making.
+    unsavedPrompt: _('backend.modal.unsaved'),
     form: {
       id: 'crm-case-convert-form',
       scope: 'crm-case-convert',
