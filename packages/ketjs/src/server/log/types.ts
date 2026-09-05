@@ -142,6 +142,10 @@ export const CORE_EVENTS = [
   'job_discarded',
   'job_cancelled',
   'job_ignored_abort',
+  'schedule_fired',
+  'schedule_error',
+  'worker_tick_error',
+  'queue_notifier_unavailable',
   'log_dropped',
   'log_driver_failed',
 ] as const

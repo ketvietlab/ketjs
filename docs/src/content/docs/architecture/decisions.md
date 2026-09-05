@@ -2184,3 +2184,52 @@ silently starts letting values through, and dropping `personal` silently ends an
 unclassified on day one. The inventory reports that honestly instead of implying coverage.
 
 **Reversible:** the keys, yes — additive. The container, no.
+## D71 — A schedule is manifest data, and it claims before it runs
+**The gap.** There was no way to say "this runs every night". Five modules already did periodic work
+and the hospitality plan needed a catch-up sweep to cover dropped webhooks, so the alternatives on the
+table were a Kubernetes CronJob or a job that re-enqueues itself. Both are worse than they look. A
+CronJob runs once, and a database-per-tenant deployment needs the work once *per tenant* — the worker
+already iterates tenants and the cluster does not know they exist. A self-re-enqueueing job stops
+forever the first time an attempt is discarded, and tells nobody.
+
+**Chosen:** `defineJob({ schedule: { every: '15m' } | { dailyAt: '03:00', timezone } })`. The schedule
+is part of the manifest, so `ket manifest` prints it, `ket diff` compares it and `ket check` rejects
+one that does not parse — the same argument D41 makes for fills being data rather than functions.
+
+**A schedule runs nothing.** It decides a tick is due and enqueues the ordinary job, which then goes
+through the leases, retries, timeouts, abort signals and records that already exist. That reuse is why
+the whole feature is small; the only genuinely new problem is mutual exclusion.
+
+**Exactly once without a leader.** The queue's `uniqueKey` was the obvious tool and is not enough: it
+holds only while a job is live and is released the moment one completes, so a tick that finished an
+hour ago would be enqueued again. Instead one row per job per tenant holds the last tick anybody
+claimed, moved forward with a compare-and-set. Every replica sweeps, one update changes a row, the
+rest get nothing, and there is no election to get wrong. **The claim happens before the enqueue**, so a
+crash between them loses a tick rather than running it twice — the right way round for anything that
+touches money.
+
+**Missed ticks are skipped and counted, never replayed.** Three days of downtime produce one run. A
+job that needs to know what it missed can read its own ledger, which is more truthful than three
+identical runs, and the `schedule_fired` record carries the count so the gap is visible. A schedule
+seen for the first time does not fire for the tick it was installed inside, because nobody asked for a
+run at deploy time.
+
+**Interval and wall clock, not cron.** `every` has no clock in it and cannot be wrong about a
+timezone. `dailyAt` names one, because "after the shop closes" cannot be said any other way and
+computing it in the server's timezone is how nightly jobs run at the wrong hour. Cron expressions were
+rejected: the parser is the easy half, and the day-of-week and DST edges are where every
+implementation gets subtly wrong. Both forms are additive to; a cron form can be added later without
+breaking either.
+
+**The company problem, and what it forced.** A schedule fires once per tenant with no company, because
+the framework knows what a tenant is and does not know what a company is. That left a scheduled job
+unable to do the per-company work an ERP actually schedules, so `jobs.enqueue` gained a `company`,
+refused unless the enqueuing operation declares `crossCompany`. The gate is the declaration that
+already let the operation see more than one company, and it is in the manifest where a diff shows it.
+
+**Cost:** one statement per scheduled job per tenant every sweep, and a deployment with many tenants
+has to raise `scheduleSweepMs`. Also one more thing a module can turn on that the deployment does not
+see coming — mitigated only by the schedule being in the manifest and in the upgrade diff.
+
+**Reversible:** the schedule forms, yes — additive. The two events added to the log catalogue, no,
+by D69's argument.

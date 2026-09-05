@@ -8,6 +8,7 @@
 import { topoSort } from './graph.ts'
 import { Diagnostics } from './errors.ts'
 import { parseType } from './types.ts'
+import { validateSchedule } from './schedule.ts'
 import type { KetModule, Manifest, ComposedModel, ModulePermissionsDef } from '../types.ts'
 import { ambiguousRoutes, parseRoutePattern } from './routes.ts'
 import type { RoutePattern } from './routes.ts'
@@ -844,6 +845,36 @@ export function compose(
         if (!parsed.ok)
           diag.add({ code: 'E_BAD_TYPE', module: m.name, message: `${key} input ${input}: ${parsed.reason}` })
       }
+      if (def.schedule) {
+        try {
+          validateSchedule(def.schedule)
+        } catch (error) {
+          diag.add({
+            code: 'E_BAD_SCHEDULE',
+            module: m.name,
+            message: `job "${key}": ${(error as Error).message}`,
+            hint: (error as { hint?: string | null }).hint ?? null,
+          })
+          continue
+        }
+        // Nobody is there to supply arguments to a schedule, so a required input is
+        // a job that can only ever fail validation at three in the morning.
+        const required = Object.entries(def.input ?? {})
+          .filter(([, spec]) => {
+            const parsed = parseType(spec)
+            return parsed.ok && !parsed.optional
+          })
+          .map(([name]) => name)
+        if (required.length) {
+          diag.add({
+            code: 'E_SCHEDULED_JOB_INPUT',
+            module: m.name,
+            message: `scheduled job "${key}" requires input ${required.join(', ')}`,
+            hint: 'a schedule enqueues no arguments — make them optional, or drop the schedule',
+          })
+          continue
+        }
+      }
       for (const effect of def.effects ?? []) {
         // Enqueue targets are validated after every job has been collected, so a
         // producer may refer to a job contributed later in dependency order.
@@ -882,6 +913,7 @@ export function compose(
         idempotent: true,
         maxAttempts,
         timeoutMs,
+        ...(def.schedule ? { schedule: def.schedule } : {}),
       }
     }
   }

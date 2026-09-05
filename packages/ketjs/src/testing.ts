@@ -376,6 +376,13 @@ export type CreateTestDeploymentOptions = {
   log?: (line: string) => void
   /** Intercept worker events instead of recording them. Absent keeps `records`. */
   workerLog?: (entry: WorkerLog) => void
+  /**
+   * The worker's clock.
+   *
+   * A schedule is the one thing a test cannot hurry along by draining a queue, so
+   * without this a ten-second interval costs ten seconds of CI. Advance it instead.
+   */
+  workerNow?: () => Date
   client?: TestClientOptions
   port?: number
 }
@@ -485,6 +492,7 @@ export async function createTestDeployment(
       worker = await bootWorker(spec, {
         env,
         openLog,
+        ...(options.workerNow ? { now: options.workerNow } : {}),
         // Only when the caller asked. This used to default to a no-op because the
         // alternative was console output; now the default goes to the captured
         // sink, and a no-op here would suppress exactly what a test came to assert.
