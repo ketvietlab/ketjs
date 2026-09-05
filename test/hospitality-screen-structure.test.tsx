@@ -539,3 +539,58 @@ test('the tape chart says which week it is showing and what its colours mean', (
   assert.match(readOnly, /05\/09\/2026 – 11\/09\/2026/)
   assert.match(readOnly, /hospitality_core\.stayState\.checked_in/)
 })
+
+test('a reservation row says how long the stay is, in the unit it is sold by', () => {
+  const row = (bookingType: string, checkIn: string, checkOut: string) => ({
+    id: 'dp-1',
+    code: 'DP-1',
+    partnerId: 'guest',
+    provider: 'direct',
+    roomTypeId: 'deluxe',
+    bookingType,
+    checkIn,
+    checkOut,
+    adults: 2,
+    children: 0,
+    amountTotal: '100',
+    state: 'confirmed',
+  })
+  const length = (r: ReturnType<typeof row>) => coreScreens.stayLength(translate, r, 'vi', 'Asia/Ho_Chi_Minh')
+
+  // Two nights, and it says two nights rather than making a reader subtract.
+  assert.match(
+    length(row('nightly', '2026-09-04T07:00:00.000Z', '2026-09-06T05:00:00.000Z')),
+    /hospitality_core\.duration\.nightly/,
+  )
+  // A room sold by the hour is not measured in nights.
+  assert.match(
+    length(row('hourly', '2026-09-04T07:00:00.000Z', '2026-09-04T10:00:00.000Z')),
+    /hospitality_core\.duration\.hourly/,
+  )
+  assert.doesNotMatch(
+    length(row('hourly', '2026-09-04T07:00:00.000Z', '2026-09-04T10:00:00.000Z')),
+    /hospitality_core\.duration\.nightly/,
+  )
+  // A booking type with no unit, or dates that make no span, says the dates and
+  // claims nothing else.
+  assert.doesNotMatch(
+    length(row('bespoke', '2026-09-04T07:00:00.000Z', '2026-09-06T05:00:00.000Z')),
+    /hospitality_core\.duration\./,
+  )
+  assert.doesNotMatch(
+    length(row('nightly', '2026-09-06T05:00:00.000Z', '2026-09-04T07:00:00.000Z')),
+    /hospitality_core\.duration\./,
+  )
+
+  // A nightly stay always starts and ends at the property's own hours, so the
+  // clock is the same on every row; only the hourly case prints it.
+  assert.doesNotMatch(
+    length(row('nightly', '2026-09-04T07:00:00.000Z', '2026-09-06T05:00:00.000Z')),
+    /\d\d:\d\d/,
+  )
+  assert.match(length(row('hourly', '2026-09-04T07:00:00.000Z', '2026-09-04T10:00:00.000Z')), /\d\d:\d\d/)
+
+  // The list leads with what a reader scans for, and has one date column.
+  const columns = coreScreens.reservationColumns(translate, 'vi', 'Asia/Ho_Chi_Minh').map((c) => c.key)
+  assert.deepEqual(columns, ['code', 'guest', 'status', 'provider', 'roomType', 'stay', 'amount'])
+})
