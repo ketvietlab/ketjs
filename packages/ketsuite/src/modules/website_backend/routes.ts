@@ -1219,10 +1219,11 @@ export const routes: Record<string, RouteEntry> = {
       // The export offers the form's own field names, so nobody has to
       // remember them - and the erasure only appears where a window exists to
       // enforce.
-      const schemaFields = Array.isArray((form?.schema as { fields?: unknown })?.fields)
-        ? ((form?.schema as { fields: Array<{ name?: unknown }> }).fields
-            .map((field) => field?.name)
-            .filter((name): name is string => typeof name === 'string') ?? [])
+      const declared = (form?.schema as { fields?: unknown } | undefined)?.fields
+      const schemaFields = Array.isArray(declared)
+        ? declared
+            .map((field) => (field as { name?: unknown } | null)?.name)
+            .filter((name): name is string => typeof name === 'string')
         : []
       return adminPage(ctx, url, req, {
         title: 'website_backend.submissions.title',
