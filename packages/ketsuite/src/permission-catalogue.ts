@@ -1397,6 +1397,7 @@ const sources = {
       listEntryTerms: ['read', 'view'],
       listMedia: ['read', 'view'],
       listPages: ['read', 'view'],
+      mediaUsage: ['read', 'view'],
       listRedirects: ['read', 'view'],
       listRevisions: ['read', 'view'],
       listSiteMembers: ['read', 'view'],
