@@ -6,6 +6,7 @@ import {
   contentScreen,
   entryFormScreen,
   formEditorScreen,
+  submissionRecordScreen,
   formsScreen,
   mediaFormScreen,
   mediaScreen,
@@ -26,6 +27,8 @@ import type {
   MediaRow,
   FormRow,
   MenuRow,
+  SubmissionAuditRow,
+  SubmissionRecord,
   SiteRow,
   SubmissionRow,
   TaxonomyRow,
@@ -1022,6 +1025,60 @@ export const routes: Record<string, RouteEntry> = {
       if ((result as { ok?: boolean }).ok)
         return seeOther(inLocale(url, `/admin/website/forms?site=${encodeURIComponent(siteId)}`))
       return render(form, resultErrors(result, _))
+    },
+
+  /**
+   * One submission, and the record of everyone who opened it.
+   *
+   * readSubmission files an audit row for every read, and until this screen
+   * existed it was recording calls nobody could make. The trail is rendered
+   * beside the answers rather than tucked away: a record of who looked is
+   * worth more when the person looking can see it too.
+   */
+  '/admin/website/forms/{id}/submissions/{submissionId}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        const reason = (form.holdReason ?? '').trim()
+        const held = await ctx.call(
+          'website_form.holdSubmission',
+          { id: params.submissionId, reason: reason || null },
+          url,
+          req,
+        )
+        if (!(held as { ok?: boolean }).ok) return text(resultErrors(held, _).join('; '), { status: 400 })
+        return seeOther(inLocale(url, `/admin/website/forms/${params.id}/submissions/${params.submissionId}`))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const record = (await ctx.call(
+        'website_form.readSubmission',
+        { id: params.submissionId, reason: 'admin.submissions' },
+        url,
+        req,
+      )) as SubmissionRecord | null
+      // readSubmission answers the same way for a caller below the bar as for
+      // one naming a row that is not there, so this cannot distinguish them
+      // either - which is the point.
+      if (!record) return text(_('website_backend.error.notFound'), { status: 404 })
+      const audit = (await ctx.call(
+        'website_form.listSubmissionAudit',
+        { formId: params.id },
+        url,
+        req,
+      )) as SubmissionAuditRow[]
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.submission.title',
+        body: (_, frame) =>
+          submissionRecordScreen(
+            _,
+            record,
+            audit.filter((entry) => entry.submissionId === params.submissionId),
+            frame,
+            localeQuery(url),
+          ),
+      })
     },
 
   '/admin/website/forms/{id}/submissions':
