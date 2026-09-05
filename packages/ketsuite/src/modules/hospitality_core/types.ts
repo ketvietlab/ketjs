@@ -63,7 +63,13 @@ export const RESERVATION_STATES = [
 ] as const
 export const STAY_STATES = ['draft', 'checked_in', 'checked_out', 'no_show', 'cancelled'] as const
 export const FOLIO_STATES = ['draft', 'open', 'closed', 'cancelled'] as const
-export const ASSIGNMENT_STATES = ['active', 'closed'] as const
+/**
+ * `held` is a room kept for a guest who has not arrived. It is not occupancy:
+ * the room stays sellable to nobody else for those nights, but its own status
+ * is untouched, because a room held for next Tuesday is still an ordinary
+ * available room today.
+ */
+export const ASSIGNMENT_STATES = ['held', 'active', 'closed'] as const
 export const BOOKING_PROVIDERS = [
   'direct',
   'website',
