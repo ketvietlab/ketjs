@@ -89,7 +89,16 @@ test('agent: the composition schema tells an agent what a page may contain', () 
   assert.deepEqual(cs.sections['website.hero'], {
     by: 'website',
     title: 'Ảnh bìa lớn',
-    settings: { heading: 'text', subheading: 'text?', image: 'text?', ctaLabel: 'text?', ctaHref: 'text?' },
+    // `image` is a declared reference rather than free text, which is how the
+    // media library knows where a picture is used - and it tells an agent the
+    // same thing: this setting names a media item, not a URL to invent.
+    settings: {
+      heading: 'text',
+      subheading: 'text?',
+      image: 'ref:website.MediaMetadata?',
+      ctaLabel: 'text?',
+      ctaHref: 'text?',
+    },
   })
   const d = agentDescriptor(manifest)
   assert.ok(d.tools.some((t) => t.name === 'website__savePage'))

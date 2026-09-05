@@ -34,6 +34,7 @@ import type {
   EntryRow,
   EntryTermRow,
   MediaRow,
+  MediaUsage,
   DanglingLink,
   DomainRow,
   FormRow,
@@ -1626,10 +1627,11 @@ export const routes: Record<string, RouteEntry> = {
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const usage = (await ctx.call('website.mediaUsage', { id: params.id }, url, req)) as MediaUsage
       return adminPage(ctx, url, req, {
         title: row.attachmentId,
         translate: false,
-        body: (_, frame) => mediaFormScreen(_, row, frame, { locale: localeQuery(url) }),
+        body: (_, frame) => mediaFormScreen(_, row, frame, { locale: localeQuery(url), usage }),
       })
     },
 

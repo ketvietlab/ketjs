@@ -8,7 +8,18 @@ import type { SectionDef } from '@ketvietlab/ketjs'
 export const sections: Record<string, SectionDef> = {
   'website.hero': {
     title: 'Ảnh bìa lớn',
-    settings: { heading: 'text', subheading: 'text?', image: 'text?', ctaLabel: 'text?', ctaHref: 'text?' },
+    settings: {
+      heading: 'text',
+      subheading: 'text?',
+      /**
+       * Declared as a reference so the library can tell where it is used. It
+       * is still a string on the wire - the settings validator maps `ref` to
+       * string - so every layout already stored keeps its meaning.
+       */
+      image: 'ref:website.MediaMetadata?',
+      ctaLabel: 'text?',
+      ctaHref: 'text?',
+    },
   },
   /**
    * The first section that holds other sections.
