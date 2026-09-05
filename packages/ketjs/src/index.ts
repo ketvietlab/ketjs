@@ -47,6 +47,10 @@ export {
   placementIdErrors,
   diffPlacements,
   isPlacementId,
+  walkPlacements,
+  countPlacements,
+  MAX_LAYOUT_DEPTH,
+  MAX_LAYOUT_NODES,
 } from './kernel/layout.ts'
 export { buildMenu, activeMenuRoot } from './kernel/menu.ts'
 export type { MenuNode, MenuOptions } from './kernel/menu.ts'

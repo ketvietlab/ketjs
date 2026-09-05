@@ -60,6 +60,7 @@ test('website: seo adds typed fields to a page it does not own', () => {
 test('website: sections from three modules land in one registry', () => {
   assert.deepEqual(Object.keys(manifest.sections).sort(), [
     'menu.primary',
+    'website.columns',
     'website.hero',
     'website.rich_text',
   ])
