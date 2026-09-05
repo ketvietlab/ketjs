@@ -84,8 +84,7 @@ const rebuildPass = async (ctx: Ctx, site: Row): Promise<{ done: boolean; writte
   const siteId = site.id
   const existing = await stateFor(ctx, siteId)
   const target = String(site.activePublicationId ?? '')
-  const fresh =
-    existing?.state !== 'building' || String(existing.publicationId ?? '') !== target
+  const fresh = existing?.state !== 'building' || String(existing.publicationId ?? '') !== target
 
   const cursor = fresh ? '' : String(existing?.cursor ?? '')
   const now = new Date().toISOString()
