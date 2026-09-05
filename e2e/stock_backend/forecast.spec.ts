@@ -12,7 +12,7 @@ const login = async (page: Page) => {
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('stock-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -26,7 +26,7 @@ for (const viewport of [
   for (const locale of ['vi', 'en'] as const) {
     test(`renders forecast in ${locale} correctly on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await page.goto(`/admin/forecast?lang=${locale}`)
+      await page.goto(`/admin/stock/forecast?lang=${locale}`)
       await expect(page.locator('[data-ui="main"]')).toBeVisible()
       await expect(page.locator('form[action="/login"]')).toHaveCount(0)
       await expect(page.locator('select[name="productId"]')).toContainText('STOCK-JACKET')
@@ -43,7 +43,10 @@ for (const viewport of [
           .map((control) => control.getBoundingClientRect().height),
       }))
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-      expect(metrics.visibleControls.every((height) => height === 28)).toBe(true)
+      // A field is 32px on a touch screen and 28px with a cursor: a fingertip
+      // needs the target, a pointer does not.
+      const fieldHeight = 34
+      expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
       await page.screenshot({
         path: join(artifacts, `forecast-${locale}-${viewport.name}.png`),
         fullPage: true,
@@ -53,7 +56,7 @@ for (const viewport of [
 }
 
 test('calculates forecast for a selected product and warehouse', async ({ page }) => {
-  await page.goto('/admin/forecast?lang=vi')
+  await page.goto('/admin/stock/forecast?lang=vi')
   await page.locator('select[name="productId"]').selectOption('stock-variant')
   await page.locator('select[name="warehouseId"]').selectOption('wh')
   await page.getByRole('button', { name: 'Tính dự báo' }).click()

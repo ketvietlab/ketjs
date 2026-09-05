@@ -1,0 +1,319 @@
+import assert from 'node:assert/strict'
+import { test, type TestContext } from 'node:test'
+import { tableNameFor } from '@ketvietlab/ketjs'
+import type { Row } from '@ketvietlab/ketjs'
+import { FIELD_FILTER_MATCHES } from '../packages/ketsuite/src/modules/flow/index.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
+
+const formHeaders = { 'content-type': 'application/x-www-form-urlencoded' }
+const post = { headers: formHeaders, redirect: 'manual' as const }
+
+const boot = async (t: TestContext) => {
+  const app = await createTestDeployment(ketsuite)
+  t.after(() => app.close())
+  const scope = { company: 'acme', branches: null }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    app.fixture.call<Row>(name, input, { scope })
+
+  await fixture('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'ACME' })
+  await fixture('partner.savePartner', { id: 'admin-party', kind: 'person', name: 'Administrator' })
+  await fixture('company.saveCompany', { id: 'acme', partnerId: 'acme-party', currency: 'VND' })
+  await fixture('user.createUser', {
+    id: 'admin',
+    login: 'admin',
+    password: 'correct horse',
+    name: 'Administrator',
+    partnerId: 'admin-party',
+    defaultCompanyId: 'acme',
+    superuser: true,
+  })
+  await fixture('user.grantCompany', {
+    id: 'admin:acme',
+    userId: 'admin',
+    companyId: 'acme',
+  })
+  await app.client.login({ login: 'admin', password: 'correct horse' })
+
+  const call = async <T = Row>(name: string, input: Record<string, unknown>) =>
+    (await app.client.call<T>(name, input)).value
+  await call('flow.project.save', {
+    values: { id: 'platform', key: 'PLAT', name: 'Internal platform' },
+    idempotencyKey: 'project-platform',
+  })
+  await call('flow.column.save', {
+    values: { id: 'todo', projectId: 'platform', code: 'todo', name: 'To do', sequence: 10 },
+    idempotencyKey: 'column-todo',
+  })
+  await call('flow.column.save', {
+    values: { id: 'doing', projectId: 'platform', code: 'doing', name: 'Doing', sequence: 20 },
+    idempotencyKey: 'column-doing',
+  })
+  await call('flow.issue.save', {
+    id: 'issue-login',
+    projectId: 'platform',
+    columnId: 'todo',
+    title: 'Finish login',
+    priority: 'high',
+    idempotencyKey: 'issue-login',
+  })
+  return { app, call }
+}
+
+test('flow project issues: URL-owned create modal preserves list state, validation, compatibility and CSRF', async (t) => {
+  const { app, call } = await boot(t)
+  const collection = '/admin/flow/projects/platform/issues?q=Finish&lang=en'
+
+  const list = await app.client.get(collection)
+  const listHtml = await list.text()
+  assert.equal(list.status, 200)
+  assert.match(listHtml, /data-ui="list-page"/)
+  assert.doesNotMatch(listHtml, /data-ui="form-page"|data-ui="modal-layer"|flow-issue-create-form/)
+  assert.match(listHtml, /Internal platform/)
+  assert.match(listHtml, /href="\/admin\/flow\/issues\/issue-login\?lang=en"/)
+  assert.match(
+    listHtml,
+    /href="\/admin\/flow\/projects\/platform\/issues\?q=Finish&amp;lang=en&amp;create=1"/,
+  )
+
+  const create = await app.client.get(`${collection}&create=1`)
+  const createHtml = await create.text()
+  assert.equal(create.status, 200)
+  assert.match(createHtml, /data-ui="list-page"/)
+  assert.match(createHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(createHtml, /id="flow-issue-create-form"/)
+  assert.match(
+    createHtml,
+    /action="\/admin\/flow\/projects\/platform\/issues\?q=Finish&amp;lang=en&amp;create=1"/,
+  )
+  assert.match(createHtml, /href="\/admin\/flow\/projects\/platform\/issues\?q=Finish&amp;lang=en"/)
+  assert.match(
+    createHtml,
+    /name="returnTo" value="\/admin\/flow\/projects\/platform\/issues\?q=Finish&amp;lang=en"/,
+  )
+  assert.match(createHtml, /name="idempotencyKey" value="[^"]+"/)
+  assert.equal(createHtml.match(/data-ui="form-field"/g)?.length, 3)
+
+  const invalid = await app.client.post(
+    `${collection}&create=1`,
+    new URLSearchParams({
+      title: 'Rejected draft',
+      columnId: 'missing',
+      priority: 'high',
+      returnTo: collection,
+      idempotencyKey: 'issue-invalid',
+    }),
+    post,
+  )
+  assert.equal(invalid.status, 303)
+  const invalidLocation = invalid.headers.get('location') ?? ''
+  assert.match(invalidLocation, /^\/admin\/flow\/projects\/platform\/issues\?q=Finish&lang=en&create=1/)
+  assert.match(invalidLocation, /title=Rejected\+draft/)
+  assert.match(invalidLocation, /columnId=missing/)
+  assert.match(invalidLocation, /priority=high/)
+  const invalidHtml = await (await app.client.get(invalidLocation)).text()
+  assert.match(invalidHtml, /data-ui="modal-layer" data-route-modal="true"/)
+  assert.match(invalidHtml, /name="title"[^>]*value="Rejected draft"/)
+  assert.match(invalidHtml, /<option value="missing" selected="true">/)
+  assert.match(invalidHtml, /<option value="high" selected="true">/)
+  assert.match(invalidHtml, /That status does not belong to this project/)
+
+  const unsafe = await app.client.post(
+    `${collection}&create=1`,
+    new URLSearchParams({
+      title: 'Unsafe return draft',
+      columnId: 'missing',
+      priority: 'normal',
+      returnTo: 'https://evil.example/steal',
+      idempotencyKey: 'issue-unsafe-return',
+    }),
+    post,
+  )
+  assert.equal(unsafe.status, 303)
+  assert.match(
+    unsafe.headers.get('location') ?? '',
+    /^\/admin\/flow\/projects\/platform\/issues\?q=Finish&lang=en&create=1/,
+  )
+  assert.doesNotMatch(unsafe.headers.get('location') ?? '', /evil\.example/)
+
+  const saved = await app.client.post(
+    `${collection}&create=1`,
+    new URLSearchParams({
+      title: 'Finish routing',
+      columnId: 'doing',
+      priority: 'high',
+      returnTo: collection,
+      idempotencyKey: 'issue-create-success',
+    }),
+    post,
+  )
+  assert.equal(saved.status, 303)
+  assert.equal(saved.headers.get('location'), collection)
+  const listed = await call<{ rows: Row[] }>('flow.issue.list', { projectId: 'platform', limit: 50 })
+  assert.ok(listed.rows.some((row) => row.title === 'Finish routing'))
+
+  const legacy = await app.client.post(
+    '/admin/flow/projects/platform/issues?lang=en',
+    new URLSearchParams({ title: 'Legacy issue', columnId: 'todo', priority: 'normal' }),
+    post,
+  )
+  assert.equal(legacy.status, 303)
+  assert.equal(legacy.headers.get('location'), '/admin/flow/projects/platform/issues?lang=en')
+  const legacyListed = await call<{ rows: Row[] }>('flow.issue.list', { projectId: 'platform', limit: 50 })
+  assert.ok(legacyListed.rows.some((row) => row.title === 'Legacy issue'))
+
+  const forged = await app.client.post(
+    `${collection}&create=1`,
+    new URLSearchParams({ title: 'Forged', columnId: 'todo', priority: 'normal' }),
+    {
+      headers: { ...formHeaders, origin: 'https://evil.example' },
+      redirect: 'manual',
+    },
+  )
+  assert.equal(forged.status, 403)
+
+  const refused = await app.client.request('/admin/flow/projects/platform/issues?lang=en', {
+    method: 'PUT',
+  })
+  assert.equal(refused.status, 405)
+})
+
+test('flow project issues route: a filter that stopped short reaches the screen as a warning', async (t) => {
+  const { app, call } = await boot(t)
+  await call('flow.field.save', {
+    id: 'field-environment',
+    projectId: 'platform',
+    code: 'environment',
+    name: 'Environment',
+    kind: 'select',
+    config: { options: [{ code: 'prod', label: 'Production' }] },
+    idempotencyKey: 'field-environment',
+  })
+  // One row past the cap, inserted straight into the store: the point is what
+  // the route does with a truncated answer, not what nine hundred saves do.
+  const count = FIELD_FILTER_MATCHES + 1
+  await app.fixture.withTenant('', async ({ adapter }) => {
+    const insert = async (model: string, columns: readonly string[], rows: readonly unknown[][]) => {
+      const sql = `INSERT INTO ${adapter.quoteIdent(tableNameFor(model))} (${columns
+        .map((name) => adapter.quoteIdent(name))
+        .join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`
+      for (const row of rows) await adapter.run(sql, row as never[])
+    }
+    const stamp = '2026-09-05T00:00:00.000Z'
+    await insert(
+      'flow.Issue',
+      [
+        'companyId',
+        'id',
+        'projectId',
+        'columnId',
+        'title',
+        'priority',
+        'threadId',
+        'active',
+        'version',
+        'createdAt',
+        'updatedAt',
+      ],
+      Array.from({ length: count }, (_, index) => [
+        'acme',
+        `bulk-${index}`,
+        'platform',
+        'todo',
+        `Bulk ${index}`,
+        'normal',
+        `thread:flow.Issue:bulk-${index}`,
+        1,
+        1,
+        stamp,
+        stamp,
+      ]),
+    )
+    await insert(
+      'flow.IssueFieldValue',
+      ['companyId', 'id', 'issueId', 'fieldId', 'value'],
+      Array.from({ length: count }, (_, index) => [
+        'acme',
+        `bulk-value-${index}`,
+        `bulk-${index}`,
+        'field-environment',
+        'prod',
+      ]),
+    )
+  })
+
+  // A filter travels in the URL as one base64url token — the same encoding the
+  // screens produce, so this is the request a reader would actually send.
+  const token = Buffer.from(
+    JSON.stringify({ kind: 'rule', field: 'field:environment', operator: 'equals', value: 'prod' }),
+    'utf8',
+  ).toString('base64url')
+  const filtered = new URLSearchParams({ lang: 'en', filter: token })
+  const warned = await (
+    await app.client.get(`/admin/flow/projects/platform/issues?${filtered.toString()}`)
+  ).text()
+  assert.match(warned, /data-ui="notice" data-tone="warning"/)
+  assert.match(warned, /This result is incomplete/)
+
+  // The same screen without the field rule says nothing, so the warning is
+  // about the filter rather than about the size of the project.
+  const quiet = await (await app.client.get('/admin/flow/projects/platform/issues?lang=en')).text()
+  assert.doesNotMatch(quiet, /This result is incomplete/)
+})
+
+/**
+ * One intent, one issue (FLW-033).
+ *
+ * The form renders its idempotency key once per opening, so a double click, a
+ * back button or a phone retrying a request all post the same key. The id used
+ * to be a fresh uuid on each attempt, which made the second attempt a
+ * different record — and one person pressing the button twice ended up with
+ * two issues nobody meant to make.
+ */
+test('flow project issues: resubmitting the create form does not make a second issue', async (t) => {
+  const { app, call } = await boot(t)
+  const collection = '/admin/flow/projects/platform/issues?lang=en'
+  const before = (await call<{ total: number }>('flow.issue.list', { projectId: 'platform' })).total
+
+  const submit = () =>
+    app.client.post(
+      `${collection}&create=1`,
+      new URLSearchParams({
+        title: 'Đúng một lần',
+        columnId: 'todo',
+        returnTo: collection,
+        // The same key both times, which is what the rendered form really does.
+        idempotencyKey: 'issue-create-once',
+      }),
+      post,
+    )
+
+  assert.equal((await submit()).status, 303)
+  const after = (await call<{ total: number }>('flow.issue.list', { projectId: 'platform' })).total
+  assert.equal(after, before + 1)
+
+  assert.equal((await submit()).status, 303, 'the second submit still answers as a success')
+  assert.equal(
+    (await call<{ total: number }>('flow.issue.list', { projectId: 'platform' })).total,
+    after,
+    'and it lands on the issue the first one made rather than beside it',
+  )
+
+  // A different key is a different intent, and does make a second issue.
+  assert.equal(
+    (
+      await app.client.post(
+        `${collection}&create=1`,
+        new URLSearchParams({
+          title: 'Lần khác',
+          columnId: 'todo',
+          returnTo: collection,
+          idempotencyKey: 'issue-create-twice',
+        }),
+        post,
+      )
+    ).status,
+    303,
+  )
+  assert.equal((await call<{ total: number }>('flow.issue.list', { projectId: 'platform' })).total, after + 1)
+})

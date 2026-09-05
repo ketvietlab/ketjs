@@ -1,14 +1,16 @@
 import { defineModule } from '@ketvietlab/ketjs'
+import { channelRoutes } from './channel-routes.ts'
 import { contentTypes } from './content-types.ts'
 import { functions } from './functions.ts'
 import { models } from './models.ts'
+import { online } from './online.ts'
 import { sections } from './sections.ts'
 
 export default defineModule({
   name: 'website_retail',
   version: '0.1.0',
-  app: true,
-  depends: ['website', 'product'],
+  depends: ['website', 'product', 'product_media', 'channel_api', 'sale', 'stock', 'pricing', 'uom'],
+  compatible: { channel_api: '^1' },
   title: 'Website Retail',
   summary: 'Catalog, giỏ hàng và checkout lead cho website bán lẻ.',
   category: 'Website',
@@ -33,6 +35,15 @@ export default defineModule({
       'error.invalidEmail': 'Địa chỉ email không hợp lệ.',
       'error.invalidPhone': 'Số điện thoại không hợp lệ.',
       'error.noteTooLong': 'Ghi chú vượt quá giới hạn cho phép.',
+      'error.cartFull': 'Giỏ hàng đã đạt số dòng tối đa.',
+      'error.cartTokenRequired': 'Yêu cầu cần mã giỏ hàng trong header X-Cart-Token.',
+      'error.orderingUnavailable': 'Website chưa được cấu hình để nhận đơn hàng.',
+      'error.orderRejected': 'Không thể tạo đơn bán từ giỏ hàng này.',
+      'error.orderNotFound': 'Không tìm thấy đơn hàng.',
+      'error.invalidOrderPolicy': 'Chính sách đơn hàng phải là quotation hoặc confirm.',
+      'error.warehouseUnavailable': 'Kho hàng không tồn tại.',
+      'error.uomUnavailable': 'Đơn vị tính mặc định không tồn tại.',
+      'error.pricelistUnavailable': 'Bảng giá không tồn tại.',
     },
     en: {
       'app.title': 'Retail website',
@@ -54,10 +65,20 @@ export default defineModule({
       'error.invalidEmail': 'The email address is invalid.',
       'error.invalidPhone': 'The phone number is invalid.',
       'error.noteTooLong': 'The note exceeds the allowed length.',
+      'error.cartFull': 'The cart already holds the maximum number of lines.',
+      'error.cartTokenRequired': 'This request needs a cart token in the X-Cart-Token header.',
+      'error.orderingUnavailable': 'This site is not configured to take orders yet.',
+      'error.orderRejected': 'The cart could not be turned into a sales order.',
+      'error.orderNotFound': 'The order was not found.',
+      'error.invalidOrderPolicy': 'The order policy must be quotation or confirm.',
+      'error.warehouseUnavailable': 'The warehouse does not exist.',
+      'error.uomUnavailable': 'The default unit of measure does not exist.',
+      'error.pricelistUnavailable': 'The pricelist does not exist.',
     },
   },
   models,
-  functions,
+  functions: { ...functions, ...online },
+  routes: channelRoutes,
   contentTypes,
   sections,
 })

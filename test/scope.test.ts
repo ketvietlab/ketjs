@@ -25,7 +25,7 @@ import type { Adapter, Ctx, KetError, Row } from '@ketvietlab/ketjs'
 const ledger = defineModule({
   name: 'ledger',
   models: {
-    Invoice: { scope: 'company+branch', fields: { id: 'id', total: 'int' } },
+    Invoice: { scope: 'company+branch', fields: { id: 'id', total: 'int', amount: 'decimal?' } },
     Setting: { scope: 'company', fields: { id: 'id', value: 'text', branchId: 'text?' } },
     Currency: { scope: 'shared', fields: { id: 'id', code: 'text' } },
   },
@@ -33,12 +33,51 @@ const ledger = defineModule({
     add: defineFn({
       input: { id: 'id', total: 'int' },
       effects: ['write:ledger.Invoice'],
+      idempotent: true,
       handler: async (ctx: Ctx, a) => ctx.db.insert('ledger.Invoice', { id: a.id, total: a.total } as Row),
     }),
     list: defineFn({
       input: {},
       effects: ['read:ledger.Invoice'],
       handler: async (ctx: Ctx) => ctx.db.all(from(ctx.table('ledger.Invoice'))),
+    }),
+    directList: defineFn({
+      input: {},
+      effects: ['read:ledger.Invoice'],
+      handler: async (ctx: Ctx) => ctx.db.select('ledger.Invoice'),
+    }),
+    directUpdate: defineFn({
+      input: { id: 'id', total: 'int' },
+      effects: ['write:ledger.Invoice'],
+      handler: async (ctx: Ctx, a) => ctx.db.update('ledger.Invoice', { id: a.id }, { total: a.total }),
+    }),
+    directCompareAndSet: defineFn({
+      input: { id: 'id', expected: 'int', total: 'int' },
+      effects: ['write:ledger.Invoice'],
+      handler: async (ctx: Ctx, a) =>
+        ctx.db.compareAndSet('ledger.Invoice', { id: a.id }, { total: a.expected }, { total: a.total }),
+    }),
+    deleteVisible: defineFn({
+      input: {},
+      effects: ['write:ledger.Invoice'],
+      handler: async (ctx: Ctx) => ctx.db.del(deleteFrom(ctx.table('ledger.Invoice'))),
+    }),
+    directFindAmount: defineFn({
+      input: { amount: 'decimal' },
+      effects: ['read:ledger.Invoice'],
+      handler: async (ctx: Ctx, a) => ctx.db.select('ledger.Invoice', { amount: a.amount }),
+    }),
+    directUpdateAmount: defineFn({
+      input: { amount: 'decimal', total: 'int' },
+      effects: ['write:ledger.Invoice'],
+      handler: async (ctx: Ctx, a) =>
+        ctx.db.update('ledger.Invoice', { amount: a.amount }, { total: a.total }),
+    }),
+    directCompareAmount: defineFn({
+      input: { id: 'id', amount: 'decimal', total: 'int' },
+      effects: ['write:ledger.Invoice'],
+      handler: async (ctx: Ctx, a) =>
+        ctx.db.compareAndSet('ledger.Invoice', { id: a.id }, { amount: a.amount }, { total: a.total }),
     }),
     listAllCompanies: defineFn({
       input: {},
@@ -52,6 +91,19 @@ const ledger = defineModule({
       effects: ['write:ledger.Invoice'],
       handler: async (ctx: Ctx, a) =>
         ctx.db.insert('ledger.Invoice', { id: a.id, total: 1, companyId: a.companyId } as Row),
+    }),
+    move: defineFn({
+      input: { id: 'id', companyId: 'text?', branchId: 'text?' },
+      effects: ['write:ledger.Invoice'],
+      handler: async (ctx: Ctx, a) =>
+        ctx.db.update(
+          'ledger.Invoice',
+          { id: a.id },
+          {
+            ...(a.companyId ? { companyId: a.companyId } : {}),
+            ...(a.branchId ? { branchId: a.branchId } : {}),
+          },
+        ),
     }),
     saveSetting: defineFn({
       input: { id: 'id', value: 'text', branchId: 'text?' },
@@ -151,6 +203,66 @@ test('scope: a write is stamped from the request, and cannot be aimed elsewhere'
   await db.close()
 })
 
+test('scope: update cannot move an existing row to another company or branch', async () => {
+  const db = await boot()
+  try {
+    await callFn('ledger.add', { id: 'safe', total: 1 }, { adapter: db, manifest, scope: A })
+    for (const patch of [
+      { id: 'safe', companyId: 'globex' },
+      { id: 'safe', branchId: 'saigon' },
+    ]) {
+      await assert.rejects(
+        () => callFn('ledger.move', patch, { adapter: db, manifest, scope: A }),
+        (error: unknown) => (error as { code: string }).code === 'E_SCOPE_FIELD_WRITTEN',
+      )
+    }
+    const [row] = await db.all('SELECT companyId, branchId FROM ledger_invoice WHERE id = ?', ['safe'])
+    assert.deepEqual(
+      { companyId: row?.companyId, branchId: row?.branchId },
+      { companyId: 'acme', branchId: 'hanoi' },
+    )
+  } finally {
+    await db.close()
+  }
+})
+
+test('idempotency: retries are isolated by scope and reject changed input', async () => {
+  const db = await boot()
+  try {
+    await callFn(
+      'ledger.add',
+      { id: 'a', total: 1 },
+      { adapter: db, manifest, scope: A, idempotencyKey: 'same' },
+    )
+    await callFn(
+      'ledger.add',
+      { id: 'b', total: 2 },
+      { adapter: db, manifest, scope: B, idempotencyKey: 'same' },
+    )
+    await assert.rejects(
+      () =>
+        callFn(
+          'ledger.add',
+          { id: 'changed', total: 3 },
+          { adapter: db, manifest, scope: A, idempotencyKey: 'same' },
+        ),
+      (error: unknown) => (error as { code: string }).code === 'E_IDEMPOTENCY_CONFLICT',
+    )
+    assert.deepEqual(
+      (await db.all('SELECT id, companyId FROM ledger_invoice ORDER BY id')).map((row) => [
+        row.id,
+        row.companyId,
+      ]),
+      [
+        ['a', 'acme'],
+        ['b', 'globex'],
+      ],
+    )
+  } finally {
+    await db.close()
+  }
+})
+
 test('scope: a company-scoped model may use branchId as an ordinary optional relation', async () => {
   const db = await boot()
   try {
@@ -247,6 +359,134 @@ test('scope: branch narrows within a company, and is not a permission', async ()
 
   const everyBranch = (await callFn('ledger.list', {}, { adapter: db, manifest, scope: A })).value as Row[]
   assert.equal(everyBranch.length, 2, 'no branch list means every branch of the company, not none')
+  await db.close()
+})
+
+test('scope: an explicit empty readable branch set denies every read and write path', async () => {
+  const db = await boot()
+  try {
+    const hanoi = { company: 'acme', branch: 'hanoi', branches: ['hanoi'] }
+    const saigon = { company: 'acme', branch: 'saigon', branches: ['saigon'] }
+    const denied = { company: 'acme', branches: [] as string[] }
+    await callFn('ledger.add', { id: 'h1', total: 1 }, { adapter: db, manifest, scope: hanoi })
+    await callFn('ledger.add', { id: 's1', total: 2 }, { adapter: db, manifest, scope: saigon })
+
+    const queried = (await callFn('ledger.list', {}, { adapter: db, manifest, scope: denied })).value as Row[]
+    const selected = (await callFn('ledger.directList', {}, { adapter: db, manifest, scope: denied }))
+      .value as Row[]
+    assert.deepEqual(queried, [], 'the query builder preserves an explicit empty branch set')
+    assert.deepEqual(selected, [], 'the convenience selector preserves an explicit empty branch set')
+
+    const changed = (
+      await callFn('ledger.directUpdate', { id: 'h1', total: 10 }, { adapter: db, manifest, scope: denied })
+    ).value as { changes: number }
+    assert.equal(changed.changes, 0)
+
+    const swapped = (
+      await callFn(
+        'ledger.directCompareAndSet',
+        { id: 'h1', expected: 1, total: 20 },
+        { adapter: db, manifest, scope: denied },
+      )
+    ).value as { changes: number; matched: boolean }
+    assert.deepEqual(swapped, { changes: 0, matched: false })
+
+    const removed = (await callFn('ledger.deleteVisible', {}, { adapter: db, manifest, scope: denied }))
+      .value as { changes: number }
+    assert.equal(removed.changes, 0, 'a scoped delete must not widen [] to every branch')
+
+    await assert.rejects(
+      () =>
+        callFn(
+          'ledger.add',
+          { id: 'blocked', total: 3 },
+          { adapter: db, manifest, scope: { ...denied, branch: 'hanoi' } },
+        ),
+      (error: unknown) => (error as { code: string }).code === 'E_WRITE_BRANCH_NOT_READABLE',
+    )
+
+    assert.deepEqual(
+      (await db.all('SELECT id, total FROM ledger_invoice ORDER BY id')).map((row) => ({
+        id: row.id,
+        total: row.total,
+      })),
+      [
+        { id: 'h1', total: 1 },
+        { id: 's1', total: 2 },
+      ],
+    )
+  } finally {
+    await db.close()
+  }
+})
+
+test('scope: convenience select, update, and compareAndSet keep the readable branch set', async () => {
+  const db = await boot()
+  const hanoi = { company: 'acme', branch: 'hanoi', branches: ['hanoi'] }
+  const saigon = { company: 'acme', branch: 'saigon', branches: ['saigon'] }
+  await callFn('ledger.add', { id: 'h1', total: 1 }, { adapter: db, manifest, scope: hanoi })
+  await callFn('ledger.add', { id: 's1', total: 2 }, { adapter: db, manifest, scope: saigon })
+
+  const visible = (await callFn('ledger.directList', {}, { adapter: db, manifest, scope: hanoi }))
+    .value as Row[]
+  assert.deepEqual(
+    visible.map((row) => row.id),
+    ['h1'],
+  )
+
+  const changed = (
+    await callFn('ledger.directUpdate', { id: 's1', total: 20 }, { adapter: db, manifest, scope: hanoi })
+  ).value as { changes: number }
+  assert.equal(changed.changes, 0, 'an id from another branch is not writable')
+
+  const swapped = (
+    await callFn(
+      'ledger.directCompareAndSet',
+      { id: 's1', expected: 2, total: 30 },
+      { adapter: db, manifest, scope: hanoi },
+    )
+  ).value as { changes: number; matched: boolean }
+  assert.deepEqual(swapped, { changes: 0, matched: false })
+  assert.equal((await db.all('SELECT total FROM ledger_invoice WHERE id = ?', ['s1']))[0]?.total, 2)
+  await db.close()
+})
+
+test('scope: convenience decimal predicates compare numeric value on SQLite', async () => {
+  const db = await boot()
+  await db.run('INSERT INTO ledger_invoice (id, total, amount, companyId, branchId) VALUES (?, ?, ?, ?, ?)', [
+    'd1',
+    1,
+    '12.50',
+    'acme',
+    'hanoi',
+  ])
+
+  const found = (
+    await callFn('ledger.directFindAmount', { amount: '12.5' }, { adapter: db, manifest, scope: A })
+  ).value as Row[]
+  assert.deepEqual(
+    found.map((row) => row.id),
+    ['d1'],
+  )
+
+  const changed = (
+    await callFn(
+      'ledger.directUpdateAmount',
+      { amount: '12.500', total: 2 },
+      { adapter: db, manifest, scope: A },
+    )
+  ).value as { changes: number }
+  assert.equal(changed.changes, 1)
+
+  const swapped = (
+    await callFn(
+      'ledger.directCompareAmount',
+      { id: 'd1', amount: '12.5000', total: 3 },
+      { adapter: db, manifest, scope: A },
+    )
+  ).value as { changes: number; matched: boolean }
+  assert.deepEqual(swapped, { changes: 1, matched: true })
+  assert.equal((await db.all('SELECT total FROM ledger_invoice WHERE id = ?', ['d1']))[0]?.total, 3)
   await db.close()
 })
 

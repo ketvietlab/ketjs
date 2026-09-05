@@ -1,20 +1,25 @@
-// The worker process role. It composes the same AppSpec as HTTP, but opens no
+// The worker process role. It composes the same DeploymentSpec as HTTP, but opens no
 // socket, builds no theme and reads no session. Jobs retain the tenant, actor and
 // company scope captured when they were enqueued.
 
 import { randomUUID } from 'node:crypto'
-import { createAppRegistry, restrictManifest } from '../kernel/apps.ts'
 import { createAdapterPool } from '../data/pool.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { createContext } from './ctx.ts'
 import { sqliteStore } from './config.ts'
 import { jobDefinition } from './jobs.ts'
 import { createQueue, JOB_CHANNEL } from './queue.ts'
+import { claimDue } from './schedule.ts'
+import { pruneRateSlots } from './ratelimit.ts'
+import { KetError } from '../kernel/errors.ts'
 import { bootRuntime } from './runtime.ts'
+import { traceOf } from './log/index.ts'
+import type { OpenLog } from './log/index.ts'
 import { effectStorage, namespacedStorage, storageFromConfig } from './storage/index.ts'
 import { effectTransport, unavailableTransport } from './transport/index.ts'
 import type { DurableJob, Queue } from './queue.ts'
-import type { AppSpec } from '../kernel/workspace.ts'
+import type { DeploymentSpec } from '../kernel/workspace.ts'
+import type { LogLevel } from './log/index.ts'
 import type { Adapter, JobContext, Manifest } from '../types.ts'
 import type { RuntimeConfig } from './config.ts'
 
@@ -28,6 +33,14 @@ export type WorkerLog = {
   attempt: number
   durationMs?: number
   error?: string
+  /**
+   * The failure's stable code when it had one.
+   *
+   * Reducing a KetError to its message threw away the one part worth counting: a
+   * record saying "E_UNEXPECTED" for a failure the system named and expected is a
+   * record nobody can group or alert on.
+   */
+  errorCode?: string
 }
 
 export type BootedWorker = {
@@ -35,6 +48,11 @@ export type BootedWorker = {
   manifest: Manifest
   /** Claim one fair pass without starting a permanent loop. */
   runOnce(): Promise<number>
+  /**
+   * Move every due schedule forward once, and enqueue what moved. Returns how many
+   * jobs were enqueued. `start()` does this on a timer; a test does it deliberately.
+   */
+  sweepSchedules(): Promise<number>
   /** Keep claiming until no due work and all claimed jobs have settled. */
   drain(): Promise<number>
   /** Start adaptive polling. Idempotent. */
@@ -64,21 +82,20 @@ const parseQueues = (configured: Record<string, number>, env: Record<string, str
   return queues
 }
 
-async function tenantSource(spec: AppSpec, manifest: Manifest, config: RuntimeConfig): Promise<TenantSource> {
+async function tenantSource(
+  spec: DeploymentSpec,
+  manifest: Manifest,
+  config: RuntimeConfig,
+): Promise<TenantSource> {
   const serve = spec.serve ?? {}
-  const bootstrap = config.bootstrapApps ?? serve.bootstrap ?? []
-  const registries = new WeakMap<Adapter, Awaited<ReturnType<typeof createAppRegistry>>>()
+  const prepared = new WeakSet<Adapter>()
 
   const prepare = async (adapter: Adapter): Promise<Manifest> => {
-    let registry = registries.get(adapter)
-    if (!registry) {
+    if (!prepared.has(adapter)) {
       if (config.migrateOnBoot) await migrateOne(adapter, manifest)
-      registry = await createAppRegistry(manifest, adapter, { autoInstall: config.autoInstall })
-      if (bootstrap.length && (await registry.enabled()).size === 0)
-        for (const name of bootstrap) await registry.install(name)
-      registries.set(adapter, registry)
+      prepared.add(adapter)
     }
-    return restrictManifest(manifest, await registry.enabled())
+    return manifest
   }
 
   if (!serve.tenants) {
@@ -94,7 +111,7 @@ async function tenantSource(spec: AppSpec, manifest: Manifest, config: RuntimeCo
 
   const tenantSpec = serve.tenants
   const pool = createAdapterPool({
-    create: (key) => tenantSpec.open(key, config) as Adapter,
+    create: (key) => tenantSpec.open(key, config),
     ...(tenantSpec.max === undefined ? {} : { max: tenantSpec.max }),
     ...(tenantSpec.idleMs === undefined ? {} : { idleMs: tenantSpec.idleMs }),
   })
@@ -107,20 +124,31 @@ async function tenantSource(spec: AppSpec, manifest: Manifest, config: RuntimeCo
 }
 
 export async function bootWorker(
-  spec: AppSpec,
+  spec: DeploymentSpec,
   options: {
     env?: Record<string, string | undefined>
     workerId?: string
     now?: () => Date
     random?: () => number
     log?: (entry: WorkerLog) => void
+    /** Redirect this worker's operational records, without editing the spec. */
+    openLog?: OpenLog
   } = {},
 ): Promise<BootedWorker> {
   if (!spec.worker || !Object.keys(spec.worker.queues).length)
-    throw new Error(`app "${spec.name}" declares no worker queues`)
+    throw new Error(`deployment "${spec.name}" declares no worker queues`)
 
   const env = options.env ?? process.env
-  const { config, manifest } = await bootRuntime(spec, { env })
+  const {
+    config,
+    manifest,
+    log: sink,
+    logger,
+  } = await bootRuntime(spec, {
+    env,
+    role: 'worker',
+    ...(options.openLog ? { openLog: options.openLog } : {}),
+  })
   const baseStorage = await (spec.serve?.openStorage ?? storageFromConfig)(config)
   const baseTransport = await (spec.serve?.openTransport ?? unavailableTransport)(config)
   const storageFor = (tenant: string) => namespacedStorage(baseStorage, tenant || spec.name)
@@ -130,10 +158,53 @@ export async function bootWorker(
   const workerId = options.workerId ?? `${spec.name}-${process.pid}-${randomUUID().slice(0, 8)}`
   const now = options.now ?? (() => new Date())
   const random = options.random ?? Math.random
-  const log = options.log ?? ((entry: WorkerLog) => console.log(JSON.stringify(entry)))
+  /**
+   * The worker's own events, on the deployment's sink.
+   *
+   * `WorkerLog` stays the internal shape and `options.log` keeps replacing it, so a
+   * deployment that already intercepts these is unaffected. What changed is where
+   * the default goes: one pipeline, redacted and level-filtered like everything
+   * else, instead of a second private one on stdout.
+   */
+  const emit = (entry: WorkerLog): void => {
+    const level: LogLevel =
+      entry.event === 'discarded' || entry.event === 'handler_ignored_abort'
+        ? 'error'
+        : entry.event === 'retrying' || entry.event === 'cancelled'
+          ? 'warn'
+          : 'info'
+    logger.child({ tenant: entry.tenant || null }).log({
+      level,
+      event: entry.event === 'handler_ignored_abort' ? 'job_ignored_abort' : `job_${entry.event}`,
+      fn: entry.job,
+      ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
+      // Rebuilt so describeError sees a named failure rather than a bare string:
+      // the code survived the WorkerLog boundary in its own field.
+      ...(entry.error === undefined
+        ? {}
+        : {
+            error: entry.errorCode
+              ? new KetError({ code: entry.errorCode, message: entry.error })
+              : entry.error,
+          }),
+      fields: {
+        workerId: entry.workerId,
+        jobId: entry.jobId,
+        queue: entry.queue,
+        attempt: entry.attempt,
+      },
+    })
+  }
+  const log = options.log ?? emit
   const pollMin = spec.worker.pollMinMs ?? 100
   const pollMax = spec.worker.pollMaxMs ?? 2_000
   const refreshMs = spec.worker.tenantRefreshMs ?? 60_000
+  const sweepMs = Math.max(1_000, spec.worker.scheduleSweepMs ?? 30_000)
+  const scheduled = Object.values(manifest.jobs).some((meta) => meta.schedule)
+  // Only when the deployment actually limits something. Pruning unconditionally
+  // would create the table in every tenant that never wanted one.
+  const limited = Boolean(spec.serve?.rateLimit)
+  const pruneRateEveryMs = 3_600_000
   const leaseMs = spec.worker.leaseMs ?? 60_000
   const shutdownGrace = spec.worker.shutdownGraceMs ?? 15_000
   const maxConcurrency = spec.serve?.tenants ? (spec.serve.tenants.max ?? 32) : Infinity
@@ -145,11 +216,14 @@ export async function bootWorker(
   let closing = false
   let loop: Promise<void> | null = null
   let unsubscribe: (() => Promise<void>) | null = null
+  let sweepTimer: ReturnType<typeof setInterval> | null = null
+  let sweeping: Promise<unknown> | null = null
   let wakeResolve: (() => void) | null = null
   const inFlight = new Set<Promise<void>>()
   const controllers = new Map<string, AbortController>()
   const active = new Map<string, number>()
   const rescuedAt = new Map<string, number>()
+  const ratePrunedAt = new Map<string, number>()
   const totalActive = () => [...active.values()].reduce((sum, count) => sum + count, 0)
 
   const refresh = async () => {
@@ -240,6 +314,17 @@ export async function bootWorker(
         actor: job.actor,
         scope: job.scope,
         queueNotify: config.queueNotify,
+        log: logger.child({
+          tenant: tenant.key || null,
+          fn: job.job,
+          actor: traceOf(job.actor, config.secret),
+          company: job.scope?.company ?? null,
+          // The job's own id, hashed like any other correlation: every record from
+          // one attempt shares it. It is deliberately not the trace of the request
+          // that enqueued the job — the queue does not carry a correlation column,
+          // so claiming otherwise here would be a lie a dashboard would believe.
+          trace: traceOf(job.id, config.secret),
+        }),
       })
       const context = Object.assign(base, {
         job: {
@@ -293,6 +378,7 @@ export async function bootWorker(
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      const errorCode = error instanceof KetError ? { errorCode: error.code } : {}
       if (job.attempt >= job.maxAttempts) {
         const changed = await queue.discard(job.id, error, workerId)
         if (!changed) {
@@ -318,6 +404,7 @@ export async function bootWorker(
           attempt: job.attempt,
           durationMs: now().getTime() - started,
           error: message,
+          ...errorCode,
         })
       } else {
         const changed = await queue.retry(job.id, error, retryAt(job.attempt), workerId)
@@ -344,6 +431,7 @@ export async function bootWorker(
           attempt: job.attempt,
           durationMs: now().getTime() - started,
           error: message,
+          ...errorCode,
         })
       }
     } finally {
@@ -388,6 +476,13 @@ export async function bootWorker(
           await queue.rescue()
           rescuedAt.set(key, now().getTime())
         }
+        // Counters for keys nobody will use again would otherwise grow forever.
+        // On the pass that already holds this tenant's lease, once an hour.
+        if (limited && now().getTime() - (ratePrunedAt.get(key) ?? 0) >= pruneRateEveryMs) {
+          ratePrunedAt.set(key, now().getTime())
+          const { removed } = await pruneRateSlots(tenant.adapter, { now: now() })
+          if (removed) logger.child({ tenant: key || null }).info('rate_pruned', { removed })
+        }
         for (const [name, limit] of Object.entries(queues)) {
           const room = Math.min(limit - (active.get(name) ?? 0), maxConcurrency - totalActive())
           if (room <= 0) continue
@@ -402,6 +497,62 @@ export async function bootWorker(
       })
     }
     return claimed
+  }
+
+  /**
+   * Move every due schedule forward, in every tenant, and enqueue what moved.
+   *
+   * Claim first, enqueue second: a crash between the two loses one tick rather than
+   * running it twice, which is the right way round for anything that touches money.
+   * A tenant that throws does not stop the rest — one broken database is not a
+   * reason for every other tenant to stop keeping time.
+   */
+  const sweepSchedules = async (): Promise<number> => {
+    if (!scheduled || closing) return 0
+    await refresh()
+    let fired = 0
+    for (const key of tenantKeys) {
+      if (closing) break
+      const at = logger.child({ tenant: key || null })
+      try {
+        await source.with(key, async (tenant) => {
+          const claims = await claimDue(tenant.adapter, tenant.live, {
+            now: now(),
+            timezone: config.defaultTimezone,
+          })
+          if (!claims.length) return
+          const queue = await createQueue(tenant.adapter, { notify: config.queueNotify })
+          for (const claim of claims) {
+            const meta = tenant.live.jobs[claim.job]
+            if (!meta) continue
+            await queue.enqueue(
+              claim.job,
+              {},
+              {
+                queue: meta.queue,
+                maxAttempts: meta.maxAttempts,
+                actor: null,
+                // No company: the framework knows which tenants exist and does not
+                // know what a company is. A job with per-company work declares
+                // crossCompany, reads them, and enqueues per company from there.
+                scope: { company: null, companies: null, branch: null, branches: null },
+                uniqueKey: `schedule:${claim.tick}`,
+              },
+            )
+            fired += 1
+            at.log({
+              level: 'info',
+              event: 'schedule_fired',
+              fn: claim.job,
+              fields: { tick: claim.tick, skipped: claim.skipped },
+            })
+          }
+        })
+      } catch (error) {
+        at.error('schedule_error', error)
+      }
+    }
+    return fired
   }
 
   const drain = async (): Promise<number> => {
@@ -421,32 +572,47 @@ export async function bootWorker(
       let idle = pollMin
       while (!closing) {
         const claimed = await runOnce().catch((error) => {
-          console.error(JSON.stringify({ event: 'worker_tick_error', workerId, error: String(error) }))
+          logger.error('worker_tick_error', error, { workerId })
           return 0
         })
         idle = claimed ? pollMin : Math.min(pollMax, Math.max(pollMin, idle * 2))
         if (!closing) await waitForWake(idle)
       }
     })()
+    if (scheduled && !sweepTimer) {
+      // Its own timer rather than a step in the poll loop: the poll loop backs off
+      // to two seconds when there is nothing to do, and a schedule that only fires
+      // when the queue is busy is not a schedule.
+      sweepTimer = setInterval(() => {
+        // Held so that close() can wait for it. A sweep still running when the
+        // tenant source shuts under it would fail on a closed pool and report an
+        // error that is really just the process stopping.
+        sweeping = sweepSchedules()
+          .catch((error) => logger.error('schedule_error', error, { workerId }))
+          .finally(() => {
+            sweeping = null
+          })
+      }, sweepMs)
+      sweepTimer.unref?.()
+    }
   }
 
   if (source.singleAdapter?.notifications?.subscribe && config.queueNotify) {
     try {
       unsubscribe = await source.singleAdapter.notifications.subscribe(JOB_CHANNEL, wake, wake)
     } catch (error) {
-      console.warn(
-        JSON.stringify({
-          event: 'queue_notifier_unavailable',
-          workerId,
-          error: String(error),
-          fallback: 'polling',
-        }),
-      )
+      logger.log({
+        level: 'warn',
+        event: 'queue_notifier_unavailable',
+        error,
+        fields: { workerId, fallback: 'polling' },
+      })
     }
   }
 
   return {
     workerId,
+    sweepSchedules,
     manifest,
     runOnce,
     drain,
@@ -470,15 +636,20 @@ export async function bootWorker(
       if (graceTimer) clearTimeout(graceTimer)
       if (!graceful)
         for (const controller of controllers.values()) controller.abort(new Error('worker shutting down'))
+      if (sweepTimer) clearInterval(sweepTimer)
+      await sweeping
       await unsubscribe?.()
       await source.close()
       await baseTransport.close?.()
+      logger.info('shutdown', { workerId })
+      await sink.flush?.()
+      await sink.close?.()
     },
   }
 }
 
 export async function serveWorker(
-  spec: AppSpec,
+  spec: DeploymentSpec,
   options: Parameters<typeof bootWorker>[1] = {},
 ): Promise<BootedWorker> {
   const worker = await bootWorker(spec, options)

@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { defineFn, eq, from, localDateTimeToUtc } from '@ketvietlab/ketjs'
+import { dateTimeFormatter, defineFn, desc, eq, from, gte, localDateTimeToUtc, lt } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, verifyPassword } from '../user/password.ts'
 
@@ -39,6 +39,32 @@ const policyFor = async (ctx: Ctx): Promise<Row> =>
     overtimeMinimumMinutes: 30,
   }
 
+const currentMonth = (timezone: string): string => {
+  const parts = dateTimeFormatter('en', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date())
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  if (!year || !month) throw new Error('month')
+  return `${year}-${month}`
+}
+
+const currentDate = (timezone: string): string => {
+  const parts = dateTimeFormatter('en', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+  if (!year || !month || !day) throw new Error('date')
+  return `${year}-${month}-${day}`
+}
+
 const monthBounds = (month: string, timezone: string): [string, string] => {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('month')
   const [year, number] = month.split('-').map(Number)
@@ -75,6 +101,16 @@ type ClockInput = {
   employee: Row
   branchId: string
   source: string
+  /**
+   * Which way the caller believes they are punching.
+   *
+   * Absent, the state decides and the punch toggles — which is right at a kiosk,
+   * where the person can see the screen. It is wrong over a network: a client
+   * retrying a check-in whose response was lost would clock the employee out,
+   * silently and in the opposite direction from the one they asked for. Naming
+   * the direction turns that into a refusal.
+   */
+  expect?: 'in' | 'out'
   kioskId?: string
   actorUserId?: string
   networkFingerprint?: string
@@ -101,6 +137,9 @@ const clock = async (ctx: Ctx, input: ClockInput) => {
     }
     const version = Number(state.version)
     const punchId = randomUUID()
+    const heading = state.openSessionId ? 'out' : 'in'
+    if (input.expect && input.expect !== heading)
+      return invalid(issue('expect', `attendance.error.already${heading === 'out' ? 'In' : 'Out'}`))
     if (!state.openSessionId) {
       const sessionId = randomUUID()
       const claimed = await tx.db.compareAndSet(
@@ -297,14 +336,18 @@ export const functions: Record<string, FnSpec> = {
   'kiosk.manageIssue': defineFn({
     input: { id: 'id?', name: 'text', branchId: 'id' },
     output: { ok: 'bool', id: 'id?', secret: 'text?', errors: 'json?' },
-    effects: ['write:attendance.Kiosk'],
+    effects: ['read:attendance.Kiosk', 'write:attendance.Kiosk'],
+    exposure: 'internal',
     idempotent: true,
-    agent: true,
+    agent: false,
     handler: async (ctx: Ctx, a) => {
       if (!ctx.scope.branch || String(a.branchId) !== ctx.scope.branch)
         return invalid(issue('branchId', 'attendance.error.branch'))
-      const id = String(a.id ?? randomUUID()),
-        value = secret()
+      if (!clean(a.name)) return invalid(issue('name', 'attendance.error.required'))
+      const id = String(a.id ?? randomUUID())
+      if ((await ctx.db.select('attendance.Kiosk', { id }))[0])
+        return invalid(issue('requestKey', 'attendance.error.credentialReplay'))
+      const value = secret()
       await ctx.db.insert('attendance.Kiosk', {
         id,
         name: clean(a.name),
@@ -321,8 +364,9 @@ export const functions: Record<string, FnSpec> = {
     input: { employeeId: 'id', pin: 'text' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: ['read:attendance.Credential', 'write:attendance.Credential'],
+    exposure: 'internal',
     idempotent: true,
-    agent: true,
+    agent: false,
     handler: async (ctx: Ctx, a) => {
       const pin = clean(a.pin)
       if (!/^\d{4,12}$/.test(pin)) return invalid(issue('pin', 'attendance.error.invalid'))
@@ -335,19 +379,46 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  'credential.manageOptions': defineFn({
+    input: {},
+    output: { id: 'id', code: 'text', name: 'text' },
+    effects: [
+      'read:attendance.Kiosk',
+      'write:attendance.Kiosk',
+      'read:attendance.Credential',
+      'write:attendance.Credential',
+      'read:hr.Employee',
+      'read:partner.Partner',
+    ],
+    agent: false,
+    handler: async (ctx: Ctx) => {
+      const E = ctx.table('hr.Employee')
+      return (await ctx.db.all(from(E).preload('partner').where(eq(E.active, true)))).map((row) => ({
+        id: row.id,
+        code: row.code,
+        name: String((row.partner as Row | null)?.name ?? row.code),
+      }))
+    },
+  }),
+
   'credential.manageQr': defineFn({
-    input: { employeeId: 'id' },
+    input: { employeeId: 'id', requestKey: 'text?' },
     output: { ok: 'bool', id: 'id?', secret: 'text?', errors: 'json?' },
     effects: ['read:attendance.Credential', 'write:attendance.Credential'],
+    exposure: 'internal',
     idempotent: true,
-    agent: true,
+    agent: false,
     handler: async (ctx: Ctx, a) => {
-      const value = qrSecret()
       const existing = (await ctx.db.select('attendance.Credential', { employeeId: a.employeeId }))[0]
+      const requestKey = clean(a.requestKey)
+      if (requestKey && existing?.qrRequestKey === requestKey)
+        return invalid(issue('requestKey', 'attendance.error.credentialReplay'))
+      const value = qrSecret()
       const id = String(existing?.id ?? `employee:${a.employeeId}`)
       const values = {
         employeeId: a.employeeId,
         qrDigest: digest(value),
+        qrRequestKey: requestKey || null,
         qrIssuedAt: now(),
         active: true,
         updatedAt: now(),
@@ -445,7 +516,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'punch.self': defineFn({
-    input: {},
+    input: { expect: 'text?' },
     output: {
       ok: 'bool',
       employeeId: 'id?',
@@ -463,20 +534,64 @@ export const functions: Record<string, FnSpec> = {
       'write:attendance.Session',
       'write:attendance.Punch',
     ],
-    handler: async (ctx: Ctx) => {
+    idempotent: true,
+    handler: async (ctx: Ctx, a) => {
       const employee = await employeeForActor(ctx)
       if (!employee) return invalid(issue('employeeId', 'attendance.error.employeeUser'))
+      const expect = a.expect == null ? undefined : String(a.expect)
+      if (expect !== undefined && expect !== 'in' && expect !== 'out')
+        return invalid(issue('expect', 'attendance.error.invalid'))
       return clock(ctx, {
         employee,
         branchId: String(employee.homeBranchId),
         source: 'account',
         actorUserId: ctx.actor ?? undefined,
+        ...(expect ? { expect } : {}),
       })
     },
   }),
 
+  /** Whether this employee is on the clock right now, and since when. */
+  'clock.mine': defineFn({
+    input: {},
+    output: { onClock: 'bool', sessionId: 'id?', startAt: 'datetime?', branchId: 'id?' },
+    effects: ['read:hr.Employee', 'read:attendance.ClockState', 'read:attendance.Session'],
+    handler: async (ctx: Ctx) => {
+      const employee = await employeeForActor(ctx)
+      if (!employee) return { onClock: false }
+      const state = (await ctx.db.select('attendance.ClockState', { id: String(employee.id) }))[0]
+      if (!state?.openSessionId) return { onClock: false }
+      const session = (await ctx.db.select('attendance.Session', { id: state.openSessionId }))[0]
+      return {
+        onClock: true,
+        sessionId: state.openSessionId,
+        startAt: session?.startAt ?? null,
+        branchId: session?.branchId ?? null,
+      }
+    },
+  }),
+
+  /** The attendance policy's local calendar date for channel defaults. */
+  'calendar.mine': defineFn({
+    input: {},
+    output: { today: 'text', timezone: 'text' },
+    effects: ['read:attendance.Policy'],
+    handler: async (ctx: Ctx) => {
+      const policy = await policyFor(ctx)
+      const timezone = String(policy.timezone)
+      return { today: currentDate(timezone), timezone }
+    },
+  }),
+
   'session.mine': defineFn({
-    input: { month: 'text?' },
+    input: {
+      month: 'text?',
+      currentMonth: 'bool?',
+      dateFrom: 'text?',
+      dateTo: 'text?',
+      offset: 'int?',
+      limit: 'int?',
+    },
     output: {
       id: 'id',
       branchId: 'id',
@@ -485,16 +600,49 @@ export const functions: Record<string, FnSpec> = {
       correctedStartAt: 'datetime?',
       correctedStopAt: 'datetime?',
       state: 'text',
+      workedHours: 'text',
     },
     effects: ['read:hr.Employee', 'read:attendance.Session', 'read:attendance.Policy'],
     handler: async (ctx: Ctx, a) => {
       const employee = await employeeForActor(ctx)
       if (!employee) return []
-      const rows = await ctx.db.select('attendance.Session', { employeeId: employee.id })
-      if (!a.month) return rows
-      const policy = await policyFor(ctx),
-        [from, to] = monthBounds(String(a.month), String(policy.timezone))
-      return rows.filter((row) => String(row.startAt) >= from && String(row.startAt) < to)
+      const policy = await policyFor(ctx)
+      const S = ctx.table('attendance.Session')
+      let query = from(S).where(eq(S.employeeId, employee.id))
+      if (a.dateFrom) {
+        query = query.where(
+          gte(S.startAt, localDateTimeToUtc(`${String(a.dateFrom)}T00:00`, String(policy.timezone))),
+        )
+      }
+      if (a.dateTo) {
+        const next = new Date(`${String(a.dateTo)}T00:00:00.000Z`)
+        next.setUTCDate(next.getUTCDate() + 1)
+        query = query.where(
+          lt(
+            S.startAt,
+            localDateTimeToUtc(`${next.toISOString().slice(0, 10)}T00:00`, String(policy.timezone)),
+          ),
+        )
+      }
+      // A month label and its UTC bounds must come from the same timezone.
+      // Letting the caller derive "current" from an employee timezone while
+      // these bounds use policy time can skip a whole month at the boundary.
+      if (a.month || a.currentMonth) {
+        const month = a.currentMonth ? currentMonth(String(policy.timezone)) : String(a.month)
+        const [from, to] = monthBounds(month, String(policy.timezone))
+        query = query.where(gte(S.startAt, from), lt(S.startAt, to))
+      }
+      query = query.orderBy(desc(S.startAt), desc(S.id))
+      if (a.offset != null) query = query.offset(Math.max(0, Number(a.offset)))
+      if (a.limit != null) query = query.limit(Math.max(1, Math.min(101, Number(a.limit))))
+      const rows = await ctx.db.all(query)
+      const rounding = Math.max(1, Number(policy.roundingMinutes))
+      return rows.map((row) => {
+        const stop = effectiveStop(row)
+        const rawMinutes = stop ? minutes(Date.parse(stop) - Date.parse(effectiveStart(row))) : 0
+        const workedMinutes = Math.round(rawMinutes / rounding) * rounding
+        return { ...row, workedHours: (workedMinutes / 60).toFixed(2) }
+      })
     },
   }),
 
@@ -611,7 +759,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'period.report': defineFn({
-    input: { month: 'text' },
+    input: { month: 'text?' },
     output: { id: 'id', month: 'text', timezone: 'text', state: 'text', version: 'int', entries: 'json?' },
     effects: [
       'read:attendance.Policy',
@@ -627,10 +775,11 @@ export const functions: Record<string, FnSpec> = {
     ],
     agent: true,
     handler: async (ctx: Ctx, a) => {
-      const month = String(a.month)
       let policy: Row
+      let month: string
       try {
         policy = await policyFor(ctx)
+        month = clean(a.month) || currentMonth(String(policy.timezone))
         monthBounds(month, String(policy.timezone))
       } catch {
         return null
@@ -660,7 +809,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'period.manageClose': defineFn({
-    input: { month: 'text' },
+    input: { month: 'text', expectedVersion: 'int?' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
     effects: [
       'read:attendance.Policy',
@@ -703,6 +852,8 @@ export const functions: Record<string, FnSpec> = {
         period = (await ctx.db.select('attendance.Period', { month }))[0]
       }
       if (period.state === 'locked') return { ok: true, id: period.id, version: period.version }
+      if (a.expectedVersion != null && Number(period.version) !== Number(a.expectedVersion))
+        return invalid(issue('version', 'attendance.error.invalid'))
       const open = (await ctx.db.select('attendance.Session', {})).some(
         (row) => row.state === 'open' && String(row.startAt) >= bounds[0] && String(row.startAt) < bounds[1],
       )
@@ -727,17 +878,23 @@ export const functions: Record<string, FnSpec> = {
       if (pendingCorrections || pendingOvertime)
         return invalid(issue('month', 'attendance.error.periodPending'))
       const version = Number(period.version) + 1
-      await ctx.db.update(
+      const changed = await ctx.db.compareAndSet(
         'attendance.Period',
         { id: period.id },
+        {
+          state: 'open',
+          ...(a.expectedVersion == null ? {} : { version: Number(a.expectedVersion) }),
+        },
         { state: 'locked', version, lockedAt: now(), lockedBy: ctx.actor ?? null },
       )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid(issue('version', 'attendance.error.invalid'))
       return { ok: true, id: period.id, version }
     },
   }),
 
   'period.manageReopen': defineFn({
-    input: { month: 'text', reason: 'text' },
+    input: { month: 'text', reason: 'text', expectedVersion: 'int?' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
     effects: ['read:attendance.Period', 'write:attendance.Period'],
     idempotent: true,
@@ -747,10 +904,16 @@ export const functions: Record<string, FnSpec> = {
       const period = (await ctx.db.select('attendance.Period', { month: a.month }))[0]
       if (!period) return invalid(issue('month', 'attendance.error.missing'))
       if (period.state === 'open') return { ok: true, id: period.id, version: period.version }
+      if (a.expectedVersion != null && Number(period.version) !== Number(a.expectedVersion))
+        return invalid(issue('version', 'attendance.error.invalid'))
       const version = Number(period.version) + 1
-      await ctx.db.update(
+      const changed = await ctx.db.compareAndSet(
         'attendance.Period',
         { id: period.id },
+        {
+          state: 'locked',
+          ...(a.expectedVersion == null ? {} : { version: Number(a.expectedVersion) }),
+        },
         {
           state: 'open',
           version,
@@ -759,6 +922,8 @@ export const functions: Record<string, FnSpec> = {
           reopenReason: clean(a.reason),
         },
       )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid(issue('version', 'attendance.error.invalid'))
       return { ok: true, id: period.id, version }
     },
   }),

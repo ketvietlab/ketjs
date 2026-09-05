@@ -67,7 +67,7 @@ test('partner: an address is its own row, so there is nothing to compute about w
     (got.addresses as Array<{ isDefault: boolean }>).filter((address) => address.isDefault).length,
     2,
   )
-  // In Odoo both of these would be partners, and `commercial_partner_id` would
+  // In the domain contract both of these would be partners, and computed commercial-party pointer would
   // exist to walk back up and answer "so who is the customer".
   const parties = await callFn('partner.listPartners', {}, { ...o, scope: SCOPE })
   assert.equal((parties.value as unknown[]).length, 1, 'two addresses did not become two parties')
@@ -208,7 +208,7 @@ test('partner: repeated defaults and roles remain unique and idempotent', async 
   await o.adapter.close()
 })
 
-// ── the per-company segment: ir.property, as an ordinary model ───────────────
+// ── the per-company segment: property side table, as an ordinary model ───────────────
 
 test('terms: the same shared party carries different terms per legal entity', async () => {
   const o = await boot()
@@ -216,8 +216,11 @@ test('terms: the same shared party carries different terms per legal entity', as
   await call(o, 'partner.saveTerms', { id: 't1', partnerId: 'p1', creditLimit: '3000' }, { company: 'c1' })
   await call(o, 'partner.saveTerms', { id: 't2', partnerId: 'p1', creditLimit: '0' }, { company: 'c2' })
 
-  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).creditLimit, 3000)
-  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).creditLimit, 0)
+  assert.equal(
+    (await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c1' })).creditLimit,
+    '3000',
+  )
+  assert.equal((await call(o, 'partner.getTerms', { partnerId: 'p1' }, { company: 'c2' })).creditLimit, '0')
   // And the party itself is one row, seen identically from both.
   assert.equal((await call(o, 'partner.getPartner', { id: 'p1' }, { company: 'c2' })).name, 'Acme')
   await o.adapter.close()

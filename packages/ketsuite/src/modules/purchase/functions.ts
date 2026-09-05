@@ -1,6 +1,21 @@
-import { defineFn } from '@ketvietlab/ketjs'
+import { defineFn, deleteFrom, desc, eq, from, ilike, inArray, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import { insertDraftMove, quoteTaxLineForPosting, type TaxShare } from '../account/functions.ts'
+import {
+  addDecimals,
+  canonicalDecimalText,
+  compareDecimals,
+  decimalSign,
+  minorText,
+  moneyMinor,
+  multiplyToMinor,
+  negateDecimalText,
+  scaleOf,
+  subtractDecimals,
+  sumMoneyMinor,
+} from '../account/money.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
+import { convertQty, type Unit, UomError } from '../uom/convert.ts'
 
 export const PURCHASE_STATES = ['draft', 'sent', 'to approve', 'purchase', 'cancel'] as const
 export const INVOICE_STATUSES = ['no', 'to invoice', 'invoiced'] as const
@@ -8,9 +23,30 @@ export const PURCHASE_METHODS = ['purchase', 'receive'] as const
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
 const n = (value: unknown): number => Number(value ?? 0)
-const money = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
-const decimal = (value: number): string => String(money(value))
+const quantityRound = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
+const quantityText = (value: number): string => String(quantityRound(value))
 const now = (): string => new Date().toISOString()
+const wildcard = (value: unknown): string => String(value ?? '').replace(/[\\%_]/g, '\\$&')
+
+class PurchaseRefused extends Error {
+  result: Row
+  constructor(result: Row) {
+    super('refused')
+    this.result = result
+  }
+}
+
+const claimRevision = async (ctx: Ctx, order: Row, expectedRevision?: unknown): Promise<boolean> => {
+  const revision = n(order.revision)
+  if (expectedRevision !== undefined && revision !== n(expectedRevision)) return false
+  const changed = await ctx.db.compareAndSet(
+    'purchase.Order',
+    { id: order.id },
+    { revision: order.revision ?? null },
+    { revision: revision + 1 },
+  )
+  return 'dryRun' in changed || changed.matched
+}
 
 async function currency(ctx: Ctx): Promise<string> {
   if (!ctx.scope.company) throw new Error('purchase requires an active company')
@@ -19,11 +55,20 @@ async function currency(ctx: Ctx): Promise<string> {
   return String(company.currency)
 }
 
+/**
+ * The next order number for this company.
+ *
+ * Keyed by the company because `id` is a tenant-wide primary key: the constant
+ * `'purchase'` gave the whole tenant one row, so only the first company to raise
+ * an order could ever own it. See sale.nextName, which had the same defect.
+ */
 async function nextName(ctx: Ctx): Promise<string> {
-  const id = 'purchase'
+  if (!ctx.scope.company) throw new Error('purchase requires an active company')
+  const id = `${ctx.scope.company}:purchase`
   await ctx.db.insertIfAbsent('purchase.Sequence', { id, nextNumber: 1 })
   for (let attempt = 0; attempt < 32; attempt += 1) {
-    const row = (await ctx.db.select('purchase.Sequence', { id }))[0]!
+    const row = (await ctx.db.select('purchase.Sequence', { id, companyId: ctx.scope.company }))[0]
+    if (!row) throw new Error('purchase sequence row disappeared while assigning a number')
     const current = n(row.nextNumber)
     const changed = await ctx.db.compareAndSet(
       'purchase.Sequence',
@@ -36,6 +81,36 @@ async function nextName(ctx: Ctx): Promise<string> {
   throw new Error('purchase sequence did not settle after concurrent updates')
 }
 
+const unitOf = async (ctx: Ctx, id: unknown): Promise<Unit | null> => {
+  const row = (await ctx.db.select('uom.Unit', { id }))[0]
+  return row
+    ? {
+        id: String(row.id),
+        parentPath: String(row.parentPath ?? ''),
+        absoluteFactor: n(row.absoluteFactor),
+        rounding: n(row.rounding) || 0.01,
+      }
+    : null
+}
+
+/**
+ * A vendor sells in their unit and the warehouse counts in the product's. Both
+ * numbers are real and they are not the same number, so every quantity that
+ * crosses between a purchase line and a stock move is converted rather than
+ * copied. Copying is what put two pieces on the shelf for two boxes of twelve.
+ */
+const inUnit = async (ctx: Ctx, quantity: number, fromId: unknown, toId: unknown): Promise<number | null> => {
+  if (String(fromId) === String(toId)) return quantity
+  const [from, to] = await Promise.all([unitOf(ctx, fromId), unitOf(ctx, toId)])
+  if (!from || !to) return null
+  try {
+    return convertQty(quantity, from, to)
+  } catch (error) {
+    if (error instanceof UomError) return null
+    throw error
+  }
+}
+
 async function productContext(ctx: Ctx, productId: unknown) {
   const product = (await ctx.db.select('product.Product', { id: productId }))[0]
   if (!product) return null
@@ -43,99 +118,261 @@ async function productContext(ctx: Ctx, productId: unknown) {
   return template ? { product, template } : null
 }
 
+/**
+ * The vendor's best matching pricelist row, expressed in the unit the buyer is
+ * ordering in.
+ *
+ * A pricelist row carries its own unit, and both comparisons that use the row
+ * ignored it: `minQty` was compared against the ordered quantity as if the two
+ * numbers shared a unit, and the price was applied per ordered unit as if the
+ * vendor had quoted it that way. Order one box of twelve against "80 per piece
+ * from 5 pieces" and the row did not even match — twelve pieces read as one —
+ * and when a row did match, a per-piece price was charged per box.
+ */
 async function supplierPrice(
   ctx: Ctx,
   partnerId: unknown,
   productId: unknown,
   quantity: number,
+  orderedUomId: unknown,
   at: string,
 ): Promise<Row | null> {
   const product = await productContext(ctx, productId)
   if (!product) return null
-  return (
-    (
-      await ctx.db.select('purchase.SupplierInfo', {
-        partnerId,
-        productTemplateId: product.template.id,
-      })
+  const scale = scaleOf(await currency(ctx))
+  const rows = (
+    await ctx.db.select('purchase.SupplierInfo', {
+      partnerId,
+      productTemplateId: product.template.id,
+    })
+  )
+    .filter((row) => !row.productId || row.productId === productId)
+    .filter(
+      (row) => (!row.dateStart || String(row.dateStart) <= at) && (!row.dateEnd || String(row.dateEnd) >= at),
     )
-      .filter((row) => (!row.productId || row.productId === productId) && n(row.minQty) <= quantity)
-      .filter(
-        (row) =>
-          (!row.dateStart || String(row.dateStart) <= at) && (!row.dateEnd || String(row.dateEnd) >= at),
+  const matching: Row[] = []
+  for (const row of rows) {
+    const inRowUnit = await inUnit(ctx, quantity, orderedUomId, row.productUomId)
+    if (inRowUnit === null || n(row.minQty) > inRowUnit) continue
+    // One ordered unit holds this many of the row's unit, so the row's price
+    // scales by the same factor: 80 per piece is 960 per box of twelve.
+    const orderedInRow = await inUnit(ctx, 1, orderedUomId, row.productUomId)
+    if (orderedInRow === null) continue
+    matching.push({
+      ...row,
+      price: minorText(multiplyToMinor([row.price, String(orderedInRow)], scale), scale),
+      minQtyOrdered: inRowUnit,
+    })
+  }
+  return (
+    matching.sort((a, b) => {
+      const variant = Number(Boolean(b.productId)) - Number(Boolean(a.productId))
+      return (
+        variant ||
+        n(a.sequence) - n(b.sequence) ||
+        n(b.minQty) - n(a.minQty) ||
+        compareDecimals(a.price, b.price)
       )
-      .sort((a, b) => {
-        const variant = Number(Boolean(b.productId)) - Number(Boolean(a.productId))
-        return (
-          variant || n(a.sequence) - n(b.sequence) || n(b.minQty) - n(a.minQty) || n(a.price) - n(b.price)
-        )
-      })[0] ?? null
+    })[0] ?? null
   )
 }
 
-function taxAmounts(tax: Row | null, gross: number, quantity: number) {
-  if (!tax) return { untaxed: money(gross), tax: 0, total: money(gross) }
-  if (tax.amountType === 'group') throw new Error('group taxes are outside the supported Odoo 19 subset')
-  const amount = n(tax.amount)
-  let untaxed = money(gross)
-  let taxAmount = 0
-  if (tax.amountType === 'fixed') {
-    taxAmount = money(amount * quantity)
-    if (tax.priceInclude) untaxed = money(gross - taxAmount)
-    return { untaxed, tax: taxAmount, total: tax.priceInclude ? money(gross) : money(gross + taxAmount) }
-  }
-  const rate = amount / 100
-  if (tax.amountType === 'division') {
-    if (tax.priceInclude) {
-      untaxed = money(gross * (1 - rate))
-      taxAmount = money(gross - untaxed)
-    } else taxAmount = money(gross / (1 - rate) - gross)
-  } else if (tax.priceInclude) {
-    untaxed = money(gross / (1 + rate))
-    taxAmount = money(gross - untaxed)
-  } else taxAmount = money(gross * rate)
-  return { untaxed, tax: taxAmount, total: money(untaxed + taxAmount) }
-}
-
 async function totals(ctx: Ctx, orderId: unknown) {
-  let untaxed = 0
-  let tax = 0
+  const order = (await ctx.db.select('purchase.Order', { id: orderId }))[0]
+  if (!order) return
+  const scale = scaleOf(order.currency)
+  let untaxed = 0n
+  let tax = 0n
   for (const line of await ctx.db.select('purchase.OrderLine', { orderId })) {
-    const held = line.taxId ? ((await ctx.db.select('account.Tax', { id: line.taxId }))[0] ?? null) : null
-    const gross = money(n(line.productQty) * n(line.priceUnit) * (1 - n(line.discount) / 100))
-    const amounts = taxAmounts(held, gross, n(line.productQty))
-    untaxed = money(untaxed + amounts.untaxed)
-    tax = money(tax + amounts.tax)
+    const quote = await quoteTaxLineForPosting(ctx, {
+      taxIds: line.taxId ? [line.taxId] : [],
+      quantity: line.productQty,
+      priceUnit: line.priceUnit,
+      discount: line.discount,
+      taxUse: 'purchase',
+    })
+    if (quote.ok !== true) throw new Error(String(quote.errors[0]?.message ?? 'invalid purchase tax'))
+    untaxed += moneyMinor(quote.amountUntaxed, scale)
+    tax += moneyMinor(quote.amountTax, scale)
   }
   await ctx.db.update(
     'purchase.Order',
     { id: orderId },
     {
-      amountUntaxed: decimal(untaxed),
-      amountTax: decimal(tax),
-      amountTotal: decimal(untaxed + tax),
+      amountUntaxed: minorText(untaxed, scale),
+      amountTax: minorText(tax, scale),
+      amountTotal: minorText(untaxed + tax, scale),
+      revision: n(order.revision) + 1,
     },
   )
+}
+
+/**
+ * What a purchase line has actually been billed, read from the bills themselves.
+ * The stored counter was incremented when a bill was drafted and never reversed,
+ * so cancelling a bill left the order billed for ever and a second bill was
+ * refused. Deriving it also settles two bills drafted at the same time: both
+ * read the same rows inside their own transaction instead of a stale count.
+ */
+async function billedQuantity(ctx: Ctx, lineId: unknown): Promise<string> {
+  let billed = '0'
+  for (const moveLine of await ctx.db.select('account.MoveLine', { purchaseLineId: lineId })) {
+    if (!moveLine.productId) continue
+    const move = (await ctx.db.select('account.Move', { id: moveLine.moveId }))[0]
+    if (!move || move.state === 'cancel') continue
+    billed = addDecimals(
+      billed,
+      move.moveType === 'in_refund' ? negateDecimalText(moveLine.quantity) : moveLine.quantity,
+    )
+  }
+  return billed
+}
+
+async function refreshBilled(ctx: Ctx, orderId: unknown): Promise<void> {
+  for (const line of await ctx.db.select('purchase.OrderLine', { orderId }))
+    await ctx.db.update(
+      'purchase.OrderLine',
+      { id: line.id },
+      { qtyInvoiced: await billedQuantity(ctx, line.id) },
+    )
+}
+
+/**
+ * What the warehouse has received, converted back into the unit the line was
+ * ordered in. Stock is told to receive in the product's own unit, so the raw
+ * move quantity is not comparable to `productQty`.
+ */
+async function receivedQuantity(ctx: Ctx, line: Row): Promise<number> {
+  const context = await productContext(ctx, line.productId)
+  const stockUom = context?.template.uomId ?? line.productUomId
+  let received = 0
+  for (const move of await ctx.db.select('stock.Move', { purchaseLineId: line.id, state: 'done' }))
+    received += n(move.quantity)
+  const converted = await inUnit(ctx, received, stockUom, line.productUomId)
+  return quantityRound(converted ?? received)
+}
+
+async function refreshReceived(ctx: Ctx, orderId: unknown): Promise<void> {
+  for (const line of await ctx.db.select('purchase.OrderLine', { orderId }))
+    await ctx.db.update(
+      'purchase.OrderLine',
+      { id: line.id },
+      { qtyReceived: quantityText(await receivedQuantity(ctx, line)) },
+    )
 }
 
 async function invoiceStatus(ctx: Ctx, orderId: unknown): Promise<string> {
   const order = (await ctx.db.select('purchase.Order', { id: orderId }))[0]
   if (order?.state !== 'purchase') return 'no'
-  let billable = 0
-  let invoiced = 0
+  let billable = '0'
+  let invoiced = '0'
   for (const line of await ctx.db.select('purchase.OrderLine', { orderId })) {
     const context = await productContext(ctx, line.productId)
     const method = String(
       context?.template.purchaseMethod ?? (context?.template.type === 'service' ? 'purchase' : 'receive'),
     )
-    billable += method === 'purchase' ? n(line.productQty) : n(line.qtyReceived)
-    invoiced += n(line.qtyInvoiced)
+    billable = addDecimals(
+      billable,
+      method === 'purchase' ? line.productQty : String(await receivedQuantity(ctx, line)),
+    )
+    invoiced = addDecimals(invoiced, await billedQuantity(ctx, line.id))
   }
-  return billable - invoiced > 0.000001 ? 'to invoice' : invoiced > 0 ? 'invoiced' : 'no'
+  return compareDecimals(billable, invoiced) > 0
+    ? 'to invoice'
+    : compareDecimals(invoiced, '0') > 0
+      ? 'invoiced'
+      : 'no'
 }
 
 async function refreshInvoiceStatus(ctx: Ctx, orderId: unknown) {
   await ctx.db.update('purchase.Order', { id: orderId }, { invoiceStatus: await invoiceStatus(ctx, orderId) })
+}
+
+const lineEffects = [
+  'read:purchase.Order',
+  'read:purchase.OrderLine',
+  'write:purchase.OrderLine',
+  'write:purchase.Order',
+  'read:purchase.SupplierInfo',
+  'read:product.Product',
+  'read:product.Template',
+  'read:uom.Unit',
+  'read:account.Tax',
+  'read:company.Company',
+] as const
+
+/** An RFQ accepts line changes until it is confirmed or locked. */
+const editableOrder = async (ctx: Ctx, orderId: unknown): Promise<Row | null> => {
+  const order = (await ctx.db.select('purchase.Order', { id: orderId }))[0]
+  if (!order || order.locked || !['draft', 'sent'].includes(String(order.state))) return null
+  return order
+}
+
+type PlannedLine = { values: Record<string, unknown> } | { error: ReturnType<typeof invalid> }
+
+/**
+ * Price and validate one line. Shared so adding and correcting a line cannot
+ * drift apart — the second was missing entirely, which left a mistyped quantity
+ * correctable only by cancelling the whole request.
+ */
+async function planLine(ctx: Ctx, args: Record<string, unknown>): Promise<PlannedLine> {
+  const order = await editableOrder(ctx, args.orderId)
+  if (!order) return { error: invalid('orderId', 'lines can only be added to an unlocked RFQ') }
+  if (compareDecimals(args.productQty, '0') <= 0)
+    return { error: invalid('productQty', 'ordered quantity must be positive') }
+  const context = await productContext(ctx, args.productId)
+  if (!context?.template.purchaseOk) return { error: invalid('productId', 'product is not purchasable') }
+  if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
+    return { error: invalid('productUomId', 'unit of measure does not exist') }
+  // A unit that measures something else is not a unit for this product. Without
+  // this an order could be placed in kilograms for a product counted in pieces.
+  if ((await inUnit(ctx, 1, args.productUomId, context.template.uomId)) === null)
+    return { error: invalid('productUomId', 'unit does not measure the same thing as the product') }
+  const price = await supplierPrice(
+    ctx,
+    order.partnerId,
+    args.productId,
+    n(args.productQty),
+    args.productUomId,
+    String(order.dateOrder),
+  )
+  const priceUnit = args.priceUnit ?? price?.price ?? '0'
+  const discount = args.discount ?? price?.discount ?? '0'
+  if (
+    compareDecimals(priceUnit, '0') < 0 ||
+    compareDecimals(discount, '0') < 0 ||
+    compareDecimals(discount, '100') > 0
+  )
+    return { error: invalid('priceUnit', 'unit price and discount are invalid') }
+  const tax = args.taxId ? (await ctx.db.select('account.Tax', { id: args.taxId }))[0] : null
+  if (args.taxId && (!tax || !['purchase', 'none'].includes(String(tax.typeTaxUse))))
+    return { error: invalid('taxId', 'tax use does not match a purchase order') }
+  const datePlanned = String(
+    args.datePlanned ??
+      new Date(new Date(String(order.dateOrder)).getTime() + n(price?.delay ?? 1) * 86400000).toISOString(),
+  )
+  const quote = await quoteTaxLineForPosting(ctx, {
+    taxIds: tax ? [tax.id] : [],
+    quantity: args.productQty,
+    priceUnit,
+    discount,
+    taxUse: 'purchase',
+  })
+  if (quote.ok !== true)
+    return { error: invalid('taxId', String(quote.errors[0]?.message ?? 'invalid purchase tax')) }
+  return {
+    values: {
+      productId: args.productId,
+      name: args.name ?? price?.productName ?? context.template.name,
+      productQty: String(args.productQty),
+      productUomId: args.productUomId,
+      priceUnit: String(priceUnit),
+      discount: String(discount),
+      taxId: args.taxId ?? null,
+      datePlanned,
+      priceSubtotal: quote.amountUntaxed,
+    },
+  }
 }
 
 const confirmEffects = [
@@ -148,7 +385,11 @@ const confirmEffects = [
   'read:stock.PickingType',
   'read:stock.Picking',
   'write:stock.Picking',
+  'read:stock.Move',
   'write:stock.Move',
+  // Confirming settles the invoice status, which is read from the bills.
+  'read:account.Move',
+  'read:account.MoveLine',
 ] as const
 
 async function createReceipt(ctx: Ctx, order: Row) {
@@ -168,13 +409,17 @@ async function createReceipt(ctx: Ctx, order: Row) {
   if (created.ok !== true) return created
   for (const line of goods) {
     const moveId = `${String(line.id)}:receipt`
+    const context = await productContext(ctx, line.productId)
+    const stockUom = context?.template.uomId ?? line.productUomId
+    const quantity = await inUnit(ctx, n(line.productQty), line.productUomId, stockUom)
+    if (quantity === null) return invalid('productUomId', 'ordered unit does not convert to the product unit')
     const moved = (await stockFunctions.addMove!.handler(ctx, {
       id: moveId,
       name: line.name,
       pickingId,
       productId: line.productId,
-      productUomId: line.productUomId,
-      productUomQty: line.productQty,
+      productUomId: stockUom,
+      productUomQty: quantityText(quantity),
       origin: order.name,
     })) as Row
     if (moved.ok !== true) return moved
@@ -183,27 +428,43 @@ async function createReceipt(ctx: Ctx, order: Row) {
   return { ok: true, pickingId }
 }
 
-async function confirm(ctx: Ctx, id: unknown, approval: boolean) {
+async function confirm(ctx: Ctx, id: unknown, approval: boolean, expectedRevision?: unknown) {
   const order = (await ctx.db.select('purchase.Order', { id }))[0]
   if (!order) return invalid('id', 'purchase order does not exist')
+  if (expectedRevision !== undefined && n(order.revision) !== n(expectedRevision))
+    return invalid('expectedRevision', 'purchase order changed')
   if (order.state === 'purchase') return { ok: true, id, state: order.state }
   if (!['draft', 'sent', 'to approve'].includes(String(order.state)))
     return invalid('state', 'only an RFQ can be confirmed')
   if (!(await ctx.db.select('purchase.OrderLine', { orderId: id })).length)
     return invalid('lines', 'an RFQ needs at least one product line')
-  if (approval) {
-    await ctx.db.update('purchase.Order', { id }, { state: 'to approve' })
-    return { ok: true, id, state: 'to approve' }
-  }
-  const receipt = await createReceipt(ctx, order)
-  if ((receipt as Row).ok !== true) return receipt
-  await ctx.db.update('purchase.Order', { id }, { state: 'purchase', dateApprove: now() })
-  await refreshInvoiceStatus(ctx, id)
-  return {
-    ok: true,
-    id,
-    state: 'purchase',
-    ...((receipt as Row).pickingId ? { pickingId: (receipt as Row).pickingId } : {}),
+  try {
+    let pickingId: unknown
+    await ctx.tx(async (tx) => {
+      const current = (await tx.db.select('purchase.Order', { id }))[0]
+      if (!current || !(await claimRevision(tx, current, expectedRevision)))
+        throw new PurchaseRefused(invalid('expectedRevision', 'purchase order changed'))
+      if (approval) {
+        await tx.db.update('purchase.Order', { id }, { state: 'to approve' })
+        return
+      }
+      // The receipt is a picking plus one move per line plus the order's own
+      // state. A domain refusal rolls the entire graph back.
+      const receipt = (await createReceipt(tx, current)) as Row
+      if (receipt.ok !== true) throw new PurchaseRefused(receipt)
+      pickingId = receipt.pickingId
+      await tx.db.update('purchase.Order', { id }, { state: 'purchase', dateApprove: now() })
+      await refreshInvoiceStatus(tx, id)
+    })
+    return {
+      ok: true,
+      id,
+      state: approval ? 'to approve' : 'purchase',
+      ...(pickingId ? { pickingId } : {}),
+    }
+  } catch (error) {
+    if (error instanceof PurchaseRefused) return error.result
+    throw error
   }
 }
 
@@ -258,14 +519,21 @@ export const functions: Record<string, FnSpec> = {
       }
       if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
         return invalid('productUomId', 'unit of measure does not exist')
+      // A price per kilogram for a product counted in pieces can never be
+      // applied to an order line, so the row would sit in the pricelist and
+      // silently match nothing.
+      if ((await inUnit(ctx, 1, args.productUomId, template.uomId)) === null)
+        return invalid('productUomId', 'unit does not measure the same thing as the product')
       if (
         n(args.minQty) < 0 ||
-        n(args.price) < 0 ||
-        n(args.discount) < 0 ||
-        n(args.discount) > 100 ||
+        compareDecimals(args.price, '0') < 0 ||
+        compareDecimals(args.discount ?? '0', '0') < 0 ||
+        compareDecimals(args.discount ?? '0', '100') > 0 ||
         n(args.delay) < 0
       )
         return invalid('price', 'quantity, price, discount and lead time must be valid non-negative values')
+      if (args.dateStart && args.dateEnd && String(args.dateEnd) < String(args.dateStart))
+        return invalid('dateEnd', 'the validity period ends before it starts')
       const existing = (await ctx.db.select('purchase.SupplierInfo', { id: args.id }))[0]
       const values = {
         ...args,
@@ -318,14 +586,81 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   listOrders: defineFn({
-    input: { state: 'text?', partnerId: 'id?' },
+    input: {
+      state: 'text?',
+      states: 'json?',
+      partnerId: 'id?',
+      search: 'text?',
+      limit: 'int?',
+      offset: 'int?',
+    },
     effects: ['read:purchase.Order'],
     agent: true,
-    handler: (ctx, args) =>
-      ctx.db.select('purchase.Order', {
-        ...(args.state ? { state: args.state } : {}),
-        ...(args.partnerId ? { partnerId: args.partnerId } : {}),
-      }),
+    handler: (ctx, args) => {
+      const O = ctx.table('purchase.Order')
+      const states = Array.isArray(args.states) ? args.states.map(String) : []
+      const limit = Math.max(1, Math.min(Math.trunc(Number(args.limit) || 500), 2_000))
+      return ctx.db.all(
+        from(O)
+          .where(
+            eq(O.companyId, ctx.scope.company),
+            ...(args.state ? [eq(O.state, String(args.state))] : []),
+            ...(states.length ? [inArray(O.state, states)] : []),
+            ...(args.partnerId ? [eq(O.partnerId, String(args.partnerId))] : []),
+            ...(args.search
+              ? [
+                  or(
+                    ilike(O.name, `%${wildcard(args.search)}%`, true),
+                    ilike(O.partnerRef, `%${wildcard(args.search)}%`, true),
+                  ),
+                ]
+              : []),
+          )
+          .orderBy(desc(O.dateOrder), desc(O.id))
+          .limit(limit)
+          .offset(Math.max(0, Math.trunc(Number(args.offset) || 0))),
+      )
+    },
+  }),
+  listOrderMetrics: defineFn({
+    input: { orderIds: 'json' },
+    effects: ['read:purchase.OrderLine', 'read:stock.Move', 'read:stock.Picking'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const orderIds = Array.isArray(args.orderIds)
+        ? [...new Set(args.orderIds.map(String).filter(Boolean))]
+        : []
+      if (!orderIds.length) return []
+      const L = ctx.table('purchase.OrderLine')
+      const lines = await ctx.db.all(from(L).where(inArray(L.orderId, orderIds)))
+      const lineIds = lines.map((line) => String(line.id))
+      const M = ctx.table('stock.Move')
+      const moves = lineIds.length ? await ctx.db.all(from(M).where(inArray(M.purchaseLineId, lineIds))) : []
+      const pickingIds = [
+        ...new Set(moves.flatMap((move) => (move.pickingId ? [String(move.pickingId)] : []))),
+      ]
+      const P = ctx.table('stock.Picking')
+      const pickingStates = new Map<string, string>()
+      if (pickingIds.length)
+        for (const picking of await ctx.db.all(from(P).where(inArray(P.id, pickingIds))))
+          pickingStates.set(String(picking.id), String(picking.state))
+      const orderByLine = new Map(lines.map((line) => [String(line.id), String(line.orderId)]))
+      return orderIds.map((orderId) => ({
+        orderId,
+        itemCount: lines.filter((line) => String(line.orderId) === orderId).length,
+        pickingStates: [
+          ...new Set(
+            moves
+              .filter((move) => orderByLine.get(String(move.purchaseLineId)) === orderId)
+              .flatMap((move) =>
+                move.pickingId && pickingStates.has(String(move.pickingId))
+                  ? [pickingStates.get(String(move.pickingId))!]
+                  : [],
+              ),
+          ),
+        ],
+      }))
+    },
   }),
   getOrder: defineFn({
     input: { id: 'id' },
@@ -333,31 +668,71 @@ export const functions: Record<string, FnSpec> = {
       'read:purchase.Order',
       'read:purchase.OrderLine',
       'read:stock.Move',
+      'read:stock.MoveLine',
       'read:stock.Picking',
       'read:account.MoveLine',
       'read:account.Move',
+      'read:product.Product',
+      'read:product.Template',
+      'read:uom.Unit',
     ],
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
       if (!order) return null
-      const lines = await ctx.db.select('purchase.OrderLine', { orderId: args.id })
-      const moves = (await ctx.db.select('stock.Move')).filter((move) =>
-        lines.some((line) => line.id === move.purchaseLineId),
+      const stored = await ctx.db.select('purchase.OrderLine', { orderId: args.id })
+      // Received and billed are read from the warehouse and the ledger rather
+      // than from the columns caching them, so the order is right whether or not
+      // anyone has pressed a sync button since the goods arrived.
+      const lines: Row[] = []
+      const moves: Row[] = []
+      const billLines: Row[] = []
+      for (const line of stored) {
+        moves.push(...(await ctx.db.select('stock.Move', { purchaseLineId: line.id })))
+        billLines.push(...(await ctx.db.select('account.MoveLine', { purchaseLineId: line.id })))
+        lines.push({
+          ...line,
+          qtyReceived: quantityText(await receivedQuantity(ctx, line)),
+          qtyInvoiced: await billedQuantity(ctx, line.id),
+        })
+      }
+      const bills: Row[] = []
+      for (const id of new Set(billLines.map((line) => String(line.moveId)))) {
+        const bill = (await ctx.db.select('account.Move', { id }))[0]
+        if (bill) bills.push(bill)
+      }
+      const detailedMoves: Row[] = await Promise.all(
+        moves.map(async (move) => ({
+          ...move,
+          tracking: String((await productContext(ctx, move.productId))?.template.tracking ?? 'none'),
+          lines: await ctx.db.select('stock.MoveLine', { moveId: move.id }),
+        })),
       )
-      const billLines = (await ctx.db.select('account.MoveLine')).filter((line) =>
-        lines.some((held) => held.id === line.purchaseLineId),
-      )
-      const billIds = [...new Set(billLines.map((line) => String(line.moveId)))]
-      const bills = (await ctx.db.select('account.Move')).filter((move) => billIds.includes(String(move.id)))
-      return { ...order, lines, moves, bills }
+      const pickingIds = [
+        ...new Set(detailedMoves.flatMap((move) => (move.pickingId ? [String(move.pickingId)] : []))),
+      ]
+      const P = ctx.table('stock.Picking')
+      const pickings = pickingIds.length
+        ? (await ctx.db.all(from(P).where(inArray(P.id, pickingIds)))).map((picking) => ({
+            ...picking,
+            moves: detailedMoves.filter((move) => String(move.pickingId) === String(picking.id)),
+          }))
+        : []
+      return {
+        ...order,
+        invoiceStatus: await invoiceStatus(ctx, args.id),
+        lines,
+        moves: detailedMoves,
+        pickings,
+        bills,
+      }
     },
   }),
   createOrder: defineFn({
     input: {
       id: 'id',
       partnerId: 'id',
-      partnerRef: 'text',
+      partnerRef: 'text?',
       pickingTypeId: 'id',
       dateOrder: 'datetime?',
       datePlanned: 'datetime?',
@@ -382,15 +757,15 @@ export const functions: Record<string, FnSpec> = {
         return invalid('partnerId', 'vendor does not exist')
       if (!(await ctx.db.select('stock.PickingType', { id: args.pickingTypeId }))[0])
         return invalid('pickingTypeId', 'receipt operation type does not exist')
-      if (!String(args.partnerRef).trim())
-        return invalid('partnerRef', 'vendor reference is required in Odoo 19')
       const dateOrder = String(args.dateOrder ?? now())
       const name = await nextName(ctx)
       await ctx.db.insert('purchase.Order', {
         id: args.id,
         name,
         partnerId: args.partnerId,
-        partnerRef: args.partnerRef,
+        // The vendor's own quotation number arrives with their reply, so it
+        // cannot be a condition of asking them for one.
+        partnerRef: String(args.partnerRef ?? '').trim(),
         state: 'draft',
         locked: false,
         dateOrder,
@@ -403,8 +778,106 @@ export const functions: Record<string, FnSpec> = {
         amountTax: '0',
         amountTotal: '0',
         notes: args.notes ?? null,
+        revision: 0,
       })
       return { ok: true, id: args.id, name }
+    },
+  }),
+  saveDraft: defineFn({
+    input: {
+      id: 'id',
+      partnerId: 'id',
+      pickingTypeId: 'id?',
+      lines: 'json',
+      create: 'bool?',
+      expectedRevision: 'int?',
+    },
+    output: { ok: 'bool', id: 'id?', revision: 'int?', errors: 'json?' },
+    effects: [
+      'read:purchase.Sequence',
+      'write:purchase.Sequence',
+      'read:purchase.Order',
+      'write:purchase.Order',
+      'read:purchase.OrderLine',
+      'write:purchase.OrderLine',
+      'read:purchase.SupplierInfo',
+      'read:partner.Partner',
+      'read:partner.Role',
+      'read:stock.PickingType',
+      'read:product.Product',
+      'read:product.Template',
+      'read:uom.Unit',
+      'read:account.Tax',
+      'read:company.Company',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const lines = Array.isArray(args.lines) ? (args.lines as Row[]) : []
+      if (!args.create && args.expectedRevision === undefined)
+        return invalid('expectedRevision', 'purchase order version is required')
+      if (!lines.length || lines.length > 100) return invalid('lines', 'an RFQ needs 1 to 100 lines')
+      if (
+        lines.some(
+          (line) =>
+            !line ||
+            typeof line !== 'object' ||
+            !line.id ||
+            !line.productId ||
+            !line.productUomId ||
+            !(n(line.productQty) > 0),
+        )
+      )
+        return invalid('lines', 'every line needs a product, unit and positive quantity')
+
+      try {
+        await ctx.tx(async (tx) => {
+          let order = (await tx.db.select('purchase.Order', { id: args.id }))[0]
+          if (args.create && order) return
+          if (!order) {
+            if (!args.create) throw new PurchaseRefused(invalid('id', 'purchase order does not exist'))
+            if (!args.pickingTypeId)
+              throw new PurchaseRefused(invalid('pickingTypeId', 'receipt operation type is required'))
+            const created = (await functions.createOrder!.handler(tx, {
+              id: args.id,
+              partnerId: args.partnerId,
+              pickingTypeId: args.pickingTypeId,
+            })) as Row
+            if (created.ok !== true) throw new PurchaseRefused(created)
+            order = (await tx.db.select('purchase.Order', { id: args.id }))[0]
+          } else {
+            if (order.state !== 'draft' || order.locked)
+              throw new PurchaseRefused(invalid('state', 'only an unlocked RFQ can be updated'))
+            if (!(await claimRevision(tx, order, args.expectedRevision)))
+              throw new PurchaseRefused(invalid('expectedRevision', 'purchase order changed'))
+          }
+          if (!order) throw new PurchaseRefused(invalid('id', 'purchase order does not exist'))
+          if (!(await tx.db.select('partner.Partner', { id: args.partnerId }))[0])
+            throw new PurchaseRefused(invalid('partnerId', 'vendor does not exist'))
+          if (!(await tx.db.select('partner.Role', { partnerId: args.partnerId, role: 'supplier' }))[0])
+            throw new PurchaseRefused(invalid('partnerId', 'partner is not an active vendor'))
+
+          await tx.db.update('purchase.Order', { id: args.id }, { partnerId: args.partnerId })
+          const L = tx.table('purchase.OrderLine')
+          await tx.db.del(deleteFrom(L).where(eq(L.orderId, String(args.id))))
+          for (const [index, line] of lines.entries()) {
+            const added = (await functions.addLine!.handler(tx, {
+              id: line.id,
+              orderId: args.id,
+              productId: line.productId,
+              productQty: line.productQty,
+              productUomId: line.productUomId,
+              sequence: (index + 1) * 10,
+            })) as Row
+            if (added.ok !== true) throw new PurchaseRefused(added)
+          }
+        })
+      } catch (error) {
+        if (error instanceof PurchaseRefused) return error.result
+        throw error
+      }
+      const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
+      return { ok: true, id: args.id, revision: n(order?.revision) }
     },
   }),
   addLine: defineFn({
@@ -421,76 +894,101 @@ export const functions: Record<string, FnSpec> = {
       datePlanned: 'datetime?',
       sequence: 'int?',
     },
+    output: { ok: 'bool', id: 'id?', priceUnit: 'decimal?', existing: 'bool?', errors: 'json?' },
+    effects: [...lineEffects],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const existing = (await ctx.db.select('purchase.OrderLine', { id: args.id }))[0]
+      // A retry must report what the line holds, not what this call would have
+      // written. Returning a freshly computed price for a line that was never
+      // touched is what made an edit look like it had worked.
+      if (existing) return { ok: true, id: args.id, priceUnit: String(existing.priceUnit), existing: true }
+      const planned = await planLine(ctx, args)
+      if ('error' in planned) return planned.error
+      const inserted = await ctx.db.insertIfAbsent('purchase.OrderLine', {
+        ...planned.values,
+        id: args.id,
+        orderId: args.orderId,
+        qtyReceived: '0',
+        qtyInvoiced: '0',
+        sequence: args.sequence ?? 10,
+      })
+      if (!('dryRun' in inserted) && !inserted.inserted) {
+        // A concurrent retry won the insert; report the line it wrote.
+        const raced = (await ctx.db.select('purchase.OrderLine', { id: args.id }))[0]
+        return { ok: true, id: args.id, priceUnit: String(raced?.priceUnit ?? ''), existing: true }
+      }
+      await totals(ctx, args.orderId)
+      return { ok: true, id: args.id, priceUnit: planned.values.priceUnit, existing: false }
+    },
+  }),
+  updateLine: defineFn({
+    input: {
+      id: 'id',
+      productQty: 'decimal',
+      name: 'text?',
+      priceUnit: 'decimal?',
+      discount: 'decimal?',
+      taxId: 'id?',
+      productUomId: 'id?',
+      datePlanned: 'datetime?',
+      sequence: 'int?',
+    },
     output: { ok: 'bool', id: 'id?', priceUnit: 'decimal?', errors: 'json?' },
+    effects: [...lineEffects],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const line = (await ctx.db.select('purchase.OrderLine', { id: args.id }))[0]
+      if (!line) return invalid('id', 'order line does not exist')
+      const editable = await editableOrder(ctx, line.orderId)
+      if (!editable) return invalid('id', 'lines can only be changed on an unlocked RFQ')
+      const planned = await planLine(ctx, {
+        ...args,
+        orderId: line.orderId,
+        productId: line.productId,
+        productUomId: args.productUomId ?? line.productUomId,
+        name: args.name ?? line.name,
+        priceUnit: args.priceUnit ?? line.priceUnit,
+        discount: args.discount ?? line.discount,
+        taxId: args.taxId === undefined ? line.taxId : args.taxId,
+        datePlanned: args.datePlanned ?? line.datePlanned,
+      })
+      if ('error' in planned) return planned.error
+      await ctx.db.update(
+        'purchase.OrderLine',
+        { id: args.id },
+        {
+          ...planned.values,
+          ...(args.sequence === undefined ? {} : { sequence: args.sequence }),
+        },
+      )
+      await totals(ctx, line.orderId)
+      return { ok: true, id: args.id, priceUnit: planned.values.priceUnit }
+    },
+  }),
+  removeLine: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:purchase.Order',
       'read:purchase.OrderLine',
       'write:purchase.OrderLine',
       'write:purchase.Order',
-      'read:purchase.SupplierInfo',
-      'read:product.Product',
-      'read:product.Template',
-      'read:uom.Unit',
       'read:account.Tax',
     ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
-      const order = (await ctx.db.select('purchase.Order', { id: args.orderId }))[0]
-      if (!order || !['draft', 'sent'].includes(String(order.state)) || order.locked)
-        return invalid('orderId', 'lines can only be added to an unlocked RFQ')
-      if (!(n(args.productQty) > 0)) return invalid('productQty', 'ordered quantity must be positive')
-      const context = await productContext(ctx, args.productId)
-      if (!context?.template.purchaseOk) return invalid('productId', 'product is not purchasable')
-      if (!(await ctx.db.select('uom.Unit', { id: args.productUomId }))[0])
-        return invalid('productUomId', 'unit of measure does not exist')
-      const price = await supplierPrice(
-        ctx,
-        order.partnerId,
-        args.productId,
-        n(args.productQty),
-        String(order.dateOrder),
-      )
-      const priceUnit = args.priceUnit ?? price?.price ?? '0'
-      const discount = args.discount ?? price?.discount ?? '0'
-      if (n(priceUnit) < 0 || n(discount) < 0 || n(discount) > 100)
-        return invalid('priceUnit', 'unit price and discount are invalid')
-      const tax = args.taxId ? (await ctx.db.select('account.Tax', { id: args.taxId }))[0] : null
-      if (args.taxId && (!tax || !['purchase', 'none'].includes(String(tax.typeTaxUse))))
-        return invalid('taxId', 'tax use does not match a purchase order')
-      const datePlanned = String(
-        args.datePlanned ??
-          new Date(
-            new Date(String(order.dateOrder)).getTime() + n(price?.delay ?? 1) * 86400000,
-          ).toISOString(),
-      )
-      const gross = money(n(args.productQty) * n(priceUnit) * (1 - n(discount) / 100))
-      let subtotal: number
-      try {
-        subtotal = taxAmounts(tax, gross, n(args.productQty)).untaxed
-      } catch (error) {
-        return invalid('taxId', (error as Error).message)
-      }
-      const existing = (await ctx.db.select('purchase.OrderLine', { id: args.id }))[0]
-      if (!existing)
-        await ctx.db.insert('purchase.OrderLine', {
-          id: args.id,
-          orderId: args.orderId,
-          productId: args.productId,
-          name: args.name ?? price?.productName ?? context.template.name,
-          productQty: args.productQty,
-          productUomId: args.productUomId,
-          priceUnit: String(priceUnit),
-          discount: String(discount),
-          taxId: args.taxId ?? null,
-          datePlanned,
-          qtyReceived: '0',
-          qtyInvoiced: '0',
-          priceSubtotal: decimal(subtotal),
-          sequence: args.sequence ?? 10,
-        })
-      await totals(ctx, args.orderId)
-      return { ok: true, id: args.id, priceUnit: String(priceUnit) }
+      const line = (await ctx.db.select('purchase.OrderLine', { id: args.id }))[0]
+      if (!line) return { ok: true, id: args.id }
+      if (!(await editableOrder(ctx, line.orderId)))
+        return invalid('id', 'lines can only be removed from an unlocked RFQ')
+      const table = ctx.table('purchase.OrderLine')
+      await ctx.db.del(deleteFrom(table).where(eq(table.id, args.id)))
+      await totals(ctx, line.orderId)
+      return { ok: true, id: args.id }
     },
   }),
   sendRfq: defineFn({
@@ -508,15 +1006,15 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   confirmOrder: defineFn({
-    input: { id: 'id', requiresApproval: 'bool?' },
+    input: { id: 'id', requiresApproval: 'bool?', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', state: 'text?', pickingId: 'id?', errors: 'json?' },
     effects: [...confirmEffects],
     idempotent: true,
     agent: true,
-    handler: (ctx, args) => confirm(ctx, args.id, args.requiresApproval === true),
+    handler: (ctx, args) => confirm(ctx, args.id, args.requiresApproval === true, args.expectedRevision),
   }),
   approveOrder: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', state: 'text?', pickingId: 'id?', errors: 'json?' },
     effects: [...confirmEffects],
     idempotent: true,
@@ -524,7 +1022,80 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
       if (order?.state !== 'to approve') return invalid('state', 'order is not waiting for approval')
-      return confirm(ctx, args.id, false)
+      return confirm(ctx, args.id, false, args.expectedRevision)
+    },
+  }),
+  receiveOrderReceipt: defineFn({
+    input: { id: 'id', receiptId: 'id', expectedRevision: 'int?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      receiptId: 'id?',
+      receivedAt: 'datetime?',
+      lineCount: 'int?',
+      errors: 'json?',
+    },
+    effects: [
+      ...(stockFunctions.completePicking!.effects ?? []),
+      'read:purchase.Order',
+      'write:purchase.Order',
+      'read:purchase.OrderLine',
+      'write:purchase.OrderLine',
+      'read:account.Move',
+      'read:account.MoveLine',
+      'read:uom.Unit',
+    ],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
+      if (!order) return invalid('id', 'purchase order does not exist')
+      if (args.expectedRevision !== undefined && n(order.revision) !== n(args.expectedRevision))
+        return invalid('expectedRevision', 'purchase order changed')
+      if (order.state !== 'purchase') return invalid('state', 'only a purchase order can be received')
+      const lines = await ctx.db.select('purchase.OrderLine', { orderId: args.id })
+      const moves: Row[] = []
+      for (const line of lines)
+        moves.push(...(await ctx.db.select('stock.Move', { purchaseLineId: line.id })))
+      const receiptMoves = moves.filter((move) => String(move.pickingId) === String(args.receiptId))
+      const picking = (await ctx.db.select('stock.Picking', { id: args.receiptId }))[0]
+      if (!picking || !receiptMoves.length)
+        return invalid('receiptId', 'receipt does not belong to the purchase order')
+      if (picking.state === 'cancel') return invalid('state', 'a cancelled receipt cannot be received')
+      const quantities: Array<{ moveLineId: string; quantity: number }> = []
+      for (const move of receiptMoves) {
+        const prepared = await ctx.db.select('stock.MoveLine', { moveId: move.id })
+        const quantity = prepared.reduce((sum, row) => sum + n(row.quantity), 0)
+        if (!prepared.length || Math.abs(quantity - n(move.productUomQty)) > 0.000001)
+          return invalid('receiptId', 'receipt quantities need warehouse review before mobile receipt')
+        const context = await productContext(ctx, move.productId)
+        const tracking = String(context?.template.tracking ?? 'none')
+        if (tracking !== 'none' && prepared.some((row) => !row.lotId))
+          return invalid('receiptId', 'tracked receipt lines need lot or serial review')
+        for (const row of prepared) quantities.push({ moveLineId: String(row.id), quantity: n(row.quantity) })
+      }
+      const current = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
+      if (!current || !(await claimRevision(ctx, current, args.expectedRevision)))
+        return invalid('expectedRevision', 'purchase order changed')
+      // completePicking owns its own atomic stock transaction. Claim the order
+      // version immediately before entering it instead of nesting transactions,
+      // which is not portable across SQLite and PostgreSQL adapters.
+      const completed = (await stockFunctions.completePicking!.handler(ctx, {
+        id: args.receiptId,
+        quantities,
+        createBackorder: false,
+      })) as Row
+      if (completed.ok !== true) return completed
+      await refreshReceived(ctx, args.id)
+      await refreshInvoiceStatus(ctx, args.id)
+      const receipt = (await ctx.db.select('stock.Picking', { id: args.receiptId }))[0]
+      return {
+        ok: true,
+        id: args.id,
+        receiptId: args.receiptId,
+        receivedAt: receipt?.dateDone ?? now(),
+        lineCount: quantities.length,
+      }
     },
   }),
   syncReceipts: defineFn({
@@ -538,20 +1109,17 @@ export const functions: Record<string, FnSpec> = {
       'read:stock.Move',
       'read:product.Product',
       'read:product.Template',
+      'read:uom.Unit',
+      'read:account.Move',
+      'read:account.MoveLine',
     ],
     idempotent: true,
     agent: true,
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'purchase order does not exist')
-      for (const line of await ctx.db.select('purchase.OrderLine', { orderId: args.id })) {
-        const moves = await ctx.db.select('stock.Move', { purchaseLineId: line.id, state: 'done' })
-        await ctx.db.update(
-          'purchase.OrderLine',
-          { id: line.id },
-          { qtyReceived: decimal(moves.reduce((sum, move) => sum + n(move.quantity), 0)) },
-        )
-      }
+      await refreshReceived(ctx, args.id)
+      await refreshBilled(ctx, args.id)
       await refreshInvoiceStatus(ctx, args.id)
       return { ok: true, id: args.id, invoiceStatus: await invoiceStatus(ctx, args.id) }
     },
@@ -579,7 +1147,10 @@ export const functions: Record<string, FnSpec> = {
       'read:account.Account',
       'read:account.Tax',
       'read:account.Move',
+      'read:account.MoveLine',
       'read:company.Company',
+      'read:stock.Move',
+      'read:uom.Unit',
       'write:account.Move',
       'write:account.MoveLine',
     ],
@@ -599,47 +1170,85 @@ export const functions: Record<string, FnSpec> = {
         return invalid('expenseAccountId', 'an expense account is required')
       if (payable?.accountType !== 'liability_payable')
         return invalid('payableAccountId', 'a payable account is required')
-      const billable: Array<{
+      type Billable = {
         line: Row
-        quantity: number
-        subtotal: number
-        tax: Row | null
-        taxAmount: number
-      }> = []
-      for (const line of await ctx.db.select('purchase.OrderLine', { orderId: args.orderId })) {
-        const context = await productContext(ctx, line.productId)
-        const method = String(
-          context?.template.purchaseMethod ?? (context?.template.type === 'service' ? 'purchase' : 'receive'),
-        )
-        const basis = method === 'purchase' ? n(line.productQty) : n(line.qtyReceived)
-        const quantity = money(basis - n(line.qtyInvoiced))
-        if (quantity <= 0) continue
-        const gross = money(quantity * n(line.priceUnit) * (1 - n(line.discount) / 100))
-        const tax = line.taxId ? ((await ctx.db.select('account.Tax', { id: line.taxId }))[0] ?? null) : null
-        if (tax && !['purchase', 'none'].includes(String(tax.typeTaxUse)))
-          return invalid('taxId', 'tax use does not match a vendor bill')
-        let amounts: ReturnType<typeof taxAmounts>
-        try {
-          amounts = taxAmounts(tax, gross, quantity)
-        } catch (error) {
-          return invalid('taxId', (error as Error).message)
-        }
-        if (
-          amounts.tax &&
-          (!args.taxAccountId || !(await ctx.db.select('account.Account', { id: args.taxAccountId }))[0])
-        )
-          return invalid('taxAccountId', 'a valid tax account is required')
-        billable.push({ line, quantity, subtotal: amounts.untaxed, tax, taxAmount: amounts.tax })
+        quantity: string
+        subtotal: string
+        taxAmount: string
+        shares: Array<TaxShare & { accountId: unknown }>
       }
-      if (!billable.length) return invalid('lines', 'there is no received or ordered quantity left to bill')
-      const untaxed = money(billable.reduce((sum, item) => sum + item.subtotal, 0))
-      const tax = money(billable.reduce((sum, item) => sum + item.taxAmount, 0))
-      const total = money(untaxed + tax)
+      const collect = async (scoped: Ctx): Promise<Billable[] | ReturnType<typeof invalid>> => {
+        const billable: Billable[] = []
+        for (const line of await scoped.db.select('purchase.OrderLine', { orderId: args.orderId })) {
+          const context = await productContext(scoped, line.productId)
+          const method = String(
+            context?.template.purchaseMethod ??
+              (context?.template.type === 'service' ? 'purchase' : 'receive'),
+          )
+          const basis =
+            method === 'purchase'
+              ? canonicalDecimalText(line.productQty)
+              : canonicalDecimalText(String(await receivedQuantity(scoped, line)))
+          // Read what the bills say rather than a counter, so two drafts prepared
+          // at once cannot both bill the same quantity.
+          const quantity = subtractDecimals(basis, await billedQuantity(scoped, line.id))
+          if (decimalSign(quantity) <= 0) continue
+          const quote = await quoteTaxLineForPosting(scoped, {
+            taxIds: line.taxId ? [line.taxId] : [],
+            quantity,
+            priceUnit: line.priceUnit,
+            discount: line.discount,
+            taxUse: 'purchase',
+          })
+          if (quote.ok !== true) return invalid('taxId', String(quote.errors[0]?.message ?? 'invalid tax'))
+          const shares: Array<TaxShare & { accountId: unknown }> = []
+          for (const share of quote.shares) {
+            if (moneyMinor(share.amount, quote.scale) === 0n) continue
+            const accountId = (quote.shares.length === 1 ? args.taxAccountId : null) ?? share.accountId
+            if (!accountId || !(await scoped.db.select('account.Account', { id: accountId }))[0])
+              return invalid('taxAccountId', 'a valid tax account is required')
+            shares.push({ ...share, accountId })
+          }
+          billable.push({
+            line,
+            quantity,
+            subtotal: quote.amountUntaxed,
+            taxAmount: quote.amountTax,
+            shares,
+          })
+        }
+        return billable
+      }
+      const preview = await collect(ctx)
+      if (!Array.isArray(preview)) return preview
+      if (!preview.length) return invalid('lines', 'there is no received or ordered quantity left to bill')
       const invoiceDate = String(args.invoiceDate ?? now())
-      await ctx.tx(async (tx) => {
-        await tx.db.insert('account.Move', {
+      const scale = scaleOf(order.currency)
+      let total = 0n
+      const written = await ctx.tx(async (tx) => {
+        const billable = await collect(tx)
+        if (!Array.isArray(billable)) return billable
+        if (!billable.length) return invalid('lines', 'there is no received or ordered quantity left to bill')
+        const untaxed = sumMoneyMinor(
+          billable.map((item) => item.subtotal),
+          scale,
+        )
+        const tax = sumMoneyMinor(
+          billable.map((item) => item.taxAmount),
+          scale,
+        )
+        total = untaxed + tax
+        const zero = minorText(0n, scale)
+        // Accounting stamps its journal sequence when the bill is posted; until
+        // then a draft showed its raw identifier, so the buyer's own screen
+        // listed a UUID where a document number belongs. An order can be billed
+        // more than once — after a cancellation, or in instalments — and a move
+        // name is unique per journal, so the draft is numbered within its order.
+        const draftNumber =
+          (await tx.db.select('account.Move', { ref: order.name, journalId: args.journalId })).length + 1
+        const move: Row = {
           id: args.id,
-          name: String(args.id),
+          name: `${String(order.name)}/${String(draftNumber)}`,
           ref: order.name,
           date: invoiceDate,
           moveType: 'in_invoice',
@@ -651,15 +1260,18 @@ export const functions: Record<string, FnSpec> = {
           paymentTermId: args.paymentTermId ?? null,
           paymentState: 'not_paid',
           currency: order.currency,
-          amountUntaxed: decimal(untaxed),
-          amountTax: decimal(tax),
-          amountTotal: decimal(total),
+          amountUntaxed: minorText(untaxed, scale),
+          amountTax: minorText(tax, scale),
+          amountTotal: minorText(total, scale),
           postedAt: null,
-        })
+          revision: 0,
+        }
+        const moveLines: Row[] = []
         let sequence = 10
         for (const item of billable) {
           const baseId = `${String(args.id)}:${String(item.line.id)}`
-          await tx.db.insert('account.MoveLine', {
+          const subtotal = minorText(moneyMinor(item.subtotal, scale), scale)
+          moveLines.push({
             id: baseId,
             moveId: args.id,
             name: item.line.name,
@@ -667,51 +1279,49 @@ export const functions: Record<string, FnSpec> = {
             partnerId: order.partnerId,
             productId: item.line.productId,
             productUomId: item.line.productUomId,
-            quantity: decimal(item.quantity),
+            quantity: item.quantity,
             priceUnit: item.line.priceUnit,
             discount: item.line.discount,
             taxId: item.line.taxId,
-            debit: decimal(item.subtotal),
-            credit: '0',
-            balance: decimal(item.subtotal),
+            debit: subtotal,
+            credit: zero,
+            balance: subtotal,
             dateMaturity: null,
             displayType: null,
             reconciled: false,
-            amountResidual: '0',
+            amountResidual: zero,
             sequence,
             purchaseLineId: item.line.id,
           })
           sequence += 10
-          if (item.taxAmount)
-            await tx.db.insert('account.MoveLine', {
-              id: `${baseId}:tax`,
+          for (const share of item.shares) {
+            const amount = minorText(moneyMinor(share.amount, scale), scale)
+            moveLines.push({
+              id: `${baseId}:tax:${String(share.taxId)}`,
               moveId: args.id,
-              name: item.tax?.name ?? 'Tax',
-              accountId: args.taxAccountId,
+              name: share.name,
+              accountId: share.accountId,
               partnerId: order.partnerId,
               productId: null,
               productUomId: null,
               quantity: '1',
-              priceUnit: decimal(item.taxAmount),
+              priceUnit: amount,
               discount: '0',
-              taxId: null,
-              debit: decimal(item.taxAmount),
-              credit: '0',
-              balance: decimal(item.taxAmount),
+              taxId: share.taxId,
+              debit: amount,
+              credit: zero,
+              balance: amount,
               dateMaturity: null,
               displayType: null,
               reconciled: false,
-              amountResidual: '0',
+              amountResidual: zero,
               sequence: sequence++,
               purchaseLineId: item.line.id,
             })
-          await tx.db.update(
-            'purchase.OrderLine',
-            { id: item.line.id },
-            { qtyInvoiced: decimal(n(item.line.qtyInvoiced) + item.quantity) },
-          )
+          }
         }
-        await tx.db.insert('account.MoveLine', {
+        const totalText = minorText(total, scale)
+        moveLines.push({
           id: `${String(args.id)}:counterpart`,
           moveId: args.id,
           name: order.name,
@@ -720,22 +1330,45 @@ export const functions: Record<string, FnSpec> = {
           productId: null,
           productUomId: null,
           quantity: '1',
-          priceUnit: decimal(total),
+          priceUnit: totalText,
           discount: '0',
           taxId: null,
-          debit: '0',
-          credit: decimal(total),
-          balance: decimal(-total),
+          debit: zero,
+          credit: totalText,
+          balance: negateDecimalText(totalText),
           dateMaturity: invoiceDate,
           displayType: null,
           reconciled: false,
-          amountResidual: decimal(total),
+          amountResidual: totalText,
           sequence: sequence + 10,
           purchaseLineId: null,
         })
+        await insertDraftMove(tx, { move, lines: moveLines })
+        await refreshBilled(tx, args.orderId)
+        await refreshInvoiceStatus(tx, args.orderId)
+        return { ok: true }
       })
-      await refreshInvoiceStatus(ctx, args.orderId)
-      return { ok: true, id: args.id, amountTotal: decimal(total) }
+      if ((written as Row).ok !== true) return written
+      return { ok: true, id: args.id, amountTotal: minorText(total, scale) }
+    },
+  }),
+  resetToDraft: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', state: 'text?', errors: 'json?' },
+    effects: ['read:purchase.Order', 'write:purchase.Order'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
+      if (!order) return invalid('id', 'purchase order does not exist')
+      if (order.state === 'draft') return { ok: true, id: args.id, state: 'draft' }
+      // An approver who wants the request changed had only one button, and it
+      // destroyed the request. Sending it back is the ordinary answer; a
+      // confirmed order is past that point because a receipt already exists.
+      if (!['sent', 'to approve'].includes(String(order.state)))
+        return invalid('state', 'only a request awaiting sending or approval can go back to draft')
+      await ctx.db.update('purchase.Order', { id: args.id }, { state: 'draft' })
+      return { ok: true, id: args.id, state: 'draft' }
     },
   }),
   lockOrder: defineFn({
@@ -752,7 +1385,7 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
   cancelOrder: defineFn({
-    input: { id: 'id' },
+    input: { id: 'id', expectedRevision: 'int?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:purchase.Order',
@@ -769,23 +1402,37 @@ export const functions: Record<string, FnSpec> = {
     handler: async (ctx, args) => {
       const order = (await ctx.db.select('purchase.Order', { id: args.id }))[0]
       if (!order) return invalid('id', 'purchase order does not exist')
-      const lines = await ctx.db.select('purchase.OrderLine', { orderId: args.id })
-      const moves = (await ctx.db.select('stock.Move')).filter((move) =>
-        lines.some((line) => line.id === move.purchaseLineId),
-      )
-      if (moves.some((move) => move.state === 'done'))
-        return invalid('state', 'a received order cannot be cancelled')
-      if (
-        (await ctx.db.select('account.MoveLine')).some((line) =>
-          lines.some((held) => held.id === line.purchaseLineId),
-        )
-      )
-        return invalid('state', 'a billed order cannot be cancelled')
-      for (const move of moves) await ctx.db.update('stock.Move', { id: move.id }, { state: 'cancel' })
-      for (const pickingId of [...new Set(moves.map((move) => move.pickingId).filter(Boolean))])
-        await ctx.db.update('stock.Picking', { id: pickingId }, { state: 'cancel' })
-      await ctx.db.update('purchase.Order', { id: args.id }, { state: 'cancel' })
-      return { ok: true, id: args.id }
+      if (args.expectedRevision !== undefined && n(order.revision) !== n(args.expectedRevision))
+        return invalid('expectedRevision', 'purchase order changed')
+      if (order.state === 'cancel') return { ok: true, id: args.id }
+      try {
+        await ctx.tx(async (tx) => {
+          const current = (await tx.db.select('purchase.Order', { id: args.id }))[0]
+          if (!current || !(await claimRevision(tx, current, args.expectedRevision)))
+            throw new PurchaseRefused(invalid('expectedRevision', 'purchase order changed'))
+          // Locking is the operator saying "no more changes"; cancellation is
+          // the largest change there is.
+          if (current.locked)
+            throw new PurchaseRefused(invalid('state', 'a locked order cannot be cancelled'))
+          const lines = await tx.db.select('purchase.OrderLine', { orderId: args.id })
+          const moves: Row[] = []
+          for (const line of lines)
+            moves.push(...(await tx.db.select('stock.Move', { purchaseLineId: line.id })))
+          if (moves.some((move) => move.state === 'done'))
+            throw new PurchaseRefused(invalid('state', 'a received order cannot be cancelled'))
+          for (const line of lines)
+            if ((await tx.db.select('account.MoveLine', { purchaseLineId: line.id })).length)
+              throw new PurchaseRefused(invalid('state', 'a billed order cannot be cancelled'))
+          for (const move of moves) await tx.db.update('stock.Move', { id: move.id }, { state: 'cancel' })
+          for (const pickingId of [...new Set(moves.map((move) => move.pickingId).filter(Boolean))])
+            await tx.db.update('stock.Picking', { id: pickingId }, { state: 'cancel' })
+          await tx.db.update('purchase.Order', { id: args.id }, { state: 'cancel' })
+        })
+        return { ok: true, id: args.id }
+      } catch (error) {
+        if (error instanceof PurchaseRefused) return error.result
+        throw error
+      }
     },
   }),
 }

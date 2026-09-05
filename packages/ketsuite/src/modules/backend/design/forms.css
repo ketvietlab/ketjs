@@ -1,0 +1,1134 @@
+/* Shared sections, relations, modal, media and form components. */
+
+@layer ket.app {
+  /* Page hierarchy and surfaces. */
+  [data-ui="section"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+    min-inline-size: 0;
+  }
+  [data-ui="section-head"] {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--admin-gap);
+  }
+  [data-ui="section-eyebrow"],
+  [data-ui="section-title"],
+  [data-ui="section-description"] {
+    margin: 0;
+  }
+  [data-ui="section-eyebrow"] {
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.075em;
+    text-transform: uppercase;
+  }
+  [data-ui="section-title"] {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-md);
+    line-height: 1.35;
+  }
+  [data-ui="section-description"] {
+    margin-block-start: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+  }
+  [data-ui="section-actions"] {
+    flex: 0 0 auto;
+  }
+  [data-ui="section-body"] {
+    min-inline-size: 0;
+  }
+
+  [data-ui="surface"] {
+    min-inline-size: 0;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+    box-shadow: var(--admin-shadow-card);
+  }
+  [data-ui="surface"][data-tone="subtle"] {
+    background: var(--admin-surface-subtle);
+    box-shadow: none;
+  }
+  [data-ui="surface"][data-padding="compact"] {
+    padding: var(--admin-gap);
+  }
+  [data-ui="surface"][data-padding="default"] {
+    padding: var(--admin-gap-md);
+  }
+  [data-ui="surface"][data-padding="none"] {
+    padding: 0;
+  }
+
+  /* Durable record attachments. The upload stays compact, while long file
+     names wrap inside the panel instead of widening the page. */
+  [data-ui="attachments"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+  }
+  [data-ui="attachment-list"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+    list-style: none;
+  }
+  [data-ui="attachment-item"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap-sm) var(--admin-gap);
+  }
+  [data-ui="attachment-item"] + [data-ui="attachment-item"] {
+    border-block-start: 1px solid var(--admin-line);
+  }
+  [data-ui="attachment-link"] {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--admin-accent-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  [data-ui="attachment-meta"] {
+    flex: 0 0 auto;
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+    white-space: nowrap;
+  }
+  [data-ui="attachment-upload"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="attachment-upload"] > label {
+    display: grid;
+    min-inline-size: min(18rem, 100%);
+    flex: 1 1 18rem;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+  [data-ui="attachment-input"] {
+    inline-size: 100%;
+    min-block-size: var(--admin-field-height);
+    min-inline-size: 0;
+    color: var(--admin-ink);
+    font: inherit;
+  }
+
+  /* Relational selectors keep the short path compact and put full CRUD in the
+     modal. The footer action remains visible even when the relation is empty. */
+  [data-ui="relation-select"] {
+    position: relative;
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+  [data-ui="relation-native"] {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-start: 0;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  [data-ui="relation-trigger"] {
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: var(--admin-field-height);
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap-sm);
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    font: inherit;
+    /* The same type metrics as [data-ui="form-control"]. Without them the button
+       inherits the body's larger line box and stands 2px taller than every other
+       control on the row. */
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    text-align: start;
+    cursor: pointer;
+  }
+  [data-ui="relation-trigger"][data-empty="true"] {
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="relation-trigger"]:focus-visible {
+    border-color: var(--admin-focus-border);
+    box-shadow: 0 0 0 3px var(--admin-focus-ring);
+    outline: none;
+  }
+  [data-ui="relation-value"] {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* A multi-valued relation shows what it holds beneath the trigger, so the
+     trigger itself stays an "add another" affordance at a fixed height. */
+  [data-ui="relation-chips"] {
+    display: flex;
+    flex-wrap: wrap;
+    margin: var(--admin-gap-xs) 0 0;
+    padding: 0;
+    gap: var(--admin-gap-xs);
+    list-style: none;
+  }
+  [data-ui="relation-chip"] {
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: 100%;
+    gap: 0.25rem;
+    padding: 0.125rem 0.25rem 0.125rem 0.5rem;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink);
+  }
+  [data-ui="relation-chip"] > span {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="relation-chip-clear"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    flex: none;
+    padding: 0;
+    border: 0;
+    border-radius: var(--admin-radius-sm);
+    background: transparent;
+    color: var(--admin-ink-muted);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+  }
+  [data-ui="relation-chip-clear"]:is(:hover, :focus-visible) {
+    color: var(--admin-ink);
+  }
+  [data-ui="relation-chip-clear"]:focus-visible {
+    outline: 2px solid var(--admin-focus-border);
+    outline-offset: 1px;
+  }
+  [data-ui="relation-option"][data-selected="true"]::after,
+  [data-ui="relation-dialog-row"][data-selected="true"] [data-ui="relation-dialog-main"] strong::after {
+    content: " ✓";
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="relation-menu"] {
+    position: absolute;
+    inset-block-start: calc(100% + 0.25rem);
+    inset-inline: 0;
+    z-index: 40;
+    display: grid;
+    min-inline-size: min(22rem, calc(100vw - 2rem));
+    overflow: hidden;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-float);
+  }
+  [data-ui="relation-search"] {
+    inline-size: calc(100% - var(--admin-gap-sm) * 2);
+    min-block-size: var(--admin-field-height);
+    margin: var(--admin-gap-sm);
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    font: inherit;
+  }
+  [data-ui="relation-options"] {
+    display: grid;
+    max-block-size: 16rem;
+    overflow: auto;
+  }
+  [data-ui="relation-option"] {
+    display: grid;
+    min-block-size: var(--admin-control-height);
+    padding: 0.375rem 0.625rem;
+    border: 0;
+    background: transparent;
+    color: var(--admin-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  [data-ui="relation-option"]:is(:hover, :focus-visible),
+  [data-ui="relation-option"][aria-selected="true"] {
+    background: var(--admin-accent-soft);
+    outline: none;
+  }
+  [data-ui="relation-option"] small {
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="relation-footer"] {
+    display: flex;
+    justify-content: flex-start;
+    padding: var(--admin-gap-xs) var(--admin-gap-sm);
+    border-block-start: 1px solid var(--admin-line);
+  }
+  [data-ui="relation-dialog-toolbar"] {
+    display: flex;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    margin-block-end: var(--admin-gap);
+  }
+  [data-ui="relation-dialog-toolbar"] [data-ui="form-control"] {
+    flex: 1 1 auto;
+  }
+  [data-ui="relation-dialog-list"] {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    border-block-start: 1px solid var(--admin-line);
+    list-style: none;
+  }
+  [data-ui="relation-dialog-row"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+    padding: var(--admin-gap-sm) 0;
+    border-block-end: 1px solid var(--admin-line);
+  }
+  [data-ui="relation-dialog-main"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: 0.125rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--admin-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  [data-ui="relation-dialog-main"]:focus-visible {
+    outline: 2px solid var(--admin-focus-border);
+    outline-offset: 2px;
+  }
+  [data-ui="relation-dialog-meta"] {
+    overflow: hidden;
+    color: var(--admin-ink-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="relation-dialog-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--admin-gap-xs);
+  }
+  [data-ui="relation-editor"] {
+    display: grid;
+    gap: var(--admin-gap);
+    margin-block-end: var(--admin-gap);
+    padding: var(--admin-gap);
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-subtle);
+  }
+  [data-ui="relation-empty"] {
+    margin: 0;
+    padding: var(--admin-gap);
+    color: var(--admin-ink-muted);
+    text-align: center;
+  }
+  [data-ui="modal-sheet"][data-size="large"] {
+    inline-size: min(56rem, calc(100vw - var(--admin-gap-lg)));
+  }
+  [data-ui="modal-layer"][data-presentation="dialog"] {
+    place-items: center;
+    padding: var(--admin-gap-lg);
+  }
+  [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"] {
+    inline-size: min(56rem, 100%);
+    block-size: auto;
+    max-block-size: calc(100dvh - var(--admin-gap-lg) * 2);
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-lg);
+    overflow: hidden;
+  }
+
+  /* URL-addressable modal workspace. The backdrop is a real close link and
+     the sheet owns its scroll, so the document never grows horizontally. */
+  [data-ui="modal-layer"] {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    min-inline-size: 0;
+    justify-items: end;
+  }
+  body:has([data-ui="modal-layer"][data-route-modal="true"]) {
+    overflow: hidden;
+  }
+  [data-ui="modal-backdrop"] {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    display: block;
+    background: color-mix(in srgb, #000 36%, transparent);
+    text-decoration: none;
+  }
+  button[data-ui="modal-backdrop"] {
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+  }
+  [data-ui="modal-backdrop"] > span {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-ui="modal-sheet"] {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    inline-size: min(34rem, calc(100vw - var(--admin-gap-lg)));
+    max-inline-size: 100%;
+    block-size: 100dvh;
+    min-inline-size: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    border-inline-start: 1px solid var(--admin-line-strong);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-float);
+  }
+  [data-ui="modal-head"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-gap);
+    padding: var(--admin-gap) var(--admin-gap-md);
+    border-block-end: 1px solid var(--admin-line);
+  }
+  [data-ui="modal-heading"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap-xs);
+  }
+  [data-ui="modal-title"] {
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--admin-ink);
+    font-size: var(--admin-size-md);
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="modal-description"] {
+    margin: 0;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-sm);
+    line-height: 1.45;
+  }
+  [data-ui="modal-close"] {
+    display: grid;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    text-decoration: none;
+  }
+  [data-ui="modal-body"] {
+    min-inline-size: 0;
+    overflow: auto;
+    padding: var(--admin-gap-md);
+    overscroll-behavior: contain;
+  }
+
+  [data-ui="media"] {
+    display: grid;
+    min-inline-size: 0;
+    max-inline-size: 44rem;
+    grid-template-columns: minmax(14rem, 24rem) minmax(10rem, 18rem);
+    align-items: start;
+    gap: var(--admin-gap);
+  }
+  [data-ui="media-primary"] {
+    display: block;
+    inline-size: 100%;
+    aspect-ratio: 1;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-lg);
+    object-fit: contain;
+    background: var(--admin-surface-subtle);
+  }
+  [data-ui="media-placeholder"] {
+    display: grid;
+    grid-column: 1 / -1;
+    min-block-size: 10rem;
+    place-items: center;
+    padding: var(--admin-gap-md);
+    border: 1px dashed var(--admin-line);
+    border-radius: var(--admin-radius-lg);
+    color: var(--admin-ink-secondary);
+    text-align: center;
+  }
+  [data-ui="media-gallery"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(7rem, 100%), 1fr));
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="media-item"] {
+    display: grid;
+    inline-size: 100%;
+    gap: var(--admin-gap-xs);
+    padding: var(--admin-gap-xs);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+  }
+  [data-ui="media-item"][data-primary="true"] {
+    border-color: var(--admin-accent-line);
+    box-shadow: 0 0 0 2px var(--admin-focus-ring);
+  }
+  [data-ui="media-item"] > img {
+    display: block;
+    inline-size: 100%;
+    aspect-ratio: 1;
+    border-radius: calc(var(--admin-radius) - var(--admin-gap-xs));
+    object-fit: cover;
+  }
+  [data-ui="media-item-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+  [data-ui="media-item-actions"] > form {
+    display: inline-flex;
+  }
+  [data-ui="media-actions"] {
+    display: flex;
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="media-upload"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="media-file-label"] {
+    display: inline-flex;
+    block-size: var(--admin-field-height);
+    min-block-size: var(--admin-field-height);
+    align-items: center;
+    justify-content: center;
+    padding-inline: 0.625rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+  [data-ui="media-file-label"]:focus-within {
+    outline: 2px solid var(--admin-focus-border);
+    outline-offset: 2px;
+  }
+  [data-ui="media-file-input"] {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  [data-ui="media-extension"] {
+    min-inline-size: 0;
+    grid-column: 1 / -1;
+  }
+
+  [data-ui="media"] > :is([data-ui="loading"], [data-ui="error"]) {
+    grid-column: 1 / -1;
+  }
+
+  [data-ui="record-form"] {
+    display: grid;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+  }
+  [data-ui="form-cluster"] {
+    display: flex;
+    inline-size: 100%;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: flex-end;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-form"][data-layout="actions"] {
+    display: block;
+  }
+  [data-ui="record-form"][data-layout="inline"] {
+    display: grid;
+    min-inline-size: min(100%, 14rem);
+    max-inline-size: 22rem;
+    flex: 0 1 22rem;
+    grid-template-columns: minmax(9rem, 1fr) auto;
+    align-items: end;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="record-form"][data-layout="inline"][data-has-fields="false"] {
+    display: inline-flex;
+    min-inline-size: auto;
+    max-inline-size: none;
+    flex: 0 0 auto;
+  }
+  [data-ui="record-form"][data-layout="inline"] > [data-ui="form-grid"] {
+    display: block;
+  }
+  [data-ui="record-form"][data-layout="inline"] > [data-ui="form-grid"]:empty {
+    display: none;
+  }
+  [data-ui="record-form"][data-layout="inline"] > [data-ui="form-actions"] {
+    grid-column: 2;
+    align-self: end;
+  }
+  [data-ui="form-grid"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--admin-gap-sm) var(--admin-gap-lg);
+  }
+  [data-ui="form-field"] {
+    display: grid;
+    min-inline-size: 0;
+    min-block-size: var(--admin-field-height);
+    gap: 0.125rem;
+  }
+  [data-ui="form-field"][data-span="full"] {
+    grid-column: 1 / -1;
+  }
+  [data-ui="form-label"] {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+  [data-ui="form-required"] {
+    color: var(--admin-danger);
+    font-weight: 700;
+  }
+  [data-ui="form-control"] {
+    inline-size: 100%;
+    min-block-size: var(--admin-field-height);
+    min-inline-size: 0;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--admin-control-border);
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink);
+    background: var(--admin-control-bg);
+    font: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    transition:
+      border-color var(--admin-motion-fast),
+      box-shadow var(--admin-motion-fast);
+  }
+  :is(input, select)[data-ui="form-control"]:not([type="checkbox"]) {
+    block-size: var(--admin-field-height);
+  }
+  [data-ui="form-control"]:focus-visible {
+    border-color: var(--admin-focus-border);
+    background: var(--admin-control-focus);
+    box-shadow: 0 0 0 3px var(--admin-focus-ring);
+    outline: none;
+  }
+  [data-ui="form-control"]:hover:not(:focus-visible):not(:disabled) {
+    border-color: var(--admin-control-border-hover);
+    background: var(--admin-control-hover);
+  }
+  [data-ui="form-control"]:disabled {
+    border-color: var(--admin-line);
+    background: light-dark(var(--admin-surface-subtle), var(--color-control-disabled));
+    color: var(--admin-ink-disabled);
+    cursor: not-allowed;
+  }
+  [data-ui="form-field"][data-invalid="true"] [data-ui="form-control"] {
+    border-color: var(--admin-danger);
+  }
+  textarea[data-ui="form-control"] {
+    min-block-size: 6.875rem;
+    resize: vertical;
+  }
+  /* The browser draws the calendar and clock glyphs in its own colour, which on a
+     dark canvas is a dark mark on a dark field. `color-scheme` on the root tells it
+     which set to use; this makes the mark follow the ink like every other glyph. */
+  [data-ui="form-control"]::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
+    cursor: pointer;
+    filter: invert(var(--admin-picker-invert, 0));
+  }
+  [data-ui="form-control"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
+  input[type="checkbox"][data-ui="form-control"] {
+    inline-size: 1rem;
+    min-block-size: 1rem;
+    padding: 0;
+    accent-color: var(--admin-focus-border);
+  }
+  [data-ui="form-field"][data-kind="checkbox"] {
+    grid-template-columns: 1rem minmax(0, 1fr);
+    align-content: start;
+    align-items: start;
+    column-gap: var(--admin-gap-sm);
+  }
+  [data-ui="form-field"][data-kind="checkbox"] [data-ui="form-control"] {
+    grid-column: 1;
+    grid-row: 1;
+    margin-block-start: 0.0625rem;
+  }
+  [data-ui="form-field"][data-kind="checkbox"]
+    :is([data-ui="form-label"], [data-ui="form-help"], [data-ui="form-error"]) {
+    grid-column: 2;
+  }
+  [data-ui="form-options"] {
+    display: flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap);
+  }
+  [data-ui="form-option"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  [data-ui="form-option-input"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+    margin: 0;
+    accent-color: var(--admin-focus-border);
+  }
+  [data-ui="form-option-input"]:disabled {
+    opacity: 0.8;
+    cursor: not-allowed;
+  }
+  [data-ui="form-help"] {
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+  }
+  [data-ui="form-error"] {
+    color: var(--admin-danger-strong);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+
+  [data-ui="date-picker"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: var(--admin-gap-sm);
+    min-inline-size: 0;
+  }
+  [data-ui="date-picker"] fieldset {
+    display: grid;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="date-picker-label"] {
+    padding: 0;
+    color: var(--admin-ink);
+    font-size: var(--admin-size-sm);
+    font-weight: 700;
+  }
+  [data-ui="date-picker-fields"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(10rem, 1fr));
+    gap: var(--admin-gap-sm);
+  }
+  [data-ui="date-picker"][data-range="false"] [data-ui="date-picker-fields"] {
+    grid-template-columns: minmax(10rem, 18rem);
+  }
+  [data-ui="date-picker-field"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(4.5rem, 6rem) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.125rem var(--admin-gap-sm);
+  }
+  [data-ui="date-picker-field-label"] {
+    grid-column: 1;
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+    font-weight: 600;
+  }
+  [data-ui="date-picker-required"] {
+    color: var(--admin-danger);
+    font-weight: 700;
+  }
+  [data-ui="date-picker-control-wrap"] {
+    position: relative;
+    display: grid;
+    align-items: center;
+    min-inline-size: 0;
+    grid-column: 2;
+  }
+  [data-ui="date-picker-icon"] {
+    position: absolute;
+    inset-inline-start: var(--admin-gap-sm);
+    z-index: 1;
+    display: inline-grid;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    place-items: center;
+    color: var(--admin-ink-muted);
+    pointer-events: none;
+  }
+  [data-ui="date-picker-control"] {
+    inline-size: 100%;
+    block-size: var(--admin-field-height);
+    min-block-size: var(--admin-field-height);
+    min-inline-size: 0;
+    padding: 0.25rem 0.5rem 0.25rem 1.75rem;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink);
+    background: var(--admin-surface);
+    font: inherit;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    color-scheme: light dark;
+    transition:
+      border-color var(--admin-motion-fast),
+      box-shadow var(--admin-motion-fast);
+  }
+  [data-ui="date-picker-control"]:focus-visible {
+    border-color: var(--admin-focus-border);
+    box-shadow: 0 0 0 3px var(--admin-focus-ring);
+    outline: none;
+  }
+  [data-ui="date-picker-control"]:disabled {
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-disabled);
+    cursor: not-allowed;
+  }
+  [data-ui="date-picker-field"][data-invalid="true"] [data-ui="date-picker-control"] {
+    border-color: var(--admin-danger);
+  }
+  [data-ui="date-picker-help"] {
+    grid-column: 2;
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+  }
+  [data-ui="date-picker-error"] {
+    grid-column: 2;
+    color: var(--admin-danger-strong);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+  [data-ui="date-picker-actions"] {
+    padding-block-end: 0.0625rem;
+  }
+  [data-ui="form-errors"] {
+    margin: 0;
+    padding: var(--admin-gap-sm) var(--admin-gap);
+    border: 1px solid var(--admin-danger-line);
+    border-inline-start: 3px solid var(--admin-danger);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-danger-soft);
+    color: var(--admin-status-fixed-ink);
+    font-size: var(--admin-size-sm);
+  }
+  [data-ui="form-actions"] {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* Desktop record forms use the compact ERP label/value rhythm. The control
+     column stays flexible while labels share a bounded measure; the mobile rule
+     below returns fields to a vertical stack before either side becomes cramped. */
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"]:not([data-kind="checkbox"]) {
+    grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--admin-gap);
+  }
+
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"]:not([data-kind="checkbox"])
+    > [data-ui="form-label"] {
+    grid-column: 1;
+    align-self: center;
+  }
+
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"]:not([data-kind="checkbox"])
+    > :is(
+      [data-ui="form-control"],
+      [data-ui="form-options"],
+      [data-ui="form-help"],
+      [data-ui="form-error"],
+      ket-island
+    ) {
+    grid-column: 2;
+  }
+
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"][data-kind="textarea"] {
+    align-items: start;
+  }
+
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"][data-kind="textarea"]
+    > [data-ui="form-label"] {
+    margin-block-start: 0.375rem;
+  }
+
+  /* FormPage keeps Chatter as a true page rail. The island supplies behaviour;
+     the page supplies its border, padding and one-third measure. */
+  [data-ui="form-page-aside"] > :is(ket-island, [data-ui="chatter"]),
+  [data-ui="form-page-aside"] > ket-island > [data-ui="chatter"] {
+    inline-size: 100%;
+    max-inline-size: none;
+  }
+  [data-ui="form-page-aside"] > ket-island > [data-ui="chatter"] {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Multi-value relations grow downward while preserving the inline label
+     anchor at the first control. */
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"][data-kind="relation"]:has([data-ui="relation-chips"]) {
+    align-items: start;
+  }
+
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"][data-kind="relation"]:has([data-ui="relation-chips"])
+    > [data-ui="form-label"] {
+    align-self: start;
+    margin-block-start: 0.375rem;
+  }
+
+  @media (max-width: 47.9375rem) {
+    [data-ui="date-picker"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+    [data-ui="date-picker-fields"],
+    [data-ui="date-picker"][data-range="false"] [data-ui="date-picker-fields"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    [data-ui="date-picker-actions"],
+    [data-ui="date-picker-actions"] [data-ui="action-group"] {
+      inline-size: 100%;
+    }
+    [data-ui="date-picker-actions"] [data-ui="action"] {
+      flex: 1 1 8rem;
+    }
+    [data-ui="media"] {
+      max-inline-size: none;
+      grid-template-columns: minmax(0, 1fr);
+    }
+    [data-ui="media-gallery"],
+    [data-ui="media-actions"],
+    [data-ui="media-extension"],
+    [data-ui="media"] > :is([data-ui="loading"], [data-ui="error"]) {
+      grid-column: 1;
+    }
+    [data-ui="form-grid"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    [data-ui="form-field"][data-span="full"] {
+      grid-column: auto;
+    }
+    [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+    [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"]:not([data-kind="checkbox"])
+      > :is(
+        [data-ui="form-label"],
+        [data-ui="form-control"],
+        [data-ui="form-options"],
+        [data-ui="form-help"],
+        [data-ui="form-error"],
+        ket-island
+      ) {
+      /* The island carrying a relation control belongs in the stack like any
+         other control. Left out, it auto-places into an implicit second column
+         and squeezes the label into a sliver beside it. */
+      grid-column: 1;
+    }
+    [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"][data-kind="textarea"]
+      > [data-ui="form-label"] {
+      margin-block-start: 0;
+    }
+    [data-ui="form-actions"],
+    [data-ui="form-actions"] [data-ui="action-group"] {
+      inline-size: 100%;
+    }
+    [data-ui="form-actions"] [data-ui="action"] {
+      flex: 1 1 10rem;
+    }
+    [data-ui="form-cluster"] {
+      align-items: stretch;
+    }
+    [data-ui="record-form"][data-layout="inline"] {
+      min-inline-size: 100%;
+      max-inline-size: none;
+      flex-basis: 100%;
+    }
+    [data-ui="record-form"][data-layout="inline"][data-has-fields="false"] {
+      min-inline-size: 100%;
+    }
+    [data-ui="relation-menu"] {
+      position: fixed;
+      inset: auto var(--admin-gap-sm) var(--admin-gap-sm);
+      max-block-size: min(28rem, calc(100dvh - var(--admin-gap-lg)));
+    }
+    [data-ui="relation-options"] {
+      max-block-size: min(18rem, 45dvh);
+    }
+    [data-ui="relation-dialog-toolbar"],
+    [data-ui="relation-dialog-row"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    [data-ui="relation-dialog-toolbar"] {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    [data-ui="relation-dialog-row"] {
+      align-items: stretch;
+    }
+    [data-ui="relation-dialog-actions"] {
+      justify-content: flex-end;
+    }
+    [data-ui="relation-dialog-actions"] [data-ui="action"] {
+      flex: 0 0 auto;
+    }
+    [data-ui="modal-layer"][data-presentation="dialog"] {
+      padding: 0;
+    }
+    [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"] {
+      inline-size: 100%;
+      block-size: 100dvh;
+      max-block-size: 100dvh;
+      border: 0;
+      border-radius: 0;
+    }
+  }
+
+  /* Compatibility RecordForm uses `form-field` while the public FormPage
+     contract uses `field`. Mirror the same responsive inline label rhythm so
+     every KetSuite FormPage gets the Partner layout without module CSS. */
+  @media (max-width: 89.9375rem) {
+    [data-ui="form-page"]
+      [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(6.5rem, 7.5rem) minmax(0, 1fr);
+      column-gap: var(--admin-gap-sm);
+    }
+  }
+  @media (max-width: 63.9375rem) {
+    [data-ui="form-page"] [data-ui="record-form"][data-layout="default"] > [data-ui="form-grid"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    [data-ui="form-page"] [data-ui="form-field"][data-span="full"] {
+      grid-column: auto;
+    }
+  }
+  @media (max-width: 47.9375rem) {
+    [data-ui="form-page"]
+      [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"]:not([data-kind="checkbox"]) {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+    [data-ui="form-page"]
+      [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"]:not([data-kind="checkbox"])
+      > [data-ui="form-label"] {
+      grid-column: 1;
+    }
+    [data-ui="form-page"]
+      [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"]:not([data-kind="checkbox"])
+      > :is(
+        [data-ui="form-control"],
+        [data-ui="form-options"],
+        [data-ui="form-help"],
+        [data-ui="form-error"],
+        ket-island
+      ) {
+      grid-column: 1;
+    }
+    [data-ui="form-page"]
+      [data-ui="record-form"][data-layout="default"]
+      > [data-ui="form-grid"]
+      > [data-ui="form-field"][data-kind="textarea"]
+      > [data-ui="form-label"] {
+      margin-block-start: 0;
+    }
+  }
+}

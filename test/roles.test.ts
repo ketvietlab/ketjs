@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  bootApp,
+  bootDeployment,
   callFn,
   compose,
   defineModule,
@@ -11,11 +11,12 @@ import {
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
 import type { Ctx } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { legacyPermissionCatalogue, legacyPresetFunctions } from '@ketvietlab/ketsuite'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 /**
  * A role is a named list of function keys, additive across roles — Salesforce
- * permission sets rather than Odoo's ir.model.access. The unit is the action, so
+ * permission sets rather than the domain contract's model-level CRUD grants. The unit is the action, so
  * the role *is* the list of actions, and `ket permissions` can print what any list
  * reaches because there is nothing to traverse.
  */
@@ -111,8 +112,50 @@ test('allow: an empty list is a real restriction, not a missing one', async () =
 
 // ── the role model, and the whole thing running ──────────────────────────────
 
+test('legacy presets: exported audit helpers are the exact current User/Manager projection', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const catalogue = legacyPermissionCatalogue(manifest)
+
+  assert.equal(
+    catalogue.some((entry) => entry.key === 'user.issueAuthToken'),
+    false,
+  )
+  assert.deepEqual(
+    catalogue.find((entry) => entry.key === 'user.listUsers'),
+    {
+      key: 'user.listUsers',
+      module: 'user',
+      task: 'read',
+    },
+  )
+  assert.deepEqual(
+    catalogue.find((entry) => entry.key === 'user.createUser'),
+    {
+      key: 'user.createUser',
+      module: 'user',
+      task: 'manage',
+    },
+  )
+
+  const ordinary = legacyPresetFunctions(manifest, 'user', 'user')
+  assert.equal(ordinary.includes('user.listUsers'), true)
+  assert.equal(ordinary.includes('user.createUser'), false)
+  assert.equal(ordinary.includes('user.cloneManagedRole'), false)
+  assert.equal(ordinary.includes('user.issueAuthToken'), false)
+
+  const manager = legacyPresetFunctions(manifest, 'user', 'manager')
+  assert.equal(manager.includes('user.createUser'), true)
+  assert.equal(manager.includes('user.cloneManagedRole'), true)
+  assert.equal(manager.includes('user.issueAuthToken'), true)
+  assert.deepEqual(legacyPresetFunctions(manifest, 'oauth', 'user'), [])
+  assert.throws(() => legacyPresetFunctions(manifest, 'missing', 'user'), /no module "missing"/)
+})
+
 const setup = async () => {
-  const b = await bootApp(ketsuite, { env: { KET_SQLITE: ':memory:', KET_SECRET: 'shared' }, port: 0 })
+  const b = await bootDeployment(ketsuite, {
+    env: { KET_LOG: 'null', KET_SQLITE: ':memory:', KET_SECRET: 'shared' },
+    port: 0,
+  })
   const o = { adapter: b.adapter!, manifest: b.manifest, scope: { company: 'acme' } }
   const run = (fn: string, args: Record<string, unknown> = {}) =>
     callFn(fn, args, o).then((r) => r.value as Record<string, unknown>)

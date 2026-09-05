@@ -9,7 +9,6 @@ export default defineModule({
   name: 'mail_inbound',
   version: '0.1.0',
   depends: ['mail', 'mail_transport'],
-  app: true,
   title: 'Email đến',
   summary: 'Webhook ký HMAC, reply routing, alias và chẩn đoán email đến.',
   category: 'Năng suất',

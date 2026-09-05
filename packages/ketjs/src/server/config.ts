@@ -6,29 +6,37 @@
 //
 // Note what is NOT here: which driver to open. The framework knows the Adapter
 // contract and ships SQLite, which it owns. Postgres lives in its own package, and
-// a package the framework depended on would be a cycle — so an app that wants it
+// a package the framework depended on would be a cycle — so a deployment that wants it
 // hands `openStore` in. The fence is the reason, and the fence is checked.
 
 import { sqliteAdapter } from '../data/sqlite.ts'
+import { isTimezone } from '../data/time.ts'
 import { KetError } from '../kernel/errors.ts'
+import { isLogDriverName, isLogLevel } from './log/types.ts'
+import type { LogDriverName, LogLevel } from './log/types.ts'
 import type { Adapter } from '../types.ts'
+
+export type PublicStorageConfig =
+  | { kind: 'local'; dir: string; baseUrl?: string | null }
+  | {
+      kind: 's3'
+      bucket: string
+      accessKeyId: string
+      secretAccessKey: string
+      endpoint?: string | null
+      region?: string
+      pathStyle?: boolean
+      baseUrl?: string | null
+    }
 
 export type RuntimeConfig = {
   port: number
   host: string
-  /** Non-null means "not SQLite"; the app's openStore decides what it means. */
+  /** Non-null means "not SQLite"; the deployment's openStore decides what it means. */
   databaseUrl: string | null
   sqliteFile: string
   /** Applied on boot unless told otherwise; a production deploy migrates separately. */
   migrateOnBoot: boolean
-  /** Installed on an empty database so a first run has something to look at. */
-  bootstrapApps: string[] | null
-  /**
-   * Whether modules declaring install: 'auto' are allowed to arrive on their own.
-   * A module draws the boundary; this decides whether the deployment honours it.
-   * Off is for development, where an app appearing by itself is a surprise.
-   */
-  autoInstall: boolean
   defaultLocale: string
   fallbackLocale: string
   /** IANA timezone used when the authenticated user has not chosen one. */
@@ -54,24 +62,27 @@ export type RuntimeConfig = {
   s3AccessKeyId: string | null
   s3SecretAccessKey: string | null
   s3PathStyle: boolean
+  /** Optional second backend; the legacy storage configuration remains private/default. */
+  publicStorage?: PublicStorageConfig
+  /** Which built-in sink to open. `auto` reads columns to a terminal and NDJSON to a pipe. */
+  logDriver: LogDriverName
+  logLevel: LogLevel
+  /**
+   * Which stream a log goes to. stderr, because stdout carries the answer a
+   * command was run for and a log line interleaved into it breaks the pipe.
+   */
+  logStream: 'stdout' | 'stderr'
+  logDir: string
+  /** Records a batching driver may hold before it starts dropping and says so. */
+  logBuffer: number
 }
-
-const list = (v: string | undefined): string[] | null =>
-  v === undefined
-    ? null
-    : v
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
 
 export function readConfig(
   env: Record<string, string | undefined> = process.env,
   defaults: Partial<RuntimeConfig> = {},
 ): RuntimeConfig {
   const defaultTimezone = env.KET_TIMEZONE ?? defaults.defaultTimezone ?? 'UTC'
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: defaultTimezone }).format()
-  } catch {
+  if (!isTimezone(defaultTimezone)) {
     throw new KetError({
       code: 'E_TIMEZONE_CONFIG',
       message: `KET_TIMEZONE must be an IANA timezone, got "${defaultTimezone}"`,
@@ -83,21 +94,80 @@ export function readConfig(
       code: 'E_STORAGE_CONFIG',
       message: `KET_STORAGE must be local or s3, got "${storageKind}"`,
     })
+  const logDriver = env.KET_LOG ?? defaults.logDriver ?? 'auto'
+  if (!isLogDriverName(logDriver))
+    throw new KetError({
+      code: 'E_LOG_CONFIG',
+      message: `KET_LOG must be one of auto, console, pretty, file, null; got "${logDriver}"`,
+    })
+  const logLevel = env.KET_LOG_LEVEL ?? defaults.logLevel ?? 'info'
+  if (!isLogLevel(logLevel))
+    throw new KetError({
+      code: 'E_LOG_CONFIG',
+      message: `KET_LOG_LEVEL must be one of debug, info, warn, error; got "${logLevel}"`,
+    })
+  const logStream = env.KET_LOG_STREAM ?? defaults.logStream ?? 'stderr'
+  if (logStream !== 'stdout' && logStream !== 'stderr')
+    throw new KetError({
+      code: 'E_LOG_CONFIG',
+      message: `KET_LOG_STREAM must be stdout or stderr, got "${logStream}"`,
+    })
+  const logBuffer = Number(env.KET_LOG_BUFFER ?? defaults.logBuffer ?? 10_000)
+  if (!Number.isSafeInteger(logBuffer) || logBuffer < 1)
+    throw new KetError({
+      code: 'E_LOG_CONFIG',
+      message: `KET_LOG_BUFFER must be a positive integer, got "${env.KET_LOG_BUFFER ?? logBuffer}"`,
+    })
   const uploadMax = Number(env.KET_UPLOAD_MAX ?? defaults.uploadMax ?? 25 * 1024 * 1024)
   if (!Number.isSafeInteger(uploadMax) || uploadMax < 1)
     throw new KetError({
       code: 'E_STORAGE_CONFIG',
       message: `KET_UPLOAD_MAX must be a positive integer, got "${env.KET_UPLOAD_MAX ?? uploadMax}"`,
     })
+  let publicStorage = defaults.publicStorage
+  const publicEnv = Object.keys(env).some(
+    (key) =>
+      (key.startsWith('KET_S3_PUBLIC_') ||
+        key === 'KET_STORAGE_PUBLIC_DIR' ||
+        key === 'KET_STORAGE_PUBLIC_URL') &&
+      env[key] !== undefined,
+  )
+  if (publicEnv) {
+    const baseUrl = env.KET_STORAGE_PUBLIC_URL ?? publicStorage?.baseUrl
+    if (storageKind === 's3') {
+      if (env.KET_STORAGE_PUBLIC_DIR !== undefined)
+        throw new KetError({
+          code: 'E_STORAGE_CONFIG',
+          message: 'S3 storage cannot use KET_STORAGE_PUBLIC_DIR',
+        })
+      const held = publicStorage?.kind === 's3' ? publicStorage : undefined
+      publicStorage = {
+        kind: 's3',
+        bucket: env.KET_S3_PUBLIC_BUCKET ?? held?.bucket ?? '',
+        accessKeyId: env.KET_S3_PUBLIC_KEY ?? held?.accessKeyId ?? '',
+        secretAccessKey: env.KET_S3_PUBLIC_SECRET ?? held?.secretAccessKey ?? '',
+        endpoint: env.KET_S3_PUBLIC_ENDPOINT ?? held?.endpoint,
+        region: env.KET_S3_PUBLIC_REGION ?? held?.region,
+        pathStyle:
+          env.KET_S3_PUBLIC_PATH_STYLE === undefined ? held?.pathStyle : env.KET_S3_PUBLIC_PATH_STYLE !== '0',
+        baseUrl,
+      }
+    } else {
+      if (Object.keys(env).some((key) => key.startsWith('KET_S3_PUBLIC_') && env[key] !== undefined))
+        throw new KetError({ code: 'E_STORAGE_CONFIG', message: 'KET_S3_PUBLIC_* requires KET_STORAGE=s3' })
+      publicStorage = {
+        kind: 'local',
+        dir: env.KET_STORAGE_PUBLIC_DIR ?? (publicStorage?.kind === 'local' ? publicStorage.dir : ''),
+        baseUrl,
+      }
+    }
+  }
   return {
     port: Number(env.PORT ?? defaults.port ?? 3000),
     host: env.HOST ?? defaults.host ?? '127.0.0.1',
     databaseUrl: env.DATABASE_URL ?? defaults.databaseUrl ?? null,
-    sqliteFile: env.KET_SQLITE ?? defaults.sqliteFile ?? '.ket/app.db',
-    migrateOnBoot: env.KET_MIGRATE !== '0',
-    autoInstall:
-      env.KET_AUTO_INSTALL === undefined ? (defaults.autoInstall ?? true) : env.KET_AUTO_INSTALL !== '0',
-    bootstrapApps: list(env.KET_APPS) ?? defaults.bootstrapApps ?? null,
+    sqliteFile: env.KET_SQLITE ?? defaults.sqliteFile ?? '.ket/deployment.db',
+    migrateOnBoot: env.KET_MIGRATE === undefined ? (defaults.migrateOnBoot ?? true) : env.KET_MIGRATE !== '0',
     defaultLocale: env.KET_LOCALE ?? defaults.defaultLocale ?? 'en',
     fallbackLocale: env.KET_FALLBACK_LOCALE ?? defaults.fallbackLocale ?? defaults.defaultLocale ?? 'en',
     defaultTimezone,
@@ -116,10 +186,16 @@ export function readConfig(
     s3SecretAccessKey: env.KET_S3_SECRET ?? defaults.s3SecretAccessKey ?? null,
     s3PathStyle:
       env.KET_S3_PATH_STYLE === undefined ? (defaults.s3PathStyle ?? false) : env.KET_S3_PATH_STYLE !== '0',
+    ...(publicStorage ? { publicStorage } : {}),
+    logDriver,
+    logLevel,
+    logStream,
+    logDir: env.KET_LOG_DIR ?? defaults.logDir ?? '.ket/log',
+    logBuffer,
   }
 }
 
-/** How an app opens its datastore. SQLite is the default because it needs no driver. */
+/** How a deployment opens its datastore. SQLite is the default because it needs no driver. */
 export type OpenStore = (config: RuntimeConfig) => Adapter | Promise<Adapter>
 
 export const sqliteStore: OpenStore = async (config) => {
@@ -127,9 +203,9 @@ export const sqliteStore: OpenStore = async (config) => {
     throw new KetError({
       code: 'E_NO_DATASTORE_DRIVER',
       module: 'ketjs',
-      message: `DATABASE_URL is set, but this app only knows how to open SQLite`,
+      message: `DATABASE_URL is set, but this deployment only knows how to open SQLite`,
       hint:
-        'give the app a serve.openStore that imports a driver package (@ketvietlab/ketjs-postgres, say); ' +
+        'give the deployment a serve.openStore that imports a driver package (@ketvietlab/ketjs-postgres, say); ' +
         'the framework cannot depend on one without becoming a cycle',
     })
   }

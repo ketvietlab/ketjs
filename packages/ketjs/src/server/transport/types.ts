@@ -115,8 +115,8 @@ export function unavailableTransport(): OutboundTransport {
     async send() {
       throw new KetError({
         code: 'E_TRANSPORT_UNAVAILABLE',
-        message: 'no outbound transport is configured for this app',
-        hint: 'provide serve.openTransport in the app deployment',
+        message: 'no outbound transport is configured for this deployment',
+        hint: 'provide serve.openTransport in the deployment declaration',
       })
     },
   }

@@ -4,6 +4,14 @@ import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { canManageStructure } from '../website/access.ts'
 
 const invalid = (field: string, message: string) => ({ ok: false, errors: [{ field, message }] })
+const slug = (value: unknown): string =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 120)
 const page = (limit: unknown, offset: unknown) => ({
   limit: Math.min(Math.max(Number.isInteger(limit) ? Number(limit) : 24, 1), 100),
   offset: Math.min(Math.max(Number.isInteger(offset) ? Number(offset) : 0, 0), 100_000),
@@ -50,6 +58,21 @@ const claimRateSlot = async (ctx: Ctx, key: string, now: Date): Promise<boolean>
 }
 
 export const functions: Record<string, FnSpec> = {
+  listChannelProperties: defineFn({
+    exposure: 'internal',
+    anonymous: true,
+    input: { siteId: 'id' },
+    output: { propertyId: 'id', slug: 'text' },
+    effects: ['read:website.Site', 'read:website_hospitality.SiteProperty'],
+    handler: async (ctx, args) => {
+      if (!(await hospitalitySite(ctx, args.siteId))) return []
+      const links = await ctx.db.select('website_hospitality.SiteProperty', {
+        siteId: args.siteId,
+        active: true,
+      })
+      return links.map((link) => ({ propertyId: link.propertyId, slug: link.slug }))
+    },
+  }),
   listStays: defineFn({
     anonymous: true,
     input: { siteId: 'id', limit: 'int?', offset: 'int?' },
@@ -101,7 +124,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   saveSiteProperty: defineFn({
-    input: { id: 'id', siteId: 'id', propertyId: 'id', active: 'bool?' },
+    input: { id: 'id', siteId: 'id', propertyId: 'id', slug: 'text?', active: 'bool?' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
     effects: [
       'read:website.Site',
@@ -116,8 +139,8 @@ export const functions: Record<string, FnSpec> = {
       if (!(await hospitalitySite(ctx, args.siteId)))
         return invalid('siteId', 'website_hospitality.error.invalidSite')
       if (!(await canManageStructure(ctx, args.siteId))) return invalid('siteId', 'website.error.forbidden')
-      if (!(await ctx.db.select('hospitality_core.Property', { id: args.propertyId }))[0])
-        return invalid('propertyId', 'website_hospitality.error.propertyNotFound')
+      const property = (await ctx.db.select('hospitality_core.Property', { id: args.propertyId }))[0]
+      if (!property) return invalid('propertyId', 'website_hospitality.error.propertyNotFound')
       const existing = (await ctx.db.select('website_hospitality.SiteProperty', { id: args.id }))[0]
       if (existing && existing.siteId !== args.siteId)
         return invalid('id', 'website.error.immutableOwnership')
@@ -132,6 +155,7 @@ export const functions: Record<string, FnSpec> = {
         id: args.id,
         siteId: args.siteId,
         propertyId: args.propertyId,
+        slug: slug(args.slug || property.publicName || property.name || property.code || args.propertyId),
         active: args.active !== false,
       }
       if (existing) await ctx.db.update('website_hospitality.SiteProperty', { id: args.id }, row)

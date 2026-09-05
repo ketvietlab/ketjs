@@ -1,10 +1,10 @@
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
-export async function collaborationEvidenceApp(
-  options: { databaseUrl?: string; app?: typeof ketsuite } = {},
+export async function collaborationEvidenceDeployment(
+  options: { databaseUrl?: string; deployment?: typeof ketsuite } = {},
 ) {
-  const e2e = await createTestApp(options.app ?? ketsuite, {
+  const e2e = await createTestDeployment(options.deployment ?? ketsuite, {
     worker: false,
     ...(options.databaseUrl ? { env: { DATABASE_URL: options.databaseUrl } } : {}),
   })
@@ -51,11 +51,37 @@ export async function collaborationEvidenceApp(
       })
     }
 
+    // Keep the directory above one page and give every business filter a
+    // meaningful count so the ListPage evidence covers paging, tabs and empty
+    // filtered states with the same fixture.
+    for (let index = 1; index <= 29; index++) {
+      const id = `directory-partner-${String(index).padStart(2, '0')}`
+      await call('partner.savePartner', {
+        id,
+        kind: index % 4 === 0 ? 'person' : 'company',
+        name: index % 4 === 0 ? `Liên hệ vận hành ${index}` : `Đối tác vận hành ${index}`,
+        ref: `DT-${String(index).padStart(4, '0')}`,
+        email: `partner-${index}@example.test`,
+        phone: `0900${String(index).padStart(6, '0')}`,
+      })
+      const roles = index % 5 === 0 ? ['customer', 'supplier'] : [index % 2 === 0 ? 'supplier' : 'customer']
+      for (const role of roles)
+        await call('partner.grantRole', {
+          id: `${id}:${role}`,
+          partnerId: id,
+          role,
+        })
+    }
+    await call('partner.archivePartner', { id: 'directory-partner-29', active: false })
+
     await call('uom.saveUnit', { id: 'unit', name: 'Đơn vị', relativeFactor: '1' })
+    await call('product.saveCategory', { id: 'workwear', name: 'Đồng phục vận hành' })
+    await call('product.saveCategory', { id: 'services', name: 'Dịch vụ' })
     await call('product.saveTemplate', {
       id: 'tpl-collab',
       name: 'Áo khoác vận hành',
       type: 'goods',
+      categoryId: 'workwear',
       uomId: 'unit',
       listPrice: '1250000',
       description: 'Sản phẩm mẫu dùng để kiểm chứng Chatter trên Product.',
@@ -71,6 +97,82 @@ export async function collaborationEvidenceApp(
       isStorable: true,
       tracking: 'none',
     })
+    for (const product of [
+      {
+        id: 'safety-vest',
+        name: 'Áo phản quang công trường',
+        type: 'goods',
+        categoryId: 'workwear',
+        listPrice: '185000',
+        storable: true,
+      },
+      {
+        id: 'safety-helmet',
+        name: 'Mũ bảo hộ tiêu chuẩn',
+        type: 'goods',
+        categoryId: 'workwear',
+        listPrice: '320000',
+        storable: true,
+      },
+      {
+        id: 'thermal-bottle',
+        name: 'Bình giữ nhiệt nhân viên',
+        type: 'goods',
+        categoryId: 'workwear',
+        listPrice: '275000',
+        storable: true,
+      },
+      {
+        id: 'equipment-maintenance',
+        name: 'Bảo trì thiết bị định kỳ',
+        type: 'service',
+        categoryId: 'services',
+        listPrice: '950000',
+        storable: false,
+      },
+      {
+        id: 'operations-onboarding',
+        name: 'Triển khai quy trình vận hành',
+        type: 'service',
+        categoryId: 'services',
+        listPrice: '2500000',
+        storable: false,
+      },
+    ]) {
+      await call('product.saveTemplate', {
+        id: product.id,
+        name: product.name,
+        type: product.type,
+        categoryId: product.categoryId,
+        uomId: 'unit',
+        listPrice: product.listPrice,
+        description: 'Dữ liệu mẫu cho kiểm chứng danh mục sản phẩm.',
+      })
+      await call('product.saveVariant', {
+        id: `${product.id}:default`,
+        templateId: product.id,
+        defaultCode: product.id.toLocaleUpperCase('en'),
+        combinationKey: '',
+      })
+      if (product.storable)
+        await call('stock.configureProduct', {
+          templateId: product.id,
+          isStorable: true,
+          tracking: 'none',
+        })
+    }
+    // Keep the catalogue above one page so visual evidence always covers the
+    // pager together with search, filters and both view controls.
+    for (let index = 1; index <= 25; index++)
+      await call('product.saveTemplate', {
+        id: `catalogue-sample-${String(index).padStart(2, '0')}`,
+        name: `Sản phẩm kiểm thử ${String(index).padStart(2, '0')}`,
+        type: 'goods',
+        categoryId: 'workwear',
+        uomId: 'unit',
+        listPrice: String(100000 + index * 10000),
+        description: 'Dữ liệu mẫu để kiểm chứng phân trang danh mục sản phẩm.',
+      })
     for (const attribute of [
       { id: 'attribute-color', name: 'Màu sắc', displayType: 'pills', createVariant: 'always' },
       { id: 'attribute-size', name: 'Kích cỡ', displayType: 'radio', createVariant: 'always' },
@@ -203,7 +305,6 @@ export async function collaborationEvidenceApp(
       name: 'VAT 10%',
       description: 'Thuế GTGT bán ra 10%',
       typeTaxUse: 'sale',
-      taxScope: 'consu',
       amountType: 'percent',
       amount: '10',
       priceInclude: false,

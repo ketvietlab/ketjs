@@ -19,6 +19,13 @@ export type Validator = (value: unknown, changes: Row) => true | string
 
 const PLAIN_DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
 
+/** Public resource budget for one exact decimal, including sign and decimal point. */
+export const DECIMAL_MAX_CHARS = 4096
+
+export type ParsedDecimal =
+  | { ok: true; value: string }
+  | { ok: false; reason: 'type' | 'finite' | 'syntax' | 'size' }
+
 /**
  * A finite number as plain decimal text.
  *
@@ -28,15 +35,62 @@ const PLAIN_DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
  */
 export const decimalText = (v: number | string): string => {
   const s = String(v).trim()
-  if (PLAIN_DECIMAL.test(s)) return s
+  if (s.length <= DECIMAL_MAX_CHARS && PLAIN_DECIMAL.test(s)) return s
   const m = /^([+-]?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/i.exec(s)
   if (!m) return s
   const sign = m[1] ?? ''
   const digits = (m[2] as string) + (m[3] ?? '')
-  const point = (m[2] as string).length + Number(m[4])
-  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`
-  if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}`
-  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`
+  const exponent = Number(m[4])
+  if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > DECIMAL_MAX_CHARS) return s
+  const point = (m[2] as string).length + exponent
+  const expanded =
+    point <= 0
+      ? `${sign}0.${'0'.repeat(-point)}${digits}`
+      : point >= digits.length
+        ? `${sign}${digits}${'0'.repeat(point - digits.length)}`
+        : `${sign}${digits.slice(0, point)}.${digits.slice(point)}`
+  return expanded.length <= DECIMAL_MAX_CHARS ? expanded : s
+}
+
+export const parseDecimal = (value: unknown): ParsedDecimal => {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return { ok: false, reason: 'finite' }
+    const rendered = decimalText(value)
+    if (rendered.length > DECIMAL_MAX_CHARS) return { ok: false, reason: 'size' }
+    return PLAIN_DECIMAL.test(rendered)
+      ? { ok: true, value: rendered.replace(/^\+/, '') }
+      : { ok: false, reason: 'syntax' }
+  }
+  if (typeof value !== 'string') return { ok: false, reason: 'type' }
+  const held = value.trim()
+  // Check the cheap public budget before the regex. SQLite UDFs repeat this
+  // boundary defensively for rows written outside KetJS.
+  if (held.length > DECIMAL_MAX_CHARS) return { ok: false, reason: 'size' }
+  return PLAIN_DECIMAL.test(held)
+    ? { ok: true, value: held.replace(/^\+/, '') }
+    : { ok: false, reason: 'syntax' }
+}
+
+/** Canonical numeric spelling for computed values and equivalence keys. */
+export const canonicalDecimal = (value: unknown): string | null => {
+  const parsed = parseDecimal(value)
+  if (!parsed.ok) return null
+  let held = parsed.value
+  const negative = held.startsWith('-')
+  held = held.replace(/^-/, '')
+  const [rawWhole = '', fraction = ''] = held.split('.')
+  const whole = rawWhole || '0'
+  const combined = whole + fraction
+  const first = combined.search(/[1-9]/)
+  if (first < 0) return '0'
+  let last = combined.length - 1
+  while (combined[last] === '0') last--
+  const digits = combined.slice(first, last + 1)
+  const exponent = whole.length - first
+  const sign = negative ? '-' : ''
+  if (exponent <= 0) return `${sign}0.${'0'.repeat(-exponent)}${digits}`
+  if (exponent >= digits.length) return `${sign}${digits}${'0'.repeat(exponent - digits.length)}`
+  return `${sign}${digits.slice(0, exponent)}.${digits.slice(exponent)}`
 }
 
 const castValue = (
@@ -61,14 +115,11 @@ const castValue = (
       return { ok: true, value: n }
     }
     case 'decimal': {
-      if (typeof v === 'number') {
-        if (!Number.isFinite(v)) return { ok: false, message: `expected a decimal, got ${JSON.stringify(v)}` }
-        return { ok: true, value: decimalText(v) }
-      }
-      if (typeof v !== 'string' || !PLAIN_DECIMAL.test(v.trim())) {
-        return { ok: false, message: `expected a decimal string, got ${JSON.stringify(v)}` }
-      }
-      return { ok: true, value: v.trim().replace(/^\+/, '') }
+      const parsed = parseDecimal(v)
+      if (parsed.ok) return parsed
+      if (parsed.reason === 'size')
+        return { ok: false, message: `decimal exceeds ${DECIMAL_MAX_CHARS} characters` }
+      return { ok: false, message: `expected a finite number or plain decimal string` }
     }
     case 'float': {
       const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v
@@ -82,8 +133,14 @@ const castValue = (
       if (v === 'true' || v === 'false') return { ok: true, value: v === 'true' }
       return { ok: false, message: `expected a boolean, got ${JSON.stringify(v)}` }
     case 'datetime':
+      // Always ISO-8601 UTC, whatever offset it arrived in. Postgres normalises a
+      // TIMESTAMPTZ on the way in whether or not we ask, so storing "+07:00"
+      // verbatim would put a different string in SQLite than in Postgres for the
+      // same instant. It also makes the text sort chronologically, which is what
+      // a range query on SQLite compares.
       if (v instanceof Date) return { ok: true, value: v.toISOString() }
-      if (typeof v === 'string' && !Number.isNaN(Date.parse(v))) return { ok: true, value: v }
+      if (typeof v === 'string' && !Number.isNaN(Date.parse(v)))
+        return { ok: true, value: new Date(v).toISOString() }
       return { ok: false, message: `expected a date, got ${JSON.stringify(v)}` }
     case 'date':
       return isDateText(v)

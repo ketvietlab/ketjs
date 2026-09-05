@@ -1,17 +1,17 @@
-// Booting an app: the sequence every deployment repeats, written once.
+// Booting a deployment: the sequence every deployment repeats, written once.
 //
-// Before this, running a KetSuite-shaped app meant ~150 lines of hand-written boot
-// in the app itself — open a database, migrate, register functions, install a
-// bootstrap set, decide who the request is, build the theme, mount the framework's
+// Before this, running a KetSuite-shaped deployment meant ~150 lines of hand-written boot
+// in the deployment itself — open a database, migrate, register functions,
+// decide who the request is, build the theme, mount the framework's
 // own routes, print something useful, shut down cleanly. Every one of those lines
-// is app-agnostic, and every second app would have copied them, drift included.
+// is deployment-agnostic, and every second deployment would have copied them, drift included.
 //
-// What stays with the app is what only the app knows: which modules it ships, which
+// What stays with the deployment is what only it knows: which modules it ships, which
 // function turns a path into a page, which extra routes it serves, and how to open
-// a datastore that is not SQLite. Those arrive through `AppSpec.serve` as data
+// a datastore that is not SQLite. Those arrive through `DeploymentSpec.serve` as data
 // rather than as a closure the framework has to trust.
 
-import { createAppRegistry } from '../kernel/apps.ts'
+import { withoutVersion } from './assets.ts'
 import { translator } from '../kernel/i18n.ts'
 import { KetError } from '../kernel/errors.ts'
 import { createTheme } from '../theme/render.ts'
@@ -19,7 +19,7 @@ import { agentDescriptor } from '../agent/capabilities.ts'
 import { migrateOne } from '../data/fleet.ts'
 import { callFn } from './fn.ts'
 import { createKetServer } from './http.ts'
-import { createSessions, dbSessionStore } from './session.ts'
+import { createSessions, dbSessionStore, scopeForSession } from './session.ts'
 import { createTenants, singleTenant } from './tenants.ts'
 import { createJoints } from '../theme/joints.ts'
 import { buildMenu } from '../kernel/menu.ts'
@@ -27,23 +27,26 @@ import type { MenuNode } from '../kernel/menu.ts'
 import type { IslandRegistry, Markup } from '@ketvietlab/ketjs-view'
 import type { Tenants, TenantSpec } from './tenants.ts'
 import { createAdapterPool } from '../data/pool.ts'
-import type { AppInfo } from '../kernel/apps.ts'
 import type { SessionContext, Sessions, SessionOptions, SessionRecord } from './session.ts'
 import { document, json, text, withHeaders } from './respond.ts'
 import { join, isAbsolute } from 'node:path'
-import { html, each } from '@ketvietlab/ketjs-view'
+import { html, each, renderToString } from '@ketvietlab/ketjs-view'
 import { sqliteStore } from './config.ts'
 import { bootRuntime } from './runtime.ts'
+import { traceOf } from './log/index.ts'
+import type { RatePolicy } from './ratelimit.ts'
+import type { Logger, OpenLog } from './log/index.ts'
 import type { RuntimeConfig, OpenStore } from './config.ts'
 import { namespacedStorage, storageFromConfig } from './storage/index.ts'
 import type { OpenStorage, Storage } from './storage/index.ts'
 import type { OpenTransport } from './transport/index.ts'
-import type { AppSpec } from '../kernel/workspace.ts'
-import type { AppRegistry } from '../kernel/apps.ts'
+import type { DeploymentSpec, NavigationSpec } from '../kernel/workspace.ts'
 import type { Translator } from '../kernel/i18n.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { IncomingMessage } from 'node:http'
 import type { RouteParams } from '../kernel/routes.ts'
+import { randomBytes } from 'node:crypto'
+import type { Streams, StreamStore } from './stream.ts'
 
 export type { Html, RouteResult } from './respond.ts'
 export {
@@ -67,27 +70,33 @@ export type Route = (
 
 /**
  * What a route needs that only the running server has. Handed to `serve.routes` so
- * an app's screens can read live state without reaching for module-level globals.
+ * deployment screens can read live state without reaching for module-level globals.
  */
 export type ServeContext = {
-  /** Everything this deployment ships, installed or not. */
+  /** The immutable manifest selected by this deployment. */
   manifest: Manifest
-  /**
-   * Restricted to what is switched on for THIS request's tenant.
-   *
-   * It takes the request because the answer depends on it. Computing it once at
-   * boot is what would show one tenant the module set of another — and that does
-   * not fail, it answers wrongly, which is worse.
-   */
+  /** The authored deployment and its external-client compatibility policy. */
+  deploymentName: string
+  clientCompatibility: ClientCompatibilityPolicy | null
+  /** Same manifest for every tenant; request-shaped for convenient route composition. */
   live: (req: IncomingMessage) => Promise<Manifest>
-  /** The app list for this request's tenant. The registry itself stays leased. */
-  appsOf: (req: IncomingMessage) => Promise<AppInfo[]>
   config: RuntimeConfig
   scopeOf: (url: URL, req: IncomingMessage) => Promise<Scope>
   localeOf: (url: URL, req: IncomingMessage) => string
   translate: (locale: string) => Translator
   /** A function call carrying this request's tenant, live manifest and scope. */
-  call: (name: string, input: Record<string, unknown>, url: URL, req: IncomingMessage) => Promise<unknown>
+  call: (
+    name: string,
+    input: Record<string, unknown>,
+    url: URL,
+    req: IncomingMessage,
+    options?: {
+      idempotencyKey?: string | null
+      idempotencyNamespace?: string | null
+      idempotencyDigest?: string | null
+      correlationId?: string | null
+    },
+  ) => Promise<unknown>
   /**
    * The same call with the permission check off.
    *
@@ -101,26 +110,65 @@ export type ServeContext = {
     input: Record<string, unknown>,
     url: URL,
     req: IncomingMessage,
+    options?: {
+      idempotencyKey?: string | null
+      idempotencyNamespace?: string | null
+      idempotencyDigest?: string | null
+      correlationId?: string | null
+    },
   ) => Promise<unknown>
+  /**
+   * Call inside exactly one company after this route has authenticated an
+   * external credential that is bound to that company.
+   *
+   * This is intentionally separate from `callUnchecked`: provider callbacks
+   * arrive without a staff session, so their request scope cannot select the
+   * legal entity. The company id must come from verified credential material,
+   * never from an unsigned path, query, header, or body field alone. The call
+   * remains in the request's tenant and cannot widen to another company.
+   */
+  callUncheckedForVerifiedCompany: (
+    name: string,
+    input: Record<string, unknown>,
+    companyId: string,
+    url: URL,
+    req: IncomingMessage,
+    options?: {
+      idempotencyKey?: string | null
+      idempotencyNamespace?: string | null
+      idempotencyDigest?: string | null
+      correlationId?: string | null
+    },
+  ) => Promise<unknown>
+  /** Whether this request's effective allow-list contains one exact function key. */
+  allows: (name: string, url: URL, req: IncomingMessage) => Promise<boolean>
+
+  /** What this deployment declared its navigation to mean. Null when it declared nothing. */
+  navigation: NavigationSpec | null
   /** The document every screen sits in. Markup, not a string — see respond.ts. */
   document: (o: { lang: string; title?: string; head?: Html; body: Html }) => Html
-  /** Installed modules' stylesheets for this tenant, in dependency order. */
+  /** Composed modules' stylesheets for this tenant, in dependency order. */
   styles: (req: IncomingMessage) => Promise<Html>
   /**
-   * Render an extension point: every installed module's fills, in dependency
+   * Render an extension point: every composed module's fills, in dependency
    * order, as markup a template inserts verbatim.
    *
-   * Empty when nobody fills it, and empty when an installed module omitted it.
+   * Empty when nobody fills it, and empty when a composed module omitted it.
    */
   joint: (url: URL, req: IncomingMessage, key: string, props?: Record<string, unknown>) => Promise<Markup>
-  /** False when an installed module omitted this joint — see jointShows in screens. */
+  /** False when a composed module omitted this joint — see jointShows in screens. */
   jointShows: (url: URL, req: IncomingMessage, key: string) => Promise<boolean>
   /**
-   * The navigation tree as this viewer sees it: what the deployment ships, what
-   * this database has switched on, and what this request may call — in that order,
-   * because each filter depends on the one before.
+   * The navigation tree as this viewer sees it: what the deployment composes and
+   * what this request may call.
    */
   menu: (url: URL, req: IncomingMessage) => Promise<MenuNode[]>
+  /** Printable reports for a model whose read-only source this viewer may call. */
+  reportsOf: (
+    url: URL,
+    req: IncomingMessage,
+    target: string,
+  ) => Promise<import('../types.ts').ComposedReport[]>
   /**
    * This request's sessions. A function because with subdomain tenants they live
    * in that tenant's database — one per tenant, not one per deployment.
@@ -142,6 +190,12 @@ export type PagesSpec = {
   resolve: string
   /** Optional function taking `{ host }` and returning site id, title, locale and theme. */
   siteResolve?: string
+  /**
+   * Optional function taking `{ siteId }` and returning the site's navigation.
+   * Its answer reaches a theme as `menu`; without it a theme that draws
+   * navigation draws nothing, which is a blank nav rather than an error.
+   */
+  menuResolve?: string
   /** Theme region whose host carries the same data-ket-slot name. */
   region?: string
   /** Message key for the title of a path that has no page. */
@@ -157,11 +211,33 @@ export type SessionResolveContext = {
   req: IncomingMessage
 }
 
+/**
+ * Identity established by infrastructure in front of the deployment.
+ *
+ * The resolver is the trust boundary: callers must verify the proxy credential
+ * (for example a short-lived signed assertion) before returning an identity.
+ * KetJS then applies the same actor, scope and permission pipeline used by a
+ * cookie session without persisting a second login session in the tenant DB.
+ */
+export type RequestIdentity = {
+  userId: string
+  companies: string[]
+  company: string | null
+  branch?: string | null
+  branches?: string[] | null
+  securityVersion?: number
+}
+
+export type RequestIdentityResolveContext = {
+  adapter: Adapter
+  manifest: Manifest
+  url: URL
+  req: IncomingMessage
+}
+
 export type ServeSpec = {
   pages?: PagesSpec
   assets?: { prefix: string; dir: string }
-  /** Installed on an empty database so a first run has something to look at. */
-  bootstrap?: string[]
   routes?: (ctx: ServeContext) => Record<string, Route>
   /** Anything other than SQLite; the framework cannot depend on a driver. */
   openStore?: OpenStore
@@ -170,56 +246,130 @@ export type ServeSpec = {
   /** Inject a deployment-owned outbound provider for durable worker jobs. */
   openTransport?: OpenTransport
   /**
+   * Send operational records somewhere the framework does not know how to reach.
+   *
+   * The built-ins need nothing but Node, so anything requiring a client library
+   * belongs here rather than in the framework — the same fence as `openStore`.
+   * Level filtering, redaction and failure isolation are applied around whatever
+   * this returns, so a sink cannot break the work it is describing.
+   *
+   * Return a fresh driver per call rather than one memoised instance. A process
+   * that runs both roles — `ket dev` — opens the sink once for HTTP and once for
+   * the worker and closes each with its own role; a shared instance is closed by
+   * whichever shuts down first, and the other role's last records are written to a
+   * handle that is already gone.
+   */
+  openLog?: OpenLog
+  /** Version and maintenance policy published by profile bootstrap routes. */
+  clientCompatibility?: ClientCompatibilityPolicy
+  /** Backing store for the built-in resumable stream transport. */
+  streamStore?: StreamStore
+  /**
+   * Authorize a public stream id and map it to the exact tenant-namespaced topic
+   * used by `BootedDeployment.streams`. Absent or null keeps the endpoint closed.
+   */
+  resolveStream?: (
+    ctx: ServeContext,
+    id: string,
+    url: URL,
+    req: IncomingMessage,
+  ) => string | null | Promise<string | null>
+  /** Maximum buffered body accepted by the generic JSON function transport. */
+  maxJsonBodyBytes?: number
+  /**
+   * A ceiling on how often one caller may reach a route, or null for no ceiling.
+   *
+   * Per-request rather than global on purpose: a durable check costs a database
+   * round trip, so pointing it at everything hands an attacker a lever. Name the
+   * routes where repetition is the abuse.
+   */
+  rateLimit?: (ctx: ServeContext, url: URL, req: IncomingMessage) => RatePolicy | null
+  /**
    * Turn on sessions. Present means the X-Ket-Company shim is gone and identity
    * comes from a signed cookie; absent means the shim stays and the banner says so.
    */
   sessions?: Omit<SessionOptions, 'store'> & { store?: SessionOptions['store'] }
   /** Revalidate live account state and memberships before scope and permissions. */
   resolveSession?: (ctx: SessionResolveContext) => Promise<SessionContext | null>
+  /** Verify and resolve identity asserted by a trusted gateway for this request. */
+  resolveIdentity?: (ctx: RequestIdentityResolveContext) => Promise<RequestIdentity | null>
+  /** Classify non-staff credentials so the generic function transport can fail closed. */
+  resolveAudience?: (url: URL, req: IncomingMessage) => string | null | Promise<string | null>
   /**
-   * Serve several tenants, one database each — Odoo's model, and the one that
-   * makes per-tenant module sets work. Absent, the app has a single datastore.
+   * Serve several tenants, one database each. Every tenant runs this same deployment.
    */
   tenants?: TenantSpec
   /**
    * Which functions a signed-in user may call. Absent means no restriction, which
-   * is what an app without roles is. Returning a list restricts every call the
+   * is what a deployment without roles is. Returning a list restricts every call the
    * request makes, including the ones a route makes on its behalf.
+   *
+   * The request is handed over because answering the question almost always means
+   * asking the database, and which database that is comes from the request. A
+   * resolver that had to invent one could only reach the tenant a bare URL happens
+   * to resolve to — which is the wrong one for every tenant but the default.
    */
-  permissions?: (ctx: ServeContext, userId: string) => Promise<readonly string[] | null>
+  permissions?: (
+    ctx: ServeContext,
+    userId: string,
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<readonly string[] | null>
   defaults?: Partial<RuntimeConfig>
 }
 
-export type BootedApp = {
+export type ClientCompatibilityPolicy = {
+  minimumVersions: { ios: string; android: string }
+  recommendedVersions?: { ios: string; android: string }
+  maintenance?: { enabled: boolean; messages?: Record<string, string> }
+}
+
+export type BootedDeployment = {
   name: string
   manifest: Manifest
-  /** The datastore, when there is exactly one. Null when the app serves tenants. */
+  /** The datastore, when there is exactly one. Null when the deployment serves tenants. */
   adapter: Adapter | null
-  /** Likewise: with tenants, "which apps" is a question about a tenant. */
-  apps: AppRegistry | null
   /** Per-tenant access, and the only form that works in both modes. */
   tenants: Tenants
   config: RuntimeConfig
+  /** Writers for the same store served by the authorized stream endpoint. */
+  streams: Streams
+  /**
+   * This deployment's logger, carrying its name and process role.
+   *
+   * A host that calls functions in process — a seeding script, a test harness —
+   * narrows it with `child` and hands it to `callFn`, so those calls are recorded
+   * the same way a served one is instead of silently escaping the pipeline.
+   */
+  logger: Logger
   port: number
   banner: () => Promise<string>
   close: () => Promise<void>
 }
 
-export type BootAppOptions = {
+export type BootDeploymentOptions = {
   env?: Record<string, string | undefined>
   port?: number
   /** Boot progress. Long-running serve keeps its banner separate. */
   log?: (line: string) => void
+  /** Redirect this process's operational records, without editing the spec. */
+  openLog?: OpenLog
 }
 
 /**
- * Opens, migrates, installs, serves. Returns before listening is announced so a
+ * Opens, migrates, and serves. Returns before listening is announced so a
  * caller can print its own banner, or a test can boot on port 0 and never print.
  */
-export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<BootedApp> {
+export async function bootDeployment(
+  spec: DeploymentSpec,
+  o: BootDeploymentOptions = {},
+): Promise<BootedDeployment> {
   const serve = spec.serve ?? {}
   const log = o.log ?? console.log
-  const { config, modules, manifest } = await bootRuntime(spec, o)
+  // `o.log` above is the boot-progress printer this function has always taken;
+  // `logSink` is the deployment's operational sink. Different things, and the
+  // older name is public API, so the new one is the one that gets qualified.
+  const { config, modules, manifest, log: logSink, logger } = await bootRuntime(spec, o)
   const baseStorage = await (serve.openStorage ?? storageFromConfig)(config)
   const storages = new Map<string, Storage>()
   const storageFor = (key: string): Storage => {
@@ -232,29 +382,14 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     return storage
   }
 
-  /**
-   * An empty database is not a useful one to look at, so a first run installs
-   * enough to see something. A database that has been used is left exactly as it
-   * is — and with tenants, "first run" is per tenant rather than per deployment.
-   */
-  const bootstrap = config.bootstrapApps ?? serve.bootstrap ?? []
-  const bootstrapInto = async (key: string, apps: AppRegistry): Promise<void> => {
-    if (!bootstrap.length || (await apps.enabled()).size !== 0) return
-    for (const name of bootstrap) await apps.install(name)
-    log(`  first run${key ? ` [${key}]` : ''}, installed: ${[...(await apps.enabled())].sort().join(', ')}`)
-  }
-
   // Opened here only when there is one. With tenants there is no single datastore,
   // and a nullable field says that more honestly than a default one would.
   const adapter: Adapter | null = serve.tenants ? null : await (serve.openStore ?? sqliteStore)(config)
-  let apps: AppRegistry | null = null
   if (adapter) {
     if (config.migrateOnBoot) {
       const ops = await migrateOne(adapter, manifest)
       if (ops.length) log(`  migrate: ${ops.length} operation(s)`)
     }
-    apps = await createAppRegistry(manifest, adapter, { autoInstall: config.autoInstall })
-    await bootstrapInto('', apps)
   }
 
   /**
@@ -270,34 +405,40 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
    * also the isolation you want: a session id from one tenant simply is not in
    * another's table.
    *
-   * An app serving every tenant from one domain cannot do that, because reading
-   * the session needs the database and knowing the database needs the session. It
-   * passes `sessions.store` instead — one shared store, with the tenant recorded
-   * on the session. Both work; the framework assumes neither.
+   * A deployment serving every tenant from one domain must still resolve the tenant
+   * before reading the cookie — for example from a trusted gateway assertion, path,
+   * or explicit header. It may pass `sessions.store` as one shared identity store;
+   * every record is then tenant-bound, and a session never selects a datastore.
    */
   const sharedStore = serve.sessions?.store ?? null
+  const configuredSessionSecret = serve.sessions?.secret || config.secret
+  const generatedTenantSecret =
+    serve.sessions && serve.tenants && !configuredSessionSecret ? randomBytes(32).toString('base64url') : null
   const sessionOpts = serve.sessions
     ? {
-        ...(config.secret ? { secret: config.secret } : {}),
         secure: config.host !== '127.0.0.1' && config.host !== 'localhost',
         ...serve.sessions,
+        ...(configuredSessionSecret ? { secret: configuredSessionSecret } : {}),
+        ...(generatedTenantSecret ? { secret: generatedTenantSecret, ephemeralSecret: true } : {}),
       }
     : null
   const makeSessions = sessionOpts
-    ? (a: Adapter) => createSessions({ ...sessionOpts, store: sharedStore ?? dbSessionStore(a) })
+    ? (a: Adapter, tenant?: string) =>
+        createSessions({
+          ...sessionOpts,
+          ...(sharedStore && tenant !== undefined ? { tenant } : {}),
+          store: sharedStore ?? dbSessionStore(a),
+        })
     : null
 
-  // Single datastore: one Sessions, built now. Tenants: one per tenant, built on
-  // first touch — unless a shared store was supplied, in which case it is one
-  // again and every tenant hands back the same instance.
+  // Single datastore: one Sessions, built now. Tenant deployments expose one
+  // lease-safe facade per tenant. Facades may share a backing store, but remain
+  // distinct so every record and administrative operation stays tenant-bound.
   const sessions: Sessions | null = makeSessions && adapter ? await makeSessions(adapter) : null
 
-  // Built per tenant, because which templates exist depends on what is installed.
-  const islandRegistry = (live: Manifest): IslandRegistry => {
-    const disabled = new Set(live.disabledModules ?? [])
+  const islandRegistry = (): IslandRegistry => {
     const registry: IslandRegistry = {}
     for (const module of modules) {
-      if (disabled.has(module.name)) continue
       for (const [name, definition] of Object.entries(module.islands)) registry[name] = definition.view
     }
     return registry
@@ -320,22 +461,17 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
 
   // Fills are KTL, so they translate the way templates do.
   const jointFactory = (live: Manifest, locale: string) =>
-    createJoints(live, { translate: translate(locale), islands: islandRegistry(live) })
+    createJoints(live, { translate: translate(locale), islands: islandRegistry() })
 
   const tenants: Tenants = serve.tenants
     ? createTenants({
         spec: serve.tenants,
         pool: createAdapterPool({
-          create: (key) => {
-            const made = (serve.tenants as TenantSpec).open(key, config)
-            // The pool wants an Adapter now; opening is the adapter's own job.
-            return made as Adapter
-          },
+          create: (key) => (serve.tenants as TenantSpec).open(key, config),
           ...(serve.tenants.max !== undefined ? { max: serve.tenants.max } : {}),
           ...(serve.tenants.idleMs !== undefined ? { idleMs: serve.tenants.idleMs } : {}),
         }),
         manifest,
-        autoInstall: config.autoInstall,
         ...(config.migrateOnBoot
           ? {
               prepare: async (key, a) => {
@@ -344,14 +480,12 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
               },
             }
           : {}),
-        onFirstTouch: (key, made) => bootstrapInto(key, made),
         ...(makeSessions ? { sessions: makeSessions } : {}),
         joints: jointFactory,
         ...themeFactory,
       })
     : singleTenant({
         adapter: adapter as Adapter,
-        apps: apps as AppRegistry,
         manifest,
         joints: jointFactory,
         ...themeFactory,
@@ -359,8 +493,8 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       })
 
   /**
-   * Sessions, when the app asks for them. Absent, the header shim stays and the
-   * banner keeps saying so — an app that has not wired auth yet should look like
+   * Sessions, when the deployment asks for them. Absent, the header shim stays and the
+   * banner keeps saying so — a deployment that has not wired auth yet should look like
    * one rather than quietly appear to have it.
    */
   /** This request's tenant's sessions — the same instance for all, when shared. */
@@ -369,17 +503,52 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
 
   // One cookie lookup per request even though scope, permissions and actor all
   // depend on it. With tenant databases this also avoids three separate leases.
+  const authenticationEnabled = Boolean(makeSessions || serve.resolveIdentity)
   const sessionRecords = new WeakMap<IncomingMessage, Promise<SessionRecord | null>>()
   const sessionRecordOf = (url: URL, req: IncomingMessage): Promise<SessionRecord | null> => {
-    if (!makeSessions) return Promise.resolve(null)
+    if (!authenticationEnabled) return Promise.resolve(null)
     let record = sessionRecords.get(req)
     if (!record) {
-      record = sessionsOf(url, req).then(async (manager) => {
+      record = tenants.ofRequest(url, req, async (tenant) => {
+        const identity = await serve.resolveIdentity?.({
+          adapter: tenant.adapter,
+          manifest: tenant.live,
+          url,
+          req,
+        })
+        if (identity) {
+          const companies = [...new Set(identity.companies)]
+          if (
+            !identity.userId ||
+            !companies.length ||
+            !identity.company ||
+            !companies.includes(identity.company)
+          )
+            return null
+          const now = Date.now()
+          return {
+            id: `request:${identity.userId}`,
+            userId: identity.userId,
+            companies,
+            company: identity.company,
+            branch: identity.branch ?? null,
+            branches: identity.branches ?? null,
+            securityVersion: identity.securityVersion ?? 0,
+            revision: 0,
+            createdAt: now,
+            expiresAt: now,
+          }
+        }
+        const manager = await sessionsOf(url, req)
         const raw = (await manager?.of(req)) ?? null
         if (!raw || !manager || !serve.resolveSession) return raw
-        const resolved = await tenants.ofRequest(url, req, (tenant) =>
-          serve.resolveSession!({ adapter: tenant.adapter, manifest: tenant.live, record: raw, url, req }),
-        )
+        const resolved = await serve.resolveSession({
+          adapter: tenant.adapter,
+          manifest: tenant.live,
+          record: raw,
+          url,
+          req,
+        })
         if (!resolved) {
           await manager.store.destroy(raw.id)
           return null
@@ -414,7 +583,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
    * a session id issued by one tenant is not a row in another's table at all.
    */
   const scopeOf = async (url: URL, req: IncomingMessage): Promise<Scope> => {
-    if (!makeSessions) {
+    if (!authenticationEnabled) {
       const list = (h: string) =>
         ((req.headers[h] as string | undefined) ?? '')
           .split(',')
@@ -422,15 +591,23 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
           .filter(Boolean)
       const company = (req.headers['x-ket-company'] as string | undefined) ?? config.defaultCompany
       const companies = list('x-ket-companies')
+      const branches = list('x-ket-branch')
       return {
         company,
         companies: companies.length ? [...new Set([company, ...companies])] : null,
         branch: (req.headers['x-ket-current-branch'] as string | undefined) ?? null,
-        branches: list('x-ket-branch') || null,
+        // An absent development header means unrestricted, matching Scope's
+        // null/undefined contract. `[]` is reserved for callers that explicitly
+        // construct a scope with no readable branches.
+        branches: branches.length ? branches : null,
       }
     }
-    const s = await sessionsOf(url, req)
-    return s?.scopeOf(await sessionRecordOf(url, req)) ?? { company: null }
+    const record = await sessionRecordOf(url, req)
+    if (!record) {
+      const s = await sessionsOf(url, req)
+      return s?.scopeOf(null) ?? { company: null }
+    }
+    return scopeForSession(record) ?? { company: null }
   }
 
   /**
@@ -447,38 +624,83 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     config.fallbackLocale,
   ])
 
+  const requestLocales = new WeakMap<
+    IncomingMessage,
+    { query: string | null; header: string; locale: string }
+  >()
+
   const localeOf = (url: URL, req: IncomingMessage): string => {
-    const asked = [
-      url.searchParams.get('lang'),
-      ...((req.headers['accept-language'] as string | undefined) ?? '')
-        .split(',')
-        .map((part) => part.split(';')[0]?.trim())
-        .flatMap((tag) => (tag ? [tag, tag.split('-')[0] as string] : [])),
-    ]
-    return asked.find((l) => l && known.has(l)) ?? config.defaultLocale
+    const query = url.searchParams.get('lang')
+    const header = (req.headers['accept-language'] as string | undefined) ?? ''
+    const held = requestLocales.get(req)
+    if (held?.query === query && held.header === header) return held.locale
+
+    let locale = query && known.has(query) ? query : null
+    if (!locale) {
+      for (const part of header.split(',')) {
+        const tag = part.split(';')[0]?.trim()
+        if (!tag) continue
+        if (known.has(tag)) {
+          locale = tag
+          break
+        }
+        const base = tag.split('-')[0]
+        if (base && known.has(base)) {
+          locale = base
+          break
+        }
+      }
+    }
+
+    const resolved = locale ?? config.defaultLocale
+    requestLocales.set(req, { query, header, locale: resolved })
+    return resolved
   }
 
-  const translate = (locale: string) => translator(manifest, locale, { fallback: config.fallbackLocale })
+  const translators = new Map<string, Translator>()
+  const translate = (locale: string): Translator => {
+    const cached = translators.get(locale)
+    if (cached) return cached
+    const made = Object.freeze(translator(manifest, locale, { fallback: config.fallbackLocale }))
+    if (known.has(locale)) translators.set(locale, made)
+    return made
+  }
 
   /**
-   * Every installed module's stylesheets, in dependency order, so a module that
-   * extends another loads after it and can override it. The app used to name two
-   * files belonging to another module by hand — which meant knowing that module's
-   * file layout, and going on linking them after it was uninstalled.
+   * Every composed module's stylesheets, in dependency order, so a module that
+   * extends another loads after it and can override it. A deployment does not
+   * name another module's files by hand, so it never needs to know that module's
+   * internal file layout.
    */
-  const styles = async (req: IncomingMessage): Promise<Html> =>
-    tenants.ofRequest(new URL('http://x/'), req, async (t) => {
-      const on = await t.apps.enabled()
-      const hrefs = manifest.styles.filter((s) => on.has(s.by)).map((s) => s.href)
-      return html`${each(
-        hrefs,
-        (h) => h,
-        (h) => html`<link rel="stylesheet" href=${h}>`,
-      )}`
+  const styles = async (_req: IncomingMessage): Promise<Html> =>
+    html`${each(
+      manifest.styles.map((style) => style.href),
+      (href) => href,
+      (href) => html`<link rel="stylesheet" href=${href}>`,
+    )}`
+
+  /**
+   * The context a call's records carry.
+   *
+   * Correlation and actor are hashed here rather than by the sink, so a raw value
+   * never becomes a record in the first place: the framework does not export those,
+   * and a log aggregator is an export.
+   */
+  const callLog = (tenant: string, scope: Scope, actor: string | null, correlationId?: string | null) =>
+    logger.child({
+      // The tenant the lease already resolved, rather than resolving it a second
+      // time: `keyOf` throws for a host this deployment does not serve, and a
+      // logger must never be the thing that decides a request fails.
+      tenant: tenant || null,
+      trace: traceOf(correlationId, config.secret),
+      actor: traceOf(actor, config.secret),
+      company: scope.company,
     })
 
   const ctx: ServeContext = {
     manifest,
+    deploymentName: spec.name,
+    clientCompatibility: serve.clientCompatibility ?? null,
     config,
     scopeOf,
     localeOf,
@@ -497,13 +719,44 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       // The sidebar's search is in the URL like every other list's, so a filtered
       // menu is a link and the back button walks out of it.
       const q = url.searchParams.get('menu')?.trim() || undefined
+      // Someone who may call an inspection capability is looking, not working, and
+      // `for` describes work. Narrowing their sidebar would hide the very thing
+      // they were let in to see.
+      const inspecting = allow !== null && (spec.navigation?.audit ?? []).some((key) => allow.includes(key))
       return tenants.ofRequest(url, req, async (t) =>
-        buildMenu(t.live, { allow, translate: (k) => _(k), active: url.pathname, q }),
+        buildMenu(t.live, {
+          allow,
+          translate: (k) => _(k),
+          locale: _.locale,
+          active: url.pathname,
+          q,
+          groups: spec.navigation?.groups,
+          demote: spec.navigation?.demote,
+          // Searching is how someone reaches a surface that is not their daily
+          // work, so the search results are the permitted tree, not the narrowed
+          // one. Hiding what a person typed the name of would be a bug.
+          intent: !inspecting && !q,
+        }),
       )
     },
+    reportsOf: async (url, req, target) => {
+      const allow = await allowFor(url, req)
+      return tenants.ofRequest(url, req, async (t) =>
+        Object.values(t.live.reports).filter(
+          (report) =>
+            t.live.routes['/reports/{report}/{id}'] !== undefined &&
+            report.target === target &&
+            (allow === null || allow.includes(report.source)),
+        ),
+      )
+    },
+    navigation: spec.navigation ?? null,
+    allows: async (name, url, req) => {
+      const allow = await allowFor(url, req)
+      return allow === null || allow.includes(name)
+    },
     live: (req) => tenants.ofRequest(new URL('http://x/'), req, async (t) => t.live),
-    appsOf: (req) => tenants.ofRequest(new URL('http://x/'), req, (t) => t.apps.list()),
-    callUnchecked: async (name, input, url, req) => {
+    callUnchecked: async (name, input, url, req, options) => {
       const scope = await scopeOf(url, req)
       const actor = await actorOf(url, req)
       return tenants.ofRequest(
@@ -516,12 +769,48 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
               manifest: t.live,
               scope,
               actor,
+              idempotencyKey: options?.idempotencyKey,
+              idempotencyNamespace: options?.idempotencyNamespace,
+              idempotencyDigest: options?.idempotencyDigest,
+              correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              log: callLog(t.key, scope, actor, options?.correlationId),
             })
           ).value,
       )
     },
-    call: async (name, input, url, req) => {
+    callUncheckedForVerifiedCompany: async (name, input, companyId, url, req, options) => {
+      const company = companyId.trim()
+      if (!company)
+        throw new KetError({
+          code: 'E_VERIFIED_COMPANY_REQUIRED',
+          module: 'server',
+          message: 'a verified company is required for company-scoped dispatch',
+          hint: 'authenticate the external credential and derive one company before dispatching the function',
+        })
+      const actor = await actorOf(url, req)
+      const verifiedScope: Scope = { company, companies: [company], branch: null, branches: null }
+      return tenants.ofRequest(
+        url,
+        req,
+        async (t) =>
+          (
+            await callFn(name, input, {
+              adapter: t.adapter,
+              manifest: t.live,
+              scope: verifiedScope,
+              actor,
+              idempotencyKey: options?.idempotencyKey,
+              idempotencyNamespace: options?.idempotencyNamespace,
+              idempotencyDigest: options?.idempotencyDigest,
+              correlationId: options?.correlationId,
+              queueNotify: config.queueNotify,
+              log: callLog(t.key, verifiedScope, actor, options?.correlationId),
+            })
+          ).value,
+      )
+    },
+    call: async (name, input, url, req, options) => {
       // One lease for the whole call: the scope and the allow-list are resolved
       // outside it, so a session lookup never holds a pooled connection.
       const scope = await scopeOf(url, req)
@@ -538,7 +827,12 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
               scope,
               allow,
               actor,
+              idempotencyKey: options?.idempotencyKey,
+              idempotencyNamespace: options?.idempotencyNamespace,
+              idempotencyDigest: options?.idempotencyDigest,
+              correlationId: options?.correlationId,
               queueNotify: config.queueNotify,
+              log: callLog(t.key, scope, actor, options?.correlationId),
             })
           ).value,
       )
@@ -548,10 +842,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
   /**
    * Module-contributed routes and assets.
    *
-   * Both are looked up per request against the LIVE manifest rather than mounted
-   * once at boot. That costs a set lookup and buys the property the app model
-   * claims: switching a module off stops its routes answering and stops its
-   * stylesheet being served, without a restart.
+   * Both are mounted from the immutable deployment manifest.
    */
   const routeHandlers = new Map<string, Route>()
   for (const [path, entry] of Object.entries(manifest.routes)) routeHandlers.set(path, entry.make(ctx))
@@ -559,16 +850,10 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
   const moduleRoutes: Record<string, Route> = {}
   for (const [path, entry] of Object.entries(manifest.routes)) {
     moduleRoutes[path] = async (url, req, params) => {
-      const on = await tenants.ofRequest(url, req, (t) => t.apps.enabled())
-      if (!on.has(entry.by)) {
-        return text(`${path} belongs to "${entry.by}", which is not installed on this database`, {
-          status: 404,
-        })
-      }
       // Closed unless the module said otherwise. A browser is sent to the sign-in
       // page carrying where it was going; anything else gets the status, because a
       // redirect to an HTML form is a useless answer to a fetch().
-      if (makeSessions && !entry.anonymous) {
+      if (authenticationEnabled && !entry.anonymous) {
         if (!(await sessionRecordOf(url, req))) {
           const wantsHtml = String(req.headers.accept ?? '').includes('text/html')
           return wantsHtml
@@ -583,20 +868,18 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
   }
 
   /**
-   * A module's assets, resolved per request so that switching the module off stops
-   * them being served — without a restart, and without the app knowing where any
-   * module keeps its files.
+   * A module's assets, resolved without exposing module file layout to the deployment.
    */
   const assetMount = {
     prefix: '/_ket/asset/',
-    resolve: async (rest: string, url: URL, req: IncomingMessage): Promise<string | null> => {
+    resolve: async (rest: string, _url: URL, _req: IncomingMessage): Promise<string | null> => {
       const slash = rest.indexOf('/')
       if (slash <= 0) return null
       const owner = rest.slice(0, slash)
-      const file = rest.slice(slash + 1)
+      // A version segment names the bytes, not a directory — see assets.ts.
+      const file = withoutVersion(rest.slice(slash + 1))
       const dir = manifest.assets[owner]
       if (!dir || !file || file.startsWith('..') || isAbsolute(file)) return null
-      if (!(await tenants.ofRequest(url, req, (t) => t.apps.enabled())).has(owner)) return null
       return join(dir, file)
     },
   }
@@ -614,12 +897,19 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     .map(([k]) => k)
 
   const allowFor = async (url: URL, req: IncomingMessage): Promise<readonly string[] | null> => {
-    if (!makeSessions) return null // no login exists yet; the shim is the identity
+    if (!authenticationEnabled) return null // no login exists yet; the shim is the identity
+    const audience = await serve.resolveAudience?.(url, req)
+    const customAudience = Boolean(audience && audience !== 'anonymous' && audience !== 'staff')
     const record = await sessionRecordOf(url, req)
-    if (!record) return anonymousFns // a stranger, not an administrator
-    if (!serve.permissions) return null
-    const granted = await serve.permissions(ctx, record.userId)
-    return granted === null ? null : [...new Set([...anonymousFns, ...granted])]
+    if (!record) {
+      return anonymousFns // a stranger, not an administrator
+    }
+    // A custom bearer audience is fail-closed unless the deployment explicitly
+    // maps it to exact functions. This lets Channel routes call their domain
+    // functions without turning a POS/customer token into a staff session.
+    if (!serve.permissions) return customAudience ? [] : null
+    const granted = await serve.permissions(ctx, record.userId, url, req)
+    return granted === null ? (customAudience ? [] : null) : [...new Set([...anonymousFns, ...granted])]
   }
 
   const pages = serve.pages
@@ -627,15 +917,23 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     throw new KetError({
       code: 'E_PAGE_RESOLVER_MISSING',
       module: spec.name,
-      message: `app "${spec.name}" resolves pages with "${pages.resolve}", which no installed module declares`,
-      hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the app, or drop serve.pages`,
+      message: `deployment "${spec.name}" resolves pages with "${pages.resolve}", which no composed module declares`,
+      hint: `add the module that owns "${pages.resolve.split('.')[0]}" to the deployment, or drop serve.pages`,
+    })
+  }
+  if (pages?.menuResolve && !manifest.functions[pages.menuResolve]) {
+    throw new KetError({
+      code: 'E_MENU_RESOLVER_MISSING',
+      module: spec.name,
+      message: `deployment "${spec.name}" resolves navigation with "${pages.menuResolve}", which no composed module declares`,
+      hint: `add the module that owns "${pages.menuResolve.split('.')[0]}", or drop serve.pages.menuResolve`,
     })
   }
   if (pages?.siteResolve && !manifest.functions[pages.siteResolve]) {
     throw new KetError({
       code: 'E_SITE_RESOLVER_MISSING',
       module: spec.name,
-      message: `app "${spec.name}" resolves sites with "${pages.siteResolve}", which no installed module declares`,
+      message: `deployment "${spec.name}" resolves sites with "${pages.siteResolve}", which no composed module declares`,
     })
   }
   for (const selected of availableThemes)
@@ -643,7 +941,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       throw new KetError({
         code: 'E_PAGE_REGION_MISSING',
         module: spec.name,
-        message: `app "${spec.name}" navigates through region "${pages.region}", which theme "${selected.name}" does not render`,
+        message: `deployment "${spec.name}" navigates through region "${pages.region}", which theme "${selected.name}" does not render`,
         hint: `add a "${pages.region}" template, or remove serve.pages.region to keep full navigation`,
       })
     }
@@ -680,8 +978,17 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       throw new KetError({
         code: 'E_ROUTE_RESERVED',
         module: spec.name,
-        message: `app "${spec.name}" claims "${path}", which is reserved`,
+        message: `deployment "${spec.name}" claims "${path}", which is reserved`,
         hint: '/_ket/ belongs to the framework: health, the agent descriptor, streams and assets',
+      })
+    }
+    const reservation = Object.entries(manifest.routePrefixes).find(([prefix]) => path.startsWith(prefix))
+    if (reservation) {
+      throw new KetError({
+        code: 'E_ROUTE_RESERVED',
+        module: spec.name,
+        message: `deployment "${spec.name}" claims "${path}", inside the prefix reserved by "${reservation[1]}"`,
+        hint: 'reserved API routes must be declared by modules through the published route factory',
       })
     }
     const owner = manifest.routes[path]?.by
@@ -689,7 +996,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
       throw new KetError({
         code: 'E_ROUTE_CLASH',
         module: spec.name,
-        message: `module "${owner}" and app "${spec.name}" both serve "${path}"`,
+        message: `module "${owner}" and deployment "${spec.name}" both serve "${path}"`,
         hint: 'two owners cannot share one path — rename one, or keep the route in its module',
       })
     }
@@ -698,6 +1005,13 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
   const server = await createKetServer({
     manifest,
     adapter,
+    log: logger,
+    ...(serve.streamStore ? { streamStore: serve.streamStore } : {}),
+    ...(serve.resolveStream
+      ? { resolveStream: (id, url, req) => serve.resolveStream!(ctx, id, url, req) }
+      : {}),
+    ...(serve.maxJsonBodyBytes !== undefined ? { maxJsonBodyBytes: serve.maxJsonBodyBytes } : {}),
+    ...(serve.rateLimit ? { rateLimit: (url, req) => serve.rateLimit!(ctx, url, req) } : {}),
     /**
      * The HTTP layer gets a pool whose leases go through the tenant runtime, not
      * the raw one.
@@ -717,6 +1031,77 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
           resolveDatastore: (url: URL, req: IncomingMessage) => tenants.keyOf(url, req),
         }
       : {}),
+    /**
+     * The page a person gets when the answer is no.
+     *
+     * A permission failure used to hand a browser the same JSON a client gets:
+     * a code, a function key and a hint about a CLI, on a bare page with no way
+     * back. That is a fine answer for a program and a dead end for a person, and
+     * the person is the one who arrived by clicking something.
+     *
+     * The markup uses the same `data-ui` hooks the design system already styles,
+     * and loads the deployment's own stylesheets, so this is the product's error
+     * screen rather than a second visual language living in the framework.
+     */
+    renderErrorPage: async ({ code, status, url, req }) => {
+      const _ = translate(localeOf(url, req))
+      const text = (key: string, fallback: string): string => {
+        const found = _(key)
+        return found && found !== key ? found : fallback
+      }
+      const kind = code === 'E_FN_NOT_PERMITTED' ? 'forbidden' : status === 404 ? 'missing' : 'failed'
+      const copy = {
+        forbidden: {
+          title: text('backend.error.forbidden.title', 'Bạn không có quyền mở màn hình này'),
+          message: text(
+            'backend.error.forbidden.message',
+            'Tài khoản của bạn không được cấp quyền cho màn hình này. Nếu đây là việc bạn cần làm, hãy đề nghị quản trị viên cấp thêm quyền.',
+          ),
+        },
+        missing: {
+          title: text('backend.error.missing.title', 'Không tìm thấy màn hình này'),
+          message: text(
+            'backend.error.missing.message',
+            'Đường dẫn này không còn tồn tại, hoặc chưa bao giờ tồn tại trong bản triển khai đang chạy.',
+          ),
+        },
+        failed: {
+          title: text('backend.error.failed.title', 'Màn hình này không mở được'),
+          message: text(
+            'backend.error.failed.message',
+            'Đã có lỗi khi dựng màn hình. Thử lại; nếu vẫn vậy, gửi mã lỗi bên dưới cho người phụ trách hệ thống.',
+          ),
+        },
+      }[kind]
+      const back = text('backend.error.back', 'Quay lại trang đầu')
+      // Only hooks the design system already declares and styles. The one rule
+      // below centres the block on an otherwise empty page, and is inline because
+      // an error page has to render even when a stylesheet is what went wrong.
+      const head = html`${await styles(req)}<style>
+        .ket-error-page {
+          display: grid;
+          min-block-size: 100dvh;
+          place-items: center;
+          padding: 2rem;
+        }
+      </style>`
+      const body = html`<main class="ket-error-page">
+        <div data-ui="error" role="alert">
+          <p data-ui="error-code">${code}</p>
+          <p data-ui="error-message">${copy.title}</p>
+          <p data-ui="error-hint">${copy.message}</p>
+          <p>
+            <a data-ui="action" data-variant="primary" data-size="default" href="/admin">
+              <span data-ui="action-label">${back}</span>
+            </a>
+          </p>
+        </div>
+      </main>`
+      // Same shape every other document takes: doctype, then the rendered tree.
+      return `<!doctype html>${renderToString(
+        ctx.document({ lang: localeOf(url, req), title: copy.title, head, body }),
+      )}`
+    },
     resolveLocale: localeOf,
     resolveScope: scopeOf,
     resolveAllow: allowFor,
@@ -743,7 +1128,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
               if (pages?.siteResolve && !site) return null
               const chosen = site?.theme ?? fallbackTheme.name
               const allowed = availableThemes.find((theme) => theme.name === chosen)
-              if (!allowed || t.live.disabledModules?.includes(allowed.name)) return null
+              if (!allowed) return null
               const locale = site?.locale ?? localeOf(url, req)
               const key = `${t.key}::${t.live.order.join(',')}::${allowed.name}::${locale}`
               let runtime = dynamicThemes.get(key)
@@ -761,7 +1146,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
      * The storefront: a path becomes a page, and a page becomes its sections.
      *
      * The lookup runs through callFn like anything else, so the company filter and
-     * the app-installed check apply to a public page exactly as they do to an API
+     * the composed manifest applies to a public page exactly as it does to an API
      * call — the front of the site is not a second door with different rules.
      */
     ...(pages
@@ -787,6 +1172,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
               id: string
               title: string
               layout: unknown
+              meta?: Record<string, unknown> | null
             } | null
             if (!row) {
               const _ = translate(locale)
@@ -797,11 +1183,23 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
                 sections: [],
               }
             }
+            // Navigation belongs to the site, not to the page, so it is resolved
+            // beside it rather than carried by it. The framework names no
+            // module: the deployment says which function answers, the way it
+            // already does for the site and the page.
+            const menu =
+              pages.menuResolve && resolvedSite?.id
+                ? ((await ctx.call(pages.menuResolve, { siteId: resolvedSite.id }, url, req)) ?? [])
+                : []
             return {
               site,
               locale,
+              menu,
               page: { id: row.id, path: url.pathname, title: row.title },
-              meta: {},
+              // Whatever the resolver says describes this page. The framework
+              // does not name the fields — a module owns them and decides what
+              // is public; this only stops hardcoding the answer to "nothing".
+              meta: row.meta ?? {},
               sections: typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
             }
           },
@@ -810,18 +1208,15 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     routes: {
       ...moduleRoutes,
       ...appRoutes,
-      // The framework's own two, mounted last so an app cannot shadow them by accident.
-      // Both answer for the tenant that asked: "which apps are on" has no
-      // deployment-wide answer once there is more than one database.
+      // The framework's own two, mounted last so a deployment cannot shadow them.
       '/_ket/health': async (url, req) =>
         tenants.ofRequest(url, req, async (t) =>
           json({
             ok: true,
-            app: spec.name,
+            deployment: spec.name,
             database: t.adapter.name,
             ...(t.key ? { tenant: t.key } : {}),
-            apps: [...(await t.apps.enabled())].sort(),
-            orphans: await t.apps.orphans(),
+            modules: manifest.order,
             locales: Object.keys(manifest.messages ?? {}),
           }),
         ),
@@ -833,18 +1228,12 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
   const port = await server.listen(config.port)
 
   const banner = async () => {
-    // With tenants there is no deployment-wide list of installed apps, and the
-    // banner says which mode it is in rather than inventing one.
-    const enabled = apps ? [...(await apps.enabled())].sort() : []
     const at = `http://${config.host}:${port}`
-    // A "site" row only means something if a path can become a page; an app that
+    // A "site" row only means something if a path can become a page; a deployment that
     // declares its own "/" route would otherwise be listed twice, once wrongly.
     const paths = new Map<string, string>()
     if (pages) paths.set('/', 'site')
-    // Module routes belong on the banner too, and only while installed — the list
-    // is what the deployment actually serves, not what it could serve.
-    for (const [p, r] of Object.entries(manifest.routes))
-      if (enabled.includes(r.by)) paths.set(p, p.replace(/^\//, ''))
+    for (const p of Object.keys(manifest.routes)) paths.set(p, p.replace(/^\//, ''))
     for (const p of Object.keys(appRoutes)) paths.set(p, p.replace(/^\//, '') || 'site')
     const rows = [
       ...[...paths].map(([p, label]) => [label, at + p]),
@@ -857,7 +1246,7 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
           ? adapter.name + (config.databaseUrl ? '' : ` (${config.sqliteFile})`)
           : `${(await tenants.keys()).length} tenant(s), one database each`,
       ],
-      ['apps installed', apps ? enabled.join(', ') || '(none)' : 'per tenant'],
+      ['modules', manifest.order.join(', ') || '(none)'],
       ['locales', Object.keys(manifest.messages ?? {}).join(', ') || '(none)'],
       [
         'identity',
@@ -865,13 +1254,10 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
           ? `sessions (${sessions ? sessions.store.name : 'one per tenant'})`
           : 'X-Ket-Company header',
       ],
-      // Silence here would be the wrong kind: a module that declared install:'auto'
-      // and did not arrive should say why, not look broken.
-      ...(config.autoInstall ? [] : [['auto-install', 'off (KET_AUTO_INSTALL=0)']]),
     ]
     const w = Math.max(...rows.map((r) => (r[0] as string).length))
     const note = makeSessions
-      ? (sessions?.ephemeralSecret ?? !config.secret)
+      ? (sessions?.ephemeralSecret ?? !configuredSessionSecret)
         ? `\n  KET_SECRET is not set, so a signing key was generated for this process.` +
           `\n  Sessions will not survive a restart and will not work across pods.`
         : ''
@@ -888,13 +1274,32 @@ export async function bootApp(spec: AppSpec, o: BootAppOptions = {}): Promise<Bo
     await server.close()
     if (adapter) await adapter.close()
     await tenants.close()
+    // Last, and after everything that might still have something to say. A buffered
+    // sink that is closed first loses precisely the records describing the shutdown.
+    logger.info('shutdown')
+    await logSink.flush?.()
+    await logSink.close?.()
   }
-  return { name: spec.name, manifest, adapter, apps, tenants, config, port, banner, close }
+  return {
+    name: spec.name,
+    manifest,
+    adapter,
+    tenants,
+    config,
+    streams: server.streams,
+    logger,
+    port,
+    banner,
+    close,
+  }
 }
 
-/** bootApp, plus the banner and the signal handling a long-running process wants. */
-export async function serveApp(spec: AppSpec, o: BootAppOptions = {}): Promise<BootedApp> {
-  const booted = await bootApp(spec, o)
+/** bootDeployment, plus the banner and the signal handling a long-running process wants. */
+export async function serveDeployment(
+  spec: DeploymentSpec,
+  o: BootDeploymentOptions = {},
+): Promise<BootedDeployment> {
+  const booted = await bootDeployment(spec, o)
   console.log(await booted.banner())
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {

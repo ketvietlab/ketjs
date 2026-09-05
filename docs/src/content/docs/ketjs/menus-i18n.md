@@ -4,12 +4,13 @@ description: Compose permission-aware navigation and module-owned translated mes
 ---
 
 Menus and messages are module declarations. Composition checks navigation ownership and merges
-language catalogues, while the runtime filters a menu by installed modules and the current viewer's
+language catalogues, while the runtime filters a menu by composed modules and the current viewer's
 function grants.
 
 ## Declare navigation
 
 ```ts
+// File: src/modules/sales/index.ts
 export const sales = defineModule({
   name: 'sales',
   menus: {
@@ -42,7 +43,7 @@ export const sales = defineModule({
 })
 ```
 
-A root entry is an app. An entry without `path` is a heading. `parent` references a global menu ID,
+A root entry is a top-level section. An entry without `path` is a heading. `parent` references a global menu ID,
 and a module parenting onto another module's entry must declare that dependency.
 
 Unknown parents, duplicate IDs, dependency violations, and invalid depths are composition errors.
@@ -52,7 +53,8 @@ Unknown parents, duplicate IDs, dependency violations, and invalid depths are co
 Build navigation for one viewer:
 
 ```ts
-import { activeApp, buildMenu } from '@ketvietlab/ketjs'
+// File: src/modules/example/index.ts
+import { activeMenuRoot, buildMenu } from '@ketvietlab/ketjs'
 
 const tree = buildMenu(liveManifest, {
   allow: grantedFunctionKeys,
@@ -61,12 +63,12 @@ const tree = buildMenu(liveManifest, {
   q: searchText,
 })
 
-const currentApp = activeApp(tree)
+const currentRoot = activeMenuRoot(tree)
 ```
 
 The filters run in this order:
 
-1. the live manifest contains only shipped and enabled module behavior;
+1. the deployment manifest contains composed module behavior;
 2. `needs` removes entries whose function is absent or not granted;
 3. empty headings disappear with their children;
 4. optional search preserves the ancestor path to every matching leaf;
@@ -87,6 +89,7 @@ and do not store SVG markup in the manifest.
 Message keys are local in the module declaration and qualified during composition:
 
 ```ts
+// File: src/modules/example/index.ts
 messages: {
   en: {
     'app.title': 'Sales',
@@ -114,6 +117,7 @@ Messages may be strings or plural-category maps using `Intl.PluralRules` categor
 ## Translate
 
 ```ts
+// File: src/modules/example/index.ts
 import { translator } from '@ketvietlab/ketjs'
 
 const t = translator(manifest, 'en', {
@@ -134,11 +138,39 @@ The translator exposes:
 An unresolved key renders as the key rather than becoming blank. Missing translations fall back and
 may be observed without breaking the build.
 
+`Intl.PluralRules` instances are shared by locale. A running deployment also reuses one translator
+per shipped locale, so route and screen composition may call `ServeContext.translate(locale)` without
+reconstructing the plural engine. The deployment freezes these cached translators so one request cannot
+change an instance that a later request will reuse.
+
+## Date and time formatting
+
+Use the shared formatter when a server-rendered list formats dates repeatedly:
+
+```ts
+// File: src/modules/example/screens/orders.ts
+import { dateTimeFormatter } from '@ketvietlab/ketjs'
+
+const formatter = dateTimeFormatter(locale, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: company.timezone,
+})
+
+const labels = orders.map((order) => formatter.format(new Date(order.createdAt)))
+```
+
+Equivalent option objects resolve to the same immutable `Intl.DateTimeFormat` instance, regardless of
+property order. The pseudo-locale uses English's Intl rules while translated copy still expands. Prefer
+binding the formatter before a large loop; repeated `dateTimeFormatter()` calls are safe and cached but
+still have to canonicalize the options.
+
 ## KTL translation
 
 When the theme runtime has a translator, KTL exposes it as the `_` filter:
 
 ```liquid
+{% comment %} File: src/themes/example/templates/example.ktl {% endcomment %}
 <h1>{{ 'sales.app.title' | _ }}</h1>
 <span>{{ 'sales.order.count' | _: count }}</span>
 ```
@@ -148,6 +180,7 @@ The filter is used instead of putting a function in template scope. KTL scope re
 ## Find missing messages
 
 ```ts
+// File: src/modules/example/index.ts
 import { formatMissing, missingMessages } from '@ketvietlab/ketjs'
 
 console.log(formatMissing(missingMessages(manifest, ['en', 'vi', 'fr'])))
@@ -161,6 +194,7 @@ tooling as a report; incomplete optional locales should not make application com
 Use `PSEUDO_LOCALE` (`qps`) to expand and bracket strings:
 
 ```ts
+// File: src/modules/example/index.ts
 const pseudo = translator(manifest, PSEUDO_LOCALE, { fallback: 'en' })
 ```
 
@@ -172,13 +206,15 @@ language text. Test both left-to-right expansion and your actual longest support
 Runtime defaults come from:
 
 ```bash
+# Run from: /path/to/ketjs
 KET_LOCALE=en
 KET_FALLBACK_LOCALE=en
 ```
 
 Applications may resolve request locale through their route/session design. `ServeContext.localeOf()`
 returns the locale selected by the running app, and `ServeContext.translate(locale)` returns its
-translator.
+translator. The server memoizes locale resolution for repeated calls with the same request/query/header
+and checks a valid `?lang=` before parsing `Accept-Language`.
 
 Keep locale preference separate from tenant and company identity. A user may change language without
 changing the database or legal entity in scope.

@@ -1,11 +1,12 @@
 export { defineModule, defineTheme } from './kernel/define.ts'
-export { defineApp, defineWorkspace, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
+export { defineDeployment, defineWorkspace, composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
 export { resolveWorkspace } from './kernel/modules.ts'
 export type {
   ModuleRef,
   ModulePath,
-  AppDeclaration,
-  AppSpec,
+  DeploymentDeclaration,
+  DeploymentSpec,
+  NavigationSpec,
   WorkspaceDeclaration,
 } from './kernel/workspace.ts'
 export type {
@@ -19,31 +20,69 @@ export type {
   TaxonomyDef,
   ComposedContentType,
   ComposedTaxonomy,
+  RouteEntry,
+  HttpRouteContract,
+  JsonSchema,
+  Manifest,
+  ModulePermissionsDef,
+  PermissionBundleDef,
+  PermissionCatalogue,
+  PermissionExemptionDef,
+  PermissionExemptionReason,
+  PermissionFunctionDef,
+  PermissionLabels,
+  PermissionPosture,
+  PermissionRisk,
+  RoleTemplateDef,
+  CompiledPermissionBundle,
+  CompiledRoleTemplate,
 } from './types.ts'
 export { compose } from './kernel/compose.ts'
-export { validateLayout, formatLayoutErrors } from './kernel/layout.ts'
-export { createAppRegistry, restrictManifest } from './kernel/apps.ts'
-export { buildMenu, activeApp } from './kernel/menu.ts'
+export { compilePermissionBundles, permissionDigest } from './kernel/permissions.ts'
+export type { CompilePermissionOptions } from './kernel/permissions.ts'
+export {
+  validateLayout,
+  formatLayoutErrors,
+  withPlacementIds,
+  placementIdErrors,
+  diffPlacements,
+  isPlacementId,
+  walkPlacements,
+  countPlacements,
+  MAX_LAYOUT_DEPTH,
+  MAX_LAYOUT_NODES,
+} from './kernel/layout.ts'
+export { buildMenu, activeMenuRoot } from './kernel/menu.ts'
 export type { MenuNode, MenuOptions } from './kernel/menu.ts'
-export { translator, missingMessages, formatMissing, PSEUDO_LOCALE } from './kernel/i18n.ts'
+export {
+  translator,
+  missingMessages,
+  formatMissing,
+  dateTimeFormatter,
+  PSEUDO_LOCALE,
+} from './kernel/i18n.ts'
 export type { Translator, Message, Catalog, Messages } from './kernel/i18n.ts'
-export type { AppRegistry, AppInfo, AppState } from './kernel/apps.ts'
-export type { Placement, LayoutError } from './kernel/layout.ts'
+export type { Placement, LayoutError, IdentifiedPlacement, PlacementChange } from './kernel/layout.ts'
 export { diffManifests, formatDiff } from './kernel/diff.ts'
 export { KetError, Diagnostics } from './kernel/errors.ts'
 export { isDateText } from './kernel/types.ts'
 
 export { defineFn, callFn, registerFunctions, _resetIdempotency } from './server/fn.ts'
+export { enforcePolicy } from './server/policy.ts'
+export type { PolicyDecision, PolicyDenialEvidence } from './server/policy.ts'
 export { project } from './server/project.ts'
-export { createKetServer } from './server/http.ts'
-export { bootApp, serveApp } from './server/boot.ts'
+export { createKetServer, statusForError, wantsHtml } from './server/http.ts'
+export { bootDeployment, serveDeployment } from './server/boot.ts'
 export type {
   ServeSpec,
   ServeContext,
+  ClientCompatibilityPolicy,
   SessionResolveContext,
+  RequestIdentity,
+  RequestIdentityResolveContext,
   PagesSpec,
-  BootedApp,
-  BootAppOptions,
+  BootedDeployment,
+  BootDeploymentOptions,
   Route,
 } from './server/boot.ts'
 export { bootRuntime } from './server/runtime.ts'
@@ -70,13 +109,14 @@ export {
 } from './server/respond.ts'
 export type { Html, ResponseBody, RouteResult } from './server/respond.ts'
 export { readConfig, sqliteStore } from './server/config.ts'
-export type { RuntimeConfig, OpenStore } from './server/config.ts'
+export type { RuntimeConfig, OpenStore, PublicStorageConfig } from './server/config.ts'
 export {
   storageFromConfig,
   localStorage,
   s3Storage,
   namespacedStorage,
   effectStorage,
+  withPublicStorage,
 } from './server/storage/index.ts'
 export { signRequest, presignUrl, sha256 } from './server/storage/index.ts'
 export type { Storage, Stored, OpenStorage, S3StorageOptions, StorageEffect } from './server/storage/index.ts'
@@ -96,6 +136,50 @@ export type {
   TransportEffect,
   TransportReceipt,
 } from './server/transport/index.ts'
+export {
+  bufferedLog,
+  consoleLog,
+  CORE_EVENTS,
+  createLogger,
+  describeError,
+  fileLog,
+  isolatedLog,
+  leveledLog,
+  logFromConfig,
+  memoryLog,
+  MODULE_EVENT,
+  multiLog,
+  nullLog,
+  prettyLog,
+  redactLog,
+  traceOf,
+} from './server/log/index.ts'
+export type {
+  ConsoleLogOptions,
+  CoreEvent,
+  FileLogOptions,
+  LogContext,
+  LogDriver,
+  LogEntry,
+  LogError,
+  LogFields,
+  LogLevel,
+  LogProcess,
+  LogRecord,
+  Logger,
+  MemoryLog,
+  OpenLog,
+} from './server/log/index.ts'
+export { classificationInventory, formatClassification } from './kernel/classification.ts'
+export { MIN_EVERY_MS, parseEvery, tickAt, ticksBetween, validateSchedule } from './kernel/schedule.ts'
+export { claimDue } from './server/schedule.ts'
+export { claimRateSlot, pruneRateSlots } from './server/ratelimit.ts'
+export { auditHash, auditId } from './kernel/audit.ts'
+export { nextSequenceNumber, peekSequenceNumber, sequenceKey } from './server/sequence.ts'
+export type { SequenceOptions } from './server/sequence.ts'
+export type { RatePolicy, RateVerdict } from './server/ratelimit.ts'
+export type { ScheduleClaim } from './server/schedule.ts'
+export type { ClassificationInventory, ClassifiedField } from './kernel/classification.ts'
 export { multipart } from './server/multipart.ts'
 export type { MultipartPart, MultipartOptions } from './server/multipart.ts'
 export { createStreams, memoryStreamStore, dbStreamStore } from './server/stream.ts'
@@ -117,13 +201,46 @@ export type { StreamStore, Writer } from './server/stream.ts'
 export { createQueue, queueFor, JOB_CHANNEL } from './server/queue.ts'
 export type { DurableJob, JobState, Queue, QueueListOptions } from './server/queue.ts'
 export { createIdempotency } from './server/idem.ts'
+export {
+  FormValidationError,
+  assertForm,
+  invalidForm,
+  issuesFromFieldErrors,
+} from './server/form.ts'
+
+export {
+  compileReportTemplate,
+  interFontUrl,
+  parseImage,
+  parseReportMarkup,
+  parseTrueType,
+  renderPdf,
+  renderReportHtml,
+} from './pdf/index.ts'
+export type {
+  PdfImage,
+  PdfRenderOptions,
+  ReportDocument,
+  ReportElement,
+  ReportNode,
+  ReportTag,
+  TrueTypeFont,
+} from './pdf/index.ts'
 
 export { sqliteAdapter } from './data/sqlite.ts'
 export { assertAdapter, ADAPTER_METHODS } from './data/adapter.ts'
 export { createAdapterPool } from './data/pool.ts'
 export type { AdapterPool, PoolOptions } from './data/pool.ts'
-export { migrateOne, migrateFleet, formatFleet } from './data/fleet.ts'
-export type { MigrationResult } from './data/fleet.ts'
+export {
+  migrateOne,
+  confirmManualMigration,
+  verifyPhysicalSchema,
+  migrateFleet,
+  formatFleet,
+  ManualMigrationConfirmationError,
+} from './data/fleet.ts'
+export type { MigrationResult, PhysicalSchemaVerification } from './data/fleet.ts'
+export { physicalSchemaIssues } from './data/physical.ts'
 export { from, deleteFrom, table, asc, desc, Query } from './data/query.ts'
 export type {
   Dialect,
@@ -135,7 +252,16 @@ export type {
   GroupOrder,
   GroupRow,
 } from './data/query.ts'
-export { dateBucket, isTimezone, assertTimezone, localDateTimeToUtc, localDayRange } from './data/time.ts'
+export {
+  dateBucket,
+  isTimezone,
+  assertTimezone,
+  localDateTimeToUtc,
+  localDayRange,
+  GROUP_INTERVALS,
+  isGroupInterval,
+  assertGroupInterval,
+} from './data/time.ts'
 export type { GroupInterval } from './data/time.ts'
 export {
   eq,
@@ -189,29 +315,113 @@ export {
   renderSql,
   tableNameFor,
   DestructiveMigrationError,
+  ManualMigrationRequiredError,
 } from './data/migrate.ts'
+export type { Schema, MigrationOp } from './data/migrate.ts'
 
-// Re-exported for convenience; the view layer is its own package and can be
-// installed alone by a client that never touches the server half.
+// Re-exported whole; the view layer is its own package and can be installed alone
+// by a client that never touches the server half, but an app that has both should
+// not have to know which half a name lives in.
+//
+// It used to be eight names picked by hand, and the set was not usable on its own:
+// `mount` was there while `domHost` — the host every call to it needs — was not, so
+// "convenience" meant importing from both packages anyway and guessing which.
 export {
-  renderToString,
+  signal,
+  computed,
+  effect,
+  batch,
+  html,
+  each,
+  when,
+  isResult,
+  isEach,
+  createRoot,
   hydrateRoot,
+  EVENT_PREFIX,
   mount,
   mountHydrated,
+  countingHost,
+  domHost,
+  escapeHtml,
+  renderToString,
+  HydrationMismatch,
+  HOLE_MARKER,
+  HOLE_OPEN,
+  trustedMarkup,
+  isMarkup,
   renderIsland,
   hydrateIslands,
   createIslandManager,
+  IslandError,
   ISLAND_TAG,
+  validationIssue,
+  fieldErrorsOf,
+  formErrorsOf,
+  validationProblem,
+  valuesFromFormData,
+  defineFormSchema,
+  validateForm,
+  createForm,
+} from '@ketvietlab/ketjs-view'
+export type {
+  Signal,
+  Computed,
+  TemplateResult,
+  EachResult,
+  Renderable,
+  Root,
+  Mounted,
+  Host,
+  HostNode,
+  Markup,
+  IslandView,
+  IslandController,
+  IslandFactory,
+  IslandDefinition,
+  IslandRegistry,
+  IslandProps,
+  HydratedIsland,
+  IslandElement,
+  IslandManager,
+  FormValues,
+  FormFieldType,
+  ValidationIssue,
+  ValidationIssueInput,
+  ValidationVerdict,
+  FormFieldRule,
+  FormSchema,
+  FormValidationResult,
+  FormValidationProblem,
+  ReadonlySignal,
+  FormController,
+  JSXChild,
+  JSXComponent,
+  IntrinsicProps,
 } from '@ketvietlab/ketjs-view'
 export { createTheme } from './theme/render.ts'
-export { reachOf, functionsOf, formatReach, formatInventory } from './agent/permissions.ts'
-export type { Reach, GrantedFn, ModelReach } from './agent/permissions.ts'
+export {
+  reachOf,
+  functionsOf,
+  formatReach,
+  formatInventory,
+  permissionInventory,
+} from './agent/permissions.ts'
+export type {
+  Reach,
+  GrantedFn,
+  ModelReach,
+  PermissionInventory,
+  PermissionModuleInventory,
+  PermissionFunctionInventory,
+} from './agent/permissions.ts'
 export { compileKtl } from './theme/ktl/compile.ts'
 export { loadTemplates } from './theme/templates.ts'
 export { createJoints } from './theme/joints.ts'
 export type { Joints } from './theme/joints.ts'
 export { makeDrop, makeDrops, sealScope } from './theme/viewmodel.ts'
-export { tokensToCss, scopedCss } from './theme/tokens.ts'
+export type { Drop } from './theme/viewmodel.ts'
+export { tokensToCss, scopedCss, LAYER_ORDER } from './theme/tokens.ts'
 
 export { agentTools, agentDescriptor, compositionSchema } from './agent/capabilities.ts'
 export { generateDts } from './codegen/dts.ts'

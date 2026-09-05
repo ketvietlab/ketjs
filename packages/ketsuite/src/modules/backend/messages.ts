@@ -2,7 +2,7 @@ import type { Message } from '@ketvietlab/ketjs'
 
 /**
  * Every string the backend shows. Keys are prefixed with the module name by the
- * composer, so these become `backend.nav.apps` and so on.
+ * composer, so these become `backend.nav.sections` and so on.
  *
  * Vietnamese is the source language: it is what the team writes and reviews. The
  * English is a real translation, not a placeholder, because a second locale that
@@ -12,19 +12,34 @@ export const messages: Record<string, Record<string, Message>> = {
   vi: {
     signOut: 'Đăng xuất',
     'app.title': 'Quản trị',
-    'app.summary': 'Màn hình quản lý ứng dụng, trang và cài đặt.',
+    'app.summary': 'Màn hình quản trị và cấu hình hệ thống.',
     'app.category': 'Hệ thống',
 
-    'nav.apps': 'Ứng dụng',
-    'nav.search': 'Tìm ứng dụng, menu…',
-    'nav.noMatch': 'Không có ứng dụng hoặc menu nào khớp.',
+    'nav.sections': 'Phân hệ',
+    'nav.search': 'Tìm phân hệ, menu…',
+    'nav.noMatch': 'Không có phân hệ hoặc menu nào khớp.',
+    // What a person reads when the answer is no. The code stays on the page —
+    // it is what they will be asked for — but it is not the headline, because
+    // "E_FN_NOT_PERMITTED" tells them nothing they can act on.
+    'error.forbidden.title': 'Bạn không có quyền mở màn hình này',
+    'error.forbidden.message':
+      'Tài khoản của bạn chưa được cấp quyền cho màn hình này. Nếu đây là việc bạn cần làm, hãy đề nghị quản trị viên cấp thêm quyền.',
+    'error.missing.title': 'Không tìm thấy màn hình này',
+    'error.missing.message':
+      'Đường dẫn này không còn tồn tại, hoặc chưa bao giờ có trong bản triển khai đang chạy.',
+    'error.failed.title': 'Màn hình này không mở được',
+    'error.failed.message':
+      'Đã có lỗi khi dựng màn hình. Thử lại; nếu vẫn vậy, gửi mã lỗi bên dưới cho người phụ trách hệ thống.',
+    'error.back': 'Quay lại trang đầu',
     'nav.pages': 'Trang',
-    'nav.settings': 'Cài đặt',
     brand: 'KetSuite',
+    switchCompany: 'Chuyển công ty',
     'context.rootBranch': 'Chi nhánh gốc',
 
     'table.columns': 'Chọn cột',
     'table.id': 'Mã',
+
+    'print.label': 'In',
 
     'relation.choose': 'Chọn một bản ghi',
     'relation.search': 'Tìm kiếm…',
@@ -41,16 +56,20 @@ export const messages: Record<string, Record<string, Message>> = {
     'relation.remove': 'Lưu trữ',
     'relation.confirmRemove': 'Xác nhận lưu trữ',
     'relation.retry': 'Thử lại',
+    'relation.clear': 'Bỏ chọn',
+    'relation.chosen': 'Đã chọn',
 
     'chrome.breadcrumb': 'Đường dẫn',
     'chrome.removeFilter': 'Bỏ bộ lọc',
     'chrome.previous': 'Trang trước',
+    'modal.unsaved': 'Đóng lại sẽ mất phần bạn đang nhập. Vẫn đóng?',
     'chrome.next': 'Trang sau',
     'chrome.views': 'Kiểu xem',
     'chrome.view.list': 'Danh sách',
     'chrome.view.kanban': 'Thẻ',
     'chrome.searchFacet': 'Tìm',
     'chrome.searchPages': 'Tìm trang…',
+    'chrome.globalFilter': 'Tìm kiếm và bộ lọc',
     'chrome.filters': 'Bộ lọc',
     'chrome.groupBy': 'Nhóm theo',
     'chrome.favorites': 'Yêu thích',
@@ -62,22 +81,17 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.customOperator': 'Điều kiện',
     'chrome.customValue': 'Giá trị',
     'chrome.apply': 'Áp dụng',
+    'chrome.more': 'Thêm thao tác',
+    'chrome.archive': 'Lưu trữ',
+    'chrome.delete': 'Xoá',
+
+    'table.selectAll': 'Chọn tất cả dòng',
+    'table.selectRow': 'Chọn dòng',
 
     'menu.admin': 'Quản trị',
-    'menu.apps': 'Ứng dụng',
     'menu.content': 'Nội dung',
     'menu.pages': 'Trang',
     'menu.config': 'Cấu hình',
-    'menu.settings': 'Cài đặt',
-
-    'apps.title': 'Ứng dụng',
-    'apps.depends': 'Phụ thuộc',
-    'apps.dependents': 'Đang được dùng bởi',
-    'apps.install': 'Cài đặt',
-    'apps.uninstall': 'Gỡ',
-    'apps.none': '—',
-    'apps.empty.message': 'Bản triển khai này chưa có ứng dụng nào.',
-    'apps.empty.hint': 'Ứng dụng phải được đưa vào lúc build trước khi cài được.',
 
     'pages.title': 'Trang',
     'pages.col.path': 'Đường dẫn',
@@ -88,26 +102,34 @@ export const messages: Record<string, Record<string, Message>> = {
     'pages.empty.message': 'Chưa có trang nào.',
     'pages.empty.hint': 'Tạo trang đầu tiên để bắt đầu.',
     'pages.count': { one: '{count} trang', other: '{count} trang' },
-
-    'settings.title': 'Cài đặt',
-    'settings.tokens': 'Design token đang áp dụng',
   },
   en: {
     signOut: 'Sign out',
     'app.title': 'Administration',
-    'app.summary': 'Manage apps, pages and settings.',
+    'app.summary': 'Manage system administration and configuration.',
     'app.category': 'System',
 
-    'nav.apps': 'Apps',
-    'nav.search': 'Search apps and menus…',
-    'nav.noMatch': 'No app or menu matches.',
+    'nav.sections': 'Modules',
+    'error.forbidden.title': 'You do not have access to this screen',
+    'error.forbidden.message':
+      'Your account has not been granted this screen. If this is work you need to do, ask an administrator to grant it.',
+    'error.missing.title': 'This screen does not exist',
+    'error.missing.message': 'This path is no longer served, or was never part of the running deployment.',
+    'error.failed.title': 'This screen could not be opened',
+    'error.failed.message':
+      'Something failed while building the screen. Try again; if it keeps happening, send the code below to whoever runs the system.',
+    'error.back': 'Back to the start',
+    'nav.search': 'Search modules and menus…',
+    'nav.noMatch': 'No module or menu matches.',
     'nav.pages': 'Pages',
-    'nav.settings': 'Settings',
     brand: 'KetSuite',
+    switchCompany: 'Switch company',
     'context.rootBranch': 'Root branch',
 
     'table.columns': 'Columns',
     'table.id': 'Id',
+
+    'print.label': 'Print',
 
     'relation.choose': 'Select a record',
     'relation.search': 'Search…',
@@ -124,16 +146,20 @@ export const messages: Record<string, Record<string, Message>> = {
     'relation.remove': 'Archive',
     'relation.confirmRemove': 'Confirm archive',
     'relation.retry': 'Retry',
+    'relation.clear': 'Remove',
+    'relation.chosen': 'Selected',
 
     'chrome.breadcrumb': 'Breadcrumb',
     'chrome.removeFilter': 'Remove filter',
     'chrome.previous': 'Previous page',
+    'modal.unsaved': 'Closing loses what you have typed. Close anyway?',
     'chrome.next': 'Next page',
     'chrome.views': 'Views',
     'chrome.view.list': 'List',
     'chrome.view.kanban': 'Cards',
     'chrome.searchFacet': 'Search',
     'chrome.searchPages': 'Search pages…',
+    'chrome.globalFilter': 'Search and filters',
     'chrome.filters': 'Filters',
     'chrome.groupBy': 'Group By',
     'chrome.favorites': 'Favorites',
@@ -145,22 +171,17 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.customOperator': 'Operator',
     'chrome.customValue': 'Value',
     'chrome.apply': 'Apply',
+    'chrome.more': 'More actions',
+    'chrome.archive': 'Archive',
+    'chrome.delete': 'Delete',
+
+    'table.selectAll': 'Select all rows',
+    'table.selectRow': 'Select row',
 
     'menu.admin': 'Administration',
-    'menu.apps': 'Apps',
     'menu.content': 'Content',
     'menu.pages': 'Pages',
     'menu.config': 'Configuration',
-    'menu.settings': 'Settings',
-
-    'apps.title': 'Apps',
-    'apps.depends': 'Requires',
-    'apps.dependents': 'Required by',
-    'apps.install': 'Install',
-    'apps.uninstall': 'Remove',
-    'apps.none': '—',
-    'apps.empty.message': 'This deployment ships no apps.',
-    'apps.empty.hint': 'An app has to be built in before it can be installed.',
 
     'pages.title': 'Pages',
     'pages.col.path': 'Path',
@@ -171,8 +192,5 @@ export const messages: Record<string, Record<string, Message>> = {
     'pages.empty.message': 'No pages yet.',
     'pages.empty.hint': 'Create your first page to get started.',
     'pages.count': { one: '{count} page', other: '{count} pages' },
-
-    'settings.title': 'Settings',
-    'settings.tokens': 'Design tokens in effect',
   },
 }

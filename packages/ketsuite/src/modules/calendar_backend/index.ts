@@ -6,8 +6,6 @@ export default defineModule({
   name: 'calendar_backend',
   version: '0.1.0',
   depends: ['calendar', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Lịch trong quản trị',
   summary: 'Lịch biểu, tuần và tháng với sự kiện theo múi giờ.',
   category: 'Năng suất',
@@ -45,4 +43,4 @@ export default defineModule({
 })
 
 export { islands } from './islands.ts'
-export { calendarScreen } from './screens.tsx'
+export { calendarScreen } from './screens/index.ts'

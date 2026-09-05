@@ -22,7 +22,6 @@ export default defineModule({
   name: 'stock_lot_activity_backend',
   version: '0.1.0',
   depends: ['stock_backend', 'stock_lot_mail_backend', 'activity_backend'],
-  install: 'auto',
   functions,
   fills: {
     'stock_backend:lot.collaboration': `{% island "activity.record" %}`,

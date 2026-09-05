@@ -6,7 +6,8 @@ import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
 import { company, loyalty, partner, pricing, product, uom } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 
-const configured = process.env.KET_TEST_PG ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
+const configured =
+  process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
 const adminUrl = new URL(configured)
 adminUrl.pathname = '/postgres'
 
@@ -120,8 +121,8 @@ test(
             id: `${id}:line`,
             productId: 'fruit-box',
             quantity: 1,
-            untaxed: 100,
-            total: 100,
+            untaxed: '100',
+            total: '100',
             lineKind: 'product',
           },
         ],

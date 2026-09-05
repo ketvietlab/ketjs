@@ -12,13 +12,14 @@ export const HOOKS = [
   'inline',
   'code',
   'badge',
+  'deadline',
   'tag',
   'tag-remove',
   'count-badge',
   'person',
   'person-name',
   'avatar',
-  'app-action',
+  'thumbnail',
   'qr-code',
 ] as const
 
@@ -62,6 +63,21 @@ export const code = (value: string | null, context?: string): TemplateResult => 
  * specific when it has to be.
  */
 export type Tone = 'neutral' | 'info' | 'positive' | 'warning' | 'danger'
+
+/**
+ * A date somebody is working towards, marked when it has already passed.
+ *
+ * Not a badge, deliberately. Every tone a badge has is already spoken for by
+ * priority in the one table that needs this — urgent is `danger`, high is
+ * `warning` — so a late date rendered as a badge reads as a third priority
+ * rather than as a deadline. Colouring the date itself is what the eye is
+ * looking for anyway: the number, not a label beside it.
+ */
+export const deadline = (o: { date: string; late?: boolean }): TemplateResult => (
+  <span data-ui="deadline" data-late={String(o.late === true)}>
+    {o.date}
+  </span>
+)
 
 export const badge = (label: string, tone: Tone = 'neutral', value?: string): TemplateResult => (
   <span data-ui="badge" data-tone={tone} data-value={value ?? ''}>
@@ -114,24 +130,37 @@ export const avatar = (name: string): TemplateResult => (
   </span>
 )
 
+/**
+ * A record's picture at list size, with a placeholder when it has none.
+ *
+ * The placeholder is not decoration: it holds the column's width so rows keep
+ * their rhythm whether or not a picture exists, and it is the same shape as the
+ * image so the eye scans one column rather than two. The image is decorative in
+ * a row that already names the record, so the alt text stays empty unless the
+ * caller has something to add that the row does not already say.
+ */
+export const thumbnail = (options: {
+  src?: string | null
+  alt?: string
+  fallback?: JSXChild
+  /** `row` for a list cell, `card` for the wider crop a kanban card carries. */
+  size?: 'row' | 'card'
+}): TemplateResult => (
+  <span data-ui="thumbnail" data-size={options.size ?? 'row'} data-empty={String(!options.src)}>
+    {options.src ? (
+      <img src={options.src} alt={options.alt ?? ''} loading="lazy" decoding="async" />
+    ) : (
+      (options.fallback ?? '')
+    )}
+  </span>
+)
+
 /** A name with its avatar — the shape a person's column takes in every list. */
 export const person = (name: string): TemplateResult => (
   <span data-ui="person">
     {avatar(name)}
     <span data-ui="person-name">{name}</span>
   </span>
-)
-
-/**
- * A button that acts on the row or card it sits in.
- *
- * `action` is what it does, not how it looks — the stylesheet decides that the
- * primary one is filled and the rest are outlined, and no caller passes a colour.
- */
-export const actionButton = (o: { label: string; action: string; disabled?: boolean }): TemplateResult => (
-  <button type="button" data-ui="app-action" data-action={o.action} disabled={o.disabled === true}>
-    {o.label}
-  </button>
 )
 
 /** A server-rendered QR matrix with a four-module quiet zone. */

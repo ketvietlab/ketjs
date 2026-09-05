@@ -1,0 +1,1462 @@
+/* Shared list, kanban, table, status and catalogue components. */
+
+@layer ket.app {
+  /* ── List chrome ───────────────────────────────────────────────────────────
+     The row above a list: what you can add, where you are, what you filtered on,
+     which slice you are looking at, and how you want to look at it. Every one of
+     them is a link or a form — no client state, so the back button works. */
+
+  [data-ui="list-chrome"] {
+    display: grid;
+    inline-size: 100%;
+    min-inline-size: 0;
+    gap: var(--admin-gap);
+  }
+
+  [data-ui="list-context"] {
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 650;
+    line-height: 1.25;
+  }
+
+  [data-ui="list-context"]:empty {
+    display: none;
+  }
+
+  [data-ui="list-chrome-row"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-lg);
+  }
+
+  [data-ui="chrome-tools"] {
+    display: flex;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--admin-gap-sm);
+  }
+
+  /* A ListPage command bar keeps query controls bounded on the left while the
+     pager and view controls remain anchored to the far edge. */
+  [data-ui="list-chrome"][data-layout="command"] [data-ui="list-chrome-row"] {
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-search"] {
+    inline-size: auto;
+    max-inline-size: 50rem;
+    margin-inline: 0;
+    flex: 1 1 24rem;
+  }
+
+  [data-ui="list-chrome"][data-layout="command"] [data-ui="chrome-tail"] {
+    margin-inline-start: auto;
+  }
+
+  [data-ui="list-page"][data-variant="operational"]
+    [data-ui="list-chrome"][data-layout="command"]
+    [data-ui="chrome-lead"]:empty {
+    display: none;
+  }
+
+  [data-ui="topbar"]:has([data-ui="list-chrome"][data-layout="catalogue"]) {
+    display: block;
+    padding: var(--admin-gap-lg);
+    background: var(--admin-bg);
+  }
+
+  [data-ui="list-chrome"][data-layout="catalogue"] {
+    gap: var(--admin-gap-lg);
+  }
+
+  [data-ui="list-chrome"][data-layout="catalogue"] [data-ui="chrome-search"] {
+    inline-size: min(100%, 44rem);
+    margin-inline: 0;
+  }
+
+  [data-ui="chrome-lead"],
+  [data-ui="chrome-tail"] {
+    display: flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="chrome-lead"] {
+    flex: 0 1 auto;
+  }
+
+  [data-ui="chrome-tail"] {
+    flex: 0 0 auto;
+  }
+
+  [data-ui="chrome-tail-menu"] {
+    display: contents;
+  }
+
+  /* A resource filter is a peer of paging and view choice, not another token
+     inside the global query. Give its trigger the same fixed toolbar footprint. */
+  [data-ui="chrome-tail-menu"] [data-ui="search-menu-open"] {
+    min-block-size: var(--admin-control-height);
+    border: 1px solid var(--admin-line-strong);
+    background: var(--admin-control-bg);
+  }
+
+  [data-ui="chrome-create"] {
+    display: inline-flex;
+    min-block-size: var(--admin-control-height);
+    align-items: center;
+    padding-inline: 0.75rem;
+    border: 1px solid transparent;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  [data-ui="bulk-form"] {
+    display: block;
+  }
+
+  [data-ui="bulk-actions"] {
+    position: relative;
+    display: none;
+  }
+
+  [data-ui="shell"]:has([data-ui="row-select"]:checked) [data-ui="bulk-actions"] {
+    display: block;
+  }
+
+  [data-ui="bulk-actions-open"] {
+    display: grid;
+    inline-size: var(--admin-control-height);
+    block-size: var(--admin-control-height);
+    place-items: center;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  [data-ui="bulk-actions-open"]::-webkit-details-marker {
+    display: none;
+  }
+
+  [data-ui="bulk-actions-menu"] {
+    position: absolute;
+    z-index: 40;
+    inset-block-start: calc(100% + var(--admin-gap-xs));
+    inset-inline-end: 0;
+    display: grid;
+    min-inline-size: 9rem;
+    padding: var(--admin-gap-xs);
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="bulk-action"] {
+    inline-size: 100%;
+    padding: var(--admin-gap-sm) var(--admin-gap);
+    border: 0;
+    border-radius: var(--admin-radius-sm);
+    background: transparent;
+    color: var(--admin-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  [data-ui="bulk-action"]:hover,
+  [data-ui="bulk-action"]:focus-visible {
+    background: var(--admin-surface-hover);
+  }
+
+  [data-ui="bulk-action"][data-tone="danger"] {
+    color: var(--admin-danger);
+  }
+
+  [data-ui="chrome-search"] {
+    display: flex;
+    inline-size: min(100%, 40rem);
+    margin-inline: auto;
+    min-inline-size: 0;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    min-block-size: var(--admin-control-height);
+    padding-inline: 0.5rem;
+    border: 1px solid var(--admin-control-border);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-control-bg);
+  }
+
+  [data-ui="chrome-search-query"] {
+    display: flex;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  [data-ui="chrome-search-query"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-ui="chrome-search-menus"] {
+    display: flex;
+    min-inline-size: max-content;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="search-menu-open"][data-icon-only="true"] {
+    inline-size: 2.25rem;
+    min-inline-size: 2.25rem;
+    justify-content: center;
+    gap: 0.125rem;
+  }
+
+  [data-ui="search-menu-open"][data-icon-only="true"] > [data-ui="icon"]:last-child {
+    inline-size: 0.75rem;
+  }
+
+  [data-ui="search-menu-badge"] {
+    min-inline-size: 1rem;
+    block-size: 1rem;
+    padding-inline: 0.25rem;
+    border-radius: 999px;
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    text-align: center;
+  }
+
+  [data-ui="chrome-search"]:focus-within {
+    border-color: var(--admin-focus-border);
+    background: var(--admin-control-focus);
+    box-shadow: 0 0 0 3px var(--admin-focus-ring);
+  }
+
+  [data-ui="chrome-search-input"] {
+    flex: 1 0 8rem;
+    min-inline-size: 6rem;
+    border: 0;
+    background: none;
+    color: var(--admin-ink);
+    font: inherit;
+    font-size: 0.8125rem;
+    outline: none;
+  }
+
+  [data-ui="chrome-search-input"]::placeholder {
+    color: var(--admin-placeholder);
+  }
+
+  /* A facet is what you filtered on, and the × is how you undo it. Both visible:
+     a filter you cannot see is a list that is lying about how much it has. */
+  [data-ui="facet"] {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    padding: 0.125rem 0.25rem 0.125rem 0.5rem;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  [data-ui="chrome-search-toggle"],
+  [data-ui="chrome-search-modal"] {
+    display: none;
+  }
+
+  [data-ui="chrome-search-panel"] {
+    min-inline-size: 0;
+  }
+
+  [data-ui="chrome-search-actions"] {
+    display: flex;
+    justify-content: flex-end;
+    padding-block-start: var(--admin-gap);
+    border-block-start: 1px solid var(--admin-line);
+  }
+
+  [data-ui="chrome-search-apply"] {
+    min-block-size: var(--admin-control-height);
+    padding-inline: var(--admin-gap-md);
+    border: 1px solid transparent;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+    font: inherit;
+    font-size: var(--admin-size-sm);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  [data-ui="facet-remove"] {
+    display: grid;
+    inline-size: 1rem;
+    block-size: 1rem;
+    place-items: center;
+    border-radius: var(--admin-radius-sm);
+    color: inherit;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  [data-ui="search-menu"] {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  [data-ui="search-menu-open"] {
+    display: inline-flex;
+    min-block-size: 1.75rem;
+    align-items: center;
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    list-style: none;
+  }
+
+  [data-ui="search-menu-open"]::-webkit-details-marker {
+    display: none;
+  }
+
+  [data-ui="search-menu-open"] > [data-ui="icon"] {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+  }
+
+  [data-ui="search-menu-content"] {
+    position: absolute;
+    z-index: 20;
+    inset-block-start: calc(100% + 0.375rem);
+    inset-inline-end: 0;
+    display: grid;
+    min-inline-size: 14rem;
+    max-block-size: 24rem;
+    padding: 0.375rem;
+    overflow: auto;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-float);
+  }
+
+  [data-ui="search-menu-query"] {
+    display: flex;
+    gap: var(--admin-gap-xs);
+    padding: 0.25rem;
+    border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="search-menu-query"] input {
+    min-inline-size: 11rem;
+    min-block-size: 2rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    padding-inline: 0.5rem;
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+  }
+
+  [data-ui="search-menu-query"] button {
+    min-inline-size: 2rem;
+    min-block-size: 2rem;
+    border: 0;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-control-bg);
+    color: var(--admin-ink);
+  }
+
+  [data-ui="search-menu-item"] {
+    display: flex;
+    min-block-size: 2rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    text-decoration: none;
+  }
+
+  a[data-ui="search-menu-item"]:hover,
+  a[data-ui="search-menu-item"][data-active="true"] {
+    background: var(--admin-accent-soft);
+  }
+
+  [data-ui="search-menu-item"][data-nested="true"] {
+    display: grid;
+    block-size: auto;
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  [data-ui="custom-filter"] {
+    display: grid;
+    gap: 0.375rem;
+    margin: 0.375rem 0 0;
+    padding: 0.5rem 0 0;
+    border: 0;
+    border-block-start: 1px solid var(--admin-line);
+  }
+
+  [data-ui="custom-filter"] select,
+  [data-ui="custom-filter"] input,
+  [data-ui="custom-filter"] button {
+    min-block-size: 2rem;
+    border: 1px solid var(--admin-control-border);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-control-bg);
+    color: var(--admin-ink);
+    font: inherit;
+  }
+
+  [data-ui="custom-filter"] button {
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+    cursor: pointer;
+  }
+
+  [data-ui="pager"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-ui="pager-step"] {
+    display: grid;
+    inline-size: var(--admin-control-height);
+    block-size: var(--admin-control-height);
+    place-items: center;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink);
+    font-size: 0.875rem;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  /* An arrow with nowhere to go stays put and says so, rather than disappearing —
+     a toolbar that changes width as you page is a toolbar you cannot aim at. */
+  [data-ui="pager-step"][aria-disabled="true"] {
+    border-color: var(--admin-line);
+    color: var(--admin-ink-muted);
+    cursor: default;
+  }
+
+  [data-ui="group-pager"] > td {
+    text-align: end;
+  }
+
+  [data-ui="group-pager"] > td > span,
+  [data-ui="group-pager"] > td > a {
+    display: inline-grid;
+    min-inline-size: 2rem;
+    min-block-size: 2rem;
+    place-items: center;
+    color: var(--admin-ink-secondary);
+    text-decoration: none;
+  }
+
+  [data-ui="group-pager"] > td > span:first-child {
+    display: inline;
+    margin-inline-end: var(--admin-gap-xs);
+    font-size: 0.75rem;
+  }
+
+  [data-ui="view-switch"] {
+    display: inline-flex;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    overflow: hidden;
+  }
+
+  [data-ui="view-kind"] {
+    display: grid;
+    inline-size: var(--admin-control-height);
+    block-size: var(--admin-control-height);
+    place-items: center;
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  [data-ui="view-kind"] + [data-ui="view-kind"] {
+    border-inline-start: 1px solid var(--admin-line-strong);
+  }
+
+  [data-ui="view-kind"][data-active="true"] {
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+
+  /* ── Kanban ───────────────────────────────────────────────────────────────── */
+
+  [data-ui="gantt"] {
+    --gantt-row: 1.9rem;
+    display: grid;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    overflow: hidden;
+  }
+
+  /* The scroller is what keeps a long project usable; the canvas inside it is
+     as wide as the span needs, which is why the width is in pixels. */
+  [data-ui="gantt-scroll"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  [data-ui="gantt-canvas"] {
+    display: grid;
+    min-inline-size: min-content;
+  }
+
+  [data-ui="gantt-head"] {
+    position: relative;
+    block-size: 1.6rem;
+    margin-inline-start: var(--gantt-label);
+    inline-size: var(--gantt-width);
+    border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="gantt-month"] {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: var(--gantt-x);
+    inline-size: var(--gantt-w);
+    padding-inline-start: 0.35rem;
+    border-inline-start: 1px solid var(--admin-line);
+    color: var(--admin-ink-muted);
+    font-size: 0.72rem;
+    line-height: 1.6rem;
+    white-space: nowrap;
+    /* A month the span only clips a day or two of is a narrow band, and its
+       name spilled across the next one. Clipped rather than shrunk: the axis
+       below it is what carries the dates, and the label is an aid. */
+    overflow: hidden;
+  }
+
+  [data-ui="gantt-today"] {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: var(--gantt-x);
+    inline-size: 2px;
+    background: var(--admin-danger);
+    z-index: 1;
+  }
+
+  [data-ui="gantt-body"] {
+    display: grid;
+  }
+
+  [data-ui="gantt-row"] {
+    display: grid;
+    grid-template-columns: var(--gantt-label) var(--gantt-width);
+    align-items: center;
+    min-block-size: var(--gantt-row);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  [data-ui="gantt-row"]:hover {
+    background: var(--admin-surface-hover);
+  }
+
+  [data-ui="gantt-label"] {
+    padding-inline: var(--admin-gap-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.82rem;
+  }
+
+  [data-ui="gantt-track"] {
+    position: relative;
+    display: block;
+    block-size: var(--gantt-row);
+  }
+
+  [data-ui="gantt-bar"] {
+    position: absolute;
+    inset-block: 0.35rem;
+    inset-inline-start: var(--gantt-x);
+    inline-size: var(--gantt-w);
+    border-radius: 999px;
+    background: var(--admin-accent-soft);
+    box-shadow: inset 0 0 0 1px var(--admin-accent-line);
+    overflow: hidden;
+  }
+
+  [data-ui="gantt-bar"][data-done="true"] {
+    background: var(--admin-success-soft);
+    box-shadow: inset 0 0 0 1px var(--admin-success-icon);
+  }
+
+  /* A start nobody chose is drawn as one: dashed, so a plan read off this
+     chart is not mistaken for a plan somebody made. */
+  [data-ui="gantt-bar"][data-inferred="true"],
+  [data-ui="gantt-point"][data-inferred="true"] {
+    border: 1px dashed var(--admin-line-strong);
+    box-shadow: none;
+  }
+
+  [data-ui="gantt-fill"] {
+    display: block;
+    block-size: 100%;
+    inline-size: var(--gantt-p);
+    background: var(--admin-accent);
+    opacity: 0.55;
+  }
+
+  /* No end date is a point, not a bar reaching to today. */
+  [data-ui="gantt-point"] {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: var(--gantt-x);
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    margin-block-start: -0.3rem;
+    border-radius: 2px;
+    background: var(--admin-accent);
+    transform: rotate(45deg);
+  }
+
+  [data-ui="gantt-empty"] {
+    margin: 0;
+    padding: var(--admin-gap-md);
+    color: var(--admin-ink-muted);
+  }
+
+  [data-ui="progress"] {
+    display: inline-grid;
+    gap: 0.2rem;
+    min-inline-size: 4rem;
+    inline-size: 100%;
+    max-inline-size: 10rem;
+  }
+
+  /* A record the question does not apply to draws nothing, not an empty bar. */
+  [data-ui="progress"][data-empty="true"] {
+    display: none;
+  }
+
+  [data-ui="progress-label"] {
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--admin-ink-muted);
+  }
+
+  [data-ui="progress-track"] {
+    display: block;
+    block-size: 0.3rem;
+    border-radius: 999px;
+    background: var(--admin-surface-subtle);
+    overflow: hidden;
+  }
+
+  [data-ui="progress-fill"] {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+    background: var(--admin-accent, currentColor);
+  }
+
+  [data-ui="progress"][data-complete="true"] [data-ui="progress-fill"] {
+    background: var(--admin-success-icon, var(--admin-accent, currentColor));
+  }
+
+  [data-ui="kanban"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+
+  [data-ui="kanban-card"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--admin-gap-xs);
+    padding: var(--admin-gap-sm);
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+  }
+
+  /* The card's picture sits above its title and spans the card, so a grid of
+     cards is scanned by image first and by name second. */
+  [data-ui="kanban-media"] {
+    display: block;
+    margin: calc(var(--admin-gap-sm) * -1) calc(var(--admin-gap-sm) * -1) 0;
+  }
+
+  [data-ui="kanban-title"] {
+    margin: 0;
+    color: var(--admin-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  [data-ui="kanban-meta"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="kanban-note"] {
+    margin: 0;
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+  }
+
+  [data-ui="main"] {
+    min-inline-size: 0;
+  }
+
+  [data-ui="topbar"] {
+    z-index: 10;
+    display: flex;
+    min-block-size: var(--admin-topbar-height);
+    align-items: center;
+    gap: var(--admin-gap);
+    padding-block: 5px;
+    padding-inline: var(--admin-gap);
+    background: color-mix(in srgb, var(--admin-bg) 94%, transparent);
+    border-block-end: 0;
+    backdrop-filter: blur(10px);
+  }
+
+  /* The bar is furniture for whatever is in it: a list's chrome, the context
+     switcher, whatever a module hangs on `topbar.end`. A framed screen names
+     itself in its own heading, so on one of those the bar can end up holding
+     nothing — and an empty bar is forty-four pixels and a rule drawn across the
+     page saying nothing. It stays in the DOM because it is a navigation slot; it
+     just stops taking up room. `:empty` will not do: the renderer leaves hydration
+     comments inside. */
+  [data-ui="topbar"]:not(:has(> *)) {
+    min-block-size: 0;
+    padding: 0;
+    border-block-end: 0;
+  }
+
+  body > [data-ui="shell"] [data-ui="topbar"] {
+    position: sticky;
+    inset-block-start: 0;
+  }
+
+  [data-ui="title"] {
+    margin: 0;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    color: var(--admin-ink);
+    font-size: var(--admin-size-lg);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+  }
+
+  [data-ui="content"] {
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-height: 100vh;
+    padding: var(--admin-gap) var(--admin-gap) var(--admin-gap-lg);
+    overflow-x: auto;
+  }
+
+  [data-ui="content"]:has(
+    > :is(
+        [data-ui="list-page"][data-variant="operational"],
+        [data-ui="form-page"][data-variant="operational"],
+        [data-ui="dashboard-page"][data-variant="operational"],
+        [data-ui="board-page"][data-variant="operational"]
+      )
+  ) {
+    padding: 0;
+  }
+
+  [data-ui="content"]:has(> [data-ui="record-workspace"]) {
+    padding: 1.375rem 1.75rem 3rem;
+  }
+
+  /* Screens that are reading rather than scanning keep their measure. */
+  [data-ui="content"]:has([data-ui="tokens"]) {
+    inline-size: min(100%, var(--admin-page-max));
+    margin-inline: auto;
+  }
+
+  /* A list runs to both edges of the pane and starts directly under the bar:
+     the border, the radius and the drop shadow were drawing a card around
+     something that is not a card. */
+  [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"])) {
+    padding: 0;
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    > [data-ui="content"] {
+    padding: 0 var(--admin-gap-lg) var(--admin-gap-lg);
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="table-scroll"][data-gutter="compact"] {
+    margin: 0;
+  }
+
+  [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"]))
+    [data-ui="table-scroll"]:not([data-gutter="compact"]) {
+    border-radius: 0;
+    border-block-start: 0;
+    border-inline: 0;
+    box-shadow: none;
+  }
+
+  [data-ui="content"]
+    [data-ui="list-page"][data-variant="operational"]
+    [data-ui="table-scroll"]:not([data-gutter="compact"]) {
+    border: 1px solid var(--admin-table-line);
+    border-radius: var(--admin-radius) var(--admin-radius) 0 0;
+    box-shadow: none;
+  }
+
+  [data-ui="group-title"] {
+    margin: 0;
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.075em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  /* ── Data list ────────────────────────────────────────────────────────── */
+
+  /* ── Data table ────────────────────────────────────────────────────────────
+     One table, drawn the same way everywhere: columns arrive as data, so the row
+     height, the header and the overflow behaviour are decided here once and no
+     module gets to disagree.
+
+     The scroll box is the important part. A wide list must scroll inside itself,
+     because a page that scrolls sideways takes the sidebar with it. */
+
+  [data-ui="table-scroll"] {
+    overflow-x: auto;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="table-scroll"][data-gutter="compact"] {
+    margin: 10px;
+    border-radius: 4px;
+  }
+
+  [data-ui="table"] {
+    inline-size: 100%;
+    border-spacing: 0;
+    background: var(--admin-table-bg);
+    /* auto, not fixed: a name column and a status column do not want the same
+       share of the width, and nothing here knows which is which. */
+    table-layout: auto;
+  }
+
+  [data-ui="table"] th {
+    position: sticky;
+    z-index: 1;
+    inset-block-start: 0;
+    block-size: 2rem;
+    padding: 0 var(--admin-gap);
+    background: var(--admin-table-header);
+    border-block-end: 1px solid var(--admin-table-line);
+    color: var(--admin-table-header-ink);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    line-height: 1.2;
+    text-align: start;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="table"]
+    th {
+    block-size: var(--table-header-height);
+    background: var(--admin-table-header);
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="row"] {
+    block-size: var(--table-row-height);
+  }
+
+  [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="row"]
+    td {
+    padding-block: var(--admin-gap-sm);
+  }
+
+  [data-ui="row"] {
+    block-size: var(--admin-row-height);
+  }
+
+  [data-ui="group-row"] td {
+    padding: 0;
+    border-block-end: 1px solid var(--admin-divider-subtle);
+    background: var(--admin-surface-subtle);
+  }
+
+  [data-ui="group-link"] {
+    display: flex;
+    min-block-size: var(--admin-row-height);
+    align-items: center;
+    gap: 0.5rem;
+    padding-inline: var(--admin-gap);
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    font-weight: 650;
+    text-decoration: none;
+  }
+
+  [data-ui="group-indent"] {
+    inline-size: calc(var(--group-depth) * 1rem);
+    flex: 0 0 auto;
+  }
+
+  [data-ui="group-link"] > [data-ui="icon"] {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
+
+  [data-ui="group-count"] {
+    min-inline-size: 1.5rem;
+    margin-inline-start: auto;
+    padding: 0.125rem 0.375rem;
+    border-radius: 999px;
+    background: var(--admin-surface-hover);
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
+  [data-ui="row"]:last-child td {
+    border-block-end: 0;
+  }
+
+  [data-ui="row"] td {
+    padding: 0.375rem var(--admin-gap);
+    border-block-end: 1px solid var(--admin-table-line);
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    text-align: start;
+    vertical-align: middle;
+    transition: background-color var(--admin-motion-fast);
+  }
+
+  [data-ui="row"][data-row-href] {
+    cursor: pointer;
+  }
+
+  [data-ui="select-col"],
+  [data-ui="row"] [data-ui="select-cell"] {
+    inline-size: 2.25rem;
+    padding-inline: var(--admin-gap-sm);
+    text-align: center;
+  }
+
+  [data-ui="select-all"],
+  [data-ui="row-select"] {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    margin: 0;
+    accent-color: var(--admin-accent);
+    cursor: pointer;
+  }
+
+  /* The first column is what you are looking for; everything else qualifies it. */
+  [data-ui="row"] td:first-child {
+    color: var(--admin-ink);
+    font-weight: 500;
+  }
+
+  [data-ui="row-link"] {
+    color: inherit;
+    text-underline-offset: 0.14em;
+  }
+
+  [data-ui="cell"] code {
+    color: var(--admin-ink);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-sm);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  /* Numbers line up on the right, everywhere, so a column can be read down. */
+  [data-ui="table"] [data-align="end"] {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-ui="col-actions"],
+  [data-ui="cell-actions"] {
+    inline-size: var(--admin-control-height);
+  }
+
+  /* ── Choosing columns ──────────────────────────────────────────────────────
+     A <details> and a list of links. Not checkboxes in a form: a checkbox needs
+     a handler to mean anything, and a handler is client state (D43). Each entry
+     is the same list with one more column, or one fewer. */
+
+  [data-ui="col-config"] {
+    position: relative;
+  }
+
+  [data-ui="col-config-open"] {
+    display: grid;
+    inline-size: var(--admin-control-height);
+    block-size: var(--admin-control-height);
+    place-items: center;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1;
+    list-style: none;
+  }
+
+  [data-ui="col-config-open"]::-webkit-details-marker {
+    display: none;
+  }
+
+  [data-ui="col-config-menu"] {
+    position: absolute;
+    z-index: 30;
+    inset-block-start: calc(100% + 0.25rem);
+    inset-inline-end: 0;
+    display: flex;
+    min-inline-size: 10rem;
+    flex-direction: column;
+    padding: 0.25rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="col-toggle"] {
+    display: flex;
+    min-block-size: 1.75rem;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    padding-inline: 0.375rem;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    text-decoration: none;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: nowrap;
+  }
+
+  [data-ui="col-toggle"][data-on="true"] {
+    color: var(--admin-ink);
+    font-weight: 600;
+  }
+
+  [data-ui="col-toggle-mark"] {
+    inline-size: 0.75rem;
+    flex: 0 0 auto;
+    color: var(--admin-accent-text);
+  }
+
+  /* ── Status ────────────────────────────────────────────────────────────────
+     The tone is named for what it means, not for what it looks like. A design
+     team that wants "draft" amber changes one rule and every draft follows. */
+
+  [data-ui="badge"] {
+    display: inline-flex;
+    min-block-size: 1.375rem;
+    align-items: center;
+    gap: 0.3125rem;
+    padding-inline: 0.4375rem;
+    border-radius: var(--admin-radius-sm);
+    font-size: var(--admin-size-xs);
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  [data-ui="badge"]::before {
+    inline-size: 0.375rem;
+    block-size: 0.375rem;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
+  }
+
+  [data-ui="badge"][data-tone="neutral"] {
+    background: var(--admin-neutral-soft);
+    color: var(--admin-neutral);
+  }
+
+  [data-ui="badge"][data-tone="info"] {
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+
+  [data-ui="badge"][data-tone="positive"] {
+    background: var(--admin-success-soft);
+    color: var(--admin-success);
+  }
+
+  [data-ui="badge"][data-tone="warning"] {
+    background: var(--admin-warning-soft);
+    color: var(--admin-warning);
+  }
+
+  [data-ui="badge"][data-tone="danger"] {
+    background: var(--admin-danger-soft);
+    color: var(--admin-danger);
+  }
+
+  [data-ui="qr-code"] {
+    display: block;
+    max-inline-size: 100%;
+    block-size: auto;
+    image-rendering: pixelated;
+  }
+
+  /* ── People ────────────────────────────────────────────────────────────────
+     Initials, not a photograph: nothing stores one yet, and a broken image in
+     every row is worse than no image. This stays as the fallback either way. */
+
+  [data-ui="person"] {
+    display: inline-flex;
+    min-inline-size: 0;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="person-name"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-ui="avatar"] {
+    display: grid;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+
+  /* A record's picture at list size. The empty state is the same box with the
+     same border, so a column of thumbnails reads as one column whether or not
+     every row has an image. */
+  [data-ui="thumbnail"] {
+    display: grid;
+    inline-size: 2rem;
+    block-size: 2rem;
+    flex: 0 0 auto;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-muted);
+  }
+  [data-ui="thumbnail"] img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  [data-ui="thumbnail"] [data-ui="icon"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+  /* A card is scanned from across the screen, so its picture takes the card's
+     width rather than a cell's height. */
+  [data-ui="thumbnail"][data-size="card"] {
+    inline-size: 100%;
+    block-size: 6rem;
+  }
+  [data-ui="thumbnail"][data-size="card"] [data-ui="icon"] {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+  }
+  /* The column is only as wide as the picture; the name beside it takes the rest. */
+  [data-ui="table"] :is(th, td)[data-kind="media"] {
+    inline-size: 2rem;
+    padding-inline-end: 0;
+  }
+
+  /* ── Settings token list ──────────────────────────────────────────────── */
+
+  [data-ui="tokens"] {
+    display: grid;
+    gap: var(--admin-gap-sm);
+  }
+
+  [data-ui="token-list"] {
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="token"] {
+    display: grid;
+    min-block-size: 2.5rem;
+    grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr);
+    align-items: center;
+    border-block-end: 1px solid var(--admin-line);
+  }
+
+  [data-ui="token"]:last-child {
+    border-block-end: 0;
+  }
+
+  [data-ui="token-name"],
+  [data-ui="token-value"] {
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0.625rem var(--admin-gap);
+    overflow-wrap: anywhere;
+  }
+
+  [data-ui="token-name"] {
+    color: var(--admin-ink);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+
+  [data-ui="token-value"] {
+    border-inline-start: 1px solid var(--admin-line);
+    color: var(--admin-ink-secondary);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Feedback states ──────────────────────────────────────────────────── */
+
+  [data-ui="empty"] {
+    display: grid;
+    max-inline-size: 38rem;
+    justify-items: start;
+    gap: var(--admin-gap-xs);
+    margin: var(--admin-gap-md) auto;
+    padding: var(--admin-gap-md);
+    border: 1px dashed var(--admin-line-strong);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+  }
+
+  [data-ui="empty-message"],
+  [data-ui="empty-hint"],
+  [data-ui="error-code"],
+  [data-ui="error-message"],
+  [data-ui="error-hint"] {
+    margin: 0;
+  }
+
+  [data-ui="empty-message"] {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-base);
+    font-weight: 700;
+  }
+
+  [data-ui="empty-hint"] {
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+  }
+
+  [data-ui="error"] {
+    display: grid;
+    max-inline-size: 48rem;
+    gap: var(--admin-gap-xs);
+    margin: var(--admin-gap-md) auto;
+    padding: var(--admin-gap-md);
+    border: 1px solid var(--admin-danger-line);
+    border-inline-start: 3px solid var(--admin-danger);
+    border-radius: var(--admin-radius);
+    background: var(--admin-danger-soft);
+    color: var(--admin-status-fixed-ink);
+  }
+
+  [data-ui="error-code"] {
+    color: var(--admin-danger);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.035em;
+  }
+
+  [data-ui="error-message"] {
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  [data-ui="error-hint"] {
+    margin-block-start: var(--admin-gap-xs);
+    padding-block-start: var(--admin-gap-sm);
+    border-block-start: 1px solid var(--admin-danger-line);
+    color: var(--admin-status-fixed-ink-secondary);
+    font-size: 0.8125rem;
+  }
+
+  /* ── Design catalogue ─────────────────────────────────────────────────── */
+
+  [data-ui="catalogue"] {
+    inline-size: min(100%, 108rem);
+    margin-inline: auto;
+    padding: var(--admin-gap-lg);
+  }
+
+  [data-ui="catalogue-nav"] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 50;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--admin-gap-xs);
+    margin: calc(var(--admin-gap-lg) * -1) calc(var(--admin-gap-lg) * -1) var(--admin-gap-xl);
+    padding: var(--admin-gap) var(--admin-gap-lg);
+    background: color-mix(in srgb, var(--admin-bg) 94%, transparent);
+    border-block-end: 1px solid var(--admin-line);
+    backdrop-filter: blur(12px);
+  }
+
+  [data-ui="catalogue-nav"] a {
+    block-size: var(--admin-control-height);
+    padding-inline: 0.5rem;
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+    line-height: 1.25;
+    text-decoration: none;
+  }
+
+  [data-ui="catalogue-case"] {
+    display: grid;
+    gap: var(--admin-gap);
+    margin-block-end: 3rem;
+    scroll-margin-block-start: 5rem;
+  }
+
+  [data-ui="catalogue-head"] {
+    display: grid;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="catalogue-head"] h2,
+  [data-ui="catalogue-head"] p {
+    margin: 0;
+  }
+
+  [data-ui="catalogue-head"] h2 {
+    color: var(--admin-ink);
+    font-size: var(--admin-size-md);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  [data-ui="catalogue-head"] p {
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+  }
+
+  [data-ui="catalogue-frame"] {
+    min-inline-size: 0;
+    max-block-size: 46rem;
+    overflow: auto;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-card);
+  }
+
+  [data-ui="catalogue-frame"] > [data-ui="shell"] {
+    min-inline-size: 50rem;
+    min-block-size: 26rem;
+  }
+
+  [data-ui="catalogue-frame"] > :is([data-ui="empty"], [data-ui="error"]) {
+    margin-block: 3rem;
+  }
+
+  /* ── Pointer states ───────────────────────────────────────────────────── */
+
+  @media (hover: hover) {
+    [data-ui="nav-item"]:hover {
+      background: var(--admin-surface);
+      color: var(--admin-ink);
+    }
+
+    [data-ui="nav-item"][data-active="true"]:hover {
+      background: var(--admin-accent-soft);
+      color: var(--admin-accent-text);
+    }
+
+    [data-ui="row"]:hover td {
+      background: var(--admin-table-hover);
+    }
+
+    [data-ui="catalogue-nav"] a:hover {
+      border-color: var(--admin-accent-line);
+      background: var(--admin-accent-soft);
+      color: var(--admin-accent-text);
+    }
+  }
+}

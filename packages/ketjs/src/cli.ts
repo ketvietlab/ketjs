@@ -1,33 +1,42 @@
 #!/usr/bin/env node
 // The CLI is deliberately thin: everything it prints is read off the manifest,
-// so there is no second source of truth about what an app contains.
+// so there is no second source of truth about what a deployment contains.
 
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { delimiter, extname, join, normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { composeWorkspace, explainWorkspace } from './kernel/workspace.ts'
-import type { AppSpec, WorkspaceDeclaration } from './kernel/workspace.ts'
+import type { DeploymentSpec, WorkspaceDeclaration } from './kernel/workspace.ts'
 import { resolveWorkspace } from './kernel/modules.ts'
 import type { ResolvedModuleInfo } from './kernel/modules.ts'
 import { diffManifests, formatDiff } from './kernel/diff.ts'
 import { generateDts } from './codegen/dts.ts'
 import { agentDescriptor } from './agent/capabilities.ts'
-import { reachOf, functionsOf, formatReach, formatInventory, grantsOfRole } from './agent/permissions.ts'
+import {
+  reachOf,
+  functionsOf,
+  formatReach,
+  formatInventory,
+  grantsOfRole,
+  permissionInventory,
+} from './agent/permissions.ts'
+import { classificationInventory, formatClassification } from './kernel/classification.ts'
 import { readConfig, sqliteStore } from './server/config.ts'
 import { schemaFromManifest, planMigration, renderSql } from './data/migrate.ts'
-import { migrateOne, migrateFleet, formatFleet } from './data/fleet.ts'
+import { migrateOne, migrateFleet, formatFleet, verifyPhysicalSchema } from './data/fleet.ts'
+import type { PhysicalSchemaVerification } from './data/fleet.ts'
 import { createAdapterPool } from './data/pool.ts'
 import { sqliteAdapter } from './data/sqlite.ts'
-import { bootApp, serveApp } from './server/boot.ts'
+import { bootDeployment, serveDeployment } from './server/boot.ts'
 import { bootRuntime } from './server/runtime.ts'
 import { callFn } from './server/fn.ts'
-import { createAppRegistry, restrictManifest } from './kernel/apps.ts'
 import { bootWorker, serveWorker } from './server/worker.ts'
+import { createDevelopmentCloser } from './server/development.ts'
 import { createQueue } from './server/queue.ts'
 import { scaffold } from './scaffold/index.ts'
 import { KetError } from './kernel/errors.ts'
-import { CookieJar, createTestApp, TestClient, TestHttpError } from './testing.ts'
+import { CookieJar, createTestDeployment, TestClient, TestHttpError } from './testing.ts'
 import type { Manifest } from './types.ts'
 
 const [, , cmd = 'help', ...rest] = process.argv
@@ -72,7 +81,7 @@ const CANDIDATES = [
   'examples/workspace.js',
 ]
 
-/** Where the apps are declared. Named explicitly, or the first conventional path. */
+/** Where deployments are declared. Named explicitly, or the first conventional path. */
 const workspacePath = () => {
   const given = opt('workspace')
   if (given) {
@@ -94,16 +103,16 @@ const loadWorkspace = async () => {
   const absolutePath = resolve(configuredPath)
   const mod = (await import(pathToFileURL(absolutePath).href)) as {
     default?: WorkspaceDeclaration
-    apps?: WorkspaceDeclaration['apps']
+    deployments?: WorkspaceDeclaration['deployments']
     modulePaths?: WorkspaceDeclaration['modulePaths']
   }
   const declaration =
-    mod.default && typeof mod.default === 'object' && Array.isArray(mod.default.apps)
+    mod.default && typeof mod.default === 'object' && Array.isArray(mod.default.deployments)
       ? mod.default
-      : { apps: mod.apps, modulePaths: mod.modulePaths }
-  if (!Array.isArray(declaration.apps))
+      : { deployments: mod.deployments, modulePaths: mod.modulePaths }
+  if (!Array.isArray(declaration.deployments))
     throw new Error(
-      `${configuredPath} must default-export defineWorkspace(...) or export \`apps\`, an array of defineApp(...)`,
+      `${configuredPath} must default-export defineWorkspace(...) or export \`deployments\`, an array of defineDeployment(...)`,
     )
   const fromEnv = (process.env.KET_MODULE_PATH ?? '')
     .split(delimiter)
@@ -114,7 +123,11 @@ const loadWorkspace = async () => {
     extraModulePaths: [...fromEnv, ...opts('module-path')],
     allowSource: process.env.KET_DEV_SOURCE === '1',
   })
-  return { ws: composeWorkspace(resolved.apps), apps: resolved.apps, resolved }
+  return {
+    ws: composeWorkspace(resolved.deployments),
+    deployments: resolved.deployments,
+    resolved,
+  }
 }
 
 const formatModules = (paths: readonly string[], modules: readonly ResolvedModuleInfo[]): string => {
@@ -124,53 +137,69 @@ const formatModules = (paths: readonly string[], modules: readonly ResolvedModul
   lines.push('modules:')
   for (const module of modules) {
     lines.push(
-      `  ${module.name.padEnd(24)} ${module.version.padEnd(10)} ${module.kind.padEnd(6)} apps=${module.apps.join(',')}  ${module.source}`,
+      `  ${module.name.padEnd(24)} ${module.version.padEnd(10)} ${module.kind.padEnd(6)} deployments=${module.deployments.join(',')}  ${module.source}`,
     )
   }
   if (!modules.length) lines.push('  (none)')
   return lines.join('\n')
 }
 
-/** The AppSpec, not the composed manifest — serving needs what the app declared. */
-const pickSpec = (specs: AppSpec[]): AppSpec => {
-  const name = opt('app')
+/** The DeploymentSpec, not the composed manifest — serving needs the authored runtime settings. */
+const pickSpec = (specs: DeploymentSpec[]): DeploymentSpec => {
+  const name = opt('deployment')
   if (!name) {
     const servable = specs.filter((s) => s.serve)
     const one = servable[0] ?? specs[0]
-    if (!one) throw new Error('the workspace declares no apps')
+    if (!one) throw new Error('the workspace declares no deployments')
     return one
   }
   const found = specs.find((s) => s.name === name)
-  if (!found) throw new Error(`unknown app "${name}" (have: ${specs.map((s) => s.name).join(', ')})`)
+  if (!found) throw new Error(`unknown deployment "${name}" (have: ${specs.map((s) => s.name).join(', ')})`)
   return found
 }
 
-const pickApp = (ws: { apps: Record<string, Manifest> }): [string, Manifest] => {
-  const name = opt('app') ?? (Object.keys(ws.apps)[0] as string)
-  const m = ws.apps[name]
-  if (!m) throw new Error(`unknown app "${name}" (have: ${Object.keys(ws.apps).join(', ')})`)
+const pickFleetSpec = (specs: DeploymentSpec[]): DeploymentSpec => {
+  if (opt('deployment')) return pickSpec(specs)
+  const fleets = specs.filter((spec) => spec.serve?.tenants)
+  if (!fleets.length) throw new Error('the workspace declares no tenant-fleet deployment')
+  if (fleets.length > 1)
+    throw new Error(
+      `the workspace declares multiple tenant-fleet deployments (${fleets.map((spec) => spec.name).join(', ')}); pass --deployment NAME`,
+    )
+  return fleets[0] as DeploymentSpec
+}
+
+const pickDeployment = (ws: { deployments: Record<string, Manifest> }): [string, Manifest] => {
+  const name = opt('deployment') ?? (Object.keys(ws.deployments)[0] as string)
+  const m = ws.deployments[name]
+  if (!m) throw new Error(`unknown deployment "${name}" (have: ${Object.keys(ws.deployments).join(', ')})`)
   return [name, m]
 }
 
 const HELP = `ket — zero-dependency fullstack framework
 
-  ket check                 compose every app and report contract violations
-  ket manifest [--app X]    print the composed manifest
-  ket workspace             show apps, datastores and shared modules
+  ket check                 compose every deployment and report contract violations
+  ket manifest [--deployment X]    print the composed manifest
+  ket workspace             show deployments, datastores and shared modules
   ket modules               show resolved modules and their source paths
-  ket types [--app X]       generate .ket/types.d.ts from the manifest
-  ket agent [--app X]       print the agent capability descriptor
+  ket types [--deployment X]       generate .ket/types.d.ts from the manifest
+  ket agent [--deployment X]       print the agent capability descriptor
   ket permissions           every function that exists to be granted
+  ket classification        which fields hold personal data, and which never leave
     --grant a,b,c           …or what a role granted exactly these can reach
     --module NAME           …or what granting one module's whole surface reaches
     --role NAME             …or what a role in the database actually grants
-  ket migrate [--app X]     plan migrations (add --allow-destructive to permit data loss)
+    --json                  machine-readable module/function inventory
+    --all                   with --json, inventory every deployment
+  ket migrate [--deployment X]     plan migrations (add --allow-destructive to permit data loss)
     --all                   …or apply them to every tenant database (add --dry-run)
+  ket schema verify [--deployment X]  compare the physical database, migration marker, and manifest
+    --tenant KEY            select one tenant database; --all verifies the complete tenant fleet
   ket diff --against FILE   compare the current manifest with a stored one
-  ket snapshot [--app X]    write .ket/manifest.<app>.json for a later diff
+  ket snapshot [--deployment X]    write .ket/manifest.<deployment>.json for a later diff
 
-  ket serve [--app X]       boot the app and serve it
-  ket worker [--app X]      run declared queues for the same app and manifest
+  ket serve [--deployment X]       boot and serve the deployment
+  ket worker [--deployment X]      run declared queues for the same deployment and manifest
   ket call FUNCTION         exercise a function through its real HTTP endpoint
     --against URL           call an already-running development server
     --input JSON|@FILE|-    function input (default: {})
@@ -181,28 +210,49 @@ const HELP = `ket — zero-dependency fullstack framework
     --login-path PATH       override the application's login route
     --dry-run               report declared writes without applying them
     --idempotency-key KEY   exercise idempotent retry handling
-    --isolated              boot a temporary app/database for this call
+    --isolated              boot a temporary deployment/database for this call
   ket provision FUNCTION    run a declared one-shot bootstrap function
     --input -               read JSON, including secrets, from stdin only
-    --tenant KEY            required when the app uses tenant databases
+    --tenant KEY            required when the deployment uses tenant databases
   ket test [FILES...]       run emitted headless tests with Node's test runner
     --watch                 rerun when the selected JavaScript artifacts change
     --test-name-pattern P   select tests by name; --coverage enables coverage
-  ket jobs list             inspect durable jobs (--tenant is required for tenant apps)
+  ket jobs list             inspect durable jobs (--tenant is required for tenant deployments)
   ket jobs retry ID         make a retryable/discarded job available now
   ket jobs cancel ID        cancel a pending or executing job
   ket jobs prune            apply the 7/30-day retention policy
-  ket dev [--app X]         serve compiled output, restarting when an artifact changes
+  ket dev [--deployment X]         serve compiled output, restarting when an artifact changes
     --all                   run HTTP and worker together under this one watcher
-                            (--no-auto-install holds back modules that install themselves)
-  ket new NAME [--dir D]    scaffold an app that runs
+  ket new NAME [--dir D]    scaffold a deployment that runs
 
 Options: --workspace FILE (default: dist/ket.workspace.js, ket.workspace.js, workspace.js)
          --module-path DIR (repeatable; KET_MODULE_PATH uses the platform path separator)
-         --app NAME, --port N, --header "Name: value" (repeatable)
+         --deployment NAME, --port N, --header "Name: value" (repeatable)
 `
 
 const TEST_VALUE_OPTIONS = ['test-name-pattern', 'test-concurrency', 'reporter', 'out-dir'] as const
+
+const formatSchemaVerification = (datastore: string, report: PhysicalSchemaVerification): string => {
+  if (report.ok) return `ok    ${datastore.padEnd(24)} physical schema, marker and manifest agree`
+
+  const lines = [`FAIL  ${datastore.padEnd(24)} schema verification failed`]
+  if (!report.applied) lines.push('  marker: missing')
+  else if (!report.markerMatchesManifest) lines.push('  marker: differs from the current manifest')
+
+  if (report.applied && report.markerIssues.length) {
+    lines.push('  physical vs marker:')
+    for (const issue of report.markerIssues) lines.push(`    - ${issue}`)
+  }
+  const sameIssues =
+    report.markerMatchesManifest &&
+    report.markerIssues.length === report.manifestIssues.length &&
+    report.markerIssues.every((issue, index) => issue === report.manifestIssues[index])
+  if (!sameIssues && report.manifestIssues.length) {
+    lines.push('  physical vs manifest:')
+    for (const issue of report.manifestIssues) lines.push(`    - ${issue}`)
+  }
+  return lines.join('\n')
+}
 
 const collectTests = (path: string): string[] => {
   if (!existsSync(path)) throw new Error(`test path does not exist: ${path}`)
@@ -307,7 +357,6 @@ const callWithClient = async (baseUrl: string): Promise<number> => {
     'login-path',
     'idempotency-key',
     'header',
-    'app',
     'workspace',
     'module-path',
   ])[0]
@@ -362,7 +411,7 @@ try {
 
   if (cmd === 'test') await runTests()
 
-  // Remote smoke calls need no workspace and do not boot a second app.
+  // Remote smoke calls need no workspace and do not boot a second deployment.
   if (cmd === 'call' && opt('against')) {
     const against = new URL(opt('against') as string)
     if (against.protocol !== 'http:' && against.protocol !== 'https:')
@@ -386,76 +435,67 @@ try {
     await new Promise(() => {})
   }
 
-  const { ws, apps: specs, resolved } = await loadWorkspace()
-  mkdirSync('.ket', { recursive: true })
+  const { ws, deployments: specs, resolved } = await loadWorkspace()
+  if (!(cmd === 'migrate' && flag('dry-run')) && cmd !== 'schema') mkdirSync('.ket', { recursive: true })
 
   if (cmd === 'serve') {
     const spec = pickSpec(specs)
-    if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block, so there is nothing to run`)
+    if (!spec.serve)
+      throw new Error(`deployment "${spec.name}" declares no serve block, so there is nothing to run`)
     const port = opt('port')
-    const env = flag('no-auto-install') ? { ...process.env, KET_AUTO_INSTALL: '0' } : process.env
-    await serveApp(spec, { env, ...(port ? { port: Number(port) } : {}) })
+    await serveDeployment(spec, { env: process.env, ...(port ? { port: Number(port) } : {}) })
   } else if (cmd === 'worker') {
     const spec = pickSpec(specs)
     const worker = await serveWorker(spec, { env: process.env })
     console.log(`worker ${worker.workerId} is running (${Object.keys(spec.worker?.queues ?? {}).join(', ')})`)
   } else if (cmd === 'call') {
     const spec = pickSpec(specs)
-    if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)
+    if (!spec.serve) throw new Error(`deployment "${spec.name}" declares no serve block`)
     if (flag('isolated')) {
-      const testApp = await createTestApp(spec, { worker: false })
+      const testDeployment = await createTestDeployment(spec, { worker: false })
       try {
-        process.exitCode = await callWithClient(testApp.baseUrl)
+        process.exitCode = await callWithClient(testDeployment.baseUrl)
       } finally {
-        await testApp.close()
+        await testDeployment.close()
       }
     } else {
-      const env = {
-        ...process.env,
-        ...(flag('no-migrate') ? { KET_MIGRATE: '0' } : {}),
-        ...(flag('no-auto-install') ? { KET_AUTO_INSTALL: '0' } : {}),
-      }
-      const app = await bootApp(spec, {
+      const env = { ...process.env, ...(flag('no-migrate') ? { KET_MIGRATE: '0' } : {}) }
+      const deployment = await bootDeployment(spec, {
         env,
         port: 0,
         log: flag('verbose') ? (line) => console.error(line) : () => {},
       })
       try {
-        process.exitCode = await callWithClient(`http://127.0.0.1:${app.port}`)
+        process.exitCode = await callWithClient(`http://127.0.0.1:${deployment.port}`)
       } finally {
-        await app.close()
+        await deployment.close()
       }
     }
   } else if (cmd === 'provision') {
-    const fnKey = positionals(['input', 'tenant', 'app', 'workspace', 'module-path'])[0]
+    const fnKey = positionals(['input', 'tenant', 'deployment', 'workspace', 'module-path'])[0]
     if (!fnKey) throw new Error('usage: ket provision FUNCTION --input - [--tenant KEY]')
     if (opt('input') !== '-')
       throw new Error('ket provision reads input only from stdin; pass --input - so secrets never enter argv')
     const spec = pickSpec(specs)
-    if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)
-    const runtime = await bootRuntime(spec, { env: process.env })
+    if (!spec.serve) throw new Error(`deployment "${spec.name}" declares no serve block`)
+    // No socket is opened here, so the records are a command's, not a server's.
+    const runtime = await bootRuntime(spec, { env: process.env, role: 'cli' })
     const meta = runtime.manifest.functions[fnKey]
     if (!meta) throw new Error(`unknown function "${fnKey}"`)
     if (!meta.provision || meta.exposure !== 'internal')
       throw new Error(`function "${fnKey}" is not declared internal + provision`)
     const tenant = opt('tenant')
     if (spec.serve.tenants && !tenant)
-      throw new Error(`app "${spec.name}" has tenant databases; pass --tenant NAME`)
+      throw new Error(`deployment "${spec.name}" has tenant databases; pass --tenant NAME`)
     const adapter = spec.serve.tenants
       ? await spec.serve.tenants.open(tenant as string, runtime.config)
       : await (spec.serve.openStore ?? sqliteStore)(runtime.config)
     if (spec.serve.tenants) await adapter.open()
     try {
       await migrateOne(adapter, runtime.manifest)
-      const apps = await createAppRegistry(runtime.manifest, adapter, {
-        autoInstall: runtime.config.autoInstall,
-      })
-      const bootstrap = runtime.config.bootstrapApps ?? spec.serve.bootstrap ?? []
-      if ((await apps.enabled()).size === 0) for (const name of bootstrap) await apps.install(name)
-      const live = restrictManifest(runtime.manifest, await apps.enabled())
       const result = await callFn(fnKey, jsonObject('-', '--input'), {
         adapter,
-        manifest: live,
+        manifest: runtime.manifest,
         actor: 'system:provision',
         scope: { company: null, branch: null },
       })
@@ -472,22 +512,20 @@ try {
     }
   } else if (cmd === 'all') {
     const spec = pickSpec(specs)
-    if (!spec.serve) throw new Error(`app "${spec.name}" declares no serve block`)
-    if (!spec.worker) throw new Error(`app "${spec.name}" declares no worker block`)
-    const app = await bootApp(spec, {
+    if (!spec.serve) throw new Error(`deployment "${spec.name}" declares no serve block`)
+    if (!spec.worker) throw new Error(`deployment "${spec.name}" declares no worker block`)
+    const deployment = await bootDeployment(spec, {
       env: process.env,
       ...(opt('port') ? { port: Number(opt('port')) } : {}),
     })
     const worker = await bootWorker(spec, { env: process.env })
     worker.start()
-    console.log(await app.banner())
+    console.log(await deployment.banner())
     console.log(`  worker ${worker.workerId} is running in this development process\n`)
-    const close = async () => {
-      await worker.close()
-      await app.close()
-      process.exit(0)
+    const close = createDevelopmentCloser(deployment, worker)
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+      process.on(signal, () => void close().then(() => process.exit(0)))
     }
-    for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => void close())
     await new Promise(() => {})
   } else if (cmd === 'jobs') {
     const action = rest.find((item) => !item.startsWith('--'))
@@ -504,7 +542,7 @@ try {
     })
     const tenant = opt('tenant')
     if (spec.serve?.tenants && !tenant)
-      throw new Error(`app "${spec.name}" has tenant databases; pass --tenant NAME`)
+      throw new Error(`deployment "${spec.name}" has tenant databases; pass --tenant NAME`)
     const adapter = spec.serve?.tenants
       ? await spec.serve.tenants.open(tenant as string, config)
       : await (spec.serve?.openStore ?? sqliteStore)(config)
@@ -559,19 +597,35 @@ try {
   } else if (cmd === 'modules') {
     console.log(formatModules(resolved.modulePaths, resolved.modules))
   } else if (cmd === 'manifest') {
-    const [, m] = pickApp(ws)
+    const [, m] = pickDeployment(ws)
     console.log(JSON.stringify(m, null, 2))
   } else if (cmd === 'types') {
-    const [name, m] = pickApp(ws)
+    const [name, m] = pickDeployment(ws)
     const out = `.ket/types.${name}.d.ts`
     writeFileSync(out, generateDts(m))
     console.log(`wrote ${out}`)
   } else if (cmd === 'permissions') {
-    const [, m] = pickApp(ws)
     const module = opt('module')
     const grant = opt('grant')
     const role = opt('role')
-    if (role) {
+    if (flag('json')) {
+      if (module || grant || role)
+        throw new Error('permissions --json cannot be combined with --module, --grant or --role')
+      if (flag('all')) {
+        if (opt('deployment'))
+          throw new Error('permissions --json accepts either --deployment NAME or --all, not both')
+        const deployments = Object.entries(ws.deployments)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([name, manifest]) => ({ name, inventory: permissionInventory(manifest) }))
+        console.log(JSON.stringify({ version: 1, deployments }, null, 2))
+      } else {
+        const [name, manifest] = pickDeployment(ws)
+        console.log(JSON.stringify({ name, inventory: permissionInventory(manifest) }, null, 2))
+      }
+    } else if (flag('all')) {
+      throw new Error('permissions --all requires --json')
+    } else if (role) {
+      const [, m] = pickDeployment(ws)
       // The one form that reads the database: a role is data, and what it grants is
       // a fact about a deployment rather than about the code.
       const spec = pickSpec(specs)
@@ -584,8 +638,11 @@ try {
       } finally {
         await adapter.close()
       }
-    } else if (module) console.log(formatReach(reachOf(m, functionsOf(m, module))))
-    else if (grant)
+    } else if (module) {
+      const [, m] = pickDeployment(ws)
+      console.log(formatReach(reachOf(m, functionsOf(m, module))))
+    } else if (grant) {
+      const [, m] = pickDeployment(ws)
       console.log(
         formatReach(
           reachOf(
@@ -597,12 +654,20 @@ try {
           ),
         ),
       )
-    else console.log(formatInventory(m))
+    } else {
+      const [, m] = pickDeployment(ws)
+      console.log(formatInventory(m))
+    }
+  } else if (cmd === 'classification') {
+    const [, m] = pickDeployment(ws)
+    const inventory = classificationInventory(m)
+    // JSON for an audit that has to be filed; columns for a person reading it now.
+    console.log(flag('json') ? JSON.stringify(inventory, null, 2) : formatClassification(inventory))
   } else if (cmd === 'agent') {
-    const [, m] = pickApp(ws)
+    const [, m] = pickDeployment(ws)
     console.log(JSON.stringify(agentDescriptor(m), null, 2))
   } else if (cmd === 'snapshot') {
-    const [name, m] = pickApp(ws)
+    const [name, m] = pickDeployment(ws)
     const out = `.ket/manifest.${name}.json`
     writeFileSync(out, JSON.stringify(m, null, 2))
     console.log(`wrote ${out}`)
@@ -610,24 +675,118 @@ try {
     const against = opt('against')
     if (!against || !existsSync(against))
       throw new Error('pass --against <manifest.json> (make one with `ket snapshot`)')
-    const [, m] = pickApp(ws)
+    const [, m] = pickDeployment(ws)
     const before = JSON.parse(readFileSync(against, 'utf8')) as Manifest
     const items = diffManifests(before, m)
     console.log(formatDiff(items))
     process.exit(items.some((i) => i.severity === 'breaking') ? 1 : 0)
+  } else if (cmd === 'schema') {
+    const action = positionals(['workspace', 'module-path', 'deployment', 'tenant'])[0]
+    if (action !== 'verify')
+      throw new Error('usage: ket schema verify [--deployment NAME] [--tenant NAME | --all]')
+
+    if (flag('all')) {
+      if (opt('tenant')) throw new Error('pass either --tenant NAME or --all, not both')
+      const spec = pickFleetSpec(specs)
+      const tenants = spec.serve?.tenants
+      if (!tenants) throw new Error(`deployment "${spec.name}" serves a single datastore; drop --all`)
+      const tenantExists = tenants.exists
+      if (!tenantExists)
+        throw new Error(
+          `deployment "${spec.name}" must define serve.tenants.exists(key, config) before schema verification can inspect tenant datastores without creating them`,
+        )
+      const config = readConfig(process.env, {
+        sqliteFile: `.ket/${spec.name}.db`,
+        ...spec.serve?.defaults,
+      })
+      const pool = createAdapterPool({ create: (key) => tenants.open(key, config) })
+      let failed = false
+      try {
+        const manifest = ws.deployments[spec.name] as Manifest
+        const lines: string[] = []
+        for (const key of await tenants.list()) {
+          try {
+            if (!(await tenantExists(key, config))) {
+              failed = true
+              lines.push(
+                `FAIL  ${key.padEnd(24)} datastore does not exist; schema verification will not create it`,
+              )
+              continue
+            }
+            const report = await pool.with(key, (adapter) => verifyPhysicalSchema(adapter, manifest))
+            lines.push(formatSchemaVerification(key, report))
+            failed ||= !report.ok
+          } catch (error) {
+            failed = true
+            lines.push(`FAIL  ${key.padEnd(24)} ${(error as Error).message}`)
+          }
+        }
+        console.log(lines.join('\n'))
+      } finally {
+        await pool.close()
+      }
+      process.exitCode = failed ? 1 : 0
+    } else {
+      const spec = pickSpec(specs)
+      if (!spec.serve)
+        throw new Error(
+          `deployment "${spec.name}" declares no serve block, so there is no datastore to verify`,
+        )
+      const tenant = opt('tenant')
+      if (spec.serve.tenants && !tenant)
+        throw new Error(`deployment "${spec.name}" has tenant databases; pass --tenant NAME or --all`)
+      if (!spec.serve.tenants && tenant)
+        throw new Error(`deployment "${spec.name}" serves a single datastore; drop --tenant`)
+      const config = readConfig(process.env, {
+        sqliteFile: `.ket/${spec.name}.db`,
+        ...spec.serve.defaults,
+      })
+      if (
+        !spec.serve.tenants &&
+        !spec.serve.openStore &&
+        !config.databaseUrl &&
+        config.sqliteFile !== ':memory:' &&
+        !existsSync(config.sqliteFile)
+      )
+        throw new Error(
+          `SQLite datastore "${config.sqliteFile}" does not exist; schema verification will not create it`,
+        )
+      if (spec.serve.tenants) {
+        const tenantExists = spec.serve.tenants.exists
+        if (!tenantExists)
+          throw new Error(
+            `deployment "${spec.name}" must define serve.tenants.exists(key, config) before schema verification can inspect tenant datastores without creating them`,
+          )
+        if (!(await tenantExists(tenant as string, config)))
+          throw new Error(
+            `tenant datastore "${tenant}" does not exist; schema verification will not create it`,
+          )
+      }
+      const adapter = spec.serve.tenants
+        ? await spec.serve.tenants.open(tenant as string, config)
+        : await (spec.serve.openStore ?? sqliteStore)(config)
+      if (spec.serve.tenants) await adapter.open()
+      try {
+        const report = await verifyPhysicalSchema(adapter, ws.deployments[spec.name] as Manifest)
+        console.log(formatSchemaVerification(tenant ?? spec.name, report))
+        process.exitCode = report.ok ? 0 : 1
+      } finally {
+        await adapter.close()
+      }
+    }
   } else if (cmd === 'migrate') {
-    const spec = pickSpec(specs)
     if (flag('all')) {
       // The fleet. A deployment that ships a new module has to reach every tenant
       // database, and one that cannot be opened must not stop the others — a
       // half-migrated fleet you cannot see is worse than one you can.
+      const spec = pickFleetSpec(specs)
       const tenants = spec.serve?.tenants
-      if (!tenants) throw new Error(`app "${spec.name}" serves a single datastore; drop --all`)
+      if (!tenants) throw new Error(`deployment "${spec.name}" serves a single datastore; drop --all`)
       const config = readConfig(process.env, spec.serve?.defaults ?? {})
-      const pool = createAdapterPool({ create: (key) => tenants.open(key, config) as never })
+      const pool = createAdapterPool({ create: (key) => tenants.open(key, config) })
       try {
         const keys = await tenants.list()
-        const m = ws.apps[spec.name] as Manifest
+        const m = ws.deployments[spec.name] as Manifest
         const results = await migrateFleet(pool, keys, m, {
           allowDestructive: flag('allow-destructive'),
           dryRun: flag('dry-run'),
@@ -638,7 +797,7 @@ try {
         await pool.close()
       }
     }
-    const [name, m] = pickApp(ws)
+    const [name, m] = pickDeployment(ws)
     const adapter = sqliteAdapter()
     adapter.open()
     const snapPath = `.ket/schema.${name}.json`
@@ -646,8 +805,11 @@ try {
     const next = schemaFromManifest(m)
     const ops = planMigration(prev, next, { allowDestructive: flag('allow-destructive') })
     for (const sql of renderSql(ops, adapter)) console.log(sql + ';')
-    writeFileSync(snapPath, JSON.stringify(next, null, 2))
-    console.log(`\n-- ${ops.length} operation(s); schema snapshot written to ${snapPath}`)
+    if (flag('dry-run')) console.log(`\n-- dry run: ${ops.length} operation(s); schema snapshot unchanged`)
+    else {
+      writeFileSync(snapPath, JSON.stringify(next, null, 2))
+      console.log(`\n-- ${ops.length} operation(s); schema snapshot written to ${snapPath}`)
+    }
     adapter.close()
   } else {
     console.error(`unknown command "${cmd}"\n\n${HELP}`)

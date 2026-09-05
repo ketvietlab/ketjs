@@ -17,9 +17,72 @@ export const models: Record<string, ModelDef> = {
       theme: 'text',
       tokens: 'json?',
       siteGroup: 'text?',
+      /**
+       * Which publication a visitor is currently reading.
+       *
+       * Optional because a site that has only ever used publishEntry has none,
+       * and must keep working: the per-entry pointer stays the fallback.
+       */
+      activePublicationId: 'ref:website.Publication?',
       active: 'bool',
     },
     indexes: { active_name: { fields: ['companyId', 'active', 'name'] } },
+  },
+
+  /**
+   * One publish, one record.
+   *
+   * Publishing was per entry: a page went live the moment someone pressed the
+   * button on it, so a set of related changes reached visitors piecemeal — a
+   * page whose menu link did not exist yet, or a link to a page that was not
+   * published. A publication freezes which revision of which entry goes out,
+   * and activating it moves all of them or none.
+   *
+   * The frozen set lives in `entries` rather than in rows of its own: it is an
+   * immutable snapshot read as a whole, and never queried by its parts.
+   */
+  Publication: {
+    scope: 'company',
+    timestamps: true,
+    fields: {
+      id: 'id',
+      siteId: 'ref:website.Site',
+      /** prepared → active → superseded. A superseded publication is history. */
+      state: 'text',
+      entries: 'json',
+      entryCount: 'int',
+      contentHash: 'text',
+      /**
+       * The distinct section types the frozen set places.
+       *
+       * Recorded so the last gate before content goes live can ask whether the
+       * deployment still provides them without re-reading every revision: a
+       * module removed between preparing and activating is exactly the window
+       * that turns a publication into a five hundred on the storefront.
+       */
+      sectionTypes: 'json?',
+      /**
+       * What other modules froze alongside the entries, keyed by module name.
+       *
+       * `website` does not read it. A publication has to be able to carry the
+       * navigation and the metadata that go with a set of pages — otherwise a
+       * menu change reaches visitors on its own schedule and a link appears
+       * before the page it points at. But `website_menu` depends on `website`,
+       * not the other way round, so the slot is opaque here and the module that
+       * owns a key is the only thing that reads it.
+       */
+      attachments: 'json?',
+      preparedBy: 'text?',
+      preparedAt: 'datetime',
+      activatedAt: 'datetime?',
+      supersededAt: 'datetime?',
+      /** Which publication this one replaced, so a rollback can name its base. */
+      previousId: 'ref:website.Publication?',
+    },
+    indexes: {
+      site_state: { fields: ['companyId', 'siteId', 'state'] },
+      site_prepared: { fields: ['companyId', 'siteId', 'preparedAt'] },
+    },
   },
   SiteDomain: {
     scope: 'company',
@@ -160,11 +223,13 @@ export const models: Record<string, ModelDef> = {
     timestamps: true,
     fields: {
       id: 'id',
+      key: 'text',
       name: 'text',
       active: 'bool',
       sessionIdleSeconds: 'int',
       sessionAbsoluteSeconds: 'int',
     },
+    indexes: { key: { fields: ['key'], unique: true } },
   },
   CustomerRealmSite: {
     scope: 'company',
@@ -231,6 +296,43 @@ export const models: Record<string, ModelDef> = {
     indexes: {
       token: { fields: ['tokenDigest'], unique: true },
       account_expiry: { fields: ['accountId', 'absoluteExpiresAt'] },
+    },
+  },
+  /** Rotating bearer credentials for headless and native customer clients. */
+  CustomerTokenGrant: {
+    scope: 'shared',
+    fields: {
+      id: 'id',
+      realmId: 'ref:website.CustomerRealm',
+      accountId: 'ref:website.CustomerAccount',
+      accessDigest: 'text',
+      refreshDigest: 'text',
+      /**
+       * The entropy a rotation cannot be predicted without.
+       *
+       * Rotation has to be replayable — a client whose response was lost must be
+       * able to retry and get the same pair back — which is why it is derived
+       * rather than random. Derived from the old token alone it was also
+       * derivable by whoever held that token, so one leak exposed the whole
+       * future chain. This is the part they do not have.
+       */
+      rotationSecret: 'text',
+      /** The digest this grant last rotated away from, so replaying it is visible. */
+      previousRefreshDigest: 'text?',
+      securityVersion: 'int',
+      version: 'int',
+      createdAt: 'datetime',
+      accessExpiresAt: 'datetime',
+      refreshExpiresAt: 'datetime',
+      lastRotatedAt: 'datetime',
+      revokedAt: 'datetime?',
+      revokeReason: 'text?',
+    },
+    indexes: {
+      access: { fields: ['accessDigest'], unique: true },
+      refresh: { fields: ['refreshDigest'], unique: true },
+      previous_refresh: { fields: ['previousRefreshDigest'] },
+      account_expiry: { fields: ['accountId', 'refreshExpiresAt'] },
     },
   },
   CustomerAuthRateLimit: {

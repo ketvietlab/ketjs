@@ -87,7 +87,7 @@ test('oauth domain: state is digest-only and transaction claim is single-use und
     await runtime.call('oauth.saveProvider', providerInput, 'admin')
     const started = await runtime.call<{ ok: boolean; state: string; nonce: string; codeVerifier: string }>(
       'oauth.beginTransaction',
-      { providerId: 'provider-main', mode: 'login', returnTo: '/admin/products', discovery },
+      { providerId: 'provider-main', mode: 'login', returnTo: '/admin/product/templates', discovery },
     )
     assert.equal(started.ok, true)
     const row = (await runtime.adapter.all('SELECT * FROM oauth_transaction', []))[0]!

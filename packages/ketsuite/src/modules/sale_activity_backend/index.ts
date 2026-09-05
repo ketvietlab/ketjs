@@ -22,7 +22,6 @@ export default defineModule({
   name: 'sale_activity_backend',
   version: '0.1.0',
   depends: ['sale_backend', 'sale_mail_backend', 'activity_backend'],
-  install: 'auto',
   functions,
   fills: {
     'sale_backend:order.collaboration': `{% island "activity.record" %}`,

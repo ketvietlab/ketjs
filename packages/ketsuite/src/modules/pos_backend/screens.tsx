@@ -2,29 +2,32 @@ import type { Translator } from '@ketvietlab/ketjs'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
-  cardGrid,
-  contentCard,
+  CardGrid,
+  ContentCard,
   dataTable,
+  DashboardPage,
   emptyState,
   formatMoney,
-  framedPage as Framed,
+  ListScreen,
   linkButton,
-  metric,
-  recordActions,
-  recordForm as RecordForm,
-  section as Section,
+  Metric,
+  RecordActions,
+  RecordForm,
+  RecordScreen,
+  Section,
+  shell,
   stack,
-  surface as Surface,
+  Surface,
 } from '../../ui/index.ts'
 import type { FormField, Frame } from '../../ui/index.ts'
+import { minorText, scaleOf, sumMoneyMinor } from '../account/money.ts'
+import { selectionLabel } from '../backend/screen.ts'
 
 type AnyRow = Record<string, unknown>
 const empty = (_: Translator) => emptyState(_('pos_backend.empty'), _('pos_backend.emptyHint'))
-export const labelOf = (_: Translator, group: string, value: unknown) => {
-  const raw = String(value ?? ''),
-    key = `pos_backend.${group}.${raw}`
-  return _.resolves(key) ? _(key) : raw
-}
+/** A stable pos code in the reader's language; the code itself survives as data. */
+export const labelOf = (_: Translator, group: string, value: unknown): string =>
+  selectionLabel(_, 'pos_backend', group, value)
 
 export const dashboard = (
   _: Translator,
@@ -33,48 +36,56 @@ export const dashboard = (
   frame: Frame,
 ): TemplateResult => {
   const paidOrders = orders.filter((row) => ['paid', 'done'].includes(String(row.state)))
-  const sales = paidOrders.reduce((sum, row) => sum + Number(row.amountTotal), 0)
-  return (
-    <Framed
-      translator={_}
-      title={_('pos_backend.dashboard.title')}
+  const currency = paidOrders[0]?.currency ?? 'VND'
+  const scale = scaleOf(currency)
+  const sales = minorText(
+    sumMoneyMinor(
+      paidOrders.map((row) => row.amountTotal),
+      scale,
+    ),
+    scale,
+  )
+  return shell(
+    _,
+    _('pos_backend.dashboard.title'),
+    <DashboardPage
+      variant="operational"
       frame={frame}
-      body={cardGrid({
-        items: [
-          {
-            id: 'open',
-            title: _('pos_backend.dashboard.openSessions'),
-            value: sessions.filter((r) => r.state !== 'closed').length,
-            href: '/admin/pos/sessions',
-          },
-          {
-            id: 'draft',
-            title: _('pos_backend.dashboard.draftOrders'),
-            value: orders.filter((r) => r.state === 'draft').length,
-            href: '/admin/pos/orders?state=draft',
-          },
-          {
-            id: 'paid',
-            title: _('pos_backend.dashboard.paidOrders'),
-            value: paidOrders.length,
-            href: '/admin/pos/orders',
-          },
-          {
-            id: 'sales',
-            title: _('pos_backend.dashboard.sales'),
-            value: formatMoney(_, sales, paidOrders[0]?.currency),
-            href: '/admin/pos/orders',
-          },
-        ],
-        id: (item) => item.id,
-        card: (item) =>
-          contentCard({
-            title: item.title,
-            href: item.href,
-            body: metric({ label: item.title, value: String(item.value) }),
-          }),
-      })}
-    />
+      title={_('pos_backend.dashboard.title')}
+      body={
+        <CardGrid
+          items={[
+            {
+              id: 'open',
+              title: _('pos_backend.dashboard.openSessions'),
+              value: sessions.filter((r) => r.state !== 'closed').length,
+              href: '/admin/pos/sessions',
+            },
+            {
+              id: 'draft',
+              title: _('pos_backend.dashboard.draftOrders'),
+              value: orders.filter((r) => r.state === 'draft').length,
+              href: '/admin/pos/orders?state=draft',
+            },
+            {
+              id: 'paid',
+              title: _('pos_backend.dashboard.paidOrders'),
+              value: paidOrders.length,
+              href: '/admin/pos/orders',
+            },
+            {
+              id: 'sales',
+              title: _('pos_backend.dashboard.sales'),
+              value: formatMoney(_, sales, currency),
+              href: '/admin/pos/orders',
+            },
+          ]}
+          id={(item) => item.id}
+          card={(item) => <Metric label={item.title} value={String(item.value)} href={item.href} />}
+        />
+      }
+    />,
+    { ...frame, topbar: false },
   )
 }
 
@@ -84,7 +95,7 @@ export const configsScreen = (
   rows: AnyRow[],
   fields: FormField[],
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('pos_backend.configs.title')}
     frame={frame}
@@ -136,7 +147,7 @@ export const methodsScreen = (
   fields: FormField[],
   linkFields: FormField[],
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('pos_backend.methods.title')}
     frame={frame}
@@ -197,7 +208,7 @@ export const sessionsScreen = (
   rows: AnyRow[],
   fields: FormField[],
 ): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('pos_backend.sessions.title')}
     frame={frame}
@@ -270,13 +281,13 @@ export const sessionDetail = (
   if (state === 'opened')
     actions.push({ value: 'closing', label: _('pos_backend.action.startClosing'), variant: 'primary' })
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={String(session.name)}
       frame={frame}
       body={stack([
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             { id: 'state', title: _('pos_backend.field.state'), value: labelOf(_, 'sessionState', state) },
             { id: 'orders', title: _('pos_backend.field.orders'), value: String(orders.length) },
             {
@@ -284,12 +295,15 @@ export const sessionDetail = (
               title: _('pos_backend.field.expectedCash'),
               value: formatMoney(_, session.cashRegisterBalanceEnd, orders[0]?.currency ?? currency),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) =>
-            contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
-        }),
-        ...(actions.length ? [<Surface body={recordActions({ action: actionPath, actions })} />] : []),
+          ]}
+          id={(item) => item.id}
+          card={(item) => (
+            <ContentCard title={item.title} body={<Metric label={item.title} value={item.value} />} />
+          )}
+        />,
+        ...(actions.length
+          ? [<Surface body={<RecordActions action={actionPath} actions={actions} />} />]
+          : []),
         ...(state === 'opened'
           ? [
               <Surface
@@ -363,7 +377,7 @@ const orderTable = (_: Translator, rows: AnyRow[]) =>
   })
 
 export const ordersScreen = (_: Translator, frame: Frame, rows: AnyRow[]): TemplateResult => (
-  <Framed
+  <ListScreen
     translator={_}
     title={_('pos_backend.orders.title')}
     frame={frame}
@@ -379,7 +393,7 @@ export const registerScreen = (
   createFields: FormField[],
   actionPath: string,
 ): TemplateResult => (
-  <Framed
+  <RecordScreen
     translator={_}
     title={_('pos_backend.register.title')}
     frame={frame}
@@ -423,13 +437,13 @@ export const orderDetail = (
   if (['paid', 'done'].includes(String(order.state)) && !order.isRefund)
     actions.push({ value: 'refund', label: _('pos_backend.action.refund') })
   return (
-    <Framed
+    <RecordScreen
       translator={_}
       title={String(order.posReference)}
       frame={frame}
       body={stack([
-        cardGrid({
-          items: [
+        <CardGrid
+          items={[
             {
               id: 'state',
               title: _('pos_backend.field.state'),
@@ -450,13 +464,16 @@ export const orderDetail = (
               title: _('pos_backend.field.paid'),
               value: formatMoney(_, order.amountPaid, order.currency),
             },
-          ],
-          id: (item) => item.id,
-          card: (item) =>
-            contentCard({ title: item.title, body: metric({ label: item.title, value: item.value }) }),
-        }),
+          ]}
+          id={(item) => item.id}
+          card={(item) => (
+            <ContentCard title={item.title} body={<Metric label={item.title} value={item.value} />} />
+          )}
+        />,
         ...(integration === undefined ? [] : [integration]),
-        ...(actions.length ? [<Surface body={recordActions({ action: actionPath, actions })} />] : []),
+        ...(actions.length
+          ? [<Surface body={<RecordActions action={actionPath} actions={actions} />} />]
+          : []),
         <Section
           title={_('pos_backend.lines.title')}
           body={

@@ -152,7 +152,14 @@ export const mediaPanel = (props: MediaPanelProps): TemplateResult => {
           >
             <label data-ui="media-file-label">
               <span>{labels.choose}</span>
-              <input data-ui="media-file-input" type="file" name="file" accept="image/*" required />
+              <input
+                data-ui="media-file-input"
+                type="file"
+                name="file"
+                accept="image/*"
+                autocomplete="off"
+                required
+              />
             </label>
             {button({ label: labels.add, type: 'submit', disabled: props.status === 'unavailable' })}
           </form>

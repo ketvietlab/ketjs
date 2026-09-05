@@ -34,18 +34,19 @@ export function parseType(spec: string): TypeParse {
   return { ok: true, base: s as FieldBase, optional }
 }
 
-// decimal is a number in TypeScript because it is a number in arithmetic; only
-// its storage is exact.
+// decimal is a string in TypeScript because that is the only shape that survives
+// the round trip unchanged. Arithmetic still happens on numbers — coerce where you
+// compute, and a write accepts either — but reading one back never rounds it.
 const TS: Record<FieldBase, string> = {
   id: 'string',
   text: 'string',
   int: 'number',
   float: 'number',
-  decimal: 'number',
+  decimal: 'string',
   bool: 'boolean',
   json: 'unknown',
   date: 'string',
-  datetime: 'Date',
+  datetime: 'string',
   ref: 'string',
 }
 export const tsTypeOf = (t: ParsedType): string => TS[t.base] + (t.optional ? ' | null' : '')

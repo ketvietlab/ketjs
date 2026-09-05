@@ -8,7 +8,7 @@ import {
   callFn,
   compose,
   createQueue,
-  defineApp,
+  defineDeployment,
   migrateOne,
   registerFunctions,
   sqliteAdapter,
@@ -97,11 +97,11 @@ test('hospitality stay notices: deadline follows the property-local 23:00 rule',
 test('hospitality stay notices: physical SQLite worker prepares, repairs and records evidence without PII payloads', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'ket-hospitality-stay-notices-'))
   const file = join(dir, 'hospitality.db')
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'hospitality_stay_notice_test',
     modules,
     headless: true,
-    serve: { bootstrap: ['hospitality_core'] },
+    serve: {},
     worker: { queues: { maintenance: 1 } },
   })
   const producer = sqliteAdapter(file)
@@ -144,7 +144,7 @@ test('hospitality stay notices: physical SQLite worker prepares, repairs and rec
     await producer.close()
 
     worker = await bootWorker(app, {
-      env: { KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
+      env: { KET_LOG: 'null', KET_SQLITE: file, KET_COMPANY: 'acme', KET_QUEUE_NOTIFY: '0' },
       log: () => {},
     })
     assert.equal(await worker.drain(), 1)

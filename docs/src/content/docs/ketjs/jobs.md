@@ -9,6 +9,7 @@ business data, and a separate worker process claims jobs with leases. Redis is n
 ## Declare a job
 
 ```ts
+// File: src/modules/sales/index.ts
 import { defineJob, defineModule } from '@ketvietlab/ketjs'
 
 export const sales = defineModule({
@@ -51,6 +52,7 @@ The job context extends the normal function context with:
 The producer declares the enqueue effect:
 
 ```ts
+// File: src/modules/export/jobs.ts
 functions: {
   confirmOrder: {
     input: { orderId: 'id' },
@@ -83,6 +85,7 @@ publishes its wake-up notification on the same transaction connection and only a
 `jobs.enqueue()` accepts:
 
 ```ts
+// File: src/modules/export/jobs.ts
 await ctx.jobs.enqueue('billing.issueInvoice', { orderId }, {
   runAt: new Date(Date.now() + 5 * 60_000),
   priority: 10,
@@ -98,16 +101,90 @@ Queue uniqueness prevents duplicate active delivery; it does not replace busines
 is released after a terminal state, and an at-least-once worker may still retry a handler whose result
 was committed externally before acknowledgement.
 
-## Configure the worker
+## Run a job on a schedule
 
-Every shipped queue must be configured on the app:
+A job may declare when it runs on its own. The schedule is part of the manifest, so `ket manifest`
+prints it, `ket diff` compares it, and `ket check` rejects one that does not parse.
 
 ```ts
-const app = defineApp({
+// File: src/modules/hotel/jobs.ts
+import { defineJob } from '@ketvietlab/ketjs'
+
+export const jobs = {
+  catchUp: defineJob({
+    idempotent: true,
+    schedule: { every: '15m' },
+    handler: async (ctx) => { /* reconcile whatever a webhook may have dropped */ },
+  }),
+  nightAudit: defineJob({
+    idempotent: true,
+    schedule: { dailyAt: '03:00', timezone: 'Asia/Ho_Chi_Minh' },
+    crossCompany: true,
+    handler: async (ctx) => { /* see below */ },
+  }),
+}
+```
+
+`every` takes a count and one of `s m h d`, no shorter than ten seconds. `dailyAt` takes 24-hour
+`HH:MM` in `timezone`, defaulting to `KET_TIMEZONE` — a wall clock is the only way to say "after the
+shop closes", and it is the reason a timezone has to be named rather than assumed from the server.
+
+A scheduled job takes no arguments, because nobody is there to supply them; a required input is a
+composition error rather than a validation failure at three in the morning.
+
+### Once per tenant, with no company
+
+A schedule fires once per tenant database and the job runs with **no company scope**. The framework
+knows which tenants exist; it does not know what a company is. A job with per-company work declares
+`crossCompany` to see them and hands each one its own job:
+
+```ts
+// File: src/modules/hotel/jobs.ts
+handler: async (ctx) => {
+  for (const company of await ctx.db.select('company.Company')) {
+    await ctx.jobs.enqueue('hotel.closeDay', {}, { company: String(company.id) })
+  }
+}
+```
+
+`company` on `enqueue` is refused unless the enqueuing operation declares `crossCompany`, because
+only that declaration let it see more than one company in the first place — and the declaration is
+in the manifest where an upgrade diff can show it.
+
+### Exactly once, without electing a leader
+
+Every replica sweeps. Each schedule keeps one row per tenant holding the last tick anybody enqueued,
+and a tick is claimed by moving that row forward with a compare-and-set: whoever's update changes a
+row won, and the others get nothing. The queue's `uniqueKey` is not enough on its own, because it
+holds only while a job is live and is released the moment one completes.
+
+The claim happens **before** the enqueue, so a crash between the two loses a tick rather than running
+it twice.
+
+### Missed ticks are skipped, not replayed
+
+A schedule seen for the first time does not fire for the tick it was installed inside — a nightly job
+firing the moment it is deployed is a surprise at the worst moment. After downtime, the next sweep
+jumps to the current tick and runs once: three days off produce one run, not three. The
+`schedule_fired` record carries how many ticks were passed over, so the gap is visible rather than
+silent, and a job that needs to know what it missed can read its own ledger.
+
+### Cost
+
+The sweep is one small statement per scheduled job per tenant, every `worker.scheduleSweepMs`
+(default 30s). A deployment with many tenants and a minute of tolerance should raise it.
+
+## Configure the worker
+
+Every shipped queue must be configured on the deployment:
+
+```ts
+// File: src/deployment.ts
+const deployment = defineDeployment({
   name: 'erp',
   modules: [sales],
   headless: true,
-  serve: { bootstrap: ['sales'] },
+  serve: {},
   worker: {
     queues: {
       mail: 4,
@@ -125,14 +202,16 @@ const app = defineApp({
 Run separate production roles:
 
 ```bash
-ket serve --app erp --workspace dist/ket.workspace.js
-ket worker --app erp --workspace dist/ket.workspace.js
+# Run from: /path/to/example-app
+ket serve --deployment erp --workspace dist/ket.workspace.js
+ket worker --deployment erp --workspace dist/ket.workspace.js
 ```
 
 In development:
 
 ```bash
-ket dev --all --app erp --workspace dist/ket.workspace.js
+# Run from: /path/to/ketjs
+ket dev --all --deployment erp --workspace dist/ket.workspace.js
 ```
 
 ## Delivery model
@@ -141,6 +220,7 @@ Job states are `available`, `scheduled`, `executing`, `retryable`, `completed`, 
 `cancelled`.
 
 ```mermaid
+%% File: docs/src/content/docs/ketjs/jobs.md
 stateDiagram-v2
   direction LR
   [*] --> available
@@ -174,6 +254,7 @@ so lost notifications do not lose jobs.
 Observe `ctx.signal` in provider calls and long loops:
 
 ```ts
+// File: src/modules/export/jobs.ts
 await ctx.transport.send(message, { signal: ctx.signal })
 
 for (const item of items) {
@@ -188,6 +269,7 @@ idempotency keys and provider APIs that accept abort signals.
 ## Operator commands
 
 ```bash
+# Run from: /path/to/ketjs
 ket jobs list --state retryable --queue mail --limit 50
 ket jobs retry JOB_ID
 ket jobs cancel JOB_ID
@@ -200,10 +282,11 @@ retention policy for terminal rows.
 
 ## Testing jobs
 
-`createTestApp()` opens a worker handle for apps with worker configuration but does not leave a polling
+`createTestDeployment()` opens a worker handle for deployments with worker configuration but does not leave a polling
 loop running. Drain explicitly where the scenario expects asynchronous work to settle:
 
 ```ts
+// File: src/modules/export/jobs.ts
 await e2e.client.call('sales.confirmOrder', { orderId: 'o1' })
 const completed = await e2e.drainJobs()
 assert.equal(completed, 1)

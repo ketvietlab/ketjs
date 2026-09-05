@@ -32,6 +32,7 @@ export const models: Record<string, ModelDef> = {
       employeeId: 'ref:hr.Employee',
       pinHash: 'text?',
       qrDigest: 'text?',
+      qrRequestKey: 'text?',
       qrIssuedAt: 'datetime?',
       active: 'bool',
       updatedAt: 'datetime',

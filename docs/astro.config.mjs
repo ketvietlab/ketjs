@@ -20,12 +20,14 @@ export default defineConfig({
       },
     }),
     starlight({
-      title: 'KetSuite Docs',
-      description: 'Architecture, operations, and development documentation for the KetJS framework.',
+      title: 'Ket Developer Docs',
+      description: 'Developer guides for the KetJS framework and the KetSuite application.',
       favicon: '/favicon.svg',
       logo: {
-        src: './src/assets/logo-placeholder.svg',
-        replacesTitle: false,
+        light: './src/assets/ketsuite-logo-light.png',
+        dark: './src/assets/ketsuite-logo-dark.png',
+        alt: 'KetSuite — Extensible Open ERP',
+        replacesTitle: true,
       },
       locales: {
         root: {
@@ -41,13 +43,13 @@ export default defineConfig({
         },
       ],
       editLink: {
-        baseUrl: 'https://github.com/ketvietlab/ketjs/edit/develop/docs/',
+        baseUrl: 'https://github.com/ketvietlab/ketjs/edit/develop/docs/src/content/docs/',
       },
       customCss: ['./src/styles/ketsuite.css'],
       sidebar: [
         {
           label: 'Start here',
-          items: [{ label: 'Documentation overview', slug: '' }],
+          items: [{ label: 'Choose a development path', slug: '' }],
         },
         {
           label: 'KetJS framework',
@@ -55,16 +57,16 @@ export default defineConfig({
             { label: 'Framework overview', slug: 'ketjs' },
             { label: 'Quick start', slug: 'ketjs/quick-start' },
             {
-              label: 'Application model',
-              collapsed: true,
+              label: 'Compose an application',
+              collapsed: false,
               items: [
-                { label: 'Workspaces and apps', slug: 'ketjs/workspaces' },
+                { label: 'Workspaces and deployments', slug: 'ketjs/workspaces' },
                 { label: 'Modules and manifest', slug: 'ketjs/modules' },
                 { label: 'Module discovery', slug: 'ketjs/module-discovery' },
               ],
             },
             {
-              label: 'Data and operations',
+              label: 'Model data and behavior',
               collapsed: true,
               items: [
                 { label: 'Models and scopes', slug: 'ketjs/models' },
@@ -74,46 +76,109 @@ export default defineConfig({
               ],
             },
             {
-              label: 'Server runtime',
+              label: 'Serve and integrate',
               collapsed: true,
               items: [
                 { label: 'HTTP routes and responses', slug: 'ketjs/http' },
+                { label: 'HTTP contracts and OpenAPI', slug: 'ketjs/openapi' },
                 { label: 'Sessions and tenants', slug: 'ketjs/sessions-tenants' },
                 { label: 'Durable jobs and workers', slug: 'ketjs/jobs' },
                 { label: 'Storage, transport, streams', slug: 'ketjs/integrations' },
+                { label: 'Operational logging', slug: 'ketjs/logging' },
               ],
             },
             {
-              label: 'UI and presentation',
+              label: 'Build UI and documents',
               collapsed: true,
               items: [
+                { label: 'Form validation', slug: 'ketjs/form-validation' },
                 { label: 'Rendering and islands', slug: 'ketjs/rendering' },
                 { label: 'Themes and KTL', slug: 'ketjs/themes' },
                 { label: 'Menus and localization', slug: 'ketjs/menus-i18n' },
+                { label: 'Reports and PDF', slug: 'ketjs/reports' },
               ],
             },
             {
-              label: 'Tooling and delivery',
+              label: 'Verify and deliver',
               collapsed: true,
               items: [
                 { label: 'Testing', slug: 'ketjs/testing' },
                 { label: 'CLI and configuration', slug: 'ketjs/cli-config' },
+                { label: 'Upgrading KetJS', slug: 'ketjs/upgrading' },
                 { label: 'Deployment', slug: 'ketjs/deployment' },
-                { label: 'Publishing packages', slug: 'ketjs/releasing' },
                 { label: 'Public API', slug: 'ketjs/api' },
+                { label: 'Publishing packages', slug: 'ketjs/releasing' },
               ],
             },
           ],
         },
         {
-          label: 'Architecture & internals',
-          collapsed: true,
-          items: [{ label: 'Architecture overview', slug: 'architecture' }],
+          label: 'KetSuite application',
+          items: [
+            { label: 'Developer guide', slug: 'ketsuite' },
+            { label: 'Local development', slug: 'ketsuite/quick-start' },
+            {
+              label: 'Develop KetSuite',
+              collapsed: false,
+              items: [
+                { label: 'Application architecture', slug: 'ketsuite/architecture' },
+                { label: 'Module development', slug: 'ketsuite/module-development' },
+                { label: 'Security and data scope', slug: 'ketsuite/security-scope' },
+                { label: 'Testing KetSuite', slug: 'ketsuite/testing' },
+              ],
+            },
+            {
+              label: 'Build interfaces',
+              collapsed: true,
+              items: [
+                { label: 'Backend UI development', slug: 'ketsuite/backend-development' },
+                { label: 'Channel API architecture', slug: 'ketsuite/channel-api' },
+                { label: 'Customer API reference', slug: 'ketsuite/channel-api-reference' },
+              ],
+            },
+            {
+              label: 'Business domains',
+              collapsed: true,
+              items: [
+                { label: 'Product', slug: 'ketsuite/product' },
+                { label: 'Website', slug: 'ketsuite/website' },
+                { label: 'Hospitality', slug: 'ketsuite/hospitality' },
+                { label: 'Manufacturing', slug: 'ketsuite/manufacturing' },
+                { label: 'CRM', slug: 'ketsuite/crm' },
+                { label: 'Loyalty', slug: 'ketsuite/loyalty' },
+                { label: 'Point of Sale', slug: 'ketsuite/pos' },
+                { label: 'Accounting ledger', slug: 'ketsuite/accounting' },
+              ],
+            },
+          ],
         },
         {
-          label: 'Operations & migration',
+          label: 'Engineering reference',
           collapsed: true,
-          items: [{ label: 'Operations overview', slug: 'operations' }],
+          items: [
+            {
+              label: 'Operate and measure',
+              collapsed: false,
+              items: [
+                { label: 'Operations reading map', slug: 'operations' },
+                { label: 'Performance benchmarks', slug: 'operations/benchmarks' },
+                { label: 'Loyalty benchmark evidence', slug: 'ketsuite/benchmarks/loyalty' },
+              ],
+            },
+            {
+              label: 'Design records',
+              collapsed: true,
+              items: [
+                { label: 'How to use design records', slug: 'architecture' },
+                { label: 'Architecture decisions', slug: 'architecture/decisions' },
+                {
+                  label: 'Permission bundles and scoped roles RFC',
+                  slug: 'architecture/permission-bundles-rfc',
+                },
+                { label: 'Open questions', slug: 'architecture/open-questions' },
+              ],
+            },
+          ],
         },
         {
           label: 'Contributing',
@@ -121,6 +186,15 @@ export default defineConfig({
           items: [
             { label: 'Develop the docs', slug: 'getting-started' },
             { label: 'Docs application boundary', slug: 'foundation/app-boundary' },
+            {
+              label: 'Team handoffs',
+              collapsed: true,
+              items: [
+                { label: 'Hospitality to Website', slug: 'handoffs/hospitality-website' },
+                { label: 'Mobile Channel API baseline', slug: 'handoffs/mobile-channel-baseline' },
+                { label: 'View system to KetSuite', slug: 'handoffs/view-system-ketsuite' },
+              ],
+            },
           ],
         },
       ],

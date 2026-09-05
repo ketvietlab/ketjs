@@ -4,6 +4,7 @@ import {
   callFn,
   compose,
   createIdempotency,
+  defineModule,
   eq,
   from,
   planMigration,
@@ -98,6 +99,26 @@ test('postgres: column types differ from sqlite where the dialects differ', asyn
   await adapter.close()
 })
 
+test('postgres: a json value reaches the driver as an object, not as text', async () => {
+  const { adapter, calls } = await pg()
+  const value = { issuer: 'https://id.example', endpoints: ['authorize', 'token'] }
+  await adapter.run('INSERT INTO t ("v") VALUES ($1)', [value])
+  // The driver encodes a parameter bound to JSONB. Encoding it here as well left
+  // the column holding a JSON string, so reads came back as text and every
+  // `json` field silently changed type between SQLite and Postgres.
+  assert.deepEqual(calls[0]!.params, [value])
+  assert.equal(typeof calls[0]!.params[0], 'object')
+  await adapter.close()
+})
+
+test('postgres: undefined still binds as null, and a Date is left to the driver', async () => {
+  const { adapter, calls } = await pg()
+  const at = new Date('2026-08-28T00:00:00.000Z')
+  await adapter.run('INSERT INTO t ("a", "b") VALUES ($1, $2)', [undefined, at])
+  assert.deepEqual(calls[0]!.params, [null, at])
+  await adapter.close()
+})
+
 test('postgres: one schema, two dialects, from the same manifest', async () => {
   const { adapter } = await pg()
   const ops = planMigration(null, schemaFromManifest(manifest))
@@ -134,6 +155,37 @@ test('postgres: a failing transaction rolls back and still releases', async () =
     calls.map((c) => c.text),
     ['[tx] BEGIN', '[tx] X', '[tx] ROLLBACK', '[tx] RELEASE'],
   )
+  await adapter.close()
+})
+
+test('postgres: a transaction-scoped adapter expires after commit and rollback', async () => {
+  const { adapter, calls } = await pg()
+  let committed!: Adapter
+  await adapter.tx(async (tx) => {
+    committed = tx
+  })
+  const afterCommit = calls.length
+  await assert.rejects(
+    () => committed.run('UPDATE after_commit'),
+    /transaction-scoped adapter used after its transaction ended/,
+  )
+  assert.equal(calls.length, afterCommit, 'an expired adapter must not reach the released connection')
+
+  let rolledBack!: Adapter
+  await assert.rejects(
+    () =>
+      adapter.tx(async (tx) => {
+        rolledBack = tx
+        throw new Error('rollback body')
+      }),
+    /rollback body/,
+  )
+  const afterRollback = calls.length
+  await assert.rejects(
+    () => rolledBack.all('SELECT after_rollback'),
+    /transaction-scoped adapter used after its transaction ended/,
+  )
+  assert.equal(calls.length, afterRollback, 'rollback also expires the scoped adapter before release')
   await adapter.close()
 })
 
@@ -193,34 +245,68 @@ test('idempotency: a record survives a restart because it lives in the log', asy
   await adapter.close()
 })
 
+test('idempotency: legacy tables gain request digests without losing records', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  await adapter.exec(`CREATE TABLE ket_idem (
+    key TEXT PRIMARY KEY, fn TEXT NOT NULL, state TEXT NOT NULL, result TEXT, created_at TEXT NOT NULL
+  )`)
+  await adapter.run(`INSERT INTO ket_idem (key, fn, state, result, created_at) VALUES (?, ?, 'done', ?, ?)`, [
+    'legacy',
+    'legacy.fn',
+    JSON.stringify({ ok: true }),
+    new Date().toISOString(),
+  ])
+  const idem = await createIdempotency(adapter)
+  assert.ok((await adapter.introspect()).ket_idem!.digest)
+  assert.deepEqual(await idem.read('legacy'), { state: 'done', result: { ok: true }, digest: null })
+  await adapter.close()
+})
+
 test('idempotency: a key claimed but not finished is reported, not silently re-run', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()
   for (const sql of renderSql(planMigration(null, schemaFromManifest(manifest)), adapter))
     await adapter.exec(sql)
-  registerFunctions(mods)
-
-  // Stand in for another instance that claimed the key and has not finished.
-  const idem = await createIdempotency(adapter)
-  const claimed = await idem.claim('catalog.createProduct:k9', 'catalog.createProduct')
-  assert.equal(claimed, true)
-  assert.equal(
-    await idem.claim('catalog.createProduct:k9', 'catalog.createProduct'),
-    false,
-    'the primary key settles the race',
+  let entered!: () => void
+  let finish!: () => void
+  const started = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  const gate = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  const pending = defineModule({
+    name: 'pending',
+    functions: {
+      hold: {
+        input: { id: 'id' },
+        idempotent: true,
+        handler: async () => {
+          entered()
+          await gate
+          return { ok: true }
+        },
+      },
+    },
+  })
+  const pendingManifest = compose([...mods, pending])
+  registerFunctions([...mods, pending])
+  const first = callFn(
+    'pending.hold',
+    { id: 'p2' },
+    { adapter, manifest: pendingManifest, idempotencyKey: 'k9' },
   )
+  await started
 
   await assert.rejects(
-    () =>
-      callFn(
-        'catalog.createProduct',
-        { id: 'p2', title: 'B', priceCents: 1, slug: 'b' },
-        { adapter, manifest, idempotencyKey: 'k9' },
-      ),
+    () => callFn('pending.hold', { id: 'p2' }, { adapter, manifest: pendingManifest, idempotencyKey: 'k9' }),
     (e: unknown) => {
       assert.equal((e as { code: string }).code, 'E_IDEMPOTENCY_IN_FLIGHT')
       return true
     },
   )
+  finish()
+  await first
   await adapter.close()
 })

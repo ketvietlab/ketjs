@@ -1,4 +1,4 @@
-import { asc, defineFn, deleteFrom, eq, from, KetError } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 
 const mediaOutput = {
@@ -53,6 +53,59 @@ export const functions: Record<string, FnSpec> = {
     handler: rowsFor,
   }),
 
+  /**
+   * The primary image of many targets at once.
+   *
+   * A catalogue page shows a thumbnail per row, and asking `listMedia` per row
+   * would be one query per product plus every non-primary image none of them
+   * needs. Targets are named as ids, and only the primary of each comes back.
+   */
+  listPrimaryMedia: defineFn({
+    input: { templateIds: 'json?', productIds: 'json?' },
+    output: { id: 'id', attachmentId: 'id', templateId: 'id?', productId: 'id?', alt: 'text?' },
+    effects: ['read:product_media.Media'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const templateIds = new Set((Array.isArray(args.templateIds) ? args.templateIds : []).map(String))
+      const productIds = new Set((Array.isArray(args.productIds) ? args.productIds : []).map(String))
+      if (!templateIds.size && !productIds.size) return []
+      const M = ctx.table('product_media.Media')
+      const rows = await ctx.db.all(from(M).where(eq(M.primary, true)).orderBy(asc(M.sequence), asc(M.id)))
+      return rows
+        .filter(
+          (row) =>
+            (row.templateId != null && templateIds.has(String(row.templateId))) ||
+            (row.productId != null && productIds.has(String(row.productId))),
+        )
+        .map((row) => ({
+          id: row.id,
+          attachmentId: row.attachmentId,
+          templateId: row.templateId,
+          productId: row.productId,
+          alt: row.alt,
+        }))
+    },
+  }),
+
+  /** All images for a bounded set of variants, used by the template media tab. */
+  listMediaByProducts: defineFn({
+    input: { productIds: 'json?' },
+    output: mediaOutput,
+    effects: ['read:product_media.Media', 'read:storage.Attachment'],
+    agent: true,
+    handler: async (ctx, args) => {
+      const productIds = [...new Set((Array.isArray(args.productIds) ? args.productIds : []).map(String))]
+      if (!productIds.length) return []
+      const M = ctx.table('product_media.Media')
+      return ctx.db.all(
+        from(M)
+          .where(inArray(M.productId, productIds))
+          .orderBy(asc(M.sequence), asc(M.id))
+          .preload('attachment'),
+      )
+    },
+  }),
+
   attachMedia: defineFn({
     input: {
       id: 'id',
@@ -88,8 +141,17 @@ export const functions: Record<string, FnSpec> = {
         invalid('attachment target does not match the product media target')
 
       return ctx.tx(async (tx) => {
+        const before = (await tx.db.select('product_media.Media', { id: args.id }))[0]
+        if (before && (before.attachmentId !== args.attachmentId || before.targetKey !== selected.targetKey))
+          invalid('media id is already attached to another image or target')
         const existing = await rowsFor(tx, selected)
-        const makePrimary = args.primary === true || existing.length === 0
+        // The row being written is already in `existing` on a re-run, so both the
+        // primary decision and the sequence are taken from the *other* rows.
+        // Counting it would make a replay of the first attach see one image, drop
+        // makePrimary to false, and demote the only primary the gallery has.
+        const others = existing.filter((row) => String(row.id) !== String(args.id))
+        const makePrimary =
+          args.primary === true || (args.primary == null && before?.primary === true) || others.length === 0
         if (makePrimary) await resetPrimary(tx, existing, args.id)
         const row = {
           id: args.id,
@@ -99,12 +161,9 @@ export const functions: Record<string, FnSpec> = {
           targetKey: selected.targetKey,
           primarySlot: makePrimary ? selected.targetKey : null,
           alt: args.alt ?? null,
-          sequence: Number(args.sequence ?? existing.length * 10 + 10),
+          sequence: Number(args.sequence ?? before?.sequence ?? others.length * 10 + 10),
           primary: makePrimary,
         }
-        const before = (await tx.db.select('product_media.Media', { id: args.id }))[0]
-        if (before && (before.attachmentId !== args.attachmentId || before.targetKey !== selected.targetKey))
-          invalid('media id is already attached to another image or target')
         const inserted = await tx.db.insertIfAbsent('product_media.Media', row)
         if (!('dryRun' in inserted) && !inserted.inserted)
           await tx.db.update(

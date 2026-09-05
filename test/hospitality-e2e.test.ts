@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import type { Row, Scope } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const scope: Scope = { company: 'default', companies: ['default'], branches: null }
 
 test('hospitality e2e: authenticated booking and front-desk flow crosses real HTTP', async (t) => {
-  const e2e = await createTestApp(ketsuite)
+  const e2e = await createTestDeployment(ketsuite)
   t.after(() => e2e.close())
   const seed = (name: string, input: Record<string, unknown>) => e2e.fixture.call(name, input, { scope })
 
@@ -400,9 +400,13 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const buildingDetailPage = await e2e.client.get(`/admin/hospitality/buildings/${buildingId}?lang=en`)
   const buildingDetailHtml = await buildingDetailPage.text()
   assert.equal(buildingDetailPage.status, 200, buildingDetailHtml)
-  assert.match(buildingDetailHtml, /Building record/)
   assert.match(buildingDetailHtml, /Archive building/)
   assert.match(buildingDetailHtml, /River Tower/)
+  assert.doesNotMatch(
+    buildingDetailHtml,
+    /Building record|data-ui="record-thumbnail"|data-ui="record-kicker"/,
+  )
+  assert.match(buildingDetailHtml, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
   assert.doesNotMatch(buildingDetailHtml, /hospitality_core\./)
 
   const buildingUpdated = await e2e.client.post(
@@ -423,10 +427,13 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const floorDetailPage = await e2e.client.get(`${floorDetailPath}?lang=vi`)
   const floorDetailHtml = await floorDetailPage.text()
   assert.equal(floorDetailPage.status, 200, floorDetailHtml)
-  assert.match(floorDetailHtml, /Hồ sơ tầng/)
   assert.match(floorDetailHtml, /Lưu trữ tầng/)
   assert.match(floorDetailHtml, /River Wing/)
-  assert.doesNotMatch(floorDetailHtml, /hospitality_core\./)
+  assert.doesNotMatch(
+    floorDetailHtml,
+    /Hồ sơ tầng|data-ui="record-thumbnail"|data-ui="record-kicker"|hospitality_core\./,
+  )
+  assert.match(floorDetailHtml, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
 
   const floorUpdated = await e2e.client.post(
     `${floorDetailPath}?lang=vi`,
@@ -604,6 +611,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.equal(quotePage.status, 200)
   assert.match(quoteHtml, /Báo giá sẵn sàng/)
   assert.match(quoteHtml, /100/)
+  assert.match(quoteHtml, /data-route-modal="true"/)
   assert.doesNotMatch(quoteHtml, /hospitality_core\./)
 
   const impossibleLocalDate = await e2e.client.post(
@@ -914,12 +922,21 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(checkedInHtml, /Điều chỉnh ngày trả phòng/)
   assert.doesNotMatch(checkedInHtml, /hospitality_core\./)
 
+  // The field is a datetime-local, read in the property's timezone. Building it
+  // from toISOString() spells the instant in UTC, so once UTC and Ho Chi Minh
+  // City fall on different dates — every day from 17:00 UTC — "tomorrow" arrived
+  // as tomorrow-in-UTC, which is still today where the property is. The stay then
+  // had no night left to release and the early checkout stopped being early.
+  const adjustedCheckOut = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    .toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
+    .slice(0, 16)
+    .replace(' ', 'T')
   const departureAdjusted = await e2e.client.post(
     '/admin/hospitality/reservations/booking-1?lang=vi',
     new URLSearchParams({
       operation: 'adjust-departure',
       lang: 'vi',
-      checkOut: '2026-08-24T12:00',
+      checkOut: adjustedCheckOut,
     }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
@@ -928,12 +945,12 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const departurePage = await e2e.client.get(departureAdjusted.headers.get('location')!)
   const departureHtml = await departurePage.text()
   assert.match(departureHtml, /Đã cập nhật ngày trả phòng/)
-  assert.match(departureHtml, /value="2026-08-24T12:00"/)
+  assert.ok(departureHtml.includes(`value="${adjustedCheckOut}"`))
   assert.doesNotMatch(departureHtml, /hospitality_core\./)
   const departurePageEn = await e2e.client.get('/admin/hospitality/reservations/booking-1?lang=en')
   const departureHtmlEn = await departurePageEn.text()
   assert.match(departureHtmlEn, /Adjust departure/)
-  assert.match(departureHtmlEn, /value="2026-08-24T12:00"/)
+  assert.ok(departureHtmlEn.includes(`value="${adjustedCheckOut}"`))
   assert.doesNotMatch(departureHtmlEn, /hospitality_core\./)
 
   const stayDetailEn = await e2e.client.get('/admin/hospitality/stays/booking-1%3Astay?lang=en')
@@ -977,7 +994,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const folioDetailEn = await e2e.client.get('/admin/hospitality/folios/booking-1%3Afolio?lang=en')
   assert.equal(folioDetailEn.status, 200)
   const folioDetailEnHtml = await folioDetailEn.text()
-  assert.match(folioDetailEnHtml, /Operational record only/)
+  assert.match(folioDetailEnHtml, /Not an invoice yet/)
   assert.match(folioDetailEnHtml, /Post charge/)
   assert.doesNotMatch(folioDetailEnHtml, /hospitality_core\./)
   const chargePosted = await e2e.client.post(
@@ -987,8 +1004,8 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
       id: 'e2e-manual-charge',
       lang: 'vi',
       stayId: 'booking-1:stay',
-      description: 'Nước suối minibar',
-      type: 'minibar',
+      description: 'Dịch vụ spa',
+      type: 'spa',
       quantity: '2',
       unitPrice: '10',
     }),
@@ -1011,7 +1028,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const correctedFolio = await e2e.client.get(chargeVoided.headers.get('location')!)
   const correctedFolioHtml = await correctedFolio.text()
   assert.match(correctedFolioHtml, /Đã hủy khoản phí/)
-  assert.match(correctedFolioHtml, /Nước suối minibar/)
+  assert.match(correctedFolioHtml, /Dịch vụ spa/)
   assert.doesNotMatch(correctedFolioHtml, /hospitality_core\./)
   assert.equal(await e2e.drainJobs(), 1)
 
@@ -1072,22 +1089,22 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     ['/admin/hospitality/front-desk?lang=vi&date=2026-08-20', 'Bàn lễ tân'],
     ['/admin/hospitality/tape-chart?lang=vi&from=2026-08-20', 'Lịch phòng'],
     ['/admin/hospitality/reservations?lang=vi', 'Đặt phòng'],
-    ['/admin/hospitality/stays?lang=vi', 'Lưu trú'],
-    ['/admin/hospitality/folios?lang=vi', 'Hồ sơ dịch vụ'],
+    ['/admin/hospitality/stays?lang=vi', 'Khách đang lưu trú'],
+    ['/admin/hospitality/folios?lang=vi', 'Phiếu chi phí'],
     ['/admin/hospitality/properties?lang=vi', 'Cơ sở lưu trú'],
-    ['/admin/hospitality/rooms?lang=vi', 'Sơ đồ phòng'],
+    ['/admin/hospitality/rooms?lang=vi', 'Danh mục phòng'],
     ['/admin/hospitality/room-types?lang=vi', 'Loại phòng'],
     [
       '/admin/hospitality/content?lang=vi&property=hotel&target=room_type%3Adeluxe',
       'Nội dung &amp; hình ảnh',
     ],
-    ['/admin/hospitality/rate-plans?lang=vi', 'Giá bán'],
+    ['/admin/hospitality/rate-plans?lang=vi', 'Bảng giá'],
     ['/admin/hospitality/services?lang=vi&property=hotel', 'Dịch vụ &amp; phụ phí'],
     ['/admin/hospitality/night-audit?lang=vi&property=hotel&auditDate=2026-08-20', 'Chốt ngày vận hành'],
     ['/admin/hospitality/stay-notices?lang=vi&property=hotel', 'Thông báo lưu trú'],
     [
       '/admin/hospitality/inventory?lang=vi&property=hotel&roomType=deluxe&from=2026-08-20&to=2026-08-22',
-      'Tồn kho &amp; hạn chế bán',
+      'Phòng trống và điều kiện bán',
     ],
     ['/admin/hospitality/amenities?lang=vi', 'Danh mục tiện nghi'],
     ['/admin/hospitality/policies?lang=vi', 'Chính sách hủy'],
@@ -1098,6 +1115,23 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
     const html = await response.text()
     assert.doesNotMatch(html, /hospitality_core\./, path)
     assert.match(html, new RegExp(title), path)
+    assert.doesNotMatch(html, /data-route-modal="true"/, path)
+  }
+
+  for (const path of [
+    '/admin/hospitality/reservations?lang=vi&property=hotel&create=1',
+    '/admin/hospitality/rate-plans?lang=vi&property=hotel&create=1',
+    '/admin/hospitality/housekeeping?lang=vi&property=hotel&create=1',
+    '/admin/hospitality/amenities?lang=vi&create=1',
+    '/admin/hospitality/policies?lang=vi&create=1',
+    '/admin/hospitality/billing/rules?lang=vi&create=1',
+  ] as const) {
+    const response = await e2e.client.get(path)
+    const html = await response.text()
+    assert.equal(response.status, 200, `${path}: ${html}`)
+    assert.match(html, /data-ui="list-page"/, path)
+    assert.match(html, /data-route-modal="true"/, path)
+    assert.match(html, /role="dialog"/, path)
   }
 
   const overdueReservation = await seed('hospitality_core.createReservation', {
@@ -1121,16 +1155,29 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   const frontDesk = await e2e.client.get('/admin/hospitality/front-desk?lang=vi&date=2026-08-20')
   const html = await frontDesk.text()
   assert.match(html, /Bàn lễ tân/)
-  assert.match(html, /Nguyễn An/)
   assert.match(html, /Lưu trú quá giờ trả phòng/)
   assert.match(html, /RES-OVERDUE/)
   assert.match(html, /Trần Bình/)
+  // Every heading says "today", and ?date= means today can be a Thursday in
+  // August. The screen names the day it is actually showing.
+  assert.match(html, /20\/08\/2026/)
+  // The desk works two queues: who is still to arrive, and who is due out.
+  assert.match(html, /Khách đến hôm nay/)
+  assert.match(html, /Khách rời hôm nay/)
+  // Nguyễn An arrived today and was shown to a room; the desk is done with
+  // them until Friday, so they leave the queues and stay on the stays list.
+  assert.doesNotMatch(html, /Nguyễn An/)
+  const staysList = await e2e.client.get('/admin/hospitality/stays?lang=vi&property=hotel')
+  assert.equal(staysList.status, 200)
+  assert.match(await staysList.text(), /Nguyễn An/)
 
   const english = await e2e.client.get('/admin/hospitality/front-desk?lang=en&date=2026-08-20')
   assert.equal(english.status, 200)
   const englishHtml = await english.text()
   assert.match(englishHtml, /Front desk/)
   assert.match(englishHtml, /Overdue departures/)
+  assert.match(englishHtml, /Arriving today/)
+  assert.match(englishHtml, /Departing today/)
   assert.match(englishHtml, /RES-OVERDUE/)
   const englishServices = await e2e.client.get('/admin/hospitality/services?lang=en&property=hotel')
   assert.equal(englishServices.status, 200)
@@ -1297,7 +1344,7 @@ test('hospitality e2e: authenticated booking and front-desk flow crosses real HT
   assert.match(releasedHtml, /Đã cập nhật trạng thái phòng/)
   assert.match(releasedHtml, /Chưa vệ sinh/)
   const preselectedQueue = await e2e.client.get(
-    '/admin/hospitality/housekeeping?lang=vi&property=hotel&room=103',
+    '/admin/hospitality/housekeeping?lang=vi&property=hotel&room=103&create=1',
   )
   assert.match(await preselectedQueue.text(), /<option(?=[^>]*value="103")(?=[^>]*selected)[^>]*>/)
 

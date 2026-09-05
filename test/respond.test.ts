@@ -2,8 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   NAVIGATION_TYPE,
-  bootApp,
-  defineApp,
+  bootDeployment,
+  defineDeployment,
   defineModule,
   document,
   fragment,
@@ -115,17 +115,34 @@ test('respond: raw is the one way past the escaper, and it is one word to grep f
 
 // ── the locale, which reaches the first attribute on every page ──────────────
 
-const notes = defineModule({ name: 'notes', app: true, messages: { en: { hi: 'Hi' } } })
+const notes = defineModule({
+  name: 'notes',
+  messages: { en: { hi: 'Hi' } },
+  routes: {
+    '/locale-probe': (ctx) => async (url, req) => {
+      const first = ctx.localeOf(url, req)
+      const second = ctx.localeOf(url, req)
+      const firstTranslator = ctx.translate(first)
+      const secondTranslator = ctx.translate(first)
+      return json({
+        first,
+        second,
+        sameTranslator: firstTranslator === secondTranslator,
+        frozenTranslator: Object.isFrozen(firstTranslator),
+      })
+    },
+  },
+})
 
-const app = defineApp({
+const app = defineDeployment({
   name: 'localeapp',
   modules: [notes],
   headless: true,
-  serve: { bootstrap: ['notes'], defaults: { defaultLocale: 'vi', fallbackLocale: 'vi' } },
+  serve: { defaults: { defaultLocale: 'vi', fallbackLocale: 'vi' } },
 })
 
 test('locale: only a locale the deployment ships a catalogue for is ever used', async () => {
-  const b = await bootApp(app, { env: { KET_SQLITE: ':memory:' }, port: 0 })
+  const b = await bootDeployment(app, { env: { KET_LOG: 'null', KET_SQLITE: ':memory:' }, port: 0 })
   const at = `http://127.0.0.1:${b.port}/_ket/health`
   // Node's own fetch sends `Accept-Language: *` by default. That reached Intl and
   // threw, so any client that did not set the header got a 500 — found by probing,
@@ -133,5 +150,25 @@ test('locale: only a locale the deployment ships a catalogue for is ever used', 
   assert.equal((await fetch(at)).status, 200)
   assert.equal((await fetch(at, { headers: { 'accept-language': '*' } })).status, 200)
   assert.equal((await fetch(at, { headers: { 'accept-language': 'zz-ZZ' } })).status, 200)
+
+  const queryWins = await fetch(`http://127.0.0.1:${b.port}/locale-probe?lang=en`, {
+    headers: { 'accept-language': 'fr-CA, vi;q=0.8' },
+  })
+  assert.deepEqual(await queryWins.json(), {
+    first: 'en',
+    second: 'en',
+    sameTranslator: true,
+    frozenTranslator: true,
+  })
+
+  const baseTag = await fetch(`http://127.0.0.1:${b.port}/locale-probe`, {
+    headers: { 'accept-language': 'en-US, vi;q=0.8' },
+  })
+  assert.deepEqual(await baseTag.json(), {
+    first: 'en',
+    second: 'en',
+    sameTranslator: true,
+    frozenTranslator: true,
+  })
   await b.close()
 })

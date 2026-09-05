@@ -3,21 +3,31 @@
 // each without any of them stepping on the others — Ecto's composability with a
 // chainable surface.
 
-import { exprTouches, and } from './expr.ts'
+import { assertCol, exprTouches, and, makeCol } from './expr.ts'
 import type { Col, Expr } from './expr.ts'
 import { tableNameFor } from './migrate.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { Manifest } from '../types.ts'
-import { assertTimezone } from './time.ts'
+import { assertGroupInterval, assertTimezone } from './time.ts'
 import type { GroupInterval } from './time.ts'
+import { DECIMAL_MAX_CHARS, parseDecimal } from './changeset.ts'
 
 export type Dialect = 'sqlite' | 'postgres'
 export type Sql = { text: string; params: unknown[]; touches: string[] }
 export type Order = { col: Col; dir: 'asc' | 'desc' }
 export type GroupSpec = { col: Col; interval?: GroupInterval; timezone?: string }
 export type AggregateSpec =
-  | { fn: 'count'; as: string }
-  | { fn: 'countDistinct' | 'sum' | 'avg' | 'min' | 'max'; col: Col; as: string }
+  | { fn: 'count'; col?: Col; as: string }
+  | { fn: 'countDistinct' | 'sum' | 'min' | 'max'; col: Col; as: string }
+  | {
+      fn: 'avg'
+      col: Col
+      as: string
+      /** Required for decimal columns so both adapters return the same finite value. */
+      scale?: number
+      /** Decimal averages currently support PostgreSQL-compatible half-away-from-zero rounding. */
+      rounding?: 'half-away-from-zero'
+    }
 export type GroupOrder = { by: 'key' | 'count' | string; dir: 'asc' | 'desc' }
 export type GroupRow = { key: unknown[]; count: number; aggregates: Record<string, unknown> }
 
@@ -35,7 +45,7 @@ export function table(manifest: Manifest, model: string): Table {
     })
   }
   const t = Object.create(null) as Record<string, unknown>
-  for (const name of Object.keys(def.fields)) t[name] = Object.freeze({ model, name })
+  for (const [name, field] of Object.entries(def.fields)) t[name] = makeCol(model, name, field.base)
   t['$model'] = model
   t['$columns'] = Object.keys(def.fields)
   return Object.freeze(t) as Table
@@ -104,7 +114,7 @@ export class Query {
   }
 
   select(...cols: Col[]): Query {
-    return this.with({ columns: cols.map((c) => c.name) })
+    return this.with({ columns: cols.map((c) => assertCol(c).name) })
   }
   /** Additional conditions are ANDed, so a query can be narrowed by several callers. */
   where(...parts: Expr[]): Query {
@@ -112,6 +122,7 @@ export class Query {
     return this.with({ condition: this.condition ? and(this.condition, next) : next })
   }
   orderBy(...order: Order[]): Query {
+    for (const item of order) assertCol(item.col)
     return this.with({ order: [...this.order, ...order] })
   }
   limit(n: number): Query {
@@ -126,18 +137,21 @@ export class Query {
   groupBy(...groups: GroupSpec[]): Query {
     if (!groups.length) throw new KetError({ code: 'E_GROUP_EMPTY', message: 'groupBy requires a field' })
     for (const group of groups) {
+      assertCol(group.col)
       if (group.col.model !== this.model)
         throw new KetError({
           code: 'E_GROUP_MODEL',
           message: `cannot group ${this.model} by ${group.col.model}`,
         })
+      if (group.interval) assertGroupInterval(group.interval)
       if (group.interval && group.timezone) assertTimezone(group.timezone)
     }
     return this.with({ kind: 'group', columns: null, groups: [...this.groups, ...groups] })
   }
   aggregate(...aggregates: AggregateSpec[]): Query {
     for (const aggregate of aggregates) {
-      if (aggregate.fn !== 'count' && aggregate.col.model !== this.model)
+      if (aggregate.col) assertCol(aggregate.col)
+      if (aggregate.col && aggregate.col.model !== this.model)
         throw new KetError({
           code: 'E_GROUP_MODEL',
           message: `cannot aggregate ${aggregate.col.model} on ${this.model}`,
@@ -168,7 +182,7 @@ export class Query {
     const s = exprTouches(this.condition)
     s.add(this.model)
     for (const group of this.groups) s.add(group.col.model)
-    for (const aggregate of this.aggregates) if (aggregate.fn !== 'count') s.add(aggregate.col.model)
+    for (const aggregate of this.aggregates) if (aggregate.col) s.add(aggregate.col.model)
     return [...s].sort()
   }
 
@@ -184,7 +198,45 @@ export class Query {
       params.push(v)
       return ph()
     }
-    const colSql = (c: Col) => `${q(tableNameFor(c.model))}.${q(c.name)}`
+    const colSql = (candidate: Col) => {
+      const c = assertCol(candidate)
+      return `${q(tableNameFor(c.model))}.${q(c.name)}`
+    }
+    const isDecimal = (c: Col): boolean => assertCol(c).base === 'decimal'
+    const isSqliteDecimal = (c: Col): boolean => dialect === 'sqlite' && isDecimal(c)
+    const nulls = (dir: 'asc' | 'desc'): 'FIRST' | 'LAST' => (dir === 'asc' ? 'LAST' : 'FIRST')
+    const orderTerm = (sql: string, dir: 'asc' | 'desc'): string =>
+      `${sql} ${dir.toUpperCase()} NULLS ${nulls(dir)}`
+    const bindDecimal = (c: Col, value: unknown): string => {
+      if (!isDecimal(c) || value === null) return bind(value)
+      const parsed = parseDecimal(value)
+      if (!parsed.ok)
+        throw new KetError({
+          code: parsed.reason === 'size' ? 'E_DECIMAL_TOO_LONG' : 'E_INVALID_DECIMAL',
+          message:
+            parsed.reason === 'size'
+              ? `${c.model}.${c.name} query value exceeds the ${DECIMAL_MAX_CHARS}-character decimal limit`
+              : `${c.model}.${c.name} query value must be a finite number or plain decimal string`,
+        })
+      return bind(parsed.value)
+    }
+    const decimalOrderSql = (column: string, dir: 'asc' | 'desc'): string => {
+      const sign = `ket_decimal_sign(${column})`
+      const exponent = `ket_decimal_exponent(${column})`
+      const digits = `ket_decimal_digits(${column})`
+      const reverse = dir === 'asc' ? 'desc' : 'asc'
+      // SQLite keeps decimal columns as TEXT for exact decoding. These components
+      // sort normalized scientific parts instead of coercing the value through
+      // REAL, including magnitudes beyond Number.MAX_SAFE_INTEGER.
+      return [
+        orderTerm(sign, dir),
+        orderTerm(`CASE WHEN ${sign} < 0 THEN ${exponent} END`, reverse),
+        orderTerm(`CASE WHEN ${sign} < 0 THEN ${digits} END`, reverse),
+        orderTerm(`CASE WHEN ${sign} > 0 THEN ${exponent} END`, dir),
+        orderTerm(`CASE WHEN ${sign} > 0 THEN ${digits} END`, dir),
+      ].join(', ')
+    }
+    const decimalOrder = (c: Col, dir: 'asc' | 'desc'): string => decimalOrderSql(colSql(c), dir)
 
     const render = (e: Expr): string => {
       if (e.op === 'and' || e.op === 'or') {
@@ -195,27 +247,34 @@ export class Query {
       if (e.op === 'null') return `${colSql(e.col)} IS ${e.negated ? 'NOT ' : ''}NULL`
       if (e.op === 'bucket') {
         const column = colSql(e.col)
+        // Interpolated into DATE_TRUNC below, so it must be a member of the closed
+        // set and nothing else — the value reaches here straight from JSON.
+        const interval = assertGroupInterval(e.interval)
         if (dialect === 'postgres') {
           const format =
-            e.interval === 'quarter'
+            interval === 'quarter'
               ? 'YYYY-"Q"Q'
-              : e.interval === 'year'
+              : interval === 'year'
                 ? 'YYYY'
-                : e.interval === 'month'
+                : interval === 'month'
                   ? 'YYYY-MM'
                   : 'YYYY-MM-DD'
-          return `TO_CHAR(DATE_TRUNC('${e.interval}', ${column} AT TIME ZONE ${bind(e.timezone)}), '${format}') = ${bind(e.value)}`
+          return `TO_CHAR(DATE_TRUNC('${interval}', ${column} AT TIME ZONE ${bind(e.timezone)}), '${format}') = ${bind(e.value)}`
         }
-        return `ket_date_bucket(${column}, ${bind(e.interval)}, ${bind(e.timezone)}) = ${bind(e.value)}`
+        return `ket_date_bucket(${column}, ${bind(interval)}, ${bind(e.timezone)}) = ${bind(e.value)}`
       }
       if (e.op === 'like')
         return `${colSql(e.col)} ${e.insensitive && dialect === 'postgres' ? 'ILIKE' : 'LIKE'} ${bind(e.value)}${e.escape ? ` ESCAPE '\\'` : ''}`
       if (e.op === 'in') {
         if (!e.values.length) return '1 = 0'
-        return `${colSql(e.col)} IN (${e.values.map(bind).join(', ')})`
+        if (isSqliteDecimal(e.col))
+          return `(${e.values.map((value) => `ket_decimal_cmp(${colSql(e.col)}, ${bindDecimal(e.col, value)}) = 0`).join(' OR ')})`
+        return `${colSql(e.col)} IN (${e.values.map((value) => bindDecimal(e.col, value)).join(', ')})`
       }
+      if (isSqliteDecimal(e.col))
+        return `ket_decimal_cmp(${colSql(e.col)}, ${bindDecimal(e.col, e.value)}) ${e.cmp} 0`
       const compared = e.numeric && dialect === 'sqlite' ? `CAST(${colSql(e.col)} AS REAL)` : colSql(e.col)
-      return `${compared} ${e.cmp} ${bind(e.value)}`
+      return `${compared} ${e.cmp} ${bindDecimal(e.col, e.value)}`
     }
 
     const t = q(tableNameFor(this.model))
@@ -225,19 +284,67 @@ export class Query {
     else if (this.kind === 'group') {
       const groupSql = this.groups.map((group) => {
         const column = colSql(group.col)
-        if (!group.interval) return column
+        if (!group.interval) return isSqliteDecimal(group.col) ? `ket_decimal_key(${column})` : column
+        // Same boundary as the bucket expression: interpolated into DATE_TRUNC, so
+        // it is validated here rather than trusted from the caller.
+        const interval = assertGroupInterval(group.interval)
         const timezone = group.timezone ?? 'UTC'
         if (dialect === 'postgres') {
-          if (group.interval === 'quarter')
+          if (interval === 'quarter')
             return `TO_CHAR(DATE_TRUNC('quarter', ${column} AT TIME ZONE ${bind(timezone)}), 'YYYY-"Q"Q')`
-          const format =
-            group.interval === 'year' ? 'YYYY' : group.interval === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD'
-          return `TO_CHAR(DATE_TRUNC('${group.interval}', ${column} AT TIME ZONE ${bind(timezone)}), '${format}')`
+          const format = interval === 'year' ? 'YYYY' : interval === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD'
+          return `TO_CHAR(DATE_TRUNC('${interval}', ${column} AT TIME ZONE ${bind(timezone)}), '${format}')`
         }
-        return `ket_date_bucket(${column}, ${bind(group.interval)}, ${bind(timezone)})`
+        return `ket_date_bucket(${column}, ${bind(interval)}, ${bind(timezone)})`
       })
       const aggregateSql = this.aggregates.map((aggregate) => {
-        if (aggregate.fn === 'count') return `COUNT(*) AS ${q(aggregate.as)}`
+        if (aggregate.fn === 'count')
+          return `COUNT(${aggregate.col ? colSql(aggregate.col) : '*'}) AS ${q(aggregate.as)}`
+        if (aggregate.fn === 'avg' && isDecimal(aggregate.col)) {
+          if (aggregate.rounding !== 'half-away-from-zero' || aggregate.scale === undefined)
+            throw new KetError({
+              code: 'E_DECIMAL_AVG_ROUNDING_REQUIRED',
+              message: 'a decimal average requires an explicit finite scale and rounding rule',
+              hint: `add scale and rounding: 'half-away-from-zero', or request sum and count and divide in the domain`,
+            })
+          if (
+            !Number.isSafeInteger(aggregate.scale) ||
+            aggregate.scale < 0 ||
+            aggregate.scale > DECIMAL_MAX_CHARS
+          )
+            throw new KetError({
+              code: 'E_DECIMAL_AVG_SCALE',
+              message: `decimal average scale must be an integer from 0 to ${DECIMAL_MAX_CHARS}`,
+            })
+          const column = colSql(aggregate.col)
+          let average: string
+          if (dialect === 'sqlite') average = `ket_decimal_avg(${column}, ${bind(aggregate.scale)})`
+          else {
+            // PostgreSQL's numeric AVG divides before ROUND and chooses a finite
+            // internal result scale, so high requested scales can no longer
+            // recover the discarded digits. Scale the exact SUM first, then use
+            // integer quotient/remainder arithmetic for half-away-from-zero.
+            const scale = bind(aggregate.scale)
+            const factor = `CAST(('1e' || CAST(${scale} AS TEXT)) AS NUMERIC)`
+            const sum = `SUM(${column})`
+            const count = `COUNT(${column})`
+            const shifted = `ABS(${sum}) * ${factor}`
+            const rounded = `DIV(${shifted}, ${count}) + CASE WHEN MOD(${shifted}, ${count}) * 2 >= ${count} THEN 1 ELSE 0 END`
+            // Multiplication by an exact negative-power factor preserves the
+            // requested display scale. PostgreSQL numeric division derives a
+            // result scale from operand precision and can truncate this back
+            // to 20 digits before the client receives it.
+            const inverseFactor = `CAST(('1e-' || CAST(${scale} AS TEXT)) AS NUMERIC)`
+            average = `CASE WHEN ${count} = 0 THEN NULL ELSE SIGN(${sum}) * (${rounded}) * ${inverseFactor} END`
+          }
+          return `${average} AS ${q(aggregate.as)}`
+        }
+        if (isSqliteDecimal(aggregate.col)) {
+          const column = colSql(aggregate.col)
+          if (aggregate.fn === 'countDistinct')
+            return `COUNT(DISTINCT ket_decimal_key(${column})) AS ${q(aggregate.as)}`
+          return `ket_decimal_${aggregate.fn}(${column}) AS ${q(aggregate.as)}`
+        }
         const fn = aggregate.fn === 'countDistinct' ? 'COUNT' : aggregate.fn.toUpperCase()
         const body =
           aggregate.fn === 'countDistinct' ? `DISTINCT ${colSql(aggregate.col)}` : colSql(aggregate.col)
@@ -251,25 +358,35 @@ export class Query {
     if (this.kind === 'group') {
       text += ` GROUP BY ${this.groups.map((_, i) => String(i + 1)).join(', ')}`
       if (this.groupOrder.length) {
-        const aliases = new Set(this.aggregates.map((a) => a.as))
+        const aliases = new Map(this.aggregates.map((aggregate) => [aggregate.as, aggregate]))
         text += ` ORDER BY ${this.groupOrder
           .map((order) => {
+            const aggregate = aliases.get(order.by)
             const by =
               order.by === 'key'
                 ? q('__group0')
                 : order.by === 'count'
                   ? q('__count')
-                  : aliases.has(order.by)
+                  : aggregate
                     ? q(order.by)
                     : null
             if (!by)
               throw new KetError({ code: 'E_GROUP_ORDER', message: `unknown group order "${order.by}"` })
-            return `${by} ${order.dir.toUpperCase()}`
+            const decimal =
+              (order.by === 'key' && !this.groups[0]!.interval && isSqliteDecimal(this.groups[0]!.col)) ||
+              (aggregate !== undefined &&
+                aggregate.fn !== 'count' &&
+                aggregate.fn !== 'countDistinct' &&
+                isSqliteDecimal(aggregate.col))
+            if (decimal) return decimalOrderSql(by, order.dir)
+            return orderTerm(by, order.dir)
           })
           .join(', ')}`
       }
     } else if (this.order.length)
-      text += ` ORDER BY ${this.order.map((o) => `${colSql(o.col)} ${o.dir.toUpperCase()}`).join(', ')}`
+      text += ` ORDER BY ${this.order
+        .map((o) => (isSqliteDecimal(o.col) ? decimalOrder(o.col, o.dir) : orderTerm(colSql(o.col), o.dir)))
+        .join(', ')}`
     if (this.limitN != null) text += ` LIMIT ${bind(this.limitN)}`
     if (this.offsetN != null) text += ` OFFSET ${bind(this.offsetN)}`
 
@@ -296,5 +413,5 @@ export class Query {
 
 export const from = (t: Table): Query => new Query({ kind: 'select', model: t.$model })
 export const deleteFrom = (t: Table): Query => new Query({ kind: 'delete', model: t.$model })
-export const asc = (col: Col): Order => ({ col, dir: 'asc' })
-export const desc = (col: Col): Order => ({ col, dir: 'desc' })
+export const asc = (col: Col): Order => ({ col: assertCol(col), dir: 'asc' })
+export const desc = (col: Col): Order => ({ col: assertCol(col), dir: 'desc' })

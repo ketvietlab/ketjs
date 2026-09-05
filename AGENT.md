@@ -1,7 +1,53 @@
 # Agent rules
 
+- Everything written into the repository or onto GitHub is in English: branch names, commit messages, pull request titles and descriptions, review comments, and issue comments. Vietnamese remains correct for product strings, user-facing copy, and the handoff documents written for a specific team; conversation with a maintainer follows whatever language they are using.
 - Branch names must start with `feat/` or `fix/`. Do not use agent-specific prefixes such as `claude/` or `codex/`.
 - Develop and test in the same scope: while implementing a change, run the targeted tests for the package, module, screen, or flow being changed.
 - Do not run the full test suite as part of routine local development. The full suite is already configured in CI and runs when a pull request targets `develop`.
 - Every style change must be verified in a real browser at desktop and mobile widths for every affected locale and screen state. Check horizontal gaps between adjacent controls, vertical spacing at header/tab/body boundaries, identical body padding across sibling tabs, overflow, and that hidden or empty elements occupy zero layout space. Record or update visual evidence before considering the style work complete.
-- Any change that affects the KetJS framework must include the corresponding update to the KetJS framework documentation under `docs/src/content/docs/ketjs/`. Do not edit KetSuite documentation yet; that section is intentionally deferred until KetSuite is complete.
+- Every behavior, public contract, configuration, workflow, or architecture change must update the corresponding documentation in the same change. Use the documentation index below to find the owning page; update every affected page when a change crosses boundaries.
+- All new or updated documentation pages belong under `docs/src/content/docs/`; never add documentation Markdown at the root of `docs/`. `docs/README.md` is reserved for maintaining the docs application, and existing root-level Markdown is legacy material to migrate into the content collection rather than extend.
+- Every fenced code block in the documentation must begin with a language-valid location comment. Use `// File: path` for TypeScript, JavaScript, TSX, and JSONC; `# Run from: path` for shell commands; `%% File: path` for Mermaid; `{% comment %} File: path {% endcomment %}` for Liquid/KTL; `<!-- File: path -->` for Markdown and HTML; and `# File: path` for text, HTTP, and other plain examples. Use a concrete repository or example-project path, not a vague label. Run `npm --prefix docs run check:snippets` before handoff.
+
+## Design system contract
+
+- `packages/design-system` and the public `@ketvietlab/design-system` package are the single source of truth for KetSuite UI tokens, typography, primitives, layouts, patterns, and `data-ui` contracts. Use `npm run design:system` to inspect the canonical catalogue.
+- Every new or modified KetSuite UI must consume the design system before introducing local components or CSS. Inter is the canonical UI typeface; colour, spacing, density, radius, shadow, and motion must come from design-system tokens.
+- KetSuite modules own business data, translated labels, routes, and domain behaviour. Reusable presentation belongs in `packages/design-system`, which must remain domain-neutral and depend only on `@ketvietlab/ketjs-view`.
+- Do not create or retain parallel token scales, generic primitives, or copied component styles. When a reusable capability is missing, add it to the design system first, expose its states in the catalogue, and then migrate the consuming UI.
+- Every design-system component or visual-state change requires contract/unit coverage plus browser E2E at desktop and mobile widths. Read the generated visual evidence before handoff and never commit that evidence.
+- When touching legacy KetSuite UI, bring the affected surface onto the design-system contract within the same change; unrelated screens do not require a big-bang migration.
+
+### Mandatory KetSuite page design
+
+- Every routed KetSuite administration screen must use exactly one canonical full-page pattern: `ListPage` for collections and result sets, `RecordPage` for create/edit/detail/workflow around one durable subject, or `WorkspacePage` for dashboards and operational surfaces. Use `layout="canvas"` only for horizontally spatial work such as boards, maps, timelines, floor plans, and KDS. Do not introduce another full-page pattern.
+- `FormPage`, `DashboardPage`, and `BoardPage` are compatibility adapters only. Do not add new consumers. `Framed` is deprecated and must not appear in production screen code.
+- Application screens must use the KetSuite page boundary so navigation and organisation context come from `Frame`. Every operational page must render one breadcrumb/company context band and one identity header. Disable the shell topbar when the page owns that identity; never render duplicate page titles or rebuild breadcrumbs inside a module.
+- Canonical page titles are 24px on desktop and 16px at the compact breakpoint, with tight `1.2` line height. Descriptions use normal `1.45` line height. Title-to-description spacing is the heading's 4px gap; do not add per-pattern title, subtitle, eyebrow, or subline margins.
+- Canonical page headers use `var(--kv-space-4) var(--kv-page-padding-x)` on desktop and `var(--kv-space-4) var(--kv-space-4) var(--kv-space-3)` at the compact breakpoint. The application `[data-ui="content"]` must not add padding around these patterns. A dense operational list body begins with `var(--kv-space-2)` top padding.
+- These measurements belong to `packages/design-system`; modules must not override them locally. Any intentional change must update all canonical patterns, their compatibility adapters, contract tests, catalogue specimens, desktop/mobile browser coverage, and affected locales in the same change.
+
+## Documentation index
+
+| Change area | Documentation owner |
+| --- | --- |
+| Repository overview, onboarding links, and top-level developer commands | `README.md` |
+| Documentation application, Starlight navigation, local docs workflow | `docs/README.md`, `docs/astro.config.mjs`, `docs/src/content/docs/getting-started.md` |
+| Documentation landing page and guide discovery | `docs/src/content/docs/index.mdx` |
+| Repository boundary and documentation architecture | `docs/src/content/docs/foundation/app-boundary.md`, `docs/src/content/docs/architecture/index.md` |
+| KetJS overview, package selection, and first application | `docs/src/content/docs/ketjs/{index,quick-start}.md` |
+| Workspaces, application composition, lifecycle, modules, discovery | `docs/src/content/docs/ketjs/{workspaces,app-lifecycle,modules,module-discovery}.md` |
+| Models, scopes, queries, changesets, functions, effects, migrations | `docs/src/content/docs/ketjs/{models,data,functions,migrations}.md` |
+| HTTP, OpenAPI, sessions, tenants, jobs, storage, transports, streams | `docs/src/content/docs/ketjs/{http,openapi,sessions-tenants,jobs,integrations}.md` |
+| Operational logging, log drivers, event catalogue, redaction | `docs/src/content/docs/ketjs/logging.md` |
+| Forms, rendering, islands, themes, menus, localization, reports | `docs/src/content/docs/ketjs/{form-validation,rendering,themes,menus-i18n,reports}.md` |
+| Testing, CLI, configuration, deployment, releases, public API | `docs/src/content/docs/ketjs/{testing,cli-config,deployment,releasing,api}.md` |
+| KetSuite overview, first application, composition, module ownership | `docs/src/content/docs/ketsuite/{index,quick-start,architecture,module-development}.md` |
+| KetSuite backend UI, security, data scope, testing | `docs/src/content/docs/ketsuite/{backend-development,security-scope,testing}.md` |
+| KetSuite Channel API and generated customer contract | `docs/src/content/docs/ketsuite/channel-api.md`, `docs/src/content/docs/ketsuite/channel-api-reference.mdx` |
+| KetSuite identity and organization modules | `docs/src/content/docs/ketsuite/{address,partner,company-branch,authentication-users,oauth-oidc}.md` |
+| KetSuite CRM, loyalty, and accounting behavior | `docs/src/content/docs/ketsuite/{crm,loyalty,accounting,accounting-tt99}.md` |
+| KetSuite Website, publication, and the public SEO projection | `docs/src/content/docs/ketsuite/website.md` |
+| Cross-cutting architecture decisions and unresolved design questions | `docs/src/content/docs/architecture/{decisions,open-questions}.md` |
+| Operations and benchmark policy | `docs/src/content/docs/operations/{index,benchmarks}.md`, `docs/src/content/docs/ketsuite/benchmarks/` |
+| Team-specific integration contracts | `docs/src/content/docs/handoffs/` |

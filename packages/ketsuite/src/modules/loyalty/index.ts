@@ -6,18 +6,26 @@ import { messages } from './messages.ts'
 import { models } from './models.ts'
 import { orderFunctions } from './order-functions.ts'
 import { relations } from './relations.ts'
+import { statsFunctions } from './stats.ts'
+import { storedValueFunctions } from './stored-value.ts'
 
 export default defineModule({
   name: 'loyalty',
   version: '0.1.0',
   depends: ['company', 'partner', 'product', 'pricing'],
-  app: true,
   title: 'Khách hàng thân thiết',
   summary: 'Chương trình ưu đãi, ví điểm, hạng thành viên và lịch sử bất biến.',
   category: 'Bán hàng',
   models,
   relations,
-  functions: { ...adminFunctions, ...orderFunctions, ...membershipFunctions, ...maintenanceFunctions },
+  functions: {
+    ...adminFunctions,
+    ...orderFunctions,
+    ...membershipFunctions,
+    ...maintenanceFunctions,
+    ...statsFunctions,
+    ...storedValueFunctions,
+  },
   jobs,
   messages,
 })

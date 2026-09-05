@@ -1,0 +1,133 @@
+---
+title: Security and data scope
+description: Preserve KetSuite staff, customer, permission, effect, company, and branch boundaries.
+---
+
+KetSuite has two distinct identity planes. Staff sessions authorize backend functions and company or
+branch context. Customer sessions and tokens authorize Channel API capabilities within a customer realm.
+Do not share credentials, cookies, or generic function transports between those planes.
+
+## Staff request boundary
+
+On each authenticated request, KetSuite rebuilds the user's session context from live rows. The cookie
+contains the last selection, not authoritative company or branch membership. Revoking a grant or
+archiving a company therefore takes effect on the next request across every process.
+
+The app resolves function permissions through the same live resolver exposed by `user.permitted` and
+`user.effectiveAccess`:
+
+- a live, unexpired superuser receives the unrestricted marker;
+- another staff user receives exact qualified function names from applicable tenant/company/branch assignments;
+- managed templates are accepted only when their version and digest match the composed deployment;
+- the explanation projection carries role, source, scope, bundle path, risk, and repair issues;
+- `ctx.call()` applies that permission set together with declared effects and scope.
+
+Zitadel and other IdPs authenticate a subject. They do not choose a KetSuite company, branch, role, bundle,
+or function permission. Those decisions come only from local live authorization rows and the immutable
+deployment catalog.
+
+Never treat a hidden menu or missing button as authorization. Routes must call an authorized function,
+and functions must declare effects for every resource they touch.
+
+## Company and branch isolation
+
+The request context carries the active `company` and `branch` plus the sets the user may access. KetJS
+applies model scope to reads and writes:
+
+| Model scope | KetSuite meaning | Typical use |
+| --- | --- | --- |
+| `shared` | Visible across companies within the tenant | Partner identity, company directory, security metadata |
+| `company` | Restricted to the active company | Commercial terms, orders, accounting records |
+| `branch` | Restricted to the active operating branch | Branch-local operational records |
+
+Do not trust a `companyId` or `branchId` received from a form as authority to switch context. Context
+changes go through user functions that validate active grants. Do not use unchecked SQL or a shared
+adapter to bypass scoped tables in application code.
+
+Test both directions of isolation: a permitted row is visible in its context, and the same identifier is
+not visible or writable from an ungranted company or branch.
+
+## Function exposure and effects
+
+`defineFn()` is the security declaration for domain operations:
+
+- `input` and `output` constrain transport data;
+- `effects` constrain resources the handler may access;
+- default exposure is the normal permission-controlled function surface;
+- `exposure: 'internal'` keeps infrastructure operations off the public function transport;
+- `agent: true` is a deliberate capability publication, not a harmless metadata flag;
+- `idempotent: true` promises safe replay behavior and must match the implementation.
+
+Prefer `ctx.call()` from a route. Every use of `ctx.callUnchecked()` needs a visible trust argument: the
+Channel API uses it behind its own authentication, CSRF, realm, capability, and contract checks; staff
+backend routes do not need that bypass.
+
+Use `permissionInventory(manifest)` or `ket permissions --json` for machine-readable authorization review.
+The report includes every composed module, even one with no functions, and records whether each function is
+HTTP/internal, anonymous, provision-only, cross-company, replay-safe, agent-published, and projected. It is a
+composition report, not a grant: only live KetSuite Role/Grant/Assignment rows decide what a staff user may call.
+
+The implemented [permission bundles and scoped roles RFC](/architecture/permission-bundles-rfc/) defines how an
+application classifies that exact inventory, composes versioned templates, and assigns roles by scope. Enable
+`permissions.requireCoverage` at the deployment boundary to fail composition when any function or module
+posture is missing. A new function never inherits access from its name or from an existing manager-style role.
+
+Capability grants do not replace record-specific policy. Domain functions call `enforcePolicy()` with a stable
+qualified policy key after capability authorization and before the sensitive transition. A denial uses a stable
+code and emits only sanitized evidence. This keeps maker-checker, ownership, lifecycle, and threshold rules with
+the domain that owns the record without forking the user resolver.
+
+Neither capabilities nor policies decide *which records a caller may see*. A module whose records are private to
+an audience resolves that audience from its own rows, in one place, and every read of those records passes
+through it: `crm.caseAudience` for cases, `flow.visibleProjects` for projects. Both answer `null` for "no
+restriction" — no actor, a superuser, or an explicit company-wide grant row — and a list of ids otherwise, so a
+caller who belongs to nothing reads nothing. The company-wide grant is a row rather than a capability on purpose:
+`Ctx` carries no allow-list, so a domain function cannot ask what the caller may do, and an audience that could
+be widened from the permission catalogue would be widened by accident.
+
+An anonymous provider callback that owns a cryptographic company binding may use
+`ctx.callUncheckedForVerifiedCompany()` after signature verification. Derive the company from signed
+credential material and verify the exact request bytes before dispatch. The helper deliberately creates one
+company scope inside the already selected tenant; an unsigned URL, header, query, or decoded payload field is
+never enough authority to select that company.
+
+## Customer Channel API
+
+`channel_api` owns and reserves `/api/customer/v1/`, `/api/staff/v1/`, `/api/pos/v1/`,
+`/api/integration/v1/`, and `/internal/v1/`. A contributor publishes inside a reserved prefix only
+through the owner's route contract and a compatible dependency.
+
+Customer browser sessions use an HTTP-only, `SameSite=Lax` cookie scoped to the customer API path.
+Mutations validate same-origin and CSRF data. Native clients use Bearer access tokens and rotating
+refresh tokens; stored values are digests. Realm resolution comes from the website host or the explicit
+channel realm header, not from staff company context.
+
+See [Channel API architecture](/ketsuite/channel-api/) for route construction and the generated
+[Customer API reference](/ketsuite/channel-api-reference/) for the current external contract.
+
+## Transactions and concurrency
+
+Use `ctx.tx()` when a business invariant spans more than one write. Put uniqueness that must survive
+concurrent requests in model indexes, then handle the losing writer deterministically. Application-only
+"check then insert" logic is not a concurrency guarantee.
+
+Idempotent mutations should accept stable identifiers or use KetJS idempotency namespaces at the
+external boundary. The Channel API requires `Idempotency-Key` for operations whose route contract marks
+them idempotent and rejects reuse with a different body.
+
+Warehouse completion treats the picking state as the concurrency fence: the final transition to `done`
+uses compare-and-set, and any generated backorder is committed in the same transaction as the stock
+ledger changes. Staff execution must also validate each submitted quantity against the move demand and
+each return against a delivered move line; a preview version alone does not authorize arbitrary line
+content.
+
+## Review checklist
+
+- Which identity plane calls this code: staff, customer, anonymous, worker, or internal service?
+- Does the machine-readable permission inventory classify every composed module and callable function?
+- Which company, branch, tenant, site, or realm selects the data?
+- Are all resources present in `effects`, including reads used only for validation?
+- Does the route use `ctx.call()` unless it owns an explicit replacement authorization boundary?
+- Can two concurrent requests violate an invariant?
+- Are secrets, tokens, and passwords absent from logs, URLs, screenshots, and committed fixtures?
+- Do denial and cross-scope tests accompany the successful path?

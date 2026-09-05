@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const bootHr = async (t: TestContext) => {
-  const e2e = await createTestApp(ketsuite, { worker: false })
+  const e2e = await createTestDeployment(ketsuite, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'default', branch: 'root:default', branches: ['root:default'] }
   const fixture = async (name: string, input: Record<string, unknown>, actor?: string) =>
@@ -129,6 +129,14 @@ const bootHr = async (t: TestContext) => {
 
 test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n', async (t) => {
   const { e2e, fixture } = await bootHr(t)
+  const currentMonthParts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date())
+  const currentMonth = `${currentMonthParts.find((part) => part.type === 'year')?.value}-${
+    currentMonthParts.find((part) => part.type === 'month')?.value
+  }`
   await e2e.client.login({ login: 'employee', password: 'correct horse' })
 
   const mine = await e2e.client.get('/my/work', { headers: { accept: 'text/html' } })
@@ -191,14 +199,60 @@ test('HR attendance headless E2E: rotation, self service, PIN/QR kiosk and i18n'
   assert.equal(english.status, 200)
   const englishHtml = await english.text()
   assert.match(englishHtml, /Employees/)
+  assert.match(englishHtml, /data-ui="list-page"/)
+  assert.match(englishHtml, /href="\/admin\/hr\?create=1&amp;lang=en"/)
+  assert.doesNotMatch(englishHtml, /id="hr-employee-form"|data-ui="modal-layer"/)
+  assert.doesNotMatch(englishHtml, /name="partnerId"|Partner ID/)
   assert.doesNotMatch(englishHtml, /hr_backend\.[A-Za-z]/)
 
-  const period = await e2e.client.get('/admin/attendance?month=2026-08')
+  const createdHtml = await e2e.client.form<string>('/admin/hr?lang=en', {
+    code: 'NV002',
+    name: 'Lê Thu Hà',
+    userId: '',
+    homeBranchId: 'root:default',
+    timezone: 'Asia/Ho_Chi_Minh',
+    startDate: '2026-08-21',
+  })
+  assert.match(createdHtml, /Lê Thu Hà/)
+  const employees = (await fixture('hr.employee.manageList', {}, 'admin')) as unknown as Row[]
+  const created = employees.find((row) => row.code === 'NV002')
+  assert.equal(created?.name, 'Lê Thu Hà')
+  assert.match(String(created?.partnerId), /^employee:.*:partner$/)
+  const employeePartners = (await fixture(
+    'partner.listPartners',
+    { role: 'employee', search: 'Lê Thu Hà' },
+    'admin',
+  )) as unknown as Row[]
+  assert.equal(employeePartners.length, 1)
+
+  const rejected = await fixture(
+    'hr.employee.create',
+    {
+      id: 'employee-invalid',
+      code: 'NV003',
+      name: 'Partner không được lưu',
+      homeBranchId: 'missing-branch',
+      timezone: 'Asia/Ho_Chi_Minh',
+      startDate: '2026-08-21',
+    },
+    'admin',
+  )
+  assert.equal(rejected.ok, false)
+  const rolledBack = (await fixture(
+    'partner.listPartners',
+    { search: 'Partner không được lưu' },
+    'admin',
+  )) as unknown as Row[]
+  assert.deepEqual(rolledBack, [])
+
+  const period = await e2e.client.get(`/admin/attendance?month=${currentMonth}`)
   assert.equal(period.status, 200)
   assert.match(await period.text(), /Bảng công tháng/)
-  const locked = await e2e.client.form<string>('/admin/attendance?month=2026-08', { action: 'close' })
+  const locked = await e2e.client.form<string>(`/admin/attendance?month=${currentMonth}`, {
+    action: 'close',
+  })
   assert.match(locked, /Đã khóa/)
-  const exported = await e2e.client.get('/admin/attendance/export/2026-08')
+  const exported = await e2e.client.get(`/admin/attendance/export/${currentMonth}`)
   assert.equal(exported.status, 200)
   assert.match(await exported.text(), /employee_code,employee_name,date/)
 

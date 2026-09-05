@@ -1,6 +1,7 @@
 // One server function, three surfaces: an HTTP endpoint, the typed client that
 // calls it, and an agent tool descriptor — all read off the same manifest entry.
 
+import { isVersioned } from './assets.ts'
 import { createServer } from 'node:http'
 import { pipeline } from 'node:stream/promises'
 import { isNavigationRequest, navigablePage } from './respond.ts'
@@ -14,15 +15,42 @@ import { createStreams, dbStreamStore, memoryStreamStore } from './stream.ts'
 import type { StreamStore } from './stream.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { KetError } from '../kernel/errors.ts'
+import { FormValidationError } from './form.ts'
 import type { Adapter, Manifest, Scope } from '../types.ts'
 import type { AdapterPool } from '../data/pool.ts'
 import { KetError as KetErr } from '../kernel/errors.ts'
 import type { ThemeRuntime } from '../theme/render.ts'
 import { compileRoutes } from '../kernel/routes.ts'
+import type { Logger } from './log/logger.ts'
+import { claimRateSlot } from './ratelimit.ts'
+import type { RatePolicy } from './ratelimit.ts'
 import type { RouteParams } from '../kernel/routes.ts'
 import { html, trustedMarkup } from '@ketvietlab/ketjs-view'
 
 type HttpRoute = (url: URL, req: IncomingMessage, params: RouteParams) => Promise<RouteResult> | RouteResult
+
+/**
+ * What an error means over HTTP.
+ *
+ * Every KetError used to answer 400, which said "you sent something wrong" to a
+ * person whose request was fine and whose permissions were not. A monitor cannot
+ * tell a missing grant from a malformed body, and neither can a client.
+ */
+export const statusForError = (code: string): number => {
+  if (code === 'E_FN_NOT_PERMITTED') return 403
+  if (code === 'E_NOT_FOUND' || code === 'E_UNKNOWN_FUNCTION') return 404
+  if (code === 'E_PAYLOAD_TOO_LARGE') return 413
+  return 400
+}
+
+/** True when this request is a browser navigating, rather than a client calling. */
+export const wantsHtml = (req: IncomingMessage): boolean => {
+  const accept = String(req.headers.accept ?? '')
+  if (!accept.includes('text/html')) return false
+  // A fragment request is answered by the caller's own error handling; replacing
+  // a slot with a full document would paint a page inside a page.
+  return String(req.headers['x-ket-navigation'] ?? '') === ''
+}
 
 export type ServeOpts = {
   manifest: Manifest
@@ -42,8 +70,49 @@ export type ServeOpts = {
     | ThemeRuntime['clients']
     | ((url: URL, req: IncomingMessage) => Promise<ThemeRuntime['clients']>)
   port?: number
-  /** Defaults to a table on the app's adapter; swap for memory on a single instance. */
+  /** Defaults to a table on the deployment adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
+  /**
+   * Authorize a resumable-stream request and map its public id to the internal,
+   * tenant-namespaced topic stored by `streams`.
+   *
+   * The endpoint is disabled when this resolver is absent. Returning null also
+   * refuses the request, so looking up a topic never happens before the deployment
+   * has authenticated the caller and chosen its tenant.
+   */
+  resolveStream?: (id: string, url: URL, req: IncomingMessage) => string | null | Promise<string | null>
+  /** Maximum buffered JSON body for the generic function transport. Defaults to 1 MiB. */
+  maxJsonBodyBytes?: number
+  /**
+   * A ceiling on how often one caller may reach a route, or null for no ceiling.
+   *
+   * Deliberately per-request rather than global: a durable check costs a database
+   * round trip, so applying it to everything would hand an attacker a lever rather
+   * than take one away. Return a policy for the handful of routes where repetition
+   * is the abuse — signing in, refreshing a token, an expensive report — and null
+   * everywhere else. Volume belongs to whatever sits in front of this process.
+   */
+  rateLimit?: (url: URL, req: IncomingMessage) => RatePolicy | null
+
+  /**
+   * Where request-level records go.
+   *
+   * Without one, a 500 leaves no trace on the server at all: the catch below turns
+   * an exception into a JSON body for the client and the stack is discarded.
+   */
+  log?: Logger
+  /**
+   * Render an error as a page, for a browser that was navigating.
+   *
+   * Returning null falls back to JSON, which is what a client calling the API
+   * wants and what a person who clicked a link never did.
+   */
+  renderErrorPage?: (o: {
+    code: string
+    status: number
+    url: URL
+    req: IncomingMessage
+  }) => Promise<string | null>
   /**
    * Which language this request is in. Resolved in one place, like the datastore,
    * so a handler cannot answer in the wrong one by forgetting to pass it along.
@@ -73,8 +142,8 @@ export type ServeOpts = {
 
 /**
  * A mount is either a directory, or a function from the rest of the path to an
- * absolute file — which is how a module's assets can stop being served the moment
- * the module is uninstalled, without rebuilding the server.
+ * absolute file — which lets a composed module resolve its own assets without
+ * coupling the server to that module's file layout.
  */
 export type AssetMount = {
   prefix: string
@@ -82,6 +151,19 @@ export type AssetMount = {
   resolve?: (rest: string, url: URL, req: IncomingMessage) => Promise<string | null>
 }
 
+/**
+ * The file types a module may publish, and what they are served as.
+ *
+ * This doubles as the list of what gets served at all, so it has to cover what
+ * a browser actually loads from an asset directory rather than only what this
+ * repo happens to ship today. It was briefly the shorter list, which 404'd
+ * `.jpeg`, `.gif`, `.webp` and `.woff` — all of which had worked, because an
+ * unknown type used to fall through to `application/octet-stream` and browsers
+ * sniff images successfully.
+ *
+ * What stays out is source and anything that carries it: `.ts`, `.tsx`, and
+ * `.map` — a minified bundle's sourcemap inlines the whole original file.
+ */
 const ASSET_MIME: Record<string, string> = {
   '.css': 'text/css',
   '.js': 'text/javascript',
@@ -89,9 +171,26 @@ const ASSET_MIME: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
   '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
+  '.pdf': 'application/pdf',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
 }
+
+/**
+ * Extensions are compared in lower case, because a file called `logo.PNG` is
+ * a PNG. `extname` reports the case it finds, so the table lookup missed it.
+ */
+const assetType = (rel: string): string | undefined => ASSET_MIME[extname(rel).toLowerCase()]
 
 const json = (res: ServerResponse, status: number, body: unknown): void => {
   const s = JSON.stringify(body, null, 2)
@@ -113,6 +212,26 @@ const contentType = (type: string): string => {
 
 const islandScript = '<script type="module" src="/_ket/islands.js"></script>'
 const viewRuntimeUrl = '/_ket/view/index.js'
+const TOKENS_PATH = '/_ket/tokens.css'
+const tokensLink = `<link rel="stylesheet" href="${TOKENS_PATH}">`
+
+/**
+ * A theme's declared tokens, linked into the document it renders.
+ *
+ * `tokens` had been a declaration with no consumer: every theme wrote one, the
+ * manifest composed them, `tokensToCss` turned them into `--ket-*` custom
+ * properties inside the `ket.theme` layer — and nothing ever put the result on a
+ * page, so themes hard-coded a second palette in their own stylesheet instead. The
+ * framework owns the cascade order it publishes, which is why it links this rather
+ * than asking every theme to.
+ */
+const withThemeTokens = (body: string, css: string): string => {
+  if (!css || body.includes(TOKENS_PATH)) return body
+  const closingHead = body.indexOf('</head>')
+  return closingHead < 0
+    ? tokensLink + body
+    : body.slice(0, closingHead) + tokensLink + body.slice(closingHead)
+}
 
 const bootstrapDocument = (body: string): string => {
   if (
@@ -322,11 +441,87 @@ const send = async (res: ServerResponse, result: RouteResult): Promise<void> => 
   await pipeline(result.body, res)
 }
 
-const readBody = async (req: IncomingMessage): Promise<Record<string, unknown>> => {
+const requestUrl = (req: IncomingMessage): URL => {
+  const target = req.url ?? '/'
+  const host = req.headers.host ?? 'localhost'
+  const invalid = () =>
+    new KetError({
+      code: 'E_INVALID_REQUEST_URL',
+      message: 'request target or Host header is invalid',
+    })
+
+  // KetJS is an origin server, not a forward proxy. Absolute-form and
+  // scheme-relative targets can replace the Host-derived authority in WHATWG URL
+  // parsing, and a backslash is treated like a slash for special schemes.
+  if (!target.startsWith('/') || target.startsWith('//') || target.includes('\\')) throw invalid()
+
+  // Parse only an authority. Userinfo and path/query delimiters are all valid to
+  // URL(), but none are valid in the Host contract and each can change which
+  // tenant a resolver sees.
+  const forbiddenHostCharacter = [...host].some((character) => {
+    const code = character.charCodeAt(0)
+    return (
+      character.trim() === '' ||
+      code <= 0x1f ||
+      (code >= 0x7f && code <= 0x9f) ||
+      '@/\\?#%'.includes(character)
+    )
+  })
+  if (!host || forbiddenHostCharacter) throw invalid()
+  try {
+    const base = new URL(`http://${host}`)
+    if (base.username || base.password || base.pathname !== '/' || base.search || base.hash) throw invalid()
+    const url = new URL(target, base)
+    if (url.origin !== base.origin) throw invalid()
+    return url
+  } catch {
+    throw invalid()
+  }
+}
+
+const decodeRequestPath = (value: string): string => {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    throw new KetError({
+      code: 'E_ROUTE_ENCODING',
+      message: 'request path contains invalid percent encoding',
+    })
+  }
+}
+
+const readBody = async (req: IncomingMessage, maxBytes: number): Promise<Record<string, unknown>> => {
+  const declared = Number(req.headers['content-length'])
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new KetError({
+      code: 'E_PAYLOAD_TOO_LARGE',
+      message: `JSON body exceeds ${maxBytes} bytes`,
+    })
+  }
   const chunks: Buffer[] = []
-  for await (const c of req) chunks.push(c as Buffer)
+  let total = 0
+  for await (const held of req) {
+    const chunk = Buffer.isBuffer(held) ? held : Buffer.from(held)
+    total += chunk.byteLength
+    if (total > maxBytes) {
+      throw new KetError({
+        code: 'E_PAYLOAD_TOO_LARGE',
+        message: `JSON body exceeds ${maxBytes} bytes`,
+      })
+    }
+    chunks.push(chunk)
+  }
   if (!chunks.length) return {}
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
+  let value: unknown
+  try {
+    value = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  } catch {
+    throw new KetError({ code: 'E_INVALID_JSON_BODY', message: 'request body must be valid JSON' })
+  }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new KetError({ code: 'E_INVALID_JSON_BODY', message: 'request body must be a JSON object' })
+  }
+  return value as Record<string, unknown>
 }
 
 export async function createKetServer(o: ServeOpts) {
@@ -336,6 +531,12 @@ export async function createKetServer(o: ServeOpts) {
     throw new KetErr({
       code: 'E_NO_RESOLVER',
       message: 'a pool needs resolveDatastore to know which database a request belongs to',
+    })
+  const maxJsonBodyBytes = o.maxJsonBodyBytes ?? 1024 * 1024
+  if (!Number.isSafeInteger(maxJsonBodyBytes) || maxJsonBodyBytes <= 0)
+    throw new KetErr({
+      code: 'E_JSON_BODY_LIMIT',
+      message: 'maxJsonBodyBytes must be a positive safe integer',
     })
 
   // Compile once: matching stays cheap per request, and an ambiguous surface is
@@ -351,7 +552,7 @@ export async function createKetServer(o: ServeOpts) {
       throw new KetErr({
         code: 'E_UNKNOWN_TENANT',
         message: `no datastore for ${url.host}${url.pathname}`,
-        hint: 'resolveDatastore returned null — the request names a tenant this app does not serve',
+        hint: 'resolveDatastore returned null — the request names a tenant this deployment does not serve',
       })
     }
     return o.pool.with(key, fn)
@@ -388,15 +589,37 @@ export async function createKetServer(o: ServeOpts) {
     o.streamStore ?? (o.adapter ? dbStreamStore(o.adapter) : memoryStreamStore()),
   )
 
-  const server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+  const tenantForLog = (url: URL, req: IncomingMessage): string | null => {
     try {
-      // Static files. Several mounts, because the app has its own and every
-      // installed module may ship some — and a module's must stop being served the
-      // moment it is switched off, which is what `resolve` is for: it answers per
-      // request instead of being fixed when the server was built.
+      return o.resolveDatastore?.(url, req) ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const server = createServer(async (req, res) => {
+    const started = Date.now()
+    // The route pattern, never the pathname: a raw path carries record ids and a
+    // query string, which is how customer data reaches a log aggregator. An
+    // unmatched path stays unnamed for the same reason — the status already says
+    // what happened, and the string a stranger typed is not worth keeping.
+    let route = '(unmatched)'
+    let requestLog = o.log
+    try {
+      const url = requestUrl(req)
+      // Which tenant this request belongs to, for attribution only.
+      //
+      // Guarded, and the guard is the point: `resolveDatastore` throws
+      // E_UNKNOWN_TENANT for a host this deployment does not serve, and static
+      // assets are answered before any tenant is needed. Letting that throw here
+      // would mean adding logging had changed what the server serves.
+      requestLog = o.log?.child({ tenant: tenantForLog(url, req) })
+      // Static files. Several mounts, because the deployment has its own and every
+      // composed module may ship some. `resolve` keeps the file lookup behind the
+      // same request boundary as every other route.
       for (const mount of mounts) {
         if (!url.pathname.startsWith(mount.prefix)) continue
+        route = 'asset'
         // Path traversal is the one thing a static handler must not get wrong.
         const rel = normalize(url.pathname.slice(mount.prefix.length)).replace(/^(\.\.[/\\])+/, '')
         const file =
@@ -406,10 +629,24 @@ export async function createKetServer(o: ServeOpts) {
               : null
             : await (mount.resolve as NonNullable<AssetMount['resolve']>)(rel, url, req)
         if (file === null) break
+        // A module publishes a *directory*, not a list of files, so anything
+        // else that lives in that directory went out with the assets: the TSX an
+        // island is authored in, a sourcemap with the original text inlined, a
+        // README. They were answered as `application/octet-stream` — a download
+        // rather than an error, which is worse than useless for source nobody
+        // meant to publish. `ASSET_MIME` is already the list of things a browser
+        // loads as a page asset, so it is the list of things that get served.
+        const type = assetType(rel)
+        if (type === undefined) break
         try {
           const body = await readFile(file)
-          const type = ASSET_MIME[extname(rel)] ?? 'application/octet-stream'
-          res.writeHead(200, { 'content-type': contentType(type), 'cache-control': 'no-cache' })
+          // A URL that names its own content can never go stale, so it is kept
+          // rather than revalidated. Anything else keeps the old answer: safe,
+          // and re-fetched every time, which is what versioning is for.
+          res.writeHead(200, {
+            'content-type': contentType(type),
+            'cache-control': isVersioned(rel) ? 'public, max-age=31536000, immutable' : 'no-cache',
+          })
           return res.end(body)
         } catch {
           break
@@ -420,15 +657,61 @@ export async function createKetServer(o: ServeOpts) {
         return res.end('not found')
       }
 
-      const route = matchRoute(url.pathname)
-      if (route) {
-        const r = await route.value(url, req, route.params)
+      // Before anything expensive, including before a route is chosen: refusing
+      // after doing the work is a limit that costs what it was meant to save.
+      const policy = o.rateLimit?.(url, req)
+      if (policy) {
+        const verdict = await withDb(url, req, (adapter) => claimRateSlot(adapter, policy))
+        if (!verdict.ok) {
+          route = `rate:${policy.action}`
+          requestLog?.log({
+            level: 'warn',
+            event: 'rate_limited',
+            fields: {
+              action: policy.action,
+              limit: policy.limit,
+              retryAfterMs: verdict.retryAfterMs,
+              method: req.method ?? '',
+            },
+          })
+          res.writeHead(429, {
+            'content-type': 'application/json; charset=utf-8',
+            'retry-after': String(Math.max(1, Math.ceil(verdict.retryAfterMs / 1_000))),
+          })
+          return res.end(
+            JSON.stringify({ code: 'E_RATE_LIMITED', message: `too many "${policy.action}" requests` }),
+          )
+        }
+      }
+
+      const matched = matchRoute(url.pathname)
+      if (matched) {
+        route = matched.path
+        const r = await matched.value(url, req, matched.params)
         return await send(res, r)
       }
 
-      if (url.pathname === '/_ket/manifest') return json(res, 200, o.manifest)
-      if (url.pathname === '/_ket/agent') return json(res, 200, agentDescriptor(o.manifest))
+      // Framework endpoints name themselves: the paths are fixed, so there is no
+      // identifier to leak and no cardinality to worry about.
+      if (url.pathname === '/_ket/manifest') {
+        route = url.pathname
+        return json(res, 200, o.manifest)
+      }
+      if (url.pathname === '/_ket/agent') {
+        route = url.pathname
+        return json(res, 200, agentDescriptor(o.manifest))
+      }
+      if (url.pathname === TOKENS_PATH) {
+        route = url.pathname
+        const theme = await resolveTheme(url, req)
+        res.writeHead(theme ? 200 : 404, {
+          'content-type': contentType(theme ? 'text/css' : 'text/plain'),
+          'cache-control': 'no-cache',
+        })
+        return res.end(theme ? theme.tokensCss : 'not found')
+      }
       if (url.pathname === '/_ket/islands.js') {
+        route = url.pathname
         const theme = await resolveTheme(url, req)
         const clients = await resolveIslandClients(url, req, theme)
         res.writeHead(200, {
@@ -441,7 +724,13 @@ export async function createKetServer(o: ServeOpts) {
       // Resumable stream: the client reconnects with ?from=<cursor> and gets
       // exactly what it missed, never a duplicate and never a gap.
       if (url.pathname.startsWith('/_ket/stream/')) {
-        const id = url.pathname.slice('/_ket/stream/'.length)
+        route = '/_ket/stream'
+        const publicId = decodeRequestPath(url.pathname.slice('/_ket/stream/'.length))
+        // A public stream id is never a storage key by default. The resolver is the
+        // deployment's authentication and tenant boundary; omitting it keeps this
+        // framework endpoint closed, and null does not reveal whether a topic exists.
+        const id = await o.resolveStream?.(publicId, url, req)
+        if (!id) return json(res, 404, { code: 'E_STREAM_NOT_FOUND', message: 'stream not found' })
         const from = Number(url.searchParams.get('from') ?? 0)
         res.writeHead(200, {
           'content-type': 'text/event-stream',
@@ -467,7 +756,8 @@ export async function createKetServer(o: ServeOpts) {
       }
 
       if (url.pathname.startsWith('/_ket/fn/') && req.method === 'POST') {
-        const fnKey = decodeURIComponent(url.pathname.slice('/_ket/fn/'.length))
+        route = '/_ket/fn'
+        const fnKey = decodeRequestPath(url.pathname.slice('/_ket/fn/'.length))
         const meta = o.manifest.functions[fnKey]
         if (meta?.exposure === 'internal') {
           throw new KetError({
@@ -476,7 +766,10 @@ export async function createKetServer(o: ServeOpts) {
             hint: 'call it from the trusted route that owns its security policy',
           })
         }
-        const args = await readBody(req)
+        // Bound the untrusted body before authentication/session resolvers run. A
+        // caller must not be able to make those expensive paths retain an unbounded
+        // payload first, whether or not Content-Length was supplied.
+        const args = await readBody(req, maxJsonBodyBytes)
         // Resolved before the pool lease, so a session lookup never holds one.
         const scope = await o.resolveScope?.(url, req)
         const allow = await o.resolveAllow?.(url, req)
@@ -491,6 +784,7 @@ export async function createKetServer(o: ServeOpts) {
             queueNotify: o.queueNotify,
             dryRun: url.searchParams.get('dryRun') === '1',
             idempotencyKey: (req.headers['idempotency-key'] as string | undefined) ?? null,
+            idempotencyNamespace: `fn:http:${scope?.company ?? 'none'}:${actor ?? 'anonymous'}`,
           }),
         )
         return json(res, 200, result)
@@ -517,7 +811,9 @@ export async function createKetServer(o: ServeOpts) {
             }),
           )
         }
-        const fullHtml = bootstrapDocument(theme.renderRegion('layout', scope))
+        const fullHtml = bootstrapDocument(
+          withThemeTokens(theme.renderRegion('layout', scope), theme.tokensCss),
+        )
         res.writeHead(200, {
           'content-type': 'text/html; charset=utf-8',
           ...(o.pageRegion ? { vary: 'X-Ket-Navigation' } : {}),
@@ -526,14 +822,48 @@ export async function createKetServer(o: ServeOpts) {
       }
       return json(res, 404, { code: 'E_NOT_FOUND', message: `no route for ${url.pathname}` })
     } catch (e) {
+      // Anything that is not a named contract failure escaped a `try` nobody wrote,
+      // and so did a failure that arrived after the headers went out. Both used to
+      // be discarded here: the client got a message and the server kept nothing.
+      if (!(e instanceof KetError) || res.headersSent) {
+        requestLog?.log({
+          level: 'error',
+          event: 'unhandled',
+          durationMs: Date.now() - started,
+          error: e,
+          fields: { method: req.method ?? '', route, headersSent: res.headersSent },
+        })
+      }
       // A streaming response has already sent its headers; there is no status code
       // left to send, so the only honest thing is to close the socket.
       if (res.headersSent) {
         if (!res.writableEnded) res.destroy(e as Error)
         return
       }
-      if (e instanceof KetError) return json(res, e.code === 'E_PAYLOAD_TOO_LARGE' ? 413 : 400, e.toJSON())
+      if (e instanceof FormValidationError) return json(res, 422, e.toJSON())
+      const status = e instanceof KetError ? statusForError(e.code) : 500
+      const code = e instanceof KetError ? e.code : 'E_INTERNAL'
+      if (o.renderErrorPage && wantsHtml(req)) {
+        // A page that fails to render an error is worse than the error, so the
+        // fallback is the JSON that was always there.
+        const page = await o.renderErrorPage({ code, status, url: requestUrl(req), req }).catch(() => null)
+        if (page !== null) {
+          res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' })
+          return res.end(page)
+        }
+      }
+      if (e instanceof KetError) return json(res, status, e.toJSON())
       return json(res, 500, { code: 'E_INTERNAL', message: (e as Error).message })
+    } finally {
+      requestLog?.log({
+        // A stylesheet is not an application event. One page load is dozens of
+        // asset requests, and at info they would be most of what a deployment
+        // says about itself.
+        level: route === 'asset' ? 'debug' : 'info',
+        event: 'http_request',
+        durationMs: Date.now() - started,
+        fields: { method: req.method ?? '', route, status: res.statusCode },
+      })
     }
   })
 

@@ -1,0 +1,46 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="progress"] {
+    display: grid;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="progress-label"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-3);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="progress-value"] {
+    color: var(--kv-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="progress-track"] {
+    height: 4px;
+    overflow: hidden;
+    border-radius: var(--kv-radius-full);
+    background: color-mix(in srgb, var(--kv-text-main) 9%, transparent);
+  }
+
+  :where([data-kv-design-system]) [data-ui="progress-bar"] {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--kv-accent);
+  }
+
+  :where([data-kv-design-system]) [data-ui="progress"][data-tone="positive"] [data-ui="progress-bar"] {
+    background: var(--kv-success);
+  }
+
+  :where([data-kv-design-system]) [data-ui="progress"][data-tone="warning"] [data-ui="progress-bar"] {
+    background: var(--kv-warning);
+  }
+
+  :where([data-kv-design-system]) [data-ui="progress"][data-tone="danger"] [data-ui="progress-bar"] {
+    background: var(--kv-danger);
+  }
+}

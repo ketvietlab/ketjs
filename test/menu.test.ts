@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildMenu, compose, defineModule, restrictManifest } from '@ketvietlab/ketjs'
+import { buildMenu, compose, defineModule } from '@ketvietlab/ketjs'
 
 /** Composition reports every violation at once, so a test asks what is in the pile. */
 const violations = (fn: () => unknown): Array<{ code: string; message: string }> => {
@@ -115,16 +115,6 @@ test('menu: an entry with no needs is visible to anyone who reaches the page', (
   assert.equal(tree[0]!.children[0]!.path, '/admin')
 })
 
-test('menu: uninstalling a module takes its entries with it', () => {
-  const m = compose([sales, admin])
-  const live = restrictManifest(m, new Set(['admin']))
-  assert.deepEqual(Object.keys(live.menus).sort(), ['admin', 'admin.settings'])
-  assert.deepEqual(
-    buildMenu(live).map((n) => n.id),
-    ['admin'],
-  )
-})
-
 test('menu: the branch leading to the open page is marked, all the way up', () => {
   const tree = buildMenu(compose([sales, admin]), { active: '/quotes' })
   assert.equal(tree[0]!.active, true, 'the app')
@@ -210,4 +200,182 @@ test('menu: the sidebar search keeps a branch that matches anywhere along it', (
     ['sales', 'admin'],
     'an empty search is not a search',
   )
+})
+
+/**
+ * A module where reading and writing are separate capabilities, which is the
+ * situation `for` exists for: the read is granted widely so other screens can
+ * resolve names, and the write says whose surface this actually is.
+ */
+const hotel = defineModule({
+  name: 'hotel',
+  functions: {
+    listRooms: { effects: [], handler: () => [] },
+    listProperties: { effects: [], handler: () => [] },
+    saveProperty: { effects: ['write'], handler: () => [] },
+    completeCleaning: { effects: ['write'], handler: () => [] },
+  },
+  menus: {
+    hotel: { label: 'Hotel' },
+    'hotel.cleaning': {
+      parent: 'hotel',
+      label: 'Cleaning',
+      path: '/admin/hotel/cleaning',
+      needs: 'hotel.listRooms',
+      for: ['hotel.completeCleaning'],
+    },
+    'hotel.properties': {
+      parent: 'hotel',
+      label: 'Properties',
+      path: '/admin/hotel/properties',
+      needs: 'hotel.listProperties',
+      for: ['hotel.saveProperty'],
+    },
+  },
+})
+
+const hotelManifest = () => compose([hotel])
+
+test('intent: a surface someone may read but does not work on leaves the main list', () => {
+  const tree = buildMenu(hotelManifest(), {
+    // A housekeeper: they may read the property list so a room picker can name
+    // the building, and that is the whole of their interest in it.
+    allow: ['hotel.listRooms', 'hotel.listProperties', 'hotel.completeCleaning'],
+    intent: true,
+  })
+  const items = tree[0]!.children
+  assert.deepEqual(
+    items.filter((item) => !item.secondary).map((item) => item.path),
+    ['/admin/hotel/cleaning'],
+  )
+  assert.ok(
+    items.some((item) => item.path === '/admin/hotel/properties' && item.secondary),
+    'the property list stays in the tree so search can still find it',
+  )
+})
+
+test('intent: a heading follows its children out of the main list', () => {
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties', 'hotel.completeCleaning'],
+    intent: true,
+  })
+  assert.equal(tree[0]!.secondary, false, 'a group holding live work stays')
+
+  const readerOnly = buildMenu(hotelManifest(), {
+    allow: ['hotel.listProperties'],
+    intent: true,
+  })
+  assert.equal(
+    readerOnly[0]!.children.every((child) => child.secondary),
+    false,
+    'a viewer nothing claims keeps the permitted tree rather than an empty sidebar',
+  )
+})
+
+test('intent: nobody is left with an empty sidebar', () => {
+  // This viewer may open both screens and works on neither. Narrowing would
+  // leave them nothing, which reads as a broken deployment rather than as a
+  // deployment that has nothing for them.
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties'],
+    intent: true,
+  })
+  assert.deepEqual(
+    tree[0]!.children.map((child) => child.secondary),
+    [false, false],
+  )
+})
+
+test('intent: an entry that declares nothing is everyone’s, as it was before', () => {
+  const legacy = defineModule({
+    name: 'legacy',
+    functions: { list: { effects: [], handler: () => [] } },
+    menus: {
+      legacy: { label: 'Legacy' },
+      'legacy.list': { parent: 'legacy', label: 'List', path: '/admin/legacy', needs: 'legacy.list' },
+    },
+  })
+  const tree = buildMenu(compose([legacy]), { allow: ['legacy.list'], intent: true })
+  assert.equal(tree[0]!.children[0]!.secondary, false)
+})
+
+test('intent: off by default, so a caller that does not ask keeps the whole tree', () => {
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties', 'hotel.completeCleaning'],
+  })
+  assert.equal(
+    tree[0]!.children.every((child) => child.secondary === false),
+    true,
+  )
+})
+
+test('groups: a deployment regroups the menu the way its shifts run', () => {
+  // The module puts both screens under one heading because both are its code.
+  // The hotel runs a front desk and a cash desk, and those are different shifts.
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties'],
+    groups: [
+      { id: 'shift', label: 'Ca làm việc', items: ['hotel.cleaning'] },
+      { id: 'setup', label: 'Thiết lập', items: ['hotel.properties'] },
+    ],
+  })
+  assert.deepEqual(
+    tree[0]!.children.map((child) => [child.label, child.children.map((leaf) => leaf.path)]),
+    [
+      ['Ca làm việc', ['/admin/hotel/cleaning']],
+      ['Thiết lập', ['/admin/hotel/properties']],
+    ],
+  )
+})
+
+test('groups: the order declared is the order shown, for groups and for their entries', () => {
+  // Both entries sit at sequence 10 under different module headings — a tie the
+  // alphabet used to break, which put "Thiết lập" above "Ca làm việc".
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties'],
+    groups: [
+      { id: 'shift', label: 'Ca làm việc', items: ['hotel.properties', 'hotel.cleaning'] },
+      { id: 'setup', label: 'Thiết lập', items: [] },
+    ].filter((group) => group.items.length),
+  })
+  assert.deepEqual(
+    tree[0]!.children.map((child) => child.label),
+    ['Ca làm việc'],
+  )
+  assert.deepEqual(
+    tree[0]!.children[0]!.children.map((leaf) => leaf.path),
+    ['/admin/hotel/properties', '/admin/hotel/cleaning'],
+    'entries follow the order the deployment listed them, not their module sequence',
+  )
+})
+
+test('groups: an entry the deployment does not claim keeps the heading its module gave it', () => {
+  const tree = buildMenu(hotelManifest(), {
+    allow: ['hotel.listRooms', 'hotel.listProperties'],
+    groups: [{ id: 'shift', label: 'Ca làm việc', items: ['hotel.cleaning'] }],
+  })
+  assert.deepEqual(
+    tree[0]!.children.map((child) => [child.label, child.path]),
+    [
+      ['Ca làm việc', null],
+      // Unclaimed, so it stays exactly where its module put it.
+      ['Properties', '/admin/hotel/properties'],
+    ],
+  )
+})
+
+test('demote: a deployment can take an entry off the main list without touching permission', () => {
+  const tree = buildMenu(hotelManifest(), {
+    // This viewer works on both screens; the deployment still says one of them
+    // does not deserve a permanent row.
+    allow: ['hotel.listRooms', 'hotel.listProperties', 'hotel.completeCleaning', 'hotel.saveProperty'],
+    intent: true,
+    demote: ['hotel.properties'],
+  })
+  const items = tree[0]!.children
+  assert.deepEqual(
+    items.filter((item) => !item.secondary).map((item) => item.path),
+    ['/admin/hotel/cleaning'],
+  )
+  assert.ok(items.some((item) => item.path === '/admin/hotel/properties' && item.secondary))
 })

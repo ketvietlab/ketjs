@@ -1,7 +1,8 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone } from '@ketvietlab/ketjs'
+import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone, like, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, needsRehash, verifyPassword } from './password.ts'
+import { advanceAuthorizationRevision, recordAuthorizationAudit } from './authorization.ts'
 import { roleFunctions } from './roles.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
@@ -44,12 +45,18 @@ const audit = async (
 
 const superuser = async (ctx: Ctx, userId: string): Promise<boolean> => {
   const U = ctx.table('user.User')
-  return Boolean(await ctx.db.one(from(U).where(eq(U.id, userId), eq(U.active, true), eq(U.superuser, true))))
+  const row = await ctx.db.one(from(U).where(eq(U.id, userId), eq(U.active, true), eq(U.superuser, true)))
+  if (!row) return false
+  return !row.superuserExpiresAt || timestampMs(row.superuserExpiresAt) > Date.now()
 }
 
 const liveSuperusers = async (ctx: Ctx): Promise<number> => {
   const U = ctx.table('user.User')
-  return ctx.db.count(from(U).where(eq(U.active, true), eq(U.superuser, true), eq(U.accessKind, 'internal')))
+  const rows = await ctx.db.all(
+    from(U).where(eq(U.active, true), eq(U.superuser, true), eq(U.accessKind, 'internal')),
+  )
+  return rows.filter((row) => !row.superuserExpiresAt || timestampMs(row.superuserExpiresAt) > Date.now())
+    .length
 }
 
 const lockSecurityGuard = async (ctx: Ctx, id: string): Promise<void> => {
@@ -60,6 +67,12 @@ const lockSecurityGuard = async (ctx: Ctx, id: string): Promise<void> => {
 }
 
 const lockLastSuperuser = (ctx: Ctx): Promise<void> => lockSecurityGuard(ctx, 'last-superuser')
+
+const AUTHORIZATION_SCOPE_EFFECTS = [
+  'read:user.AuthorizationRevision',
+  'write:user.AuthorizationRevision',
+  'write:user.SecurityAudit',
+]
 
 const throttleIds = (login: string, networkFingerprint: string): string[] => [
   `login:${digest(login)}`,
@@ -214,7 +227,14 @@ export const functions: Record<string, FnSpec> = {
   ...roleFunctions,
 
   listUsers: defineFn({
-    input: { includeArchived: 'bool?' },
+    // `search` and `limit` are what a relational picker sends on every
+    // keystroke; without them the field could only ever be a plain select over
+    // every user in the tenant.
+    // `ids` is for the caller that already knows who it needs. A page of tasks
+    // wants the names behind its handful of assigneeIds, and the search-and-limit
+    // shape a picker sends cannot answer that: it caps at five hundred, so the
+    // five hundred and first user comes back as a raw id where a name belongs.
+    input: { includeArchived: 'bool?', search: 'text?', ids: 'json?', limit: 'int?' },
     output: {
       id: 'id',
       login: 'text',
@@ -235,8 +255,17 @@ export const functions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
-      const q = from(U).orderBy(asc(U.login))
-      const rows = await ctx.db.all(a.includeArchived === true ? q : q.where(eq(U.active, true)))
+      const wanted = Array.isArray(a.ids) ? [...new Set(a.ids.map(String))] : null
+      if (wanted && !wanted.length) return []
+      let q = from(U).orderBy(asc(U.login))
+      if (wanted) q = q.where(inArray(U.id, wanted))
+      if (a.includeArchived !== true) q = q.where(eq(U.active, true))
+      if (a.search) {
+        const needle = `%${String(a.search).trim()}%`
+        q = q.where(or(like(U.name, needle), like(U.login, needle)))
+      }
+      if (typeof a.limit === 'number') q = q.limit(Math.max(1, Math.min(500, a.limit)))
+      const rows = await ctx.db.all(q)
       return rows.map((row) => ({ ...row, passwordReady: Boolean(row.passwordHash) }))
     },
   }),
@@ -299,6 +328,7 @@ export const functions: Record<string, FnSpec> = {
     // that can mint itself one.
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
+      const existing = await ctx.db.one(from(U).where(eq(U.id, a.id)))
       const login = normalizeLogin(a.login)
       const password = String(a.password ?? '')
       const accessKind = String(a.accessKind ?? 'internal')
@@ -310,11 +340,26 @@ export const functions: Record<string, FnSpec> = {
       if (a.timezone && !isTimezone(String(a.timezone))) errors.push(issue('timezone', 'user.error.timezone'))
       if (password && password.length < 8) errors.push(issue('password', 'user.error.passwordLength'))
       if (password && ctx.actor) errors.push(issue('password', 'user.error.adminPassword'))
-      if (await ctx.db.one(from(U).where(eq(U.login, login))))
-        errors.push(issue('login', 'user.error.loginUnique'))
+      const loginOwner = await ctx.db.one(from(U).where(eq(U.login, login)))
+      if (loginOwner && loginOwner.id !== a.id) errors.push(issue('login', 'user.error.loginUnique'))
       if (a.superuser === true && ctx.actor && !(await superuser(ctx, ctx.actor)))
         errors.push(issue('superuser', 'user.error.superuserRequired'))
       if (errors.length) return invalid(errors)
+      if (existing) {
+        const samePassword = password
+          ? !!existing.passwordHash && (await verifyPassword(password, String(existing.passwordHash)))
+          : !existing.passwordHash
+        const same =
+          existing.login === login &&
+          existing.name === String(a.name).trim() &&
+          (existing.email ?? null) === (a.email || null) &&
+          (existing.timezone ?? null) === (a.timezone || null) &&
+          (existing.partnerId ?? null) === (a.partnerId || null) &&
+          existing.accessKind === accessKind &&
+          existing.superuser === (a.superuser === true) &&
+          samePassword
+        return same ? { ok: true, id: a.id } : invalid([issue('id', 'user.error.idConflict')])
+      }
       const inserted = await ctx.db.insertIfAbsent('user.User', {
         id: a.id,
         login,
@@ -373,7 +418,9 @@ export const functions: Record<string, FnSpec> = {
       'write:user.SecurityAudit',
     ],
     handler: async (ctx: Ctx, a) => {
-      if (ctx.actor !== 'system:provision') return invalid([issue('adminLogin', 'user.error.provisionActor')])
+      const developmentScaffold = ctx.actor === 'system:scaffold'
+      if (ctx.actor !== 'system:provision' && !developmentScaffold)
+        return invalid([issue('adminLogin', 'user.error.provisionActor')])
       const companyName = String(a.companyName).trim()
       const companyCode = String(a.companyCode).trim().toUpperCase()
       const currency = String(a.currency).trim().toUpperCase()
@@ -390,7 +437,9 @@ export const functions: Record<string, FnSpec> = {
         ['adminName', adminName],
       ] as const)
         if (!value) errors.push(issue(field, 'user.error.required'))
-      if (adminPassword.length < 8) errors.push(issue('adminPassword', 'user.error.passwordLength'))
+      const scaffoldCredential = developmentScaffold && adminLogin === 'admin' && adminPassword === 'admin'
+      if (adminPassword.length < 8 && !scaffoldCredential)
+        errors.push(issue('adminPassword', 'user.error.passwordLength'))
       if (errors.length) return invalid(errors)
 
       const U = ctx.table('user.User')
@@ -429,6 +478,7 @@ export const functions: Record<string, FnSpec> = {
           parentId: null,
           currency,
           active: true,
+          version: 1,
         })
         await tx.db.insert('company.Branch', {
           id: branchId,
@@ -696,6 +746,7 @@ export const functions: Record<string, FnSpec> = {
       'write:user.Membership',
       'read:user.BranchMembership',
       'write:user.BranchMembership',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
     ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
@@ -713,13 +764,14 @@ export const functions: Record<string, FnSpec> = {
         const M = tx.table('user.Membership')
         const existing = await tx.db.one(from(M).where(eq(M.userId, a.userId), eq(M.companyId, a.companyId)))
         const membershipId = String(existing?.id ?? a.id)
-        if (!existing)
-          await tx.db.insertIfAbsent('user.Membership', {
-            id: membershipId,
-            userId: a.userId,
-            companyId: a.companyId,
-          })
-        await tx.db.insertIfAbsent('user.BranchMembership', {
+        const membership = existing
+          ? null
+          : await tx.db.insertIfAbsent('user.Membership', {
+              id: membershipId,
+              userId: a.userId,
+              companyId: a.companyId,
+            })
+        const branchMembership = await tx.db.insertIfAbsent('user.BranchMembership', {
           id: `root:${a.userId}:${root.id}`,
           userId: a.userId,
           branchId: root.id,
@@ -728,6 +780,25 @@ export const functions: Record<string, FnSpec> = {
         if (!heldUser.defaultCompanyId) patch.defaultCompanyId = a.companyId
         if (!heldUser.defaultBranchId || !heldUser.defaultCompanyId) patch.defaultBranchId = root.id
         if (Object.keys(patch).length) await tx.db.update('user.User', { id: a.userId }, patch)
+        const changed =
+          Boolean(membership && ('dryRun' in membership || membership.inserted)) ||
+          'dryRun' in branchMembership ||
+          branchMembership.inserted ||
+          Object.keys(patch).length > 0
+        if (changed) {
+          const revision = await advanceAuthorizationRevision(tx)
+          await recordAuthorizationAudit(tx, {
+            event: 'authorization.scope.company-granted',
+            targetKind: 'user',
+            targetId: String(a.userId),
+            scopeKey: `company:${String(a.companyId)}`,
+            source: 'membership',
+            reason: 'legacy company membership compatibility',
+            before: { membership: existing?.id ?? null },
+            after: { membershipId, rootBranchId: root.id, defaults: patch },
+            revision,
+          })
+        }
         return { ok: true, id: membershipId }
       })
     },
@@ -743,6 +814,7 @@ export const functions: Record<string, FnSpec> = {
       'read:user.BranchMembership',
       'write:user.BranchMembership',
       'read:company.Branch',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
     ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
@@ -753,14 +825,31 @@ export const functions: Record<string, FnSpec> = {
       return ctx.tx(async (tx) => {
         const B = tx.table('company.Branch')
         const branchIds = (await tx.db.all(from(B).where(eq(B.companyId, a.companyId)))).map((row) => row.id)
+        let branchChanges = 0
         if (branchIds.length) {
           const BM = tx.table('user.BranchMembership')
-          await tx.db.del(deleteFrom(BM).where(eq(BM.userId, a.userId), inArray(BM.branchId, branchIds)))
+          branchChanges = (
+            await tx.db.del(deleteFrom(BM).where(eq(BM.userId, a.userId), inArray(BM.branchId, branchIds)))
+          ).changes
         }
         const M = tx.table('user.Membership')
         const { changes } = await tx.db.del(
           deleteFrom(M).where(eq(M.userId, a.userId), eq(M.companyId, a.companyId)),
         )
+        if (changes || branchChanges) {
+          const revision = await advanceAuthorizationRevision(tx)
+          await recordAuthorizationAudit(tx, {
+            event: 'authorization.scope.company-revoked',
+            targetKind: 'user',
+            targetId: String(a.userId),
+            scopeKey: `company:${String(a.companyId)}`,
+            source: 'membership',
+            reason: 'legacy company membership compatibility',
+            before: { membership: changes, branchMemberships: branchChanges },
+            after: null,
+            revision,
+          })
+        }
         return { ok: true, removed: changes }
       })
     },
@@ -775,6 +864,7 @@ export const functions: Record<string, FnSpec> = {
       'read:user.BranchMembership',
       'write:user.BranchMembership',
       'read:company.Branch',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
     ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
@@ -787,33 +877,73 @@ export const functions: Record<string, FnSpec> = {
       const M = ctx.table('user.Membership')
       if (!(await ctx.db.one(from(M).where(eq(M.userId, a.userId), eq(M.companyId, branch.companyId)))))
         return invalid([issue('branchId', 'user.error.branchCompanyMembership')])
-      const inserted = await ctx.db.insertIfAbsent('user.BranchMembership', {
-        id: a.id,
-        userId: a.userId,
-        branchId: a.branchId,
+      return ctx.tx(async (tx) => {
+        const inserted = await tx.db.insertIfAbsent('user.BranchMembership', {
+          id: a.id,
+          userId: a.userId,
+          branchId: a.branchId,
+        })
+        if (!('dryRun' in inserted) && !inserted.inserted) {
+          const BM = tx.table('user.BranchMembership')
+          const held = await tx.db.one(from(BM).where(eq(BM.userId, a.userId), eq(BM.branchId, a.branchId)))
+          return { ok: true, id: held?.id }
+        }
+        const revision = await advanceAuthorizationRevision(tx)
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.scope.branch-granted',
+          targetKind: 'user',
+          targetId: String(a.userId),
+          scopeKey: `branch:${String(branch.companyId)}:${String(a.branchId)}`,
+          source: 'branch-membership',
+          reason: 'legacy branch membership compatibility',
+          before: null,
+          after: { id: a.id, branchId: a.branchId },
+          revision,
+        })
+        return { ok: true, id: a.id }
       })
-      if ('dryRun' in inserted || inserted.inserted) return { ok: true, id: a.id }
-      const BM = ctx.table('user.BranchMembership')
-      const held = await ctx.db.one(from(BM).where(eq(BM.userId, a.userId), eq(BM.branchId, a.branchId)))
-      return { ok: true, id: held?.id }
     },
   }),
 
   revokeBranch: defineFn({
     input: { userId: 'id', branchId: 'id' },
     output: { ok: 'bool', removed: 'int?', errors: 'json?' },
-    effects: ['read:user.User', 'read:user.BranchMembership', 'write:user.BranchMembership'],
+    effects: [
+      'read:user.User',
+      'read:user.BranchMembership',
+      'write:user.BranchMembership',
+      'read:company.Branch',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
+    ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
       const user = await ctx.db.one(from(U).where(eq(U.id, a.userId)))
       if (user?.active === true && user.defaultBranchId === a.branchId)
         return invalid([issue('branchId', 'user.error.defaultBranchRevoke')])
-      const BM = ctx.table('user.BranchMembership')
-      const { changes } = await ctx.db.del(
-        deleteFrom(BM).where(eq(BM.userId, a.userId), eq(BM.branchId, a.branchId)),
-      )
-      return { ok: true, removed: changes }
+      return ctx.tx(async (tx) => {
+        const BM = tx.table('user.BranchMembership')
+        const B = tx.table('company.Branch')
+        const branch = await tx.db.one(from(B).where(eq(B.id, a.branchId)))
+        const { changes } = await tx.db.del(
+          deleteFrom(BM).where(eq(BM.userId, a.userId), eq(BM.branchId, a.branchId)),
+        )
+        if (changes) {
+          const revision = await advanceAuthorizationRevision(tx)
+          await recordAuthorizationAudit(tx, {
+            event: 'authorization.scope.branch-revoked',
+            targetKind: 'user',
+            targetId: String(a.userId),
+            scopeKey: `branch:${String(branch?.companyId ?? 'unknown')}:${String(a.branchId)}`,
+            source: 'branch-membership',
+            reason: 'legacy branch membership compatibility',
+            before: { branchId: a.branchId },
+            after: null,
+            revision,
+          })
+        }
+        return { ok: true, removed: changes }
+      })
     },
   }),
 
@@ -826,6 +956,7 @@ export const functions: Record<string, FnSpec> = {
       'read:user.Membership',
       'read:user.BranchMembership',
       'read:company.Branch',
+      ...AUTHORIZATION_SCOPE_EFFECTS,
     ],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
@@ -840,12 +971,32 @@ export const functions: Record<string, FnSpec> = {
       if (!membership) return invalid([issue('companyId', 'user.error.companyMembership')])
       if (!branchMembership || branch?.companyId !== a.companyId)
         return invalid([issue('branchId', 'user.error.branchMembership')])
-      await ctx.db.update(
-        'user.User',
-        { id: a.userId },
-        { defaultCompanyId: a.companyId, defaultBranchId: a.branchId },
-      )
-      return { ok: true }
+      const U = ctx.table('user.User')
+      const user = await ctx.db.one(from(U).where(eq(U.id, a.userId)))
+      if (user?.defaultCompanyId === a.companyId && user?.defaultBranchId === a.branchId) return { ok: true }
+      return ctx.tx(async (tx) => {
+        await tx.db.update(
+          'user.User',
+          { id: a.userId },
+          { defaultCompanyId: a.companyId, defaultBranchId: a.branchId },
+        )
+        const revision = await advanceAuthorizationRevision(tx)
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.scope.default-context-changed',
+          targetKind: 'user',
+          targetId: String(a.userId),
+          scopeKey: `branch:${String(a.companyId)}:${String(a.branchId)}`,
+          source: 'default-context',
+          reason: 'legacy default context compatibility',
+          before: {
+            companyId: user?.defaultCompanyId ?? null,
+            branchId: user?.defaultBranchId ?? null,
+          },
+          after: { companyId: a.companyId, branchId: a.branchId },
+          revision,
+        })
+        return { ok: true }
+      })
     },
   }),
 
@@ -963,14 +1114,19 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   archiveCompany: defineFn({
-    input: { id: 'id', active: 'bool' },
-    output: { ok: 'bool', id: 'id?', active: 'bool?', errors: 'json?' },
+    input: { id: 'id', active: 'bool', expectedVersion: 'int?' },
+    output: { ok: 'bool', id: 'id?', active: 'bool?', version: 'int?', errors: 'json?' },
     effects: ['read:user.User', 'read:company.Company', 'write:company.Company'],
     idempotent: true,
     handler: async (ctx: Ctx, a) => {
       const C = ctx.table('company.Company')
       const company = await ctx.db.one(from(C).where(eq(C.id, a.id)))
       if (!company) return invalid([issue('id', 'company.error.missing')])
+      const currentVersion = Number(company.version ?? 0)
+      if (company.active === a.active)
+        return { ok: true, id: a.id, active: company.active, version: currentVersion }
+      if (a.expectedVersion != null && currentVersion !== Number(a.expectedVersion))
+        return invalid([issue('expectedVersion', 'company.error.versionConflict')])
       if (a.active === false) {
         const U = ctx.table('user.User')
         if (await ctx.db.one(from(U).where(eq(U.defaultCompanyId, a.id), eq(U.active, true))))
@@ -978,8 +1134,16 @@ export const functions: Record<string, FnSpec> = {
         if ((await ctx.db.count(from(C).where(eq(C.active, true)))) <= 1)
           return invalid([issue('active', 'company.error.lastActive')])
       }
-      await ctx.db.update('company.Company', { id: a.id }, { active: a.active })
-      return { ok: true, id: a.id, active: a.active }
+      const version = currentVersion + 1
+      const changed = await ctx.db.compareAndSet(
+        'company.Company',
+        { id: a.id },
+        { version: company.version ?? null },
+        { active: a.active, version },
+      )
+      if (!('dryRun' in changed) && !changed.matched)
+        return invalid([issue('expectedVersion', 'company.error.versionConflict')])
+      return { ok: true, id: a.id, active: a.active, version }
     },
   }),
 

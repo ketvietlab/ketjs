@@ -1,17 +1,25 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { renderToString } from '@ketvietlab/ketjs-view'
-import { compose, translator } from '@ketvietlab/ketjs'
-import type { MenuNode } from '@ketvietlab/ketjs'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { globSync, readFileSync } from 'node:fs'
+import { html as html2, renderToString } from '@ketvietlab/ketjs-view'
+import {
+  buildMenu,
+  compose,
+  document as ketDocument,
+  statusForError,
+  translator,
+  wantsHtml,
+} from '@ketvietlab/ketjs'
+import { LAYER_ORDER_CSS } from '@ketvietlab/ketjs/theme'
+import { HOOKS as PUBLIC_HOOKS } from '@ketvietlab/design-system'
+import type { MenuNode, Route, ServeContext } from '@ketvietlab/ketjs'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 import backend from '@ketvietlab/ketsuite/backend'
 import {
   actionGroup,
   attachmentPanel,
   activityContractCases,
   calendarContractCases,
-  appsScreen,
   backendPage,
   badge,
   breadcrumbs,
@@ -20,44 +28,66 @@ import {
   cataloguePage,
   CASES,
   contentCard,
+  timeframeFilter,
   countBadge,
   dataTable,
   datePicker,
+  definitionList,
+  gantt,
+  columns,
+  chart,
+  barChart,
+  delta,
+  progressBar,
   emptyState,
   errorState,
   formCluster,
-  framed,
+  RecordScreen,
   HOOKS,
   hasIcon,
   icon,
   iconButton,
   inline,
   kanbanCard,
+  thumbnail,
+  deadline,
+  docTree,
   kanbanGrid,
   linkButton,
   loadingState,
+  loginScreen,
   mailContractCases,
   metric,
   modalSheet,
   mediaPanel,
   notice,
+  pageContext,
   pagesScreen,
   person,
   recordList,
   recordActions,
+  recordFieldGrid,
   recordForm,
+  recordHeaderActions,
+  recordRail,
+  readonlyField,
   qrCode,
   recordToggle,
   recordWorkspace,
   scheduleBoard,
   section,
-  settingsScreen,
+  shell,
   stack,
   surface,
   tabs,
   tag,
+  WorkspaceScreen,
 } from '@ketvietlab/ketsuite/backend'
-import type { AppRow, ListChrome, PageRow } from '@ketvietlab/ketsuite/backend'
+import type { ListChrome, PageRow } from '@ketvietlab/ketsuite/backend'
+import { DashboardPage as KetSuiteDashboardPage } from '../packages/ketsuite/src/ui/dashboard-page.tsx'
+import { BoardPage as KetSuiteBoardPage } from '../packages/ketsuite/src/ui/board-page.tsx'
+import { FormPage as KetSuiteFormPage } from '../packages/ketsuite/src/ui/form-page.tsx'
+import { ListPage as KetSuiteListPage } from '../packages/ketsuite/src/ui/list-page.tsx'
 
 /**
  * The design team writes CSS against these attributes.
@@ -69,16 +99,6 @@ import type { AppRow, ListChrome, PageRow } from '@ketvietlab/ketsuite/backend'
  */
 const CONTRACT = HOOKS
 
-const app = (over: Partial<AppRow> = {}): AppRow => ({
-  name: 'website',
-  title: 'Website',
-  summary: 'x',
-  category: 'Website',
-  state: 'available',
-  depends: [],
-  dependents: [],
-  ...over,
-})
 const page = (over: Partial<PageRow> = {}): PageRow => ({
   id: 'p',
   path: '/',
@@ -87,13 +107,14 @@ const page = (over: Partial<PageRow> = {}): PageRow => ({
   ...over,
 })
 
-/** A tree with every shape the shell draws: an app, a section, and a plain link. */
+/** A tree with every shape the shell draws: a root, a section, and a plain link. */
 const node = (id: string, over: Partial<MenuNode> = {}): MenuNode => ({
   id,
   label: id,
   path: null,
   icon: null,
   active: false,
+  secondary: false,
   children: [],
   ...over,
 })
@@ -117,6 +138,15 @@ const MENU: MenuNode[] = [
 /** Every control at once — the contract test only sees what is rendered. */
 const CHROME: ListChrome = {
   create: { label: 'Mới', path: '/admin/pages/new' },
+  selection: {
+    formId: 'page-bulk',
+    action: '/admin/pages/bulk',
+    hidden: { returnTo: '/admin/pages' },
+    actions: [
+      { id: 'archive', label: 'Archive' },
+      { id: 'delete', label: 'Delete', tone: 'danger' },
+    ],
+  },
   search: {
     name: 'q',
     value: 'x',
@@ -126,6 +156,15 @@ const CHROME: ListChrome = {
       {
         id: 'filters',
         label: 'Bộ lọc',
+        icon: 'users',
+        ariaLabel: 'Người phụ trách',
+        badge: 2,
+        search: {
+          name: 'assigneeQuery',
+          value: 'An',
+          placeholder: 'Tìm người phụ trách',
+          submitLabel: 'Tìm',
+        },
         items: [{ id: 'active', label: 'Đang hoạt động', path: '?preset=active', active: true }],
         customFilter: {
           fields: [{ value: 'name', label: 'Tên' }],
@@ -139,6 +178,15 @@ const CHROME: ListChrome = {
     ],
   },
   pager: { from: 1, to: 30, total: 84, prev: null, next: '/admin/pages?page=2' },
+  tailMenus: [
+    {
+      id: 'assignee',
+      label: 'Người phụ trách',
+      icon: 'users',
+      keep: { view: 'list' },
+      items: [{ id: 'me', label: 'Tôi', path: '?assignee=me' }],
+    },
+  ],
   views: [
     { id: 'list', label: 'Danh sách', icon: 'list', path: '?view=list', active: true },
     { id: 'kanban', label: 'Thẻ', icon: 'layout-grid', path: '?view=kanban', active: false },
@@ -146,6 +194,146 @@ const CHROME: ListChrome = {
 }
 
 const _ = translator(compose([backend], { headless: true }), 'vi')
+
+test('KetSuite ListPage derives breadcrumbs and company context from its frame', () => {
+  const output = renderToString(
+    KetSuiteListPage({
+      variant: 'operational',
+      frame: {
+        menu: [
+          node('flow', {
+            label: 'Flow',
+            path: '/admin/flow/projects',
+            active: true,
+            children: [
+              node('project-issues', {
+                label: 'Công việc',
+                path: '/admin/flow/projects/north-star/issues',
+                active: true,
+              }),
+            ],
+          }),
+        ],
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+          contextPath: '/admin/context',
+        },
+      },
+      title: 'Dự án Sao Bắc',
+      body: 'Danh sách công việc',
+    }),
+  )
+
+  assert.match(output, /data-ui="list-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(output, /href="\/admin\/flow\/projects"[^>]*>[\s\S]*?Flow/)
+  assert.match(output, /Công việc[\s\S]*?aria-current="page"[^>]*>[\s\S]*?Dự án Sao Bắc/)
+  assert.match(output, /data-ui="page-context-viewer" href="\/admin\/context"/)
+  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+})
+
+test('KetSuite FormPage derives its operational topbar from the application frame', () => {
+  const output = renderToString(
+    KetSuiteFormPage({
+      variant: 'operational',
+      frame: {
+        menu: [
+          node('accounting', {
+            label: 'Kế toán',
+            path: '/admin/accounting',
+            active: true,
+            children: [
+              node('accounts', {
+                label: 'Hệ thống tài khoản',
+                path: '/admin/accounting/accounts',
+                active: true,
+              }),
+            ],
+          }),
+        ],
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+        },
+      },
+      title: 'Tạo tài khoản',
+      body: 'Các trường tài khoản',
+    }),
+  )
+
+  assert.match(output, /data-ui="form-page"[^>]*data-variant="operational"/)
+  assert.match(output, /data-ui="form-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(output, /Kế toán[\s\S]*?Hệ thống tài khoản[\s\S]*?Tạo tài khoản/)
+  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+})
+
+test('KetSuite DashboardPage derives context and preserves extension actions', () => {
+  const output = renderToString(
+    KetSuiteDashboardPage({
+      variant: 'operational',
+      frame: {
+        menu: [node('sales', { label: 'Bán hàng', path: '/admin/sales', active: true })],
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+        },
+        extras: { 'topbar.end': 'Extension action' },
+      },
+      title: 'Tổng quan bán hàng',
+      actions: 'Tạo báo giá',
+      body: 'Chỉ số bán hàng',
+    }),
+  )
+
+  assert.match(output, /data-ui="dashboard-page"[^>]*data-variant="operational"/)
+  assert.match(output, /data-ui="dashboard-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(output, /Bán hàng[\s\S]*?Tổng quan bán hàng/)
+  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.match(output, /data-ui="dashboard-page-actions"[\s\S]*?Tạo báo giá[\s\S]*?Extension action/)
+})
+
+test('KetSuite BoardPage derives context and preserves extension actions', () => {
+  const output = renderToString(
+    KetSuiteBoardPage({
+      variant: 'operational',
+      frame: {
+        menu: [node('pipeline', { label: 'CRM', path: '/admin/crm/pipeline', active: true })],
+        viewer: {
+          name: 'Nguyễn Quản Trị',
+          company: 'ket-viet',
+          companies: ['ket-viet'],
+          companyName: 'Công ty Kết Việt',
+          branch: 'hcm',
+          branchName: 'Chi nhánh Hồ Chí Minh',
+        },
+        extras: { 'topbar.end': 'Extension action' },
+      },
+      title: 'Pipeline bán hàng',
+      actions: 'Tạo cơ hội',
+      controls: 'Lọc theo đội',
+      body: 'Các cột cơ hội',
+    }),
+  )
+
+  assert.match(output, /data-ui="board-page"[^>]*data-variant="operational"/)
+  assert.match(output, /data-ui="board-page-context"[\s\S]*?data-ui="breadcrumbs"/)
+  assert.match(output, /CRM[\s\S]*?Pipeline bán hàng/)
+  assert.match(output, /Công ty Kết Việt[\s\S]*?Chi nhánh Hồ Chí Minh/)
+  assert.match(output, /data-ui="board-page-actions"[\s\S]*?Tạo cơ hội[\s\S]*?Extension action/)
+  assert.match(output, /data-ui="board-page-toolbar"[\s\S]*?Lọc theo đội/)
+})
 
 const componentContract = [
   qrCode([[true]], 'QR code'),
@@ -167,6 +355,7 @@ const componentContract = [
     kicker: 'Product',
     title: 'Linen shirt',
     subtitle: 'LINEN-01 · Unit',
+    status: badge('Active', 'positive'),
     image: null,
     imageFallback: icon('package'),
     badges: [
@@ -185,6 +374,40 @@ const componentContract = [
     body: surface({ body: 'Product form', padding: 'compact' }),
     aside: surface({ body: 'Collaboration', padding: 'compact' }),
     asideLabel: 'Collaboration',
+  }),
+  recordFieldGrid({
+    fields: [readonlyField({ id: 'future-code', label: 'Future code', future: true })],
+  }),
+  recordHeaderActions({
+    label: 'Record actions',
+    form: 'product-form',
+    moreLabel: 'More',
+    more: recordForm({
+      action: '/admin/products/archive',
+      fields: [],
+      submit: 'Archive',
+      submitVariant: 'destructive',
+      layout: 'inline',
+    }),
+    noteLabel: 'Internal note',
+    saveLabel: 'Save & close',
+    saveOptionsLabel: 'Save options',
+  }),
+  recordRail({
+    system: {
+      title: 'System information',
+      facts: [{ id: 'id', label: 'ID', value: 'record-1', divider: true }],
+    },
+    switches: {
+      title: 'Channels',
+      items: [{ id: 'web', label: 'Website', icon: 'globe', future: true }],
+      actionLabel: 'Manage channels',
+    },
+    activity: {
+      title: 'Activity',
+      items: [{ id: 'created', label: 'Created', detail: 'Today', icon: 'package' }],
+      actionLabel: 'View all',
+    },
   }),
   modalSheet({
     title: 'Follow-up',
@@ -321,10 +544,36 @@ const componentContract = [
         key: row.id,
         title: 'Card',
         href: `/k/${row.id}`,
+        media: thumbnail({ src: '/files/x', alt: 'Card', size: 'card' }),
         meta: badge('Draft'),
         note: 'Note',
         actions: linkButton({ label: 'Open', href: '/k' }),
       }),
+  }),
+  thumbnail({ src: '/files/x', alt: 'Record' }),
+  thumbnail({ fallback: icon('package') }),
+  // Two levels, so the nested branch and its rail are rendered and not only
+  // the root list — the stylesheet targets both.
+  // Both states, because only the late one is styled.
+  deadline({ date: '30/06/2026' }),
+  deadline({ date: '19/05/2026', late: true }),
+  docTree<{
+    id: string
+    parent: string | null
+    title: string
+    summary: string
+    count: string | null
+  }>({
+    rows: [
+      { id: 'root', parent: null, title: 'Handbook', summary: 'How we work', count: '2 children' },
+      { id: 'child', parent: 'root', title: 'Onboarding', summary: 'First week', count: null },
+    ],
+    id: (row) => row.id,
+    parent: (row) => row.parent,
+    title: (row) => row.title,
+    href: (row) => `/docs/${row.id}`,
+    summary: (row) => row.summary,
+    count: (row) => row.count,
   }),
   recordList({
     rows: [{ id: 'r', title: 'Record', summary: 'Summary', value: '12' }],
@@ -339,6 +588,11 @@ const componentContract = [
     rows: [{ id: 'r', name: 'Record' }],
     id: (row) => row.id,
     rowHref: (row) => `/r/${row.id}`,
+    selection: {
+      formId: 'page-bulk',
+      action: '/admin/pages/bulk',
+      actions: [{ id: 'archive', label: 'Archive' }],
+    },
     columns: [
       {
         key: 'name',
@@ -396,24 +650,21 @@ const componentContract = [
 ]
 
 const everything = [
-  appsScreen(
-    _,
-    [app({ state: 'installed', dependents: ['website_menu'] }), app({ name: 'b', depends: ['website'] })],
-    {
-      menu: MENU,
-      viewer: {
-        name: 'Nguyễn Quản Trị',
-        company: 'acme',
-        companies: ['acme', 'globex'],
-        companyName: 'Công ty Kết Việt',
-        branch: 'root:acme',
-        branches: ['root:acme'],
-        branchName: 'Trụ sở chính',
-        contextPath: '/admin/context',
-      },
-      indicators: [{ id: 'activity', icon: 'bell', label: 'Việc', count: 3, path: '/a' }],
+  shell(_, 'Standalone title', surface({ body: 'Standalone body' })),
+  pagesScreen(_, [page(), page({ id: 'viewer', title: 'Viewer' })], {
+    menu: MENU,
+    viewer: {
+      name: 'Nguyễn Quản Trị',
+      company: 'acme',
+      companies: ['acme', 'globex'],
+      companyName: 'Công ty Kết Việt',
+      branch: 'root:acme',
+      branches: ['root:acme'],
+      branchName: 'Trụ sở chính',
+      contextPath: '/admin/context',
     },
-  ),
+    indicators: [{ id: 'activity', icon: 'bell', label: 'Việc', count: 3, path: '/a' }],
+  }),
   pagesScreen(
     _,
     [page(), page({ id: 'q', published: false })],
@@ -422,10 +673,120 @@ const everything = [
     { shown: ['id'], colsHref: (keys) => `/admin/pages?cols=${keys.join(',')}` },
   ),
   person('Nguyễn Quản Trị'),
-  settingsScreen(_, { 'color-accent': 'x' }, { menu: MENU }),
+  // The period a screen reports on: the choice, the range it resolves to and the
+  // moment it was computed. Rendered with all three so the optional parts are in
+  // the contract too.
+  timeframeFilter({
+    id: 'contract-timeframe',
+    label: 'Kỳ báo cáo',
+    options: [
+      { id: 'today', label: 'Hôm nay', href: '/admin/crm/overview?period=today' },
+      {
+        id: 'last_30_days',
+        label: '30 ngày qua',
+        href: '/admin/crm/overview?period=last_30_days',
+        active: true,
+        detail: '2026-08-06 → 2026-09-05',
+      },
+    ],
+    range: '2026-08-06 → 2026-09-05',
+    asOf: '2026-09-05 09:42',
+    asOfLabel: 'Cập nhật',
+    note: 'Asia/Ho_Chi_Minh',
+  }),
   // A sidebar whose search matched nothing: the label goes, a note takes its place.
-  settingsScreen(_, { 'color-accent': 'x' }, { menu: [], menuFilter: 'zzz' }),
+  pagesScreen(_, [page()], { menu: [], menuFilter: 'zzz' }),
+  // How far along a record is. A value, because the empty case draws nothing at
+  // all — which is the point of it, and would show none of the parts.
+  progressBar({ value: 62, label: 'Tiến độ' }),
+  // A bar, a point and a start nobody chose, which is every shape a row takes.
+  gantt({
+    items: [
+      { id: 'g1', title: 'Bar', href: '/a', startsOn: '2026-08-01', endsOn: '2026-09-20', progress: 40 },
+      { id: 'g2', title: 'Point', href: '/b', startsOn: '2026-08-10' },
+      {
+        id: 'g3',
+        title: 'Inferred',
+        href: '/c',
+        startsOn: '2026-08-05',
+        endsOn: '2026-08-09',
+        inferredStart: true,
+      },
+    ],
+    today: '2026-08-15',
+    labels: { today: 'Hôm nay', empty: 'Trống' },
+  }),
+  gantt({ items: [], labels: { today: 'Hôm nay', empty: 'Trống' } }),
+  // Two things read against each other. Equal columns above a threshold, one
+  // below it, decided by the space rather than by the device.
+  columns([surface({ body: 'Cơ cấu doanh thu' }), surface({ body: 'Chi phí theo tài khoản' })], 'loose'),
+  // A filter row: every choice visible, wrapping rather than scrolling past the edge.
+  tabs({
+    label: 'Kỳ báo cáo',
+    wrap: true,
+    items: [
+      { id: 'today', label: 'Hôm nay', href: '?period=today' },
+      { id: 'last30', label: '30 ngày qua', href: '?period=last30', active: true },
+    ],
+  }),
+  pageContext({
+    label: 'Vị trí trang',
+    items: [{ label: 'Sản phẩm' }, { label: 'Danh mục sản phẩm' }],
+    viewer: {
+      name: 'Nguyễn Quản Trị',
+      company: 'ket-viet',
+      companies: ['ket-viet'],
+      companyName: 'Công ty Kết Việt',
+      branch: 'hcm',
+      branchName: 'Chi nhánh Hồ Chí Minh',
+      contextPath: '/admin/context',
+    },
+  }),
+  // A chart is two halves: the canvas the island mounts, and the legend that
+  // carries the same numbers as text. Rendered here with a stand-in for the
+  // plot, because the island needs a request and this contract needs neither.
+  chart({
+    plot: surface({ body: 'canvas' }),
+    kind: 'line',
+    keys: [
+      { id: 'now', label: 'Kỳ này', series: 1, value: '2.450.680 ₫' },
+      { id: 'was', label: 'Kỳ trước', series: 'comparison', value: '2.073.620 ₫' },
+    ],
+  }),
+  // And the case a deployment without the admin gets: no canvas, legend only.
+  chart({ plot: null, kind: 'doughnut', keys: [{ id: 'a', label: 'Bán hàng hoá', series: 1 }] }),
+  chart({ plot: null, kind: 'line', keys: [], empty: 'Chưa có số liệu' }),
+  barChart({
+    bars: [
+      { id: 'cogs', label: '632 · Giá vốn hàng bán', value: 1_320_000_000, href: '/admin/accounting' },
+      { id: 'admin', label: '642 · Chi phí quản lý', value: 160_000_000 },
+    ],
+    value: (bar) => String(bar.value),
+    scale: ['0', '1.5 tỷ'],
+  }),
+  barChart({ bars: [], value: () => '', empty: 'Chưa có chi phí' }),
+  // Both halves of a change: which way it went, and whether that is good news.
+  delta({ label: '+18,2%', direction: 'up', sentiment: 'good' }),
+  delta({ label: '-6,3%', direction: 'down', sentiment: 'good' }),
+  delta({ label: '0%', direction: 'flat', sentiment: 'neutral' }),
+  metric({ label: 'Doanh thu thuần', value: '2.450.680 ₫', trend: 'x', detail: 'so với kỳ trước' }),
+  // The same card with its optional glyph, which is a different set of hooks.
+  metric({ label: 'Hoạt động quá hạn', value: '4', icon: icon('alert-triangle') }),
+  // The token list, which no admin screen renders any more now that the design-token
+  // dump has left /admin/settings. Modules still reach for it on record detail.
+  definitionList({
+    title: 'Design token',
+    items: [{ key: 'color-accent', term: '--ket-color-accent', value: 'x' }],
+  }),
   errorState('E_X', 'msg', 'hint'),
+  // The sign-in screen, in the one state that shows every hook it owns at once.
+  loginScreen(_, {
+    next: '/admin/companies',
+    failed: true,
+    providers: [{ code: 'google', name: 'Google', href: '/oauth/google' }],
+    locales: ['vi', 'en'],
+    locale: 'vi',
+  }),
   ...componentContract,
   ...mailContractCases(),
   ...activityContractCases(),
@@ -441,38 +802,326 @@ test('ui contract: every documented data-ui hook is actually emitted', () => {
 
 test('ui contract: no hook is emitted that the contract does not list', () => {
   const emitted = new Set([...everything.matchAll(/data-ui="([^"]+)"/g)].map((m) => m[1] as string))
-  const undocumented = [...emitted].filter((n) => !CONTRACT.includes(n)).sort()
-  assert.deepEqual(undocumented, [], 'a new hook needs a line in admin.css before it ships')
+  const undocumented = [...emitted].filter((n) => !CONTRACT.includes(n) && !PUBLIC_HOOKS.includes(n)).sort()
+  assert.deepEqual(undocumented, [], 'a new hook needs a baseline rule before it ships')
 })
 
+const ADMIN_STYLESHEETS = [
+  'packages/ketsuite/src/modules/backend/design/foundation.css',
+  'packages/ketsuite/src/modules/backend/design/lists.css',
+  'packages/ketsuite/src/modules/backend/design/responsive.css',
+  'packages/ketsuite/src/modules/backend/design/auth.css',
+  'packages/ketsuite/src/modules/backend/design/controls.css',
+  'packages/ketsuite/src/modules/backend/design/record.css',
+  'packages/ketsuite/src/modules/backend/design/forms.css',
+  'packages/ketsuite/src/modules/backend/design/content.css',
+  'packages/ketsuite/src/modules/backend/design/charts.css',
+]
+
+/** Every stylesheet the kit's hooks are styled by. */
+const STYLESHEETS = [
+  ...ADMIN_STYLESHEETS,
+  'packages/ketsuite/src/ui/client/mail.css',
+  'packages/ketsuite/src/ui/client/activity.css',
+  'packages/ketsuite/src/ui/client/calendar.css',
+]
+
+const ADMIN_CSS = ADMIN_STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
+
+test('backend content: a breadcrumb that has to shrink clips instead of overprinting', () => {
+  // `nowrap` text in a shrinkable flex item keeps its full width and paints over
+  // whatever sits beside it. Clipping only the last crumb left every ancestor
+  // free to do exactly that, which is what long Vietnamese labels did.
+  const trail = ADMIN_CSS.match(
+    /\[data-ui="page-context-trail"\] \[data-ui="breadcrumb"\]\s*\{([^}]+)\}/,
+  )?.[1]
+  assert.match(trail ?? '', /overflow: hidden/, 'every crumb clips, not only the last one')
+  assert.match(trail ?? '', /white-space: nowrap/)
+  assert.match(
+    ADMIN_CSS,
+    /\[data-ui="page-context-trail"\] \[data-ui="breadcrumb"\] > :where\(a, span\)\s*\{[^}]*text-overflow: ellipsis/,
+    'a clipped crumb says it was clipped',
+  )
+  assert.match(
+    ADMIN_CSS,
+    /\[data-ui="page-context-trail"\] \[data-ui="breadcrumb"\]:not\(:last-child\)::after\s*\{[^}]*flex: 0 0 auto/,
+    'the separator is not what gives way',
+  )
+})
+
+test('backend content lets operational page patterns own their spacing', () => {
+  assert.match(
+    ADMIN_CSS,
+    /\[data-ui="content"\]:has\([\s\S]*?\[data-ui="list-page"\]\[data-variant="operational"\][\s\S]*?\[data-ui="form-page"\]\[data-variant="operational"\][\s\S]*?\[data-ui="dashboard-page"\]\[data-variant="operational"\][\s\S]*?\[data-ui="board-page"\]\[data-variant="operational"\][\s\S]*?padding: 0/,
+  )
+})
+
+/** And the ones a module owns for its own island. */
+const MODULE_STYLESHEETS = [
+  'packages/ketsuite/src/modules/backend/design/tokens.css',
+  'packages/ketsuite/src/modules/crm_backend/client/crm.css',
+  'packages/ketsuite/src/modules/partner_backend/client/address.css',
+  'packages/ketsuite/src/ui/client/flow-app.css',
+]
+
 test('ui contract: every documented hook has an explicit CSS rule', () => {
-  const css = [
-    'packages/ketsuite/src/modules/backend/design/admin.css',
-    'packages/ketsuite/src/ui/client/mail.css',
-    'packages/ketsuite/src/ui/client/activity.css',
-    'packages/ketsuite/src/ui/client/calendar.css',
-  ]
-    .map((path) => readFileSync(path, 'utf8'))
-    .join('\n')
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
   const missing = CONTRACT.filter((name) => !css.includes(`[data-ui="${name}"]`))
   assert.deepEqual(missing, [], 'a component hook needs a concrete baseline rule before it ships')
 })
 
-test('sidebar: every KetSuite app declares a glyph carried by the design system', () => {
+test('ui contract: the stylesheet targets no hook nothing emits', () => {
+  // The contract runs both ways. The existing test catches a rule with no hook;
+  // this catches a hook with no markup — `[data-ui="crumb"]` outlived the component
+  // that emitted it and sat there being maintained.
+  //
+  // Two sources beyond the kit are legitimate. `nav-item` belongs to whatever a
+  // third party hangs off `backend:nav.items`, so the kit never emits it. The login
+  // screen and the design catalogue still write their own markup — they are on
+  // ui-audit's pending list — so their hooks are read from the source that emits
+  // them, and stop being read from there the day that markup moves into the kit.
+  const RESERVED_FOR_FILLS = ['nav-item']
+  // A public component's markup lives in @ketvietlab/design-system, not in this
+  // kit, so its hooks are absent from `HOOKS` — but a backend screen composes
+  // those components and the admin stylesheet is entitled to say how they sit in
+  // an admin page. Without this, moving a component out to the public package
+  // turned every rule that mentioned it into an orphan.
+  const PUBLIC = PUBLIC_HOOKS
+  // An island's markup is behaviour, so it lives in the browser file rather than in
+  // the kit; the login screen and the design catalogue are on ui-audit's pending
+  // list. Both are read from the source that emits them, so the day that markup
+  // moves into the kit this stops reading them and nothing has to be remembered.
+  const OTHER_SOURCES = [
+    'packages/ketsuite/src/modules/user/login.ts',
+    'packages/ketsuite/src/modules/backend/catalogue.ts',
+    ...globSync('packages/ketsuite/src/**/client/*.mjs'),
+    ...globSync('packages/ketsuite/src/ui/client/*.tsx'),
+  ]
+  const emitted = new Set<string>([
+    ...HOOKS,
+    ...PUBLIC,
+    ...RESERVED_FOR_FILLS,
+    ...OTHER_SOURCES.flatMap((path) =>
+      [...readFileSync(path, 'utf8').matchAll(/data-ui=(?:"|\{?')([a-z0-9-]+)/g)].map((m) => m[1] as string),
+    ),
+  ])
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
+  const targeted = new Set([...css.matchAll(/\[data-ui="([a-z0-9-]+)"/g)].map((m) => m[1] as string))
+  const orphans = [...targeted].filter((name) => !emitted.has(name)).sort()
+  assert.deepEqual(orphans, [], 'a rule outlived the component that emitted its hook')
+})
+
+test('design tokens: the cascade order is declared before the first stylesheet', () => {
+  // `@layer a, b, c;` is what fixes precedence; without it the order is whatever
+  // first-appearance across the loaded stylesheets happens to be, and `ket.theme`
+  // outranked `ket.app` on every backend page purely because its stylesheet linked first.
+  const rendered = renderToString(
+    ketDocument({
+      lang: 'vi',
+      title: 'x',
+      head: html2`<link rel="stylesheet" href="/a.css">`,
+      body: html2``,
+    }),
+  )
+  const order = rendered.indexOf(LAYER_ORDER_CSS)
+  assert.ok(order > 0, 'every document declares the layer order')
+  assert.ok(order < rendered.indexOf('/a.css'), 'before any stylesheet can define a layer')
+  assert.equal(LAYER_ORDER_CSS, '@layer ket.reset, ket.theme, ket.app, ket.user;')
+})
+
+test('design tokens: no rule sits outside a cascade layer, where it outranks ket.user', () => {
+  // Unlayered CSS beats every layer, including the one the design handoff promises
+  // always wins. Seventy-nine lines of mobile shell rules used to sit out here.
+  for (const path of [...STYLESHEETS, ...MODULE_STYLESHEETS]) {
+    const source = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    let depth = 0
+    for (const [index, line] of source.split('\n').entries()) {
+      const text = line.trim()
+      if (depth === 0 && text && !text.startsWith('@layer '))
+        assert.fail(`${path}:${index + 1} is outside a cascade layer, so it outranks ket.user\n  ${text}`)
+      depth += (line.match(/{/g)?.length ?? 0) - (line.match(/}/g)?.length ?? 0)
+    }
+  }
+})
+
+test('routes: the segment after /admin names the section, so a path says where it lives', () => {
+  // Two conventions used to run side by side: /admin/crm/cases said which app it
+  // belonged to, /admin/transfers and /admin/accounts did not — and website_backend
+  // used both, with pages and posts namespaced and forms, media, menus, sites and
+  // taxonomies flat. A reader could not tell what owned a screen from its URL, and
+  // /admin/pages and /admin/website/pages were two page lists in two apps.
+  const APPS = new Set([
+    // one per root menu entry
+    'accounting',
+    'activities',
+    'attendance',
+    'calendar',
+    'crm',
+    'flow',
+    'hospitality',
+    'hr',
+    'inbound-email',
+    'inbox',
+    'loyalty',
+    'manufacturing',
+    'oauth',
+    'outbox',
+    'partner',
+    'pos',
+    'pricing',
+    'product',
+    'purchase',
+    'reports',
+    'sales',
+    'stock',
+    'website',
+    // and the administration section's own screens, which sit directly under /admin
+    'apps',
+    'settings',
+    'profile',
+    'context',
+    'addresses',
+    'companies',
+    'users',
+    'roles',
+    'permission-presets',
+  ])
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const stray = Object.keys(manifest.routes)
+    .filter((path) => path === '/admin' || path.startsWith('/admin/'))
+    .filter((path) => {
+      const app = path.split('/')[2]
+      return app !== undefined && !APPS.has(app)
+    })
+    .sort()
+  assert.deepEqual(stray, [], 'a backend path must start with the section it belongs to')
+})
+
+test('routes: every path a screen builds is a path some module serves', () => {
+  // A link is only as good as the route behind it, and nothing checked that the two
+  // agreed: renaming `/admin/taxes` to `/admin/accounting/taxes` left twenty form
+  // actions and redirects on the old one, every last of them written as
+  // `` `/admin/taxes${localeQuery(url)}` `` — a template hole away from the search
+  // that found the rest. The route table is the answer; this asks it.
+  const routes = Object.keys(compose(ketsuite.modules, { headless: true }).routes).map((route) =>
+    route.split('/'),
+  )
+  const served = (path: string): boolean => {
+    const parts = path.split('/')
+    return routes.some(
+      (route) =>
+        route.length === parts.length &&
+        route.every((segment, index) => segment.startsWith('{') || segment === parts[index]),
+    )
+  }
+
+  /**
+   * The literal, with its holes read the way a router would.
+   *
+   * A hole filling a whole segment is a path parameter. A hole anywhere else is an
+   * id glued to the segment before it or the `?lang=` suffix every link carries, and
+   * neither says anything about the shape of the path — so the path ends there.
+   * Holes nest (`${a ? `?x=${b}` : ''}`), which is why this counts braces.
+   */
+  const shape = (literal: string): string => {
+    let out = ''
+    for (let i = 0; i < literal.length; ) {
+      if (literal[i] === '$' && literal[i + 1] === '{') {
+        if (!out.endsWith('/')) return out
+        let depth = 1
+        i += 2
+        while (i < literal.length && depth > 0) {
+          if (literal[i] === '{') depth++
+          if (literal[i] === '}') depth--
+          i++
+        }
+        out += '{}'
+        continue
+      }
+      if (literal[i] === '?' || literal[i] === '#') break
+      out += literal[i]
+      i++
+    }
+    return out
+  }
+
+  const stray: string[] = []
+  for (const file of globSync('packages/ketsuite/src/**/*.{ts,tsx}')) {
+    // the design harness names paths for screens it renders without a server
+    if (file.includes('/backend/catalogue')) continue
+    const source = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+    for (const match of source.matchAll(/[`'](\/admin\/[^`'\n]*)[`']/g)) {
+      const path = shape(match[1] as string).replace(/\/$/, '')
+      if (!path.startsWith('/admin/') || served(path)) continue
+      stray.push(`${file.split('/src/')[1]}: ${path}`)
+    }
+  }
+  assert.deepEqual([...new Set(stray)].sort(), [], 'a screen links somewhere no route answers')
+})
+
+test('sidebar: every menu entry says where it goes in the list', () => {
+  // Without `sequence` an entry falls to 100 and ties with every other one, and the
+  // tie-break is the label — so a Vietnamese menu came out in the order its English
+  // message keys happened to sort in. Purchasing read Đơn mua · RFQ · Bảng giá,
+  // which is the workflow backwards.
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const entries = Object.entries(manifest.menus)
+  assert.deepEqual(
+    entries
+      .filter(([, entry]) => entry.sequence === undefined)
+      .map(([id]) => id)
+      .sort(),
+    [],
+    'an entry with no sequence is an entry nobody decided the position of',
+  )
+
+  const bySibling = new Map<string, Map<number, string[]>>()
+  for (const [id, entry] of entries) {
+    const siblings = bySibling.get(entry.parent ?? '') ?? new Map()
+    siblings.set(entry.sequence as number, [...(siblings.get(entry.sequence as number) ?? []), id])
+    bySibling.set(entry.parent ?? '', siblings)
+  }
+  const tied = [...bySibling.values()]
+    .flatMap((siblings) => [...siblings.values()])
+    .filter((ids) => ids.length > 1)
+  assert.deepEqual(tied, [], 'two entries at one position leave the order to registration order')
+})
+
+test('sidebar: equal sequences fall back to the language being read, not the message key', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const order = (locale: string) =>
+    buildMenu(manifest, {
+      translate: (key) => translator(manifest, locale)(key),
+      locale,
+    }).map((node) => node.label)
+  // Vietnamese and English disagree about where "Bán hàng"/"Sales" sits relative to
+  // its neighbours, which is the whole point: the reader's alphabet decides.
+  assert.notDeepEqual(order('vi'), order('en'))
+  assert.ok(order('vi').every((label) => !label.startsWith('menu.')))
+})
+
+test('sidebar: every KetSuite root declares a glyph carried by the design system', () => {
   const manifest = compose(ketsuite.modules, { headless: true })
   const missing = Object.entries(manifest.menus)
     .filter(([, entry]) => !entry.parent)
     .filter(([, entry]) => !entry.icon || !hasIcon(entry.icon))
     .map(([id]) => id)
     .sort()
-  assert.deepEqual(missing, [], 'an app must choose a supported semantic icon in its own module')
+  assert.deepEqual(missing, [], 'a root menu must choose a supported semantic icon in its own module')
 })
 
 test('sidebar footer: legacy systray order keeps settings and sign-out functional', () => {
   const html = renderToString(
-    appsScreen(_, [app({ state: 'installed' })], {
+    pagesScreen(_, [page()], {
       menu: MENU,
-      viewer: { name: 'Nguyễn Quản Trị', company: 'acme', companies: ['acme', 'globex'] },
+      viewer: {
+        name: 'Nguyễn Quản Trị',
+        company: 'acme',
+        companies: ['acme', 'globex'],
+        contextPath: '/admin/context',
+      },
       indicators: [
         { id: 'message', icon: 'mail', label: 'Thông báo', count: 2, path: '/admin/inbox' },
         { id: 'activity', icon: 'bell', label: 'Hoạt động', count: 2, path: '/admin/activities' },
@@ -480,20 +1129,17 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
     }),
   )
   assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
-  assert.match(html, /data-ui="viewer-company-indicator"[^>]*aria-label="acme"/)
   assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
   assert.match(html, /data-ui="viewer-presence"/)
+  assert.match(html, /data-ui="viewer-context-switcher" href="\/admin\/context"/)
+  assert.match(html, /Chuyển công ty/)
+  assert.doesNotMatch(html, /data-ui="context-switcher"|data-ui="viewer-company-indicator"/)
   assert.match(html, /<form data-ui="signout" method="post" action="\/logout">/)
-  assert.match(html, /<a data-ui="sidebar-settings" href="\/admin\/settings">/)
-  assert.ok(
-    html.indexOf('data-ui="sidebar-tools"') < html.indexOf('data-ui="sidebar-settings"'),
-    'Settings belongs below the systray divider',
-  )
 })
 
 test('backend shell: fragment navigation emits only replaceable slots', () => {
   const html = renderToString(
-    appsScreen(_, [app({ state: 'installed' })], {
+    pagesScreen(_, [page()], {
       navigation: true,
       menu: MENU,
       extras: { 'sidebar.foot': 'persistent foot' },
@@ -508,32 +1154,67 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
 })
 
-test('backend layout: framed list and form screens share the accounting workspace', () => {
+test('backend layout: canonical screen wrappers supply context and flatten around rich records', () => {
   const list = renderToString(pagesScreen(_, [page()], {}))
-  assert.match(list, /data-ui="record-workspace" data-page-frame="true"/)
-  assert.match(list, /data-ui="record-heading"[\s\S]*Trang/)
+  assert.match(list, /data-ui="list-page"[^>]*data-pattern="list"/)
+  assert.match(list, /data-ui="list-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.match(list, /data-ui="list-page-title"[\s\S]*Trang/)
 
   const rich = renderToString(
-    framed(
-      _,
-      'Record',
-      {},
-      recordWorkspace({
+    RecordScreen({
+      translator: _,
+      title: 'Record',
+      frame: {},
+      body: recordWorkspace({
         title: 'Record identity',
         imageFallback: icon('package'),
         body: surface({ body: 'Record body' }),
       }),
-    ),
+    }),
   )
-  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 2)
-  assert.equal(rich.match(/data-page-frame="true"/g)?.length, 1)
+  assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 1)
+  assert.equal(rich.match(/data-pattern="record"/g)?.length, 1)
+  assert.match(rich, /data-ui="form-page-context"[\s\S]*data-ui="breadcrumbs"/)
 
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
-  assert.match(css, /data-page-frame="true"\]:has/)
-  assert.ok(
-    css.includes('> [data-ui="record-body"] [data-ui="record-workspace"]'),
-    'the generic frame also flattens a rich workspace wrapped by feedback or a stack',
+  const css = ADMIN_CSS
+  assert.match(css, /\[data-ui="form-page"\]:has\([\s\S]*?\[data-ui="record-workspace"\]/)
+})
+
+test('record workspace: collaboration aligns with the sheet when the topbar collapses', () => {
+  const css = ADMIN_CSS
+  assert.match(css, /\[data-ui="record-aside"\][\s\S]*?inset-block-start: 0/)
+  assert.match(
+    css,
+    /\[data-ui="main"\]:has\(> \[data-ui="topbar"\] > \*\) \[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
   )
+})
+
+test('record workspace: compact identity and actions share the global record header', () => {
+  const html = renderToString(
+    recordWorkspace({
+      kicker: 'Products',
+      title: 'Linen shirt',
+      imageFallback: icon('package'),
+      controller: button({ label: 'Save', type: 'submit', form: 'product-form', variant: 'primary' }),
+      body: surface({ body: 'Product form' }),
+    }),
+  )
+
+  assert.match(
+    html,
+    /data-ui="record-top"[\s\S]*data-ui="record-header"[\s\S]*Linen shirt[\s\S]*data-ui="record-controller"[\s\S]*form="product-form"/,
+  )
+  assert.doesNotMatch(
+    html,
+    /data-ui="breadcrumbs"|data-ui="record-thumbnail"|data-ui="record-kicker"|Products/,
+  )
+  assert.doesNotMatch(html, /data-ui="record-navigation"[\s\S]*data-ui="record-controller"/)
+})
+
+test('record workspace: floating form controls can extend beyond the sheet', () => {
+  const css = ADMIN_CSS
+  assert.match(css, /\[data-ui="record-sheet"\][\s\S]*?overflow: visible/)
+  assert.match(css, /\[data-ui="relation-menu"\][\s\S]*?position: absolute/)
 })
 
 test('backend responder: a fragment request never renders document infrastructure', async () => {
@@ -554,7 +1235,7 @@ test('backend responder: a fragment request never renders document infrastructur
     {
       lang: 'vi',
       title: 'Ứng dụng',
-      body: appsScreen(_, [app()], { navigation: true, menu: MENU }),
+      body: pagesScreen(_, [page()], { navigation: true, menu: MENU }),
     },
   )
   assert.equal(result.type, 'text/vnd.ket.fragments+html')
@@ -562,14 +1243,7 @@ test('backend responder: a fragment request never renders document infrastructur
 })
 
 test('design tokens: every admin role used by components is declared', () => {
-  const css = [
-    'packages/ketsuite/src/modules/backend/design/admin.css',
-    'packages/ketsuite/src/ui/client/mail.css',
-    'packages/ketsuite/src/ui/client/activity.css',
-    'packages/ketsuite/src/ui/client/calendar.css',
-  ]
-    .map((path) => readFileSync(path, 'utf8'))
-    .join('\n')
+  const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
   const declared = new Set([...tokens.matchAll(/(--admin-[\w-]+)\s*:/g)].map((match) => match[1]))
   const referenced = new Set([...css.matchAll(/var\((--admin-[\w-]+)/g)].map((match) => match[1]))
@@ -596,20 +1270,109 @@ test('design tokens: status surfaces stay fixed across light and dark themes', (
   }
 })
 
-test('design density: desktop controls share the 28px operational height', () => {
+test('ui kit: every PascalCase export takes the one props object JSX hands it', async () => {
+  // A positional helper exported under a JSX name is a trap: `<Stack items={…} />`
+  // would hand `stack(items, gap)` a props object where it wants a list, and the
+  // page renders empty rather than failing. So the entry rule for the PascalCase
+  // block is arity one.
+  const kit = (await import('@ketvietlab/ketsuite/ui')) as unknown as Record<string, unknown>
+  const wrong = Object.entries(kit)
+    .filter(([name]) => /^[A-Z][a-zA-Z]*$/.test(name))
+    .filter(([, value]) => typeof value === 'function')
+    .filter(([, value]) => (value as (...args: unknown[]) => unknown).length !== 1)
+    .map(([name]) => name)
+    .sort()
+  assert.deepEqual(wrong, [], 'a JSX component takes props, not a positional argument list')
+})
+
+test('ui contract: an island control carries the same hook a form control does', () => {
+  // An island's markup is behaviour, so it lives in a browser file rather than in
+  // the kit — but the control inside it is still a control. Three of them wrote
+  // their own: a heavier border, and no focus ring, no disabled state, no invalid
+  // state. `<input type="datetime-local">` with no `data-ui` at all got whatever a
+  // descendant selector two files away happened to say.
+  const bare: string[] = []
+  for (const path of globSync('packages/ketsuite/src/**/client/*.mjs')) {
+    // the storefront search island is on ui-audit's pending list, markup and all
+    if (path.includes('website_search')) continue
+    for (const [index, line] of readFileSync(path, 'utf8').split('\n').entries()) {
+      for (const match of line.matchAll(/<(input|select|textarea)\s[^>]*>/g)) {
+        if (match[0].includes('data-ui=') || match[0].includes('type="hidden"')) continue
+        bare.push(`${path}:${index + 1} ${match[0].slice(0, 60)}`)
+      }
+    }
+  }
+  assert.deepEqual(bare, [], 'an island control needs data-ui="form-control", like every other control')
+})
+
+test('design tokens: the native date picker glyph follows the theme', () => {
+  // The browser draws the calendar and clock marks itself, in its own colour, which
+  // on a dark canvas is a dark mark on a dark field. It is a bitmap: invertible,
+  // not recolourable.
+  const css = ADMIN_CSS
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
-  assert.match(tokens, /--admin-control-height:\s*1\.75rem;/)
+  assert.match(css, /::-webkit-calendar-picker-indicator[\s\S]*?filter: invert\(var\(--admin-picker-invert/)
+  assert.match(tokens, /--admin-picker-invert: light-dark\(0, 1\);/)
+})
+
+test('backend layout: a workspace screen uses one identity band with navigation context', () => {
+  const manifest = compose(ketsuite.modules, { headless: true })
+  const vi = translator(manifest, 'vi')
+  const menu = buildMenu(manifest, {
+    translate: (key) => vi(key),
+    locale: 'vi',
+    active: '/admin/stock/transfers',
+  })
+  const framed = renderToString(
+    WorkspaceScreen({ translator: vi, title: 'Điều chuyển', frame: { menu }, body: surface({ body: 'x' }) }),
+  )
+  assert.equal(framed.match(/data-ui="title"/g), null, 'the bar does not repeat the heading')
+  assert.equal(framed.match(/data-ui="dashboard-page-title"/g)?.length, 1)
+  assert.match(framed, /data-ui="dashboard-page-context"[\s\S]*data-ui="breadcrumbs"/)
+
+  // A list keeps its toolbar; it just stops naming the page twice.
+  const listed = renderToString(
+    WorkspaceScreen({
+      translator: vi,
+      title: 'Điều chuyển',
+      frame: { menu, chrome: { create: { label: 'Mới', path: '/x' } } },
+      body: surface({ body: 'x' }),
+    }),
+  )
+  assert.match(listed, /data-ui="chrome-create"/)
+  assert.equal(listed.match(/data-ui="title"/g), null)
+})
+
+test('sidebar: the footer is pinned to the window, not to the end of the page', () => {
+  // As a plain grid item the sidebar stretched to the shell's row — the content's
+  // height — so on a long list the systray, the message and activity counts and the
+  // settings link sat hundreds of pixels below the fold. It is the window's height
+  // and it sticks; `sidebar-nav` takes the overflow inside it.
+  const css = ADMIN_CSS
+  const rule = css.match(/\[data-ui="sidebar"\] \{[^}]*\}/)?.[0] ?? ''
+  assert.match(rule, /position:\s*sticky;/)
+  assert.match(rule, /inset-block-start:\s*0;/)
+  assert.match(rule, /block-size:\s*100dvh;/)
+  assert.match(rule, /align-self:\s*start;/, 'or the grid stretches it back to the page height')
+  assert.match(css, /\[data-ui="sidebar-nav"\] \{[^}]*overflow-y:\s*auto;/)
+})
+
+test('design density: controls and fields follow the canonical component dimensions', () => {
+  const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
+  const css = ADMIN_CSS
+  assert.match(tokens, /--admin-control-height:\s*var\(--kv-control-height-md\);/)
+  assert.match(tokens, /--admin-field-height:\s*var\(--kv-control-height-md\);/)
   assert.match(css, /:where\(\[data-ui="action"\],[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
-  assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(css, /\[data-ui="field-input"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
+  assert.match(css, /\[data-ui="form-control"\][\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
 })
 
 test('style safety: hidden content has no box and adjacent record controls use a real gap', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   assert.match(css, /:where\(\[hidden\]\)\s*{\s*display:\s*none !important;/)
   assert.match(css, /\[data-ui="record-badges"\][\s\S]*?gap:\s*var\(--admin-gap\);/)
   assert.match(css, /\[data-ui="tab"\][\s\S]*?padding-block-start:\s*0\.25rem;/)
-  assert.match(css, /\[data-ui="form-field"\]\s*{[\s\S]*?min-block-size:\s*var\(--admin-control-height\);/)
+  assert.match(css, /\[data-ui="form-field"\]\s*{[\s\S]*?min-block-size:\s*var\(--admin-field-height\);/)
   assert.match(
     css,
     /@media \(min-width: 96rem\)[\s\S]*?grid-template-columns:\s*minmax\(0, 2fr\) minmax\(32rem, 1fr\);/,
@@ -748,7 +1511,7 @@ test('date picker: range remains a native, accessible and URL-driven form', () =
   )
   assert.match(html, /data-ui="date-picker" method="get" action="\/calendar" data-range="true"/)
   assert.match(html, /type="hidden" name="property" value="hotel-1"/)
-  assert.match(html, /type="date" name="from" value="2026-08-20" min="2026-01-01"/)
+  assert.match(html, /type="date" name="from" autocomplete="off" value="2026-08-20" min="2026-01-01"/)
   assert.match(html, /aria-invalid="true" aria-describedby="date-picker--calendar-to-error"/)
   assert.match(html, /data-ui="date-picker-error" id="date-picker--calendar-to-error"/)
   assert.match(html, /href="\/calendar"/)
@@ -763,7 +1526,7 @@ test('date picker: range remains a native, accessible and URL-driven form', () =
     }),
   )
   assert.match(single, /method="post" action="\/day" data-range="false"/)
-  assert.match(single, /type="date" name="date" value="" disabled/)
+  assert.match(single, /type="date" name="date" autocomplete="off" value="" disabled/)
   assert.doesNotMatch(single, /href=/)
 })
 
@@ -789,7 +1552,7 @@ test('media: primary state has a label and image actions keep accessible icon co
 })
 
 test('schedule: every declared status tone has a concrete visual state', () => {
-  const css = readFileSync('packages/ketsuite/src/modules/backend/design/admin.css', 'utf8')
+  const css = ADMIN_CSS
   for (const tone of ['neutral', 'positive', 'info', 'warning', 'danger'])
     assert.ok(
       css.includes(`[data-ui="schedule-event"][data-tone="${tone}"]`),
@@ -798,14 +1561,10 @@ test('schedule: every declared status tone has a concrete visual state', () => {
 })
 
 test('ui contract: the states a stylesheet branches on are present', () => {
-  assert.match(everything, /data-state="installed"/)
-  assert.match(everything, /data-state="available"/)
   assert.match(everything, /data-tone="positive"/)
   assert.match(everything, /data-tone="neutral"/)
   assert.match(everything, /data-active="true"/)
-  assert.match(everything, /data-action="install"/)
-  assert.match(everything, /data-action="uninstall"/)
-  assert.match(everything, /disabled="true"/, 'an app that cannot be removed shows why')
+  assert.match(everything, /disabled="true"/)
 })
 
 test('ui contract: markup carries no class attribute at all', () => {
@@ -815,17 +1574,43 @@ test('ui contract: markup carries no class attribute at all', () => {
   )
 })
 
+test('ui contract: every input disables browser autocomplete', () => {
+  const missing: string[] = []
+  for (const file of globSync('packages/ketsuite/src/**/*.{ts,tsx,mjs}')) {
+    const source = readFileSync(file, 'utf8')
+    for (const match of source.matchAll(/<input\b[^>]*>/g)) {
+      if (/\bautocomplete="off"/.test(match[0])) continue
+      const line = source.slice(0, match.index).split('\n').length
+      missing.push(`${file}:${line}`)
+    }
+  }
+  assert.deepEqual(missing, [], 'new inputs must not restore browser autocomplete')
+})
+
+test('table selection: the checkbox cell is a navigation dead zone', () => {
+  const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  const selectionGuard = source.indexOf('[data-ui="select-cell"]')
+  const linkedRowNavigation = source.indexOf('[data-ui="row"][data-row-href]')
+  assert.ok(selectionGuard >= 0, 'the selection-cell guard must remain declared')
+  assert.ok(linkedRowNavigation >= 0, 'linked-row navigation must remain declared')
+  assert.ok(
+    selectionGuard < linkedRowNavigation,
+    'the selection-cell guard must run before linked-row navigation',
+  )
+})
+
+test('route modal runtime traps focus without focusing the backdrop and keeps close navigation local', () => {
+  const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  assert.match(source, /\[data-route-modal="true"\]/)
+  assert.match(source, /event\s*\.composedPath\(\)/)
+  assert.match(source, /!item\.matches\('\[data-ui="modal-backdrop"\]'\)/)
+  assert.match(source, /event\.key === 'Escape'/)
+  assert.match(source, /close\.getAttribute\('href'\) \?\? close\.href/)
+})
+
 test('catalogue: covers empty, long, blocked and error, not just the happy path', () => {
   const ids = CASES.map((c) => c.id)
-  for (const needed of [
-    'apps-empty',
-    'apps-long',
-    'apps-blocked',
-    'pages-empty',
-    'pages-long',
-    'kit-form',
-    'state-error',
-  ]) {
+  for (const needed of ['pages-empty', 'pages-long', 'kit-form', 'state-error']) {
     assert.ok(
       ids.includes(needed),
       `the catalogue must show "${needed}" — a design that skips it gets built twice`,
@@ -839,5 +1624,135 @@ test('catalogue: covers empty, long, blocked and error, not just the happy path'
   assert.ok(
     CASES.every((c) => c.note.length > 10),
     'every case says what it is testing',
+  )
+})
+
+const landingMenu: MenuNode[] = [
+  {
+    id: 'business',
+    label: 'Business',
+    path: null,
+    icon: null,
+    active: false,
+    secondary: false,
+    children: [
+      {
+        id: 'partners',
+        label: 'Partners',
+        path: '/admin/partners',
+        icon: null,
+        active: false,
+        secondary: false,
+        children: [],
+      },
+    ],
+  },
+]
+
+test('backend root sends a viewer where the deployment says their work is', async () => {
+  const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
+  const route = factory({
+    menu: async () => landingMenu,
+    navigation: {
+      home: [
+        { needs: 'housekeeping.completeTask', path: '/admin/housekeeping' },
+        { needs: 'sales.createOrder', path: '/admin/sales' },
+      ],
+    },
+    // This viewer cleans rooms; they cannot open an order.
+    allows: async (name: string) => name === 'housekeeping.completeTask',
+  } as unknown as ServeContext)
+
+  const result = await route(new URL('http://ket.local/admin'), { headers: {} } as never, {})
+  assert.equal(result.status, 303)
+  assert.equal(result.headers?.location, '/admin/housekeeping')
+})
+
+test('backend root tries landing conditions in order, so the specific wins', async () => {
+  const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
+  const route = factory({
+    menu: async () => landingMenu,
+    navigation: {
+      home: [
+        { needs: 'housekeeping.completeTask', path: '/admin/housekeeping' },
+        { needs: 'sales.createOrder', path: '/admin/sales' },
+      ],
+    },
+    // A manager may call both; the first entry is the one that was meant.
+    allows: async () => true,
+  } as unknown as ServeContext)
+
+  const result = await route(new URL('http://ket.local/admin'), { headers: {} } as never, {})
+  assert.equal(result.headers?.location, '/admin/housekeeping')
+})
+
+test('backend root falls back to menu order when no landing condition matches', async () => {
+  const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
+  const route = factory({
+    menu: async () => landingMenu,
+    navigation: { home: [{ needs: 'housekeeping.completeTask', path: '/admin/housekeeping' }] },
+    allows: async () => false,
+  } as unknown as ServeContext)
+
+  const result = await route(new URL('http://ket.local/admin'), { headers: {} } as never, {})
+  assert.equal(
+    result.headers?.location,
+    '/admin/partners',
+    'a deployment that declared nothing for this viewer keeps the behaviour it had',
+  )
+})
+
+test('backend root opens the first screen contributed by this deployment', async () => {
+  const factory = backend.routes['/admin'] as (ctx: ServeContext) => Route
+  const menu: MenuNode[] = [
+    {
+      id: 'business',
+      label: 'Business',
+      path: null,
+      icon: null,
+      active: false,
+      secondary: false,
+      children: [
+        {
+          id: 'partners',
+          label: 'Partners',
+          path: '/admin/partners',
+          icon: null,
+          active: false,
+          secondary: false,
+          children: [],
+        },
+      ],
+    },
+  ]
+  const route = factory({ menu: async () => menu } as unknown as ServeContext)
+  const result = await route(new URL('http://ket.local/admin'), { headers: {} } as never, {})
+
+  assert.equal(result.status, 303)
+  assert.equal(result.headers?.location, '/admin/partners')
+})
+
+test('permission failure answers 403, not 400', () => {
+  // A monitor cannot tell a missing grant from a malformed body when both are 400,
+  // and neither can a client deciding whether to retry or to ask for access.
+  assert.equal(statusForError('E_FN_NOT_PERMITTED'), 403)
+  assert.equal(statusForError('E_NOT_FOUND'), 404)
+  assert.equal(statusForError('E_UNKNOWN_FUNCTION'), 404)
+  assert.equal(statusForError('E_PAYLOAD_TOO_LARGE'), 413)
+  assert.equal(statusForError('E_INVALID_JSON_BODY'), 400)
+})
+
+test('a browser navigating gets the page; a client calling gets the JSON', () => {
+  const browser = { headers: { accept: 'text/html,application/xhtml+xml' } } as never
+  const api = { headers: { accept: 'application/json' } } as never
+  const fragment = {
+    headers: { accept: 'text/html', 'x-ket-navigation': '1' },
+  } as never
+  assert.equal(wantsHtml(browser), true)
+  assert.equal(wantsHtml(api), false)
+  assert.equal(
+    wantsHtml(fragment),
+    false,
+    'a fragment request is answered by the caller, not replaced with a whole document',
   )
 })

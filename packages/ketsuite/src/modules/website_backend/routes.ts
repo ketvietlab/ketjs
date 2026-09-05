@@ -1,13 +1,19 @@
 import { randomUUID } from 'node:crypto'
-import { text } from '@ketvietlab/ketjs'
+import { text, withHeaders } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
-import { backendPage } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
 import {
   contentScreen,
   entryFormScreen,
-  formCreateScreen,
+  formEditorScreen,
+  entrySeoSection,
+  preflightScreen,
+  publicationsScreen,
+  redirectsScreen,
+  searchIndexScreen,
+  siteDomainsScreen,
+  siteMembersScreen,
+  submissionRecordScreen,
   formsScreen,
   mediaFormScreen,
   mediaScreen,
@@ -20,45 +26,33 @@ import {
   submissionsScreen,
   taxonomyScreen,
   taxonomyFormScreen,
-} from './screens.tsx'
-import type { EntryDetail, EntryKind, EntryRow, MediaRow, MenuRow, SiteRow, TaxonomyRow } from './screens.tsx'
-
-type Req = Parameters<Route>[1]
-
-const localeSuffix = (url: URL): string => {
-  const lang = url.searchParams.get('lang')
-  return lang ? `?lang=${encodeURIComponent(lang)}` : ''
-}
-
-const inLocale = (url: URL, path: string): string => {
-  const target = new URL(path, 'http://ket.local')
-  const lang = url.searchParams.get('lang')
-  if (lang) target.searchParams.set('lang', lang)
-  return `${target.pathname}${target.search}`
-}
-
-const frameFor = async (ctx: ServeContext, url: URL, req: Req) => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  menuFilter: url.searchParams.get('menu')?.trim() || null,
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-    'sidebar.foot':
-      req.headers['x-ket-navigation'] === 'fragment-v1'
-        ? undefined
-        : await ctx.joint(url, req, 'backend:sidebar.foot', { lang: ctx.localeOf(url, req) }),
-  },
-})
-
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  title: string,
-  body: Parameters<ServeContext['document']>[0]['body'],
-) => backendPage(ctx, req, { lang: ctx.localeOf(url, req), title, body })
+} from './screens/index.tsx'
+import type {
+  EntryDetail,
+  EntryKind,
+  EntryRow,
+  MediaRow,
+  DanglingLink,
+  DomainRow,
+  FormRow,
+  IndexState,
+  MemberRow,
+  PublicationRow,
+  RedirectRow,
+  SeoValues,
+  PreflightResult,
+  MenuRow,
+  RevisionDiff,
+  RevisionRow,
+  SubmissionAuditRow,
+  SubmissionRecord,
+  SiteRow,
+  SubmissionRow,
+  TaxonomyRow,
+} from './screens/index.tsx'
+import { csvOf, safeFilename } from './csv.ts'
+import { adminPage, inLocale, localeQuery } from '../backend/screen.ts'
+import type { Req } from '../backend/screen.ts'
 
 const sitesOf = (ctx: ServeContext, url: URL, req: Req) =>
   ctx.call('website.listSites', {}, url, req) as Promise<SiteRow[]>
@@ -111,6 +105,81 @@ const resultErrors = (result: unknown, _: ReturnType<ServeContext['translate']>)
   })
 }
 
+/**
+ * The contract fields the editor owns, read back out of a posted form.
+ *
+ * Blank means blank, not "leave it alone": `saveForm` treats an absent field
+ * as "keep what is there" so that a writer without the field cannot wipe it,
+ * but this screen *shows* all three, so the operator saw the box and left it
+ * empty on purpose.
+ */
+const formContractFields = (form: Record<string, string>) => {
+  const notice = (form.consentText ?? '').trim()
+  const preview = (form.summaryFields ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+  const days = (form.retentionDays ?? '').trim()
+  return {
+    consentText: notice || null,
+    summaryFields: preview.length ? preview : null,
+    // A number field in a browser will not submit letters, but a refusal that
+    // names the field beats a five hundred if one ever arrives: -1 fails the
+    // domain check, where E_INVALID_INPUT on NaN would throw past the screen.
+    retentionDays: days === '' ? null : Number.isInteger(Number(days)) ? Number(days) : -1,
+  }
+}
+
+const formValuesOf = (row: {
+  name?: unknown
+  notifyTo?: unknown
+  successMessage?: unknown
+  consentText?: unknown
+  summaryFields?: unknown
+  retentionDays?: unknown
+  schema?: unknown
+}): Record<string, string> => ({
+  name: String(row.name ?? ''),
+  notifyTo: String(row.notifyTo ?? ''),
+  successMessage: String(row.successMessage ?? ''),
+  consentText: String(row.consentText ?? ''),
+  summaryFields: Array.isArray(row.summaryFields) ? row.summaryFields.join(', ') : '',
+  retentionDays: row.retentionDays == null ? '' : String(row.retentionDays),
+  schema: JSON.stringify(row.schema ?? {}, null, 2),
+})
+
+/**
+ * The two revisions being compared, and what changed between them.
+ *
+ * Defaults to the newest two rather than waiting to be asked: "what changed?"
+ * is the question people arrive at this screen holding, and answering it
+ * without a click is the difference between a feature and a form.
+ */
+const revisionDiffOf = async (
+  ctx: ServeContext,
+  url: URL,
+  req: Req,
+  entryId: string,
+  rows: RevisionRow[],
+): Promise<RevisionDiff | null> => {
+  if (rows.length < 2) return null
+  const known = new Set(rows.map((row) => row.id))
+  const asked = (name: string) => {
+    const value = url.searchParams.get(name)
+    return value && known.has(value) ? value : null
+  }
+  const to = asked('to') ?? rows[0]?.id
+  const from = asked('from') ?? rows[1]?.id
+  if (!to || !from || to === from) return null
+  const result = (await ctx.call(
+    'website.diffRevisions',
+    { entryId, fromRevisionId: from, toRevisionId: to },
+    url,
+    req,
+  )) as (RevisionDiff & { ok?: boolean }) | null
+  return result?.ok ? result : null
+}
+
 const entryOf = (ctx: ServeContext, url: URL, req: Req, id: string) =>
   ctx.call('website.getEntry', { id }, url, req) as Promise<EntryDetail | null>
 
@@ -154,16 +223,27 @@ const renderEntry = async (
   options: { values?: Record<string, string>; errors?: string[] } = {},
 ) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
-  return document(
-    ctx,
-    url,
-    req,
-    detail?.entry.title ?? _(`website_backend.${kind.titleKey}.newTitle`),
-    entryFormScreen(_, detail, siteId, kind, await frameFor(ctx, url, req), {
-      ...options,
-      locale: localeSuffix(url),
-    }),
-  )
+  // Read beside the entry rather than folded into getEntry: the head tags
+  // belong to website_seo, and the CMS does not get to decide what is public
+  // about a page on that module's behalf.
+  const seo = detail
+    ? ((await ctx.call(
+        'website_seo.getEntrySeo',
+        { entryId: detail.entry.id },
+        url,
+        req,
+      )) as SeoValues | null)
+    : null
+  return adminPage(ctx, url, req, {
+    title: detail?.entry.title ?? _(`website_backend.${kind.titleKey}.newTitle`),
+    translate: false,
+    body: (_, frame) =>
+      entryFormScreen(_, detail, siteId, kind, frame, {
+        ...options,
+        seo,
+        locale: localeQuery(url),
+      }),
+  })
 }
 
 const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Record<string, RouteEntry> => ({
@@ -177,21 +257,11 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const rows = siteId
         ? ((await ctx.call('website.listEntries', { siteId, type }, url, req)) as EntryRow[])
         : []
-      return document(
-        ctx,
-        url,
-        req,
-        _(`website_backend.${kind.titleKey}.title`),
-        contentScreen(
-          _,
-          rows,
-          siteOptions(sites),
-          siteId,
-          await frameFor(ctx, url, req),
-          localeSuffix(url),
-          kind,
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: _(`website_backend.${kind.titleKey}.title`),
+        translate: false,
+        body: (_, frame) => contentScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url), kind),
+      })
     },
 
   [`${kind.basePath}/new`]:
@@ -274,27 +344,34 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
       const detail = await entryOf(ctx, url, req, params.id)
       if (!detail || detail.entry.type !== type)
         return text(_('website_backend.error.notFound'), { status: 404 })
-      const rows = (await ctx.call('website.listRevisions', { entryId: params.id }, url, req)) as Array<{
-        id: string
-        version: number
-        kind: string
-        authorId?: string | null
-        createdAt: string
-      }>
-      return document(
-        ctx,
+      const rows = (await ctx.call(
+        'website.listRevisions',
+        { entryId: params.id },
         url,
         req,
-        _('website_backend.revisions.title'),
-        revisionsScreen(
-          _,
-          detail.entry,
-          rows,
-          await frameFor(ctx, url, req),
-          localeSuffix(url),
-          kind.basePath,
-        ),
+      )) as RevisionRow[]
+      const diff = await revisionDiffOf(ctx, url, req, params.id, rows)
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.revisions.title',
+        body: (_, frame) =>
+          revisionsScreen(_, detail.entry, rows, frame, localeQuery(url), kind.basePath, diff),
+      })
+    },
+
+  [`${kind.basePath}/{id}/revisions/{revisionId}/restore`]:
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = await ctx.call(
+        'website.restoreRevision',
+        { entryId: params.id, revisionId: params.revisionId },
+        url,
+        req,
       )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      // Back to the entry, not to the list: a restore made a draft, and the
+      // draft is the thing the person now wants to look at.
+      return seeOther(inLocale(url, `${kind.basePath}/${params.id}`))
     },
 
   [`${kind.basePath}/{id}/preview`]:
@@ -309,20 +386,11 @@ const entryRoutes = (kind: EntryKind, type: 'website.page' | 'website.post'): Re
         token: string
         expiresAt: string
       }
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.preview.title'),
-        previewScreen(
-          _,
-          detail.entry,
-          preview.token,
-          preview.expiresAt,
-          await frameFor(ctx, url, req),
-          kind.basePath,
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.preview.title',
+        body: (_, frame) =>
+          previewScreen(_, detail.entry, preview.token, preview.expiresAt, frame, kind.basePath),
+      })
     },
 })
 
@@ -376,51 +444,43 @@ const menuEditRoute =
         req,
       )
       if ((result as { ok?: boolean }).ok)
-        return seeOther(inLocale(url, `/admin/menus/${id}?site=${encodeURIComponent(siteId)}`))
-      return document(
-        ctx,
-        url,
-        req,
-        existing?.label ?? _('website_backend.menus.newTitle'),
-        menuFormScreen(
-          _,
-          { ...existing, ...form, id: params.id, siteId } as never,
-          parents,
-          await frameFor(ctx, url, req),
-          { errors: resultErrors(result, _), locale: localeSuffix(url) },
-        ),
-      )
+        return seeOther(inLocale(url, `/admin/website/menus/${id}?site=${encodeURIComponent(siteId)}`))
+      return adminPage(ctx, url, req, {
+        title: existing?.label ?? _('website_backend.menus.newTitle'),
+        translate: false,
+        body: (_, frame) =>
+          menuFormScreen(_, { ...existing, ...form, id: params.id, siteId } as never, parents, frame, {
+            errors: resultErrors(result, _),
+            locale: localeQuery(url),
+          }),
+      })
     }
     if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-    return document(
-      ctx,
-      url,
-      req,
-      existing?.label ?? _('website_backend.menus.newTitle'),
-      menuFormScreen(_, existing ?? { siteId, position: 0 }, parents, await frameFor(ctx, url, req), {
-        locale: localeSuffix(url),
-      }),
-    )
+    return adminPage(ctx, url, req, {
+      title: existing?.label ?? _('website_backend.menus.newTitle'),
+      translate: false,
+      body: (_, frame) =>
+        menuFormScreen(_, existing ?? { siteId, position: 0 }, parents, frame, {
+          locale: localeQuery(url),
+        }),
+    })
   }
 
 export const routes: Record<string, RouteEntry> = {
   ...entryRoutes(PAGES, 'website.page'),
   ...entryRoutes(POSTS, 'website.post'),
-  '/admin/sites':
+  '/admin/website/sites':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       const _ = ctx.translate(ctx.localeOf(url, req))
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.sites.title'),
-        sitesScreen(_, await sitesOf(ctx, url, req), await frameFor(ctx, url, req), localeSuffix(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.sites.title',
+        body: async (_, frame) => sitesScreen(_, await sitesOf(ctx, url, req), frame, localeQuery(url)),
+      })
     },
 
-  '/admin/sites/new':
+  '/admin/website/sites/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -441,35 +501,27 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/sites/${id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          _('website_backend.sites.newTitle'),
-          siteFormScreen(_, form as never, themes, await frameFor(ctx, url, req), {
-            errors: resultErrors(result, _),
-            locale: localeSuffix(url),
-          }),
-        )
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/website/sites/${id}`))
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.sites.newTitle',
+          body: (_, frame) =>
+            siteFormScreen(_, form as never, themes, frame, {
+              errors: resultErrors(result, _),
+              locale: localeQuery(url),
+            }),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.sites.newTitle'),
-        siteFormScreen(
-          _,
-          { theme: themes[0]?.value, defaultLocale: 'vi', active: true },
-          themes,
-          await frameFor(ctx, url, req),
-          { locale: localeSuffix(url) },
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.sites.newTitle',
+        body: (_, frame) =>
+          siteFormScreen(_, { theme: themes[0]?.value, defaultLocale: 'vi', active: true }, themes, frame, {
+            locale: localeQuery(url),
+          }),
+      })
     },
 
-  '/admin/sites/{id}':
+  '/admin/website/sites/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -491,39 +543,34 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/sites/${params.id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          site.title,
-          siteFormScreen(
-            _,
-            { ...site, ...form, active: form.active === '1' },
-            themes,
-            await frameFor(ctx, url, req),
-            { errors: resultErrors(result, _), locale: localeSuffix(url) },
-          ),
-        )
+        if ((result as { ok?: boolean }).ok)
+          return seeOther(inLocale(url, `/admin/website/sites/${params.id}`))
+        return adminPage(ctx, url, req, {
+          title: site.title,
+          translate: false,
+          body: (_, frame) =>
+            siteFormScreen(_, { ...site, ...form, active: form.active === '1' }, themes, frame, {
+              errors: resultErrors(result, _),
+              locale: localeQuery(url),
+            }),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        site.title,
-        siteFormScreen(_, site, themes, await frameFor(ctx, url, req), { locale: localeSuffix(url) }),
-      )
+      return adminPage(ctx, url, req, {
+        title: site.title,
+        translate: false,
+        body: (_, frame) => siteFormScreen(_, site, themes, frame, { locale: localeQuery(url) }),
+      })
     },
 
-  '/admin/content':
+  '/admin/website/content':
     (_ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
       return seeOther(`/admin/website/pages${url.search}`)
     },
 
-  '/admin/content/new':
+  '/admin/website/content/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -539,7 +586,8 @@ export const routes: Record<string, RouteEntry> = {
           return renderEntry(ctx, url, req, null, siteId, PAGES, { values: form, errors: jsonErrors })
         const id = randomUUID()
         const result = await saveEntry(ctx, url, req, id, form, 'website.page')
-        if ((result as { ok?: boolean } | null)?.ok) return seeOther(inLocale(url, `/admin/content/${id}`))
+        if ((result as { ok?: boolean } | null)?.ok)
+          return seeOther(inLocale(url, `/admin/website/content/${id}`))
         return renderEntry(ctx, url, req, null, siteId, PAGES, {
           values: form,
           errors: resultErrors(result, _),
@@ -549,7 +597,7 @@ export const routes: Record<string, RouteEntry> = {
       return renderEntry(ctx, url, req, null, siteId, PAGES)
     },
 
-  '/admin/content/{id}':
+  '/admin/website/content/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const detail = await entryOf(ctx, url, req, params.id)
@@ -582,7 +630,7 @@ export const routes: Record<string, RouteEntry> = {
         detail.entry.type === 'website.post' ? 'website.post' : 'website.page',
       )
       if ((result as { ok?: boolean } | null)?.ok)
-        return seeOther(inLocale(url, `/admin/content/${params.id}`))
+        return seeOther(inLocale(url, `/admin/website/content/${params.id}`))
       return renderEntry(
         ctx,
         url,
@@ -597,7 +645,7 @@ export const routes: Record<string, RouteEntry> = {
       )
     },
 
-  '/admin/content/{id}/publish':
+  '/admin/website/content/{id}/publish':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -624,10 +672,10 @@ export const routes: Record<string, RouteEntry> = {
           },
         )
       }
-      return seeOther(inLocale(url, `/admin/content/${params.id}`))
+      return seeOther(inLocale(url, `/admin/website/content/${params.id}`))
     },
 
-  '/admin/content/{id}/revisions':
+  '/admin/website/content/{id}/revisions':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -641,16 +689,13 @@ export const routes: Record<string, RouteEntry> = {
         authorId?: string | null
         createdAt: string
       }>
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.revisions.title'),
-        revisionsScreen(_, detail.entry, rows, await frameFor(ctx, url, req), localeSuffix(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.revisions.title',
+        body: (_, frame) => revisionsScreen(_, detail.entry, rows, frame, localeQuery(url)),
+      })
     },
 
-  '/admin/content/{id}/preview':
+  '/admin/website/content/{id}/preview':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -661,16 +706,13 @@ export const routes: Record<string, RouteEntry> = {
         token: string
         expiresAt: string
       }
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.preview.title'),
-        previewScreen(_, detail.entry, preview.token, preview.expiresAt, await frameFor(ctx, url, req)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.preview.title',
+        body: (_, frame) => previewScreen(_, detail.entry, preview.token, preview.expiresAt, frame),
+      })
     },
 
-  '/admin/taxonomies':
+  '/admin/website/taxonomies':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -680,16 +722,13 @@ export const routes: Record<string, RouteEntry> = {
       const rows = siteId
         ? ((await ctx.call('website.listTaxonomyTerms', { siteId }, url, req)) as never[])
         : []
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.taxonomies.title'),
-        taxonomyScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeSuffix(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.taxonomies.title',
+        body: (_, frame) => taxonomyScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url)),
+      })
     },
 
-  '/admin/media':
+  '/admin/website/media':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -697,16 +736,152 @@ export const routes: Record<string, RouteEntry> = {
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
       const rows = siteId ? ((await ctx.call('website.listMedia', { siteId }, url, req)) as never[]) : []
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.media.title'),
-        mediaScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeSuffix(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.media.title',
+        body: (_, frame) => mediaScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url)),
+      })
     },
 
-  '/admin/menus':
+  /**
+   * The publish check, run because someone asked.
+   *
+   * preflightPublication reads a revision per page, so it is a button rather
+   * than something the content list pays for on every render.
+   */
+  /**
+   * The head tags for one page.
+   *
+   * saveEntrySeo has existed since the SEO module and no screen wrote to it,
+   * so a page's description, canonical and social image could only be set by
+   * an agent - and `noindex`, the one field that delists a page immediately,
+   * could not be reached at all.
+   */
+  '/admin/website/content/{id}/seo':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      const result = await ctx.call(
+        'website_seo.saveEntrySeo',
+        {
+          entryId: params.id,
+          metaDescription: (form.metaDescription ?? '').trim() || null,
+          canonical: (form.canonical ?? '').trim() || null,
+          ogImage: (form.ogImage ?? '').trim() || null,
+          noindex: !!form.noindex,
+        },
+        url,
+        req,
+      )
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/pages/${params.id}`))
+    },
+
+  /**
+   * Publishing a set, from a screen.
+   *
+   * preparePublication freezes which revision of which page goes out and
+   * activatePublication moves all of them or none - the machinery that stops a
+   * menu link reaching visitors before the page it points at. It was reachable
+   * only by an agent, so the atomic path existed and the one-page-at-a-time
+   * path was the only one a person could take.
+   */
+  '/admin/website/publications':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const posted = req.method === 'POST' ? await readForm(req) : null
+      const siteId = posted?.siteId || selectedSite(url, sites)
+      const render = async (errors?: string[], notice?: string | null) => {
+        const [rows, entries] = siteId
+          ? await Promise.all([
+              ctx.call('website.listPublications', { siteId }, url, req) as Promise<PublicationRow[]>,
+              ctx.call('website.listEntries', { siteId, status: 'published' }, url, req) as Promise<
+                EntryRow[]
+              >,
+            ])
+          : [[], []]
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.publications.title',
+          body: (_, frame) =>
+            publicationsScreen(_, rows, entries, siteOptions(sites), siteId, frame, {
+              errors,
+              notice,
+              locale: localeQuery(url),
+            }),
+        })
+      }
+      if (req.method === 'GET') return render(undefined, url.searchParams.get('done'))
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      const entryIds = (posted?.entryIds ?? '')
+        .split(/[\s,]+/)
+        .map((id) => id.trim())
+        .filter(Boolean)
+      // The menu is frozen alongside the pages, so navigation and the pages it
+      // points at reach visitors together rather than on separate schedules.
+      const menu = await ctx.call('website_menu.snapshotMenu', { siteId }, url, req)
+      const result = await ctx.call(
+        'website.preparePublication',
+        { id: randomUUID(), siteId, entryIds, attachments: { website_menu: menu } },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/publications?site=${encodeURIComponent(siteId)}`))
+      return render(resultErrors(result, _))
+    },
+
+  '/admin/website/publications/{id}/activate':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = (await ctx.call('website.activatePublication', { id: params.id }, url, req)) as {
+        ok?: boolean
+        missingSections?: string[]
+      }
+      if (!result.ok) {
+        const missing = result.missingSections?.length
+          ? `${_('website_backend.publications.missing')}: ${result.missingSections.join(', ')}`
+          : resultErrors(result, _).join('; ')
+        return text(missing, { status: 400 })
+      }
+      return seeOther(inLocale(url, '/admin/website/publications'))
+    },
+
+  '/admin/website/publications/{id}/rollback':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const siteId = selectedSite(url, sites)
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      // A rollback prepares a new publication from the previous set; it does
+      // not activate it. Someone still presses activate, which is the same
+      // gate every other publication goes through.
+      const result = await ctx.call('website.rollbackPublication', { id: randomUUID(), siteId }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/publications?site=${encodeURIComponent(siteId)}`))
+    },
+
+  '/admin/website/preflight':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const siteId = selectedSite(url, sites)
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      const result = (await ctx.call('website.preflightPublication', { siteId }, url, req)) as PreflightResult
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.preflight.title',
+        body: (_, frame) => preflightScreen(_, result, siteId, frame, localeQuery(url)),
+      })
+    },
+
+  '/admin/website/menus':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -716,16 +891,195 @@ export const routes: Record<string, RouteEntry> = {
       const rows = siteId
         ? ((await ctx.call('website_menu.listMenu', { siteId }, url, req)) as MenuRow[])
         : []
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.menus.title'),
-        menusScreen(_, rows, siteOptions(sites), siteId, await frameFor(ctx, url, req), localeSuffix(url)),
-      )
+      // One extra query on a screen that already lists the menu, and the only
+      // place a broken link is visible at all: the item and the page it names
+      // are edited on different screens on different days.
+      const check = siteId
+        ? ((await ctx.call('website_menu.preflightMenu', { siteId }, url, req)) as {
+            dangling?: DanglingLink[]
+          })
+        : null
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.menus.title',
+        body: (_, frame) =>
+          menusScreen(_, rows, siteOptions(sites), siteId, frame, localeQuery(url), check?.dangling ?? []),
+      })
     },
 
-  '/admin/taxonomies/new':
+  /**
+   * Who may work on this site.
+   *
+   * Membership decided every authorization decision in the module and could
+   * only be changed by calling the function directly. A permission that can be
+   * granted and never reviewed is the kind that outlives its reason.
+   */
+  '/admin/website/sites/{id}/members':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const site = (await sitesOf(ctx, url, req)).find((row) => row.id === params.id)
+      if (!site) return text(_('website_backend.error.notFound'), { status: 404 })
+      const render = async (values?: Record<string, string>, errors?: string[]) => {
+        const rows = (await ctx.call(
+          'website.listSiteMembers',
+          { siteId: params.id },
+          url,
+          req,
+        )) as MemberRow[]
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.members.title',
+          body: (_, frame) =>
+            siteMembersScreen(_, site, rows, frame, { values, errors, locale: localeQuery(url) }),
+        })
+      }
+      if (req.method === 'GET') return render()
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const result = await ctx.call(
+        'website.saveSiteMember',
+        { id: randomUUID(), siteId: params.id, userId: form.userId, role: form.role },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/sites/${params.id}/members`))
+      return render(form, resultErrors(result, _))
+    },
+
+  '/admin/website/sites/{id}/members/{memberId}/remove':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const result = await ctx.call('website.removeSiteMember', { id: params.memberId }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/sites/${params.id}/members`))
+    },
+
+  /**
+   * Which hosts answer for this site, and which one the others defer to.
+   *
+   * The primary is not decoration: canonical URLs and the sitemap are built
+   * from it, so the wrong primary publishes the wrong address to every crawler
+   * that asks.
+   */
+  '/admin/website/sites/{id}/domains':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const site = (await sitesOf(ctx, url, req)).find((row) => row.id === params.id)
+      if (!site) return text(_('website_backend.error.notFound'), { status: 404 })
+      const render = async (values?: Record<string, string>, errors?: string[]) => {
+        const rows = (await ctx.call('website.listDomains', { siteId: params.id }, url, req)) as DomainRow[]
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.domains.title',
+          body: (_, frame) =>
+            siteDomainsScreen(_, site, rows, frame, { values, errors, locale: localeQuery(url) }),
+        })
+      }
+      if (req.method === 'GET') return render()
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = await readForm(req)
+      const result = await ctx.call(
+        'website.saveDomain',
+        {
+          id: randomUUID(),
+          siteId: params.id,
+          host: form.host,
+          primary: !!form.primary,
+          redirectToPrimary: !!form.redirectToPrimary,
+        },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/sites/${params.id}/domains`))
+      return render(form, resultErrors(result, _))
+    },
+
+  /**
+   * Whether search answers from the content that is actually live.
+   *
+   * The index rebuilds itself when a reader notices it is behind, so nobody
+   * has to press this. It is here because "the site found nothing" and "the
+   * index has not caught up" look identical from outside, and only one of them
+   * is a content problem.
+   */
+  '/admin/website/sites/{id}/index':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const site = (await sitesOf(ctx, url, req)).find((row) => row.id === params.id)
+      if (!site) return text(_('website_backend.error.notFound'), { status: 404 })
+      let built: { written: number; done: boolean } | null = null
+      if (req.method === 'POST') {
+        built = (await ctx.call('website_search.reindexSite', { siteId: params.id }, url, req)) as {
+          written: number
+          done: boolean
+        }
+      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const status = (await ctx.call(
+        'website_search.indexStatus',
+        { siteId: params.id },
+        url,
+        req,
+      )) as IndexState
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.index.title',
+        body: (_, frame) => searchIndexScreen(_, site, status, frame, { built, locale: localeQuery(url) }),
+      })
+    },
+
+  /**
+   * Where an address that used to work now goes.
+   *
+   * The cycle guard and the path rules were written and no screen used them,
+   * so the one operation that keeps old links alive after a restructure could
+   * only be performed by an agent.
+   */
+  '/admin/website/redirects':
+    (ctx: ServeContext): Route =>
+    async (url, req) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const posted = req.method === 'POST' ? await readForm(req) : null
+      const siteId = posted?.siteId || selectedSite(url, sites)
+      const render = async (values?: Record<string, string>, errors?: string[]) => {
+        const rows = siteId
+          ? ((await ctx.call('website.listRedirects', { siteId }, url, req)) as RedirectRow[])
+          : []
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.redirects.title',
+          body: (_, frame) =>
+            redirectsScreen(_, rows, siteOptions(sites), siteId, frame, {
+              values,
+              errors,
+              locale: localeQuery(url),
+            }),
+        })
+      }
+      if (req.method === 'GET') return render()
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      const form = posted ?? {}
+      const result = await ctx.call(
+        'website.saveRedirect',
+        {
+          id: randomUUID(),
+          siteId,
+          fromPath: form.fromPath,
+          toPath: form.toPath,
+          permanent: !!form.permanent,
+          active: true,
+        },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/redirects?site=${encodeURIComponent(siteId)}`))
+      return render(form, resultErrors(result, _))
+    },
+
+  '/admin/website/taxonomies/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -758,43 +1112,27 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/taxonomies/${id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          _('website_backend.taxonomies.newTitle'),
-          taxonomyFormScreen(
-            _,
-            { ...form, siteId } as never,
-            taxonomies,
-            parents,
-            await frameFor(ctx, url, req),
-            {
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/website/taxonomies/${id}`))
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.taxonomies.newTitle',
+          body: (_, frame) =>
+            taxonomyFormScreen(_, { ...form, siteId } as never, taxonomies, parents, frame, {
               errors: resultErrors(result, _),
-              locale: localeSuffix(url),
-            },
-          ),
-        )
+              locale: localeQuery(url),
+            }),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.taxonomies.newTitle'),
-        taxonomyFormScreen(
-          _,
-          { siteId, taxonomy: taxonomies[0]?.value },
-          taxonomies,
-          parents,
-          await frameFor(ctx, url, req),
-          { locale: localeSuffix(url) },
-        ),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.taxonomies.newTitle',
+        body: (_, frame) =>
+          taxonomyFormScreen(_, { siteId, taxonomy: taxonomies[0]?.value }, taxonomies, parents, frame, {
+            locale: localeQuery(url),
+          }),
+      })
     },
 
-  '/admin/taxonomies/{id}':
+  '/admin/website/taxonomies/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -831,31 +1169,30 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/taxonomies/${row.id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          row.name,
-          taxonomyFormScreen(_, { ...row, ...form }, taxonomies, parents, await frameFor(ctx, url, req), {
-            errors: resultErrors(result, _),
-            locale: localeSuffix(url),
-          }),
-        )
+        if ((result as { ok?: boolean }).ok)
+          return seeOther(inLocale(url, `/admin/website/taxonomies/${row.id}`))
+        return adminPage(ctx, url, req, {
+          title: row.name,
+          translate: false,
+          body: (_, frame) =>
+            taxonomyFormScreen(_, { ...row, ...form }, taxonomies, parents, frame, {
+              errors: resultErrors(result, _),
+              locale: localeQuery(url),
+            }),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        row.name,
-        taxonomyFormScreen(_, row, taxonomies, parents, await frameFor(ctx, url, req), {
-          locale: localeSuffix(url),
-        }),
-      )
+      return adminPage(ctx, url, req, {
+        title: row.name,
+        translate: false,
+        body: (_, frame) =>
+          taxonomyFormScreen(_, row, taxonomies, parents, frame, {
+            locale: localeQuery(url),
+          }),
+      })
     },
 
-  '/admin/taxonomies/{id}/delete':
+  '/admin/website/taxonomies/{id}/delete':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -873,10 +1210,10 @@ export const routes: Record<string, RouteEntry> = {
         (result as { changes?: number }).changes == null
       )
         return text(resultErrors(result, _).join('\n'), { status: 409 })
-      return seeOther(inLocale(url, `/admin/taxonomies?site=${encodeURIComponent(row.siteId)}`))
+      return seeOther(inLocale(url, `/admin/website/taxonomies?site=${encodeURIComponent(row.siteId)}`))
     },
 
-  '/admin/media/new':
+  '/admin/website/media/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -892,29 +1229,24 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/media/${id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          _('website_backend.media.newTitle'),
-          mediaFormScreen(_, { ...form, siteId } as never, await frameFor(ctx, url, req), {
-            errors: resultErrors(result, _),
-            locale: localeSuffix(url),
-          }),
-        )
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/website/media/${id}`))
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.media.newTitle',
+          body: (_, frame) =>
+            mediaFormScreen(_, { ...form, siteId } as never, frame, {
+              errors: resultErrors(result, _),
+              locale: localeQuery(url),
+            }),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.media.newTitle'),
-        mediaFormScreen(_, { siteId }, await frameFor(ctx, url, req), { locale: localeSuffix(url) }),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.media.newTitle',
+        body: (_, frame) => mediaFormScreen(_, { siteId }, frame, { locale: localeQuery(url) }),
+      })
     },
 
-  '/admin/media/{id}':
+  '/admin/website/media/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -928,29 +1260,26 @@ export const routes: Record<string, RouteEntry> = {
           url,
           req,
         )
-        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/media/${row.id}`))
-        return document(
-          ctx,
-          url,
-          req,
-          row.attachmentId,
-          mediaFormScreen(_, { ...row, ...form } as never, await frameFor(ctx, url, req), {
-            errors: resultErrors(result, _),
-            locale: localeSuffix(url),
-          }),
-        )
+        if ((result as { ok?: boolean }).ok) return seeOther(inLocale(url, `/admin/website/media/${row.id}`))
+        return adminPage(ctx, url, req, {
+          title: row.attachmentId,
+          translate: false,
+          body: (_, frame) =>
+            mediaFormScreen(_, { ...row, ...form } as never, frame, {
+              errors: resultErrors(result, _),
+              locale: localeQuery(url),
+            }),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        row.attachmentId,
-        mediaFormScreen(_, row, await frameFor(ctx, url, req), { locale: localeSuffix(url) }),
-      )
+      return adminPage(ctx, url, req, {
+        title: row.attachmentId,
+        translate: false,
+        body: (_, frame) => mediaFormScreen(_, row, frame, { locale: localeQuery(url) }),
+      })
     },
 
-  '/admin/media/{id}/delete':
+  '/admin/website/media/{id}/delete':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -959,12 +1288,12 @@ export const routes: Record<string, RouteEntry> = {
       if (!row) return text(_('website_backend.error.notFound'), { status: 404 })
       const result = await ctx.call('website.deleteMediaMetadata', { id: params.id }, url, req)
       if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('\n'), { status: 409 })
-      return seeOther(inLocale(url, `/admin/media?site=${encodeURIComponent(row.siteId)}`))
+      return seeOther(inLocale(url, `/admin/website/media?site=${encodeURIComponent(row.siteId)}`))
     },
 
-  '/admin/menus/new': menuEditRoute(),
-  '/admin/menus/{id}': menuEditRoute(),
-  '/admin/menus/{id}/delete':
+  '/admin/website/menus/new': menuEditRoute(),
+  '/admin/website/menus/{id}': menuEditRoute(),
+  '/admin/website/menus/{id}/delete':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'POST') return text('POST', { status: 405 })
@@ -975,10 +1304,10 @@ export const routes: Record<string, RouteEntry> = {
         const _ = ctx.translate(ctx.localeOf(url, req))
         return text(resultErrors(result, _).join('\n'), { status: 409 })
       }
-      return seeOther(inLocale(url, `/admin/menus?site=${encodeURIComponent(siteId)}`))
+      return seeOther(inLocale(url, `/admin/website/menus?site=${encodeURIComponent(siteId)}`))
     },
 
-  '/admin/forms':
+  '/admin/website/forms':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -986,16 +1315,13 @@ export const routes: Record<string, RouteEntry> = {
       const sites = await sitesOf(ctx, url, req)
       const siteId = selectedSite(url, sites)
       const rows = siteId ? ((await ctx.call('website_form.listForms', { siteId }, url, req)) as never[]) : []
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.forms.title'),
-        formsScreen(_, rows, siteId, await frameFor(ctx, url, req), localeSuffix(url)),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.forms.title',
+        body: (_, frame) => formsScreen(_, rows, siteId, frame, localeQuery(url)),
+      })
     },
 
-  '/admin/forms/new':
+  '/admin/website/forms/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       const _ = ctx.translate(ctx.localeOf(url, req))
@@ -1007,17 +1333,15 @@ export const routes: Record<string, RouteEntry> = {
         const form = posted ?? {}
         const schema = parseJson(form.schema)
         if (!schema.ok)
-          return document(
-            ctx,
-            url,
-            req,
-            _('website_backend.forms.newTitle'),
-            formCreateScreen(_, siteId, await frameFor(ctx, url, req), {
-              values: form,
-              errors: [_('website_backend.error.invalidJson')],
-              locale: localeSuffix(url),
-            }),
-          )
+          return adminPage(ctx, url, req, {
+            title: 'website_backend.forms.newTitle',
+            body: (_, frame) =>
+              formEditorScreen(_, siteId, frame, {
+                values: form,
+                errors: [_('website_backend.error.invalidJson')],
+                locale: localeQuery(url),
+              }),
+          })
         const result = await ctx.call(
           'website_form.saveForm',
           {
@@ -1027,36 +1351,186 @@ export const routes: Record<string, RouteEntry> = {
             schema: schema.value,
             successMessage: form.successMessage,
             notifyTo: form.notifyTo || null,
+            ...formContractFields(form),
             active: true,
           },
           url,
           req,
         )
         if ((result as { ok?: boolean }).ok)
-          return seeOther(inLocale(url, `/admin/forms?site=${encodeURIComponent(siteId)}`))
-        return document(
-          ctx,
-          url,
-          req,
-          _('website_backend.forms.newTitle'),
-          formCreateScreen(_, siteId, await frameFor(ctx, url, req), {
-            values: form,
-            errors: resultErrors(result, _),
-            locale: localeSuffix(url),
-          }),
-        )
+          return seeOther(inLocale(url, `/admin/website/forms?site=${encodeURIComponent(siteId)}`))
+        return adminPage(ctx, url, req, {
+          title: 'website_backend.forms.newTitle',
+          body: (_, frame) =>
+            formEditorScreen(_, siteId, frame, {
+              values: form,
+              errors: resultErrors(result, _),
+              locale: localeQuery(url),
+            }),
+        })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.forms.newTitle'),
-        formCreateScreen(_, siteId, await frameFor(ctx, url, req), { locale: localeSuffix(url) }),
-      )
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.forms.newTitle',
+        body: (_, frame) => formEditorScreen(_, siteId, frame, { locale: localeQuery(url) }),
+      })
     },
 
-  '/admin/forms/{id}/submissions':
+  '/admin/website/forms/{id}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const sites = await sitesOf(ctx, url, req)
+      const posted = req.method === 'POST' ? await readForm(req) : null
+      const siteId = posted?.siteId || url.searchParams.get('site') || selectedSite(url, sites)
+      if (!siteId) return text(_('website_backend.content.noSite'), { status: 400 })
+      // listForms is the screen's own data source and forms are few, so the
+      // editor reads through it rather than adding a function whose only
+      // caller would be this route.
+      const forms = (await ctx.call('website_form.listForms', { siteId }, url, req)) as FormRow[]
+      const existing = forms.find((row) => row.id === params.id)
+      if (!existing) return text(_('website_backend.error.notFound'), { status: 404 })
+
+      const render = (values: Record<string, string>, errors?: string[]) =>
+        adminPage(ctx, url, req, {
+          title: 'website_backend.forms.editTitle',
+          body: (_, frame) =>
+            formEditorScreen(_, siteId, frame, {
+              id: params.id,
+              values,
+              errors,
+              locale: localeQuery(url),
+            }),
+        })
+
+      if (req.method === 'GET') return render(formValuesOf(existing))
+      if (req.method !== 'POST') return text('GET or POST', { status: 405 })
+      const form = posted ?? {}
+      const schema = parseJson(form.schema)
+      if (!schema.ok) return render(form, [_('website_backend.error.invalidJson')])
+      const result = await ctx.call(
+        'website_form.saveForm',
+        {
+          id: params.id,
+          siteId,
+          name: form.name,
+          schema: schema.value,
+          successMessage: form.successMessage,
+          notifyTo: form.notifyTo || null,
+          ...formContractFields(form),
+        },
+        url,
+        req,
+      )
+      if ((result as { ok?: boolean }).ok)
+        return seeOther(inLocale(url, `/admin/website/forms?site=${encodeURIComponent(siteId)}`))
+      return render(form, resultErrors(result, _))
+    },
+
+  /**
+   * One submission, and the record of everyone who opened it.
+   *
+   * readSubmission files an audit row for every read, and until this screen
+   * existed it was recording calls nobody could make. The trail is rendered
+   * beside the answers rather than tucked away: a record of who looked is
+   * worth more when the person looking can see it too.
+   */
+  /**
+   * The answers, out of the system, named field by field.
+   *
+   * exportSubmissions refuses anything the form does not ask and writes the
+   * exact field list into the audit, so the record says what left rather than
+   * that something did.
+   */
+  '/admin/website/forms/{id}/submissions/export':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const fields = (url.searchParams.get('fields') ?? '')
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean)
+      if (!fields.length) return text(_('website_backend.error.invalid'), { status: 400 })
+      const result = (await ctx.call(
+        'website_form.exportSubmissions',
+        { formId: params.id, fields, reason: 'admin.export' },
+        url,
+        req,
+      )) as { ok?: boolean; fields?: string[]; rows?: Array<Record<string, unknown>> }
+      if (!result.ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      const columns = ['_id', '_createdAt', '_status', ...(result.fields ?? [])]
+      return withHeaders(text(csvOf(columns, result.rows ?? [])), {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': `attachment; filename="${safeFilename(params.id)}-submissions.csv"`,
+      })
+    },
+
+  /**
+   * Run the retention window now, once someone has said so out loud.
+   *
+   * A confirmation rather than a button, because an erasure cannot be undone
+   * and the answers are the one thing here that a person cannot recreate.
+   */
+  '/admin/website/forms/{id}/submissions/purge':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      if (req.method !== 'POST') return text('POST', { status: 405 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const form = await readForm(req)
+      if (!form.confirm) return text(_('website_backend.submissions.purgeUnconfirmed'), { status: 400 })
+      const result = await ctx.call('website_form.purgeSubmissions', { formId: params.id }, url, req)
+      if (!(result as { ok?: boolean }).ok) return text(resultErrors(result, _).join('; '), { status: 400 })
+      return seeOther(inLocale(url, `/admin/website/forms/${params.id}/submissions`))
+    },
+
+  '/admin/website/forms/{id}/submissions/{submissionId}':
+    (ctx: ServeContext): Route =>
+    async (url, req, params) => {
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        const reason = (form.holdReason ?? '').trim()
+        const held = await ctx.call(
+          'website_form.holdSubmission',
+          { id: params.submissionId, reason: reason || null },
+          url,
+          req,
+        )
+        if (!(held as { ok?: boolean }).ok) return text(resultErrors(held, _).join('; '), { status: 400 })
+        return seeOther(inLocale(url, `/admin/website/forms/${params.id}/submissions/${params.submissionId}`))
+      }
+      if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+      const record = (await ctx.call(
+        'website_form.readSubmission',
+        { id: params.submissionId, reason: 'admin.submissions' },
+        url,
+        req,
+      )) as SubmissionRecord | null
+      // readSubmission answers the same way for a caller below the bar as for
+      // one naming a row that is not there, so this cannot distinguish them
+      // either - which is the point.
+      if (!record) return text(_('website_backend.error.notFound'), { status: 404 })
+      const audit = (await ctx.call(
+        'website_form.listSubmissionAudit',
+        { formId: params.id },
+        url,
+        req,
+      )) as SubmissionAuditRow[]
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.submission.title',
+        body: (_, frame) =>
+          submissionRecordScreen(
+            _,
+            record,
+            audit.filter((entry) => entry.submissionId === params.submissionId),
+            frame,
+            localeQuery(url),
+          ),
+      })
+    },
+
+  '/admin/website/forms/{id}/submissions':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
@@ -1066,13 +1540,31 @@ export const routes: Record<string, RouteEntry> = {
         { formId: params.id },
         url,
         req,
-      )) as never[]
-      return document(
-        ctx,
-        url,
-        req,
-        _('website_backend.submissions.title'),
-        submissionsScreen(_, rows, await frameFor(ctx, url, req)),
-      )
+      )) as SubmissionRow[]
+      const sites = await sitesOf(ctx, url, req)
+      const siteId = url.searchParams.get('site') || selectedSite(url, sites)
+      const forms = siteId
+        ? ((await ctx.call('website_form.listForms', { siteId }, url, req)) as FormRow[])
+        : []
+      const form = forms.find((row) => row.id === params.id)
+      // The export offers the form's own field names, so nobody has to
+      // remember them - and the erasure only appears where a window exists to
+      // enforce.
+      const declared = (form?.schema as { fields?: unknown } | undefined)?.fields
+      const schemaFields = Array.isArray(declared)
+        ? declared
+            .map((field) => (field as { name?: unknown } | null)?.name)
+            .filter((name): name is string => typeof name === 'string')
+        : []
+      return adminPage(ctx, url, req, {
+        title: 'website_backend.submissions.title',
+        body: (_, frame) =>
+          submissionsScreen(_, rows, frame, {
+            formId: params.id,
+            fields: form?.summaryFields?.length ? form.summaryFields : schemaFields,
+            retentionDays: form?.retentionDays ?? null,
+            locale: localeQuery(url),
+          }),
+      })
     },
 }

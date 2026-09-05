@@ -8,7 +8,6 @@ export default defineModule({
   name: 'mail_transport',
   version: '0.1.0',
   depends: ['mail'],
-  app: true,
   title: 'Gửi email',
   summary: 'Template an toàn, transactional outbox và trạng thái gửi qua durable queue.',
   category: 'Năng suất',

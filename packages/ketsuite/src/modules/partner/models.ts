@@ -1,12 +1,12 @@
 import type { ModelDef } from '@ketvietlab/ketjs'
 
 /**
- * Parties, and the three things Odoo folds into them.
+ * Parties, and the three things the domain contract folds into them.
  *
  * `res.partner` is one table for customer, supplier, contact, delivery address,
  * invoice address, legal entity and bank account owner. It works, and the cost is
  * visible in the model itself: `is_company` to ask whether this is a legal entity,
- * `type` to ask whether it is an address, and a computed `commercial_partner_id`
+ * `type` to ask whether it is an address, and a computed computed commercial-party pointer
  * to answer the only question invoicing actually cares about — who do we bill.
  *
  * That third one is the tell. It exists *because* addresses are parties: when a
@@ -14,10 +14,10 @@ import type { ModelDef } from '@ketvietlab/ketjs'
  * the counterparty is, so it walks up the parent chain to recover it.
  *
  * SAP, Tryton and ERPNext all keep addresses separate, and SAP keeps roles as rows.
- * Doing the same here removes `commercial_partner_id` and `type` outright: the
+ * Doing the same here removes computed commercial-party pointer and `type` outright: the
  * party on a document *is* the party, and an address is an address.
  *
- * What is kept from Odoo: parties are shared across companies, one address book
+ * What is kept from the domain contract: parties are shared across companies, one address book
  * for the tenant. That was decided when products were.
  */
 export const models: Record<string, ModelDef> = {
@@ -40,6 +40,8 @@ export const models: Record<string, ModelDef> = {
       ref: 'text?',
       email: 'text?',
       phone: 'text?',
+      /** Explicit permission to retain and use the optional contact PII. */
+      contactConsent: 'bool?',
       /** UI language for anything sent to them. Content is not translated (D14). */
       lang: 'text?',
       active: 'bool',
@@ -50,7 +52,7 @@ export const models: Record<string, ModelDef> = {
    * Addresses, separate — the change that pays for itself.
    *
    * A party has several; each says what it is for. A sales order names a party and
-   * two addresses, where Odoo names three parties and then computes which of them
+   * two addresses, where the domain contract names three parties and then computes which of them
    * is the real counterparty.
    */
   Address: {
@@ -107,11 +109,11 @@ export const models: Record<string, ModelDef> = {
 
   /**
    * The per-legal-entity segment of a party — SAP's KNB1, and the answer to what
-   * Odoo solves with `ir.property`.
+   * the domain contract solves with property side table.
    *
    * The party is shared, but its payment terms and credit limit are not: the same
    * customer may be on 30 days with one company and prepayment with another.
-   * Odoo stores that in a side table keyed by (field, company, record), which is
+   * the domain contract stores that in a side table keyed by (field, company, record), which is
    * EAV: invisible to SQL, untyped, and the reason "it is blank in company B" is a
    * recurring support ticket. Here it is an ordinary company-scoped model, so the
    * scope machinery that already exists does the work and the columns are real.

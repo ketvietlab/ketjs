@@ -1,11 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import type { FormField, Frame } from '../../ui/index.ts'
-import { backendPage } from '../../ui/index.ts'
+import type { FormField } from '../../ui/index.ts'
 import { readForm, seeOther } from '../backend/forms.ts'
-import { viewerOf } from '../backend/routes.ts'
 import {
   configsScreen,
   dashboard,
@@ -16,33 +13,27 @@ import {
   sessionDetail,
   sessionsScreen,
 } from './screens.tsx'
+import { adminPage, choices, optional } from '../backend/screen.ts'
+import type { AnyRow } from '../backend/screen.ts'
 
-type AnyRow = Record<string, unknown>
-type Translator = ReturnType<ServeContext['translate']>
-const frame = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]): Promise<Frame> => ({
-  navigation: req.headers['x-ket-navigation'] === 'fragment-v1',
-  viewer: await viewerOf(ctx, url, req),
-  menu: await ctx.menu(url, req),
-  extras: {
-    'nav.items': await ctx.joint(url, req, 'backend:nav.items', { active: url.pathname }),
-    'topbar.end': await ctx.joint(url, req, 'backend:topbar.end'),
-  },
-})
-const document = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Parameters<Route>[1],
-  title: string,
-  body: (_: Translator, frame: Frame) => TemplateResult | Promise<TemplateResult>,
-) => {
-  const lang = ctx.localeOf(url, req),
-    _ = ctx.translate(lang)
-  return backendPage(ctx, req, {
-    lang,
-    title: _(title),
-    body: await body(_, await frame(ctx, url, req)),
-  })
+const crossSite = (req: Parameters<Route>[1]): boolean => {
+  const origin = req.headers.origin as string | undefined
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== String(req.headers.host ?? '')
+  } catch {
+    return true
+  }
 }
+
+/**
+ * A cross-origin POST carries the signed-in user's session cookie without their
+ * intent, and every write behind these routes acts on money, stock or customer
+ * records. Refused the way user_backend, company_backend, oauth_backend,
+ * product_backend and stock_backend already refuse it.
+ */
+
+type Translator = ReturnType<ServeContext['translate']>
 const redirect = (result: unknown, ok: string) =>
   (result as AnyRow).ok ? seeOther(ok) : seeOther(`${ok}${ok.includes('?') ? '&' : '?'}invalid=1`)
 const callIfInstalled = async (
@@ -53,14 +44,6 @@ const callIfInstalled = async (
   fallback: string,
   input: Record<string, unknown>,
 ) => ctx.call((await ctx.live(req)).functions[preferred] ? preferred : fallback, input, url, req)
-const choices = (rows: AnyRow[], empty = false) => [
-  ...(empty ? [{ value: '', label: '—' }] : []),
-  ...rows.map((row) => ({
-    value: String(row.id),
-    label: `${String(row.code ?? '')}${row.code ? ' · ' : ''}${String(row.name)}`,
-  })),
-]
-const optional = (form: Record<string, string>, key: string) => (form[key] ? { [key]: form[key] } : {})
 const common = async (ctx: ServeContext, url: URL, req: Parameters<Route>[1]) => {
   const [
     configs,
@@ -339,14 +322,12 @@ export default defineModule({
   name: 'pos_backend',
   version: '0.1.0',
   depends: ['pos', 'backend'],
-  install: 'auto',
-  app: true,
   joints: { 'order.loyalty': { props: { orderId: 'id', locale: 'text?' } } },
   title: 'Điểm bán hàng trong quản trị',
   summary: 'Ca bán hàng, thanh toán, tồn kho và kế toán bán lẻ.',
   category: 'Hệ thống',
   menus: {
-    pos: { label: 'menu.app', icon: 'store', sequence: 18 },
+    pos: { label: 'menu.app', icon: 'store', sequence: 23 },
     'pos.dashboard': {
       parent: 'pos',
       label: 'menu.dashboard',
@@ -360,12 +341,14 @@ export default defineModule({
       label: 'menu.orders',
       path: '/admin/pos/orders',
       needs: 'pos.listOrders',
+      sequence: 10,
     },
     'pos.sessions': {
       parent: 'pos.ordersGroup',
       label: 'menu.sessions',
       path: '/admin/pos/sessions',
       needs: 'pos.listSessions',
+      sequence: 20,
     },
     'pos.configGroup': { parent: 'pos', label: 'menu.configGroup', sequence: 20 },
     'pos.configs': {
@@ -373,12 +356,14 @@ export default defineModule({
       label: 'menu.configs',
       path: '/admin/pos/configurations',
       needs: 'pos.listConfigs',
+      sequence: 10,
     },
     'pos.methods': {
       parent: 'pos.configGroup',
       label: 'menu.methods',
       path: '/admin/pos/payment-methods',
       needs: 'pos.listPaymentMethods',
+      sequence: 20,
     },
   },
   routes: {
@@ -386,19 +371,22 @@ export default defineModule({
       (ctx): Route =>
       async (url, req) =>
         req.method === 'GET'
-          ? document(ctx, url, req, 'pos_backend.dashboard.title', async (_, shell) =>
-              dashboard(
-                _,
-                (await ctx.call('pos.listSessions', {}, url, req)) as AnyRow[],
-                (await ctx.call('pos.listOrders', {}, url, req)) as AnyRow[],
-                shell,
-              ),
-            )
+          ? adminPage(ctx, url, req, {
+              title: 'pos_backend.dashboard.title',
+              body: async (_, shell) =>
+                dashboard(
+                  _,
+                  (await ctx.call('pos.listSessions', {}, url, req)) as AnyRow[],
+                  (await ctx.call('pos.listOrders', {}, url, req)) as AnyRow[],
+                  shell,
+                ),
+            })
           : text('GET', { status: 405 }),
     '/admin/pos/configurations':
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return redirect(
             await ctx.call(
@@ -424,25 +412,28 @@ export default defineModule({
         const d = await common(ctx, url, req),
           names = new Map(d.warehouses.map((row) => [String(row.id), row.name])),
           currencies = new Map(d.pricelists.map((row) => [String(row.id), row.currency]))
-        return document(ctx, url, req, 'pos_backend.configs.title', (_, shell) =>
-          configsScreen(
-            _,
-            shell,
-            d.configs.map((row) => ({
-              ...row,
-              warehouseName: names.get(String(row.warehouseId)),
-              currency:
-                currencies.get(String(row.pricelistId)) ??
-                d.companies.find((company) => company.id === shell.viewer?.company)?.currency,
-            })),
-            configFields(_, d),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'pos_backend.configs.title',
+          body: (_, shell) =>
+            configsScreen(
+              _,
+              shell,
+              d.configs.map((row) => ({
+                ...row,
+                warehouseName: names.get(String(row.warehouseId)),
+                currency:
+                  currencies.get(String(row.pricelistId)) ??
+                  d.companies.find((company) => company.id === shell.viewer?.company)?.currency,
+              })),
+              configFields(_, d),
+            ),
+        })
       },
     '/admin/pos/payment-methods':
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req),
             result =
               form.action === 'link'
@@ -472,45 +463,48 @@ export default defineModule({
         if (req.method !== 'GET') return text('GET or POST', { status: 405 })
         const d = await common(ctx, url, req),
           names = new Map(d.journals.map((row) => [String(row.id), row.name]))
-        return document(ctx, url, req, 'pos_backend.methods.title', (_, shell) =>
-          methodsScreen(
-            _,
-            shell,
-            d.methods.map((row) => ({ ...row, journalName: names.get(String(row.journalId)) })),
-            [
-              { name: 'name', label: _('pos_backend.field.name'), required: true },
-              {
-                name: 'journalId',
-                label: _('pos_backend.field.journal'),
-                type: 'select',
-                options: choices(d.journals.filter((row) => ['cash', 'bank'].includes(String(row.type)))),
-                required: true,
-              },
-              { name: 'isCash', label: _('pos_backend.field.isCash'), type: 'checkbox' },
-            ],
-            [
-              {
-                name: 'configId',
-                label: _('pos_backend.field.config'),
-                type: 'select',
-                options: choices(d.configs),
-                required: true,
-              },
-              {
-                name: 'paymentMethodId',
-                label: _('pos_backend.field.paymentMethod'),
-                type: 'select',
-                options: choices(d.methods),
-                required: true,
-              },
-            ],
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'pos_backend.methods.title',
+          body: (_, shell) =>
+            methodsScreen(
+              _,
+              shell,
+              d.methods.map((row) => ({ ...row, journalName: names.get(String(row.journalId)) })),
+              [
+                { name: 'name', label: _('pos_backend.field.name'), required: true },
+                {
+                  name: 'journalId',
+                  label: _('pos_backend.field.journal'),
+                  type: 'select',
+                  options: choices(d.journals.filter((row) => ['cash', 'bank'].includes(String(row.type)))),
+                  required: true,
+                },
+                { name: 'isCash', label: _('pos_backend.field.isCash'), type: 'checkbox' },
+              ],
+              [
+                {
+                  name: 'configId',
+                  label: _('pos_backend.field.config'),
+                  type: 'select',
+                  options: choices(d.configs),
+                  required: true,
+                },
+                {
+                  name: 'paymentMethodId',
+                  label: _('pos_backend.field.paymentMethod'),
+                  type: 'select',
+                  options: choices(d.methods),
+                  required: true,
+                },
+              ],
+            ),
+        })
       },
     '/admin/pos/sessions':
       (ctx): Route =>
       async (url, req) => {
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           return redirect(
             await ctx.call(
@@ -534,42 +528,45 @@ export default defineModule({
             common(ctx, url, req),
           ]),
           names = new Map(d.configs.map((row) => [String(row.id), row.name]))
-        return document(ctx, url, req, 'pos_backend.sessions.title', (_, shell) =>
-          sessionsScreen(
-            _,
-            shell,
-            rows.map((row) => ({ ...row, configName: names.get(String(row.configId)) })),
-            [
-              {
-                name: 'configId',
-                label: _('pos_backend.field.config'),
-                type: 'select',
-                options: choices(d.configs),
-                required: true,
-              },
-              {
-                name: 'userId',
-                label: _('pos_backend.field.user'),
-                type: 'select',
-                options: choices(d.users),
-                required: true,
-              },
-              { name: 'openingCash', label: _('pos_backend.field.openingCash'), type: 'decimal', value: 0 },
-              {
-                name: 'openingNotes',
-                label: _('pos_backend.field.openingNotes'),
-                type: 'textarea',
-                span: 'full',
-              },
-            ],
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'pos_backend.sessions.title',
+          body: (_, shell) =>
+            sessionsScreen(
+              _,
+              shell,
+              rows.map((row) => ({ ...row, configName: names.get(String(row.configId)) })),
+              [
+                {
+                  name: 'configId',
+                  label: _('pos_backend.field.config'),
+                  type: 'select',
+                  options: choices(d.configs),
+                  required: true,
+                },
+                {
+                  name: 'userId',
+                  label: _('pos_backend.field.user'),
+                  type: 'select',
+                  options: choices(d.users),
+                  required: true,
+                },
+                { name: 'openingCash', label: _('pos_backend.field.openingCash'), type: 'decimal', value: 0 },
+                {
+                  name: 'openingNotes',
+                  label: _('pos_backend.field.openingNotes'),
+                  type: 'textarea',
+                  span: 'full',
+                },
+              ],
+            ),
+        })
       },
     '/admin/pos/sessions/{id}':
       (ctx): Route =>
       async (url, req, params) => {
         const path = `${url.pathname}${url.search}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           const result =
             form.action === 'open'
@@ -602,35 +599,38 @@ export default defineModule({
           ...row,
           partnerName: names.get(String(row.partnerId)),
         }))
-        return document(ctx, url, req, 'pos_backend.sessions.title', (_, shell) =>
-          sessionDetail(
-            _,
-            shell,
-            session,
-            [
-              {
-                name: 'closingCash',
-                label: _('pos_backend.field.closingCash'),
-                type: 'decimal',
-                required: true,
-              },
-              {
-                name: 'closingNotes',
-                label: _('pos_backend.field.closingNotes'),
-                type: 'textarea',
-                span: 'full',
-              },
-            ],
-            path,
-            companies.find((company) => company.id === shell.viewer?.company)?.currency,
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'pos_backend.sessions.title',
+          body: (_, shell) =>
+            sessionDetail(
+              _,
+              shell,
+              session,
+              [
+                {
+                  name: 'closingCash',
+                  label: _('pos_backend.field.closingCash'),
+                  type: 'decimal',
+                  required: true,
+                },
+                {
+                  name: 'closingNotes',
+                  label: _('pos_backend.field.closingNotes'),
+                  type: 'textarea',
+                  span: 'full',
+                },
+              ],
+              path,
+              companies.find((company) => company.id === shell.viewer?.company)?.currency,
+            ),
+        })
       },
     '/admin/pos/register/{id}':
       (ctx): Route =>
       async (url, req, params) => {
         const path = `${url.pathname}${url.search}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req),
             result = (await ctx.call(
               'pos.createOrder',
@@ -655,24 +655,26 @@ export default defineModule({
         ])
         if (!session) return text('not found', { status: 404 })
         const names = new Map(d.partners.map((row) => [String(row.id), row.name]))
-        return document(ctx, url, req, 'pos_backend.register.title', (_, shell) =>
-          registerScreen(
-            _,
-            shell,
-            session,
-            orders.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
-            [
-              {
-                name: 'partnerId',
-                label: _('pos_backend.field.customer'),
-                type: 'select',
-                options: choices(d.partners, true),
-              },
-              { name: 'toInvoice', label: _('pos_backend.field.invoice'), type: 'checkbox' },
-            ],
-            path,
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'pos_backend.register.title',
+          body: (_, shell) =>
+            registerScreen(
+              _,
+              shell,
+              session,
+              orders.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
+              [
+                {
+                  name: 'partnerId',
+                  label: _('pos_backend.field.customer'),
+                  type: 'select',
+                  options: choices(d.partners, true),
+                },
+                { name: 'toInvoice', label: _('pos_backend.field.invoice'), type: 'checkbox' },
+              ],
+              path,
+            ),
+        })
       },
     '/admin/pos/orders':
       (ctx): Route =>
@@ -688,19 +690,22 @@ export default defineModule({
             ctx.call('partner.listPartners', {}, url, req) as Promise<AnyRow[]>,
           ]),
           names = new Map(partners.map((row) => [String(row.id), row.name]))
-        return document(ctx, url, req, 'pos_backend.orders.title', (_, shell) =>
-          ordersScreen(
-            _,
-            shell,
-            rows.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'pos_backend.orders.title',
+          body: (_, shell) =>
+            ordersScreen(
+              _,
+              shell,
+              rows.map((row) => ({ ...row, partnerName: names.get(String(row.partnerId)) })),
+            ),
+        })
       },
     '/admin/pos/orders/{id}':
       (ctx): Route =>
       async (url, req, params) => {
         const path = `${url.pathname}${url.search}`
         if (req.method === 'POST') {
+          if (crossSite(req)) return text('Forbidden', { status: 403 })
           const form = await readForm(req)
           let result: unknown
           if (form.action === 'line')
@@ -740,15 +745,20 @@ export default defineModule({
               id: params.id,
             })
           else if (form.action === 'refund') {
-            const sessions = (await ctx.call('pos.listSessions', { state: 'opened' }, url, req)) as AnyRow[],
-              session = sessions[0]
-            result = session
-              ? await callIfInstalled(ctx, url, req, 'loyalty_pos.refundOrder', 'pos.refundOrder', {
-                  id: randomUUID(),
-                  originalOrderId: params.id,
-                  sessionId: session.id,
-                })
-              : { ok: false }
+            const [order, sessions] = await Promise.all([
+                ctx.call('pos.getOrder', { id: params.id }, url, req) as Promise<AnyRow | null>,
+                ctx.call('pos.listSessions', { state: 'opened' }, url, req) as Promise<AnyRow[]>,
+              ]),
+              session = sessions.find((candidate) => candidate.configId === order?.configId)
+            result =
+              order && session
+                ? await callIfInstalled(ctx, url, req, 'loyalty_pos.refundOrder', 'pos.refundOrder', {
+                    id: randomUUID(),
+                    originalOrderId: params.id,
+                    sessionId: session.id,
+                    expectedRevision: order.revision,
+                  })
+                : { ok: false }
           } else return text('unknown action', { status: 400 })
           return redirect(result, path)
         }
@@ -786,53 +796,55 @@ export default defineModule({
             ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
             : '',
         })
-        return document(ctx, url, req, 'pos_backend.orders.title', (_, shell) =>
-          orderDetail(
-            _,
-            shell,
-            { ...order, partnerName: customer?.name },
-            [
-              {
-                name: 'productId',
-                label: _('pos_backend.field.product'),
-                type: 'select',
-                options: d.variants.map((row) => ({
-                  value: String(row.id),
-                  label: `${String(row.templateName)}${row.defaultCode ? ` · ${String(row.defaultCode)}` : ''}`,
-                })),
-                required: true,
-              },
-              { name: 'qty', label: _('pos_backend.field.qty'), type: 'decimal', value: 1, required: true },
-              {
-                name: 'productUomId',
-                label: _('pos_backend.field.uom'),
-                type: 'select',
-                options: choices(d.units),
-                required: true,
-              },
-              { name: 'priceUnit', label: _('pos_backend.field.priceUnit'), type: 'decimal' },
-              { name: 'discount', label: _('pos_backend.field.discount'), type: 'decimal', value: 0 },
-              {
-                name: 'taxId',
-                label: _('pos_backend.field.tax'),
-                type: 'select',
-                options: choices(d.taxes, true),
-              },
-            ],
-            [
-              {
-                name: 'paymentMethodId',
-                label: _('pos_backend.field.paymentMethod'),
-                type: 'select',
-                options: choices(methods),
-                required: true,
-              },
-              { name: 'amount', label: _('pos_backend.field.amount'), type: 'decimal', required: true },
-            ],
-            path,
-            integration,
-          ),
-        )
+        return adminPage(ctx, url, req, {
+          title: 'pos_backend.orders.title',
+          body: (_, shell) =>
+            orderDetail(
+              _,
+              shell,
+              { ...order, partnerName: customer?.name },
+              [
+                {
+                  name: 'productId',
+                  label: _('pos_backend.field.product'),
+                  type: 'select',
+                  options: d.variants.map((row) => ({
+                    value: String(row.id),
+                    label: `${String(row.templateName)}${row.defaultCode ? ` · ${String(row.defaultCode)}` : ''}`,
+                  })),
+                  required: true,
+                },
+                { name: 'qty', label: _('pos_backend.field.qty'), type: 'decimal', value: 1, required: true },
+                {
+                  name: 'productUomId',
+                  label: _('pos_backend.field.uom'),
+                  type: 'select',
+                  options: choices(d.units),
+                  required: true,
+                },
+                { name: 'priceUnit', label: _('pos_backend.field.priceUnit'), type: 'decimal' },
+                { name: 'discount', label: _('pos_backend.field.discount'), type: 'decimal', value: 0 },
+                {
+                  name: 'taxId',
+                  label: _('pos_backend.field.tax'),
+                  type: 'select',
+                  options: choices(d.taxes, true),
+                },
+              ],
+              [
+                {
+                  name: 'paymentMethodId',
+                  label: _('pos_backend.field.paymentMethod'),
+                  type: 'select',
+                  options: choices(methods),
+                  required: true,
+                },
+                { name: 'amount', label: _('pos_backend.field.amount'), type: 'decimal', required: true },
+              ],
+              path,
+              integration,
+            ),
+        })
       },
   },
   messages: { vi, en },

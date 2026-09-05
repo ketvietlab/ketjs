@@ -3,10 +3,10 @@ import type { ModelDef } from '@ketvietlab/ketjs'
 /**
  * Legal entities.
  *
- * A company is backed by a party, as in Odoo and SAP: the organisation you invoice
+ * A company is backed by a party, as in the domain contract and SAP: the organisation you invoice
  * from is an organisation, and it turns up in documents as a counterparty when two
  * of your own companies trade. Keeping one party model rather than a second
- * organisation model is the part of Odoo's design worth copying.
+ * organisation model is the part of the domain contract's design worth copying.
  *
  * `parentId` is a branch in the *organisational* sense — a subsidiary with its own
  * books. It is not the branch dimension on rows: that one lives in the scope
@@ -28,7 +28,17 @@ export const models: Record<string, ModelDef> = {
       /** A subsidiary keeps its own books; consolidation reads across (D32). */
       parentId: 'ref:company.Company?',
       currency: 'text',
+      /** Civil-date timezone used by Accounting; locked with the book currency after setup. */
+      accountingTimezone: 'text?',
+      /**
+       * Accounting owns the point after which the legal entity's book currency
+       * becomes immutable. Optional so existing company-only installations gain
+       * the guard through a non-destructive migration and remain unlocked until
+       * an accounting data pack is actually installed.
+       */
+      currencyLocked: 'bool?',
       active: 'bool',
+      version: 'int',
     },
     indexes: {
       code: { fields: ['code'], unique: true },

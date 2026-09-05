@@ -105,6 +105,7 @@ const rangeOf = (view, cursor) => {
 export function createCalendarView(runtime, props, seed = {}) {
   const { each, html, signal } = runtime
   const labels = labelsOf(props)
+  const eventTimeFormatter = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' })
   const view = signal(seed.view ?? props.view ?? 'agenda')
   const cursor = signal(seed.cursor ?? localDate())
   const status = signal(seed.status ?? 'loading')
@@ -193,7 +194,7 @@ export function createCalendarView(runtime, props, seed = {}) {
 
   const eventCard = (entry) => html`<article data-ui="calendar-event" data-all-day=${entry.allDay}>
     <strong data-ui="calendar-event-title">${entry.name}</strong>
-    <span data-ui="calendar-event-time">${entry.allDay ? labels.allDay : `${new Date(entry.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–${new Date(entry.stopAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}</span>
+    <span data-ui="calendar-event-time">${entry.allDay ? labels.allDay : `${eventTimeFormatter.format(new Date(entry.startAt))}–${eventTimeFormatter.format(new Date(entry.stopAt))}`}</span>
     ${entry.location ? html`<span data-ui="calendar-event-location">${entry.location}</span>` : ''}
     <span data-ui="calendar-event-organizer">${labels.organizer}: ${entry.organizerName}</span>
   </article>`
@@ -222,11 +223,11 @@ export function createCalendarView(runtime, props, seed = {}) {
       </header>
       <form data-ui="calendar-create" on:submit=${create}>
         <h3 data-ui="calendar-create-title">${labels.create}</h3>
-        <label data-ui="calendar-field">${labels.name}<input name="name" required maxlength="500" disabled=${busy()}></label>
-        <label data-ui="calendar-field">${labels.start}<input type="datetime-local" name="start" required disabled=${busy()}></label>
-        <label data-ui="calendar-field">${labels.stop}<input type="datetime-local" name="stop" required disabled=${busy()}></label>
-        <label data-ui="calendar-field">${labels.location}<input name="location" disabled=${busy()}></label>
-        <label data-ui="calendar-all-day"><input type="checkbox" name="allDay" disabled=${busy()}>${labels.allDay}</label>
+        <label data-ui="calendar-field">${labels.name}<input data-ui="form-control" name="name" autocomplete="off" required maxlength="500" disabled=${busy()}></label>
+        <label data-ui="calendar-field">${labels.start}<input data-ui="form-control" type="datetime-local" name="start" autocomplete="off" required disabled=${busy()}></label>
+        <label data-ui="calendar-field">${labels.stop}<input data-ui="form-control" type="datetime-local" name="stop" autocomplete="off" required disabled=${busy()}></label>
+        <label data-ui="calendar-field">${labels.location}<input data-ui="form-control" name="location" autocomplete="off" disabled=${busy()}></label>
+        <label data-ui="calendar-all-day"><input data-ui="form-control" type="checkbox" name="allDay" autocomplete="off" disabled=${busy()}>${labels.allDay}</label>
         <button data-ui="calendar-submit" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.saving : labels.save}</button>
       </form>
       ${error() ? html`<div data-ui="calendar-error" role="alert">${error()} <button data-ui="action" data-variant="secondary" data-size="compact" type="button" on:click=${() => load()}>${labels.retry}</button></div>` : ''}

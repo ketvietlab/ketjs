@@ -11,14 +11,13 @@ import { functions } from './functions.ts'
 import { tokens } from './tokens.ts'
 import { contentTypes, taxonomies } from './content-types.ts'
 import { cmsFunctions } from './cms.ts'
+import { publicationFunctions } from './publication.ts'
 import { customerFunctions } from './customer.ts'
-import { customerRoutes } from './customer-routes.ts'
 import { jobs } from './jobs.ts'
 
 export default defineModule({
   name: 'website',
   version: '0.1.0',
-  app: true,
   title: 'Website',
   summary: 'Trang, section và điều hướng — nội dung soạn bằng dữ liệu, không phải code.',
   category: 'Website',
@@ -58,6 +57,9 @@ export default defineModule({
       'error.invalidPath': 'Đường dẫn nội bộ không hợp lệ.',
       'error.invalidSlug': 'Slug chỉ được chứa chữ, số và dấu gạch ngang.',
       'error.revisionNotFound': 'Không tìm thấy revision.',
+      'error.entryUnrenderable': 'Trang này dùng section mà bản cài đặt hiện tại không còn cung cấp.',
+      'error.publicationUnrenderable':
+        'Bản xuất bản chứa trang dùng section mà bản cài đặt hiện tại không còn cung cấp.',
       'error.invalidDatetime': 'Ngày giờ không hợp lệ.',
       'error.invalidTaxonomy': 'Taxonomy chưa được đăng ký.',
       'error.invalidParent': 'Term cha không hợp lệ.',
@@ -68,6 +70,16 @@ export default defineModule({
       'error.invalidRedirect': 'Hai đường dẫn redirect phải khác nhau và là đường dẫn nội bộ.',
       'error.redirectCycle': 'Redirect tạo thành vòng lặp.',
       'error.lastAdministrator': 'Website phải luôn còn ít nhất một quản trị viên.',
+      'error.publicationEmpty': 'Cần chọn ít nhất một nội dung để xuất bản.',
+      'error.publicationTooLarge': 'Một lần xuất bản vượt quá số nội dung cho phép.',
+      'error.publicationDuplicate': 'Một nội dung xuất hiện hai lần trong lần xuất bản này.',
+      'error.publicationEntryOutsideSite': 'Nội dung không thuộc website này.',
+      'error.publicationEntryTrashed': 'Nội dung đã bị xóa nên không thể xuất bản.',
+      'error.publicationConflict': 'Mã xuất bản này đã dùng cho một tập nội dung khác.',
+      'error.publicationNotFound': 'Không tìm thấy lần xuất bản.',
+      'error.publicationSuperseded': 'Lần xuất bản này đã bị thay thế.',
+      'error.publicationStaleBase': 'Nội dung công khai vừa thay đổi. Hãy xem lại rồi xuất bản.',
+      'error.publicationNoBase': 'Chưa có lần xuất bản trước để quay lại.',
       'customer.error.realmUnavailable': 'Website chưa sẵn sàng cho tài khoản khách hàng.',
       'customer.error.invalidName': 'Tên khách hàng không hợp lệ hoặc quá dài.',
       'customer.error.invalidEmail': 'Địa chỉ email không hợp lệ.',
@@ -115,6 +127,9 @@ export default defineModule({
       'error.invalidPath': 'The local path is invalid.',
       'error.invalidSlug': 'The slug may only contain letters, numbers and hyphens.',
       'error.revisionNotFound': 'The revision was not found.',
+      'error.entryUnrenderable': 'This page places a section this deployment no longer provides.',
+      'error.publicationUnrenderable':
+        'The publication holds a page placing a section this deployment no longer provides.',
       'error.invalidDatetime': 'The date and time are invalid.',
       'error.invalidTaxonomy': 'The taxonomy is not registered.',
       'error.invalidParent': 'The parent term is invalid.',
@@ -125,6 +140,16 @@ export default defineModule({
       'error.invalidRedirect': 'Redirect paths must be distinct local paths.',
       'error.redirectCycle': 'The redirect creates a cycle.',
       'error.lastAdministrator': 'A site must always retain at least one administrator.',
+      'error.publicationEmpty': 'Select at least one piece of content to publish.',
+      'error.publicationTooLarge': 'One publication exceeds the allowed number of entries.',
+      'error.publicationDuplicate': 'An entry appears twice in this publication.',
+      'error.publicationEntryOutsideSite': 'That entry does not belong to this site.',
+      'error.publicationEntryTrashed': 'That entry is in the trash and cannot be published.',
+      'error.publicationConflict': 'This publication id was already used for a different set.',
+      'error.publicationNotFound': 'Publication not found.',
+      'error.publicationSuperseded': 'This publication has already been replaced.',
+      'error.publicationStaleBase': 'What is public changed while you were working. Review, then publish.',
+      'error.publicationNoBase': 'There is no earlier publication to roll back to.',
       'customer.error.realmUnavailable': 'Customer accounts are not ready for this site.',
       'customer.error.invalidName': 'The customer name is invalid or too long.',
       'customer.error.invalidEmail': 'The email address is invalid.',
@@ -146,8 +171,7 @@ export default defineModule({
   joints,
   sections,
   views,
-  functions: { ...functions, ...cmsFunctions, ...customerFunctions },
-  routes: customerRoutes,
+  functions: { ...functions, ...cmsFunctions, ...publicationFunctions, ...customerFunctions },
   jobs,
   tokens,
 })

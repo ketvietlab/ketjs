@@ -71,7 +71,8 @@ export const models: Record<string, ModelDef> = {
       issuer: 'text',
       redirectUri: 'text',
       nonceDigest: 'text',
-      codeVerifier: 'text',
+      /** A live PKCE credential for as long as the exchange is open. */
+      codeVerifier: { type: 'text', sensitive: true },
       discovery: 'json',
       returnTo: 'text',
       providerUpdatedAt: 'datetime',

@@ -9,6 +9,14 @@ import backend from '@ketvietlab/ketsuite/backend'
 const modules = [address, partner, company, storage, backend, uom, product, hospitalityCore]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
+const futureDate = (days: number): string =>
+  new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+const onlineCheckIn = futureDate(10)
+const onlineCheckOut = futureDate(12)
+/** The ledger is keyed by property-local calendar date; arrival is the first night. */
+const onlineFrom = onlineCheckIn
+/** Well inside the free-cancellation window of the seeded policy. */
+const onlineCancelAt = new Date().toISOString()
 const call = (name: string, args: Record<string, unknown>, adapter: Adapter) =>
   callFn(name, args, { adapter, manifest, scope })
 
@@ -17,6 +25,12 @@ async function boot(): Promise<Adapter> {
   await adapter.open()
   await migrateOne(adapter, manifest)
   registerFunctions(modules)
+  await call('partner.savePartner', { id: 'acme-party', kind: 'company', name: 'Công ty ACME' }, adapter)
+  await call(
+    'company.saveCompany',
+    { id: 'acme', code: 'ACME', partnerId: 'acme-party', currency: 'VND' },
+    adapter,
+  )
   await call('partner.savePartner', { id: 'guest', kind: 'person', name: 'Nguyễn An' }, adapter)
   await call('partner.savePartner', { id: 'companion', kind: 'person', name: 'Trần Bình' }, adapter)
   await call(
@@ -26,7 +40,14 @@ async function boot(): Promise<Adapter> {
   )
   await call(
     'hospitality_core.saveRoomType',
-    { id: 'deluxe', propertyId: 'hotel', code: 'DLX', name: 'Deluxe', baseRate: '100' },
+    {
+      id: 'deluxe',
+      propertyId: 'hotel',
+      code: 'DLX',
+      name: 'Deluxe',
+      baseRate: '100',
+      published: true,
+    },
     adapter,
   )
   for (const room of ['101', '102'])
@@ -134,6 +155,495 @@ test('hospitality operations: quote is read-only and reflects committed room-nig
     const full = (await call('hospitality_core.quoteReservation', args, adapter)).value as Row
     assert.equal(full.ok, false)
     assert.equal(((full.errors as Row[])[0] as Row).code, 'no_availability')
+  } finally {
+    await adapter.close()
+  }
+})
+
+const onlineReservation = (id: string, requestKey: string, extra: Record<string, unknown> = {}) => ({
+  id,
+  requestKey,
+  propertyId: 'hotel',
+  roomTypeId: 'deluxe',
+  partnerId: 'guest',
+  checkIn: onlineCheckIn,
+  checkOut: onlineCheckOut,
+  adults: 2,
+  ...extra,
+})
+
+test('hospitality online: quote is internal, public-safe and prices only from server configuration', async () => {
+  const adapter = await boot()
+  try {
+    assert.equal(manifest.functions['hospitality_core.quoteAvailability']?.exposure, 'internal')
+    assert.equal(manifest.functions['hospitality_core.createOnlineReservation']?.exposure, 'internal')
+    const quoted = (
+      await call(
+        'hospitality_core.quoteAvailability',
+        {
+          propertyId: 'hotel',
+          roomTypeId: 'deluxe',
+          checkIn: onlineCheckIn,
+          checkOut: onlineCheckOut,
+          adults: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(quoted.ok, true)
+    assert.equal(quoted.companyId, 'acme')
+    assert.equal(quoted.nights, 2)
+    assert.deepEqual(quoted.items, [
+      {
+        roomTypeId: 'deluxe',
+        ratePlanId: null,
+        availableQuantity: 2,
+        requestedQuantity: 1,
+        unitRate: '100',
+        amountTotal: '200',
+        currency: 'VND',
+        restrictions: {
+          minStay: null,
+          maxStay: null,
+          closedToArrival: false,
+          closedToDeparture: false,
+          stopSell: false,
+        },
+      },
+    ])
+    await call(
+      'hospitality_core.saveRatePlan',
+      {
+        id: 'web-rate',
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        code: 'WEB',
+        name: 'Website rate',
+        rateType: 'nightly',
+        amount: '125',
+        isDefault: true,
+        active: true,
+      },
+      adapter,
+    )
+    const ratePlanQuote = (
+      await call(
+        'hospitality_core.quoteAvailability',
+        {
+          propertyId: 'hotel',
+          roomTypeId: 'deluxe',
+          ratePlanId: 'web-rate',
+          checkIn: onlineCheckIn,
+          checkOut: onlineCheckOut,
+          adults: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(((ratePlanQuote.items as Row[])[0] as Row).unitRate, '125')
+    assert.equal(((ratePlanQuote.items as Row[])[0] as Row).amountTotal, '250')
+    await assert.rejects(
+      call(
+        'hospitality_core.createOnlineReservation',
+        { ...onlineReservation('unsafe-price', 'unsafe-price'), rate: '1' },
+        adapter,
+      ),
+      /unknown input "rate"/,
+    )
+
+    const overCapacity = (
+      await call(
+        'hospitality_core.quoteAvailability',
+        {
+          propertyId: 'hotel',
+          roomTypeId: 'deluxe',
+          checkIn: onlineCheckIn,
+          checkOut: onlineCheckOut,
+          adults: 3,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(overCapacity.ok, false)
+    assert.equal((overCapacity.errors as Row[])[0]?.messageKey, 'hospitality_core.error.capacityExceeded')
+
+    await call(
+      'hospitality_core.setRestrictionRange',
+      {
+        propertyId: 'hotel',
+        roomTypeId: 'deluxe',
+        from: onlineCheckIn,
+        to: onlineCheckIn,
+        stopSell: true,
+      },
+      adapter,
+    )
+    const stopped = (
+      await call(
+        'hospitality_core.quoteAvailability',
+        {
+          propertyId: 'hotel',
+          roomTypeId: 'deluxe',
+          checkIn: onlineCheckIn,
+          checkOut: onlineCheckOut,
+          adults: 2,
+        },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(stopped.ok, false)
+    assert.equal((stopped.errors as Row[])[0]?.messageKey, 'hospitality_core.error.stopSell')
+
+    const wrongCompany = (
+      await callFn(
+        'hospitality_core.quoteAvailability',
+        {
+          propertyId: 'hotel',
+          roomTypeId: 'deluxe',
+          checkIn: onlineCheckIn,
+          checkOut: onlineCheckOut,
+          adults: 2,
+        },
+        { adapter, manifest, scope: { company: 'globex', companies: ['globex'], branches: null } },
+      )
+    ).value as Row
+    assert.equal(wrongCompany.ok, false)
+    assert.equal((wrongCompany.errors as Row[])[0]?.messageKey, 'hospitality_core.error.propertyNotFound')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality online: customer cancellation applies the configured policy', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'hospitality_core.saveCancellationPolicy',
+      {
+        id: 'non-refundable',
+        code: 'NONREF',
+        name: 'Non-refundable',
+        type: 'non_refundable',
+        freeCancellationHours: 0,
+        penaltyPercent: '100',
+      },
+      adapter,
+    )
+    await call(
+      'hospitality_core.saveRoomType',
+      {
+        id: 'deluxe',
+        propertyId: 'hotel',
+        code: 'DLX',
+        name: 'Deluxe',
+        baseRate: '100',
+        cancellationPolicyId: 'non-refundable',
+        published: true,
+      },
+      adapter,
+    )
+    const created = (
+      await call(
+        'hospitality_core.createOnlineReservation',
+        onlineReservation('nonref-web', 'nonref-web', {
+          checkIn: futureDate(20),
+          checkOut: futureDate(22),
+        }),
+        adapter,
+      )
+    ).value as Row
+    assert.equal(created.ok, true)
+    const cancelled = (
+      await call(
+        'hospitality_core.cancelPartnerReservation',
+        { id: 'nonref-web', partnerId: 'guest', at: new Date().toISOString() },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(cancelled.ok, false)
+    assert.equal((cancelled.errors as Row[])[0]?.messageKey, 'hospitality_core.error.cancellationNotAllowed')
+    assert.equal(
+      (await adapter.all('SELECT state FROM hospitality_core_reservation WHERE id = ?', ['nonref-web']))[0]
+        ?.state,
+      'confirmed',
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality online: a multi-room checkout becomes one assignable stay per room', async () => {
+  const adapter = await boot()
+  try {
+    const created = (
+      await call(
+        'hospitality_core.createOnlineReservation',
+        onlineReservation('web-multi', 'checkout-multi', { quantity: 2 }),
+        adapter,
+      )
+    ).value as Row
+    assert.equal(created.ok, true)
+    assert.equal(created.id, 'web-multi')
+    assert.equal(created.quantity, 2)
+    // The purchase total is the folio total; each room carries its own nights.
+    assert.equal(created.amountTotal, '400')
+    const units = created.units as Array<Record<string, string>>
+    assert.deepEqual(
+      units.map((unit) => unit.reservationId),
+      ['web-multi', 'web-multi#2'],
+    )
+    assert.deepEqual(
+      units.map((unit) => unit.amountTotal),
+      ['200', '200'],
+    )
+
+    // Two rooms, two stays, and both can be given a physical room.
+    const stays = (await call('hospitality_core.listStays', { propertyId: 'hotel' }, adapter)).value as Row[]
+    assert.equal(stays.length, 2)
+    for (const [index, unit] of units.entries()) {
+      const arrived = (
+        await call(
+          'hospitality_core.checkIn',
+          {
+            stayId: unit.stayId,
+            roomId: ['101', '102'][index],
+            at: `${onlineCheckIn}T15:00:00.000Z`,
+          },
+          adapter,
+        )
+      ).value as Row
+      assert.equal(arrived.ok, true)
+      assert.equal(arrived.roomId, ['101', '102'][index])
+    }
+    const rooms = (await call('hospitality_core.listRooms', { propertyId: 'hotel' }, adapter)).value as Row[]
+    assert.deepEqual(
+      rooms.filter((room) => room.status === 'occupied').map((room) => room.code),
+      ['101', '102'],
+    )
+
+    // One folio holding one charge per room, and the ledger sold both nights twice.
+    const folio = (await call('hospitality_core.getFolio', { id: 'web-multi:folio' }, adapter)).value as Row
+    assert.equal(Number(folio.amountTotal), 400)
+    assert.equal((folio.charges as Row[]).length, 2)
+    const ledger = (
+      await call(
+        'hospitality_core.listInventory',
+        { propertyId: 'hotel', roomTypeId: 'deluxe', from: onlineFrom, to: onlineFrom },
+        adapter,
+      )
+    ).value as Row[]
+    assert.equal(ledger[0]?.sold, 2)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality online: a multi-room purchase is listed and cancelled as one booking', async () => {
+  const adapter = await boot()
+  try {
+    await call(
+      'hospitality_core.createOnlineReservation',
+      onlineReservation('web-multi', 'checkout-multi', { quantity: 2 }),
+      adapter,
+    )
+    // Two reservations, but the guest bought one thing.
+    const mine = (await call('hospitality_core.listPartnerReservations', { partnerId: 'guest' }, adapter))
+      .value as Row[]
+    assert.equal(mine.length, 1)
+    assert.equal(mine[0]?.rooms, 2)
+    assert.equal(Number(mine[0]?.amountTotal), 400)
+
+    const cancelled = (
+      await call(
+        'hospitality_core.cancelPartnerReservation',
+        { id: 'web-multi', partnerId: 'guest', at: onlineCancelAt },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(cancelled.ok, true)
+    assert.equal(cancelled.rooms, 2)
+    const states = (await call('hospitality_core.listReservations', { propertyId: 'hotel' }, adapter))
+      .value as Row[]
+    assert.deepEqual(new Set(states.map((row) => row.state)), new Set(['cancelled']))
+    const ledger = (
+      await call(
+        'hospitality_core.listInventory',
+        { propertyId: 'hotel', roomTypeId: 'deluxe', from: onlineFrom, to: onlineFrom },
+        adapter,
+      )
+    ).value as Row[]
+    assert.equal(ledger[0]?.sold, 0)
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality online: retrying a multi-room checkout never sells a second set', async () => {
+  const adapter = await boot()
+  try {
+    const first = (
+      await call(
+        'hospitality_core.createOnlineReservation',
+        onlineReservation('web-multi', 'checkout-multi', { quantity: 2 }),
+        adapter,
+      )
+    ).value as Row
+    const again = (
+      await call(
+        'hospitality_core.createOnlineReservation',
+        onlineReservation('web-multi', 'checkout-multi', { quantity: 2 }),
+        adapter,
+      )
+    ).value as Row
+    assert.equal(again.existing, true)
+    assert.deepEqual(again.units, first.units)
+    const ledger = (
+      await call(
+        'hospitality_core.listInventory',
+        { propertyId: 'hotel', roomTypeId: 'deluxe', from: onlineFrom, to: onlineFrom },
+        adapter,
+      )
+    ).value as Row[]
+    assert.equal(ledger[0]?.sold, 2)
+
+    // Same key, different room count is a different purchase and must be refused.
+    const changed = (
+      await call(
+        'hospitality_core.createOnlineReservation',
+        onlineReservation('web-multi', 'checkout-multi', { quantity: 1 }),
+        adapter,
+      )
+    ).value as Row
+    assert.equal(changed.ok, false)
+    assert.equal((changed.errors as Row[])[0]?.code, 'requestConflict')
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality online: reservation, retry, ownership and cancellation remain atomic', async () => {
+  const adapter = await boot()
+  try {
+    const created = (
+      await call(
+        'hospitality_core.createOnlineReservation',
+        onlineReservation('web-1', 'checkout-session-1'),
+        adapter,
+      )
+    ).value as Row
+    assert.deepEqual(
+      {
+        ok: created.ok,
+        id: created.id,
+        companyId: created.companyId,
+        rate: created.rate,
+        quantity: created.quantity,
+        amountTotal: created.amountTotal,
+        currency: created.currency,
+        existing: created.existing,
+      },
+      {
+        ok: true,
+        id: 'web-1',
+        companyId: 'acme',
+        rate: '100',
+        quantity: 1,
+        amountTotal: '200',
+        currency: 'VND',
+        existing: false,
+      },
+    )
+    const retry = (
+      await call(
+        'hospitality_core.createOnlineReservation',
+        onlineReservation('web-1-retried', 'checkout-session-1'),
+        adapter,
+      )
+    ).value as Row
+    assert.equal(retry.id, 'web-1')
+    assert.equal(retry.existing, true)
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_reservation'))[0]?.n, 1)
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_folio'))[0]?.n, 1)
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_stay'))[0]?.n, 1)
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_charge'))[0]?.n, 1)
+
+    const conflict = (
+      await call(
+        'hospitality_core.createOnlineReservation',
+        onlineReservation('web-conflict', 'checkout-session-1', { checkOut: futureDate(13) }),
+        adapter,
+      )
+    ).value as Row
+    assert.equal(conflict.ok, false)
+    assert.equal((conflict.errors as Row[])[0]?.messageKey, 'hospitality_core.error.requestConflict')
+
+    const mine = (await call('hospitality_core.listPartnerReservations', { partnerId: 'guest' }, adapter))
+      .value as Row[]
+    assert.equal(mine.length, 1)
+    assert.equal(mine[0]?.companyId, 'acme')
+    assert.equal(mine[0]?.cancellationAllowed, true)
+    assert.equal('folioId' in mine[0]!, false)
+    const stolen = (
+      await call('hospitality_core.getPartnerReservation', { id: 'web-1', partnerId: 'companion' }, adapter)
+    ).value as Row
+    assert.equal(stolen.ok, false)
+    assert.equal((stolen.errors as Row[])[0]?.messageKey, 'hospitality_core.error.reservationNotOwned')
+
+    const cancelled = (
+      await call(
+        'hospitality_core.cancelPartnerReservation',
+        { id: 'web-1', partnerId: 'guest', at: new Date().toISOString() },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(cancelled.ok, true)
+    assert.equal(cancelled.existing, false)
+    const retriedCancel = (
+      await call(
+        'hospitality_core.cancelPartnerReservation',
+        { id: 'web-1', partnerId: 'guest', at: new Date().toISOString() },
+        adapter,
+      )
+    ).value as Row
+    assert.equal(retriedCancel.existing, true)
+    const ledger = await adapter.all(
+      'SELECT sold, available FROM hospitality_core_availability_ledger ORDER BY date',
+    )
+    assert.deepEqual(
+      ledger.map((row) => [Number(row.sold), Number(row.available)]),
+      [
+        [0, 2],
+        [0, 2],
+      ],
+    )
+  } finally {
+    await adapter.close()
+  }
+})
+
+test('hospitality online: concurrent SQLite booking admits one reservation without oversell', async () => {
+  const adapter = await boot()
+  try {
+    await adapter.run('UPDATE hospitality_core_room SET active = 0 WHERE id = ?', ['102'])
+    const attempts = await Promise.all([
+      call('hospitality_core.createOnlineReservation', onlineReservation('race-a', 'race-a'), adapter),
+      call('hospitality_core.createOnlineReservation', onlineReservation('race-b', 'race-b'), adapter),
+    ])
+    const values = attempts.map((attempt) => attempt.value as Row)
+    assert.equal(values.filter((value) => value.ok === true).length, 1)
+    assert.equal(
+      values.filter(
+        (value) =>
+          value.ok === false &&
+          (value.errors as Row[]).some(
+            (error) => error.messageKey === 'hospitality_core.error.inventoryUnavailable',
+          ),
+      ).length,
+      1,
+    )
+    assert.equal((await adapter.all('SELECT COUNT(*) AS n FROM hospitality_core_reservation'))[0]?.n, 1)
+    const ledger = await adapter.all('SELECT sold, total FROM hospitality_core_availability_ledger')
+    assert.ok(ledger.every((row) => Number(row.sold) === 1 && Number(row.total) === 1))
   } finally {
     await adapter.close()
   }
@@ -318,7 +828,7 @@ test('hospitality operations: charges are idempotent and guest lists do not expo
         amountTotal: (voided.value as Row).amountTotal,
         existing: (voided.value as Row).existing,
       },
-      { ok: true, amount: 25, amountTotal: '200', existing: false },
+      { ok: true, amount: '25', amountTotal: '200', existing: false },
     )
     assert.equal((voidRetry.value as Row).existing, true)
     const storedCharge = (

@@ -1,0 +1,111 @@
+---
+title: Application architecture
+description: Understand KetSuite composition, module layers, runtime boundaries, and package ownership.
+---
+
+KetSuite is assembled explicitly in `packages/ketsuite/src/deployment.ts`. There is no import-time module
+registry: `createKetsuiteDeployment()` passes the complete module list to `defineDeployment()`, and KetJS composes it
+into the manifest used by migration, permissions, HTTP dispatch, workers, and rendering.
+
+## Three module layers
+
+KetSuite module names encode an ownership pattern, not a mandatory framework feature.
+
+| Layer | Typical name | Owns | Must not own |
+| --- | --- | --- | --- |
+| Domain | `partner`, `sale`, `loyalty` | Models, invariants, functions, jobs, reports, domain messages | Admin-only markup or another domain's integration policy |
+| Backend | `partner_backend`, `sale_backend` | `/admin/...` routes, screens, menus, islands, backend translations | Duplicate business rules or direct writes around domain functions |
+| Bridge | `account_partner`, `loyalty_sale` | Behavior that is meaningful only when two modules are selected | A patch hidden inside either domain owner |
+
+Shared capability modules such as `backend`, `mail`, `activity`, `calendar`, `storage`, `user`, and
+`channel_api` provide contracts used by several verticals. Website modules and themes form a separate
+presentation vertical but obey the same dependency rules.
+
+```mermaid
+%% File: docs/src/content/docs/ketsuite/architecture.md
+flowchart BT
+  partner_backend["partner_backend"] --> partner["partner"]
+  partner_backend --> backend["backend"]
+  account_partner["account_partner"] --> partner
+  account_partner --> account["account"]
+  account_partner_backend["account_partner_backend"] --> account_partner
+  account_partner_backend --> backend
+```
+
+The bridge keeps `partner` usable without accounting and prevents `account` from importing partner
+implementation details. The backend bridge follows the same rule for its screen contribution.
+
+## Module families in the packaged deployment
+
+The deployment composition groups capabilities by dependency direction. This map is an orientation
+aid; the `modules` array in `deployment.ts` remains the executable inventory.
+
+| Family | Domain and capability modules | Companion pattern |
+| --- | --- | --- |
+| Web and channels | `website`, `channel_api`, `website_menu`, `website_seo`, `website_search`, `website_form` | Website backend plus hospitality and retail website bridges |
+| Identity and organization | `address`, `partner`, `company`, `user`, `oauth`, `hr`, `attendance` | One backend companion per management surface; accounting is linked through `account_partner` |
+| Collaboration | `mail`, `mail_transport`, `mail_inbound`, `activity`, `calendar` | Backend modules plus model-specific mail, inbound, activity, and calendar bridges |
+| Product and stock | `uom`, `product`, `product_media`, `pricing`, `stock` | Product, pricing, and stock backends; mail and activity bridges attach collaboration |
+| Commercial flow | `purchase`, `sale`, `pos` | Separate backends; Sale connects to CRM, loyalty, mail, activity, stock, pricing, and accounting through dependencies or bridges |
+| Finance and reporting | `account`, `report` | Accounting and report backends plus partner, mail, and activity bridges |
+| Growth | `crm`, `loyalty` | CRM and loyalty backends with Sale, POS, and Website bridges |
+| Industry verticals | `hospitality_core` | Website and theme integrations compose hospitality behavior without moving it into generic commerce modules |
+
+Several backend modules intentionally depend on the shared `backend` module, while domain modules do
+not. This makes headless composition possible and prevents admin presentation from becoming a hidden
+requirement of business logic.
+
+## Declared and running
+
+A KetSuite deployment has one state: every module in its `modules` array participates in composition,
+schema migration, HTTP behavior, and worker behavior. There is no bootstrap list or per-database module
+lifecycle. Product variants are separate deployment declarations with explicit module lists.
+
+Backend companions remain separate bridge modules so headless deployments can select the business
+module without its screens. A deployment needing the admin selects both modules explicitly.
+
+## Deployment-owned runtime policy
+
+The deployment declaration owns policy that no individual module can decide safely:
+
+- datastore selection and SQLite defaults;
+- default and fallback locale;
+- default timezone;
+- worker queue concurrency;
+- anonymous-session defaults;
+- staff-session resolution and permission lookup;
+- customer versus anonymous audience resolution;
+- website page resolvers and the site title.
+
+Keep domain functions independent of these deployment defaults. They should consume `ctx.scope`, the
+active locale, declared transports, and framework services rather than reading process-wide state.
+
+## Composition order is a contract
+
+KetJS validates dependencies and produces a topological order; source-array position is still kept
+readable so humans can audit the application. Add a module close to its domain and companions. A module
+may contribute to another module's joint, reserved route prefix, or model only through a declared
+dependency and the owner's published contract.
+
+When a new feature crosses domains, prefer this decision sequence:
+
+1. Put an invariant used by only one domain in that domain module.
+2. Put presentation for that domain in its backend or website companion.
+3. Put behavior requiring two independently useful domains in a bridge module.
+4. Promote a helper to the package public API only when an external module needs the same boundary.
+
+This keeps composition graphs meaningful and makes accidental circular dependencies visible at
+composition time.
+
+## Durable Sale lifecycle events
+
+The `sale` domain appends one `sale.OrderLifecycleEvent` when an order first reaches `confirmed`,
+`shipped`, `delivered`, or `cancelled`. The event is written by the same domain command that changes
+the order whenever that command already owns a transaction. Its company, order, and phase key is
+unique, so retrying `sale.confirmOrder`, `sale.syncDeliveries`, or `sale.cancelOrder` cannot publish a
+duplicate fact.
+
+This table is a domain outbox, not a customer-care implementation. Optional bridge and private modules
+may read it and maintain their own consumption receipts. They must not update or delete Sale's event
+rows, and Sale must not depend on those consumers. A consumer should keep a slower reconciliation path
+for legacy rows and for failures between an external stock mutation and `sale.syncDeliveries`.

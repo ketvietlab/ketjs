@@ -5,13 +5,12 @@ import {
   defineModule,
   defineTheme,
   createTheme,
+  dateTimeFormatter,
   translator,
   missingMessages,
   formatMissing,
   PSEUDO_LOCALE,
 } from '@ketvietlab/ketjs'
-import { renderToString } from '@ketvietlab/ketjs-view'
-import { appsScreen } from '@ketvietlab/ketsuite/backend'
 import backend from '@ketvietlab/ketsuite/backend'
 
 const shop = defineModule({
@@ -101,28 +100,6 @@ test('i18n: a theme translates through the _ filter, because scope holds no func
   }
 })
 
-test('i18n: the backend UI has no hardcoded language left in it', () => {
-  const m = compose([backend], { headless: true })
-  const app = {
-    name: 'w',
-    title: 'W',
-    summary: 's',
-    category: 'C',
-    state: 'installed' as const,
-    depends: [],
-    dependents: ['x'],
-  }
-
-  const vi = renderToString(appsScreen(translator(m, 'vi'), [app]))
-  const en = renderToString(appsScreen(translator(m, 'en'), [app]))
-  assert.match(vi, /Ứng dụng/)
-  assert.match(vi, />Gỡ</)
-  assert.match(en, /Apps/)
-  assert.match(en, />Remove</)
-  assert.ok(!en.includes('Ứng dụng'), 'no Vietnamese survives into the English render')
-  assert.ok(!vi.includes('Remove'))
-})
-
 test('i18n: the backend catalogue is complete in both languages', () => {
   const m = compose([backend], { headless: true })
   assert.deepEqual(missingMessages(m), {}, formatMissing(missingMessages(m)))
@@ -140,4 +117,16 @@ test('i18n: has() and resolves() answer different questions', () => {
   assert.equal(pseudo.has('shop.greeting'), false)
   assert.equal(pseudo.resolves('shop.greeting'), true)
   assert.match(pseudo('shop.greeting', { name: 'D' }), /^⟦.*⟧$/)
+})
+
+test('i18n: equivalent date/time options reuse one formatter', () => {
+  const first = dateTimeFormatter('vi', { timeZone: 'UTC', month: '2-digit', year: 'numeric' })
+  const reordered = dateTimeFormatter('vi', { year: 'numeric', month: '2-digit', timeZone: 'UTC' })
+  assert.strictEqual(first, reordered)
+  assert.equal(
+    dateTimeFormatter(PSEUDO_LOCALE, { timeZone: 'UTC', year: 'numeric' }).format(
+      new Date('2026-09-02T00:00:00Z'),
+    ),
+    '2026',
+  )
 })

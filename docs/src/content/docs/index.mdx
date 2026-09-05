@@ -1,17 +1,18 @@
 ---
-title: KetSuite Docs
-description: Developer documentation for the KetJS framework and its application architecture.
+title: Ket Developer Docs
+description: Choose a focused developer path through the KetJS framework, KetSuite application, and operating guides.
 template: splash
 hero:
-  tagline: Build modular applications with KetJS using checked contracts, durable operations, and a complete deployment model.
+  tagline: Build with KetJS, extend KetSuite, and operate both through explicit contracts and focused reading paths.
   actions:
-    - text: Read the KetJS guide
-      link: /ketjs/
+    - text: Build with KetJS
+      link: /ketjs/quick-start/
       icon: right-arrow
       variant: primary
-    - text: Develop the docs
-      link: /getting-started/
-      variant: minimal
+    - text: Develop KetSuite
+      link: /ketsuite/quick-start/
+      icon: right-arrow
+      variant: secondary
     - text: View source on GitHub
       link: https://github.com/ketvietlab/ketjs
       icon: external
@@ -20,26 +21,60 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components'
 
-<div class="docs-kicker">KETJS FRAMEWORK · DEVELOPMENT · OPERATIONS</div>
+<div class="docs-kicker">FRAMEWORK · BUSINESS APPLICATION · ENGINEERING REFERENCE</div>
 
-## Documentation is part of the product
+## Choose the system you are changing
 
-This site builds independently with Astro Starlight while sharing KetSuite's visual language: a
-warm-neutral canvas, precise dividers, and indigo reserved for actions and selected states.
+KetJS and KetSuite share one repository but have different responsibilities. Start with the guide
+that owns the code you intend to change; follow framework links only when KetSuite delegates a
+contract to KetJS.
 
 <CardGrid>
-  <Card title="Architecture" icon="seti:config">
-    Technical decisions, manifests, module graphs, data models, and authorization boundaries.
+  <Card title="KetJS framework" icon="seti:config">
+    Use the [framework guide](/ketjs/) for composition, data, functions, HTTP, jobs, rendering,
+    themes, testing, and deployment contracts.
   </Card>
-  <Card title="Development" icon="puzzle">
-    Local setup, testing, module extension, and guidance for writing verifiable documentation.
+  <Card title="KetSuite application" icon="puzzle">
+    Use the [application guide](/ketsuite/) for module ownership, backend UI, security boundaries,
+    Channel APIs, and business-domain behavior.
   </Card>
-  <Card title="Operations" icon="rocket">
-    Runbooks for deployment, migrations, durable queues, Storage/S3, and system diagnostics.
+  <Card title="Engineering reference" icon="rocket">
+    Use the [operations map](/operations/) and [design records](/architecture/) when deploying,
+    measuring, or changing a cross-cutting invariant.
   </Card>
 </CardGrid>
 
-:::note[KetSuite documentation]
-The KetSuite application documentation is intentionally deferred until the application suite is complete.
-The current developer guide covers the KetJS framework and its supported public contracts.
+## Follow a complete reading path
+
+### Build an independent KetJS application
+
+1. [Scaffold and run an application](/ketjs/quick-start/).
+2. Learn [workspaces and deployments](/ketjs/workspaces/) and [modules and manifest](/ketjs/modules/).
+3. Add [models and scopes](/ketjs/models/), [queries and changesets](/ketjs/data/), and
+   [functions and effects](/ketjs/functions/).
+4. Verify behavior through [headless testing](/ketjs/testing/), then use the
+   [deployment guide](/ketjs/deployment/).
+
+### Change or extend KetSuite
+
+1. Set up [local KetSuite development](/ketsuite/quick-start/).
+2. Read the [application architecture](/ketsuite/architecture/) and place code with the
+   [module development guide](/ketsuite/module-development/).
+3. Choose [backend UI](/ketsuite/backend-development/) or the
+   [Channel API](/ketsuite/channel-api/) for the delivery surface.
+4. Review [security and data scope](/ketsuite/security-scope/) before testing with the
+   [KetSuite test matrix](/ketsuite/testing/).
+
+### Operate or evolve the platform
+
+1. Use the [operations reading map](/operations/) to find deployment, migration, job, storage, and
+   incident-related contracts.
+2. Reproduce claims from the [performance benchmarks](/operations/benchmarks/).
+3. Consult [architecture decisions](/architecture/decisions/) for established invariants and
+   [open questions](/architecture/open-questions/) for deliberately unresolved work.
+
+:::note[Developer documentation]
+These guides describe source contracts and contributor workflows. They are not an ERP user manual.
+When a development branch disagrees with a guide, checked-in source and tests remain authoritative,
+and the guide must be corrected in the same change.
 :::

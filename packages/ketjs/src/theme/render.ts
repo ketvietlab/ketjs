@@ -3,10 +3,12 @@
 
 import { compileKtl } from './ktl/compile.ts'
 import type { Compiled, Filter, Scope } from './ktl/compile.ts'
-import { renderIsland } from '@ketvietlab/ketjs-view'
 import type { IslandRegistry } from '@ketvietlab/ketjs-view'
 import { sealScope } from './viewmodel.ts'
-import { contractProps } from './contracts.ts'
+import { sectionSettings } from './contracts.ts'
+import { assertFillReach, createJointWiring } from './joint-runtime.ts'
+import type { CompiledFill } from './joint-runtime.ts'
+import { tokensToCss } from './tokens.ts'
 import { KetError } from '../kernel/errors.ts'
 import type { KetModule, Manifest } from '../types.ts'
 
@@ -15,6 +17,14 @@ export type ThemeRuntime = {
   templates: Record<string, Compiled>
   islands: IslandRegistry
   clients: Record<string, { src: string; export: string }>
+  /**
+   * The declared tokens of everything this theme actually renders with, as CSS.
+   *
+   * Composed here rather than from `manifest.tokens` because the manifest merges
+   * every composed module's tokens flat: with two themes selected the one that
+   * happens to sort later would win over the one the site selected.
+   */
+  tokensCss: string
 }
 
 export function createTheme(
@@ -27,18 +37,9 @@ export function createTheme(
     theme?: string
   } = {},
 ): ThemeRuntime {
-  // A theme is written against what the DEPLOYMENT ships, not against what a
-  // particular database has switched on. So the strict check belongs to the full
-  // manifest — where a typo is a build error — while a restricted manifest, which
-  // is a runtime view, degrades to rendering nothing. Uninstalling an app must not
-  // take the whole theme down with it.
-  const atRuntime = manifest.disabledModules !== undefined
-  const off = new Set(manifest.disabledModules ?? [])
-  const disabledSections = new Set(manifest.disabledSections ?? [])
   // Islands come from modules; the theme only names them.
   const islands: IslandRegistry = {}
   for (const m of modules) {
-    if (off.has(m.name)) continue
     for (const [name, def] of Object.entries(m.islands)) islands[name] = def.view
   }
   const clients = Object.fromEntries(
@@ -47,11 +48,33 @@ export function createTheme(
       .map(([name, island]) => [name, island.client as { src: string; export: string }]),
   )
   const sources: Record<string, string> = {}
+  const templateOwner: Record<string, KetModule> = {}
+  // Tokens follow the templates exactly: whatever renders this page is what gets to
+  // name a colour. Reading manifest.tokens instead would hand a deployment with two
+  // themes installed the tokens of whichever one composed last.
+  const tokens: Record<string, string> = {}
   for (const m of modules) {
-    if (off.has(m.name)) continue // a removed theme contributes no templates
     if (m.kind === 'theme' && opts.theme && m.name !== opts.theme) continue
-    for (const [name, src] of Object.entries(m.templates)) sources[name] = src
+    Object.assign(tokens, m.tokens)
+    for (const [name, src] of Object.entries(m.templates)) {
+      const previous = templateOwner[name]
+      // A theme overriding a module's template is the whole point of a theme. Two
+      // modules claiming one name is not an override, it is a collision, and it used
+      // to resolve silently by composition order — so which markup rendered depended
+      // on the dependency graph rather than on anybody's decision.
+      if (previous && previous.kind !== 'theme' && m.kind !== 'theme') {
+        throw new KetError({
+          code: 'E_TEMPLATE_DUPLICATE',
+          module: m.name,
+          message: `template "${name}" is already provided by "${previous.name}"`,
+          hint: 'rename one of them, or move the shared markup into a template both render',
+        })
+      }
+      templateOwner[name] = m
+      sources[name] = src
+    }
   }
+  const tokensCss = Object.keys(tokens).length ? tokensToCss(tokens) : ''
 
   const fillSources: Record<string, Array<{ by: string; template: string }>> = {}
   for (const fill of manifest.fills) {
@@ -61,84 +84,86 @@ export function createTheme(
   }
 
   const templates: Record<string, Compiled> = {}
-  const fills: Record<string, Compiled[]> = {}
+  const fills: Record<string, CompiledFill[]> = {}
 
-  const jointStack: string[] = []
-  const renderJoint = (joint: string, scope: Scope): string => {
-    const definition = manifest.joints[joint]
-    if (!definition) {
-      throw new KetError({
-        code: 'E_TEMPLATE_UNKNOWN_JOINT',
-        message: `renders joint "${joint}", which no installed module publishes`,
-      })
-    }
-    if (definition.omittedBy.length) return ''
-    if (jointStack.includes(joint)) {
-      throw new KetError({
-        code: 'E_JOINT_CYCLE',
-        message: `joint recursion: ${[...jointStack, joint].join(' -> ')}`,
-        hint: 'a fill may render another joint, but never itself through any chain',
-      })
-    }
-    if (jointStack.length >= 16) {
-      throw new KetError({ code: 'E_JOINT_TOO_DEEP', message: 'joint rendering exceeds 16 levels' })
-    }
-    jointStack.push(joint)
-    try {
-      const props = contractProps(manifest, 'joint', joint, definition.props, scope)
-      return (fills[joint] ?? []).map((compiled) => compiled.render(props)).join('')
-    } finally {
-      jointStack.pop()
-    }
-  }
+  const wiring = createJointWiring(manifest, {
+    fillsFor: (joint) => fills[joint] ?? [],
+    islands,
+  })
+
+  /**
+   * Which placement is being rendered, so that a `slot` tag inside its template
+   * can find its children.
+   *
+   * A stack rather than a scope key: children are already-rendered markup, and
+   * a scope carries values a template may print. Putting markup where `{{ }}`
+   * can reach it would either escape it into visible tag soup or open a hole,
+   * and reserving a scope name would collide with a section that wanted it.
+   * Rendering is synchronous, so a stack is exact.
+   */
+  const openSlots: Array<{ slots: Record<string, unknown>; page: unknown }> = []
 
   /**
    * A page's body is its layout: an ordered list of placements, each rendered by
    * the template named after its section type. The theme decides how a section
    * looks; the data decides which sections there are and in what order.
+   *
+   * A placement may carry children under the slot names its section declares.
+   * They render through this same path, so a nested section is rendered by the
+   * same template and checked against the same manifest as a top-level one.
    */
   const renderSectionsAt = (scope: Scope): string => {
     const layout = scope['sections']
     if (!Array.isArray(layout)) return ''
     const out: string[] = []
     for (const raw of layout) {
-      const placement = raw as { type?: string; settings?: Record<string, unknown> }
+      const placement = raw as {
+        type?: string
+        settings?: Record<string, unknown>
+        slots?: Record<string, unknown>
+      }
       if (!placement?.type) continue
       if (!manifest.sections[placement.type]) {
-        // A page saved while an app was installed still names its sections after it
-        // is removed. Skip those; re-installing brings them back with their data.
-        if (atRuntime && disabledSections.has(placement.type)) continue
-        if (atRuntime) {
-          // Named by no app this deployment has ever shipped: leave a mark rather
-          // than pretend the page was always this length.
-          out.push(`<!-- ket: unknown section "${placement.type}" -->`)
-          continue
-        }
         throw new KetError({
           code: 'E_UNKNOWN_SECTION',
-          message: `the page places section "${placement.type}", which no installed module provides`,
+          message: `the page places section "${placement.type}", which no composed module provides`,
           hint: `available sections: ${Object.keys(manifest.sections).join(', ') || '(none)'}`,
         })
       }
-      out.push(renderRegion(placement.type, { ...(placement.settings ?? {}), page: scope['page'] }))
+      const slots =
+        placement.slots && typeof placement.slots === 'object' && !Array.isArray(placement.slots)
+          ? placement.slots
+          : {}
+      openSlots.push({ slots, page: scope['page'] })
+      try {
+        out.push(
+          renderRegion(placement.type, {
+            ...sectionSettings(manifest.sections[placement.type]?.settings ?? {}, placement.settings ?? {}),
+            // The one key a section gets that is not one of its settings: which page
+            // it sits on. Declared nowhere because it is not the author's to declare.
+            page: scope['page'],
+          }),
+        )
+      } finally {
+        openSlots.pop()
+      }
     }
     return out.join('')
   }
 
-  const renderIslandAt = (name: string, scope: Scope): string => {
-    const factory = islands[name]
-    const definition = manifest.islands[name]
-    if (!factory || !definition) {
-      if (atRuntime) return ''
-      throw new KetError({
-        code: 'E_UNKNOWN_ISLAND',
-        message: `a template places island "${name}", which no installed module provides`,
-        hint: `available islands: ${Object.keys(islands).join(', ') || '(none)'}`,
-      })
-    }
-    return renderIsland(name, factory, contractProps(manifest, 'island', name, definition.props, scope), {
-      key: definition.key,
-    })
+  /**
+   * The children a placement put in one of its slots.
+   *
+   * An empty slot renders nothing rather than raising: a container with an
+   * empty column is an ordinary state of a page being built, not a fault. A
+   * slot the section never declared is caught at the write by validateLayout,
+   * which is where an author can still do something about it.
+   */
+  const renderSlotAt = (name: string, _scope: Scope): string => {
+    const open = openSlots[openSlots.length - 1]
+    const children = open?.slots?.[name]
+    if (!Array.isArray(children) || !children.length) return ''
+    return renderSectionsAt({ sections: children, page: open?.page } as Scope)
   }
 
   const renderRegion = (name: string, scope: Scope): string => {
@@ -165,7 +190,7 @@ export function createTheme(
     if (!t) {
       throw new KetError({
         code: 'E_TEMPLATE_NOT_FOUND',
-        message: `${from} renders "${name}", which no installed module provides`,
+        message: `${from} renders "${name}", which no composed module provides`,
         hint: `available templates: ${Object.keys(templates).sort().join(', ') || '(none)'}`,
       })
     }
@@ -184,57 +209,24 @@ export function createTheme(
     }
   }
 
-  const wiring = {
-    renderJoint,
+  const compileOpts = {
+    renderJoint: wiring.renderJoint,
+    renderIsland: wiring.renderIsland,
     renderRegion,
-    renderIsland: renderIslandAt,
     renderSections: renderSectionsAt,
+    renderSlot: renderSlotAt,
     renderTemplate,
   }
 
   for (const [joint, sourcesForJoint] of Object.entries(fillSources)) {
     fills[joint] = sourcesForJoint.map((fill, i) => {
-      const compiled = compileKtl(fill.template, { ...opts, name: `${joint}#${i}`, ...wiring })
-      const module = manifest.modules[fill.by]
-      for (const used of compiled.jointsUsed) {
-        const target = manifest.joints[used]
-        if (!target) {
-          throw new KetError({
-            code: 'E_FILL_UNKNOWN_JOINT',
-            module: fill.by,
-            message: `fill for "${joint}" renders unknown joint "${used}"`,
-          })
-        }
-        if (target.owner !== fill.by && !module?.depends?.includes(target.owner)) {
-          throw new KetError({
-            code: 'E_FILL_NOT_DEPENDED',
-            module: fill.by,
-            message: `fill for "${joint}" renders "${used}" without depending on "${target.owner}"`,
-          })
-        }
-      }
-      for (const used of compiled.islandsUsed) {
-        const target = manifest.islands[used]
-        if (!target) {
-          throw new KetError({
-            code: 'E_FILL_UNKNOWN_ISLAND',
-            module: fill.by,
-            message: `fill for "${joint}" places unknown island "${used}"`,
-          })
-        }
-        if (target.by !== fill.by && !module?.depends?.includes(target.by)) {
-          throw new KetError({
-            code: 'E_FILL_NOT_DEPENDED',
-            module: fill.by,
-            message: `fill for "${joint}" places "${used}" without depending on "${target.by}"`,
-          })
-        }
-      }
-      return compiled
+      const compiled = compileKtl(fill.template, { ...opts, name: `${joint}#${i}`, ...compileOpts })
+      assertFillReach(manifest, { joint, by: fill.by }, compiled)
+      return { by: fill.by, compiled }
     })
   }
   for (const [name, src] of Object.entries(sources)) {
-    templates[name] = compileKtl(src, { ...opts, name, ...wiring })
+    templates[name] = compileKtl(src, { ...opts, name, ...compileOpts })
   }
 
   // A theme that points at a joint nobody publishes is a build error, not a blank spot.
@@ -243,7 +235,7 @@ export function createTheme(
       if (!manifest.joints[j]) {
         throw new KetError({
           code: 'E_TEMPLATE_UNKNOWN_JOINT',
-          message: `template "${name}" renders joint "${j}", which no installed module publishes`,
+          message: `template "${name}" renders joint "${j}", which no composed module publishes`,
           hint: `published joints: ${Object.keys(manifest.joints).join(', ') || '(none)'}`,
         })
       }
@@ -252,16 +244,16 @@ export function createTheme(
 
   // Placing an island nobody provides is a build error, exactly like a missing joint.
   for (const [name, t] of Object.entries(templates)) {
-    for (const island of atRuntime ? [] : t.islandsUsed) {
+    for (const island of t.islandsUsed) {
       if (!manifest.islands[island]) {
         throw new KetError({
           code: 'E_TEMPLATE_UNKNOWN_ISLAND',
-          message: `template "${name}" places island "${island}", which no installed module provides`,
+          message: `template "${name}" places island "${island}", which no composed module provides`,
           hint: `provided islands: ${Object.keys(manifest.islands).join(', ') || '(none)'}`,
         })
       }
     }
   }
 
-  return { renderRegion, templates, islands, clients }
+  return { renderRegion, templates, islands, clients, tokensCss }
 }

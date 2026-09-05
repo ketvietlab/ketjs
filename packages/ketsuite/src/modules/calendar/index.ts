@@ -8,7 +8,6 @@ export default defineModule({
   name: 'calendar',
   version: '0.1.0',
   depends: ['mail', 'user', 'partner', 'storage'],
-  app: true,
   title: 'Lịch',
   summary: 'Sự kiện, người tham dự, RSVP, nhắc lịch và lịch lặp theo múi giờ.',
   category: 'Năng suất',

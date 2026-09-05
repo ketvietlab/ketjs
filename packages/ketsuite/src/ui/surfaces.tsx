@@ -6,6 +6,7 @@ import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
   'stack',
+  'columns',
   'section',
   'section-head',
   'section-eyebrow',
@@ -23,9 +24,11 @@ export const HOOKS = [
   'card-meta',
   'card-actions',
   'metric',
+  'metric-icon',
   'metric-label',
   'metric-value',
   'metric-detail',
+  'metric-trend',
 ] as const
 
 export const stack = (
@@ -33,6 +36,30 @@ export const stack = (
   gap: 'compact' | 'default' | 'loose' = 'default',
 ): TemplateResult => (
   <div data-ui="stack" data-gap={gap}>
+    {each(
+      items,
+      (_, i) => i,
+      (item) => (
+        <>{item}</>
+      ),
+    )}
+  </div>
+)
+
+/**
+ * Things read against each other, side by side.
+ *
+ * Equal columns rather than content-sized: a revenue mix and the expense
+ * breakdown beside it are compared, and a ring that took the width it wanted
+ * left the bars in a gutter. Collapses to one column when there is not room for
+ * two — a width question rather than a device one, so the stylesheet asks it
+ * with a container-relative minimum and not with a device breakpoint.
+ *
+ * Positional, like `stack`, and for the same reason: it takes a list, which is
+ * not what JSX hands a component.
+ */
+export const columns = (items: readonly JSXChild[], gap: 'default' | 'loose' = 'default'): TemplateResult => (
+  <div data-ui="columns" data-gap={gap}>
     {each(
       items,
       (_, i) => i,
@@ -104,16 +131,68 @@ export const contentCard = (o: {
   </article>
 )
 
-/** One operational fact, with context rather than colour carrying its meaning. */
+/**
+ * One operational fact, with context rather than colour carrying its meaning.
+ *
+ * `trend` is a node rather than more text because the one thing that legitimately
+ * carries colour here is a change against a previous period, and whether a change
+ * is good news depends on the metric — see `delta` in `charts.tsx`. Everything
+ * else on the card stays in the ink the rest of the page uses.
+ */
+const TONES = new Set(['neutral', 'info', 'positive', 'warning', 'danger'])
+
 export const metric = (o: {
   label: string
   value: string
   detail?: string | null
+  trend?: JSXChild
   tone?: string
-}): TemplateResult => (
-  <article data-ui="metric" data-tone={o.tone ?? 'neutral'}>
-    <p data-ui="metric-label">{o.label}</p>
-    <p data-ui="metric-value">{o.value}</p>
-    {!!o.detail && <p data-ui="metric-detail">{o.detail}</p>}
-  </article>
-)
+  /**
+   * A glyph naming the quantity, in a tile beside it.
+   *
+   * Decorative and therefore optional: a row of four figures is scanned by
+   * position, and the icon is what makes the fourth one findable again after the
+   * eye leaves the row. It carries no meaning the label does not already carry,
+   * so it is hidden from assistive technology by the stylesheet's own contract —
+   * the label remains the name of the number.
+   */
+  icon?: JSXChild
+  /**
+   * Makes the whole card the link rather than a word inside it. A metric has
+   * nothing else to click, which is why `contentCard` does the opposite.
+   */
+  href?: string | null
+}): TemplateResult => {
+  // `tone` is open here in a way the public `Metric` is not: hospitality passes a
+  // room status through it to colour a board. The dot is the design system's, and
+  // only its five semantic tones mean anything to it — a room status would draw a
+  // grey bullet in front of every label and say nothing. A card with a glyph gets
+  // no dot either: one marker to a card, and the glyph is already the marker.
+  const attributes = {
+    'data-ui': 'metric',
+    'data-tone': o.tone ?? 'neutral',
+    'data-dot': String(TONES.has(o.tone ?? '') && o.icon === undefined),
+  }
+  const body = (
+    <>
+      {o.icon !== undefined && (
+        <span data-ui="metric-icon" aria-hidden="true">
+          {o.icon}
+        </span>
+      )}
+      <p data-ui="metric-label">{o.label}</p>
+      <p data-ui="metric-value">{o.value}</p>
+      {o.trend !== undefined && <p data-ui="metric-trend">{o.trend}</p>}
+      {!!o.detail && <p data-ui="metric-detail">{o.detail}</p>}
+    </>
+  )
+  return o.href ? (
+    <a {...attributes} data-interactive="true" href={o.href}>
+      {body}
+    </a>
+  ) : (
+    <article {...attributes} data-interactive="false">
+      {body}
+    </article>
+  )
+}

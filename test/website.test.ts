@@ -60,6 +60,7 @@ test('website: seo adds typed fields to a page it does not own', () => {
 test('website: sections from three modules land in one registry', () => {
   assert.deepEqual(Object.keys(manifest.sections).sort(), [
     'menu.primary',
+    'website.columns',
     'website.hero',
     'website.rich_text',
   ])
@@ -77,7 +78,7 @@ test('layout: a page is validated against the sections that actually exist', () 
   ])
   assert.equal(bad.ok, false)
   const text = formatLayoutErrors(bad.errors)
-  assert.match(text, /\[0\] website\.ghost no installed module provides this section/)
+  assert.match(text, /\[0\] website\.ghost no composed module provides this section/)
   assert.match(text, /\[1\] website\.hero\.heading is required/)
   assert.match(text, /\[2\] website\.rich_text\.colour is not a setting/)
   assert.match(text, /\[3\] website\.hero\.heading expects text, got number/)
@@ -177,7 +178,7 @@ test('theme: placing a section nobody provides fails loudly', () => {
   const rt = createTheme(manifest, mods)
   assert.throws(
     () => rt.renderRegion('website.page', { page: {}, sections: [{ type: 'ghost.section', settings: {} }] }),
-    /places section "ghost.section", which no installed module provides/,
+    /places section "ghost.section", which no composed module provides/,
   )
 })
 

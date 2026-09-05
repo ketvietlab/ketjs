@@ -1,6 +1,22 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { asc, defineFn, deleteFrom, desc, eq, from, like, validateLayout } from '@ketvietlab/ketjs'
-import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
+import {
+  asc,
+  defineFn,
+  deleteFrom,
+  desc,
+  eq,
+  from,
+  inArray,
+  isNotNull,
+  like,
+  diffPlacements,
+  isPlacementId,
+  ne,
+  placementIdErrors,
+  validateLayout,
+  withPlacementIds,
+} from '@ketvietlab/ketjs'
+import type { Ctx, FnSpec, Placement, PlacementChange, Row } from '@ketvietlab/ketjs'
 import {
   canAccessSite,
   canAdministerSite,
@@ -10,8 +26,13 @@ import {
   canPublishEntry,
 } from './access.ts'
 import { ensureCustomerRealm } from './customer.ts'
+import { isReservedPath, reservedPrefixes } from './paths.ts'
+import { preflightEntry } from './renderable.ts'
 
 const SITE_ROLES = new Set(['administrator', 'editor', 'author', 'contributor'])
+/** How many pages one unnamed preflight will read. Beyond it, the answer is "ask again by id". */
+const PREFLIGHT_SCAN_LIMIT = 1_000
+
 const MAX_JSON_BYTES = 512 * 1024
 const hasControlCharacter = (value: string): boolean =>
   [...value].some((character) => {
@@ -75,6 +96,70 @@ const validSlug = (value: unknown): boolean => {
 }
 const forbidden = () => invalid('siteId', 'website.error.forbidden')
 
+/**
+ * What a public page may put in its <head>.
+ *
+ * An allowlist rather than "every column that is not core": modules extend
+ * website.Entry for their own purposes, and handing a row wholesale to a theme
+ * would publish whatever the next one adds. Naming them means a new field is
+ * public only when someone says so.
+ */
+/**
+ * Metadata that describes the content, and therefore travels with it.
+ *
+ * A description or a canonical belongs to a particular revision of a page: it
+ * should reach a visitor when that revision does, not the moment an editor
+ * saves it.
+ */
+export const FROZEN_META_FIELDS = ['metaDescription', 'canonical', 'ogImage'] as const
+
+/**
+ * `noindex` is deliberately not in that list. It is not a description of the
+ * page, it is an instruction to stop showing it — and an instruction to stop
+ * should not wait for the next publication to take effect.
+ */
+const LIVE_META_FIELDS = ['noindex'] as const
+
+const PUBLIC_META_FIELDS = [...FROZEN_META_FIELDS, ...LIVE_META_FIELDS] as const
+
+const pickMeta = (row: Row, fields: readonly string[]): Record<string, unknown> => {
+  const meta: Record<string, unknown> = {}
+  for (const field of fields) if (row[field] != null) meta[field] = row[field]
+  return meta
+}
+
+export const frozenMeta = (row: Row): Record<string, unknown> => pickMeta(row, FROZEN_META_FIELDS)
+
+const publicMeta = (row: Row): Record<string, unknown> => pickMeta(row, PUBLIC_META_FIELDS)
+
+/**
+ * The metadata a visitor is served for a page.
+ *
+ * When the page went out as part of a publication, the description, canonical
+ * and share image are the ones frozen with it — an editor saving a new
+ * description does not rewrite what is public until the next publication
+ * carries it out. `noindex` is always read live, because an instruction to stop
+ * showing a page should not wait for a publication to take effect.
+ *
+ * A site that has never published a set reads everything live, which is what
+ * every site did before publications existed.
+ */
+const servedMeta = async (ctx: Ctx, site: Row, entry: Row): Promise<Record<string, unknown>> => {
+  const live = publicMeta(entry)
+  if (!site.activePublicationId) return live
+
+  const Publication = ctx.table('website.Publication')
+  const publication = await ctx.db.one(
+    from(Publication).where(eq(Publication.id, site.activePublicationId), eq(Publication.state, 'active')),
+  )
+  const frozen = ((publication?.entries ?? []) as Array<{ entryId?: string; meta?: unknown }>).find(
+    (row) => row.entryId === entry.id,
+  )?.meta
+  if (!frozen || typeof frozen !== 'object') return live
+
+  return { ...(frozen as Record<string, unknown>), ...pickMeta(entry, LIVE_META_FIELDS) }
+}
+
 const siteById = async (ctx: Ctx, id: unknown): Promise<Row | null> => {
   const Site = ctx.table('website.Site')
   return ctx.db.one(from(Site).where(eq(Site.id, id)))
@@ -114,6 +199,156 @@ const validateFields = (
     if (!valid) errors.push({ field: key, message: 'website.error.invalidFieldType' })
   }
   return errors
+}
+
+/**
+ * How many published entries one search may scan. The window is a cost ceiling,
+ * not a page size: it is applied to entries that are actually publishable, so a
+ * site full of drafts no longer spends the budget before reaching them.
+ */
+const SEARCH_SCAN_LIMIT = 2_000
+
+/**
+ * Public site search over the published revision of each entry.
+ *
+ * The title and excerpt shown to a visitor are the published ones, which live on
+ * the revision rather than the entry, so the match cannot be a plain SQL LIKE on
+ * the entry. The revisions are therefore read in one batch keyed by id — the
+ * previous shape issued one query per candidate entry, up to 500 per keystroke.
+ *
+ * `capped` says the scan window was full: the answer is complete for everything
+ * scanned and the caller should not present the count as a total.
+ */
+const searchMatches = async (
+  ctx: Ctx,
+  siteId: unknown,
+  q: unknown,
+  need: number,
+): Promise<{ matches: Array<Record<string, unknown>>; capped: boolean }> => {
+  const term = String(q ?? '')
+    .trim()
+    .toLocaleLowerCase()
+    .slice(0, 100)
+  if (term.length < 2) return { matches: [], capped: false }
+
+  // A site that is not being served publicly has no public search either.
+  const Site = ctx.table('website.Site')
+  if (!(await ctx.db.one(from(Site).where(eq(Site.id, siteId), eq(Site.active, true)))))
+    return { matches: [], capped: false }
+
+  // Publicly readable is "has a published revision and is not in trash", not
+  // status === 'published': scheduling a later republish moves an entry to
+  // 'scheduled' while the revision already out there stays live, and filtering
+  // on the status would silently drop content a visitor can still open. This is
+  // the same gate getEntryByPath applies, so a result is always openable.
+  //
+  // A page under a namespace the deployment serves is not openable — a module
+  // route answers that path first — so it is not offered here either, the way
+  // the sitemap does not list it.
+  const prefixes = reservedPrefixes(Object.keys(ctx.manifest.routes ?? {}))
+  const Entry = ctx.table('website.Entry')
+  // One row past the window, so a site with exactly SEARCH_SCAN_LIMIT entries
+  // is reported as a complete answer rather than a capped one.
+  const scanned = await ctx.db.all(
+    from(Entry)
+      .where(eq(Entry.siteId, siteId), isNotNull(Entry.publishedRevisionId), ne(Entry.status, 'trash'))
+      .orderBy(desc(Entry.publishedAt))
+      .limit(SEARCH_SCAN_LIMIT + 1),
+  )
+  const capped = scanned.length > SEARCH_SCAN_LIMIT
+  const candidates = scanned
+    .slice(0, SEARCH_SCAN_LIMIT)
+    .filter((entry) => !isReservedPath(String(entry.path), prefixes))
+  if (!candidates.length) return { matches: [], capped }
+
+  // Only the four fields the match and the result actually use. A revision also
+  // carries layout and fields, which saveEntry allows up to half a megabyte
+  // each; reading whole rows for a window this size made one anonymous request
+  // for a single result cost hundreds of megabytes.
+  const Revision = ctx.table('website.EntryRevision')
+  const revisions = new Map<string, Row>()
+  // Batched in chunks so the parameter list stays bounded on every adapter.
+  for (let i = 0; i < candidates.length; i += 200) {
+    const ids = candidates.slice(i, i + 200).map((entry) => entry.publishedRevisionId)
+    const rows = await ctx.db.all(
+      from(Revision)
+        .select(Revision.id, Revision.entryId, Revision.title, Revision.excerpt)
+        .where(inArray(Revision.id, ids)),
+    )
+    for (const revision of rows) revisions.set(String(revision.id), revision)
+  }
+
+  const matches: Array<Record<string, unknown>> = []
+  for (const entry of candidates) {
+    const revision = revisions.get(String(entry.publishedRevisionId))
+    if (!revision || revision.entryId !== entry.id) continue
+    const haystack = `${String(revision.title)}\n${String(revision.excerpt ?? '')}`.toLocaleLowerCase()
+    if (!haystack.includes(term)) continue
+    matches.push({
+      id: entry.id,
+      type: entry.type,
+      path: entry.path,
+      title: revision.title,
+      excerpt: revision.excerpt ?? null,
+      publishedAt: entry.publishedAt ?? null,
+    })
+    if (matches.length >= need) break
+  }
+  return { matches, capped }
+}
+
+const sha256 = (input: string): string => createHash('sha256').update(input).digest('hex')
+
+const layoutOf = (revision: Row | null | undefined): Placement[] => {
+  const raw = revision?.layout
+  const parsed = typeof raw === 'string' ? safeJson(raw) : raw
+  return Array.isArray(parsed) ? (parsed as Placement[]) : []
+}
+
+const safeJson = (value: string): unknown => {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * What the editor would have to reconcile, said in placements.
+ *
+ * Best effort by design: the report is an aid attached to a refusal that
+ * already stands on its own, so a revision that cannot be read produces a
+ * refusal with no report rather than an error in place of the refusal.
+ */
+const conflictReport = async (
+  ctx: Ctx,
+  expectedRevisionId: unknown,
+  headRevisionId: unknown,
+): Promise<{
+  expectedRevisionId: string | null
+  headRevisionId: string | null
+  changes: PlacementChange[]
+} | null> => {
+  if (expectedRevisionId == null) return null
+  const expected = (await ctx.db.select('website.EntryRevision', { id: expectedRevisionId }))[0]
+  if (!expected) return null
+  const head =
+    headRevisionId == null
+      ? await latestRevisionOf(ctx, expected.entryId)
+      : (await ctx.db.select('website.EntryRevision', { id: headRevisionId }))[0]
+  if (!head || head.id === expected.id) return null
+  return {
+    expectedRevisionId: String(expected.id),
+    headRevisionId: String(head.id),
+    changes: diffPlacements(layoutOf(expected), layoutOf(head)),
+  }
+}
+
+const latestRevisionOf = async (ctx: Ctx, entryId: unknown): Promise<Row | null> => {
+  const Revision = ctx.table('website.EntryRevision')
+  return ctx.db.one(
+    from(Revision).where(eq(Revision.entryId, entryId)).orderBy(desc(Revision.version)).limit(1),
+  )
 }
 
 export const cmsFunctions: Record<string, FnSpec> = {
@@ -437,9 +672,16 @@ export const cmsFunctions: Record<string, FnSpec> = {
       excerpt: 'text?',
       layout: 'json',
       fields: 'json?',
+      meta: 'json?',
       published: 'bool?',
     },
-    effects: ['read:website.Entry', 'read:website.EntryRevision', 'read:website.Page'],
+    effects: [
+      'read:website.Site',
+      'read:website.Publication',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.Page',
+    ],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const path = cleanPath(args.path)
@@ -448,6 +690,14 @@ export const cmsFunctions: Record<string, FnSpec> = {
         const Page = ctx.table('website.Page')
         return ctx.db.one(from(Page).where(eq(Page.path, path), eq(Page.published, true)))
       }
+      // A site that is not being served publicly serves nothing. resolveSite
+      // already refuses one, so the storefront never arrives here for it — but
+      // this function takes a siteId from its caller, and without the check an
+      // anonymous caller naming a site being prepared could read it a page at
+      // a time while the sitemap and search both refuse to list it.
+      const Site = ctx.table('website.Site')
+      const site = await ctx.db.one(from(Site).where(eq(Site.id, args.siteId), eq(Site.active, true)))
+      if (!site) return null
       const Entry = ctx.table('website.Entry')
       const entry = await ctx.db.one(from(Entry).where(eq(Entry.siteId, args.siteId), eq(Entry.path, path)))
       if (entry?.publishedRevisionId && entry.status !== 'trash') {
@@ -462,6 +712,10 @@ export const cmsFunctions: Record<string, FnSpec> = {
             excerpt: revision.excerpt ?? null,
             layout: revision.layout,
             fields: revision.fields,
+            // The head metadata travels with the page it describes. Without it
+            // the storefront handed the theme an empty meta, so the fields
+            // website_seo declares were stored and never rendered.
+            meta: await servedMeta(ctx, site, entry),
           }
       }
       return null
@@ -479,35 +733,26 @@ export const cmsFunctions: Record<string, FnSpec> = {
       excerpt: 'text?',
       publishedAt: 'datetime?',
     },
-    effects: ['read:website.Entry', 'read:website.EntryRevision'],
+    effects: ['read:website.Site', 'read:website.Entry', 'read:website.EntryRevision'],
     handler: async (ctx: Ctx, args) => {
-      const term = String(args.q ?? '')
-        .trim()
-        .toLocaleLowerCase()
-        .slice(0, 100)
-      if (term.length < 2) return []
       const paging = page(args.limit, args.offset, 20)
-      const Entry = ctx.table('website.Entry')
-      const entries = await ctx.db.all(
-        from(Entry).where(eq(Entry.siteId, args.siteId)).orderBy(desc(Entry.publishedAt)).limit(500),
-      )
-      const matches: Array<Record<string, unknown>> = []
-      for (const entry of entries) {
-        if (!entry.publishedRevisionId || entry.status === 'trash') continue
-        const revision = (await ctx.db.select('website.EntryRevision', { id: entry.publishedRevisionId }))[0]
-        if (!revision || revision.entryId !== entry.id) continue
-        const haystack = `${String(revision.title)}\n${String(revision.excerpt ?? '')}`.toLocaleLowerCase()
-        if (!haystack.includes(term)) continue
-        matches.push({
-          id: entry.id,
-          type: entry.type,
-          path: entry.path,
-          title: revision.title,
-          excerpt: revision.excerpt ?? null,
-          publishedAt: entry.publishedAt ?? null,
-        })
-      }
-      return matches.slice(paging.offset, paging.offset + paging.limit)
+      const found = await searchMatches(ctx, args.siteId, args.q, paging.offset + paging.limit)
+      return found.matches.slice(paging.offset, paging.offset + paging.limit)
+    },
+  }),
+
+  /**
+   * How many the search would return without its window — the "/ 42" in
+   * "1-20 / 42", and the only way a result page can know there is a next one.
+   */
+  countSearchPublished: defineFn({
+    anonymous: true,
+    input: { siteId: 'id', q: 'text' },
+    output: { count: 'int', capped: 'bool' },
+    effects: ['read:website.Site', 'read:website.Entry', 'read:website.EntryRevision'],
+    handler: async (ctx: Ctx, args) => {
+      const found = await searchMatches(ctx, args.siteId, args.q, SEARCH_SCAN_LIMIT)
+      return { count: found.matches.length, capped: found.capped }
     },
   }),
 
@@ -525,7 +770,14 @@ export const cmsFunctions: Record<string, FnSpec> = {
       kind: 'text?',
       expectedRevisionId: 'id?',
     },
-    output: { ok: 'bool', id: 'id?', revisionId: 'id?', version: 'int?', errors: 'json?' },
+    output: {
+      ok: 'bool',
+      id: 'id?',
+      revisionId: 'id?',
+      version: 'int?',
+      errors: 'json?',
+      conflict: 'json?',
+    },
     effects: [
       'read:website.Site',
       'read:website.Entry',
@@ -547,17 +799,31 @@ export const cmsFunctions: Record<string, FnSpec> = {
         args.expectedRevisionId != null &&
         args.expectedRevisionId !== existing.currentRevisionId
       )
-        return invalid('expectedRevisionId', 'website.error.editConflict')
+        // "Someone else saved" was the whole answer, which leaves the editor to
+        // reload and find the difference by eye. The refusal now carries the
+        // difference itself, per placement, so a client can show what moved.
+        return {
+          ...invalid('expectedRevisionId', 'website.error.editConflict'),
+          conflict: await conflictReport(ctx, args.expectedRevisionId, existing.currentRevisionId),
+        }
       const type = ctx.manifest.contentTypes[String(args.type)]
       if (!type) return invalid('type', 'website.error.invalidContentType')
+      // How many sections a page may hold is now counted over the tree and
+      // reported by validateLayout, so the flat length check that used to sit
+      // here would only have bounded the top level of a nested document.
       if (
         !Array.isArray(args.layout) ||
-        args.layout.length > 100 ||
         jsonBytes(args.layout) + jsonBytes(args.fields ?? {}) > MAX_JSON_BYTES
       )
         return invalid('layout', 'website.error.payloadTooLarge')
       const layoutCheck = validateLayout(ctx.manifest, args.layout)
       if (!layoutCheck.ok) return { ok: false, errors: layoutCheck.errors }
+      const idErrors = placementIdErrors(args.layout as Placement[])
+      if (idErrors.length) return { ok: false, errors: idErrors }
+      // Ids are assigned here rather than trusted from the client, so content
+      // written before identity existed gains it on its first save and keeps it
+      // on every save after. A client that already carries ids keeps its own.
+      const layout = withPlacementIds(args.layout as Placement[], sha256)
       const fieldErrors = validateFields(type.fields, args.fields)
       if (fieldErrors.length) return { ok: false, errors: fieldErrors }
       const path = cleanPath(args.path)
@@ -618,23 +884,28 @@ export const cmsFunctions: Record<string, FnSpec> = {
           kind: args.kind === 'autosave' ? 'autosave' : 'revision',
           title,
           excerpt,
-          layout: args.layout,
+          layout,
           fields: args.fields ?? {},
           authorId: ctx.actor,
           createdAt: new Date().toISOString(),
         })
         return true
       })
-      if (!saved) return invalid('expectedRevisionId', 'website.error.editConflict')
+      if (!saved)
+        return {
+          ...invalid('expectedRevisionId', 'website.error.editConflict'),
+          conflict: await conflictReport(ctx, args.expectedRevisionId, null),
+        }
       return { ok: true, id: args.id, revisionId, version }
     },
   }),
 
   publishEntry: defineFn({
     input: { id: 'id', publishAt: 'datetime?', expectedRevisionId: 'id?' },
-    output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?', unrenderable: 'json?' },
     effects: [
       'read:website.Entry',
+      'read:website.EntryRevision',
       'read:website.SiteMember',
       'write:website.Entry',
       'enqueue:website.publishScheduled',
@@ -647,6 +918,16 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!(await canPublishEntry(ctx, entry))) return forbidden()
       if (args.expectedRevisionId && args.expectedRevisionId !== entry.currentRevisionId)
         return invalid('expectedRevisionId', 'website.error.editConflict')
+      // Publishing is where a draft becomes something a visitor loads. A
+      // layout the deployment can no longer draw raises E_UNKNOWN_SECTION in
+      // the renderer, so refusing here turns a five hundred on the storefront
+      // into a refusal the editor can act on.
+      const renderable = await preflightEntry(ctx, entry)
+      if (renderable.errors.length)
+        return {
+          ...invalid('id', 'website.error.entryUnrenderable'),
+          unrenderable: [renderable],
+        }
       const revisionId = String(entry.currentRevisionId)
       const now = new Date()
       const scheduled = args.publishAt ? new Date(String(args.publishAt)) : null
@@ -690,6 +971,52 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * What would break if this went live now.
+   *
+   * The same check the publish paths run, without the publish - so an editor
+   * can see that a page places a section this deployment no longer provides
+   * before pressing a button that would refuse, rather than after.
+   */
+  preflightPublication: defineFn({
+    input: { siteId: 'id', entryIds: 'json?' },
+    output: { ok: 'bool', checked: 'int?', capped: 'bool?', unrenderable: 'json?', errors: 'json?' },
+    effects: [
+      'read:website.Site',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'read:website.SiteMember',
+    ],
+    handler: async (ctx: Ctx, args) => {
+      if (!(await canManageStructure(ctx, args.siteId))) return invalid('siteId', 'website.error.forbidden')
+      const ids = Array.isArray(args.entryIds) ? args.entryIds.map(String) : null
+      if (ids && ids.length > 1_000) return invalid('entryIds', 'website.error.publicationTooLarge')
+      const Entry = ctx.table('website.Entry')
+      // Absent means every page on the site that is not in the bin, which is
+      // the question an operator actually asks after a deployment changes.
+      // One past the ceiling, so a site larger than the scan can say so.
+      const found = ids
+        ? await ctx.db.all(from(Entry).where(eq(Entry.siteId, args.siteId), inArray(Entry.id, ids)))
+        : await ctx.db.all(
+            from(Entry)
+              .where(eq(Entry.siteId, args.siteId), ne(Entry.status, 'trash'))
+              .limit(PREFLIGHT_SCAN_LIMIT + 1),
+          )
+      const capped = found.length > PREFLIGHT_SCAN_LIMIT
+      const rows = capped ? found.slice(0, PREFLIGHT_SCAN_LIMIT) : found
+      const unrenderable = []
+      for (const entry of rows) {
+        const check = await preflightEntry(ctx, entry)
+        if (check.errors.length) unrenderable.push(check)
+      }
+      // A partial scan cannot answer "is this site safe to publish" with yes,
+      // so a capped run is never ok however clean the pages it reached were.
+      // Naming the pages it did find is still worth more than refusing to say
+      // anything.
+      return { ok: unrenderable.length === 0 && !capped, checked: rows.length, capped, unrenderable }
+    },
+  }),
+
   listRevisions: defineFn({
     input: { entryId: 'id', limit: 'int?', offset: 'int?' },
     output: { id: 'id', entryId: 'id', version: 'int', kind: 'text', authorId: 'id?', createdAt: 'datetime' },
@@ -706,6 +1033,61 @@ export const cmsFunctions: Record<string, FnSpec> = {
           .limit(paging.limit)
           .offset(paging.offset),
       )
+    },
+  }),
+
+  /**
+   * What changed between two revisions of a page, placement by placement.
+   *
+   * Version history was a list of dates and authors: to see what a revision
+   * did, someone had to restore it and look. This answers the question the
+   * list was raising, and answers it the way the editor works - a section
+   * moved, a setting changed, a section added - rather than as two blobs of
+   * JSON to compare by eye.
+   *
+   * Placements written before identity existed have no id, so they compare as
+   * removed and added. That is the truthful answer rather than a defect: with
+   * no id there is no evidence the two are the same section, and guessing by
+   * position is what the id exists to replace.
+   */
+  diffRevisions: defineFn({
+    input: { entryId: 'id', fromRevisionId: 'id', toRevisionId: 'id' },
+    output: {
+      ok: 'bool',
+      fromVersion: 'int?',
+      toVersion: 'int?',
+      changes: 'json?',
+      identified: 'bool?',
+      errors: 'json?',
+    },
+    effects: ['read:website.Entry', 'read:website.EntryRevision', 'read:website.SiteMember'],
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.entryId)
+      if (!entry || !(await canEditEntry(ctx, entry))) return invalid('entryId', 'website.error.forbidden')
+      const [before, after] = await Promise.all([
+        ctx.db.select('website.EntryRevision', { id: args.fromRevisionId }),
+        ctx.db.select('website.EntryRevision', { id: args.toRevisionId }),
+      ])
+      const from_ = before[0]
+      const to = after[0]
+      // Both revisions have to belong to the entry the caller was authorized
+      // against, or a revision id becomes a way to read another page's history.
+      if (!from_ || !to || from_.entryId !== args.entryId || to.entryId !== args.entryId)
+        return invalid('revisionId', 'website.error.revisionNotFound')
+      const fromLayout = layoutOf(from_)
+      const toLayout = layoutOf(to)
+      return {
+        ok: true,
+        fromVersion: Number(from_.version),
+        toVersion: Number(to.version),
+        changes: diffPlacements(fromLayout, toLayout),
+        // Says whether the comparison had identity to work with, so a client
+        // can explain a wholesale added/removed list instead of presenting it
+        // as a genuine rewrite.
+        identified: [...fromLayout, ...toLayout].every((placement) =>
+          isPlacementId((placement as { id?: unknown }).id),
+        ),
+      }
     },
   }),
 
@@ -750,7 +1132,11 @@ export const cmsFunctions: Record<string, FnSpec> = {
           kind: 'restore',
           title: revision.title,
           excerpt: revision.excerpt ?? null,
-          layout: revision.layout,
+          // A restore is a write like any other, so it leaves identified
+          // placements behind: restoring a revision from before identity
+          // existed would otherwise put an unidentifiable layout back at the
+          // head, and every diff after it would read as a rewrite.
+          layout: withPlacementIds(layoutOf(revision), sha256),
           fields: revision.fields,
           authorId: ctx.actor,
           createdAt: new Date().toISOString(),

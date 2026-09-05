@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   and,
   asc,
+  bucketEq,
   callFn,
   changeset,
   compose,
@@ -68,8 +69,45 @@ test('query: grouping and aggregates render without interpolating values', () =>
   const sql = q.toSQL('sqlite')
   assert.match(sql.text, /COUNT\(\*\) AS "__count"/)
   assert.match(sql.text, /SUM\(.*"priceCents"\) AS "total"/)
-  assert.match(sql.text, /GROUP BY 1 ORDER BY "__count" DESC LIMIT \?/)
+  assert.match(sql.text, /GROUP BY 1 ORDER BY "__count" DESC NULLS FIRST LIMIT \?/)
   assert.deepEqual(sql.params, [true, 10])
+})
+
+test('query: both dialects render PostgreSQL-compatible NULL order and nullable counts', () => {
+  const rows = from(P).orderBy(asc(P.slug!), desc(P.priceCents!))
+  const groups = from(P)
+    .groupBy({ col: P.slug! })
+    .aggregate({ fn: 'count', col: P.slug!, as: 'present' })
+    .orderGroupsBy({ by: 'key', dir: 'asc' }, { by: 'present', dir: 'desc' })
+  for (const dialect of ['sqlite', 'postgres'] as const) {
+    assert.match(rows.toSQL(dialect).text, /"slug" ASC NULLS LAST, .*"priceCents" DESC NULLS FIRST/)
+    const grouped = groups.toSQL(dialect).text
+    assert.match(grouped, /COUNT\(.*"slug"\) AS "present"/)
+    assert.match(grouped, /ORDER BY "__group0" ASC NULLS LAST, "present" DESC NULLS FIRST/)
+  }
+})
+
+test('query: a group interval is a member of the closed set, not a string the caller supplies', () => {
+  // The Postgres dialect interpolates the interval into DATE_TRUNC('<interval>',…);
+  // the value reaches the builder straight from JSON (a listState an agent sends),
+  // so a string outside the set is SQL, not data. Both the builder entry point and
+  // the SQL boundary must refuse it, on both dialects.
+  const injection = "day', now()) , (SELECT 1"
+
+  const isIntervalError = (e: unknown) => (e as { code?: string }).code === 'E_GROUP_INTERVAL'
+  for (const build of [
+    () => from(P).groupBy({ col: P.priceCents!, interval: injection as never }),
+    () => from(P).where(bucketEq(P.priceCents!, injection as never, 'UTC', 'x')),
+  ]) {
+    assert.throws(build, isIntervalError, 'a bad interval is refused before any SQL is built')
+  }
+
+  // The builder refuses to hold a bad interval, so a frozen query can never carry
+  // one to toSQL; the toSQL guard is the second line if that ever changes. A
+  // legitimate interval still renders, and DATE_TRUNC only ever sees a keyword.
+  const good = from(P).groupBy({ col: P.priceCents!, interval: 'month', timezone: 'UTC' }).toSQL('postgres')
+  assert.match(good.text, /DATE_TRUNC\('month'/)
+  assert.ok(!good.text.includes('SELECT 1'), 'nothing from the caller reaches the SQL text')
 })
 
 test('query: date buckets use the viewer timezone and ISO Monday weeks', () => {
@@ -117,8 +155,8 @@ test('query: db.group returns normalized keys, counts and aggregates', async () 
     await callFn('grouped.add', row, { adapter, manifest: m })
   const result = await callFn('grouped.summary', {}, { adapter, manifest: m })
   assert.deepEqual(result.value, [
-    { key: [null], count: 1, aggregates: { amount: 7 } },
     { key: ['a'], count: 2, aggregates: { amount: 5 } },
+    { key: [null], count: 1, aggregates: { amount: 7 } },
   ])
   await adapter.close()
 })
@@ -199,7 +237,7 @@ test('query: the whole set of operators renders', () => {
   assert.match(sql.text, /IN \(\?, \?\)/)
   assert.match(sql.text, /LIKE \?/)
   assert.match(sql.text, /"slug" IS NULL/)
-  assert.match(sql.text, /ORDER BY .*"priceCents" DESC, .*"title" ASC/)
+  assert.match(sql.text, /ORDER BY .*"priceCents" DESC NULLS FIRST, .*"title" ASC NULLS LAST/)
   assert.deepEqual(sql.params, ['a', 'b', '%áo%', 10, 20])
 })
 

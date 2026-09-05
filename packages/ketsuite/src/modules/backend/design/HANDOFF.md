@@ -1,8 +1,13 @@
 # Backend UI — bàn giao cho đội design
 
-## Trạng thái triển khai — 2026-08-20
+## Trạng thái triển khai — 2026-08-26
 
-Visual baseline đã hoàn tất trong `design/tokens.css` và `design/admin.css` theo hướng
+Visual baseline chuẩn nằm trong public package `@ketvietlab/design-system`. Khi build,
+CSS của package được chép vào `design/design-system/` và load trước các stylesheet
+tương thích của backend. `design/tokens.css` chỉ giữ alias `--admin-*`/token cũ; không
+được khai báo thêm raw color, spacing hay radius ở đây.
+
+Hệ thống theo hướng
 **enterprise dense**: nhiều dữ liệu hữu ích trên một viewport, hierarchy tạo bằng
 divider và typography thay vì khoảng trắng/card/shadow quá mức.
 
@@ -10,10 +15,10 @@ Các thông số đã chốt:
 
 | Vai trò | Giá trị |
 |---|---:|
-| Sidebar desktop | `224px` |
-| Topbar desktop | `44px` |
-| Data row | `36px` |
-| Control desktop | `28px` |
+| Sidebar desktop | `216px` |
+| Context right rail | `340px` |
+| Data row | `52px` |
+| Control desktop | `34px` |
 | Icon trong control | `14px` |
 | Touch target action mobile | `44px` |
 | Body / compact UI | `14px` / `13px` |
@@ -22,32 +27,38 @@ Các thông số đã chốt:
 Ngôn ngữ thị giác kế thừa KétViệt Design System: warm-neutral canvas, white/dark
 surface, border mảnh và indigo chỉ dành cho primary action, focus và selection.
 Primary action dùng `brand-600`; active navigation dùng label `brand-700` trên nền
-sáng, đóng hai migration gap còn tồn tại trong theme Odoo.
+sáng, đóng hai migration gap còn tồn tại trong theme the domain contract.
 
 ## Chạy lên trong 30 giây
 
 ```bash
-npm run design
+npm run design:system
 ```
 
 | | |
 |---|---|
-| `http://127.0.0.1:4000/catalogue` | **mọi màn hình, mọi trạng thái** — đây là chỗ làm việc chính |
-| `http://127.0.0.1:4000/admin/apps` | màn hình thật, dữ liệu thật |
-| `http://127.0.0.1:4000/admin/pages` | |
-| `http://127.0.0.1:4000/admin/settings` | |
+| `http://127.0.0.1:4100/` | catalogue public — token, primitive, layout và pattern chuẩn |
 
-Database nằm trong bộ nhớ và được tạo lại mỗi lần khởi động. Cài app, gỡ app, làm hỏng
+Chạy `npm run design` riêng khi cần kiểm tra compatibility trên màn KetSuite thật:
+
+| | |
+|---|---|
+| `http://127.0.0.1:4000/catalogue` | catalogue màn backend cũ trong giai đoạn migration |
+| `http://127.0.0.1:4000/admin/companies` | màn hình thật, dữ liệu thật |
+
+Database nằm trong bộ nhớ và được tạo lại mỗi lần khởi động. Thử thay đổi dữ liệu
 thoải mái — khởi động lại là sạch. Không có gì ở đây chạm vào hệ thống thật.
 
 ## Ai sở hữu cái gì
 
 | | |
 |---|---|
-| **của đội design** | `design/tokens.css` · `design/admin.css` |
+| **nguồn chuẩn public** | `packages/design-system/src/` — token, primitive, app shell, page, record section và pattern dùng chung |
+| **compatibility KetSuite** | `design/tokens.css` · `design/foundation.css` · `design/lists.css` · `design/responsive.css` · `design/auth.css` · `design/controls.css` · `design/record.css` · `design/forms.css` · `design/content.css` |
 | **của framework** | mọi file `.ts` |
 
-Sửa CSS xong bấm F5 là thấy, không cần build, không cần khởi động lại.
+Sửa public design system thì chạy lại build hoặc `npm run design:system`; không sửa
+file sinh ra trong `design/design-system/`. CSS compatibility backend vẫn reload bằng F5.
 
 ## Hợp đồng: thuộc tính `data-ui`
 
@@ -55,7 +66,7 @@ CSS viết theo `[data-ui="..."]`, **không phải class**. Cố ý: một cái 
 định về việc thứ đó trông thế nào, mà quyết định đó là của đội design chứ không phải
 của tôi. Nên markup không mang sẵn class nào.
 
-Toàn bộ selector được liệt kê trong `admin.css`, kèm các trạng thái mỗi cái có thể ở.
+Toàn bộ selector nền được chia theo component trong các file CSS của `design/`, kèm các trạng thái mỗi cái có thể ở.
 Chúng **được khoá bằng test** (`test/backend-ui.test.ts`): nếu tôi lỡ đổi hoặc xoá một
 `data-ui`, test đỏ. Nghĩa là CSS của các bạn không thể vỡ ngầm.
 
@@ -71,23 +82,36 @@ phủ đường hạnh phúc là thiết kế sẽ phải làm lại lần hai.
 tả, và một gợi ý sửa:
 
 ```
-E_APP_IN_USE
-"website" không gỡ được khi website_menu đang cài.
-Gỡ website_menu trước, hoặc để website ở nguyên.
+E_VALIDATION
+Tên công ty là bắt buộc.
+Nhập tên rồi thử lại.
 ```
 
 Cả ba đều cần chỗ hiển thị. Phần gợi ý là thứ khiến người dùng tự thoát ra được, đừng
 cắt nó đi.
 
-**3. Token trước, quy tắc sau.** Điền `tokens.css` trước rồi hãy viết `admin.css` tham
-chiếu tới chúng. Thứ tự tầng đã cố định:
+**3. Token trước, quy tắc sau.** Điền `tokens.css` trước rồi hãy viết stylesheet component
+tham chiếu tới chúng. Thứ tự tầng đã cố định:
 
 ```
 ket.reset  <  ket.theme  <  ket.app  <  ket.user
 ```
 
-Các bạn viết trong `ket.app`, nên luôn thắng theme mà không cần đấu specificity. Chế độ
-tối chỉ cần đổi token, không cần viết lại quy tắc.
+Thứ tự này **được phát ra thật** trong `<head>` của mọi trang, trước link stylesheet
+đầu tiên. Trước đây nó chỉ nằm trong tài liệu, nên thứ tự thật là thứ tự file nào nạp
+trước — và `ket.theme` đứng trên `ket.app` ở mọi trang backend.
+
+Các bạn viết trong `ket.app`, nên luôn thắng theme mà không cần đấu specificity.
+**Không viết quy tắc nào ngoài `@layer`**: CSS không layer thắng mọi layer, kể cả
+`ket.user`. Có test giữ điều này.
+
+Chế độ tối chỉ cần đổi token: mỗi vai trò khai một lần bằng `light-dark(sáng, tối)`,
+còn `[data-theme="light"|"dark"]` chỉ đổi `color-scheme`.
+
+Breakpoint đã chốt thành một thang, liệt kê trong `tokens.css` (`--admin-bp-*`).
+`@media` không nhận custom property nên vẫn phải viết số, nhưng chỉ dùng số trong thang
+đó — mỗi giá trị lẻ hơn round number một pixel để một quy tắc và cái shell bao quanh nó
+không bao giờ lệch pha ngay tại ranh giới.
 
 ## Đa ngôn ngữ — thêm sau bản thiết kế đầu
 
@@ -111,7 +135,7 @@ thứ hai mà giả thì không chứng minh được gì về việc layout có
 
 Theme storefront là code của người lạ, nên viết bằng ngôn ngữ hạn chế không chạy được
 gì. Backend là của mình, nên viết bằng `html` đầy đủ. Hai thứ khác nhau và không dùng
-chung cơ chế — chi tiết trong `docs/00-decisions.md` (D3, D18).
+chung cơ chế — chi tiết trong `docs/src/content/docs/architecture/decisions.md` (D3, D18).
 
 Hệ quả với các bạn: ở đây các bạn có toàn quyền về CSS, nhưng markup thì đề xuất chứ
 không tự sửa, vì nó gắn với dữ liệu thật.
@@ -148,7 +172,8 @@ thuộc behavior hoặc workflow chưa có contract:
 - thêm status label semantic riêng cho app đã cài/chưa cài;
 - liên kết lý do nút disabled bằng `aria-describedby`;
 - thay mobile navigation tạm thời bằng trigger + drawer khi số menu tăng;
-- thêm toggle `data-theme="light|dark"`; system preference hiện là fallback;
+- thêm toggle `data-theme="light|dark"`; hiện chưa có UI nào đặt thuộc tính này, nên
+  chế độ tối vẫn chỉ chạy theo system preference;
 - trạng thái loading và xử lý lỗi trên giao diện.
 
 Visual QA đã kiểm tra tại `360px`, `768px`, `1024px`, `1440px`, bao gồm danh sách
@@ -167,13 +192,15 @@ Hai bề mặt dùng cùng token, focus contract và density với phần backen
 
 | Selector | Là gì |
 |---|---|
-| `[data-ui="login"]` | khung ngoài, chiếm cả trang |
+| `[data-ui="login"]` | khung ngoài, chiếm cả trang; nền có một lớp wash indigo rất nhạt |
+| `[data-ui="login-panel"]` | cột giữa: lockup, card, đổi ngôn ngữ |
+| `[data-ui="login-brand"]`, `[data-ui="login-logo"]` | lockup KetSuite. `<picture>` đổi bản sáng/tối theo `prefers-color-scheme`; file nằm ở `design/brand/`, cỡ đặt bằng `block-size` chứ không phải `inline-size` |
 | `[data-ui="login-form"]` | form, `method="post"` |
-| `[data-ui="login-title"]` | tiêu đề |
+| `[data-ui="login-heading"]`, `[data-ui="login-title"]`, `[data-ui="login-subtitle"]` | tiêu đề và câu dẫn |
 | `[data-ui="login-error"]` | thông báo sai mật khẩu, `role="alert"`, chỉ hiện khi có lỗi |
 | `[data-ui="field"]`, `[data-ui="field-label"]`, `[data-ui="field-input"]` | một ô nhập; dùng lại được ở form khác |
 | `[data-ui="login-submit"]` | nút gửi |
-| `[data-ui="login-locales"]`, `[data-ui="login-locale"][data-active]` | đổi ngôn ngữ, chỉ hiện khi có nhiều hơn một |
+| `[data-ui="login-locales"]`, `[data-ui="login-locale"][data-active]` | đổi ngôn ngữ, nằm ngoài form vì đó là điều hướng; chỉ hiện khi có nhiều hơn một |
 | `[data-ui="login-providers"]`, `[data-ui="login-provider"]` | các OIDC provider đang hoạt động; không render logo hoặc request ngoài |
 | `[data-ui="login-divider"]` | ngăn cách đăng nhập mật khẩu và OIDC |
 
@@ -197,7 +224,6 @@ cần JavaScript:
 | `[data-ui="viewer-company"]` | công ty đang chọn — **chỉ hiện khi tài khoản thuộc nhiều hơn một công ty** |
 | `[data-ui="signout"]` | form POST tới `/logout` |
 | `[data-ui="signout-button"]` | nút bên trong nó |
-| `[data-ui="sidebar-settings"]` | link thật tới `/admin/settings`, nằm dưới divider |
 
 Sáu trạng thái đã có sẵn trong `/catalogue` (`npm run design`):
 
@@ -208,7 +234,7 @@ Sáu trạng thái đã có sẵn trong `/catalogue` (`npm run design`):
     viewer-many      footer, nhiều công ty — có tên công ty/chi nhánh đang chọn
     viewer-long      tên người và tên công ty đều dài, kiểm tra popover không vỡ
 
-Các selector này đã có baseline trong `admin.css` và nằm trong `@layer ket.app`, nên
+Các selector này đã có baseline trong `auth.css` và nằm trong `@layer ket.app`, nên
 `ket.user` vẫn override được mà không cần tăng specificity.
 
 Việc đổi công ty/chi nhánh dùng `context-switcher` trên thanh trên. Footer chỉ hiển
@@ -249,7 +275,6 @@ trong HTML.
 | --- | --- |
 | `[data-ui="list-chrome"]` | cả hàng; `chrome-lead` bên trái, `chrome-tail` bên phải |
 | `[data-ui="chrome-create"]` | nút chính (“Mới”) — hiện tại chưa màn hình nào bật |
-| `[data-ui="crumbs"]`, `[data-ui="crumb"]` | đường dẫn; mục cuối có `aria-current="page"` và **không** phải link |
 | `[data-ui="chrome-search"]` | form tìm kiếm; style trạng thái gõ bằng `:focus-within` |
 | `[data-ui="chrome-search-input"]` | ô nhập bên trong nó |
 | `[data-ui="facet"]`, `[data-ui="facet-label"]`, `[data-ui="facet-remove"]` | một bộ lọc đang bật, và dấu × để bỏ |
@@ -258,6 +283,54 @@ trong HTML.
 | `[data-ui="view-switch"]`, `[data-ui="view-kind"][data-active]` | đổi kiểu xem |
 | `[data-ui="kanban"]`, `[data-ui="kanban-card"]`, `[data-ui="kanban-title"]`, `[data-ui="kanban-meta"]`, `[data-ui="kanban-uom"]`, `[data-ui="kanban-variants"]` | kiểu xem thẻ |
 | `[data-ui="table"] [data-align="end"]` | cột số — canh phải, `tabular-nums` |
+
+## Thẻ số liệu
+
+`metric` nhận thêm một glyph không bắt buộc. Glyph là **trang trí**: nhãn vẫn là tên
+của con số, nên tile mang `aria-hidden` và không bao giờ là chỗ duy nhất nói ý nghĩa.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="metric-icon"]` | tile chứa glyph, cột trái của thẻ; chỉ render khi screen truyền `icon` |
+
+Ba điều đã chốt trong CSS, đừng bỏ khi chỉnh:
+
+- các dòng chữ được ghim vào `grid-column: 2`. Không ghim thì auto-placement đẩy con số
+  xuống dưới tile ngay khi thẻ có dòng thứ ba;
+- lưới thẻ có glyph dùng sàn `12.5rem` thay vì `13.5rem` của thẻ tiền, vì tile ăn mất
+  `2.75rem` cố định — để nguyên `13.5rem` thì hàng bốn thẻ rớt xuống còn ba;
+- dưới `29.9375rem` tile bị **ẩn**. Trên hai thẻ một hàng điện thoại, `2.75rem` là
+  khoảng cách giữa một số tiền vừa khít và một số tiền bị cắt — mà số bị cắt đọc thành
+  số khác.
+
+## Bảng pipeline CRM — module tự sở hữu
+
+Bàn cờ pipeline là island, nên markup của nó nằm ở
+`modules/crm_backend/client/crm-kanban-view.mjs` và CSS ở `client/crm.css`. Nó dùng
+token của `@ketvietlab/design-system` như mọi chỗ khác; chỉ chấm màu giai đoạn lấy
+`--admin-chart-1..6`.
+
+| hook | ý nghĩa |
+| --- | --- |
+| `[data-ui="crm-kanban-board"]`, `[data-ui="crm-kanban-column"][data-tone]` | vùng cuộn ngang và một cột; `data-tone` là `1`–`6`, `won` hoặc `lost` |
+| `[data-ui="crm-kanban-stage"]`, `[data-ui="crm-stage-dot"]`, `[data-ui="crm-stage-name"]` | đầu cột |
+| `[data-ui="crm-stage-count"]`, `[data-ui="crm-stage-weight"]`, `[data-ui="crm-stage-value"]` | số hồ sơ, tỷ trọng dự báo, tổng tiền của cột |
+| `[data-ui="crm-stage-menu"]`, `[data-ui="crm-stage-menu-open"]`, `[data-ui="crm-stage-menu-content"]`, `[data-ui="crm-stage-menu-item"]` | `<details>` thao tác giai đoạn |
+| `[data-ui="crm-kanban-card"][data-priority][data-busy]` | một thẻ; `data-priority` `2`/`3` là vạch màu bên trái |
+| `[data-ui="crm-card-title"]`, `[data-ui="crm-card-party"]`, `[data-ui="crm-card-contact"]` | tiêu đề và bên liên quan |
+| `[data-ui="crm-card-tags"]`, `[data-ui="crm-card-tag"]` | nhãn của hồ sơ |
+| `[data-ui="crm-card-figures"]`, `[data-ui="crm-card-amount"]`, `[data-ui="crm-card-odds"]` | tiền và xác suất |
+| `[data-ui="crm-card-foot"]`, `[data-ui="crm-card-activity"][data-overdue][data-empty]`, `[data-ui="crm-card-activity-summary"]`, `[data-ui="crm-card-activity-due"]` | việc kế tiếp; quá hạn đổi sang màu `danger` |
+| `[data-ui="crm-card-owner"][data-assigned]` | chữ đầu người phụ trách |
+| `[data-ui="crm-card-move"]`, `[data-ui="crm-card-move-open"]`, `[data-ui="crm-card-move-form"]` | `<details>` chứa select chuyển giai đoạn |
+| `[data-ui="crm-kanban-add"]`, `[data-ui="crm-kanban-more"]`, `[data-ui="crm-kanban-empty"]`, `[data-ui="crm-kanban-error"]` | chân cột, link xem tất cả, rỗng và lỗi |
+
+Hai điều đừng đổi mà không đọc lại code:
+
+- form chuyển giai đoạn nằm trong `<details>` chứ không phải chỉ kéo–thả. Kéo–thả không
+  tồn tại với bàn phím, với screen reader, và với một trang mà script hỏng;
+- popover mở **lên trên** từ chân thẻ. Bàn cờ có `overflow-x: auto`, nghĩa là nó cũng
+  cắt theo trục dọc — mọi thứ mở ra phải nằm trong hộp của cột.
 
 ## Bảng dữ liệu
 
@@ -295,13 +368,19 @@ Người đang đăng nhập nằm ở **đáy sidebar**, cùng hàng đếm vi�
 
 ## Sidebar — port từ vidoo_backend_theme
 
-Sidebar ở đây **là** sidebar của `vidoo_backend_theme` trong repo kingfruit: 228px,
-không có thanh ứng dụng ngang trên desktop, systray nằm ở chân. Cùng số đo, cùng
-bảng màu `--kv-*` (token của admin vốn đã lấy từ đó). Sửa bên nào thì phải nói bên
-kia — mục tiêu là hai sản phẩm trông như một.
+Sidebar ở đây **là** sidebar của `vidoo_backend_theme` trong repo kingfruit: `224px`
+(`--admin-sidebar-width: 14rem`), không có thanh ứng dụng ngang trên desktop, systray
+nằm ở chân. Cùng số đo, cùng bảng màu — token của admin lấy từ đó nhưng mang tiền tố
+`--admin-*`, không phải `--kv-*`. Sửa bên nào thì phải nói bên kia — mục tiêu là hai
+sản phẩm trông như một.
+
+Sidebar cao đúng **một màn hình** (`position: sticky` + `block-size: 100dvh`), phần
+menu tự cuộn bên trong. Trước đây nó là grid item nên bị kéo cao bằng nội dung, và trên
+một danh sách dài thì systray, số đếm tin nhắn/hoạt động và link Cài đặt nằm dưới màn
+hình vài trăm pixel.
 
 Icon Lucide (ISC) được **chép vào** `icons.ts`, không cài package — giống hệt cách
-theme Odoo làm. Mỗi module tự chọn tên icon ngữ nghĩa trên bất kỳ `MenuDef` nào;
+theme the domain contract làm. Mỗi module tự chọn tên icon ngữ nghĩa trên bất kỳ `MenuDef` nào;
 design system sở hữu glyph. Tên app không có glyph thì rơi về monogram (chữ đầu),
 tên menu con không có glyph thì rơi về dot; cả hai đều không làm mất dòng.
 
@@ -343,12 +422,13 @@ cùng một hàng: label nằm trong rail hẹp, control chiếm phần còn l�
 theo cột control. Input và nút liền kề dùng `layout: 'inline'`, chung baseline và chỉ
 wrap theo **cả cụm** khi không đủ chỗ. Mọi `form-control`, kể cả
 `date`/`datetime-local`, có `inline-size: 100%`, `min-inline-size: 0` và chiều cao
-`28px` để native picker không tự nới grid. Mobile hẹp xếp label trên control; action
+`28px` để native picker không tự nới grid. Dưới `768px`, mọi field xếp label trên
+control và control chiếm trọn chiều rộng; action
 giữ touch target `44px`.
 
 `mediaPanel` không biết storage schema. Adapter chỉ đưa URL và POST endpoint; component
 sở hữu layout ảnh chính, gallery, upload và action. Ảnh chính có badge bằng chữ, không
-chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide `14px` trong control `28px`,
+chỉ khác border. Các thao tác sắp xếp/xóa dùng icon Lucide `14px` trong control `34px`,
 tooltip và accessible label; mobile tăng vùng bấm lên `44px` theo quality gate.
 
 Status surface (`neutral`, `info`, `positive`, `warning`, `danger`) giữ surface sáng và

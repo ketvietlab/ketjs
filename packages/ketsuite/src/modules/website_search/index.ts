@@ -1,11 +1,12 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { fills } from './fills.ts'
+import { functions } from './functions.ts'
 import { islands } from './islands.ts'
+import { models } from './models.ts'
 
 export default defineModule({
   name: 'website_search',
   version: '0.1.0',
-  app: true,
   title: 'Tìm kiếm',
   summary: 'Ô tìm kiếm đặt được vào bất kỳ theme nào.',
   category: 'Website',
@@ -24,5 +25,7 @@ export default defineModule({
   },
   depends: ['website'],
   fills,
+  functions,
   islands,
+  models,
 })

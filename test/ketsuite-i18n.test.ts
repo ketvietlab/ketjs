@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { compose, formatMissing, missingMessages, renderToString, translator } from '@ketvietlab/ketjs'
-import backend, { appsScreen } from '@ketvietlab/ketsuite/backend'
+import backend from '@ketvietlab/ketsuite/backend'
 import {
   account,
   accountBackend,
@@ -29,9 +29,9 @@ import {
   uom,
   user,
 } from '@ketvietlab/ketsuite'
-import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/attributes-screen.tsx'
-import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens.tsx'
-import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens.tsx'
+import { attributesScreen } from '../packages/ketsuite/src/modules/product_backend/screens/attributes.tsx'
+import { pricelistDetailScreen } from '../packages/ketsuite/src/modules/pricing_backend/screens/index.ts'
+import { stockScreen } from '../packages/ketsuite/src/modules/stock_backend/screens/index.ts'
 
 const modules = [
   address,
@@ -68,52 +68,7 @@ test('ketsuite i18n: business catalogues have complete vi/en parity', () => {
   assert.deepEqual(gaps, {}, formatMissing(gaps))
 })
 
-test('ketsuite i18n: app metadata is translated instead of falling back to Vietnamese literals', () => {
-  const rows = [
-    address,
-    addressBackend,
-    product,
-    productMedia,
-    pricing,
-    stock,
-    account,
-    accountPartner,
-    purchase,
-    sale,
-    pos,
-    storage,
-    productBackend,
-    pricingBackend,
-    stockBackend,
-    accountBackend,
-    partnerBackend,
-    accountPartnerBackend,
-    purchaseBackend,
-    saleBackend,
-    posBackend,
-  ].map((module) => ({
-    name: module.name,
-    title: module.title ?? module.name,
-    summary: module.summary ?? '',
-    category: module.category ?? '',
-    state: 'installed' as const,
-    depends: [...module.depends],
-    dependents: [],
-  }))
-  const html = renderToString(appsScreen(translator(manifest, 'en'), rows))
-
-  assert.match(html, /Product images/)
-  assert.match(html, /Shared countries, versioned administrative divisions/)
-  assert.match(html, /Install and inspect country administrative catalogs/)
-  assert.match(html, /Odoo 19 stock, transfers, and replenishment/)
-  assert.match(html, /Manage company pricelists/)
-  assert.doesNotMatch(html, /Hình ảnh sản phẩm/)
-  assert.doesNotMatch(html, /Quốc gia, catalog địa giới/)
-  assert.doesNotMatch(html, /Tồn kho, dịch chuyển/)
-  assert.doesNotMatch(html, /Danh sách bảng giá theo company/)
-})
-
-test('ketsuite i18n: Product selection labels are translated, not leaked as Odoo codes', () => {
+test('ketsuite i18n: Product selection labels are translated, not leaked as storage codes', () => {
   const rows = [
     { id: 'attribute', name: 'Màu', displayType: 'pills', createVariant: 'no_variant', values: [] },
   ]
@@ -139,8 +94,15 @@ test('ketsuite i18n: Pricing and Stock badges render localized labels while reta
     base: 'list_price',
   }
   const list = { id: 'list', name: 'Retail', currency: 'VND', sequence: 16, active: true }
-  const viPricing = renderToString(pricelistDetailScreen(vi, list, [item], {}))
-  const enPricing = renderToString(pricelistDetailScreen(en, list, [item], {}))
+  const pricingOptions = {
+    action: '/admin/pricing/pricelists/list',
+    cancelHref: '/admin/pricing/pricelists',
+    values: list,
+    items: [item],
+    itemValues: { id: 'draft' },
+  }
+  const viPricing = renderToString(pricelistDetailScreen(vi, {}, pricingOptions))
+  const enPricing = renderToString(pricelistDetailScreen(en, {}, pricingOptions))
   const viStock = renderToString(
     stockScreen(vi, 'Kho', [{ id: 'move', name: 'WH/OUT/1', kind: 'outgoing', state: 'assigned' }], {}),
   )

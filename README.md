@@ -1,29 +1,81 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/src/assets/ketsuite-logo-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="./docs/src/assets/ketsuite-logo-light.png">
+  <img alt="KetSuite — Extensible Open ERP" src="./docs/src/assets/ketsuite-logo-light.png" width="420">
+</picture>
+
 # Ket
 
 A monorepo: **KetJS** the framework, **KetSuite** the application built on it.
+
+Developer documentation: **[ketjs.ketviet.vn](https://ketjs.ketviet.vn/)**.
 
 > [!WARNING]
 > **Ket is under active development. The 0.x line is preview software and is not stable.**
 > APIs, data formats, CLI behavior, and deployment assumptions may change without
 > notice. Do not use Ket for production workloads yet.
 
-A zero-dependency fullstack framework for Node, built on five pillars:
+## Install and create an application
+
+KetJS requires Node.js 24 or newer. Scaffold a runnable application from the public package:
+
+```bash
+npx -y @ketvietlab/ketjs@latest new my_app --dir ./my-app
+cd my-app
+npm install
+npm run dev
+```
+
+The application listens on `http://127.0.0.1:3000` and uses SQLite by default. The application
+identifier must start with a lowercase letter and contain only lowercase letters, digits, and
+underscores; the directory name may use hyphens.
+
+Keep the explicit `@latest` tag: when this command runs inside an older KetJS project, npm may
+otherwise reuse that project's locally installed CLI instead of downloading the current scaffold.
+
+Install the framework into an existing project with `npm install @ketvietlab/ketjs`. Optional
+packages are `@ketvietlab/ketjs-postgres` for PostgreSQL, `@ketvietlab/ketsuite` for business
+modules, and `@ketvietlab/ketjs-view` when consuming the view layer directly. See the
+[KetJS quick start](docs/src/content/docs/ketjs/quick-start.md) for the generated layout and next
+commands.
+
+To scaffold the complete KetSuite business application instead:
+
+```bash
+npx -y @ketvietlab/ketsuite@latest new my_suite
+cd my_suite
+npm install
+npm run dev
+```
+
+The generated development server creates `admin` / `admin` only for a blank local database and
+prints a security warning. `npm start` never creates this insecure account. See the
+[KetSuite quick start](docs/src/content/docs/ketsuite/quick-start.md) for secure provisioning and
+configuration.
+
+A fullstack framework for Node with no required third-party runtime dependencies, built on five
+pillars:
 
 1. **Lego** — modules compose through extension points the base module *publishes*, not through arbitrary patching
-2. **Zero dependencies** — 0 *required* runtime deps; `node` and nothing else. One fenced exception: the Postgres driver is an optional dependency (see [D4a](docs/00-decisions.md)). SQLite, the default adapter, needs nothing.
+2. **Minimal dependency surface** — the core uses Node built-ins plus the separately published
+   `@ketvietlab/ketjs-view` package from this monorepo. PostgreSQL support and its driver live in the
+   optional `@ketvietlab/ketjs-postgres` package; SQLite uses Node's built-in driver.
 3. **Agent-driven** — the manifest is the agent's map; mutations are dry-runnable and idempotent
 4. **Theming-driven** — third-party themes in a restricted language that cannot run code
 5. **Fullstack** — the framework owns models, migrations, functions, streams and jobs
 
-Plus an **umbrella layout**: one codebase, many deployable apps, shared modules.
+Plus an **umbrella layout**: one codebase, many immutable deployments, shared modules.
 
 ```bash
 npm start                                   # KetSuite on SQLite, at :3000
 DATABASE_URL=postgres://… npm start         # …or on Postgres
 npm run dev                                 # …restarted on every change
 npm run dev -- --all                       # HTTP + worker, still one tsx watcher
+npm run build:watch                         # rebuild dist for a linked consumer
 npm run design                              # the backend UI catalogue, for designers
-npm run verify                              # audit + typecheck + tests + type proof
+npm run verify                              # audit + typecheck + full tests + type proof
+npm run test:groups                         # list auto-discovered CI test groups
+npm run test:group -- catalog               # build and run one domain group
 npm run test:one -- test/e2e.test.ts        # one emitted test file
 npm run bench:modules                       # custom module catalogue + selected closure
 npm run bench:queue                         # queue across many physical databases
@@ -33,13 +85,16 @@ npm run bench:storage                       # S3 storage across tenant databases
 Production, tests and release commands build first, then run emitted JavaScript.
 `npm run dev` is deliberately diskless: `tsx` transforms TypeScript/TSX in memory
 after a clean typecheck and watches the dependency graph. Node never receives
-untransformed source. A first run migrates, installs the app's bootstrap set, and
-serves. Every knob has a default that works;
-`KET_AUTO_INSTALL=0` (or `ket dev --no-auto-install`) holds back modules that would
-otherwise install themselves, which is what you want mid-change.
+untransformed source. A first run composes the declared modules, migrates their
+complete schema, and serves. The runtime never installs or removes modules.
 
-The production worker is a separate process role of the same app artifact:
-`ket worker --app ketsuite`. Jobs stay in PostgreSQL/SQLite and can be enqueued
+`npm run build:watch` is the co-development path for another repository that links
+this checkout and consumes package `dist` artifacts. It debounces changes, serializes
+builds, and writes the gitignored `.ket-build-watch-ready` marker only after a
+successful build so the consumer can safely rebuild against the new declarations.
+
+The production worker is a separate process role of the same deployment artifact:
+`ket worker --deployment ketsuite`. Jobs stay in PostgreSQL/SQLite and can be enqueued
 through `tx.jobs.enqueue(...)` in the same transaction as business data. PostgreSQL
 `LISTEN/NOTIFY` wakes a single-database worker quickly; polling and leases remain the
 guarantee, so Redis is not required. Operators can inspect and control durable rows
@@ -54,25 +109,19 @@ S3-compatible service; attachment metadata remains in each tenant database. Set
 streamed through a bounded multipart parser, and cleanup runs on the existing
 `maintenance` queue.
 
-```bash
-npx ket new shop && cd shop && npm install && npm run dev
-```
-
-writes an app that runs unedited: a module, a model, a function and a route.
-
 ## Custom module paths
 
-A workspace may select compiled modules from several filesystem roots, like
-Odoo's `addons_path`, without importing every custom package by hand:
+A workspace may select compiled modules from several filesystem roots without importing every
+custom package by hand:
 
 ```ts
-import { defineApp, defineWorkspace } from '@ketvietlab/ketjs'
+import { defineDeployment, defineWorkspace } from '@ketvietlab/ketjs'
 import { product } from '@ketvietlab/ketsuite'
 
 export default defineWorkspace({
   modulePaths: [new URL('./custom-addons/', import.meta.url), '/opt/vendor-addons'],
-  apps: [
-    defineApp({
+  deployments: [
+    defineDeployment({
       name: 'shop',
       modules: [product, 'sale_discount'],
       headless: true,
@@ -98,21 +147,21 @@ the `tsx` development path additionally permits TypeScript source entries.
 
 `--module-path DIR` supplements the workspace and is repeatable.
 `KET_MODULE_PATH` uses the platform path separator. Run `ket modules` to see every
-resolved module, the apps that ship it and its concrete source path.
+resolved module, the deployments that ship it and its concrete source path.
 
 The full packaging, resolution, deployment and error contract is documented in
-[Module discovery](docs/06-module-discovery.md).
+[Module discovery](docs/src/content/docs/ketjs/module-discovery.md).
 
 ## Headless end-to-end tests
 
-`@ketvietlab/ketjs/testing` boots the real app on an ephemeral port with an isolated SQLite
+`@ketvietlab/ketjs/testing` boots the real deployment on an ephemeral port with an isolated SQLite
 database and storage directory. `TestClient` crosses HTTP, retains login cookies,
 models company/tenant identity and can drain the app's durable worker without ever
 opening a browser. Fixture calls are named separately so test setup cannot be
 mistaken for the public action being exercised.
 
 ```ts
-const e2e = await createTestApp(app)
+const e2e = await createTestDeployment(app)
 try {
   await e2e.fixture.call('catalog.seed', fixture)
   const result = await e2e.client.call('catalog.list', {})
@@ -125,11 +174,11 @@ try {
 Use `ket call FUNCTION --against http://localhost:3000` for a manual smoke call,
 and `ket test dist/test --watch` to run emitted headless tests. Full API, isolation,
 authentication, multi-tenant and worker examples are in
-[the headless E2E guide](docs/05-headless-e2e.md).
+[the headless E2E guide](docs/src/content/docs/ketjs/testing.md).
 
-**No authentication yet.** The company a request acts as comes from the
-`X-Ket-Company` header. Fine for development, not for production; the resolver is
-deliberately one function so replacing it with a session is a single change.
+Deployments may either configure session authentication with `resolveSession` or use the
+development-only `X-Ket-Company` fallback. KetSuite configures cookie-backed user sessions and
+permission resolution; the header fallback applies only to deployments that do not enable sessions.
 
 ## The one artifact
 
@@ -149,17 +198,17 @@ defineModule({
 `inventory` never imports anything from `catalog`. It adds a field to a model it
 does not own, and fills an extension point `catalog` published on purpose. A fill
 aimed at an unpublished joint is a **build error**, not a blank spot — that is the
-line between this and Odoo/WordPress, where anything can be patched and therefore
-nothing can be safely changed.
+line between declared composition and arbitrary patching, where upstream changes cannot be checked
+safely.
 
-## Measured against the competition
+## Reference benchmark snapshot
 
-Full methodology in [docs/03-benchmarks.md](docs/03-benchmarks.md). Three of these
-found bugs in Ket, which is the point of running them.
+These are development-machine snapshots, not capacity claims or guarantees. Full dated methodology
+and caveats are in [the benchmark guide](docs/src/content/docs/operations/benchmarks.md); rerun the benchmark commands on
+the revision and hardware you care about.
 
 | | KetJS | best competitor |
 |---|---|---|
-| `npm i` footprint | **1 package, 0.4 MB** | SvelteKit — 53 packages, 28 MB |
 | template renders/s | **10 652** | EJS 10 311 · LiquidJS 824 |
 | DOM: update 1 row of 1 000 | **0.070 ms** | lit-html 0.100 ms |
 | DOM: create 1 000 rows | **1.80 ms** | lit-html 2.60 ms |
@@ -179,7 +228,7 @@ found bugs in Ket, which is the point of running them.
 | A stream survives a reload | resumes from cursor, no gap and no duplicate |
 | An agent cannot double-apply | idempotency key replays the first result, and survives a restart |
 | A transaction is really one transaction | BEGIN and body share a reserved connection |
-| Uninstalling an app loses no data | table list is identical before and after; rows are where they were on re-install |
+| Deployment composition is immutable at runtime | one declared module list drives schema, HTTP, workers, permissions, and rendering |
 | A theme cannot write behaviour | `defineTheme` refuses `islands`; placing one nobody provides is a build error |
 | Only islands hydrate | the rest of the page stays inert markup |
 | Hydration adopts server DOM | 20 rows hydrated in a real browser: **0** nodes created, same node objects |
@@ -187,7 +236,7 @@ found bugs in Ket, which is the point of running them.
 | A query is checked before it runs | `q.touches` vs declared effects — a query reading an undeclared model is blocked |
 | Mass assignment is not possible | `cast()` is an allow-list; uncast fields are dropped |
 | A function cannot touch undeclared data | `E_EFFECT_NOT_DECLARED` |
-| Zero required dependencies | `npm run audit:zero-dep` — enforces that only `@ketvietlab/ketjs-postgres` may import the one allowlisted driver |
+| No undeclared third-party runtime dependency | `npm run audit:zero-dep` audits imports and package boundaries; only `@ketvietlab/ketjs-postgres` may import the allowlisted database driver |
 | A committed job is not lost | PostgreSQL transaction/notify, concurrent unique enqueue, lease rescue and multi-database fairness are exercised live |
 | S3 compatibility is real | upload, HEAD, streamed GET, listing, presigned GET and delete run against MinIO in CI |
 
@@ -199,7 +248,7 @@ packages/
   ketjs/           kernel, data, server, theme, agent, codegen — depends only on ketjs-view
   ketjs-postgres/  the one package permitted a driver, and the reason it is a package
   ketsuite/        KetSuite — business modules, using only the public entry
-examples/          umbrella apps composed from the packages
+examples/          umbrella deployments composed from the packages
 tools/  test/  bench/  docs/
 ```
 
@@ -223,4 +272,10 @@ Biome is the repository-wide formatter and linter. `npm run format` normalises a
 supported source/config files; `npm run verify` refuses unformatted or lint-invalid
 changes before building and testing.
 
-See [docs/00-decisions.md](docs/00-decisions.md) for the reasoning behind each choice.
+See [the architecture decisions](docs/src/content/docs/architecture/decisions.md) for the reasoning behind each choice.
+
+## License
+
+KetJS is released under the [MIT License](LICENSE).
+
+Copyright © 2026 KETVIET JSC, Vietnam.

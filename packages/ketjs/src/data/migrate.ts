@@ -1,7 +1,7 @@
 // Schema is derived from the manifest, never hand-written; migrations are generated
 // as reviewable operations, never applied silently.
 //
-// The Odoo lesson encoded as a rule: destructive operations are still generated so
+// The the domain contract lesson encoded as a rule: destructive operations are still generated so
 // you can see them, but refused unless explicitly allowed. "Don't drop fields"
 // stops being discipline someone has to remember and becomes something the tool enforces.
 
@@ -21,6 +21,14 @@ export type Schema = { version: number; tables: Record<string, Table> }
 export type MigrationOp =
   | { op: 'CREATE_TABLE'; table: string; columns: Record<string, Column>; destructive: false }
   | { op: 'ADD_COLUMN'; table: string; column: string; def: Column; destructive: false }
+  | {
+      op: 'ALTER_COLUMN_NULLABILITY'
+      table: string
+      column: string
+      from: boolean
+      to: boolean
+      destructive: false
+    }
   | { op: 'CREATE_INDEX'; table: string; name: string; def: Index; destructive: false }
   | { op: 'DROP_INDEX'; table: string; name: string; destructive: true }
   | { op: 'DROP_COLUMN'; table: string; column: string; by: string; destructive: true }
@@ -32,6 +40,25 @@ export const tableNameFor = (modelKey: string): string =>
     .replace('.', '_')
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .toLowerCase()
+
+const indexCovers = (indexes: Record<string, Index>, fields: string[]): boolean =>
+  Object.values(indexes).some((index) => fields.every((field, position) => index.fields[position] === field))
+
+const autoIndexName = (kind: 'scope' | 'relation', seed: string): string => {
+  let hash = 2166136261
+  for (let index = 0; index < seed.length; index++) {
+    hash ^= seed.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `ket_${kind}_${(hash >>> 0).toString(36)}`
+}
+
+const addAutoIndex = (indexes: Record<string, Index>, name: string, fields: string[]): void => {
+  let candidate = name
+  let suffix = 2
+  while (indexes[candidate]) candidate = `${name}_${suffix++}`
+  indexes[candidate] = { fields, unique: false, by: '(framework)' }
+}
 
 export function schemaFromManifest(manifest: Manifest): Schema {
   const tables: Record<string, Table> = {}
@@ -46,7 +73,27 @@ export function schemaFromManifest(manifest: Manifest): Schema {
         target: f.target ?? null,
       }
     }
-    tables[tableNameFor(modelKey)] = { model: modelKey, owner: model.owner, columns, indexes: model.indexes }
+    const indexes = Object.fromEntries(
+      Object.entries(model.indexes).map(([name, index]) => [name, { ...index, fields: [...index.fields] }]),
+    )
+    if (model.scope !== 'shared') {
+      const fields = model.scope === 'company+branch' ? ['companyId', 'branchId'] : ['companyId']
+      if (!indexCovers(indexes, fields)) {
+        addAutoIndex(indexes, autoIndexName('scope', modelKey), fields)
+      }
+    }
+    tables[tableNameFor(modelKey)] = { model: modelKey, owner: model.owner, columns, indexes }
+  }
+  for (const relations of Object.values(manifest.relations)) {
+    for (const relation of Object.values(relations)) {
+      if (relation.kind !== 'hasMany') continue
+      const target = manifest.models[relation.target]
+      const table = tables[tableNameFor(relation.target)]
+      if (!target || !table) continue
+      const fields = [...new Set([...(target.scope === 'shared' ? [] : ['companyId']), relation.by])]
+      if (indexCovers(table.indexes, fields)) continue
+      addAutoIndex(table.indexes, autoIndexName('relation', `${relation.target}:${relation.by}`), fields)
+    }
   }
   return { version: 1, tables }
 }
@@ -58,6 +105,33 @@ export class DestructiveMigrationError extends Error {
     super(message)
     this.ops = ops
   }
+}
+
+/**
+ * A schema difference that cannot be applied safely from the manifest alone.
+ *
+ * Required columns need a deployment-specific backfill, nullability changes need
+ * data inspection (and a table rebuild on SQLite), and type changes need an
+ * explicit conversion expression. Treating any of those as applied would make the
+ * migration marker disagree with the physical database.
+ */
+export class ManualMigrationRequiredError extends Error {
+  code = 'E_MANUAL_MIGRATION_REQUIRED'
+  ops: MigrationOp[]
+  constructor(message: string, ops: MigrationOp[]) {
+    super(message)
+    this.ops = ops
+  }
+}
+
+const manualMigrationReason = (op: MigrationOp): string | null => {
+  if (op.op === 'ALTER_COLUMN_TYPE')
+    return `${op.table}.${op.column} changes type from ${op.from} to ${op.to}`
+  if (op.op === 'ALTER_COLUMN_NULLABILITY')
+    return `${op.table}.${op.column} changes from ${op.from ? 'optional' : 'required'} to ${op.to ? 'optional' : 'required'}`
+  if (op.op === 'ADD_COLUMN' && !op.def.optional)
+    return `${op.table}.${op.column} is a required column and existing rows need a backfill`
+  return null
 }
 
 export function planMigration(
@@ -91,6 +165,15 @@ export function planMigration(
           to: cd.base,
           destructive: true,
         })
+      else if (bc.optional !== cd.optional)
+        ops.push({
+          op: 'ALTER_COLUMN_NULLABILITY',
+          table: t,
+          column: c,
+          from: bc.optional,
+          to: cd.optional,
+          destructive: false,
+        })
     }
     // Indexes are dropped before the columns and created after them. Postgres
     // drops any index covering a dropped column as part of ALTER TABLE, so a
@@ -115,6 +198,19 @@ export function planMigration(
   }
   for (const t of Object.keys(prevTables)) {
     if (!next.tables[t]) ops.push({ op: 'DROP_TABLE', table: t, destructive: true })
+  }
+
+  const manual = ops.flatMap((op) => {
+    const reason = manualMigrationReason(op)
+    return reason ? [{ op, reason }] : []
+  })
+  if (manual.length) {
+    const list = manual.map(({ reason }) => `  - ${reason}`).join('\n')
+    throw new ManualMigrationRequiredError(
+      `migration contains ${manual.length} operation(s) that require a hand-written data migration:\n${list}\n\n` +
+        'Apply the DDL and backfill in an application-owned transaction, then call confirmManualMigration(tx, manifest). KetJS will verify the physical schema before recording it.',
+      manual.map(({ op }) => op),
+    )
   }
 
   const destructive = ops.filter((o) => o.destructive)
@@ -146,6 +242,11 @@ export function renderSql(ops: MigrationOp[], adapter: Adapter): string[] {
       out.push(`CREATE TABLE ${q(o.table)} (\n  ${cols.join(',\n  ')}\n)`)
     } else if (o.op === 'ADD_COLUMN') {
       out.push(`ALTER TABLE ${q(o.table)} ADD COLUMN ${q(o.column)} ${adapter.columnSql(o.def)}`)
+    } else if (o.op === 'ALTER_COLUMN_NULLABILITY') {
+      throw new ManualMigrationRequiredError(
+        `migration operation ${o.op} ${o.table}.${o.column} requires a hand-written data migration`,
+        [o],
+      )
     } else if (o.op === 'CREATE_INDEX') {
       const name = `${o.table}__${o.name}`
       out.push(
@@ -156,8 +257,9 @@ export function renderSql(ops: MigrationOp[], adapter: Adapter): string[] {
     } else if (o.op === 'DROP_COLUMN') {
       out.push(`ALTER TABLE ${q(o.table)} DROP COLUMN ${q(o.column)}`)
     } else if (o.op === 'ALTER_COLUMN_TYPE') {
-      out.push(
-        `-- type change ${o.table}.${o.column}: ${o.from} -> ${o.to} needs a hand-written data migration`,
+      throw new ManualMigrationRequiredError(
+        `migration operation ${o.op} ${o.table}.${o.column} requires a hand-written data migration`,
+        [o],
       )
     } else {
       out.push(`DROP TABLE ${q(o.table)}`)

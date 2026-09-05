@@ -9,9 +9,8 @@ import { messages } from './messages.ts'
 
 export default defineModule({
   name: 'product',
-  version: '0.1.0',
+  version: '0.2.0',
   depends: ['uom'],
-  app: true,
   title: 'Sản phẩm',
   summary: 'Danh mục, mẫu sản phẩm và biến thể.',
   category: 'Bán hàng',
@@ -25,3 +24,5 @@ export default defineModule({
 export { PRODUCT_TYPES } from './types.ts'
 export type { ProductType } from './types.ts'
 export { productListSearch, emptyProductListState } from './search.ts'
+export { sellableProduct } from './sellable.ts'
+export type { SellableProduct, SellableProductResult, SellableUom } from './sellable.ts'

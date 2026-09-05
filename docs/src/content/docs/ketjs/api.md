@@ -12,6 +12,7 @@ details.
 | Entrypoint | Runtime |
 | --- | --- |
 | `@ketvietlab/ketjs` | Framework composition, server, data, jobs, sessions, integrations, and selected view helpers. |
+| `@ketvietlab/ketjs/pdf` | Report-safe KTL compilation, constrained markup, HTML preview, fonts, and PDF rendering. |
 | `@ketvietlab/ketjs/theme` | Theme compilation and presentation helpers without the wider server API. |
 | `@ketvietlab/ketjs/testing` | Isolated headless applications, test clients, cookie jars, and fixture types. |
 | `@ketvietlab/ketjs-view` | Browser-safe signals, rendering, SSR, hydration, and islands. |
@@ -29,27 +30,33 @@ dependencies and its browser-facing entrypoint avoids Node APIs.
 | API | Purpose |
 | --- | --- |
 | `defineModule`, `defineTheme` | Validate and preserve module/theme declarations. |
-| `defineApp`, `defineWorkspace` | Declare deployable apps and the repository workspace. |
+| `defineDeployment`, `defineWorkspace` | Declare immutable deployments and the repository workspace. |
 | `resolveWorkspace` | Resolve string module references from configured roots. |
-| `compose`, `composeWorkspace` | Build checked manifests for one app or a workspace. |
+| `compose`, `composeWorkspace` | Build checked manifests for one deployment or a workspace. |
+| `compilePermissionBundles`, `permissionDigest` | Validate and deterministically digest exact bundle classifications and role templates. |
 | `explainWorkspace` | Render a workspace composition summary. |
-| `createAppRegistry`, `restrictManifest` | Apply database-owned module install state to a deployment manifest. |
 | `validateLayout`, `formatLayoutErrors` | Validate placement and extension relationships. |
 | `diffManifests`, `formatDiff` | Compare manifest contracts. |
+| `classificationInventory`, `formatClassification` | Enumerate personal and sensitive fields, and the models that classify none. |
 | `KetError`, `Diagnostics` | Structured framework errors and accumulated diagnostics. |
 
-Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, `AppSpec`,
+Primary types include `Manifest`, `Module`, `Theme`, `Model`, `DeploymentDeclaration`, `DeploymentSpec`,
 `WorkspaceDeclaration`, `ResolvedWorkspace`, `Placement`, and `LayoutError`.
+Permission types include `ModulePermissionsDef`, `PermissionBundleDef`, `PermissionFunctionDef`,
+`PermissionExemptionDef`, `PermissionRisk`, `PermissionPosture`, `RoleTemplateDef`,
+`PermissionCatalogue`, `CompiledPermissionBundle`, `CompiledRoleTemplate`, and
+`CompilePermissionOptions`.
 
 ### Operations and HTTP
 
 | API | Purpose |
 | --- | --- |
 | `defineFn`, `registerFunctions`, `callFn` | Declare, register, and execute effect-checked functions. |
+| `enforcePolicy` | Apply one stable domain policy decision and emit sanitized denial evidence. |
 | `project` | Apply output projection rules. |
 | `defineJob`, `registerJobs` | Declare and register durable job handlers. |
 | `createKetServer` | Create the low-level HTTP server from composed runtime services. |
-| `bootRuntime`, `bootApp`, `serveApp` | Boot datastore/runtime services or a complete HTTP app. |
+| `bootRuntime`, `bootDeployment`, `serveDeployment` | Boot runtime services or a complete HTTP deployment. |
 | `bootWorker`, `serveWorker` | Boot or continuously serve configured durable queues. |
 | `page`, `fragment`, `document` | Create rendered response bodies. |
 | `navigablePage`, `isNavigationRequest` | Negotiate a full document or lazy named navigation slots. |
@@ -57,10 +64,13 @@ Primary types include `Manifest`, `Module`, `Theme`, `Model`, `AppDeclaration`, 
 | `json`, `text`, `bytes`, `streamed`, `raw` | Create typed non-page response bodies. |
 | `withHeaders` | Add headers without discarding a response body's type. |
 | `multipart` | Parse bounded multipart input. |
+| `assertForm`, `invalidForm`, `FormValidationError` | Enforce form schemas and produce structured HTTP 422 failures. |
+| `issuesFromFieldErrors` | Bridge changeset field errors into the shared validation issue contract. |
 
-Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `Job`, `JobContext`, `ServeSpec`,
-`ServeContext`, `BootedApp`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
-`RouteResult`.
+Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `PolicyDecision`,
+`PolicyDenialEvidence`, `Job`, `JobContext`, `ServeSpec`,
+`ServeContext`, `BootedDeployment`, `BootedRuntime`, `BootedWorker`, `Route`, `RouteParams`, `ResponseBody`, and
+`RouteResult`. `ReportDef` and `ComposedReport` describe business-owned print declarations in the manifest.
 
 ### Sessions, streams, queues, and integration effects
 
@@ -70,15 +80,25 @@ Related types include `Fn`, `FnContext`, `CallResult`, `Effect`, `Job`, `JobCont
 | `parseCookies`, `SESSION_COOKIE` | Parse cookies and reference the framework session-cookie name. |
 | `createStreams`, `memoryStreamStore`, `dbStreamStore` | Create resumable stream writers and backing stores. |
 | `createQueue`, `queueFor`, `JOB_CHANNEL` | Manage durable job state and queue wake-up channels. |
+| `validateSchedule`, `tickAt`, `ticksBetween`, `parseEvery`, `claimDue` | Read a job schedule, and claim its due tick in one tenant. |
+| `claimRateSlot`, `pruneRateSlots` | Spend one slot of a durable per-caller allowance, and drop stale counters. |
+| `nextSequenceNumber`, `peekSequenceNumber` | Allocate and read a company-scoped document number. |
+| `auditHash`, `auditId` | Namespaced digest for an identity, and a command-derived event id. |
 | `createIdempotency` | Persist and replay idempotent operation results. |
 | `effectTransport`, `memoryTransport`, `unavailableTransport` | Execute or test declared outbound messages. |
 | `validateOutboundMessage` | Validate an outbound transport payload. |
 | `storageFromConfig`, `localStorage`, `s3Storage` | Open configured storage implementations. |
 | `namespacedStorage`, `effectStorage` | Scope object keys and record declared storage effects. |
 | `signRequest`, `presignUrl`, `sha256` | S3 Signature Version 4 primitives. |
+| `logFromConfig`, `consoleLog`, `prettyLog`, `fileLog`, `memoryLog`, `nullLog` | Open a built-in operational sink. |
+| `multiLog`, `leveledLog`, `bufferedLog`, `isolatedLog`, `redactLog` | Compose fan-out, filtering, batching, isolation and redaction. |
+| `createLogger`, `describeError`, `traceOf` | Bind record context, reduce a failure to data, and pseudonymise a correlation or actor. |
+| `CORE_EVENTS`, `MODULE_EVENT`, `isLogLevel`, `isLogDriverName` | The framework's event catalogue and the shapes a module event and configuration must have. |
 
 Use the higher-level runtime services when possible. Signing and queue primitives are public for custom
-adapters and operational tooling, not a requirement for ordinary modules.
+adapters and operational tooling, not a requirement for ordinary modules. Ordinary modules log through
+`ctx.log`; the sink API is for a deployment choosing where records go. See
+[operational logging](/ketjs/logging/).
 
 ### Data and migration
 
@@ -98,23 +118,42 @@ adapters and operational tooling, not a requirement for ordinary modules.
 | `schemaFromManifest`, `planMigration`, `renderSql` | Derive and render schema migration plans. |
 | `tableNameFor` | Resolve the physical table name for a manifest model. |
 | `DestructiveMigrationError` | Identify a plan requiring explicit destructive permission. |
+| `ManualMigrationRequiredError` | Identify a schema change that needs an explicit backfill or conversion. |
+| `confirmManualMigration`, `ManualMigrationConfirmationError` | Verify physical DDL/backfill before adopting a manual migration. |
+| `verifyPhysicalSchema`, `PhysicalSchemaVerification` | Read-only audit of the physical catalog against its marker and current manifest. |
+| `physicalSchemaIssues` | Compare modelled SQLite/PostgreSQL catalog objects with explicit schema values. |
 | `migrateOne`, `migrateFleet`, `formatFleet` | Apply or report one-database and tenant-fleet migrations. |
 
-The `Adapter`, `Transaction`, `Scope`, `Dialect`, `Sql`, `Table`, `Expr`, `FieldError`, and `Validator`
-types are exported from the same entrypoint.
+The `Adapter`, `Transaction`, `Scope`, `Schema`, `MigrationOp`, `Dialect`, `Sql`, `Table`, `Expr`,
+`FieldError`, and `Validator` types are exported from the same entrypoint.
+
+### Reports and PDF
+
+| API | Purpose |
+| --- | --- |
+| `compileReportTemplate` | Compile KTL in report-safe mode and return a typed document tree. |
+| `parseReportMarkup`, `renderReportHtml` | Validate constrained report markup and produce a safe HTML preview. |
+| `renderPdf` | Render deterministic PDF bytes using explicit TrueType fonts. |
+| `interFontUrl` | Resolve the framework-vendored Inter Regular, SemiBold, or Bold asset. |
+| `parseTrueType`, `parseImage` | Parse supported embedded font and image assets. |
+
+These APIs are exported from `@ketvietlab/ketjs` so application packages stay on the framework's main public
+contract. The narrow `@ketvietlab/ketjs/pdf` entrypoint exposes the same report-specific surface for independent tooling. Related types
+include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `TrueTypeFont`, and `PdfImage`.
 
 ### Presentation, menus, and capabilities
 
 | API | Purpose |
 | --- | --- |
-| `buildMenu`, `activeApp` | Resolve visible menu trees and active application context. |
-| `translator`, `missingMessages`, `formatMissing`, `PSEUDO_LOCALE` | Translate catalogs and audit missing messages. |
+| `buildMenu`, `activeMenuRoot` | Resolve visible menu trees and the active root section. |
+| `translator`, `missingMessages`, `formatMissing`, `dateTimeFormatter`, `PSEUDO_LOCALE` | Translate catalogs, reuse Intl date/time formatters, and audit missing messages. |
 | `createTheme`, `compileKtl`, `loadTemplates`, `createJoints` | Compile and execute the theme boundary. |
 | `makeDrop`, `makeDrops`, `sealScope` | Expose controlled view-model values to KTL. |
 | `tokensToCss`, `scopedCss` | Convert design tokens into layered and scoped CSS. |
 | `renderToString`, `hydrateRoot`, `mount`, `mountHydrated` | Selected `@ketvietlab/ketjs-view` rendering helpers. |
 | `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Server-render, hydrate, and reconcile named islands. |
 | `reachOf`, `functionsOf`, `formatReach`, `formatInventory` | Inspect function and data/effect permission reach. |
+| `permissionInventory` | Build a deterministic, serializable module/function permission inventory, including modules with no functions. |
 | `agentTools`, `agentDescriptor`, `compositionSchema` | Describe the composed application for tooling and agents. |
 | `generateDts` | Generate manifest-derived TypeScript declarations. |
 
@@ -123,6 +162,7 @@ types are exported from the same entrypoint.
 Use the narrow theme entrypoint in presentation packages:
 
 ```ts
+// File: src/theme.ts
 import {
   compileKtl,
   createJoints,
@@ -141,15 +181,16 @@ It also exports `LAYER_ORDER` and the `Compiled`, `Filter`, `Scope`, and `Joints
 ## `@ketvietlab/ketjs/testing`
 
 ```ts
+// File: test/order.test.ts
 import {
   CookieJar,
   TestClient,
   TestHttpError,
-  createTestApp,
+  createTestDeployment,
 } from '@ketvietlab/ketjs/testing'
 ```
 
-The entrypoint also exports `TestApp`, `CreateTestAppOptions`, `TestClientOptions`, `TestIdentity`,
+The entrypoint also exports `TestDeployment`, `CreateTestDeploymentOptions`, `TestClientOptions`, `TestIdentity`,
 `TestCallOptions`, `TestFixtures`, `TestFixtureCallOptions`, and `TestFixtureTenant`. See
 [Testing](/ketjs/testing/) for the lifecycle and isolation contract.
 
@@ -158,20 +199,29 @@ The entrypoint also exports `TestApp`, `CreateTestAppOptions`, `TestClientOption
 | API | Purpose |
 | --- | --- |
 | `signal`, `computed`, `effect`, `batch` | Fine-grained reactive state and scheduling. |
+| `defineFormSchema`, `validateForm`, `validationIssue` | Declare and execute browser-safe form validation. |
+| `valuesFromFormData`, `createForm` | Preserve native form values and manage reactive form lifecycle state. |
+| `validationProblem`, `fieldErrorsOf`, `formErrorsOf` | Build and group the stable validation transport shape. |
 | `html`, `each`, `when` | Tagged templates and conditional/list composition. |
+| `isResult`, `isEach`, `isMarkup` | Type guards for the three values the renderer understands. |
 | `createRoot`, `hydrateRoot` | Create or hydrate a rendering root. |
 | `mount`, `mountHydrated` | Mount component-style view functions. |
-| `renderToString`, `trustedMarkup`, `isMarkup` | Server rendering and explicit trusted markup. |
-| `HydrationMismatch`, `HOLE_MARKER` | Hydration diagnostics and protocol marker. |
-| `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Island serialization, hydration, reconciliation, and disposal. |
+| `renderToString`, `trustedMarkup` | Server rendering and explicit trusted markup. |
+| `HydrationMismatch`, `HOLE_MARKER`, `HOLE_OPEN` | Hydration diagnostics and the pair of protocol markers. |
+| `EVENT_PREFIX` | The attribute prefix that makes an attribute a listener rather than markup. |
+| `renderIsland`, `hydrateIslands`, `createIslandManager`, `IslandError`, `ISLAND_TAG` | Island serialization, hydration, reconciliation, disposal, and failures. |
 | `countingHost`, `domHost`, `escapeHtml` | Host implementations and escaping primitive. |
 
-The view entrypoint also exports `IslandDefinition`, `IslandFactory`, `IslandController`,
-`IslandManager`, and their related prop/instance types.
+The view entrypoint also exports `EachResult`, `IslandDefinition`, `IslandFactory`,
+`IslandController`, `IslandManager`, and their related prop/instance types.
+
+`@ketvietlab/ketjs` re-exports this entrypoint whole, so an application that installs both packages
+may import any of these names from either one.
 
 TypeScript projects using automatic JSX can configure:
 
-```json
+```jsonc
+// File: tsconfig.json
 {
   "compilerOptions": {
     "jsx": "react-jsx",
@@ -183,6 +233,7 @@ TypeScript projects using automatic JSX can configure:
 ## `@ketvietlab/ketjs-postgres`
 
 ```ts
+// File: src/database.ts
 import { postgresAdapter, type PostgresOptions } from '@ketvietlab/ketjs-postgres'
 ```
 

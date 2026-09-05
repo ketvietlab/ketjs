@@ -1,0 +1,451 @@
+/* ── KetSuite UI kit foundations ────────────────────────────────────────────
+   These rules mirror docs/design-system in kingfruit: operational density,
+   warm neutrals, one decisive primary action, explicit state and 44px compact
+   touch targets. They intentionally add no palette, radius or shadow. */
+
+@layer ket.app {
+  [data-ui="stack"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--admin-gap);
+  }
+  [data-ui="stack"][data-gap="compact"] {
+    gap: var(--admin-gap-xs);
+  }
+  [data-ui="stack"][data-gap="loose"] {
+    gap: var(--admin-gap-md);
+  }
+
+  /* Equal columns that become one when there is not room for two.
+
+     `auto-fit` with a `min(100%, …)` floor asks the question about the space
+     actually available rather than about the device: the same layout is two
+     columns in a page and one inside a rail, with no breakpoint to keep in
+     sync with the shell's own widths. `1fr` after the floor is what keeps the
+     two equal — without it the column with a ring in it takes the width the
+     ring wants and leaves the other in a gutter. */
+  [data-ui="columns"] {
+    display: grid;
+    min-inline-size: 0;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+    align-items: stretch;
+    gap: var(--admin-gap-md);
+  }
+  [data-ui="columns"][data-gap="loose"] {
+    gap: var(--admin-gap-lg);
+  }
+  [data-ui="columns"] > * {
+    min-inline-size: 0;
+  }
+  /* Equal height as well as equal width: two panels read as a pair, and one
+     ending halfway up the other reads as the shorter one having run out rather
+     than as it simply having less in it. */
+  [data-ui="columns"] > [data-ui="section"] {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  [data-ui="columns"] > [data-ui="section"] > [data-ui="section-body"],
+  [data-ui="columns"] > [data-ui="section"] [data-ui="section-body"] > [data-ui="surface"] {
+    block-size: 100%;
+  }
+
+  [data-ui="inline"] {
+    display: inline-flex;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+
+  [data-ui="code"] {
+    color: var(--admin-ink);
+    font-family: var(--admin-font-mono);
+    font-size: var(--admin-size-sm);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  /* Action hierarchy. Primary is brand-600, not brand-500: normal-size white
+     labels need the stronger token to meet AA. */
+  :where([data-ui="action"], [data-control="action"]) {
+    display: inline-flex;
+    min-block-size: var(--admin-control-height);
+    align-items: center;
+    justify-content: center;
+    gap: var(--admin-gap-xs);
+    padding-inline: 0.625rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      background-color var(--admin-motion-fast),
+      border-color var(--admin-motion-fast),
+      color var(--admin-motion-fast),
+      transform var(--admin-motion-fast);
+  }
+
+  :where([data-ui="action"], [data-control="action"])[data-size="compact"] {
+    min-block-size: var(--admin-control-height);
+    padding-inline: 0.5rem;
+    border-radius: var(--admin-radius-sm);
+    font-size: 0.8125rem;
+  }
+
+  :where([data-ui="action"], [data-control="action"])[data-size="prominent"] {
+    min-block-size: var(--admin-control-height);
+    padding-inline: var(--admin-gap);
+    font-size: 0.8125rem;
+  }
+
+  :where([data-ui="action"], [data-control="action"])[data-variant="primary"] {
+    border-color: var(--admin-accent);
+    background: var(--admin-accent);
+    color: var(--admin-accent-ink);
+  }
+
+  :where([data-ui="action"], [data-control="action"])[data-variant="tertiary"] {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  :where([data-ui="action"], [data-control="action"])[data-variant="destructive"] {
+    border-color: var(--admin-danger-line);
+    background: var(--admin-danger-soft);
+    color: var(--admin-danger-strong);
+  }
+
+  :where([data-ui="action"], [data-control="action"])[data-icon-only="true"] {
+    inline-size: var(--admin-control-height);
+    padding: 0;
+  }
+
+  :where([data-ui="action"], [data-control="action"])[data-icon-only="true"][data-size="compact"] {
+    min-block-size: var(--admin-control-height);
+    inline-size: var(--admin-control-height);
+  }
+
+  :where([data-ui="action"], [data-control="action"]):is(:disabled, [aria-disabled="true"]) {
+    border-color: var(--admin-line);
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-disabled);
+    cursor: not-allowed;
+    opacity: 0.82;
+  }
+
+  :where([data-ui="action"], [data-control="action"]):active:not(:disabled, [aria-disabled="true"]) {
+    transform: translateY(1px);
+  }
+  [data-ui="action-icon"] {
+    display: grid;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    place-items: center;
+  }
+  [data-ui="action-spinner"] {
+    inline-size: 1rem;
+    block-size: 1rem;
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: 50%;
+    animation: ket-action-spin 700ms linear infinite;
+  }
+  [data-ui="action-group"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+  }
+  @keyframes ket-action-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  /* Operational schedule: a real grid rather than a decorative calendar. The
+     label column remains readable while the date range scrolls horizontally. */
+  [data-ui="schedule-scroll"] {
+    max-inline-size: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--admin-divider-subtle);
+    border-radius: var(--admin-radius);
+    background: var(--admin-card);
+  }
+  [data-ui="schedule"] {
+    position: relative;
+    inline-size: 100%;
+  }
+  [data-ui="schedule-head"],
+  [data-ui="schedule-row"] {
+    position: relative;
+    display: grid;
+    min-block-size: 2.75rem;
+  }
+  [data-ui="schedule-head"] {
+    position: sticky;
+    z-index: 4;
+    inset-block-start: 0;
+    background: var(--admin-surface-subtle);
+    border-block-end: 1px solid var(--admin-line-strong);
+  }
+  [data-ui="schedule-row"] {
+    border-block-end: 1px solid var(--admin-line);
+  }
+  [data-ui="schedule-row"]:last-child {
+    border-block-end: 0;
+  }
+  [data-ui="schedule-corner"],
+  [data-ui="schedule-row-label"] {
+    position: sticky;
+    z-index: 3;
+    inset-inline-start: 0;
+    display: flex;
+    min-inline-size: 0;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--admin-gap-sm) var(--admin-gap);
+    background: var(--admin-surface);
+    border-inline-end: 1px solid var(--admin-line-strong);
+  }
+  [data-ui="schedule-corner"] {
+    z-index: 5;
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-xs);
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+  }
+  [data-ui="schedule-day"] {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-inline-end: 1px solid var(--admin-line);
+    color: var(--admin-ink-secondary);
+  }
+  [data-ui="schedule-day"][data-today="true"] {
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+  [data-ui="schedule-day-label"],
+  [data-ui="schedule-row-name"] {
+    font-size: var(--admin-size-sm);
+    font-weight: 650;
+  }
+  [data-ui="schedule-day-detail"],
+  [data-ui="schedule-row-detail"] {
+    overflow: hidden;
+    color: var(--admin-ink-muted);
+    font-size: var(--admin-size-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="schedule-cell"] {
+    grid-row: 1;
+    border-inline-end: 1px solid var(--admin-line);
+  }
+  [data-ui="schedule-cell"][data-today="true"] {
+    background: color-mix(in srgb, var(--admin-accent-soft) 48%, transparent);
+  }
+  [data-ui="schedule-event"] {
+    z-index: 2;
+    grid-row: 1;
+    align-self: center;
+    display: flex;
+    min-inline-size: 0;
+    block-size: 2.25rem;
+    flex-direction: column;
+    justify-content: center;
+    margin-inline: 0.2rem;
+    padding-inline: var(--admin-gap-sm);
+    overflow: hidden;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink-secondary);
+  }
+  [data-ui="schedule-event"][data-tone="neutral"] {
+    background: var(--admin-neutral-soft);
+    color: var(--admin-neutral);
+  }
+  [data-ui="schedule-event"][data-tone="positive"] {
+    border-color: var(--admin-success-icon);
+    background: var(--admin-success-soft);
+    color: var(--admin-success);
+  }
+  [data-ui="schedule-event"][data-tone="info"] {
+    border-color: var(--admin-accent-line);
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+  }
+  [data-ui="schedule-event"][data-tone="warning"] {
+    border-color: var(--admin-warning-icon);
+    background: var(--admin-warning-soft);
+    color: var(--admin-warning);
+  }
+  [data-ui="schedule-event"][data-tone="danger"] {
+    border-color: var(--admin-danger-line);
+    background: var(--admin-danger-soft);
+    color: var(--admin-danger);
+  }
+  [data-ui="schedule-event-title"],
+  [data-ui="schedule-event-detail"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-ui="schedule-event-title"] {
+    font-size: var(--admin-size-xs);
+  }
+  [data-ui="schedule-event-detail"] {
+    font-size: 0.6875rem;
+    opacity: 0.82;
+  }
+
+  [data-ui="tag"] {
+    display: inline-flex;
+    min-block-size: 1.625rem;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    padding-inline: var(--admin-gap-sm);
+    border: 1px solid var(--admin-line);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-subtle);
+    color: var(--admin-ink-secondary);
+    font-size: var(--admin-size-sm);
+    font-weight: 600;
+  }
+
+  [data-ui="tag-remove"] {
+    color: inherit;
+    font-size: var(--admin-size-md);
+    line-height: 1;
+    text-decoration: none;
+  }
+  [data-ui="count-badge"] {
+    display: inline-grid;
+    min-inline-size: 1.25rem;
+    min-block-size: 1.25rem;
+    place-items: center;
+    padding-inline: 0.3125rem;
+    border-radius: 9999px;
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-text);
+    font-size: 0.625rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer ket.app {
+  /* The period a screen reports on. A filter, not navigation: it states the
+     choice, the range that choice resolves to and when the figures were
+     computed, on one line, without borrowing the tab treatment that means
+     "sibling view". */
+  [data-ui="timeframe"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-gap-xs) var(--admin-gap-sm);
+    min-inline-size: 0;
+  }
+
+  [data-ui="timeframe-menu"] {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  [data-ui="timeframe-trigger"] {
+    display: inline-flex;
+    min-block-size: 2.25rem;
+    align-items: center;
+    gap: 0.375rem;
+    padding-inline: 0.625rem;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    list-style: none;
+  }
+
+  [data-ui="timeframe-trigger"]::-webkit-details-marker {
+    display: none;
+  }
+
+  [data-ui="timeframe-trigger"] > [data-ui="icon"] {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    color: var(--admin-ink-secondary);
+  }
+
+  [data-ui="timeframe-label"] {
+    color: var(--admin-ink-secondary);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  [data-ui="timeframe-value"] {
+    font-weight: 600;
+  }
+
+  [data-ui="timeframe-content"] {
+    position: absolute;
+    z-index: 20;
+    inset-block-start: calc(100% + 0.375rem);
+    inset-inline-start: 0;
+    display: grid;
+    min-inline-size: 14rem;
+    max-block-size: 24rem;
+    padding: 0.375rem;
+    overflow: auto;
+    border: 1px solid var(--admin-line-strong);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface);
+    box-shadow: var(--admin-shadow-float);
+  }
+
+  [data-ui="timeframe-option"] {
+    display: grid;
+    min-block-size: 2.25rem;
+    align-content: center;
+    padding: 0.375rem 0.5rem;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-ink);
+    font-size: 0.8125rem;
+    text-decoration: none;
+  }
+
+  [data-ui="timeframe-option"]:hover,
+  [data-ui="timeframe-option"][data-active="true"] {
+    background: var(--admin-accent-soft);
+  }
+
+  [data-ui="timeframe-option-label"] {
+    font-weight: 500;
+  }
+
+  [data-ui="timeframe-option-detail"] {
+    color: var(--admin-ink-secondary);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-ui="timeframe-range"],
+  [data-ui="timeframe-asof"],
+  [data-ui="timeframe-note"] {
+    color: var(--admin-ink-secondary);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+}

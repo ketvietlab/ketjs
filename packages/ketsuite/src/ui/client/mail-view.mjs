@@ -62,6 +62,7 @@ const labelsOf = (props) => LABELS[String(props.lang).toLowerCase().startsWith('
 const localeOf = (props) => (String(props.lang).toLowerCase().startsWith('en') ? 'en-US' : 'vi-VN')
 
 const apiFor = (resModel) => {
+  if (resModel === 'partner.Partner') return 'partner_mail_backend'
   if (resModel === 'product.Template') return 'product_mail_backend'
   if (resModel === 'product.Product') return 'product_variant_mail_backend'
   if (resModel === 'stock.Picking') return 'stock_mail_backend'
@@ -129,6 +130,7 @@ const upload = async (request, file, messageId) => {
 export function createChatterView(runtime, props, seed = {}) {
   const { each, html, signal } = runtime
   const labels = labelsOf(props)
+  const messageDateFormatter = new Intl.DateTimeFormat(localeOf(props))
   const status = signal(seed.status ?? 'loading')
   const busy = signal(false)
   const composerKind = signal(seed.composerKind ?? null)
@@ -258,10 +260,10 @@ export function createChatterView(runtime, props, seed = {}) {
       ${
         composerKind()
           ? html`<form data-ui="chatter-composer" on:submit=${post}>
-        <input type="hidden" name="kind" value=${composerKind()}>
+        <input type="hidden" name="kind" value=${composerKind()} autocomplete="off">
         <textarea data-ui="chatter-body" name="body" placeholder=${labels.placeholder} required disabled=${busy()}></textarea>
         <div data-ui="chatter-compose-actions">
-          <label data-ui="chatter-attachment">${labels.attachment}<input type="file" name="attachment" disabled=${busy()}></label>
+          <label data-ui="chatter-attachment">${labels.attachment}<input data-ui="form-control" type="file" name="attachment" autocomplete="off" disabled=${busy()}></label>
           <div>
             <button data-ui="chatter-compose-close" data-control="action" data-variant="tertiary" data-size="compact" type="button" on:click=${() => composerKind.set(null)} disabled=${busy()}>${labels.close}</button>
             <button data-ui="chatter-send" data-control="action" data-variant="primary" data-size="compact" type="submit" disabled=${busy()}>${busy() ? labels.sending : labels.send}</button>
@@ -280,7 +282,7 @@ export function createChatterView(runtime, props, seed = {}) {
           (message) => html`<article data-ui="chatter-message" data-kind=${message.kind}>
             <header data-ui="chatter-message-head">
               <strong data-ui="chatter-author">${message.authorName || labels.system}</strong>
-              <time data-ui="chatter-time" datetime=${message.createdAt}>${new Date(message.createdAt).toLocaleString(localeOf(props))}</time>
+              <time data-ui="chatter-time" datetime=${message.createdAt}>${messageDateFormatter.format(new Date(message.createdAt))}</time>
             </header>
             <p data-ui="chatter-message-body">${message.body}</p>
             ${

@@ -6,14 +6,14 @@ import { fileURLToPath } from 'node:url'
 
 const moduleDir = dirname(fileURLToPath(import.meta.url))
 const artifacts = join(moduleDir, 'artifacts', 'transfer-detail')
-const transferPath = '/admin/transfers/transfer-review'
+const transferPath = '/admin/stock/transfers/transfer-review'
 
 const login = async (page: Page) => {
   await page.goto('/login?lang=vi')
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('stock-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -28,7 +28,7 @@ for (const viewport of [
     test(`renders transfer detail in ${locale} correctly on ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.goto(`${transferPath}?lang=${locale}`)
-      await expect(page.locator('[data-ui="record-heading"]')).toHaveText('WH/OUT/REVIEW')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('WH/OUT/REVIEW')
       await expect(page.locator('select[name="productId"]')).toHaveValue('stock-variant')
       await expect(page.locator('[data-ui="chatter-loading"], [data-ui="activity-loading"]')).toHaveCount(0)
 
@@ -44,7 +44,10 @@ for (const viewport of [
           .map((control) => control.getBoundingClientRect().height),
       }))
       expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-      expect(metrics.visibleControls.every((height) => height === 28)).toBe(true)
+      // A field is 32px on a touch screen and 28px with a cursor: a fingertip
+      // needs the target, a pointer does not.
+      const fieldHeight = 34
+      expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
       await page.screenshot({
         path: join(artifacts, `transfer-detail-${locale}-${viewport.name}.png`),
         fullPage: true,

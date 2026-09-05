@@ -3,7 +3,7 @@ import type { ModelDef } from '@ketvietlab/ketjs'
 /**
  * The operational and sellable hotel structure.
  *
- * The Odoo source spreads these records over core, content and inventory addons.
+ * The the domain contract source spreads these records over core, content and inventory addons.
  * KetSuite keeps them together because a room without its sellable description is
  * not a useful bounded context. Accounting remains outside this boundary.
  */
@@ -21,6 +21,9 @@ export const models: Record<string, ModelDef> = {
       defaultCheckIn: 'text',
       defaultCheckOut: 'text',
       enforceTimes: 'bool',
+      allowHourly: 'bool',
+      allowWeekly: 'bool',
+      allowMonthly: 'bool',
       longStayBillOnCheckIn: 'bool?',
       starRating: 'int',
       street1: 'text?',
@@ -90,6 +93,10 @@ export const models: Record<string, ModelDef> = {
       sizeSqm: 'decimal?',
       viewType: 'text?',
       sharedBathroom: 'bool',
+      allowHourly: 'bool',
+      allowWeekly: 'bool',
+      allowMonthly: 'bool',
+      minHourlyHours: 'int',
       baseRate: 'decimal',
       color: 'text?',
       cancellationPolicyId: 'ref:hospitality_core.CancellationPolicy?',
@@ -133,6 +140,11 @@ export const models: Record<string, ModelDef> = {
   /**
    * Durable room-night capacity. `version` makes changes serialisable through
    * compare-and-set on every supported database adapter.
+   *
+   * `total` tracks the sellable room count unless an operator has set it by
+   * hand, which `totalManual` records. Without that flag the ledger could not
+   * tell an allotment decision apart from a stale snapshot, so opening a new
+   * room would either be ignored or would silently overwrite a deliberate hold.
    */
   AvailabilityLedger: {
     scope: 'company',
@@ -142,6 +154,7 @@ export const models: Record<string, ModelDef> = {
       roomTypeId: 'ref:hospitality_core.RoomType',
       date: 'date',
       total: 'int',
+      totalManual: 'bool',
       sold: 'int',
       blocked: 'int',
       available: 'int',
@@ -357,7 +370,7 @@ export const models: Record<string, ModelDef> = {
     fields: {
       id: 'id',
       propertyId: 'ref:hospitality_core.Property',
-      chargeType: 'text',
+      chargeType: 'text?',
       name: 'text',
       amount: 'decimal',
       description: 'text?',
@@ -400,10 +413,18 @@ export const models: Record<string, ModelDef> = {
       code: 'text',
       propertyId: 'ref:hospitality_core.Property',
       roomTypeId: 'ref:hospitality_core.RoomType',
+      ratePlanId: 'ref:hospitality_core.RatePlan?',
       folioId: 'ref:hospitality_core.Folio',
       stayId: 'ref:hospitality_core.Stay?',
       partnerId: 'ref:partner.Partner',
       provider: 'text',
+      requestKey: 'text?',
+      /**
+       * The purchase a reservation belongs to. One checkout for three rooms is
+       * three reservations — three rooms to assign, three stays to run — but one
+       * thing the guest bought, one folio and one cancellation.
+       */
+      groupKey: 'text?',
       externalId: 'text?',
       channelRef: 'text?',
       bookingType: 'text',
@@ -411,10 +432,20 @@ export const models: Record<string, ModelDef> = {
       checkOut: 'datetime',
       adults: 'int',
       children: 'int',
+      infants: 'int?',
+      roomQuantity: 'int?',
       rate: 'decimal',
       quantity: 'decimal',
       billingMode: 'text',
       amountTotal: 'decimal',
+      currency: 'text?',
+      // The cancellation terms as they stood when the guest agreed to them.
+      // Reading the live policy at cancel time let an edit change what an
+      // already-confirmed guest was entitled to, in both directions.
+      cancellationPolicyId: 'ref:hospitality_core.CancellationPolicy?',
+      cancellationPolicyType: 'text?',
+      freeCancellationHours: 'int?',
+      penaltyPercent: 'decimal?',
       state: 'text',
       cancelReason: 'text?',
       noShowAt: 'datetime?',
@@ -428,6 +459,11 @@ export const models: Record<string, ModelDef> = {
         fields: ['companyId', 'propertyId', 'provider', 'externalId'],
         unique: true,
       },
+      provider_request: {
+        fields: ['companyId', 'provider', 'requestKey'],
+        unique: true,
+      },
+      provider_group: { fields: ['companyId', 'provider', 'groupKey', 'id'] },
       property_schedule: {
         fields: ['companyId', 'propertyId', 'state', 'checkIn', 'checkOut'],
       },
@@ -454,6 +490,8 @@ export const models: Record<string, ModelDef> = {
       checkOut: 'datetime',
       adults: 'int',
       children: 'int',
+      infants: 'int?',
+      roomQuantity: 'int?',
       billingMode: 'text',
       rate: 'decimal',
       nextBillDate: 'date?',
@@ -484,6 +522,7 @@ export const models: Record<string, ModelDef> = {
       servicePosted: 'int',
       rentPosted: 'int',
       existingCount: 'int',
+      noShowPosted: 'int',
       totalAmount: 'decimal',
       attempt: 'int',
       requestedAt: 'datetime',
@@ -588,6 +627,10 @@ export const models: Record<string, ModelDef> = {
       productId: 'ref:product.Product',
       uomId: 'ref:uom.Unit?',
       description: 'text',
+      /** Charge type to preserve when the line is materialised. */
+      chargeType: 'text?',
+      /** `external_stock` lines are completed only by a deployment connector. */
+      fulfillmentKind: 'text?',
       quantity: 'decimal',
       unitPrice: 'decimal',
       recurrence: 'text',
@@ -615,6 +658,8 @@ export const models: Record<string, ModelDef> = {
       uomId: 'ref:uom.Unit?',
       description: 'text',
       type: 'text',
+      /** Fulfilment boundary used before this charge was posted. */
+      fulfillmentKind: 'text?',
       quantity: 'decimal',
       unitPrice: 'decimal',
       amount: 'decimal',

@@ -3,8 +3,8 @@ import { performance } from 'node:perf_hooks'
 import { tableNameFor } from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
 const runs = Math.max(7, Number(process.env.KET_BENCH_RUNS ?? 7))
@@ -78,7 +78,7 @@ const appDefinition =
         },
       }
     : ketsuite
-const app = await createTestApp(appDefinition, {
+const app = await createTestDeployment(appDefinition, {
   env: driver === 'postgres' ? { DATABASE_URL: databaseUrl.toString() } : {},
 })
 const scope = { company: 'bench', branches: null }

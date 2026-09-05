@@ -21,24 +21,38 @@ deployment contracts may still change before 1.0.
 Run the `ket` binary from the `@ketvietlab/ketjs` package:
 
 ```bash
-npx --package @ketvietlab/ketjs ket new notes
+# Run from: /path/to/projects
+npx -y @ketvietlab/ketjs@latest new notes
 cd notes
 npm install
 npm run dev
 ```
 
-The generated app listens on `http://127.0.0.1:3000`. Its first boot creates `.ket/app.db`, applies
-the composed schema, installs the bootstrap module, and serves the workspace's first servable app.
+Use an exact version such as `@ketvietlab/ketjs@0.1.3` when the scaffold must be reproducible. App
+names accept lowercase letters, digits, and underscores and must start with a letter. To separate
+the app identifier from its directory name:
+
+```bash
+# Run from: /path/to/projects
+npx -y @ketvietlab/ketjs@latest new my_app --dir ./my-app
+```
+
+Keep `@latest` even though npm normally defaults to the latest tag. When invoked inside an existing
+KetJS project, `npx` can reuse that project's locally installed older CLI when no tag is present.
+
+The generated deployment listens on `http://127.0.0.1:3000`. Its first boot creates
+`.ket/deployment.db`, applies the composed schema, and serves the workspace's first deployment.
 
 The scaffold contains:
 
 ```text
+# File: docs/src/content/docs/ketjs/quick-start.md
 notes/
 ├── ket.workspace.ts
 ├── modules/
 │   └── notes.ts
 ├── test/
-│   └── app.test.ts
+│   └── deployment.test.ts
 ├── tools/
 │   └── dev.mjs
 ├── package.json
@@ -47,18 +61,23 @@ notes/
 └── .gitignore
 ```
 
+:::note[Projects generated with 0.1.1]
+The `0.1.1` scaffold wrote the old unscoped CLI path into `tools/dev.mjs`. Upgrade the dependency to
+`@ketvietlab/ketjs@^0.1.3` and replace `node_modules/ketjs/dist/cli.js` with
+`node_modules/@ketvietlab/ketjs/dist/cli.js`, or scaffold the project again with the current release.
+:::
+
 ## The module
 
 `modules/notes.ts` declares its data and callable surface together:
 
 ```ts
+// File: src/modules/notes/index.ts
 import { defineModule, from } from '@ketvietlab/ketjs'
 
 export default defineModule({
   name: 'notes',
-  app: true,
   title: 'Notes',
-  install: 'manual',
   models: {
     Note: {
       scope: 'company',
@@ -87,38 +106,39 @@ function cannot read another model unless its effects declare that model.
 `ket.workspace.ts` makes the module deployable:
 
 ```ts
-import { defineApp, defineWorkspace, json } from '@ketvietlab/ketjs'
+// File: ket.workspace.ts
+import { defineDeployment, defineWorkspace, json } from '@ketvietlab/ketjs'
 import notes from './modules/notes.ts'
 
-export const app = defineApp({
+export const deployment = defineDeployment({
   name: 'notes',
   modules: [notes],
   headless: true,
   serve: {
-    bootstrap: ['notes'],
     routes: (ctx) => ({
       '/': async (url, request) => json(await ctx.call('notes.list', {}, url, request)),
     }),
   },
 })
 
-export default defineWorkspace({ apps: [app] })
+export default defineWorkspace({ deployments: [deployment] })
 ```
 
-`bootstrap` applies only to an empty database. It does not reinstall modules that an operator has
-explicitly removed.
+The module appears once, in `modules`. KetJS composes it, migrates its schema, and runs its behavior.
 
 ## Call the application
 
 Open the route:
 
 ```bash
+# Run from: /path/to/ketjs
 curl -H 'X-Ket-Company: demo' http://127.0.0.1:3000/
 ```
 
 Or call the function transport directly:
 
 ```bash
+# Run from: /path/to/example-app
 npx ket call notes.list \
   --against http://127.0.0.1:3000 \
   --company demo
@@ -132,28 +152,30 @@ request headers. It is a development convenience, not production authentication.
 Build before using production-style CLI commands:
 
 ```bash
+# Run from: /path/to/example-app
 npm run build
 npx ket check --workspace dist/ket.workspace.js
 npx ket manifest --workspace dist/ket.workspace.js
 npx ket permissions --workspace dist/ket.workspace.js
 ```
 
-- `check` composes every app and reports contract violations.
+- `check` composes every deployment and reports contract violations.
 - `manifest` prints the single derived artifact.
 - `permissions` inventories callable functions and their data reach.
 
 ## Run the test
 
 ```bash
+# Run from: /path/to/ketjs
 npm test
 ```
 
-The generated test boots the real app on an ephemeral port with an isolated SQLite database. See
+The generated test boots the real deployment on an ephemeral port with an isolated SQLite database. See
 [Testing](/ketjs/testing/) for fixtures, sessions, tenants, cookie jars, and worker draining.
 
 ## Next steps
 
-1. Model the deployment with [Workspaces and apps](/ketjs/workspaces/).
+1. Model the deployment with [Workspaces and deployments](/ketjs/workspaces/).
 2. Learn the extension rules in [Modules and manifest](/ketjs/modules/).
 3. Add validated writes with [Queries and changesets](/ketjs/data/).
 4. Replace the header identity shim using [Sessions and tenants](/ketjs/sessions-tenants/).

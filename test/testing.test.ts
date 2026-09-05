@@ -5,13 +5,12 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineApp, defineModule, from, json, text, withHeaders } from '@ketvietlab/ketjs'
+import { defineDeployment, defineModule, from, json, text, withHeaders } from '@ketvietlab/ketjs'
 import type { Ctx, JobContext } from '@ketvietlab/ketjs'
-import { CookieJar, createTestApp, TestHttpError } from '@ketvietlab/ketjs/testing'
+import { CookieJar, createTestDeployment, TestHttpError } from '@ketvietlab/ketjs/testing'
 
 const headless = defineModule({
   name: 'headless_test',
-  app: true,
   models: {
     Note: { scope: 'shared', fields: { id: 'id', text: 'text' } },
     Entry: { scope: 'company', fields: { id: 'id', memo: 'text' } },
@@ -61,13 +60,12 @@ const headless = defineModule({
   },
 })
 
-const app = defineApp({
+const app = defineDeployment({
   name: 'headless_e2e',
   modules: [headless],
   headless: true,
   worker: { queues: { default: 1 } },
   serve: {
-    bootstrap: ['headless_test'],
     routes: () => ({
       '/cookie/start': () =>
         withHeaders(text('', { status: 303 }), {
@@ -112,8 +110,8 @@ const runCli = async (args: string[]): Promise<{ code: number; stdout: string; s
   return { code, stdout, stderr }
 }
 
-test('testing: a headless app crosses real HTTP with isolated runtime state', async () => {
-  const e2e = await createTestApp(app, { worker: false })
+test('testing: a headless deployment crosses real HTTP with isolated runtime state', async () => {
+  const e2e = await createTestDeployment(app, { worker: false })
   const artifacts = e2e.artifactsDir
   const database = e2e.databasePath
   assert.equal(existsSync(artifacts), true)
@@ -135,7 +133,7 @@ test('testing: a headless app crosses real HTTP with isolated runtime state', as
 })
 
 test('testing: dry-run and structured HTTP failures stay observable', async () => {
-  const e2e = await createTestApp(app, { worker: false })
+  const e2e = await createTestDeployment(app, { worker: false })
   try {
     const dry = await e2e.client.call(
       'headless_test.addNote',
@@ -150,7 +148,9 @@ test('testing: dry-run and structured HTTP failures stay observable', async () =
       () => e2e.client.call('headless_test.missing'),
       (error: unknown) => {
         assert.ok(error instanceof TestHttpError)
-        assert.equal(error.status, 400)
+        // A function this build does not serve is a 404, the same as any other
+        // address that is not there.
+        assert.equal(error.status, 404)
         assert.equal((error.body as { code: string }).code, 'E_UNKNOWN_FUNCTION')
         return true
       },
@@ -161,7 +161,7 @@ test('testing: dry-run and structured HTTP failures stay observable', async () =
 })
 
 test('testing: client identities preserve company isolation', async () => {
-  const e2e = await createTestApp(app, { worker: false })
+  const e2e = await createTestDeployment(app, { worker: false })
   try {
     const acme = e2e.client.as({ company: 'acme' })
     const globex = e2e.client.as({ company: 'globex' })
@@ -181,7 +181,7 @@ test('testing: client identities preserve company isolation', async () => {
 })
 
 test('testing: fixture calls seed state while assertions still cross HTTP', async () => {
-  const e2e = await createTestApp(app, { worker: false })
+  const e2e = await createTestDeployment(app, { worker: false })
   try {
     await e2e.fixture.call('headless_test.addNote', { id: 'seed', text: 'fixture' })
     const notes = await e2e.client.call<Array<{ id: string; text: string }>>('headless_test.listNotes')
@@ -193,7 +193,7 @@ test('testing: fixture calls seed state while assertions still cross HTTP', asyn
 })
 
 test('testing: cookies survive redirects, can be cleared and persist with mode-safe files', async () => {
-  const e2e = await createTestApp(app, { worker: false })
+  const e2e = await createTestDeployment(app, { worker: false })
   try {
     const shown = (await e2e.client.get('/cookie/start')).json() as Promise<{ cookie: string }>
     assert.match((await shown).cookie, /e2e_session=remembered/)
@@ -224,7 +224,7 @@ test('testing: cookies survive redirects, can be cleared and persist with mode-s
 })
 
 test('testing: the optional worker drains jobs from the same isolated datastore', async () => {
-  const e2e = await createTestApp(app)
+  const e2e = await createTestDeployment(app)
   try {
     await e2e.client.call('headless_test.schedule', { id: 'job-note', text: 'from worker' })
     assert.equal(await e2e.drainJobs(), 1)
@@ -236,7 +236,7 @@ test('testing: the optional worker drains jobs from the same isolated datastore'
 })
 
 test('testing CLI: ket call smoke-tests a running server with files and structured failures', async () => {
-  const e2e = await createTestApp(app, { worker: false })
+  const e2e = await createTestDeployment(app, { worker: false })
   try {
     const input = join(e2e.artifactsDir, 'note.json')
     await writeFile(input, JSON.stringify({ id: 'cli', text: 'command line' }))

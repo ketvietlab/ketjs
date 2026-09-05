@@ -2,12 +2,16 @@
 // manifest entry, an agent tool descriptor and a dry-runnable test handle.
 // Written once, never restated.
 
+import { createHash } from 'node:crypto'
+import { KetError } from '../kernel/errors.ts'
 import { createContext } from './ctx.ts'
 import { createIdempotency } from './idem.ts'
-import { KetError } from '../kernel/errors.ts'
+import { FormValidationError } from './form.ts'
 import { project } from './project.ts'
 import { isDateText, parseType } from '../kernel/types.ts'
+import { DECIMAL_MAX_CHARS, parseDecimal } from '../data/changeset.ts'
 import { queueFor } from './queue.ts'
+import type { Logger } from './log/logger.ts'
 import type { Adapter, Ctx, FnSpec, KetModule, Manifest, WriteRecord } from '../types.ts'
 
 export type CallResult = {
@@ -45,36 +49,61 @@ const JS_OF: Record<string, string> = {
   json: 'object',
 }
 
-const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
-
 export function validateInput(fnKey: string, manifest: Manifest, args: Record<string, unknown>): void {
   const sig = manifest.functions[fnKey]?.input ?? {}
   const errors: string[] = []
+  const issues: import('@ketvietlab/ketjs-view').ValidationIssue[] = []
+  const add = (
+    field: string,
+    code: string,
+    message: string,
+    params: Readonly<Record<string, unknown>> = {},
+  ): void => {
+    errors.push(message)
+    issues.push({ field, code, messageKey: `validation.${code}`, params })
+  }
   for (const [name, tspec] of Object.entries(sig)) {
     const t = parseType(tspec)
     const v = args?.[name]
     if (v == null) {
-      if (t.ok && !t.optional) errors.push(`missing required input "${name}" (${tspec})`)
+      if (t.ok && !t.optional)
+        add(name, 'required', `missing required input "${name}" (${tspec})`, { expected: tspec })
       continue
     }
     if (!t.ok) continue
     const want = JS_OF[t.base]
-    if (want && typeof v !== want) errors.push(`input "${name}" expects ${t.base} (${want}), got ${typeof v}`)
-    if (
-      t.base === 'decimal' &&
-      !((typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && DECIMAL.test(v.trim())))
-    )
-      errors.push(`input "${name}" expects a finite number or an exact decimal string`)
+    if (want && typeof v !== want) {
+      add(name, 'type', `input "${name}" expects ${t.base} (${want}), got ${typeof v}`, {
+        expected: t.base,
+        actual: typeof v,
+      })
+      continue
+    }
+    if (t.base === 'decimal') {
+      const parsed = parseDecimal(v)
+      if (!parsed.ok)
+        add(
+          name,
+          parsed.reason === 'size' ? 'maxLength' : 'decimal',
+          parsed.reason === 'size'
+            ? `input "${name}" exceeds the ${DECIMAL_MAX_CHARS}-character decimal limit`
+            : `input "${name}" expects a finite number or an exact decimal string`,
+          parsed.reason === 'size' ? { max: DECIMAL_MAX_CHARS } : {},
+        )
+    }
     if (t.base === 'int' && typeof v === 'number' && !Number.isInteger(v))
-      errors.push(`input "${name}" expects an integer`)
+      add(name, 'integer', `input "${name}" expects an integer`)
     if (t.base === 'date' && !isDateText(v))
-      errors.push(`input "${name}" expects a calendar date (YYYY-MM-DD)`)
+      add(name, 'date', `input "${name}" expects a calendar date (YYYY-MM-DD)`)
   }
   for (const k of Object.keys(args ?? {})) {
-    if (!(k in sig)) errors.push(`unknown input "${k}" (accepted: ${Object.keys(sig).join(', ') || 'none'})`)
+    if (!Object.hasOwn(sig, k)) {
+      const accepted = Object.keys(sig)
+      add(k, 'unknown', `unknown input "${k}" (accepted: ${accepted.join(', ') || 'none'})`, { accepted })
+    }
   }
   if (errors.length) {
-    throw new KetError({
+    throw new FormValidationError(issues, {
       code: 'E_INVALID_INPUT',
       message: `${fnKey}: ${errors.join('; ')}`,
       hint: `signature: ${JSON.stringify(sig)}`,
@@ -95,45 +124,118 @@ const idemFor = (adapter: Adapter): Promise<Idem> => {
   }
   return p
 }
+
 export const _resetIdempotency = (): void => {
   /* records are durable; nothing to clear */
 }
 
+const canonical = (value: unknown): string => {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, held]) => `${JSON.stringify(key)}:${canonical(held)}`)
+    .join(',')}}`
+}
+
+const requestDigest = (args: Record<string, unknown>): string =>
+  createHash('sha256').update(canonical(args)).digest('hex')
+
+const idempotencyKey = (
+  fnKey: string,
+  key: string,
+  o: {
+    actor?: string | null
+    idempotencyNamespace?: string | null
+    scope?: import('../types.ts').Scope
+  },
+): string => {
+  const digest = requestDigest({
+    actor: o.actor ?? null,
+    branch: o.scope?.branch ?? null,
+    branches: [...(o.scope?.branches ?? [])].sort(),
+    companies: [...(o.scope?.companies ?? [])].sort(),
+    company: o.scope?.company ?? null,
+    fn: fnKey,
+    key,
+    namespace: o.idempotencyNamespace ?? null,
+  })
+  return `v2:${digest}`
+}
+
+export type CallOptions = {
+  adapter: Adapter
+  manifest: Manifest
+  dryRun?: boolean
+  actor?: string | null
+  /** Ephemeral correlation propagated to Ctx; never persisted by the framework. */
+  correlationId?: string | null
+  idempotencyKey?: string | null
+  /** Separates public callers that can choose the same client key. */
+  idempotencyNamespace?: string | null
+  /** Defaults to a canonical digest of validated function arguments. */
+  idempotencyDigest?: string | null
+  scope?: import('../types.ts').Scope
+  /**
+   * The functions this caller may invoke. Undefined or null means unrestricted,
+   * which is what an internal call, a migration or a test is — the check exists
+   * for requests carrying an identity, and a caller with no identity has no
+   * business being narrowed by one.
+   *
+   * A list rather than a predicate so that it can be printed, diffed and stored.
+   * The framework enforces it; which list a user gets is the deployment's decision, the
+   * same split as the datastore driver.
+   */
+  allow?: readonly string[] | null
+  /** Runtime override for the optional queue wake-up signal. */
+  queueNotify?: boolean
+  /** Where this call's operational log goes. Absent discards. */
+  log?: Logger
+}
+
+/**
+ * Every call arrives here — HTTP, an in-process route, a job's own dispatch, a
+ * test — which is why this is the one place that has to record what happened.
+ *
+ * An anticipated failure is a warning and an unanticipated one is an error: a
+ * KetError is a contract this system named and expected to reject, while anything
+ * else escaped a `try` nobody wrote. Only the second kind carries a stack, and only
+ * the second kind should wake somebody up.
+ */
 export async function callFn(
   fnKey: string,
   args: Record<string, unknown>,
-  o: {
-    adapter: Adapter
-    manifest: Manifest
-    dryRun?: boolean
-    actor?: string | null
-    idempotencyKey?: string | null
-    scope?: import('../types.ts').Scope
-    /**
-     * The functions this caller may invoke. Undefined or null means unrestricted,
-     * which is what an internal call, a migration or a test is — the check exists
-     * for requests carrying an identity, and a caller with no identity has no
-     * business being narrowed by one.
-     *
-     * A list rather than a predicate so that it can be printed, diffed and stored.
-     * The framework enforces it; which list a user gets is the app's decision, the
-     * same split as the datastore driver.
-     */
-    allow?: readonly string[] | null
-    /** Runtime override for the optional queue wake-up signal. */
-    queueNotify?: boolean
-  },
+  o: CallOptions,
 ): Promise<CallResult> {
-  const def = registry.get(fnKey)
-  const owner = fnKey.split('.')[0] as string
-  if (o.manifest.disabledModules?.includes(owner)) {
-    throw new KetError({
-      code: 'E_APP_NOT_INSTALLED',
-      module: owner,
-      message: `"${fnKey}" belongs to "${owner}", which is not installed on this database`,
-      hint: `install "${owner}" first — the code ships with this deployment, it is simply switched off here`,
+  const started = Date.now()
+  try {
+    const result = await runFn(fnKey, args, o)
+    o.log?.log({
+      level: 'info',
+      event: 'fn_call',
+      fn: fnKey,
+      durationMs: Date.now() - started,
+      dryRun: result.dryRun,
+      ...(result.replayed ? { replayed: true } : {}),
     })
+    return result
+  } catch (cause) {
+    const known = cause instanceof KetError
+    o.log?.log({
+      level: known ? 'warn' : 'error',
+      // A caller reaching for something it may not have is a security signal, not
+      // a malfunction, and it is counted separately for that reason.
+      event: known && cause.code === 'E_FN_NOT_PERMITTED' ? 'fn_denied' : 'fn_error',
+      fn: fnKey,
+      durationMs: Date.now() - started,
+      error: cause,
+    })
+    throw cause
   }
+}
+
+async function runFn(fnKey: string, args: Record<string, unknown>, o: CallOptions): Promise<CallResult> {
+  const def = registry.get(fnKey)
   if (!def)
     throw new KetError({
       code: 'E_UNKNOWN_FUNCTION',
@@ -145,6 +247,7 @@ export async function callFn(
   // call this at all learns that and nothing else — not which arguments it takes,
   // and not whether the ones they guessed were right.
   if (o.allow && !o.allow.includes(fnKey)) {
+    const owner = fnKey.split('.')[0] ?? fnKey
     throw new KetError({
       code: 'E_FN_NOT_PERMITTED',
       module: owner,
@@ -157,28 +260,42 @@ export async function callFn(
   const meta = o.manifest.functions[fnKey]!
   const dryRun = o.dryRun ?? false
 
+  if (o.idempotencyKey && !meta.idempotent) {
+    throw new KetError({
+      code: 'E_NOT_IDEMPOTENT',
+      message: `"${fnKey}" is not declared idempotent but was called with an idempotency key`,
+      hint: 'declare `idempotent: true` on the function, or drop the key',
+    })
+  }
+  if (dryRun && !meta.dryRun)
+    throw new KetError({ code: 'E_NO_DRY_RUN', message: `"${fnKey}" does not support dry-run` })
+
   // Create system queue tables on the root adapter before user code can enter a
   // transaction. Lazy DDL inside a rolled-back transaction would otherwise leave
   // an in-memory "initialized" marker pointing at a table that no longer exists.
   if (Object.keys(o.manifest.jobs).length) await queueFor(o.adapter)
 
-  const idemKey = o.idempotencyKey ? `${fnKey}:${o.idempotencyKey}` : null
+  // A dry-run is a preview, not an execution. It neither claims nor completes the
+  // caller's durable key: otherwise the following real command would replay the
+  // simulated result and never perform the writes it previewed.
+  const idemKey = !dryRun && o.idempotencyKey ? idempotencyKey(fnKey, o.idempotencyKey, o) : null
+  const idemDigest = idemKey ? (o.idempotencyDigest ?? requestDigest(args)) : null
   let idem: Idem | null = null
 
   if (idemKey) {
-    if (!meta.idempotent) {
-      throw new KetError({
-        code: 'E_NOT_IDEMPOTENT',
-        message: `"${fnKey}" is not declared idempotent but was called with an idempotency key`,
-        hint: 'declare `idempotent: true` on the function, or drop the key',
-      })
-    }
     idem = await idemFor(o.adapter)
     // Claim the key before doing any work. Losing the race means another caller is
     // either mid-flight or already finished, and both are answered from the record.
-    const claimed = await idem.claim(idemKey, fnKey)
+    const claimed = await idem.claim(idemKey, fnKey, 5 * 60_000, idemDigest)
     if (!claimed) {
       const existing = await idem.read(idemKey)
+      if (existing?.digest && existing.digest !== idemDigest) {
+        throw new KetError({
+          code: 'E_IDEMPOTENCY_CONFLICT',
+          message: `idempotency key "${o.idempotencyKey}" was already used with a different request`,
+          hint: 'reuse a key only when retrying the exact same command',
+        })
+      }
       if (existing?.state === 'done') return { ...(existing.result as CallResult), replayed: true }
       throw new KetError({
         code: 'E_IDEMPOTENCY_IN_FLIGHT',
@@ -187,17 +304,16 @@ export async function callFn(
       })
     }
   }
-  if (dryRun && !meta.dryRun)
-    throw new KetError({ code: 'E_NO_DRY_RUN', message: `"${fnKey}" does not support dry-run` })
-
   const ctx: Ctx = createContext({
     adapter: o.adapter,
     manifest: o.manifest,
     fnKey,
     dryRun,
     actor: o.actor ?? null,
+    correlationId: o.correlationId ?? null,
     scope: o.scope,
     queueNotify: o.queueNotify,
+    ...(o.log ? { log: o.log.child({ fn: fnKey, dryRun }) } : {}),
   })
 
   let result: CallResult

@@ -9,13 +9,16 @@ const MODULE_KEYS = new Set([
   'name',
   'version',
   'depends',
+  'compatible',
   'models',
   'extend',
   'joints',
   'fills',
   'functions',
+  'permissions',
   'jobs',
   'views',
+  'reports',
   'requires',
   'tokens',
   'templates',
@@ -26,19 +29,16 @@ const MODULE_KEYS = new Set([
   'contentTypes',
   'taxonomies',
   'relations',
-  'app',
   'title',
   'summary',
   'category',
-  'install',
-  'autoInstall',
-  'removable',
   'messages',
   'omits',
   'menus',
   'assets',
   'styles',
   'routes',
+  'reserves',
 ])
 
 export function defineModule(spec: ModuleSpec): KetModule {
@@ -66,13 +66,16 @@ export function defineModule(spec: ModuleSpec): KetModule {
     name: spec.name,
     version: spec.version ?? '0.0.0',
     depends: Object.freeze([...(spec.depends ?? [])]),
+    compatible: Object.freeze({ ...(spec.compatible ?? {}) }),
     models: spec.models ?? {},
     extend: spec.extend ?? {},
     joints: spec.joints ?? {},
     fills: spec.fills ?? {},
     functions: spec.functions ?? {},
+    permissions: spec.permissions ?? null,
     jobs: spec.jobs ?? {},
     views: spec.views ?? {},
+    reports: spec.reports ?? {},
     requires: Object.freeze([...(spec.requires ?? [])]),
     tokens: spec.tokens ?? {},
     templates: spec.templates ?? {},
@@ -80,6 +83,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     assets: spec.assets ?? null,
     styles: Object.freeze([...(spec.styles ?? [])]),
     routes: spec.routes ?? {},
+    reserves: Object.freeze([...(spec.reserves ?? [])]),
     menus: spec.menus ?? {},
     omits: Object.freeze([...(spec.omits ?? [])]),
     islands: spec.islands ?? {},
@@ -87,34 +91,32 @@ export function defineModule(spec: ModuleSpec): KetModule {
     contentTypes: spec.contentTypes ?? {},
     taxonomies: spec.taxonomies ?? {},
     relations: spec.relations ?? {},
-    app: spec.app === true,
     title: spec.title ?? spec.name,
     summary: spec.summary ?? '',
     category: spec.category ?? 'Khác',
-    install: spec.install ?? (spec.autoInstall === true ? 'auto' : 'manual'),
-    removable: spec.removable !== false,
     messages: spec.messages ?? {},
   })
 }
 
 // A theme is a module with a restricted role. It may provide templates, fill
 // joints and declare tokens; it may NOT declare models, extend models, or register
-// server functions. Third-party themes are only safe to install because this
+// server functions. Third-party themes are only safe to compose because this
 // restriction is enforced here rather than left to convention.
 const THEME_FORBIDDEN = [
   'models',
   'extend',
   'functions',
+  'permissions',
   'jobs',
   'islands',
   'contentTypes',
   'taxonomies',
+  'reports',
 ] as const
 
 /**
- * A theme is installable like anything else — it has to be, since its templates are
- * what a page renders through. So it defaults to appearing in the app list under its
- * own category: a theme nobody can switch on is a theme nobody can use.
+ * A theme follows the same module contract, with additional restrictions because
+ * its templates render untrusted content inside the deployment.
  */
 export function defineTheme(spec: ModuleSpec): KetModule {
   // Assets and styles a theme may ship — that is most of what a theme *is*. Routes
@@ -126,6 +128,14 @@ export function defineTheme(spec: ModuleSpec): KetModule {
       module: spec.name,
       message: `theme "${spec.name}" declares routes, which themes are not allowed to do`,
       hint: 'a route is server code; a theme may ship assets and styles, and place an island for behaviour',
+    })
+  }
+  if (spec.reserves?.length) {
+    throw new KetError({
+      code: 'E_THEME_OVERREACH',
+      module: spec.name,
+      message: `theme "${spec.name}" reserves server route prefixes, which themes are not allowed to do`,
+      hint: 'move the route contract into a module',
     })
   }
   for (const k of THEME_FORBIDDEN) {
@@ -142,5 +152,5 @@ export function defineTheme(spec: ModuleSpec): KetModule {
       })
     }
   }
-  return defineModule({ app: true, category: 'Giao diện', ...spec, kind: 'theme' })
+  return defineModule({ category: 'Giao diện', ...spec, kind: 'theme' })
 }

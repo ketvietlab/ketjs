@@ -7,7 +7,6 @@ import { relations } from './relations.ts'
 export default defineModule({
   name: 'address',
   version: '0.1.0',
-  app: true,
   title: 'Địa chỉ',
   summary: 'Quốc gia, catalog địa giới có phiên bản và định dạng địa chỉ.',
   category: 'Danh bạ',

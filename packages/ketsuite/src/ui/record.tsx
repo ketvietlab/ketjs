@@ -7,15 +7,17 @@
 
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Breadcrumb } from './navigation.tsx'
 
 export const HOOKS = [
   'record-workspace',
   'record-sheet',
+  'record-top',
   'record-header',
   'record-identity',
-  'record-thumbnail',
-  'record-kicker',
+  'record-heading-row',
   'record-heading',
+  'record-status',
   'record-subtitle',
   'record-badges',
   'record-toggle',
@@ -57,6 +59,7 @@ export const recordToggle = (options: {
       data-ui="record-toggle-input"
       type="checkbox"
       name={options.name}
+      autocomplete="off"
       value="1"
       checked={options.checked}
       form={options.form ?? undefined}
@@ -73,12 +76,25 @@ const summaryContent = (item: RecordSummaryItem): TemplateResult => (
   </>
 )
 
-type RecordWorkspaceOptions = {
+export type RecordBreadcrumbs = {
+  label: string
+  items: readonly Breadcrumb[]
+}
+
+export type RecordWorkspaceOptions = {
   /** Marks the generic page frame added by `framed`; nested record workspaces flatten it. */
   pageFrame?: boolean
   kicker?: string | null
   title: string
+  /**
+   * A record always has a trail. Screens with a richer hierarchy can provide
+   * all levels; the shared fallback keeps older records consistent by using
+   * their module kicker and current title.
+   */
+  breadcrumbs?: RecordBreadcrumbs
   subtitle?: string | null
+  /** Compact state shown beside the record title. */
+  status?: JSXChild
   image?: { src: string; alt: string } | null
   imageFallback: JSXChild
   badges?: readonly JSXChild[]
@@ -94,12 +110,11 @@ type RecordWorkspaceOptions = {
 const recordHeader = (options: RecordWorkspaceOptions): TemplateResult => (
   <>
     <div data-ui="record-identity">
-      <div data-ui="record-thumbnail" data-empty={String(!options.image)}>
-        {options.image ? <img src={options.image.src} alt={options.image.alt} /> : options.imageFallback}
-      </div>
       <div>
-        {!!options.kicker && <p data-ui="record-kicker">{options.kicker}</p>}
-        <h1 data-ui="record-heading">{options.title}</h1>
+        <div data-ui="record-heading-row">
+          <h1 data-ui="record-heading">{options.title}</h1>
+          {options.status !== undefined && <span data-ui="record-status">{options.status}</span>}
+        </div>
         {!!options.subtitle && <p data-ui="record-subtitle">{options.subtitle}</p>}
       </div>
     </div>
@@ -148,11 +163,13 @@ export const recordWorkspace = (options: RecordWorkspaceOptions): TemplateResult
       data-has-aside={String(options.aside !== undefined)}
     >
       <section data-ui="record-sheet">
-        <header data-ui="record-header" data-ket-slot={options.slots?.header}>
-          {recordHeader(options)}
-        </header>
+        <div data-ui="record-top">
+          <header data-ui="record-header" data-ket-slot={options.slots?.header}>
+            {recordHeader(options)}
+          </header>
+          {options.controller !== undefined && <div data-ui="record-controller">{options.controller}</div>}
+        </div>
         {options.navigation !== undefined && <div data-ui="record-navigation">{options.navigation}</div>}
-        {options.controller !== undefined && <div data-ui="record-controller">{options.controller}</div>}
         <div data-ui="record-body" data-ket-slot={options.slots?.body}>
           {options.body}
         </div>

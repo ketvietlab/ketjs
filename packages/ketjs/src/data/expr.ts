@@ -4,9 +4,34 @@
 // query you can inspect can be checked against a function's declared effects before
 // it runs, handed to an agent as data, and rendered for two dialects from one shape.
 
+import { assertGroupInterval } from './time.ts'
 import type { GroupInterval } from './time.ts'
+import type { FieldBase } from '../types.ts'
 
-export type Col = { readonly model: string; readonly name: string }
+declare const COLUMN_HANDLE: unique symbol
+const COLUMN_HANDLES = new WeakSet<object>()
+
+/**
+ * A manifest-backed column handle created by `table()`/`ctx.table()`.
+ *
+ * A private type brand and module-owned WeakSet identity are checked. Merely
+ * spelling or spreading `{ model, name, base }` is not enough: a forged `base`
+ * could select SQL semantics that do not match the physical column, most notably
+ * SQLite's exact-decimal path.
+ */
+export type Col = {
+  readonly model: string
+  readonly name: string
+  readonly base: FieldBase
+  readonly [COLUMN_HANDLE]: true
+}
+
+/** Internal constructor; application code obtains columns from `table()`. */
+export const makeCol = (model: string, name: string, base: FieldBase): Col => {
+  const handle = { model, name, base } as Col
+  COLUMN_HANDLES.add(handle)
+  return Object.freeze(handle)
+}
 
 export type Expr =
   | { readonly op: 'and'; readonly parts: Expr[] }
@@ -36,14 +61,36 @@ export type Expr =
       readonly value: string
     }
 
-const isCol = (c: unknown): c is Col =>
-  !!c && typeof c === 'object' && typeof (c as Col).model === 'string' && typeof (c as Col).name === 'string'
+const FIELD_BASES = new Set<FieldBase>([
+  'id',
+  'text',
+  'int',
+  'float',
+  'decimal',
+  'bool',
+  'json',
+  'date',
+  'datetime',
+  'ref',
+])
 
-const col = (c: Col): Col => {
-  if (!isCol(c))
-    throw new Error(`expected a column from table(), got ${JSON.stringify(c)} — did you use a plain string?`)
-  return c
+export const assertCol = (candidate: unknown): Col => {
+  const c = candidate as Partial<Col> | null
+  if (
+    !c ||
+    typeof c !== 'object' ||
+    typeof c.model !== 'string' ||
+    typeof c.name !== 'string' ||
+    !FIELD_BASES.has(c.base as FieldBase) ||
+    !COLUMN_HANDLES.has(c)
+  )
+    throw new Error(
+      `expected a column from table(), got ${JSON.stringify(candidate)} — model, name, and base metadata cannot be constructed by hand`,
+    )
+  return c as Col
 }
+
+const col = assertCol
 
 export const eq = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '=', value })
 export const ne = (c: Col, value: unknown): Expr => ({ op: 'cmp', col: col(c), cmp: '<>', value })
@@ -72,7 +119,9 @@ export const isNotNull = (c: Col): Expr => ({ op: 'null', col: col(c), negated: 
 export const bucketEq = (c: Col, interval: GroupInterval, timezone: string, value: string): Expr => ({
   op: 'bucket',
   col: col(c),
-  interval,
+  // Rejected at construction as well as at toSQL: the type says GroupInterval, but
+  // a value arriving as JSON has not been through the compiler.
+  interval: assertGroupInterval(interval),
   timezone,
   value,
 })

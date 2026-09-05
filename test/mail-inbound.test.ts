@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { test } from 'node:test'
-import { defineApp, defineModule } from '@ketvietlab/ketjs'
+import { defineDeployment, defineModule } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
-import { createTestApp, TestHttpError } from '@ketvietlab/ketjs/testing'
+import { createTestDeployment, TestHttpError } from '@ketvietlab/ketjs/testing'
 import {
   address,
   company,
@@ -27,7 +27,6 @@ const asAdmin = { scope, actor: 'u-admin' }
 const fixture = defineModule({
   name: 'mail_inbound_fixture',
   depends: ['mail_inbound'],
-  app: true,
   functions: {
     seedOutbound: {
       effects: ['write:mail.Thread', 'write:mail.Message', 'write:mail_transport.Delivery'],
@@ -104,7 +103,7 @@ const sendWebhook = async (
   return { response, body: (await response.json()) as Record<string, unknown> }
 }
 
-const seedIdentity = async (e2e: Awaited<ReturnType<typeof createTestApp>>): Promise<void> => {
+const seedIdentity = async (e2e: Awaited<ReturnType<typeof createTestDeployment>>): Promise<void> => {
   for (const [id, kind, name, email] of [
     ['p-company', 'company', 'ACME', 'hello@acme.test'],
     ['p-admin', 'person', 'Admin', 'admin@acme.test'],
@@ -138,7 +137,7 @@ test('inbound plain text conversion discards active HTML instead of sanitizing i
 })
 
 test('inbound email: signed reply/reference/bounce routing, attachment storage, dedupe and stock alias work end to end', async () => {
-  const app = defineApp({
+  const app = defineDeployment({
     name: 'mail_inbound_e2e',
     modules: [
       address,
@@ -158,11 +157,10 @@ test('inbound email: signed reply/reference/bounce routing, attachment storage, 
     headless: true,
     worker: { queues: { maintenance: 1 } },
     serve: {
-      bootstrap: ['mail_inbound_fixture', 'stock_mail_inbound'],
       sessions: { anonymous: { company: 'acme' } },
     },
   })
-  const e2e = await createTestApp(app, {
+  const e2e = await createTestDeployment(app, {
     env: { KET_WEBHOOK_SECRET: webhookSecret },
   })
   try {
@@ -190,7 +188,7 @@ test('inbound email: signed reply/reference/bounce routing, attachment storage, 
         }),
       (error: unknown) => {
         assert.ok(error instanceof TestHttpError)
-        assert.equal(error.status, 400)
+        assert.equal(error.status, 403)
         assert.equal((error.body as { code?: string }).code, 'E_FN_NOT_PERMITTED')
         return true
       },

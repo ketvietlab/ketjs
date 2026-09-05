@@ -13,6 +13,10 @@ const vi = {
   'field.email': 'Email',
   'field.phone': 'Điện thoại',
   'field.description': 'Mô tả',
+  'error.contactRequired': 'Cần ít nhất một cách liên hệ: email hoặc điện thoại.',
+  'error.rateLimit': 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
+  'error.inboxUnavailable':
+    'Kênh tiếp nhận tiềm năng chưa sẵn sàng. Website đang chạy dưới một công ty chưa được tạo.',
 } as const
 const en: Record<keyof typeof vi, string> = {
   'app.title': 'CRM Website',
@@ -29,5 +33,9 @@ const en: Record<keyof typeof vi, string> = {
   'field.email': 'Email',
   'field.phone': 'Phone',
   'field.description': 'Description',
+  'error.contactRequired': 'Enter at least one way to reach you: an email or a phone number.',
+  'error.rateLimit': 'Too many requests from here. Please try again later.',
+  'error.inboxUnavailable':
+    'Lead capture is not available: the site is being served under a company that does not exist.',
 }
 export const messages = { vi, en }

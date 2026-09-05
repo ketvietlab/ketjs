@@ -14,6 +14,8 @@ export const models: Record<string, ModelDef> = {
       kind: 'text',
       url: 'text?',
       storeKey: 'text?',
+      /** Worker-owned projection; the canonical storeKey always remains private/default. */
+      publicStoreKey: 'text?',
       mimetype: 'text',
       size: 'int',
       checksum: 'text?',

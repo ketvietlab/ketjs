@@ -5,21 +5,10 @@ export default defineModule({
   name: 'mail_inbound_backend',
   version: '0.1.0',
   depends: ['mail_inbound', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Email đến',
   summary: 'Chẩn đoán webhook, routing reply, bounce và alias.',
   category: 'Năng suất',
   routes,
-  menus: {
-    inbound: {
-      label: 'menu.app',
-      icon: 'download',
-      path: '/admin/inbound-email',
-      sequence: 17,
-      needs: 'mail_inbound.listEvents',
-    },
-  },
   messages: {
     vi: {
       'app.title': 'Email đến',
@@ -27,6 +16,7 @@ export default defineModule({
       'app.category': 'Năng suất',
       'menu.app': 'Email đến',
       title: 'Nhật ký email đến',
+      subtitle: 'Theo dõi webhook, trạng thái định tuyến và chẩn đoán email đến.',
       empty: 'Chưa nhận email nào.',
       emptyHint: 'Webhook đã xác thực, reply và bounce sẽ xuất hiện tại đây.',
       system: 'Provider',
@@ -43,6 +33,7 @@ export default defineModule({
       'app.category': 'Productivity',
       'menu.app': 'Inbound email',
       title: 'Inbound email log',
+      subtitle: 'Inspect inbound webhooks, routing states and diagnostics.',
       empty: 'No inbound email has arrived.',
       emptyHint: 'Verified webhooks, replies and bounces appear here.',
       system: 'Provider',
@@ -57,4 +48,4 @@ export default defineModule({
 })
 
 export { routes } from './routes.ts'
-export { inboundScreen } from './screens.tsx'
+export { inboundScreen } from './screens/index.ts'

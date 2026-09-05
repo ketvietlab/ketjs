@@ -5,6 +5,13 @@
 
 export const LAYER_ORDER = ['ket.reset', 'ket.theme', 'ket.app', 'ket.user'] as const
 
+/**
+ * The statement that fixes the order, for the document to emit before the first
+ * stylesheet loads. `@layer a, b, c;` establishes precedence on its own; where the
+ * layers are then written no longer matters.
+ */
+export const LAYER_ORDER_CSS = `@layer ${LAYER_ORDER.join(', ')};`
+
 export function tokensToCss(
   tokens: Record<string, string>,
   layer: (typeof LAYER_ORDER)[number] = 'ket.theme',

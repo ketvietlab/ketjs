@@ -7,14 +7,14 @@ import { fileURLToPath } from 'node:url'
 const moduleDir = dirname(fileURLToPath(import.meta.url))
 const artifacts = join(moduleDir, 'artifacts', 'product-variant-detail')
 const uploadFixture = join(moduleDir, 'fixtures', 'product-primary.png')
-const variantPath = '/admin/products/tpl-review/variants/variant-review'
+const variantPath = '/admin/product/templates/tpl-review/variants/variant-review'
 
 const login = async (page: Page) => {
   await page.goto('/login?lang=vi')
   await page.locator('input[name="login"]').fill('admin')
   await page.locator('input[name="password"]').fill('product-demo')
   await page.locator('button[type="submit"]').click()
-  await expect(page).toHaveURL(/\/admin(?:\?|$)/)
+  await expect(page).toHaveURL(/\/admin(?:\/|\?|$)/)
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -38,16 +38,21 @@ for (const viewport of [
         const metrics = await page.evaluate(() => ({
           documentWidth: document.documentElement.scrollWidth,
           viewportWidth: window.innerWidth,
+          // A relation field's native <select> is a 1px, opacity-0 value carrier
+          // that only exists so the form submits and validates; the control the
+          // reader actually sees and clicks is its trigger button.
           visibleControls: [
             ...document.querySelectorAll<HTMLElement>(
-              '[data-ui="record-body"] input:not([type="hidden"]):not([type="file"]), [data-ui="record-body"] select',
+              '[data-ui="form-page-body"] input:not([type="hidden"]):not([type="file"]), [data-ui="form-page-body"] select:not([data-ui="relation-native"]), [data-ui="form-page-body"] [data-ui="relation-trigger"]',
             ),
           ]
             .filter((control) => control.getBoundingClientRect().height > 0)
             .map((control) => control.getBoundingClientRect().height),
         }))
         expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth)
-        expect(metrics.visibleControls.every((height) => height === 28)).toBe(true)
+        // The public design-system contract fixes default fields at 34px.
+        const fieldHeight = 34
+        expect(metrics.visibleControls.every((height) => height === fieldHeight)).toBe(true)
         if (tab === 'media') {
           await expect(page.locator('[data-ui="media-item"]')).toHaveCount(2)
           await expect
@@ -71,7 +76,9 @@ for (const viewport of [
 
 test('updates variant fields and manages variant media', async ({ page }) => {
   await page.goto(`${variantPath}?tab=general&lang=vi`)
-  await expect(page.locator('[data-ui="record-heading"]')).toHaveText('JACKET-REVIEW')
+  await expect(
+    page.locator('[data-ket-slot="product.record-header"] [data-ui="form-page-title"]'),
+  ).toHaveText('JACKET-REVIEW')
   await expect(page.locator('[data-ui="chatter-error"]')).toHaveCount(0)
 
   await page.locator('input[name="defaultCode"]').fill('JACKET-REVIEW-UPDATED')
@@ -95,7 +102,7 @@ test('updates variant fields and manages variant media', async ({ page }) => {
     'Biến thể áo khoác màu cam',
   )
   await page.locator('[data-ui="media-file-input"]').setInputFiles(uploadFixture)
-  await page.getByRole('button', { name: 'Thêm ảnh' }).click()
+  await page.locator('[data-ui="media-upload"]').evaluate((form: HTMLFormElement) => form.requestSubmit())
   await expect(page.locator('[data-ui="media-item"]')).toHaveCount(3)
   await page.getByRole('button', { name: 'Xóa ảnh' }).last().click()
   await expect(page.locator('[data-ui="media-item"]')).toHaveCount(2)

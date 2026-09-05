@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
 import type { Row } from '@ketvietlab/ketjs'
-import { createTestApp } from '@ketvietlab/ketjs/testing'
-import { ketsuite } from '../apps/ketsuite/app.ts'
+import { createTestDeployment } from '@ketvietlab/ketjs/testing'
+import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
 const boot = async (t: TestContext) => {
-  const app = await createTestApp(ketsuite)
+  const app = await createTestDeployment(ketsuite)
   t.after(() => app.close())
   const scope = { company: 'acme', branches: null }
   const fixture = (name: string, input: Record<string, unknown>) =>
@@ -55,14 +55,58 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   let row = await call<Row>('crm.case.get', { id })
   assert.equal(row.kind, 'lead')
 
-  const converted = await app.client.post(
-    `/admin/crm/cases/${id}?lang=en`,
+  // Converting is confirmed, not clicked. The acknowledgement is checked on the
+  // server, so a post without it leaves a lead as a lead.
+  const unconfirmed = await app.client.post(
+    `/admin/crm/cases/${id}?lang=en&modal=convert`,
     new URLSearchParams({ action: 'convert', expectedVersion: String(row.version) }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
+  assert.equal(unconfirmed.status, 200)
+  const refused = await unconfirmed.text()
+  assert.match(refused, /Confirm the need before converting/u)
+  // The reason stays inside the step that asked, which is still open.
+  assert.match(refused, /Convert lead to opportunity/u)
+  assert.equal((await call<Row>('crm.case.get', { id })).kind, 'lead')
+
+  // And it says which version it saw. Without that the compare-and-set behind
+  // the action matches by construction and a stale tab wins.
+  const unversioned = await app.client.post(
+    `/admin/crm/cases/${id}?lang=en`,
+    new URLSearchParams({ action: 'convert', confirm: 'on' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(unversioned.status, 422)
+  assert.equal((await call<Row>('crm.case.get', { id })).kind, 'lead')
+
+  // The confirmation step chooses the stage the opportunity opens in.
+  const step = await app.client.get(`/admin/crm/cases/${id}?lang=en&modal=convert`)
+  assert.equal(step.status, 200)
+  const stepHtml = await step.text()
+  assert.match(stepHtml, /Convert lead to opportunity/u)
+  assert.match(stepHtml, /No second customer and no second case are created/u)
+  // The step posts back to itself, so a refusal lands with the step still open.
+  assert.match(stepHtml, /<form[^>]*action="[^"]*modal=convert[^"]*"/u)
+
+  const converted = await app.client.post(
+    `/admin/crm/cases/${id}?lang=en`,
+    new URLSearchParams({
+      action: 'convert',
+      confirm: 'on',
+      stageId: 'crm-stage-qualified',
+      expectedVersion: String(row.version),
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
   assert.equal(converted.status, 303)
+  // The step the conversion was asked from closes behind it.
+  assert.doesNotMatch(String(converted.headers.get('location')), /modal=convert/u)
   row = await call<Row>('crm.case.get', { id })
   assert.equal(row.kind, 'opportunity')
+  assert.equal(row.stageId, 'crm-stage-qualified', 'the chosen stage is the one it opens in')
+  // The same case, not a second one: converting keeps the record it changed.
+  assert.equal(row.id, id)
+  assert.equal(row.partnerId, 'customer')
 
   const moved = await app.client.post(
     '/admin/crm/pipeline/move?lang=en',
@@ -103,7 +147,9 @@ test('crm HTTP E2E: global filter/grouping, planner and configuration remain ope
   const grouped = await app.client.get('/admin/crm/cases?group=kind&lang=en')
   const groupedHtml = await grouped.text()
   assert.equal(grouped.status, 200)
-  assert.equal((groupedHtml.match(/data-ui="chrome-search"/g) ?? []).length, 1)
+  assert.equal((groupedHtml.match(/data-ui="chrome-search"/g) ?? []).length, 2)
+  assert.match(groupedHtml, /data-presentation="inline"/)
+  assert.match(groupedHtml, /data-presentation="modal"/)
   assert.match(groupedHtml, /data-ui="search-menu"/)
 
   const planner = await app.client.get('/admin/crm/activities?tab=mine&lang=en')

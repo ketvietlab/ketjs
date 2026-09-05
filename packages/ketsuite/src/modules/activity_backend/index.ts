@@ -6,8 +6,6 @@ export default defineModule({
   name: 'activity_backend',
   version: '0.1.0',
   depends: ['activity', 'backend'],
-  install: 'auto',
-  app: true,
   title: 'Hoạt động trong quản trị',
   summary: 'Danh sách việc cần làm, hạn xử lý và thao tác trên từng bản ghi.',
   category: 'Năng suất',
@@ -15,15 +13,6 @@ export default defineModule({
   styles: ['activity.css'],
   islands,
   routes,
-  menus: {
-    activity: {
-      label: 'menu.app',
-      icon: 'check-circle',
-      path: '/admin/activities',
-      sequence: 14,
-      needs: 'activity.listMy',
-    },
-  },
   fills: {
     'backend:sidebar.foot': `{% island "activity.indicator" %}`,
   },
@@ -34,6 +23,7 @@ export default defineModule({
       'app.category': 'Năng suất',
       'menu.app': 'Hoạt động',
       title: 'Hoạt động của tôi',
+      subtitle: 'Theo dõi và xử lý các hoạt động được giao từ một hàng đợi duy nhất.',
       empty: 'Không có hoạt động cần xử lý.',
       emptyHint: 'Hoạt động được lên lịch từ Chatter sẽ xuất hiện tại đây.',
       overdue: 'quá hạn',
@@ -57,6 +47,7 @@ export default defineModule({
       'app.category': 'Productivity',
       'menu.app': 'Activities',
       title: 'My activities',
+      subtitle: 'Track and process assigned activities from one work queue.',
       empty: 'No activities need attention.',
       emptyHint: 'Activities scheduled from Chatter will appear here.',
       overdue: 'overdue',
@@ -78,4 +69,4 @@ export default defineModule({
 })
 
 export { islands } from './islands.ts'
-export { activitiesScreen } from './screens.tsx'
+export { activitiesScreen } from './screens/index.ts'

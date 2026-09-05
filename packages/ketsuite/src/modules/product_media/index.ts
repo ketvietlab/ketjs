@@ -7,7 +7,6 @@ export default defineModule({
   name: 'product_media',
   version: '0.1.0',
   depends: ['product', 'storage'],
-  app: true,
   title: 'Hình ảnh sản phẩm',
   summary: 'Ảnh chính và thư viện ảnh của mẫu sản phẩm và biến thể.',
   category: 'Bán hàng',

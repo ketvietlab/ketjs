@@ -11,7 +11,7 @@ const SQL: Record<FieldBase, string> = {
   text: 'TEXT',
   int: 'BIGINT',
   float: 'DOUBLE PRECISION',
-  // Unbounded numeric, as Odoo uses for quantities and money. The driver hands it
+  // Unbounded numeric, as the domain contract uses for quantities and money. The driver hands it
   // back as a string, which is exactly what keeps it exact.
   decimal: 'NUMERIC',
   bool: 'BOOLEAN',
@@ -21,13 +21,40 @@ const SQL: Record<FieldBase, string> = {
   ref: 'TEXT',
 }
 
-// Postgres has real booleans and real json, so unlike SQLite there is almost
-// nothing to coerce. Objects still go over as JSON text for JSONB to parse.
-const bind = (v: unknown): unknown => {
-  if (v === undefined) return null
-  if (v !== null && typeof v === 'object' && !(v instanceof Date)) return JSON.stringify(v)
-  return v
+/**
+ * Dates come back as text, the way SQLite hands them back.
+ *
+ * The driver parses every date and timestamp column into a JS Date. That is a
+ * reasonable default and the wrong one here, because it makes the same field a
+ * different type depending on which datastore is underneath — and development and
+ * test run on SQLite while production runs on Postgres. A `date` fared worse
+ * still: `2026-08-22` arrived as an instant at UTC midnight, so it stopped being
+ * a calendar date and started being a timestamp that formats to the day before
+ * anywhere west of Greenwich.
+ *
+ * Only `parse` is overridden. Without a `serialize` the driver keeps its own, so
+ * writing a Date still works exactly as before.
+ */
+const TEXT_DATES = {
+  // 1082 DATE — already the calendar text the column holds.
+  ketDate: { from: [1082], parse: (value: string) => value },
+  // 1114 TIMESTAMP, 1184 TIMESTAMPTZ — normalised to the ISO-8601 SQLite stores.
+  ketTimestamp: { from: [1114, 1184], parse: (value: string) => new Date(value).toISOString() },
 }
+
+/**
+ * Postgres has real booleans and real json, so unlike SQLite there is almost
+ * nothing to coerce.
+ *
+ * An object is handed to the driver as an object. Stringifying it first looks
+ * like the SQLite path — where JSON really is text a column holds — but the
+ * driver already encodes a parameter bound to JSONB, so the string was encoded a
+ * second time and the column ended up holding a JSON *string* rather than the
+ * object: `jsonb_typeof` said `string`, and every `json` field read back as text.
+ * SQLite never showed it, because reads there parse the text back; the Postgres
+ * read path does not, trusting the driver to have handed back an object.
+ */
+const bind = (v: unknown): unknown => (v === undefined ? null : v)
 
 type Sql = {
   unsafe(text: string, params?: unknown[]): Promise<unknown[]> & { count?: number }
@@ -64,33 +91,52 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
     return tables
   }
 
-  const fromHandle = (handle: Sql): Adapter => ({
-    ...a,
-    transaction: true,
-    notifications: {
-      // pg_notify participates in the transaction on this reserved connection;
-      // PostgreSQL delivers it only after COMMIT and drops it on ROLLBACK.
-      async publish(channel, payload) {
-        await handle.unsafe('SELECT pg_notify($1, $2)', [channel, payload])
+  const fromHandle = (handle: Sql): { adapter: Adapter; deactivate: () => void } => {
+    let active = true
+    const needActive = (): Sql => {
+      if (!active) throw new Error('transaction-scoped adapter used after its transaction ended')
+      return handle
+    }
+    return {
+      adapter: {
+        ...a,
+        transaction: true,
+        async open() {
+          throw new Error('a transaction-scoped adapter is already open')
+        },
+        async close() {
+          throw new Error('a transaction-scoped adapter cannot close its root connection')
+        },
+        notifications: {
+          // pg_notify participates in the transaction on this reserved connection;
+          // PostgreSQL delivers it only after COMMIT and drops it on ROLLBACK.
+          async publish(channel, payload) {
+            await needActive().unsafe('SELECT pg_notify($1, $2)', [channel, payload])
+          },
+        },
+        async exec(text) {
+          await needActive().unsafe(text)
+        },
+        async all(text, params = []) {
+          return (await needActive().unsafe(text, params.map(bind))) as Row[]
+        },
+        async run(text, params = []) {
+          const r = (await needActive().unsafe(text, params.map(bind))) as unknown[] & { count?: number }
+          return { changes: Number(r.count ?? r.length ?? 0) }
+        },
+        async tx() {
+          needActive()
+          throw new Error('nested transactions are not supported')
+        },
+        async introspect() {
+          return introspect(needActive())
+        },
       },
-    },
-    async exec(text) {
-      await handle.unsafe(text)
-    },
-    async all(text, params = []) {
-      return (await handle.unsafe(text, params.map(bind))) as Row[]
-    },
-    async run(text, params = []) {
-      const r = (await handle.unsafe(text, params.map(bind))) as unknown[] & { count?: number }
-      return { changes: Number(r.count ?? r.length ?? 0) }
-    },
-    async tx() {
-      throw new Error('nested transactions are not supported')
-    },
-    async introspect() {
-      return introspect(handle)
-    },
-  })
+      deactivate: () => {
+        active = false
+      },
+    }
+  }
 
   const a: Adapter = {
     name: 'postgres',
@@ -111,7 +157,7 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
       }
       const mod = await import('postgres')
       const factory = (mod.default ?? mod) as unknown as (u: string, o: Record<string, unknown>) => Sql
-      sql = factory(url, { max: opts.max ?? 10, onnotice: () => {} })
+      sql = factory(url, { max: opts.max ?? 10, onnotice: () => {}, types: TEXT_DATES })
     },
 
     async close() {
@@ -150,13 +196,16 @@ export function postgresAdapter(url = process.env.DATABASE_URL ?? '', opts: Post
       const scoped = fromHandle(conn)
       try {
         await conn.unsafe('BEGIN')
-        const r = await fn(scoped)
+        const r = await fn(scoped.adapter)
+        scoped.deactivate()
         await conn.unsafe('COMMIT')
         return r
       } catch (e) {
+        scoped.deactivate()
         await conn.unsafe('ROLLBACK').catch(() => {})
         throw e
       } finally {
+        scoped.deactivate()
         conn.release()
       }
     },

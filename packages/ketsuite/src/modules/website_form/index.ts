@@ -1,5 +1,6 @@
 import { defineModule } from '@ketvietlab/ketjs'
 import { functions } from './functions.ts'
+import { jobs } from './jobs.ts'
 import { models } from './models.ts'
 import { sections } from './sections.ts'
 import { routes } from './routes.ts'
@@ -7,8 +8,6 @@ import { routes } from './routes.ts'
 export default defineModule({
   name: 'website_form',
   version: '0.1.0',
-  app: true,
-  install: 'auto',
   depends: ['website'],
   title: 'Biểu mẫu website',
   summary: 'Biểu mẫu có cấu trúc, chống spam và lưu submission theo từng website.',
@@ -38,6 +37,18 @@ export default defineModule({
       'error.invalidMessage': 'Thông báo thành công không hợp lệ hoặc quá dài.',
       'error.unavailable': 'Biểu mẫu hiện không khả dụng.',
       'error.rateLimit': 'Bạn đã gửi quá nhiều lần. Vui lòng thử lại sau.',
+      'error.staleForm': 'Biểu mẫu đã được cập nhật. Hãy tải lại trang trước khi gửi.',
+      'error.saveConflict': 'Biểu mẫu vừa được người khác lưu. Hãy tải lại rồi lưu lại.',
+      'error.consentRequired': 'Bạn cần đồng ý với thông báo trước khi gửi.',
+      'error.consentVersionRequired':
+        'Hãy tải lại trang trước khi gửi, để ghi nhận đúng thông báo bạn đã đồng ý.',
+      'error.invalidSummaryFields': 'Danh sách trường xem trước không hợp lệ.',
+      'error.unknownSummaryField': 'Trường xem trước không có trong biểu mẫu.',
+      'error.invalidRetention': 'Thời hạn lưu phải là số ngày từ 1 đến 3650.',
+      'error.noRetention': 'Biểu mẫu này chưa đặt thời hạn lưu.',
+      'error.exportFieldsRequired': 'Hãy chọn ít nhất một trường để xuất.',
+      'error.submissionNotFound': 'Không tìm thấy lượt gửi.',
+      'error.submissionPurged': 'Lượt gửi đã được xóa nội dung, không thể giữ lại.',
     },
     en: {
       'app.title': 'Website forms',
@@ -63,10 +74,23 @@ export default defineModule({
       'error.invalidMessage': 'The success message is invalid or too long.',
       'error.unavailable': 'The form is not available.',
       'error.rateLimit': 'Too many submissions. Please try again later.',
+      'error.staleForm': 'This form has been updated. Reload the page before submitting.',
+      'error.saveConflict': 'Someone else saved this form. Reload and save again.',
+      'error.consentRequired': 'You must agree to the notice before submitting.',
+      'error.consentVersionRequired':
+        'Reload the page before submitting, so the notice you agreed to is recorded correctly.',
+      'error.invalidSummaryFields': 'The preview field list is invalid.',
+      'error.unknownSummaryField': 'The preview field is not declared in the form.',
+      'error.invalidRetention': 'Retention must be a whole number of days between 1 and 3650.',
+      'error.noRetention': 'This form has no retention period set.',
+      'error.exportFieldsRequired': 'Choose at least one field to export.',
+      'error.submissionNotFound': 'The submission was not found.',
+      'error.submissionPurged': 'This submission has been erased and cannot be held.',
     },
   },
   models,
   functions,
+  jobs,
   sections,
   routes,
 })

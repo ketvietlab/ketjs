@@ -16,22 +16,42 @@ export type Column<R> = {
   label: string
   cell: (row: R) => Cell
   align?: 'end'
-  kind?: 'text' | 'number' | 'currency' | 'date' | 'status' | 'identifier' | 'person'
+  kind?: 'text' | 'number' | 'currency' | 'date' | 'status' | 'identifier' | 'person' | 'media'
   priority?: 'primary' | 'secondary' | 'tertiary'
   width?: 'narrow' | 'medium' | 'wide'
   sort?: { href: string; direction?: 'asc' | 'desc' | null; label: string }
   optional?: boolean
 }
 
+export type TableSelection = {
+  formId: string
+  action: string
+  field?: string
+  hidden?: Record<string, string>
+  actions: Array<{ id: string; label: string; tone?: 'default' | 'danger' }>
+}
+
 export type DataTable<R> = {
   columns: ReadonlyArray<Column<R>>
   rows: readonly R[]
   id: (row: R) => string
+  gutter?: 'compact'
+  selection?: TableSelection
   rowHref?: (row: R) => string
+  /** Keep row navigation without wrapping the first cell in a second link. */
+  rowLink?: boolean
   caption?: string | null
   shown?: readonly string[]
   colsHref?: (keys: readonly string[]) => string
   groups?: readonly TableGroup<R>[]
+  /**
+   * What a narrow screen does with columns that do not fit. `scroll` keeps the
+   * row horizontal and moves it sideways. `stack` gives each row its own block
+   * and labels every cell, which is the only one of the two that lets a reader
+   * see a value they never scrolled to. The design system styles both; this is
+   * the application table that decides which a screen asks for.
+   */
+  responsive?: 'scroll' | 'stack'
 }
 
 export type TableGroup<R> = {
@@ -53,6 +73,10 @@ export type TableGroup<R> = {
 export const HOOKS = [
   'table-scroll',
   'table',
+  'select-col',
+  'select-cell',
+  'select-all',
+  'row-select',
   'col',
   'row',
   'row-link',
@@ -114,11 +138,25 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
   const columns = visibleColumns(table)
   const configurable = !!table.colsHref && table.columns.some((column) => column.optional)
   return (
-    <div data-ui="table-scroll">
+    <div
+      data-ui="table-scroll"
+      data-gutter={table.gutter ?? null}
+      data-responsive={table.responsive ?? 'scroll'}
+    >
       <table data-ui="table">
         {!!table.caption && <caption data-ui="table-caption">{table.caption}</caption>}
         <thead>
           <tr>
+            {!!table.selection && (
+              <th data-ui="select-col">
+                <input
+                  data-ui="select-all"
+                  type="checkbox"
+                  autocomplete="off"
+                  aria-label={_('backend.table.selectAll')}
+                />
+              </th>
+            )}
             {each(
               columns,
               (column) => column.key,
@@ -156,8 +194,8 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
         </thead>
         <tbody>
           {table.groups?.length
-            ? groupRows(table, columns, configurable)
-            : rowViews(table.rows, table, columns, configurable)}
+            ? groupRows(_, table, columns, configurable)
+            : rowViews(_, table.rows, table, columns, configurable)}
         </tbody>
       </table>
     </div>
@@ -165,6 +203,7 @@ export const dataTable = <R,>(_: Translator, table: DataTable<R>): TemplateResul
 }
 
 const rowViews = <R,>(
+  _: Translator,
   rows: readonly R[],
   table: DataTable<R>,
   columns: ReadonlyArray<Column<R>>,
@@ -172,7 +211,20 @@ const rowViews = <R,>(
 ): TemplateResult => (
   <>
     {each(rows, table.id, (row) => (
-      <tr data-ui="row" data-row={table.id(row)}>
+      <tr data-ui="row" data-row={table.id(row)} data-row-href={table.rowHref ? table.rowHref(row) : null}>
+        {!!table.selection && (
+          <td data-ui="select-cell">
+            <input
+              data-ui="row-select"
+              type="checkbox"
+              name={`${table.selection.field ?? 'selected'}.${table.id(row)}`}
+              autocomplete="off"
+              value="1"
+              form={table.selection.formId}
+              aria-label={`${_('backend.table.selectRow')}: ${table.id(row)}`}
+            />
+          </td>
+        )}
         {each(
           columns,
           (column) => column.key,
@@ -183,8 +235,9 @@ const rowViews = <R,>(
               data-align={column.align ?? 'start'}
               data-kind={column.kind ?? 'text'}
               data-priority={column.priority ?? 'secondary'}
+              data-label={table.responsive === 'stack' ? column.label : null}
             >
-              {table.rowHref && column === columns[0] ? (
+              {table.rowHref && table.rowLink !== false && column === columns[0] ? (
                 <a data-ui="row-link" href={table.rowHref(row)}>
                   {column.cell(row)}
                 </a>
@@ -201,6 +254,7 @@ const rowViews = <R,>(
 )
 
 const groupRows = <R,>(
+  _: Translator,
   table: DataTable<R>,
   columns: ReadonlyArray<Column<R>>,
   configurable: boolean,
@@ -213,7 +267,7 @@ const groupRows = <R,>(
         (group) => (
           <>
             <tr data-ui="group-row" data-depth={String(group.depth)}>
-              <td colspan={String(columns.length + (configurable ? 1 : 0))}>
+              <td colspan={String(columns.length + (configurable ? 1 : 0) + (table.selection ? 1 : 0))}>
                 <a data-ui="group-link" href={group.href} aria-expanded={String(group.open)}>
                   <span data-ui="group-indent" style={`--group-depth:${group.depth}`} />
                   {icon(group.open ? 'chevron-down' : 'chevron-right')}
@@ -223,10 +277,10 @@ const groupRows = <R,>(
               </td>
             </tr>
             {group.open && !!group.children?.length && visit(group.children)}
-            {group.open && !!group.rows?.length && rowViews(group.rows, table, columns, configurable)}
+            {group.open && !!group.rows?.length && rowViews(_, group.rows, table, columns, configurable)}
             {group.open && group.pager && (
               <tr data-ui="group-pager">
-                <td colspan={String(columns.length + (configurable ? 1 : 0))}>
+                <td colspan={String(columns.length + (configurable ? 1 : 0) + (table.selection ? 1 : 0))}>
                   <span>{group.pager.label}</span>
                   {group.pager.prev ? (
                     <a href={group.pager.prev} aria-label="Previous page">

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
+  and,
   asc,
   bucketEq,
   compileListFilter,
@@ -10,6 +11,9 @@ import {
   inArray,
   isNull,
   like,
+  lt,
+  ne,
+  not,
   or,
 } from '@ketvietlab/ketjs'
 import type { Ctx, ListState, Row } from '@ketvietlab/ketjs'
@@ -29,14 +33,34 @@ export const issue = (field: string, code: string, params?: Record<string, unkno
 export const invalid = (...errors: CrmIssue[]): CrmResult => ({ ok: false, errors })
 export const now = (): string => new Date().toISOString()
 export const n = (value: unknown): number => Number(value ?? 0)
+
+/**
+ * When a case stops being open, it acquires a closing date.
+ *
+ * Reporting reads `closedAt` for cycle time, so it has to be written the moment
+ * a stage carries a terminal state and cleared again when the case is pulled
+ * back into the pipeline. A case that closes twice keeps the first date.
+ */
+export const closedAtFor = (held: Row, terminalState: unknown, timestamp: string): string | null =>
+  terminalState === 'won' || terminalState === 'lost' ? ((held.closedAt as string | null) ?? timestamp) : null
 export const normalized = (value: unknown): string =>
   String(value ?? '')
     .normalize('NFKC')
     .trim()
     .toLowerCase()
 
-const jsonStrings = (value: unknown): string[] =>
-  Array.isArray(value)
+/** Digits only, so `+84 90 123 4567` and `090-123-4567` compare equal. */
+export const dialled = (value: unknown): string => String(value ?? '').replace(/\D/g, '')
+
+const jsonStrings = (value: unknown): string[] => {
+  if (typeof value === 'string') {
+    try {
+      return jsonStrings(JSON.parse(value))
+    } catch {
+      return []
+    }
+  }
+  return Array.isArray(value)
     ? [
         ...new Set(
           value
@@ -46,6 +70,7 @@ const jsonStrings = (value: unknown): string[] =>
         ),
       ]
     : []
+}
 
 export const actorRequired = (ctx: Ctx): string | null => ctx.actor || null
 
@@ -102,19 +127,50 @@ const defaultStages = [
   },
 ] as const
 
+/**
+ * A seed row this company owns, whatever id it ended up carrying.
+ *
+ * `id` is the primary key across the whole tenant while the rows themselves are
+ * company scoped, so the second company to be seeded cannot reuse `crm-stage-new`
+ * — its insert hits `ON CONFLICT DO NOTHING` and vanishes. It gets the same row
+ * under a company-qualified id instead, and this is how a caller finds whichever
+ * of the two shapes is actually theirs.
+ */
+export const seededId = async (ctx: Ctx, model: string, id: string): Promise<string | null> => {
+  if ((await ctx.db.select(model, { id }))[0]) return id
+  const scoped = `${String(ctx.scope.company ?? '')}:${id}`
+  return (await ctx.db.select(model, { id: scoped }))[0] ? scoped : null
+}
+
+/** The activity type CRM schedules against when the caller names none. */
+export const crmActivityType = (ctx: Ctx): Promise<string | null> =>
+  seededId(ctx, 'activity.Type', 'crm-next-action')
+
 /** Idempotent seed used by named E2E fixtures and by the first write on a fresh company. */
 export async function ensureCrmDefaults(ctx: Ctx): Promise<void> {
-  await ctx.db.insertIfAbsent('crm.Team', {
+  const company = String(ctx.scope.company ?? '')
+  const seed = async (model: string, row: Row): Promise<void> => {
+    // Already seeded here, under either id.
+    if (await seededId(ctx, model, String(row.id))) return
+    const inserted = await ctx.db.insertIfAbsent(model, row)
+    if ('dryRun' in inserted || inserted.inserted) return
+    // The plain id belongs to another company. Take the qualified one, which is
+    // the difference between a working pipeline and a company whose every case
+    // is refused for having no stage to sit in.
+    if (company) await ctx.db.insertIfAbsent(model, { ...row, id: `${company}:${String(row.id)}` })
+  }
+  await seed('crm.Team', {
     id: 'crm-team-sales',
     code: 'sales',
     name: 'Sales',
     active: true,
+    leaderUserId: ctx.actor ?? null,
     assignmentMode: 'round_robin',
     assignmentCursor: 0,
     version: 1,
   })
-  for (const stage of defaultStages) await ctx.db.insertIfAbsent('crm.Stage', { ...stage, active: true })
-  await ctx.db.insertIfAbsent('activity.Type', {
+  for (const stage of defaultStages) await seed('crm.Stage', { ...stage, active: true })
+  await seed('activity.Type', {
     id: 'crm-next-action',
     name: 'CRM next action',
     category: 'call',
@@ -174,35 +230,89 @@ const userExists = async (ctx: Ctx, id: unknown): Promise<boolean> =>
 const teamExists = async (ctx: Ctx, id: unknown): Promise<boolean> =>
   !id || Boolean((await ctx.db.select('crm.Team', { id, active: true }))[0])
 
-async function canReadCase(ctx: Ctx, row: Row): Promise<boolean> {
-  if (!ctx.actor) return true
+export type CaseAction = 'view' | 'edit' | 'assign'
+export type CaseAccessScope = 'none' | 'self' | 'team' | 'company'
+export type CaseAudience = {
+  actor: string
+  action: CaseAction
+  scope: CaseAccessScope
+  /** Teams whose assigned records are visible for this action. */
+  teams: string[]
+  /** Teams whose unassigned queue the actor may inspect or claim. */
+  queueTeams: string[]
+}
+
+const ACCESS_SCOPES = ['none', 'self', 'team', 'company'] as const
+const accessScope = (value: unknown, fallback: CaseAccessScope): CaseAccessScope =>
+  ACCESS_SCOPES.includes(String(value) as CaseAccessScope) ? (String(value) as CaseAccessScope) : fallback
+
+/**
+ * Resolve record access independently for view, edit and assignment.
+ *
+ * `null` means "everything": either the call carries no actor at all — a job or
+ * a fixture running as the system — or the actor is a superuser. Ordinary users
+ * default to owner-private access. Team leaders get their teams for every action,
+ * while an explicit company-scoped grant is the business-manager alternative to
+ * making somebody a technical superuser.
+ */
+export async function caseAudience(ctx: Ctx, action: CaseAction = 'view'): Promise<CaseAudience | null> {
+  if (!ctx.actor) return null
   const user = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0]
-  if (user?.superuser === true) return true
-  if (row.assigneeUserId === ctx.actor) return true
-  if (!row.teamId) return row.createdByUserId === ctx.actor
+  if (user?.superuser === true) return null
+  const [memberships, ledTeams, grant] = await Promise.all([
+    ctx.db.select('crm.TeamMember', { userId: ctx.actor, active: true }),
+    ctx.db.select('crm.Team', { leaderUserId: ctx.actor, active: true }),
+    ctx.db.select('crm.AccessGrant', { userId: ctx.actor, active: true }).then((rows) => rows[0] ?? null),
+  ])
+  const memberTeams = [...new Set(memberships.map((row) => String(row.teamId)))]
+  const leaderTeams = [...new Set(ledTeams.map((row) => String(row.id)))]
+  const scope = accessScope(
+    grant?.[`${action}Scope`],
+    action === 'view' ? 'self' : action === 'edit' ? 'self' : 'self',
+  )
+  if (scope === 'company') return null
+  const teams = scope === 'team' ? [...new Set([...memberTeams, ...leaderTeams])] : leaderTeams
+  const queueTeams = action === 'edit' || scope === 'none' ? [] : memberTeams
+  return { actor: ctx.actor, action, scope, teams, queueTeams }
+}
+
+const audienceHolds = (audience: CaseAudience | null, row: Row): boolean => {
+  if (!audience) return true
+  const teamId = row.teamId ? String(row.teamId) : null
+  if (teamId && audience.teams.includes(teamId)) return true
+  if (audience.scope !== 'none' && row.assigneeUserId === audience.actor) return true
   return Boolean(
-    (
-      await ctx.db.select('crm.TeamMember', {
-        teamId: row.teamId,
-        userId: ctx.actor,
-        active: true,
-      })
-    )[0],
+    audience.action !== 'edit' && !row.assigneeUserId && teamId && audience.queueTeams.includes(teamId),
   )
 }
 
-export async function visibleCases(ctx: Ctx, rows: Row[]): Promise<Row[]> {
-  if (!ctx.actor) return rows
-  const user = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0]
-  if (user?.superuser === true) return rows
-  const memberships = await ctx.db.select('crm.TeamMember', { userId: ctx.actor, active: true })
-  const teams = new Set(memberships.map((membership) => String(membership.teamId)))
-  return rows.filter(
-    (row) =>
-      row.assigneeUserId === ctx.actor ||
-      row.createdByUserId === ctx.actor ||
-      (row.teamId && teams.has(String(row.teamId))),
-  )
+export async function canReadCase(ctx: Ctx, row: Row): Promise<boolean> {
+  return audienceHolds(await caseAudience(ctx, 'view'), row)
+}
+
+export async function canEditCase(ctx: Ctx, row: Row): Promise<boolean> {
+  return audienceHolds(await caseAudience(ctx, 'edit'), row)
+}
+
+export async function canAssignCase(ctx: Ctx, row: Row): Promise<boolean> {
+  return audienceHolds(await caseAudience(ctx, 'assign'), row)
+}
+
+/**
+ * `crm.Case` is a shared header, and a module that depends on the CRM may store
+ * its own `kind` on it — a support ticket, a warranty claim, whatever that
+ * module is for. Those rows are not the CRM's to show: its list offers "convert
+ * to opportunity", its detail screen saves through `case.save`, which refuses a
+ * kind it does not know, and its duplicate finder would offer to merge a ticket
+ * into a lead. So every CRM read is scoped to the two kinds this module owns,
+ * and the owning module answers for the rest through its own functions.
+ */
+export const ownedKinds = (): string[] => [...CASE_KINDS]
+export const ownsKind = (kind: unknown): boolean => CASE_KINDS.includes(String(kind) as never)
+
+export async function visibleCases(ctx: Ctx, rows: Row[], action: CaseAction = 'view'): Promise<Row[]> {
+  const audience = await caseAudience(ctx, action)
+  return audience ? rows.filter((row) => audienceHolds(audience, row)) : rows
 }
 
 export type SaveCaseInput = {
@@ -252,14 +362,37 @@ export async function saveCase(
   const run = async (tx: Ctx): Promise<CrmResult> => {
     await ensureCrmDefaults(tx)
     const existing = (await tx.db.select('crm.Case', { id: input.id }))[0]
-    if (existing && !(await canReadCase(tx, existing))) return invalid(issue('id', 'crm.error.notFound'))
+    if (existing && !(await canEditCase(tx, existing))) return invalid(issue('id', 'crm.error.notFound'))
     if (existing && existing.kind !== input.kind) return invalid(issue('kind', 'crm.error.leadConversion'))
     const stage = input.stageId
       ? await activeStage(tx, input.stageId, input.kind)
       : await firstStage(tx, input.kind)
     if (!stage) return invalid(issue('stageId', 'crm.error.invalidStage'))
-    const teamId = input.teamId ?? stage.teamId ?? 'crm-team-sales'
-    if (!(await teamExists(tx, teamId))) return invalid(issue('teamId', 'crm.error.notFound'))
+    const teamId =
+      input.teamId ?? existing?.teamId ?? stage.teamId ?? (await seededId(tx, 'crm.Team', 'crm-team-sales'))
+    if (!teamId || !(await teamExists(tx, teamId))) return invalid(issue('teamId', 'crm.error.notFound'))
+    if (existing) {
+      if (input.teamId && String(input.teamId) !== String(existing.teamId ?? ''))
+        return invalid(issue('teamId', 'crm.error.permission'))
+      if (input.assigneeUserId && String(input.assigneeUserId) !== String(existing.assigneeUserId ?? ''))
+        return invalid(issue('assigneeUserId', 'crm.error.permission'))
+    } else {
+      const candidate = { teamId, assigneeUserId: input.assigneeUserId || null }
+      if (!(await canAssignCase(tx, candidate)))
+        return invalid(issue('assigneeUserId', 'crm.error.permission'))
+      if (input.assigneeUserId) {
+        const team = (await tx.db.select('crm.Team', { id: teamId, active: true }))[0]
+        const member = (
+          await tx.db.select('crm.TeamMember', {
+            teamId,
+            userId: input.assigneeUserId,
+            active: true,
+          })
+        )[0]
+        if (!member && team?.leaderUserId !== input.assigneeUserId)
+          return invalid(issue('assigneeUserId', 'crm.error.notTeamMember'))
+      }
+    }
     const timestamp = now()
     const nextVersion = n(existing?.version) + 1
     const values: Row = {
@@ -269,8 +402,9 @@ export async function saveCase(
       contactName: input.contactName?.trim() || null,
       email: normalized(input.email) || null,
       phone: String(input.phone ?? '').trim() || null,
+      phoneDigits: dialled(input.phone) || null,
       teamId,
-      assigneeUserId: input.assigneeUserId || null,
+      assigneeUserId: existing?.assigneeUserId ?? input.assigneeUserId ?? null,
       stageId: stage.id,
       priority: input.priority ?? existing?.priority ?? '1',
       description: input.description?.trim() || null,
@@ -281,6 +415,7 @@ export async function saveCase(
       active: true,
       version: nextVersion,
       score: existing?.score ?? '0',
+      closedAt: closedAtFor(existing ?? {}, stage.terminalState, timestamp),
       updatedAt: timestamp,
     }
     if (existing) {
@@ -351,9 +486,47 @@ export async function saveCase(
         customerVisible: false,
         occurredAt: timestamp,
       })
+    // Scoring rules read the fields this write just changed, so the score is
+    // stale the moment the case is saved. One job per case, keyed on the case,
+    // so a run of edits collapses into a single rescore.
+    await tx.jobs.enqueue(
+      'crm.score',
+      { caseId: input.id, reason: `save:v${nextVersion}` },
+      { uniqueKey: `crm.score:${input.id}` },
+    )
     return { ok: true, id: input.id, version: nextVersion }
   }
   return options.inTransaction ? run(ctx) : ctx.tx(run)
+}
+
+/**
+ * The soonest activity still owed on each case, and whether it is late.
+ *
+ * A pipeline card is read to decide what to do next, and "next" is a date: the
+ * board used to show a name, an amount and an owner, none of which say whether
+ * anyone has touched the case this month. Batched over the whole page — the
+ * per-card version of this was the read that made the old planner screen slow.
+ */
+const nextActivityByCase = async (ctx: Ctx, caseIds: string[]): Promise<Map<string, Row>> => {
+  if (!caseIds.length) return new Map()
+  const L = ctx.table('crm.ActivityLink')
+  const links = await ctx.db.all(from(L).where(inArray(L.caseId, caseIds)))
+  const activityIds = [...new Set(links.map((link) => String(link.activityId)))]
+  if (!activityIds.length) return new Map()
+  const A = ctx.table('activity.Activity')
+  const activities = await ctx.db.all(
+    from(A).where(inArray(A.id, activityIds), eq(A.active, true), isNull(A.doneAt), isNull(A.canceledAt)),
+  )
+  const activityBy = new Map(activities.map((row) => [String(row.id), row]))
+  const soonest = new Map<string, Row>()
+  for (const link of links) {
+    const activity = activityBy.get(String(link.activityId))
+    if (!activity) continue
+    const caseId = String(link.caseId)
+    const held = soonest.get(caseId)
+    if (!held || String(activity.dueDate ?? '') < String(held.dueDate ?? '')) soonest.set(caseId, activity)
+  }
+  return soonest
 }
 
 export async function serializeCaseList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
@@ -376,26 +549,75 @@ export async function serializeCaseList(ctx: Ctx, rows: Row[]): Promise<Row[]> {
         from(ctx.table('partner.Partner')).where(inArray(ctx.table('partner.Partner').id, partnerIds)),
       )
     : []
+  // The money a case is worth lives one table over, and every screen that lists
+  // cases wants it: a pipeline column without amounts is a list of names.
+  const caseIds = ids(rows.map((row) => row.id))
+  const details = caseIds.length
+    ? await ctx.db.all(
+        from(ctx.table('crm.SalesDetail')).where(inArray(ctx.table('crm.SalesDetail').caseId, caseIds)),
+      )
+    : []
+  // Tags and the next activity are what a card is scanned for, so they are read
+  // with the page rather than one query per card on the screen that wants them.
+  const links = caseIds.length
+    ? await ctx.db.all(
+        from(ctx.table('crm.CaseTag')).where(inArray(ctx.table('crm.CaseTag').caseId, caseIds)),
+      )
+    : []
+  const tagIds = ids(links.map((link) => link.tagId))
+  const tags = tagIds.length
+    ? await ctx.db.all(from(ctx.table('crm.Tag')).where(inArray(ctx.table('crm.Tag').id, tagIds)))
+    : []
+  const tagBy = new Map(tags.map((tag) => [String(tag.id), tag]))
+  const tagsByCase = new Map<string, Row[]>()
+  for (const link of links) {
+    const tag = tagBy.get(String(link.tagId))
+    if (!tag || tag.active === false) continue
+    tagsByCase.set(String(link.caseId), [...(tagsByCase.get(String(link.caseId)) ?? []), tag])
+  }
+  const activityByCase = await nextActivityByCase(ctx, caseIds)
+  const today = now().slice(0, 10)
   const by = (values: Row[]) => new Map(values.map((row) => [String(row.id), row]))
   const stageBy = by(stages)
   const teamBy = by(teams)
   const userBy = by(users)
   const partnerBy = by(partners)
-  return rows.map((row) => ({
-    ...row,
-    stageCode: stageBy.get(String(row.stageId))?.code ?? null,
-    stageName: stageBy.get(String(row.stageId))?.name ?? row.stageId,
-    teamName: row.teamId ? (teamBy.get(String(row.teamId))?.name ?? row.teamId) : null,
-    assigneeName: row.assigneeUserId
-      ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
-      : null,
-    partnerName: row.partnerId ? (partnerBy.get(String(row.partnerId))?.name ?? row.partnerId) : null,
-  }))
+  const detailBy = new Map(details.map((row) => [String(row.caseId), row]))
+  return rows.map((row) => {
+    const detail = detailBy.get(String(row.id))
+    const activity = activityByCase.get(String(row.id))
+    return {
+      ...row,
+      stageCode: stageBy.get(String(row.stageId))?.code ?? null,
+      stageName: stageBy.get(String(row.stageId))?.name ?? row.stageId,
+      teamName: row.teamId ? (teamBy.get(String(row.teamId))?.name ?? row.teamId) : null,
+      assigneeName: row.assigneeUserId
+        ? (userBy.get(String(row.assigneeUserId))?.name ?? row.assigneeUserId)
+        : null,
+      partnerName: row.partnerId ? (partnerBy.get(String(row.partnerId))?.name ?? row.partnerId) : null,
+      expectedRevenue: detail?.expectedRevenue ?? '0',
+      probability: detail?.probability ?? '0',
+      expectedClosing: detail?.expectedClosing ?? null,
+      tags: (tagsByCase.get(String(row.id)) ?? []).map((tag) => ({
+        id: String(tag.id),
+        name: String(tag.name),
+        color: tag.color == null ? null : String(tag.color),
+      })),
+      nextActivity: activity
+        ? {
+            id: String(activity.id),
+            summary: String(activity.summary ?? ''),
+            dueDate: activity.dueDate == null ? null : String(activity.dueDate),
+            overdue: activity.dueDate != null && String(activity.dueDate) < today,
+          }
+        : null,
+    }
+  })
 }
 
 export async function caseDetail(ctx: Ctx, id: string): Promise<Row | null> {
   const row = (await ctx.db.select('crm.Case', { id }))[0]
-  if (!row || !(await canReadCase(ctx, row))) return null
+  if (!row || !ownsKind(row.kind) || !(await canReadCase(ctx, row))) return null
   const [serialized] = await serializeCaseList(ctx, [row])
   const [salesDetail, tags, timeline, messages, activityLinks, calendarLinks, attachments] =
     await Promise.all([
@@ -431,6 +653,27 @@ export async function caseDetail(ctx: Ctx, id: string): Promise<Row | null> {
         from(ctx.table('calendar.Event')).where(inArray(ctx.table('calendar.Event').id, eventIds)),
       )
     : []
+  const stages = (await ctx.db.select('crm.Stage', { active: true }))
+    .filter((stage) => stageKinds(stage).includes(String(row.kind)))
+    .sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
+  const team = row.teamId
+    ? ((await ctx.db.select('crm.Team', { id: row.teamId, active: true }))[0] ?? null)
+    : null
+  const memberships = team ? await ctx.db.select('crm.TeamMember', { teamId: team.id, active: true }) : []
+  const assigneeIds = [
+    ...memberships.map((member) => String(member.userId)),
+    ...(team?.leaderUserId ? [String(team.leaderUserId)] : []),
+    ...(row.assigneeUserId ? [String(row.assigneeUserId)] : []),
+  ].filter((userId, index, values) => values.indexOf(userId) === index)
+  const assignees = assigneeIds.length
+    ? await ctx.db.all(
+        from(ctx.table('user.User')).where(
+          inArray(ctx.table('user.User').id, assigneeIds),
+          eq(ctx.table('user.User').active, true),
+        ),
+      )
+    : []
+  const userById = new Map(assignees.map((user) => [String(user.id), user]))
   return {
     ...serialized!,
     salesDetail: salesDetail[0] ?? null,
@@ -440,11 +683,33 @@ export async function caseDetail(ctx: Ctx, id: string): Promise<Row | null> {
     attachments,
     activities,
     meetings,
+    stageOptions: stages.map((stage) => ({
+      id: String(stage.id),
+      name: String(stage.name),
+      terminalState: String(stage.terminalState),
+    })),
+    assigneeOptions: assigneeIds
+      .map((userId) => userById.get(userId))
+      .filter((user): user is Row => Boolean(user))
+      .map((user) => ({ id: String(user.id), name: String(user.name) }))
+      .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id)),
   }
 }
 
 const listStateOf = (value: unknown): ListState | null =>
   value && typeof value === 'object' ? (value as ListState) : null
+
+const caseAudienceCondition = async (ctx: Ctx, C: ReturnType<Ctx['table']>, action: CaseAction = 'view') => {
+  const audience = await caseAudience(ctx, action)
+  if (!audience) return null
+  const clauses = []
+  if (audience.scope !== 'none') clauses.push(eq(C.assigneeUserId, audience.actor))
+  if (audience.teams.length) clauses.push(inArray(C.teamId, audience.teams))
+  if (action !== 'edit' && audience.queueTeams.length)
+    clauses.push(and(isNull(C.assigneeUserId), inArray(C.teamId, audience.queueTeams)))
+  if (!clauses.length) return inArray(C.id, [])
+  return clauses.length === 1 ? clauses[0]! : or(...clauses)
+}
 
 const caseQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
   const C = ctx.table('crm.Case')
@@ -468,27 +733,21 @@ const caseQuery = async (ctx: Ctx, args: Record<string, unknown>) => {
           : eq(field.col, value),
     )
   }
-  if (args.kind) query = query.where(eq(C.kind, args.kind))
+  query = query.where(
+    args.kind && ownsKind(args.kind) ? eq(C.kind, args.kind) : inArray(C.kind, ownedKinds()),
+  )
   if (args.stageId) query = query.where(eq(C.stageId, args.stageId))
   if (args.teamId) query = query.where(eq(C.teamId, args.teamId))
   if (args.assigneeUserId) query = query.where(eq(C.assigneeUserId, args.assigneeUserId))
+  // "Mine" is answered from the session rather than from a user id in the URL:
+  // a link carrying somebody else's id would otherwise read as their board while
+  // silently returning only the rows the audience filter already allowed.
+  if (args.mine === true) query = query.where(eq(C.assigneeUserId, ctx.actor ?? ''))
   if (args.terminalState) query = query.where(eq(C.terminalState, args.terminalState))
   if (!state.includeArchived && args.includeArchived !== true) query = query.where(eq(C.active, true))
   if (args.search) query = query.where(like(C.name, `%${String(args.search).trim()}%`))
-  if (ctx.actor) {
-    const user = (await ctx.db.select('user.User', { id: ctx.actor, active: true }))[0]
-    if (user?.superuser !== true) {
-      const memberships = await ctx.db.select('crm.TeamMember', { userId: ctx.actor, active: true })
-      const teams = [...new Set(memberships.map((membership) => String(membership.teamId)))]
-      query = query.where(
-        or(
-          eq(C.assigneeUserId, ctx.actor),
-          eq(C.createdByUserId, ctx.actor),
-          ...(teams.length ? [inArray(C.teamId, teams)] : []),
-        ),
-      )
-    }
-  }
+  const audience = await caseAudienceCondition(ctx, C)
+  if (audience) query = query.where(audience)
   const sorts = state.sort.length ? state.sort : emptyCaseListState().sort
   const sortable = new Map((spec.sortable ?? []).map((field) => [field.key, field.col]))
   for (const sort of sorts) {
@@ -514,6 +773,152 @@ export async function listCases(
     total,
     nextCursor: offset + limit < total ? String(offset + limit) : null,
   }
+}
+
+/**
+ * What the pipeline header states, counted over the whole board rather than the page.
+ *
+ * The columns show forty cards each, so totals taken from what is on screen are
+ * the totals of a page — which is a different number from the one an operator is
+ * being asked to trust. This runs the same filter the columns run, without the
+ * page window, and aggregates once.
+ *
+ * `partial` is the honest answer to a board larger than the cap: the counts stay
+ * exact because they come from SQL, and the amounts are withheld rather than
+ * reported short.
+ */
+const SUMMARY_CAP = 5000
+
+export async function pipelineSummary(
+  ctx: Ctx,
+  args: Record<string, unknown>,
+): Promise<{
+  stages: Array<{ id: string; count: number; expectedRevenue: string; weightedRevenue: string }>
+  openCount: number
+  expectedRevenue: string
+  weightedRevenue: string
+  overdueActivityCount: number
+  partial: boolean
+}> {
+  const { query } = await caseQuery(ctx, args)
+  const C = ctx.table('crm.Case')
+  const grouped = await ctx.db.group(query.groupBy({ col: C.stageId }))
+  const counts = new Map(grouped.map((row) => [String(row.key[0] ?? ''), Number(row.count)]))
+  const rows = await ctx.db.all(query.limit(SUMMARY_CAP + 1))
+  const partial = rows.length > SUMMARY_CAP
+  const page = partial ? [] : rows
+  /*
+   * The board shows Won and Lost, and the header does not.
+   *
+   * Every column keeps its own count and its own money, because that is what the
+   * column head states. The four figures above the board are about work still in
+   * hand — "open records", "total value" — so a closed case must not be in them.
+   * Counting every column into them made the total climb every time a deal was
+   * won, which is the opposite of what a pipeline total is for.
+   */
+  const S = ctx.table('crm.Stage')
+  const stageIds = [...counts.keys()].filter(Boolean)
+  const stages = stageIds.length ? await ctx.db.all(from(S).where(inArray(S.id, stageIds))) : []
+  const open = new Set(
+    stages.filter((stage) => stage.terminalState === 'open').map((stage) => String(stage.id)),
+  )
+  const openCount = [...counts.entries()]
+    .filter(([id]) => open.has(id))
+    .reduce((total, [, count]) => total + count, 0)
+  const caseIds = [...new Set(page.map((row) => String(row.id)))]
+  const openCaseIds = page.filter((row) => open.has(String(row.stageId ?? ''))).map((row) => String(row.id))
+  const D = ctx.table('crm.SalesDetail')
+  const details = caseIds.length ? await ctx.db.all(from(D).where(inArray(D.caseId, caseIds))) : []
+  const detailBy = new Map(details.map((row) => [String(row.caseId), row]))
+  const money = new Map<string, { expected: number; weighted: number }>()
+  for (const row of page) {
+    const detail = detailBy.get(String(row.id))
+    const expected = n(detail?.expectedRevenue)
+    // A probability is stored as a percentage, so the weighted amount is the one
+    // a forecast adds up — not the amount times a number between zero and a hundred.
+    const weighted = (expected * Math.max(0, Math.min(100, n(detail?.probability)))) / 100
+    const stage = String(row.stageId ?? '')
+    const held = money.get(stage) ?? { expected: 0, weighted: 0 }
+    money.set(stage, { expected: held.expected + expected, weighted: held.weighted + weighted })
+  }
+  const A = ctx.table('activity.Activity')
+  const L = ctx.table('crm.ActivityLink')
+  const links = openCaseIds.length ? await ctx.db.all(from(L).where(inArray(L.caseId, openCaseIds))) : []
+  const activityIds = [...new Set(links.map((link) => String(link.activityId)))]
+  const today = now().slice(0, 10)
+  const overdue = activityIds.length
+    ? await ctx.db.all(
+        from(A).where(
+          inArray(A.id, activityIds),
+          eq(A.active, true),
+          isNull(A.doneAt),
+          isNull(A.canceledAt),
+          lt(A.dueDate, today),
+        ),
+      )
+    : []
+  const total = (pick: (value: { expected: number; weighted: number }) => number): number =>
+    [...money.entries()].filter(([id]) => open.has(id)).reduce((sum, [, value]) => sum + pick(value), 0)
+  return {
+    stages: [...counts.entries()].map(([id, count]) => ({
+      id,
+      count,
+      expectedRevenue: String(money.get(id)?.expected ?? 0),
+      weightedRevenue: String(money.get(id)?.weighted ?? 0),
+    })),
+    openCount,
+    expectedRevenue: String(total((value) => value.expected)),
+    weightedRevenue: String(total((value) => value.weighted)),
+    overdueActivityCount: overdue.length,
+    partial,
+  }
+}
+
+/**
+ * Cases that look like the one being edited.
+ *
+ * This used to page through `listCases`, which caps a page at 200 rows however
+ * large a limit it is handed — so on any pipeline past 200 cases the duplicate
+ * panel quietly stopped finding anything. The match now runs as one indexed
+ * query over the three fields a duplicate actually shares, under the same
+ * audience filter as every other read, and returns at most `limit` rows.
+ */
+export async function duplicateCases(
+  ctx: Ctx,
+  input: { id?: unknown; email?: unknown; phone?: unknown; name?: unknown },
+  limit = 20,
+): Promise<Row[]> {
+  const email = normalized(input.email)
+  const phone = String(input.phone ?? '').trim()
+  const name = String(input.name ?? '').trim()
+  const clauses = []
+  const C = ctx.table('crm.Case')
+  const digits = dialled(phone)
+  if (email) clauses.push(eq(C.email, email))
+  if (phone) clauses.push(eq(C.phone, phone))
+  if (digits) clauses.push(eq(C.phoneDigits, digits))
+  if (name) clauses.push(like(C.name, `%${name}%`))
+  if (!clauses.length) return []
+  let query = from(C)
+    .where(
+      eq(C.active, true),
+      inArray(C.kind, ownedKinds()),
+      clauses.length === 1 ? clauses[0]! : or(...clauses),
+    )
+    .orderBy(desc(C.updatedAt), asc(C.id))
+  if (input.id) query = query.where(ne(C.id, input.id))
+  const audience = await caseAudienceCondition(ctx, C)
+  if (audience) query = query.where(audience)
+  // The clauses above are a union, so a row can arrive because its name looked
+  // similar; this keeps only the ones that actually match on something.
+  const rows = await ctx.db.all(query.limit(Math.max(1, Math.min(100, limit)) + 20))
+  const matched = rows.filter(
+    (row) =>
+      (email && normalized(row.email) === email) ||
+      (digits && (dialled(row.phone) === digits || row.phoneDigits === digits)) ||
+      (name && normalized(row.name) === normalized(name)),
+  )
+  return serializeCaseList(ctx, matched.slice(0, Math.max(1, Math.min(100, limit))))
 }
 
 export async function groupCases(ctx: Ctx, args: Record<string, unknown>) {
@@ -543,7 +948,7 @@ export async function addCaseMessage(
   if (!MESSAGE_VISIBILITIES.includes(input.visibility as never))
     return invalid(issue('visibility', 'crm.error.invalidVisibility'))
   const held = (await ctx.db.select('crm.Case', { id: input.caseId }))[0]
-  if (!held) return invalid(issue('caseId', 'crm.error.notFound'))
+  if (!held || !(await canEditCase(ctx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
   if (!input.body.trim()) return invalid(issue('body', 'crm.error.required'))
   const existing = (await ctx.db.select('crm.Message', { id: input.id }))[0]
   if (existing) return { ok: true, id: input.id }
@@ -577,7 +982,7 @@ export async function moveCase(
     return invalid(issue('idempotencyKey', 'crm.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.id }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
     const stage = await activeStage(tx, input.stageId, String(held.kind))
     if (!stage) return invalid(issue('stageId', 'crm.error.invalidStage'))
     const timestamp = now()
@@ -587,7 +992,7 @@ export async function moveCase(
       active: true,
       version: n(held.version) + 1,
       updatedAt: timestamp,
-      closedAt: held.closedAt,
+      closedAt: closedAtFor(held, stage.terminalState, timestamp),
     }
     const changed = await tx.db.compareAndSet(
       'crm.Case',
@@ -604,6 +1009,12 @@ export async function moveCase(
       body: 'crm.timeline.stage',
       metadata: { from: held.stageId, to: stage.id },
     })
+    if (held.assigneeUserId && held.terminalState !== stage.terminalState)
+      await tx.jobs.enqueue(
+        'crm.gamification',
+        { userId: held.assigneeUserId },
+        { uniqueKey: `crm.gamification:${String(held.assigneeUserId)}` },
+      )
     return { ok: true, id: input.id, version: patch.version, terminalState: stage.terminalState }
   })
 }
@@ -624,6 +1035,39 @@ async function routedAssignee(ctx: Ctx, team: Row): Promise<Row | null> {
   return members[n(team.assignmentCursor) % members.length]!
 }
 
+const assignmentTargetAllowed = async (
+  ctx: Ctx,
+  held: Row,
+  teamId: string,
+  assigneeUserId: string | null,
+): Promise<boolean> => {
+  const audience = await caseAudience(ctx, 'assign')
+  if (!audience) return true
+  if (audience.teams.includes(teamId)) return true
+  return Boolean(
+    audience.scope === 'self' &&
+      !held.assigneeUserId &&
+      String(held.teamId ?? '') === teamId &&
+      assigneeUserId === audience.actor &&
+      audience.queueTeams.includes(teamId),
+  )
+}
+
+const assignmentMember = async (ctx: Ctx, team: Row, assigneeUserId: string | null): Promise<boolean> => {
+  if (!assigneeUserId) return true
+  if (!(await userExists(ctx, assigneeUserId))) return false
+  if (String(team.leaderUserId ?? '') === assigneeUserId) return true
+  return Boolean(
+    (
+      await ctx.db.select('crm.TeamMember', {
+        teamId: team.id,
+        userId: assigneeUserId,
+        active: true,
+      })
+    )[0],
+  )
+}
+
 export async function assignCase(
   ctx: Ctx,
   input: {
@@ -641,8 +1085,21 @@ export async function assignCase(
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.id }))[0]
     if (!held || !(await canReadCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
-    if (held.assigneeUserId && !input.force && !input.assigneeUserId)
-      return { ok: true, id: input.id, assigneeUserId: held.assigneeUserId, version: held.version }
+    if (!(await canAssignCase(tx, held))) return invalid(issue('id', 'crm.error.permission'))
+    if (held.assigneeUserId) {
+      if (
+        String(held.teamId ?? '') === String(input.teamId ?? held.teamId ?? '') &&
+        String(held.assigneeUserId) === String(input.assigneeUserId ?? held.assigneeUserId)
+      )
+        return {
+          ok: true,
+          id: input.id,
+          teamId: held.teamId,
+          assigneeUserId: held.assigneeUserId,
+          version: held.version,
+        }
+      return invalid(issue('assigneeUserId', 'crm.error.permission'))
+    }
     let teamId = input.teamId ?? (held.teamId ? String(held.teamId) : null)
     let assigneeUserId = input.assigneeUserId ?? null
     if (!teamId || !assigneeUserId) {
@@ -663,20 +1120,21 @@ export async function assignCase(
     if (!team) return invalid(issue('teamId', 'crm.error.notFound'))
     let member: Row | null = null
     if (!assigneeUserId) {
-      member = await routedAssignee(tx, team)
-      assigneeUserId = member?.userId
-        ? String(member.userId)
-        : team.leaderUserId
-          ? String(team.leaderUserId)
-          : null
+      const audience = await caseAudience(tx, 'assign')
+      if (audience) assigneeUserId = audience.actor
+      else {
+        member = await routedAssignee(tx, team)
+        assigneeUserId = member?.userId
+          ? String(member.userId)
+          : team.leaderUserId
+            ? String(team.leaderUserId)
+            : null
+      }
     }
-    if (!assigneeUserId || !(await userExists(tx, assigneeUserId)))
+    if (!assigneeUserId || !(await assignmentMember(tx, team, assigneeUserId)))
       return invalid(issue('assigneeUserId', 'crm.error.notFound'))
-    if (
-      !(await tx.db.select('crm.TeamMember', { teamId, userId: assigneeUserId, active: true }))[0] &&
-      team.leaderUserId !== assigneeUserId
-    )
-      return invalid(issue('assigneeUserId', 'crm.error.notFound'))
+    if (!(await assignmentTargetAllowed(tx, held, teamId, assigneeUserId)))
+      return invalid(issue('assigneeUserId', 'crm.error.permission'))
     const expected = input.expectedVersion ?? n(held.version)
     const timestamp = now()
     const changed = await tx.db.compareAndSet(
@@ -721,6 +1179,96 @@ export async function assignCase(
   })
 }
 
+const REASSIGN_REASONS = new Set([
+  'workload_balance',
+  'absence',
+  'escalation',
+  'territory_change',
+  'employee_departure',
+  'manual_correction',
+])
+
+export async function reassignCase(
+  ctx: Ctx,
+  input: {
+    id: string
+    teamId: string
+    assigneeUserId?: string | null
+    reasonCode: string
+    reasonNote?: string | null
+    expectedVersion: number
+    idempotencyKey: string
+  },
+): Promise<CrmResult> {
+  if (!actorRequired(ctx)) return invalid(issue('actor', 'crm.error.actorRequired'))
+  if (!commandKey(input.idempotencyKey))
+    return invalid(issue('idempotencyKey', 'crm.error.idempotencyRequired'))
+  if (!REASSIGN_REASONS.has(input.reasonCode)) return invalid(issue('reasonCode', 'crm.error.reassignReason'))
+  if (input.reasonCode === 'manual_correction' && !String(input.reasonNote ?? '').trim())
+    return invalid(issue('reasonNote', 'crm.error.reassignReason'))
+  return ctx.tx(async (tx) => {
+    const held = (await tx.db.select('crm.Case', { id: input.id }))[0]
+    if (!held || !ownsKind(held.kind) || !(await canReadCase(tx, held)))
+      return invalid(issue('id', 'crm.error.notFound'))
+    const auditId = `timeline:${input.id}:reassign:${input.idempotencyKey}`
+    const replay = (await tx.db.select('crm.TimelineEntry', { id: auditId }))[0]
+    if (replay)
+      return {
+        ok: true,
+        id: input.id,
+        teamId: held.teamId,
+        assigneeUserId: held.assigneeUserId,
+        version: held.version,
+      }
+    if (!(await canAssignCase(tx, held))) return invalid(issue('id', 'crm.error.permission'))
+    if (String(held.terminalState) !== 'open' || held.active === false)
+      return invalid(issue('id', 'crm.error.permission'))
+    const team = (await tx.db.select('crm.Team', { id: input.teamId, active: true }))[0]
+    if (!team) return invalid(issue('teamId', 'crm.error.notFound'))
+    const target = input.assigneeUserId ? String(input.assigneeUserId) : null
+    if (!(await assignmentMember(tx, team, target)))
+      return invalid(issue('assigneeUserId', 'crm.error.notTeamMember'))
+    if (!(await assignmentTargetAllowed(tx, held, String(team.id), target)))
+      return invalid(issue('assigneeUserId', 'crm.error.permission'))
+    const timestamp = now()
+    const changed = await tx.db.compareAndSet(
+      'crm.Case',
+      { id: input.id },
+      { version: input.expectedVersion },
+      {
+        teamId: team.id,
+        assigneeUserId: target,
+        version: n(held.version) + 1,
+        updatedAt: timestamp,
+      },
+    )
+    if (!('dryRun' in changed) && !changed.matched)
+      return invalid(issue('version', 'crm.error.stageConflict', { current: held.version }))
+    await addTimeline(tx, {
+      id: auditId,
+      caseId: input.id,
+      eventType: 'reassigned',
+      body: 'crm.timeline.reassigned',
+      metadata: {
+        fromTeamId: held.teamId ?? null,
+        fromAssigneeUserId: held.assigneeUserId ?? null,
+        toTeamId: team.id,
+        toAssigneeUserId: target,
+        reasonCode: input.reasonCode,
+        reasonNote: String(input.reasonNote ?? '').trim() || null,
+      },
+      occurredAt: timestamp,
+    })
+    return {
+      ok: true,
+      id: input.id,
+      teamId: team.id,
+      assigneeUserId: target,
+      version: n(held.version) + 1,
+    }
+  })
+}
+
 export async function scheduleCaseActivity(
   ctx: Ctx,
   input: {
@@ -739,11 +1287,11 @@ export async function scheduleCaseActivity(
     return invalid(issue('idempotencyKey', 'crm.error.idempotencyRequired'))
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.caseId }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
     const activity = await scheduleActivity(tx, {
       id: input.id,
       threadId: String(held.threadId),
-      typeId: input.typeId ?? 'crm-next-action',
+      typeId: input.typeId ?? (await crmActivityType(tx)) ?? 'crm-next-action',
       assigneeUserId: input.assigneeUserId ?? String(held.assigneeUserId ?? tx.actor),
       summary: input.summary,
       note: input.note,
@@ -775,6 +1323,8 @@ export async function completeCaseActivity(
   return ctx.tx(async (tx) => {
     const link = (await tx.db.select('crm.ActivityLink', { activityId: input.id }))[0]
     if (!link) return invalid(issue('id', 'crm.error.notFound'))
+    const held = (await tx.db.select('crm.Case', { id: link.caseId }))[0]
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
     const result = await completeActivity(tx, input.id, input.feedback ?? '', input.completedDate)
     await addTimeline(tx, {
       id: `timeline:${String(link.caseId)}:activity-done:${input.id}`,
@@ -797,6 +1347,8 @@ export async function cancelCaseActivity(
   return ctx.tx(async (tx) => {
     const link = (await tx.db.select('crm.ActivityLink', { activityId: input.id }))[0]
     if (!link) return invalid(issue('id', 'crm.error.notFound'))
+    const held = (await tx.db.select('crm.Case', { id: link.caseId }))[0]
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('id', 'crm.error.notFound'))
     const activity = await cancelActivity(tx, input.id, input.feedback)
     await addTimeline(tx, {
       id: `timeline:${String(link.caseId)}:activity-cancel:${input.id}`,
@@ -818,7 +1370,7 @@ export async function applyCasePlan(
   if (!actorRequired(ctx)) return invalid(issue('actor', 'crm.error.actorRequired'))
   return ctx.tx(async (tx) => {
     const held = (await tx.db.select('crm.Case', { id: input.caseId }))[0]
-    if (!held || !(await canReadCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
     const plan = (await tx.db.select('activity.Plan', { id: input.planId, active: true }))[0]
     if (!plan) return invalid(issue('planId', 'crm.error.notFound'))
     const steps = (await tx.db.select('activity.PlanStep', { planId: input.planId })).sort(
@@ -860,9 +1412,21 @@ export async function applyCasePlan(
 }
 
 export async function refreshCaseScore(ctx: Ctx, caseId: string, sourceKey: string): Promise<CrmResult> {
-  return ctx.tx(async (tx) => {
+  return ctx.tx((tx) => applyCaseScore(tx, caseId, sourceKey))
+}
+
+/**
+ * The scoring pass itself, without a transaction of its own.
+ *
+ * A worker handler already runs transaction-bound, and nesting one inside it
+ * breaks SQLite — so the job calls this directly while `refreshCaseScore` wraps
+ * it for callers that arrive over HTTP.
+ */
+export async function applyCaseScore(ctx: Ctx, caseId: string, sourceKey: string): Promise<CrmResult> {
+  {
+    const tx = ctx
     const held = (await tx.db.select('crm.Case', { id: caseId }))[0]
-    if (!held) return invalid(issue('caseId', 'crm.error.notFound'))
+    if (!held || !(await canEditCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
     const rules = (await tx.db.select('crm.ScoreRule', { active: true })).sort(
       (a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)),
     )
@@ -881,15 +1445,20 @@ export async function refreshCaseScore(ctx: Ctx, caseId: string, sourceKey: stri
       reasons.push({ ruleId: String(rule.id), points: n(rule.points) })
     }
     const timestamp = now()
-    await tx.db.update(
+    /**
+     * Scoring rewrites one derived field, so it neither bumps `version` nor may
+     * clobber a concurrent edit: the compare pins the row to the state this
+     * transaction read, and leaving the version alone keeps every form the user
+     * already has open valid.
+     */
+    const changed = await tx.db.compareAndSet(
       'crm.Case',
       { id: caseId },
-      {
-        score: String(score),
-        version: n(held.version) + 1,
-        updatedAt: timestamp,
-      },
+      { version: n(held.version) },
+      { score: String(score), updatedAt: timestamp },
     )
+    if (!('dryRun' in changed) && !changed.matched)
+      return invalid(issue('version', 'crm.error.stageConflict', { current: n(held.version) }))
     await tx.db.insertIfAbsent('crm.ScoreHistory', {
       id: `score:${caseId}:${sourceKey}`,
       caseId,
@@ -898,5 +1467,46 @@ export async function refreshCaseScore(ctx: Ctx, caseId: string, sourceKey: stri
       calculatedAt: timestamp,
     })
     return { ok: true, id: caseId, score, reasons }
-  })
+  }
+}
+
+/**
+ * One salesperson's standing, recomputed from counting queries.
+ *
+ * Called per user so the leaderboard can be refreshed incrementally — a case
+ * reaching a terminal state only changes the assignee's row.
+ */
+export async function gamificationProfile(ctx: Ctx, user: Row): Promise<Row> {
+  const C = ctx.table('crm.Case')
+  const A = ctx.table('activity.Activity')
+  const owned = from(C).where(eq(C.assigneeUserId, user.id), eq(C.active, true))
+  const [assigned, won, lost, activitiesDone] = await Promise.all([
+    ctx.db.count(owned),
+    ctx.db.count(owned.where(eq(C.terminalState, 'won'))),
+    ctx.db.count(owned.where(eq(C.terminalState, 'lost'))),
+    ctx.db.count(
+      from(A).where(
+        eq(A.assigneeUserId, user.id),
+        not(isNull(A.doneAt)),
+        // Every CRM thread is named after the case it belongs to, which keeps
+        // this count inside the CRM without a join through the link table.
+        like(A.threadId, 'thread:crm.Case:%'),
+      ),
+    ),
+  ])
+  const id = `gamification:${String(user.id)}`
+  const row = {
+    userId: user.id,
+    points: won * 100 + activitiesDone * 10 + Math.max(0, assigned - lost) * 2,
+    assigned,
+    won,
+    lost,
+    activitiesDone,
+    streak: won ? Math.min(won, 30) : 0,
+    refreshedAt: now(),
+  }
+  const held = (await ctx.db.select('crm.GamificationProfile', { id }))[0]
+  if (held) await ctx.db.update('crm.GamificationProfile', { id }, row)
+  else await ctx.db.insert('crm.GamificationProfile', { id, ...row })
+  return { id, ...row, userName: user.name }
 }

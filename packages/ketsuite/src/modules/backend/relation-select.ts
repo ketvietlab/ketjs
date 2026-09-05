@@ -1,62 +1,14 @@
 import type { Route, ServeContext, Translator } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
+import type { RelationSelectConfig, RelationSelectLabels } from '../../ui/client/relation-select-view.tsx'
 
-export type RelationOption = { value: string; label: string; description?: string | null }
-
-export type RelationEditorField = {
-  name: string
-  label: string
-  type?: 'text' | 'email' | 'tel' | 'select'
-  required?: boolean
-  options?: RelationOption[]
-}
-
-export type RelationManager = {
-  listFunction: string
-  listInput?: Record<string, unknown>
-  searchParam?: string
-  limitParam?: string
-  limit?: number
-  idField?: string
-  labelField?: string
-  descriptionField?: string
-  saveFunction?: string
-  saveDefaults?: Record<string, unknown>
-  removeFunction?: string
-  removeDefaults?: Record<string, unknown>
-  fields?: RelationEditorField[]
-  excludeIds?: string[]
-}
-
-export type RelationSelectLabels = {
-  choose: string
-  search: string
-  more: string
-  noRecords: string
-  loading: string
-  loadError: string
-  dialogTitle: string
-  close: string
-  select: string
-  create: string
-  edit: string
-  save: string
-  cancel: string
-  remove: string
-  confirmRemove: string
-  retry: string
-}
-
-export type RelationSelectConfig = {
-  name: string
-  ariaLabel: string
-  value?: string | null
-  options: RelationOption[]
-  required?: boolean
-  disabled?: boolean
-  labels: RelationSelectLabels
-  manager?: RelationManager
-}
+export type {
+  RelationEditorField,
+  RelationManager,
+  RelationOption,
+  RelationSelectConfig,
+  RelationSelectLabels,
+} from '../../ui/client/relation-select-view.tsx'
 
 type Req = Parameters<Route>[1]
 
@@ -85,4 +37,6 @@ export const relationLabels = (_: Translator, dialogTitle: string): RelationSele
   remove: _('backend.relation.remove'),
   confirmRemove: _('backend.relation.confirmRemove'),
   retry: _('backend.relation.retry'),
+  clear: _('backend.relation.clear'),
+  chosen: _('backend.relation.chosen'),
 })

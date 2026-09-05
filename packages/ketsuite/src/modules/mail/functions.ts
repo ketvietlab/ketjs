@@ -1,7 +1,6 @@
-import { asc, defineFn, eq, from, inArray, isNull, KetError } from '@ketvietlab/ketjs'
+import { asc, defineFn, desc, eq, from, inArray, isNull, KetError } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec } from '@ketvietlab/ketjs'
 import { NOTIFICATION_STATES } from './types.ts'
-import { unreadNotifications } from './operations.ts'
 
 const actor = (ctx: Ctx): string => {
   if (!ctx.actor)
@@ -62,8 +61,25 @@ export const functions: Record<string, FnSpec> = {
     },
   }),
 
+  countInbox: defineFn({
+    input: { unreadOnly: 'bool?' },
+    output: { count: 'int' },
+    effects: ['read:mail.Notification'],
+    handler: async (ctx: Ctx, args) => {
+      const N = ctx.table('mail.Notification')
+      return {
+        count: await ctx.db.count(
+          from(N).where(
+            eq(N.recipientUserId, actor(ctx)),
+            ...(args.unreadOnly === true ? [isNull(N.readAt)] : []),
+          ),
+        ),
+      }
+    },
+  }),
+
   listInbox: defineFn({
-    input: { limit: 'int?' },
+    input: { unreadOnly: 'bool?', limit: 'int?', offset: 'int?' },
     output: {
       id: 'id',
       messageId: 'id',
@@ -76,10 +92,22 @@ export const functions: Record<string, FnSpec> = {
       state: 'text',
       readAt: 'datetime?',
       createdAt: 'datetime',
+      targetModel: 'text?',
+      targetId: 'text?',
+      targetName: 'text?',
     },
-    effects: ['read:mail.Notification', 'read:mail.Message'],
+    effects: ['read:mail.Notification', 'read:mail.Message', 'read:mail.Thread'],
     handler: async (ctx: Ctx, args) => {
-      const notifications = await unreadNotifications(ctx, actor(ctx), Number(args.limit ?? 50))
+      const limit = Math.max(1, Math.min(100, Number(args.limit ?? 50)))
+      const offset = Math.max(0, Number(args.offset ?? 0))
+      const N = ctx.table('mail.Notification')
+      const notifications = await ctx.db.all(
+        from(N)
+          .where(eq(N.recipientUserId, actor(ctx)), ...(args.unreadOnly === false ? [] : [isNull(N.readAt)]))
+          .orderBy(desc(N.createdAt), desc(N.id))
+          .limit(limit)
+          .offset(offset),
+      )
       if (!notifications.length) return []
       const M = ctx.table('mail.Message')
       const messages = await ctx.db.all(
@@ -91,8 +119,13 @@ export const functions: Record<string, FnSpec> = {
         ),
       )
       const byId = new Map(messages.map((row) => [String(row.id), row]))
+      const threadIds = [...new Set(messages.map((row) => String(row.threadId)))]
+      const T = ctx.table('mail.Thread')
+      const threads = threadIds.length ? await ctx.db.all(from(T).where(inArray(T.id, threadIds))) : []
+      const threadById = new Map(threads.map((row) => [String(row.id), row]))
       return notifications.flatMap((notification) => {
         const message = byId.get(String(notification.messageId))
+        const thread = message ? threadById.get(String(message.threadId)) : null
         return message
           ? [
               {
@@ -107,6 +140,9 @@ export const functions: Record<string, FnSpec> = {
                 state: notification.state,
                 readAt: notification.readAt,
                 createdAt: notification.createdAt,
+                targetModel: thread?.resModel ?? null,
+                targetId: thread?.resId ?? null,
+                targetName: thread?.displayName ?? null,
               },
             ]
           : []
@@ -136,8 +172,24 @@ export const functions: Record<string, FnSpec> = {
           module: 'mail',
           message: `notification has unknown state "${String(notification.state)}"`,
         })
-      await ctx.db.update('mail.Notification', { id: args.id }, { readAt: args.readAt })
+      if (notification.readAt == null)
+        await ctx.db.update('mail.Notification', { id: args.id }, { readAt: args.readAt })
       return { ok: true, id: args.id }
     },
+  }),
+
+  markAllInboxRead: defineFn({
+    input: { readAt: 'datetime' },
+    output: { ok: 'bool', count: 'int', readAt: 'datetime' },
+    effects: ['read:mail.Notification', 'write:mail.Notification'],
+    idempotent: true,
+    handler: (ctx: Ctx, args) =>
+      ctx.tx(async (tx) => {
+        const N = tx.table('mail.Notification')
+        const rows = await tx.db.all(from(N).where(eq(N.recipientUserId, actor(tx)), isNull(N.readAt)))
+        for (const row of rows)
+          await tx.db.update('mail.Notification', { id: row.id }, { readAt: args.readAt })
+        return { ok: true, count: rows.length, readAt: args.readAt }
+      }),
   }),
 }
