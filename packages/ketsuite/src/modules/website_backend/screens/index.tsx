@@ -1150,8 +1150,193 @@ export const formEditorScreen = (
   />
 )
 
+export type SubmissionRecord = {
+  id: string
+  formId: string
+  payload: Record<string, unknown>
+  schemaVersion?: number | null
+  consent: boolean
+  consentText?: string | null
+  status: string
+  source?: string | null
+  createdAt: string
+  purgedAt?: string | null
+  holdReason?: string | null
+}
+
+export type SubmissionAuditRow = {
+  id: string
+  action: string
+  actorKey: string
+  submissionId?: string | null
+  fields?: string[] | null
+  rowCount?: number | null
+  reason?: string | null
+  occurredAt: string
+}
+
+/**
+ * One submission, opened on purpose.
+ *
+ * The queue deliberately carries no answers, so this is the only screen where
+ * anyone reads what a visitor wrote - and the only place the audit trail
+ * records a person rather than a call that never happened. The trail is shown
+ * on the same page as the answers: a record of who looked is worth more when
+ * the person looking can see it too.
+ */
+export const submissionRecordScreen = (
+  _: Translator,
+  record: SubmissionRecord,
+  audit: SubmissionAuditRow[],
+  frame: Frame,
+  locale = '',
+): TemplateResult => {
+  const answers = Object.entries(record.payload ?? {}).map(([field, value]) => ({
+    id: field,
+    field,
+    value: typeof value === 'string' ? value : JSON.stringify(value),
+  }))
+  return (
+    <RecordScreen
+      translator={_}
+      title={_('website_backend.submission.title')}
+      frame={frame}
+      body={stack([
+        ...(record.purgedAt
+          ? [
+              <Notice
+                tone="info"
+                title={_('website_backend.state.purged')}
+                message={_('website_backend.submission.purgedHint')}
+              />,
+            ]
+          : []),
+        ...(record.holdReason
+          ? [<Notice tone="warning" title={_('website_backend.field.hold')} message={record.holdReason} />]
+          : []),
+        <Section
+          title={_('website_backend.submission.answers')}
+          body={
+            <Surface
+              body={
+                answers.length === 0
+                  ? emptyState(
+                      _('website_backend.submission.noAnswers'),
+                      _('website_backend.submission.noAnswersHint'),
+                    )
+                  : dataTable(_, {
+                      rows: answers,
+                      id: (row) => row.id,
+                      columns: [
+                        {
+                          key: 'field',
+                          label: _('website_backend.field.name'),
+                          priority: 'primary',
+                          cell: (row) => row.field,
+                        },
+                        {
+                          key: 'value',
+                          label: _('website_backend.submission.answer'),
+                          cell: (row) => row.value,
+                        },
+                      ],
+                    })
+              }
+            />
+          }
+        />,
+        <Section
+          title={_('website_backend.field.consent')}
+          // The notice is stored verbatim on the submission, because a Form is
+          // one mutable row and the version alone cannot recover the text.
+          description={_('website_backend.submission.consentHint')}
+          body={
+            <Surface
+              body={stack([
+                badge(
+                  record.consent ? _('website_backend.state.yes') : _('website_backend.state.no'),
+                  record.consent ? 'positive' : 'neutral',
+                ),
+                ...(record.consentText ? [code(record.consentText)] : []),
+              ])}
+            />
+          }
+        />,
+        <Section
+          title={_('website_backend.field.hold')}
+          description={_('website_backend.submission.holdHint')}
+          body={
+            <Surface
+              body={
+                <RecordForm
+                  action={`/admin/website/forms/${record.formId}/submissions/${record.id}${locale}`}
+                  fields={[
+                    {
+                      name: 'holdReason',
+                      label: _('website_backend.submission.holdReason'),
+                      value: record.holdReason ?? '',
+                      help: _('website_backend.submission.holdReasonHint'),
+                      span: 'full',
+                    },
+                  ]}
+                  submit={_('website_backend.action.save')}
+                  submitVariant="secondary"
+                />
+              }
+            />
+          }
+        />,
+        <Section
+          title={_('website_backend.submission.audit')}
+          description={_('website_backend.submission.auditHint')}
+          body={
+            <Surface
+              body={
+                audit.length === 0
+                  ? emptyState(
+                      _('website_backend.submission.noAudit'),
+                      _('website_backend.submission.noAuditHint'),
+                    )
+                  : dataTable(_, {
+                      rows: audit,
+                      id: (row) => row.id,
+                      columns: [
+                        {
+                          key: 'occurredAt',
+                          label: _('website_backend.field.createdAt'),
+                          kind: 'date',
+                          priority: 'primary',
+                          cell: (row) => row.occurredAt,
+                        },
+                        {
+                          key: 'action',
+                          label: _('website_backend.submission.action'),
+                          cell: (row) => badge(row.action, 'info'),
+                        },
+                        {
+                          key: 'actorKey',
+                          label: _('website_backend.submission.actor'),
+                          cell: (row) => row.actorKey,
+                        },
+                        {
+                          key: 'reason',
+                          label: _('website_backend.submission.reason'),
+                          cell: (row) => row.reason ?? '',
+                        },
+                      ],
+                    })
+              }
+            />
+          }
+        />,
+      ])}
+    />
+  )
+}
+
 export type SubmissionRow = {
   id: string
+  formId: string
   summary: Record<string, unknown>
   consent: boolean
   status: string
@@ -1182,6 +1367,7 @@ export const submissionsScreen = (_: Translator, rows: SubmissionRow[], frame: F
         : dataTable(_, {
             rows,
             id: (row) => row.id,
+            rowHref: (row) => `/admin/website/forms/${row.formId}/submissions/${row.id}`,
             columns: [
               {
                 key: 'created',
