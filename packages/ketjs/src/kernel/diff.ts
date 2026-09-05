@@ -77,6 +77,24 @@ export function diffManifests(before: Manifest, after: Manifest): DiffItem[] {
           `field "${mkey}.${fname}" became required`,
           'existing NULL rows violate it - backfill first',
         )
+      } else if (Boolean(f.sensitive) !== Boolean(af.sensitive)) {
+        push(
+          'risky',
+          'FIELD_SENSITIVITY_CHANGED',
+          `field "${mkey}.${fname}" is ${af.sensitive ? 'now' : 'no longer'} sensitive`,
+          af.sensitive
+            ? 'values already written to write records and idempotency rows are not masked retroactively'
+            : 'its values will now reach write records, the agent descriptor and dry-run previews',
+        )
+      } else if (Boolean(f.personal) !== Boolean(af.personal)) {
+        push(
+          'risky',
+          'FIELD_CLASSIFICATION_CHANGED',
+          `field "${mkey}.${fname}" is ${af.personal ? 'now' : 'no longer'} personal data`,
+          af.personal
+            ? 'existing rows are in scope for export and erasure from this version on'
+            : 'check that the obligation really ended rather than the declaration being dropped',
+        )
       }
     }
   }

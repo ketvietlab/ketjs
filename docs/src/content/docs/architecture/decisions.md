@@ -2139,3 +2139,48 @@ shape survives. The **event vocabulary, no**. Once an alert keys on `fn_error`, 
 that alert silently and nobody is told, which is the same failure mode as renaming a permission. The
 catalogue is therefore a closed list in code, exported as a value, and a test checks the documented
 table against it rather than trusting that both were updated.
+## D70 — A field may say what it holds, and the vocabulary is closed
+**The gap, found by surveying rather than by needing it.** A field was `Record<string, string>` — a type
+string and nothing else. There was nowhere to record the two questions any deployment holding customer
+data eventually has to answer: which columns are personal data, and which must never leave the system.
+Both were being answered by convention. `user.passwordHash` carried the comment *"Never in any declared
+output"* — a promise the type system could not hold, and which the write record stored in the durable
+idempotency row was quietly breaking.
+
+**Chosen:** `fields: Record<string, string | FieldDef>`, where `FieldDef` is `{ type, personal?,
+sensitive? }`. The string form stays and stays canonical; the two forms compose to the same field, so
+nothing downstream learns the difference.
+
+**Why the container, not the keys, is the decision.** Adding a key to `FieldDef` later is additive and
+safe. Changing `Record<string, string>` into a union is not: it touches every model declaration in every
+module and the fifteen core files that read `.fields`. That asymmetry is the whole reason to land the
+slot now with a deliberately small vocabulary rather than wait until a compliance deadline picks the
+shape under time pressure. The vocabulary is closed and an unknown key is a composition error, for the
+same reason D1 gives about joints: strict-then-loose is possible, loose-then-strict is not.
+
+**Classification is not storage, and the schema snapshot proves it.** `schemaFromManifest` names the
+columns it cares about rather than spreading the field, so classifying a column plans no `ALTER` and
+needs no downtime. A test asserts the two snapshots are identical, because if tagging a field ever
+planned a migration nobody would tag anything.
+
+**`sensitive` is enforced or it is decoration.** A write record travels further than it looks: returned
+to the caller, shown by a dry-run, and stored verbatim in the durable idempotency row. The value is
+masked before the record is kept. The field is also withheld from `ket agent` entirely rather than
+annotated — the descriptor is the agent's map of what it may do (D8), and a value it must never write
+does not belong on that map. An insert that omits a required sensitive field then fails at validation,
+which is a loud way to find out and the right one.
+
+**`personal` is recorded, not restricted, and this is stated rather than hidden.** The application still
+has to serve the person the data is about. What the declaration buys is enumerability: `ket
+classification` answers "which columns are in scope" for an export or erasure request, and it also names
+every model that classifies *nothing*, because an inventory of only what somebody remembered to tag is
+worse than none — it looks complete. Automatic export and erasure need one more thing, which person a
+row belongs to, and that is a relationship rather than a field property. Not built, deliberately.
+
+**A reclassification is visible in the upgrade diff**, risky in both directions: dropping `sensitive`
+silently starts letting values through, and dropping `personal` silently ends an obligation.
+
+**Cost:** one more shape for a module author to know, and a KetSuite whose models are almost entirely
+unclassified on day one. The inventory reports that honestly instead of implying coverage.
+
+**Reversible:** the keys, yes — additive. The container, no.
