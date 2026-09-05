@@ -385,3 +385,82 @@ test('a tag says how much work it is on before anyone archives it', async () => 
     await e2e.close()
   }
 })
+
+/**
+ * A sprint that never started can be taken back; one that did cannot (FLW-016).
+ *
+ * The asymmetry is the point. A closed sprint is the record of what a team did
+ * in a fortnight, and every figure that reports on the past reads it. A
+ * planned one is a piece of paper somebody may have written on by mistake.
+ */
+test('a planned sprint can be deleted and lets its issues go, a run one cannot', async () => {
+  const { e2e, call, ok } = await boot()
+  try {
+    await project(call)
+    const made = ok(
+      await call<Row>('flow.issue.save', {
+        id: 'i-planned',
+        projectId: 'p1',
+        columnId: 'c-todo',
+        title: 'Việc đã xếp vào chặng',
+        idempotencyKey: 'lifecycle-issue-planned',
+      }),
+    )
+    ok(
+      await call<Row>('flow.sprint.save', {
+        id: 's-planned',
+        projectId: 'p1',
+        name: 'Chưa chạy',
+        idempotencyKey: 'lifecycle-sprint-planned',
+      }),
+    )
+    ok(
+      await call<Row>('flow.issue.assignSprint', {
+        id: 'i-planned',
+        sprintId: 's-planned',
+        expectedVersion: Number(made.version),
+        idempotencyKey: 'lifecycle-assign-planned',
+      }),
+    )
+
+    const removed = ok(
+      await call<Row>('flow.sprint.delete', {
+        id: 's-planned',
+        idempotencyKey: 'lifecycle-delete-planned',
+      }),
+    )
+    assert.equal(Number(removed.released), 1, 'and says how much work it let go')
+    const sprints = (await call<Row[]>('flow.sprint.list', { projectId: 'p1' })) ?? []
+    assert.equal(sprints.filter((row) => String(row.id) === 's-planned').length, 0)
+
+    // The work is not gone with it. It went back to the backlog, where it was
+    // before somebody planned it into a sprint that never happened.
+    const held = (await call<Row>('flow.issue.get', { id: 'i-planned' })) as Row
+    assert.equal(held.sprintId, null)
+    assert.equal(String(held.title), 'Việc đã xếp vào chặng')
+
+    // A sprint that has run refuses, both while running and once closed.
+    ok(
+      await call<Row>('flow.sprint.save', {
+        id: 's-run',
+        projectId: 'p1',
+        name: 'Đã chạy',
+        idempotencyKey: 'lifecycle-sprint-run',
+      }),
+    )
+    ok(await call<Row>('flow.sprint.start', { id: 's-run', idempotencyKey: 'lifecycle-start-run' }))
+    assert.equal(
+      (await call<Row>('flow.sprint.delete', { id: 's-run', idempotencyKey: 'lifecycle-del-running' })).ok,
+      false,
+      'while it runs',
+    )
+    ok(await call<Row>('flow.sprint.close', { id: 's-run', idempotencyKey: 'lifecycle-close-run' }))
+    assert.equal(
+      (await call<Row>('flow.sprint.delete', { id: 's-run', idempotencyKey: 'lifecycle-del-closed' })).ok,
+      false,
+      'and after it closes, because it is a record by then',
+    )
+  } finally {
+    await e2e.close()
+  }
+})

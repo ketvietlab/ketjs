@@ -14,6 +14,7 @@ import {
   addDependency,
   assignSprint,
   closeSprint,
+  deleteSprint,
   commandKey,
   dependenciesFor,
   groupIssues,
@@ -1385,6 +1386,25 @@ export const functions: Record<string, FnSpec> = {
    * `carryTo` is absent by default, which is exactly what closing used to do —
    * so nothing that calls this today behaves differently.
    */
+  /**
+   * Delete a sprint nobody ever started — see deleteSprint for why only those.
+   */
+  'sprint.delete': defineFn({
+    input: { id: 'id', idempotencyKey: 'text' },
+    output: { ok: 'bool', id: 'id?', released: 'int?', errors: 'json?' },
+    effects: [
+      'read:flow.Sprint',
+      'write:flow.Sprint',
+      'read:flow.Issue',
+      'write:flow.Issue',
+      ...membershipEffects,
+    ],
+    idempotent: true,
+    agent: true,
+    handler: (ctx, args) =>
+      deleteSprint(ctx, { id: String(args.id), idempotencyKey: String(args.idempotencyKey) }),
+  }),
+
   'sprint.close': defineFn({
     input: { id: 'id', carryTo: 'id?', carry: 'bool?', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', carried: 'int?', errors: 'json?' },
