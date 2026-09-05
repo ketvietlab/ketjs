@@ -188,7 +188,29 @@ export type MenuDef = {
  * A section is a renderable a page composes by data. The settings schema is what
  * makes that data checkable — and it is the same schema an agent is handed.
  */
-export type SectionDef = { title?: string; settings?: Record<string, string> }
+/**
+ * Where a section may hold other sections.
+ *
+ * Named rather than a single child list, because a two-column section has two
+ * places to put things and a page needs to say which. A section that declares
+ * no slots holds nothing, which keeps every section written before nesting
+ * existed exactly as closed as it was.
+ */
+export type SlotDef = {
+  /**
+   * Section types this slot accepts. Absent means any composed section, which
+   * is the honest default for a plain container - the alternative is every
+   * container having to list the whole catalogue and go stale as it grows.
+   */
+  accepts?: string[]
+  max?: number
+}
+
+export type SectionDef = {
+  title?: string
+  settings?: Record<string, string>
+  slots?: Record<string, SlotDef>
+}
 export type ViewDef = { of: string; fields: string[] }
 
 /** A printable document owned by the business module that owns its data. */

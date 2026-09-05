@@ -596,12 +596,81 @@ caller was editing and the one at the head. The report is best effort and attach
 already stands on its own: a revision that cannot be read produces a refusal with no report, never an
 error in place of the refusal.
 
-### What this does not do yet
+### A section can hold sections
 
-Nesting. A layout is still a flat ordered list, so a section cannot contain blocks, and the mocks that
-show nested structure have nothing to render from. That needs slot rules on the section definition and
-a theme that can render children, and it is the next gate rather than part of this one - a tree the
-renderer cannot draw would be a model with no reader.
+A layout was a flat ordered list, so a page could place a hero and a paragraph but could never put two
+things side by side. Every mock in the builder design shows nested structure, and there was nothing to
+render it from.
+
+A placement may now carry `slots`, keyed by the slot names its section declares:
+
+```json
+{
+  "type": "website.columns",
+  "settings": { "gap": "wide" },
+  "slots": {
+    "left": [{ "type": "website.rich_text", "settings": { "body": "..." } }],
+    "right": [{ "type": "website.hero", "settings": { "heading": "..." } }]
+  }
+}
+```
+
+**Named slots rather than one child list**, because a two-column section has two places to put things
+and the page has to say which. A section that declares no slots holds nothing, which leaves every
+section written before this exactly as closed as it was.
+
+`SectionDef.slots` is the declaration:
+
+| Field | Meaning |
+| --- | --- |
+| `accepts` | Section types this slot takes. Absent means any composed section - the honest default for a plain container, since the alternative is every container listing the whole catalogue and going stale as it grows. |
+| `max` | How many children fit. |
+
+`website.columns` is the first one: `left` and `right`, capped at twenty each. Both are capped because
+a slot with no ceiling is a way to put a whole page inside one container and walk past the limit on
+the page.
+
+**What the write refuses**, all as a list rather than an exception, and each with a `path` like
+`0.left.2` so an editor can focus the node: a slot the section never declared (silently dropping the
+children would lose an author's work between the save and the render), a type the slot does not
+accept, a slot over its `max`, a tree deeper than six levels, and an unknown section type - which is
+now caught inside a slot exactly as it always was at the top.
+
+**The page limit counts the tree.** The old ceiling was a hundred *top-level* placements, which after
+nesting would have bounded nothing: a hundred containers each holding a hundred children would have
+passed a check written to bound a page. It is now a hundred nodes anywhere in the document.
+
+### Drawing the children
+
+`{% slot "left" %}` inside a section's template renders what the placement put in that slot. It goes
+through the same path as `{% sections %}`, so a nested section is rendered by the same template and
+checked against the same manifest as a top-level one, and an unknown type raises in both places.
+
+The renderer tracks the open placement on a stack rather than passing children through the scope.
+Children are already-rendered markup, and a scope carries values a template may print: putting markup
+where `{{ }}` can reach it would either escape it into visible tag soup or open a hole, and reserving
+a scope name would collide with a section that wanted that name. Rendering is synchronous, so a stack
+is exact.
+
+An empty slot renders nothing rather than raising. A container with an empty column is an ordinary
+state of a page being built, not a fault; a slot the section never declared is caught at the write,
+which is where an author can still do something about it. `{% slot %}` is refused in report mode, the
+same way `{% sections %}` is - a printed report has no page tree to draw children from.
+
+### Identity and diffs go all the way down
+
+`withPlacementIds` walks the tree, so a child gets an id the same way a top-level section does, and
+uniqueness is checked across the whole document rather than per level - a diff keyed on id has no
+level to disambiguate with. A container's derived id folds in its children's ids, so two containers
+holding different things are different containers even when their own settings match.
+
+`diffPlacements` walks the tree too. This matters more than it sounds: comparing only the top level
+would have folded a subtree edit into "the container's settings are unchanged" and reported nothing at
+all. A change six levels down is now reported on the node that changed.
+
+Every change carries a `path`, and `moved` carries the path it came from. That is what makes dragging
+a section from one column to the other read as **one move** rather than as a removal in one place and
+an arrival in another.
 
 ## The storefront page scope
 
