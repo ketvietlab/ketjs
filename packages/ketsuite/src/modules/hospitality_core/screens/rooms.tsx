@@ -89,21 +89,37 @@ export const roomsScreen = (
         ),
         <CardGrid
           items={[
-            { id: 'rooms', label: _('hospitality_core.metric.rooms'), value: data.rows.length },
+            {
+              id: 'rooms',
+              label: _('hospitality_core.metric.rooms'),
+              value: data.rows.length,
+              tone: 'neutral' as const,
+            },
             {
               id: 'buildings',
               label: _('hospitality_core.property.metric.buildings'),
               value: activeBuildings.length,
+              tone: 'neutral' as const,
             },
-            { id: 'floors', label: _('hospitality_core.room.metric.floors'), value: activeFloors.length },
+            {
+              id: 'floors',
+              label: _('hospitality_core.room.metric.floors'),
+              value: activeFloors.length,
+              tone: 'neutral' as const,
+            },
             {
               id: 'available',
               label: _('hospitality_core.metric.available'),
               value: data.rows.filter((row) => row.status === 'available').length,
+              // Rooms exist but none is ready: the desk has nothing to give out.
+              tone:
+                data.rows.length && !data.rows.some((row) => row.status === 'available')
+                  ? ('warning' as const)
+                  : ('neutral' as const),
             },
           ]}
           id={(item) => item.id}
-          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
         />,
         ...(data.propertyId
           ? [

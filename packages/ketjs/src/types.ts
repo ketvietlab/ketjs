@@ -727,6 +727,17 @@ export type Ctx = {
       options?: JobEnqueueOptions,
     ): Promise<JobEnqueueResult>
   }
+  /**
+   * Take the next number in a named sequence, counted per company by default.
+   *
+   * Returns a number: turning it into "S00001" is the domain's decision, and a
+   * framework that chose the format would be choosing an invoice format for a tax
+   * authority it has never heard of.
+   *
+   * A dry run reads the sequence without consuming a number, so a preview cannot
+   * make the real command that follows skip one.
+   */
+  sequence(name: string, options?: import('./server/sequence.ts').SequenceOptions): Promise<number>
   /** Column handles for a model, for building queries. */
   table(model: string): import('./data/query.ts').Table
   /** A changeset bound to this app's manifest. */

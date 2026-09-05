@@ -40,10 +40,15 @@ export const housekeepingRoomsScreen = (
   const attention =
     data.summary.dirty + data.summary.cleaning + data.summary.maintenance + data.summary.outOfOrder
   const metrics = [
-    { id: 'rooms', value: total },
-    { id: 'available', value: data.summary.available },
-    { id: 'occupied', value: data.summary.occupied },
-    { id: 'attention', value: attention },
+    { id: 'rooms', value: total, tone: 'neutral' as const },
+    {
+      id: 'available',
+      value: data.summary.available,
+      tone: total && !data.summary.available ? ('warning' as const) : ('neutral' as const),
+    },
+    { id: 'occupied', value: data.summary.occupied, tone: 'neutral' as const },
+    // Every room in this count is one a guest cannot be put into yet.
+    { id: 'attention', value: attention, tone: attention ? ('danger' as const) : ('positive' as const) },
   ]
 
   return (
@@ -87,7 +92,7 @@ export const housekeepingRoomsScreen = (
             <Metric
               label={_(`hospitality_core.metric.${item.id}`)}
               value={String(item.value)}
-              tone={item.id}
+              tone={item.tone}
             />
           )}
         />,

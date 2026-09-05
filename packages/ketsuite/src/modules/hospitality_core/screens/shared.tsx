@@ -741,6 +741,13 @@ export const cleaningTone = (state: string): 'positive' | 'warning' | 'danger' |
   return 'neutral'
 }
 
+export const noticeTone = (state: string): 'positive' | 'warning' | 'info' | 'neutral' => {
+  if (state === 'attention') return 'warning'
+  if (state === 'ready' || state === 'submitted') return 'info'
+  if (state === 'confirmed') return 'positive'
+  return 'neutral'
+}
+
 export const calendarDate = (value: string, locale: string, timezone: string): string =>
   formatDateTime(locale, new Date(value), {
     timeZone: timezone,

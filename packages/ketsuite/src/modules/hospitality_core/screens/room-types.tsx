@@ -72,20 +72,37 @@ export const roomTypesScreen = (
         ),
         <CardGrid
           items={[
-            { id: 'types', label: _('hospitality_core.roomType.metric.types'), value: rows.length },
+            {
+              id: 'types',
+              label: _('hospitality_core.roomType.metric.types'),
+              value: rows.length,
+              tone: 'neutral' as const,
+            },
             {
               id: 'published',
               label: _('hospitality_core.roomType.metric.published'),
               value: rows.filter((row) => row.published).length,
+              // Types defined and none published: nothing of this hotel is
+              // offered anywhere. How many of them to publish is a choice; none
+              // of them is a gap.
+              tone:
+                rows.length && !rows.some((row) => row.published)
+                  ? ('warning' as const)
+                  : ('neutral' as const),
             },
             {
               id: 'rooms',
               label: _('hospitality_core.metric.rooms'),
               value: rows.reduce((sum, row) => sum + (row.rooms?.length ?? 0), 0),
+              // A type with no room behind it cannot be sold, whatever its price.
+              tone:
+                rows.length && !rows.some((row) => row.rooms?.length)
+                  ? ('warning' as const)
+                  : ('neutral' as const),
             },
           ]}
           id={(item) => item.id}
-          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.id} />}
+          card={(item) => <Metric label={item.label} value={String(item.value)} tone={item.tone} />}
         />,
         rows.length
           ? dataTable(_, {
