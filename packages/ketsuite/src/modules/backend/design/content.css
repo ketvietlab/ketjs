@@ -726,15 +726,38 @@
     [data-ui="sidebar-header"] {
       padding: 0;
     }
+    /* The grid above reserves `minmax(8rem, 1fr)` for this. It was reserving that
+       column for an element `responsive.css` had hidden, so the row carried a
+       gap where the only other way out of a screen should have been. */
     [data-ui="sidebar-search"] {
+      display: flex;
       margin: 0;
     }
+    /* The one definition of the mobile menu strip. `responsive.css` used to hide
+       it at this same breakpoint, in this same layer, at this same specificity —
+       so which rule won was decided by the order of the `styles` array and
+       nothing else. Swapping two lines in that array made the mobile menu
+       disappear entirely. */
     [data-ui="sidebar-nav"] {
       display: block;
       grid-column: 1 / -1;
       padding: 0;
       overflow-x: auto;
       overflow-y: hidden;
+      /* The desktop sidebar hides its scrollbar because it scrolls vertically
+         in a tall column where the cut edge is obvious. Lying on its side this
+         strip hides most of itself — two thirds of it on a phone — and without
+         a scrollbar there is nothing at all to say the rest exists. */
+      scrollbar-width: thin;
+      overscroll-behavior-inline: contain;
+      /* A second, quieter signal for the platforms that draw the scrollbar only
+         while it moves: the strip fades where it continues. */
+      mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+    }
+
+    [data-ui="sidebar-nav"]::-webkit-scrollbar {
+      display: block;
+      block-size: 0.25rem;
     }
     [data-ui="sidebar-section-label"],
     [data-ui="app-list"],

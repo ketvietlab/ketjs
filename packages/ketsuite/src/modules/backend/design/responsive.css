@@ -167,11 +167,6 @@
       padding-inline: var(--admin-gap-sm);
     }
 
-    [data-ui="sidebar-search"],
-    [data-ui="sidebar-nav"] {
-      display: none;
-    }
-
     [data-ui="sidebar-foot"] {
       flex: 0 0 auto;
       flex-direction: row;
