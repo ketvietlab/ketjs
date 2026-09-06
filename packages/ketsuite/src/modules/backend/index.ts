@@ -91,7 +91,8 @@ export type {
   RelationSelectConfig,
   RelationSelectLabels,
 } from './relation-select.ts'
-export { readForm, seeOther } from './forms.ts'
+export { formRefusal, readForm, seeOther } from './forms.ts'
+export type { FormRefusal } from './forms.ts'
 
 /**
  * The kit, re-exported.
