@@ -1017,9 +1017,21 @@ test('sale: the overview counts every order and adds up one currency', async () 
       '9007199254740993',
     )
     await call('sale.confirmOrder', { id: 'ov-exact' }, adapter)
+    const originalAll = adapter.all.bind(adapter)
+    const orderQueries: string[] = []
+    adapter.all = (sql, params) => {
+      if (/\bfrom\s+["`]?(?:sale_order)["`]?/i.test(sql)) orderQueries.push(sql)
+      return originalAll(sql, params)
+    }
     const exact = (await call('sale.countOrders', { timezone: 'Asia/Ho_Chi_Minh' }, adapter)).value as Row
+    adapter.all = originalAll
     assert.equal(exact.sale, 2)
     assert.equal(exact.saleTotal, '9007199254741213')
+    assert.equal(orderQueries.length, 5)
+    assert.ok(
+      orderQueries.every((sql) => /\bgroup by\b|\bcount\s*\(/i.test(sql)),
+      `overview must aggregate in the database:\n${orderQueries.join('\n')}`,
+    )
 
     // The company moves to another currency. The orders it already raised stay in
     // đồng, so they are still counted — and deliberately not added to dollars.
