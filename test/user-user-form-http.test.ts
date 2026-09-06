@@ -106,3 +106,81 @@ test('user create/detail preserves stable retry identity, return state and expli
   assert.match(unsafe, /href="\/admin\/users\?lang=en"/)
   assert.doesNotMatch(unsafe, /attacker\.example/)
 })
+
+test('a scoped role can be taken back from the screen that gave it', async (t) => {
+  const app = await boot(t)
+  const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
+  const fixture = (name: string, input: Record<string, unknown>) =>
+    app.fixture.call<Row>(name, input, { scope })
+  await fixture('user.createUser', { id: 'staff', login: 'staff', password: 'correct horse', name: 'Staff' })
+  await fixture('user.grantCompany', { id: 'staff:acme', userId: 'staff', companyId: 'acme' })
+  await fixture('user.saveRole', { id: 'cashier', name: 'Cashier' })
+
+  const path = '/admin/users/staff?lang=en'
+  const before = await (await app.client.get(path)).text()
+  const assigned = await app.client.post(
+    '/admin/users/staff/scoped-roles',
+    new URLSearchParams({
+      action: 'assign',
+      id: hidden(before, 'id'),
+      idempotencyKey: hidden(before, 'idempotencyKey'),
+      expectedAuthorizationRevision: hidden(before, 'expectedAuthorizationRevision'),
+      roleId: 'cashier',
+      scopeKind: 'company',
+      companyId: 'acme',
+      reason: 'give the role',
+    }),
+    post,
+  )
+  assert.equal(assigned.status, 303)
+
+  // Before this the screen could only add: the function to take a role back
+  // existed and the route answered 400 for every action but `assign`, so a role
+  // given by mistake stayed given.
+  const withRole = await (await app.client.get(path)).text()
+  assert.match(withRole, /name="assignmentId"/u, 'the screen offers the assignment to remove')
+  const removalId = [...withRole.matchAll(/name="id" value="([^"]*)"/gu)].at(-1)?.[1] ?? ''
+  const revision =
+    [...withRole.matchAll(/name="expectedAuthorizationRevision" value="([^"]*)"/gu)].at(-1)?.[1] ?? ''
+  // The renderer marks its slots with HTML comments, so read the option text
+  // with those removed rather than writing a regex around them.
+  const plain = withRole.replace(/<!--.*?-->/gu, '')
+  const assignmentId =
+    [...plain.matchAll(/<option value="([^"]+)"[^>]*>([^<]*)</gu)].find(([, , label]) =>
+      label.includes('Cashier'),
+    )?.[1] ?? ''
+  assert.ok(assignmentId, 'the assignment is listed by name, not by the pair behind it')
+  // Scoped to the company on purpose: a removal that assumed tenant scope would
+  // find nothing to remove and the role would quietly stay.
+  assert.match(plain, /Cashier · company:acme/u)
+
+  const removed = await app.client.post(
+    '/admin/users/staff/scoped-roles',
+    new URLSearchParams({
+      action: 'unassign',
+      id: removalId,
+      idempotencyKey: removalId,
+      expectedAuthorizationRevision: revision,
+      assignmentId,
+      reason: 'taken back',
+    }),
+    post,
+  )
+  assert.equal(removed.status, 303)
+  const after = await (await app.client.get(path)).text()
+  assert.doesNotMatch(after, /name="assignmentId"/u, 'nothing left to remove')
+
+  // The reason is the whole point of routing a removal through the audited
+  // function rather than deleting a row: it has to be the reason the person
+  // typed, not one the route made up on their behalf.
+  const audit = (await fixture('user.listAuthorizationAudit', { limit: 20 })) as unknown as {
+    value?: Array<{ event?: string; reason?: string }>
+  }
+  assert.equal(
+    (audit.value ?? []).some(
+      (entry) => entry.reason === 'taken back' && entry.event === 'authorization.assignment.removed',
+    ),
+    true,
+    'the typed reason reached the audit trail',
+  )
+})

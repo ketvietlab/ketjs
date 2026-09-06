@@ -1760,3 +1760,35 @@ test('a browser navigating gets the page; a client calling gets the JSON', () =>
     'a fragment request is answered by the caller, not replaced with a whole document',
   )
 })
+
+test('backend shell: the phone menu has one definition, and it says the rest is there', () => {
+  // Two stylesheets used to define the mobile shell at the same breakpoint, in
+  // the same layer, at the same specificity. Which one applied was decided by
+  // the order of `styles` in the backend module and by nothing else: swapping
+  // `responsive.css` and `content.css` made the phone menu disappear whole.
+  const phoneBlocks = ADMIN_STYLESHEETS.map((path) => {
+    const source = readFileSync(path, 'utf8')
+    const at = source.indexOf('@media (max-width: 47.9375rem)')
+    const blocks: string[] = []
+    for (let index = at; index >= 0; index = source.indexOf('@media (max-width: 47.9375rem)', index + 1))
+      blocks.push(source.slice(index, source.indexOf('\n  }', index)))
+    return [path, blocks.join('\n')] as const
+  })
+  const declaring = phoneBlocks
+    .filter(([, block]) => /\[data-ui="sidebar-nav"\][^{]*\{[^}]*display:/u.test(block))
+    .map(([path]) => path.split('/').pop())
+  assert.deepEqual(declaring, ['content.css'], 'only one stylesheet may decide whether the phone menu exists')
+
+  const strip = ADMIN_CSS.match(/\[data-ui="sidebar-nav"\]\s*\{[^}]*overflow-x: auto[^}]*\}/u)?.[0]
+  // Two thirds of this strip is off-screen on a phone. The desktop sidebar hides
+  // its scrollbar because a tall column shows its own cut edge; lying on its
+  // side it shows nothing, so the hidden part has to announce itself.
+  assert.match(strip ?? '', /scrollbar-width: thin/u, 'the strip says it scrolls')
+  assert.match(strip ?? '', /mask-image: linear-gradient/u, 'and fades where it continues')
+
+  // The search box is the only other way out of a screen once the app list is
+  // folded away, and the grid already reserves a column for it.
+  const compact = readFileSync('packages/ketsuite/src/modules/backend/design/content.css', 'utf8')
+  const search = compact.match(/\[data-ui="sidebar-search"\]\s*\{[^}]*display: flex[^}]*\}/u)?.[0]
+  assert.ok(search, 'the reserved column holds something')
+})
