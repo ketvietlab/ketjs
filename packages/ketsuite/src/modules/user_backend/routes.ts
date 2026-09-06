@@ -182,6 +182,7 @@ const renderUser = async (
           ),
           effectiveAccess,
           scopedRoleOperationId: state.scopedRoleOperationId ?? randomUUID(),
+          scopedRoleRemovalId: randomUUID(),
           scopedRoleValues: state.scopedRoleValues,
           tokenAction: withUserReturnTo(url, `/admin/users/${encodeURIComponent(row.id)}/token`, returnTo),
           sessionAction: (session) =>
@@ -576,11 +577,46 @@ export const routes: Record<string, RouteEntry> = {
       if (!row)
         return text(ctx.translate(ctx.localeOf(url, req))('user_backend.error.notFound'), { status: 404 })
       const form = await readForm(req)
-      if (form.action !== 'assign') return text('invalid action', { status: 400 })
+      if (form.action !== 'assign' && form.action !== 'unassign')
+        return text('invalid action', { status: 400 })
       const effective = (await ctx.call('user.effectiveAccess', { userId: params.id }, url, req)) as {
         revision: number
       }
       const operationId = validCreateId(form.id) ? form.id : randomUUID()
+      // Taking a role away is the same act as giving one, and it needs the same
+      // record: an operation id to be replayed against, the revision the reader
+      // was looking at, and a reason. Without this the screen could only add.
+      if (form.action === 'unassign') {
+        // The screen names the assignment, not the pair behind it: a reader
+        // picks the row they can see, and which role at which scope that was is
+        // read back from the record rather than round-tripped through the form.
+        const held = (row.assignments ?? []).find(
+          (assignment) => String(assignment.id ?? '') === (form.assignmentId ?? ''),
+        )
+        if (!held) return text('unknown assignment', { status: 400 })
+        const removal = await ctx.call(
+          'user.unassignScopedRole',
+          {
+            userId: params.id,
+            roleId: held.roleId,
+            scopeKey: held.scopeKey ?? 'tenant',
+            expectedAuthorizationRevision: Number(form.expectedAuthorizationRevision ?? effective.revision),
+            idempotencyKey: form.idempotencyKey ?? operationId,
+            reason: form.reason ?? '',
+          },
+          url,
+          req,
+        )
+        if (!(removal as { ok?: boolean }).ok)
+          return renderUser(ctx, url, req, params.id, {
+            errors: translatedErrors(ctx, url, req, removal),
+            scopedRoleOperationId: operationId,
+            returnTo: safeUserReturnTo(url, url.searchParams.get('returnTo')),
+          })
+        return seeOther(
+          userDetailPath(url, params.id, safeUserReturnTo(url, url.searchParams.get('returnTo'))),
+        )
+      }
       const result = await ctx.call(
         'user.assignScopedRole',
         {

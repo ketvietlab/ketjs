@@ -42,6 +42,7 @@ export type UserFormScreenOptions = {
   rolesAction?: string
   scopedRolesAction?: string
   scopedRoleOperationId?: string
+  scopedRoleRemovalId?: string
   scopedRoleValues?: ScopedRoleFormValues
   effectiveAccess?: {
     revision: number
@@ -177,6 +178,45 @@ export const userFormScreen = (
                       },
                     ]}
                   />,
+                  ...((values.assignments ?? []).length
+                    ? [
+                        // Giving a role and taking it back are the same act, so
+                        // they are the same shape of form: name the row, say
+                        // why, and the record carries both.
+                        <RecordForm
+                          action={options.scopedRolesAction}
+                          hidden={{
+                            action: 'unassign',
+                            id: options.scopedRoleRemovalId ?? '',
+                            idempotencyKey: options.scopedRoleRemovalId ?? '',
+                            expectedAuthorizationRevision: String(options.effectiveAccess?.revision ?? 0),
+                          }}
+                          submit={_('user_backend.action.unassignScopedRole')}
+                          submitVariant="tertiary"
+                          fields={[
+                            {
+                              name: 'assignmentId',
+                              label: _('user_backend.field.assignment'),
+                              type: 'select' as const,
+                              required: true,
+                              options: (values.assignments ?? []).map((assignment) => ({
+                                value: assignment.id ?? '',
+                                label: `${roleLabels.get(assignment.roleId) ?? assignment.roleId} · ${
+                                  assignment.scopeKey ?? 'tenant'
+                                }`,
+                              })),
+                            },
+                            {
+                              name: 'reason',
+                              label: _('user_backend.field.reason'),
+                              type: 'textarea' as const,
+                              required: true,
+                              span: 'full' as const,
+                            },
+                          ]}
+                        />,
+                      ]
+                    : []),
                   <RecordForm
                     action={options.scopedRolesAction}
                     hidden={{
