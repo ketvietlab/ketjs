@@ -1,5 +1,5 @@
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, sha256 } from '../channel_api/core.ts'
+import { channelError, defineChannelRoute, idempotencyKey, routesOf, sha256 } from '../channel_api/core.ts'
 import { claimSchema, detailSchema, projectPicking, referencesFor } from './channel-routes.ts'
 
 type Req = Parameters<Route>[1]
@@ -78,16 +78,6 @@ const missing = (ctx: ServeContext, url: URL, req: Req, code = 'pickingNotFound'
     messageKey: 'stock_staff_channel.error.pickingNotFound',
   }),
 })
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
-    }),
-  }
-}
 const commandId = (kind: string, namespace: string, key: string): string =>
   `${kind}_${sha256(`${namespace}\n${key}`)}`
 type StaffIdentity = { companyId: string | null; userId: string }

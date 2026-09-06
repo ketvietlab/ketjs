@@ -5,7 +5,13 @@
 // functions into the bounded catalogue, lifecycle, and stock-adjustment API.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, stableHash } from '../channel_api/core.ts'
+import {
+  channelError,
+  defineChannelRoute,
+  idempotencyKey,
+  routesOf,
+  stableHash,
+} from '../channel_api/core.ts'
 import { TRACKING } from '../stock/functions.ts'
 
 type Req = Parameters<Route>[1]
@@ -350,17 +356,6 @@ const invalidResult = (field: string, message: string) => ({
   ok: false,
   errors: [{ field, message }],
 })
-
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
-    }),
-  }
-}
 const requestVersion = (req: Req, body: Row): string | null => {
   const expected = String(body.expectedVersion ?? '')
   const header = String(req.headers['if-match'] ?? '').trim()

@@ -46,6 +46,13 @@ export default defineModule({
       'error.payloadTooLarge': 'Dữ liệu vượt quá giới hạn cho phép.',
       'error.duplicateName': 'Tên này đã được sử dụng.',
       'error.duplicateHost': 'Tên miền này đã được gán cho website khác.',
+      'error.invalidTokens': 'Token giao diện phải là một đối tượng khoá–giá trị.',
+      'error.invalidTokenValue':
+        'Có token mang tên hoặc giá trị không hợp lệ. Giá trị chỉ được chứa chữ, số, khoảng trắng và # . , % ( ) / + * -',
+      'error.primaryDomainInUse':
+        'Không thể gỡ tên miền chính khi website còn tên miền khác. Hãy đặt một tên miền khác làm chính trước.',
+      'error.duplicateRedirect':
+        'Đường dẫn này đã có chuyển hướng. Hãy sửa chuyển hướng đang có thay vì thêm mới.',
       'error.duplicatePath': 'Đường dẫn này đã được sử dụng trên website.',
       'error.duplicateSlug': 'Slug này đã được sử dụng.',
       'error.siteNotFound': 'Không tìm thấy website.',
@@ -66,6 +73,9 @@ export default defineModule({
       'error.taxonomyCycle': 'Cấu trúc term tạo thành vòng lặp.',
       'error.termSiteMismatch': 'Nội dung và term phải thuộc cùng website.',
       'error.termInUse': 'Không thể xóa term đang có term con hoặc đang được gán cho nội dung.',
+      'error.mediaInUse': 'Không thể xóa ảnh đang được đặt trên một trang. Hãy gỡ khỏi trang trước.',
+      'error.mediaUsageUnknown':
+        'Website quá lớn để rà hết trong một lần, nên không thể khẳng định ảnh này không còn được dùng. Hãy gỡ ảnh khỏi các trang rồi thử lại.',
       'error.invalidDimensions': 'Kích thước media không hợp lệ.',
       'error.invalidRedirect': 'Hai đường dẫn redirect phải khác nhau và là đường dẫn nội bộ.',
       'error.redirectCycle': 'Redirect tạo thành vòng lặp.',
@@ -116,6 +126,13 @@ export default defineModule({
       'error.payloadTooLarge': 'The payload exceeds the allowed size.',
       'error.duplicateName': 'This name is already in use.',
       'error.duplicateHost': 'This domain is already assigned to another site.',
+      'error.invalidTokens': 'Theme tokens have to be an object of names and values.',
+      'error.invalidTokenValue':
+        'A token name or value is not allowed. A value may hold letters, digits, spaces and # . , % ( ) / + * -',
+      'error.primaryDomainInUse':
+        'The primary domain cannot be removed while the site has others. Make one of them primary first.',
+      'error.duplicateRedirect':
+        'That path already redirects somewhere. Edit the redirect it has rather than adding another.',
       'error.duplicatePath': 'This path is already in use on the site.',
       'error.duplicateSlug': 'This slug is already in use.',
       'error.siteNotFound': 'The site was not found.',
@@ -136,6 +153,9 @@ export default defineModule({
       'error.taxonomyCycle': 'The term hierarchy contains a cycle.',
       'error.termSiteMismatch': 'The content and term must belong to the same site.',
       'error.termInUse': 'A term with children or content assignments cannot be deleted.',
+      'error.mediaInUse': 'This image is placed on a page. Take it off the page first.',
+      'error.mediaUsageUnknown':
+        'The site is larger than one scan, so nothing can say this image is unused. Take it off the pages that draw it and try again.',
       'error.invalidDimensions': 'The media dimensions are invalid.',
       'error.invalidRedirect': 'Redirect paths must be distinct local paths.',
       'error.redirectCycle': 'The redirect creates a cycle.',

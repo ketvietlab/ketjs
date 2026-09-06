@@ -229,6 +229,104 @@ export const postCharge = async (
   }
 }
 
+/** The folio moved while a cancellation was being settled against it. */
+export class FolioConflict extends Error {
+  readonly problem: Issue
+
+  constructor(problem: Issue) {
+    super(problem.code)
+    this.problem = problem
+  }
+}
+
+/** What a cancelled booking still owes, and where the penalty came from. */
+export type CancellationSettlement = {
+  folioId: unknown
+  /** The stay the penalty belongs to, when there is exactly one. */
+  stayId?: unknown
+  /** The penalty in the folio's currency. `'0'` for a free cancellation. */
+  fee: string
+  /** Stable, so a replayed cancellation rewrites the penalty instead of adding one. */
+  chargeId: string
+  sourceKey: string
+  /**
+   * Why this amount: a policy type for a cancellation we priced ourselves,
+   * `provider` for an amount the channel decided. Rendered on the folio.
+   */
+  reason: string
+  /**
+   * Which event this was. A no-show is priced by the cancellation policy but
+   * is not a cancellation, and the folio should not tell the guest it was.
+   */
+  kind?: 'cancellation' | 'no_show'
+  at: string
+}
+
+/**
+ * Settle the folio of a booking that will not happen.
+ *
+ * Both the front desk and a channel revision end here, and they used to end
+ * differently. The desk wrote a `cancellation` charge and closed the folio;
+ * the channel wrote a `service` charge and left the folio `open` — and
+ * `invoiceClosedFolios` only ever looks at closed folios, so every cancellation
+ * fee an OTA ever charged sat in a folio nobody could invoice. Same event, same
+ * settlement, one place to read it.
+ *
+ * A folio owing a penalty is `closed`: the stay is off but the money is not.
+ * Only a folio owing nothing is `cancelled`.
+ */
+export const settleCancelledFolio = async (ctx: Ctx, spec: CancellationSettlement): Promise<void> => {
+  const owed = compareDecimals(spec.fee, '0') > 0
+  const C = ctx.table('hospitality_core.Charge')
+  const active = await ctx.db.all(from(C).where(eq(C.folioId, spec.folioId), eq(C.state, 'active')))
+  // Nothing on this folio was consumed — a cancellation is refused once anyone
+  // has checked in — so the room nights and extras booked against it are void
+  // and the penalty is all that stands.
+  for (const charge of active) {
+    if (String(charge.id) === spec.chargeId) continue
+    await ctx.db.update('hospitality_core.Charge', { id: charge.id }, { state: 'void' })
+  }
+  const existing = await one(ctx, 'hospitality_core.Charge', spec.chargeId)
+  if (!owed && existing)
+    await ctx.db.update('hospitality_core.Charge', { id: spec.chargeId }, { state: 'void' })
+  if (owed) {
+    const values = {
+      folioId: spec.folioId,
+      stayId: spec.stayId ?? null,
+      description: `${spec.kind ?? 'cancellation'}:${spec.reason}`,
+      type: 'cancellation',
+      quantity: '1',
+      unitPrice: spec.fee,
+      amount: spec.fee,
+      occurredAt: spec.at,
+      sourceKey: spec.sourceKey,
+      state: 'active',
+    }
+    if (existing) await ctx.db.update('hospitality_core.Charge', { id: spec.chargeId }, values)
+    else await ctx.db.insert('hospitality_core.Charge', { id: spec.chargeId, ...values })
+  }
+  const folio = await one(ctx, 'hospitality_core.Folio', spec.folioId)
+  const claim = await ctx.db.compareAndSet(
+    'hospitality_core.Folio',
+    { id: spec.folioId },
+    { state: folio?.state, version: folio?.version },
+    {
+      state: owed ? 'closed' : 'cancelled',
+      amountTotal: spec.fee,
+      closedAt: spec.at,
+      version: Number(folio?.version ?? 0) + 1,
+    },
+  )
+  // A charge posted between the void above and this write would otherwise sit
+  // active on a closed folio, outside a total that no longer counts it.
+  if (!('dryRun' in claim) && !claim.matched)
+    throw new FolioConflict({
+      field: 'folioId',
+      code: 'transition_conflict',
+      messageKey: 'hospitality_core.validation.transition_conflict',
+    })
+}
+
 const extraOutput = {
   id: 'id',
   reservationId: 'id?',

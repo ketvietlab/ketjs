@@ -97,7 +97,7 @@ test('modal guard: an unedited modal closes without asking', () => {
 test('modal guard: it runs on every way out, before the navigation layer', () => {
   // Escape, the X and the backdrop are three doors out of the same room.
   assert.match(island, /if \(!mayLeaveModal\(modal\)\) return\n/u)
-  assert.match(island, /'\[data-ui="modal-close"\], \[data-ui="modal-backdrop"\]'/u)
+  assert.match(island, /'\[data-ui="modal-close"\], \[data-ui="modal-backdrop"\], a\[data-ui="tab"\]'/u)
   // Capture phase: the close controls are ordinary links, so the guard has to
   // see the click before whatever handles navigation does. Formatting moves, so
   // read the call rather than its indentation.
@@ -110,4 +110,33 @@ test('modal guard: it runs on every way out, before the navigation layer', () =>
     / true, \)/u,
     'registered on the capture phase',
   )
+})
+
+test('modal guard: a tab is a third way out, and it asks too', () => {
+  // A tab looks like a control that stays on the screen. It is a link out of
+  // the document, and losing a half-written note to one is the case nobody
+  // reports because the reader never meant to leave.
+  assert.match(island, /'\[data-ui="modal-close"\], \[data-ui="modal-backdrop"\], a\[data-ui="tab"\]'/u)
+})
+
+test('modal guard: a tab outside the modal is none of its business', () => {
+  // The record screen behind an open modal has tabs of its own, and the guard
+  // must not speak for them.
+  assert.match(island, /^ {6}if \(!leaving \|\| !modal\.contains\(leaving as HTMLElement\)\) return$/mu)
+})
+
+test('modal guard: a disabled tab is not a way out', () => {
+  // `tabs` renders an unavailable tab as a span, and a span navigates nowhere,
+  // so the guard would be asking about a click that costs nothing. The `a`
+  // qualifier is what keeps it off them.
+  assert.doesNotMatch(island, /modal-backdrop"\], \[data-ui="tab"\]/u)
+  assert.match(island, /modal-backdrop"\], a\[data-ui="tab"\]/u)
+})
+
+test('the prompt says leaving, because there are three ways to leave', () => {
+  const messages = readFileSync('packages/ketsuite/src/modules/backend/messages.ts', 'utf8')
+  // It guarded the X, the backdrop and Escape before this, and said "closing"
+  // for all three. Now a tab as well.
+  assert.match(messages, /'modal\.unsaved': 'Rời khỏi đây sẽ mất phần bạn đang nhập\. Vẫn tiếp tục\?',/u)
+  assert.match(messages, /'modal\.unsaved': 'Leaving loses what you have typed\. Continue\?',/u)
 })

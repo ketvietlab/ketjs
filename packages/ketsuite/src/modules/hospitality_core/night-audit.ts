@@ -486,6 +486,13 @@ export const nightAuditJobs: Record<string, JobSpec> = {
       'read:hospitality_core.Reservation',
       'write:hospitality_core.Reservation',
       'read:hospitality_core.Room',
+      // A missed arrival goes through applyNoShow, which lets go of the room
+      // that was being kept and prices the night by the cancellation policy.
+      'read:hospitality_core.RoomAssignment',
+      'write:hospitality_core.RoomAssignment',
+      'read:hospitality_core.RoomType',
+      'read:hospitality_core.CancellationPolicy',
+      'read:company.Company',
       'read:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.InventoryChange',

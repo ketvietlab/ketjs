@@ -9,9 +9,11 @@ import {
   inArray,
   isNotNull,
   like,
+  likeLiteral,
   diffPlacements,
   isPlacementId,
   ne,
+  partitionTokens,
   placementIdErrors,
   validateLayout,
   withPlacementIds,
@@ -27,7 +29,17 @@ import {
 } from './access.ts'
 import { ensureCustomerRealm } from './customer.ts'
 import { isReservedPath, reservedPrefixes } from './paths.ts'
+import { usageOf } from './media-usage.ts'
 import { preflightEntry } from './renderable.ts'
+
+/**
+ * What a person typed in the title box, as a literal.
+ *
+ * Without the escape a `%` matched every page and a `_` matched any character,
+ * so the list answered nonsense to anyone searching for "50%" or "co_op" - and
+ * the count beside it agreed, which made it look deliberate.
+ */
+const titlePattern = (search: unknown): string => `%${likeLiteral(String(search).trim().slice(0, 100))}%`
 
 const SITE_ROLES = new Set(['administrator', 'editor', 'author', 'contributor'])
 /** How many pages one unnamed preflight will read. Beyond it, the answer is "ask again by id". */
@@ -444,6 +456,13 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale))
         return invalid('defaultLocale', 'website.error.invalidLocale')
       if (jsonBytes(args.tokens ?? {}) > 64 * 1024) return invalid('tokens', 'website.error.payloadTooLarge')
+      const tokens = args.tokens
+      if (tokens != null && (typeof tokens !== 'object' || Array.isArray(tokens)))
+        return invalid('tokens', 'website.error.invalidTokens')
+      if (tokens) {
+        const { rejected } = partitionTokens(tokens as Record<string, unknown>)
+        if (rejected.length) return invalid('tokens', 'website.error.invalidTokenValue')
+      }
       const duplicate = (await ctx.db.select('website.Site')).find(
         (site) => site.id !== args.id && String(site.name).toLowerCase() === name.toLowerCase(),
       )
@@ -513,6 +532,27 @@ export const cmsFunctions: Record<string, FnSpec> = {
         if (existing) await tx.db.update('website.SiteDomain', { id: args.id }, row)
         else await tx.db.insert('website.SiteDomain', row)
       })
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  deleteDomain: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.SiteMember', 'read:website.SiteDomain', 'write:website.SiteDomain'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const domain = (await ctx.db.select('website.SiteDomain', { id: args.id }))[0]
+      if (!domain) return { ok: true, id: args.id }
+      if (!(await canAdministerSite(ctx, domain.siteId))) return forbidden()
+      const siblings = await ctx.db.select('website.SiteDomain', { siteId: domain.siteId })
+      // Canonical URLs and the sitemap are built from the primary, so removing
+      // it while other hosts still answer for the site would publish the wrong
+      // address to every crawler that asks. Promote another one first.
+      if (domain.primary === true && siblings.length > 1)
+        return invalid('id', 'website.error.primaryDomainInUse')
+      const Domain = ctx.table('website.SiteDomain')
+      await ctx.db.del(deleteFrom(Domain).where(eq(Domain.id, args.id)))
       return { ok: true, id: args.id }
     },
   }),
@@ -623,8 +663,11 @@ export const cmsFunctions: Record<string, FnSpec> = {
         .where(eq(Entry.siteId, args.siteId))
         .orderBy(desc(Entry.updatedAt), asc(Entry.title))
       if (args.type) query = query.where(eq(Entry.type, args.type))
+      // Asked for by name or left out entirely: a list of what there is does
+      // not mean a list of what was thrown away.
       if (args.status) query = query.where(eq(Entry.status, args.status))
-      if (args.search) query = query.where(like(Entry.title, `%${String(args.search).trim().slice(0, 100)}%`))
+      else query = query.where(ne(Entry.status, 'trash'))
+      if (args.search) query = query.where(like(Entry.title, titlePattern(args.search), true))
       query = query.limit(paging.limit).offset(paging.offset)
       return ctx.db.all(query)
     },
@@ -639,8 +682,11 @@ export const cmsFunctions: Record<string, FnSpec> = {
       const Entry = ctx.table('website.Entry')
       let query = from(Entry).where(eq(Entry.siteId, args.siteId))
       if (args.type) query = query.where(eq(Entry.type, args.type))
+      // The same rule as listEntries, or the pager counts rows the list will
+      // not show and the last page comes back empty.
       if (args.status) query = query.where(eq(Entry.status, args.status))
-      if (args.search) query = query.where(like(Entry.title, `%${String(args.search).trim().slice(0, 100)}%`))
+      else query = query.where(ne(Entry.status, 'trash'))
+      if (args.search) query = query.where(like(Entry.title, titlePattern(args.search), true))
       return { count: await ctx.db.count(query) }
     },
   }),
@@ -972,6 +1018,110 @@ export const cmsFunctions: Record<string, FnSpec> = {
   }),
 
   /**
+   * Out of the way, without being gone.
+   *
+   * Every consumer in the module already honours `trash`: the public resolver
+   * refuses it, the sitemap and the menu validator leave it out, the search
+   * index skips it, preflight and the media library do not count it, and
+   * `preparePublication` refuses a set containing one. Nothing could produce
+   * it, so a page created by mistake stayed in the list for ever.
+   *
+   * Trash rather than delete because deleting is the harder question and this
+   * is not it: `ref:` emits no foreign key, so removing an entry would leave
+   * its revisions, its term assignments, its preview tokens and - across a
+   * module boundary `website` cannot reach - its SEO row all pointing at
+   * nothing. Trash keeps every row and answers the question people actually
+   * have, which is "get this off my list".
+   */
+  trashEntry: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.id)
+      if (!entry || !(await canPublishEntry(ctx, entry))) return forbidden()
+      if (entry.status === 'trash') return { ok: true, id: args.id }
+      // The same clearing unpublishEntry does. The resolver checks the status
+      // too, but a pointer left behind is a pointer somebody later trusts.
+      await ctx.db.update(
+        'website.Entry',
+        { id: args.id },
+        { status: 'trash', publishedRevisionId: null, scheduledRevisionId: null, publishAt: null },
+      )
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  /**
+   * Back to a draft.
+   *
+   * `saveEntry` and `restoreRevision` both already revive a trashed entry,
+   * which is right - editing something means you want it back - but it is an
+   * implicit revival, and a screen needs a control that says what it does.
+   */
+  untrashEntry: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.id)
+      if (!entry || !(await canPublishEntry(ctx, entry))) return forbidden()
+      if (entry.status !== 'trash') return { ok: true, id: args.id }
+      // A draft, never straight back to published: what it used to say may be
+      // the reason it was thrown away.
+      await ctx.db.update('website.Entry', { id: args.id }, { status: 'draft' })
+      return { ok: true, id: args.id }
+    },
+  }),
+
+  /**
+   * The inverse of publishEntry, which never had one.
+   *
+   * A page could go live and never come back down: nothing set `status` back,
+   * and the public resolver's per-entry fallback reads `publishedRevisionId`,
+   * which nothing ever cleared. A page published by mistake, an event that is
+   * over, a takedown - all of them had only `noindex`, which asks crawlers to
+   * forget the page while every visitor with the address still reads it.
+   *
+   * This is also how a schedule is cancelled: `publishScheduled` re-reads
+   * `status` before it publishes, so a scheduled page moved back to draft
+   * stays there and the queued job returns without doing anything.
+   *
+   * What it does not do is take a page out of an *active publication*. That
+   * set is frozen by design, and the way to change what it contains is to
+   * prepare and activate another one.
+   */
+  unpublishEntry: defineFn({
+    input: { id: 'id' },
+    output: { ok: 'bool', id: 'id?', status: 'text?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.Entry'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.id)
+      if (!entry || !(await canPublishEntry(ctx, entry))) return forbidden()
+      if (entry.status === 'draft') return { ok: true, id: args.id, status: 'draft' }
+      await ctx.db.update(
+        'website.Entry',
+        { id: args.id },
+        {
+          status: 'draft',
+          publishedRevisionId: null,
+          scheduledRevisionId: null,
+          publishAt: null,
+        },
+      )
+      // publishedAt stays: it is the record of when the page was last live,
+      // and clearing it would lose that to no purpose.
+      return { ok: true, id: args.id, status: 'draft' }
+    },
+  }),
+
+  /**
    * What would break if this went live now.
    *
    * The same check the publish paths run, without the publish - so an editor
@@ -1175,10 +1325,29 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * The draft behind a preview link.
+   *
+   * Answers the same shape as `getEntryByPath`, because the storefront renders
+   * whichever of the two answered and a second shape would mean a second
+   * renderer. `meta` is the entry's own, not the publication's frozen copy: a
+   * preview is for looking at what is about to go out.
+   */
   previewEntry: defineFn({
     anonymous: true,
     input: { token: 'text' },
-    output: { entry: 'json', revision: 'json' },
+    output: {
+      id: 'id',
+      siteId: 'id?',
+      type: 'text?',
+      path: 'text',
+      title: 'text',
+      excerpt: 'text?',
+      layout: 'json',
+      fields: 'json?',
+      meta: 'json?',
+      published: 'bool?',
+    },
     effects: [
       'read:website.PreviewToken',
       'write:website.PreviewToken',
@@ -1207,7 +1376,18 @@ export const cmsFunctions: Record<string, FnSpec> = {
         )
         if (!('dryRun' in used) && !used.matched) return null
       }
-      return { entry, revision }
+      return {
+        id: entry.id,
+        siteId: entry.siteId,
+        type: entry.type,
+        path: entry.path,
+        title: revision.title,
+        excerpt: revision.excerpt ?? null,
+        layout: revision.layout,
+        fields: revision.fields,
+        meta: publicMeta(entry),
+        published: entry.status === 'published',
+      }
     },
   }),
 
@@ -1376,6 +1556,72 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  listEntryTerms: defineFn({
+    input: { entryId: 'id' },
+    output: { id: 'id', termId: 'id', taxonomy: 'text', slug: 'text', name: 'text' },
+    effects: [
+      'read:website.Entry',
+      'read:website.SiteMember',
+      'read:website.EntryTerm',
+      'read:website.TaxonomyTerm',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.entryId)
+      if (!entry || !(await canAccessSite(ctx, entry.siteId))) return []
+      const assignments = await ctx.db.select('website.EntryTerm', { entryId: args.entryId })
+      if (!assignments.length) return []
+      const Term = ctx.table('website.TaxonomyTerm')
+      const terms = await ctx.db.all(
+        from(Term)
+          .where(
+            inArray(
+              Term.id,
+              assignments.map((row) => row.termId),
+            ),
+          )
+          .orderBy(asc(Term.taxonomy), asc(Term.name)),
+      )
+      const byId = new Map(terms.map((term) => [term.id, term]))
+      // The assignment's own id, because that is what unassignTerm is given
+      // and what a remove button has to carry.
+      return assignments.flatMap((assignment) => {
+        const term = byId.get(assignment.termId)
+        return term
+          ? [
+              {
+                id: assignment.id,
+                termId: term.id,
+                taxonomy: term.taxonomy,
+                slug: term.slug,
+                name: term.name,
+              },
+            ]
+          : []
+      })
+    },
+  }),
+
+  unassignTerm: defineFn({
+    input: { entryId: 'id', termId: 'id' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:website.Entry', 'read:website.SiteMember', 'write:website.EntryTerm'],
+    idempotent: true,
+    handler: async (ctx: Ctx, args) => {
+      const entry = await entryById(ctx, args.entryId)
+      if (!entry || !(await canEditEntry(ctx, entry))) return forbidden()
+      const EntryTerm = ctx.table('website.EntryTerm')
+      // Removing a term that is not there is the state the caller asked for,
+      // so this answers ok either way rather than making a retry an error.
+      await ctx.db.del(
+        deleteFrom(EntryTerm)
+          .where(eq(EntryTerm.entryId, args.entryId))
+          .where(eq(EntryTerm.termId, args.termId)),
+      )
+      return { ok: true, id: args.entryId }
+    },
+  }),
+
   saveMediaMetadata: defineFn({
     input: {
       id: 'id',
@@ -1436,15 +1682,53 @@ export const cmsFunctions: Record<string, FnSpec> = {
     },
   }),
 
+  /**
+   * Which pages draw this media item.
+   *
+   * The other half of the guard below: an editor about to delete an image
+   * should be able to see what would break, and `deleteTerm` has shown the
+   * same for taxonomy since it was written.
+   */
+  mediaUsage: defineFn({
+    input: { id: 'id' },
+    output: { used: 'bool', capped: 'bool', uses: 'json' },
+    effects: [
+      'read:website.MediaMetadata',
+      'read:website.SiteMember',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const media = (await ctx.db.select('website.MediaMetadata', { id: args.id }))[0]
+      if (!media || !(await canAccessSite(ctx, media.siteId))) return { used: false, capped: false, uses: [] }
+      const { uses, capped } = await usageOf(ctx, media)
+      return { used: uses.length > 0, capped, uses }
+    },
+  }),
+
   deleteMediaMetadata: defineFn({
     input: { id: 'id' },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:website.MediaMetadata', 'read:website.SiteMember', 'write:website.MediaMetadata'],
+    effects: [
+      'read:website.MediaMetadata',
+      'read:website.SiteMember',
+      'read:website.Entry',
+      'read:website.EntryRevision',
+      'write:website.MediaMetadata',
+    ],
     idempotent: true,
     handler: async (ctx: Ctx, args) => {
       const media = (await ctx.db.select('website.MediaMetadata', { id: args.id }))[0]
       if (!media) return { ok: true, id: args.id }
       if (!(await canManageStructure(ctx, media.siteId))) return forbidden()
+      // A page placing this would go on naming an id that no longer resolves,
+      // and nothing anywhere would say why the image stopped appearing.
+      const { uses, capped } = await usageOf(ctx, media)
+      if (uses.length) return invalid('id', 'website.error.mediaInUse')
+      // A scan that did not reach the whole site cannot answer "nothing uses
+      // this" - the same reason a capped preflight is never ok.
+      if (capped) return invalid('id', 'website.error.mediaUsageUnknown')
       const Media = ctx.table('website.MediaMetadata')
       await ctx.db.del(deleteFrom(Media).where(eq(Media.id, args.id)))
       return { ok: true, id: args.id }
@@ -1498,6 +1782,8 @@ export const cmsFunctions: Record<string, FnSpec> = {
       if (existing && existing.siteId !== args.siteId)
         return invalid('id', 'website.error.immutableOwnership')
       const redirects = await ctx.db.select('website.Redirect', { siteId: args.siteId })
+      const taken = redirects.find((redirect) => redirect.id !== args.id && redirect.fromPath === fromPath)
+      if (taken) return invalid('fromPath', 'website.error.duplicateRedirect')
       let target: unknown = toPath
       for (let depth = 0; depth <= 20; depth += 1) {
         if (target === fromPath || depth === 20) return invalid('toPath', 'website.error.redirectCycle')

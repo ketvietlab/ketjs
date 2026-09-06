@@ -1,7 +1,13 @@
 // Versioned staff purchase-order lifecycle.
 
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
-import { channelError, defineChannelRoute, routesOf, stableHash } from '../channel_api/core.ts'
+import {
+  channelError,
+  defineChannelRoute,
+  idempotencyKey,
+  routesOf,
+  stableHash,
+} from '../channel_api/core.ts'
 // The domain owns the state machine; see the note in the sales channel. A
 // published enum that drifts from it now refuses a legitimate filter.
 import { PURCHASE_STATES } from '../purchase/functions.ts'
@@ -407,17 +413,6 @@ const domainFailure = (ctx: ServeContext, url: URL, req: Req, result: unknown) =
         ),
       },
     ),
-  }
-}
-
-const idempotencyKey = (ctx: ServeContext, url: URL, req: Req) => {
-  const key = String(req.headers['idempotency-key'] ?? '').trim()
-  if (key.length >= 8 && key.length <= 200) return key
-  return {
-    status: 400,
-    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
-      messageKey: 'channel_api.error.idempotencyRequired',
-    }),
   }
 }
 

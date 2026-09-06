@@ -13,6 +13,7 @@ import {
   defineModule,
   registerFunctions,
   sqliteAdapter,
+  streamsOf,
 } from '@ketvietlab/ketjs'
 import type { Ctx, JobContext } from '@ketvietlab/ketjs'
 import type { WorkerLog } from '@ketvietlab/ketjs'
@@ -398,6 +399,80 @@ test('worker executes with captured context and discards an exhausted handler', 
   assert.ok(logs.some((entry) => entry.event === 'handler_ignored_abort' && entry.jobId === ignored.id))
   await inspector.close()
   rmSync(dir, { recursive: true, force: true })
+})
+
+test('a job announces on its own tenant, and a reader elsewhere finds it there', async () => {
+  // The case a memory-backed store could not serve. The job runs in the worker
+  // process; the reader is anything holding that tenant's database — a web
+  // process in production, a second adapter here. It works because the log lives
+  // in the database the job was already working in, not in the worker's memory.
+  const dir = mkdtempSync(join(tmpdir(), 'ket-stream-tenants-'))
+  const module = defineModule({
+    name: 'tenant_streams',
+    jobs: {
+      announce: {
+        input: { runId: 'text' },
+        idempotent: true,
+        handler: async (ctx: JobContext, args) => {
+          const writer = await ctx.streams.open(`backfill:${String(args.runId)}`)
+          writer.write({ state: 'running' })
+          await writer.end({ state: 'done' })
+        },
+      },
+    },
+  })
+  const app = defineDeployment({
+    name: 'tenant_stream_test',
+    modules: [module],
+    headless: true,
+    serve: {
+      tenants: {
+        resolve: () => null,
+        open: (key) => sqliteAdapter(join(dir, `${key}.db`)),
+        list: async () => ['alpha', 'beta'],
+        max: 2,
+      },
+    },
+    worker: { queues: { default: 4 } },
+  })
+  const worker = await bootWorker(app, { env: { KET_QUEUE_NOTIFY: '0' }, log: () => {} })
+  try {
+    for (const key of ['alpha', 'beta'] as const) {
+      const adapter = sqliteAdapter(join(dir, `${key}.db`))
+      await adapter.open()
+      const queue = await createQueue(adapter)
+      if (key === 'alpha')
+        await queue.enqueue(
+          'tenant_streams.announce',
+          { runId: 'r1' },
+          { queue: 'default', scope: { company: key } },
+        )
+      await adapter.close()
+    }
+    assert.equal(await worker.drain(), 1, 'the job ran')
+
+    // Alpha's database has the announcement, whole.
+    const alpha = sqliteAdapter(join(dir, 'alpha.db'))
+    await alpha.open()
+    const heard = await (await streamsOf(alpha)).since('backfill:r1', 0)
+    assert.deepEqual(
+      heard.chunks.map((c) => c.data),
+      [{ state: 'running' }],
+    )
+    assert.equal(heard.done, true, 'and it knows the job finished')
+    assert.deepEqual(heard.summary, { state: 'done' })
+    await alpha.close()
+
+    // Beta's does not have it, and does not have the table either: a tenant that
+    // never streamed is not given a stream table by another tenant's job.
+    const beta = sqliteAdapter(join(dir, 'beta.db'))
+    await beta.open()
+    assert.equal('ket_stream' in (await beta.introspect()), false)
+    await beta.close()
+  } finally {
+    await worker.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('multi-database worker refreshes tenants and round-robin prevents a hot tenant starving another', async () => {

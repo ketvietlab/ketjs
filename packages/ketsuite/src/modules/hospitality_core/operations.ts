@@ -33,7 +33,7 @@ import {
   reserveInventory,
   restrictionIssues,
 } from './inventory.ts'
-import { postCharge } from './services.ts'
+import { FolioConflict, postCharge, settleCancelledFolio } from './services.ts'
 import { initializeRecurringRent } from './night-audit.ts'
 
 type Issue = { field: string; code: string; messageKey: string; params?: Record<string, unknown> }
@@ -193,6 +193,7 @@ const transition = async <T>(run: () => Promise<T>): Promise<T | { ok: false; er
     return await run()
   } catch (error) {
     if (error instanceof TransitionConflict) return failure(error.problem)
+    if (error instanceof FolioConflict) return failure(error.problem)
     if (error instanceof InventoryConflict) return failure(error.problem)
     throw error
   }
@@ -493,6 +494,11 @@ export const applyNoShow = async (
 ): Promise<{ ok: boolean; id?: string; errors: Issue[]; state?: string }> => {
   const timestamp = at.toISOString()
   const property = await record(ctx, 'hospitality_core.Property', reservation.propertyId)
+  // A guest who never arrived owes what the cancellation policy says, not the
+  // whole stay. The folio used to close with every room night still active on
+  // it, so a flexible booking nobody showed up for was billed in full — a
+  // no-show is the cancellation the guest never got around to making.
+  const fee = await cancellationFee(ctx, reservation, at)
   const inventoryDates =
     reservation.bookingType === 'hourly'
       ? []
@@ -519,14 +525,16 @@ export const applyNoShow = async (
     }
     const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
     if (folio?.state !== 'open') throw new TransitionConflict(issue('folioId', 'folio_not_open'))
-    const folioClaim = await tx.db.compareAndSet(
-      'hospitality_core.Folio',
-      { id: folio.id },
-      { state: 'open', version: folio.version },
-      { state: 'closed', closedAt: timestamp, version: Number(folio.version) + 1 },
-    )
-    if (!('matched' in folioClaim) || !folioClaim.matched)
-      throw new TransitionConflict(issue('folioId', 'transition_conflict'))
+    await settleCancelledFolio(tx, {
+      folioId: folio.id,
+      stayId: reservation.stayId,
+      fee: fee.amount,
+      chargeId: `${String(reservation.id)}:no_show`,
+      sourceKey: `reservation:${String(reservation.id)}:no_show`,
+      reason: fee.code,
+      kind: 'no_show',
+      at: timestamp,
+    })
     if (inventoryDates.length) {
       await releaseInventory(
         tx,
@@ -544,18 +552,10 @@ export const applyNoShow = async (
         aggregateId: reservation.id,
       })
     }
-    return success(reservation.id, { state: 'no_show' })
+    return success(reservation.id, { state: 'no_show', noShowFee: fee.amount })
   })
 }
 
-/**
- * A room is kept for one stay at a time over the nights it is kept for.
- *
- * Room `status` cannot carry this. A room held for next Tuesday is an ordinary
- * available room today and must stay sellable; `occupied` is about now, not
- * about a calendar. So the exclusion lives in the assignment schedule, and this
- * is the question every writer of one has to ask first.
- */
 /**
  * Put the room's own name on the assignments that carry only its id.
  *
@@ -579,6 +579,14 @@ const nameAssignedRooms = async (ctx: Ctx, stays: Row[]): Promise<Row[]> => {
   return stays
 }
 
+/**
+ * A room is kept for one stay at a time over the nights it is kept for.
+ *
+ * Room `status` cannot carry this. A room held for next Tuesday is an ordinary
+ * available room today and must stay sellable; `occupied` is about now, not
+ * about a calendar. So the exclusion lives in the assignment schedule, and this
+ * is the question every writer of one has to ask first.
+ */
 const roomTakenBetween = async (
   ctx: Ctx,
   roomId: unknown,
@@ -1131,39 +1139,15 @@ export const operations: Record<string, FnSpec> = {
               throw new TransitionConflict(issue('state', 'transition_conflict'))
             await closeHold(tx, reservation.stayId, 'room_hold_cancelled')
           }
-          const folio = await record(tx, 'hospitality_core.Folio', reservation.folioId)
-          const C = tx.table('hospitality_core.Charge')
-          const charges = await tx.db.all(
-            from(C).where(eq(C.folioId, reservation.folioId), eq(C.state, 'active')),
-          )
-          for (const charge of charges)
-            await tx.db.update('hospitality_core.Charge', { id: charge.id }, { state: 'void' })
-          if (compareDecimals(fee.amount, '0') > 0)
-            await tx.db.insert('hospitality_core.Charge', {
-              id: `${String(reservation.id)}:cancellation`,
-              folioId: reservation.folioId,
-              stayId: reservation.stayId,
-              description: `cancellation:${fee.code}`,
-              type: 'cancellation',
-              quantity: '1',
-              unitPrice: fee.amount,
-              amount: fee.amount,
-              occurredAt: at,
-              sourceKey: `reservation:${String(reservation.id)}:cancellation`,
-              state: 'active',
-            })
-          // Money owed does not vanish because the stay did. A folio carrying a
-          // penalty closes; only a folio owing nothing is cancelled outright.
-          await tx.db.update(
-            'hospitality_core.Folio',
-            { id: reservation.folioId },
-            {
-              state: compareDecimals(fee.amount, '0') > 0 ? 'closed' : 'cancelled',
-              amountTotal: fee.amount,
-              closedAt: at,
-              version: Number(folio?.version ?? 0) + 1,
-            },
-          )
+          await settleCancelledFolio(tx, {
+            folioId: reservation.folioId,
+            stayId: reservation.stayId,
+            fee: fee.amount,
+            chargeId: `${String(reservation.id)}:cancellation`,
+            sourceKey: `reservation:${String(reservation.id)}:cancellation`,
+            reason: fee.code,
+            at,
+          })
           if (inventoryDates.length)
             await releaseInventory(
               tx,
@@ -1189,16 +1173,21 @@ export const operations: Record<string, FnSpec> = {
 
   markNoShow: defineFn({
     input: { id: 'id', reason: 'text', at: 'datetime?' },
-    output: { ok: 'bool', id: 'id?', state: 'text?', errors: 'json?' },
+    output: { ok: 'bool', id: 'id?', state: 'text?', noShowFee: 'decimal?', errors: 'json?' },
     effects: [
       'read:hospitality_core.Reservation',
+      'read:hospitality_core.Charge',
       'read:hospitality_core.Folio',
       'read:hospitality_core.Property',
+      'read:hospitality_core.RoomType',
+      'read:hospitality_core.CancellationPolicy',
+      'read:company.Company',
       'read:hospitality_core.Room',
       'read:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.Reservation',
       'write:hospitality_core.Stay',
       'write:hospitality_core.Folio',
+      'write:hospitality_core.Charge',
       'write:hospitality_core.AvailabilityLedger',
       'write:hospitality_core.InventoryChange',
       'read:hospitality_core.RoomAssignment',
@@ -2027,6 +2016,123 @@ export const operations: Record<string, FnSpec> = {
       if (args.propertyId) query = query.where(eq(F.propertyId, args.propertyId))
       if (args.state) query = query.where(eq(F.state, args.state))
       return ctx.db.all(query)
+    },
+  }),
+
+  /**
+   * Everything the desk needs before it presses check out, in one read.
+   *
+   * A departure was four screens: the stay to see who and which room, the folio
+   * to see what is owed, the extras to see what a supplier has not confirmed
+   * yet, and the property to know whether the hour matters. Nothing joined
+   * them, so whether a guest could leave was a judgement each person made by
+   * hand — and the refusal only arrived after the button.
+   *
+   * The blockers here are the same ones `checkOut` raises, read rather than
+   * discovered. `balance` is deliberately not one of them: leaving is not
+   * paying, and a hotel that refused every departure with a bill outstanding
+   * would refuse most of them.
+   */
+  checkOutReadiness: defineFn({
+    input: { stayId: 'id' },
+    output: {
+      stayId: 'id',
+      state: 'text',
+      ready: 'bool',
+      roomId: 'id?',
+      roomName: 'text?',
+      guestName: 'text?',
+      checkIn: 'datetime?',
+      dueOut: 'datetime?',
+      late: 'bool',
+      lateReasonRequired: 'bool',
+      folioId: 'id?',
+      folioState: 'text?',
+      balance: 'decimal?',
+      charges: 'json?',
+      awaitingFulfilment: 'json?',
+      blockers: 'json?',
+    },
+    effects: [
+      'read:hospitality_core.Stay',
+      'read:hospitality_core.Property',
+      'read:hospitality_core.Room',
+      'read:hospitality_core.RoomAssignment',
+      'read:hospitality_core.Folio',
+      'read:hospitality_core.Charge',
+      'read:hospitality_core.ExtraLine',
+      'read:partner.Partner',
+    ],
+    agent: true,
+    handler: async (ctx: Ctx, args) => {
+      const stay = await record(ctx, 'hospitality_core.Stay', args.stayId)
+      if (!stay)
+        return {
+          stayId: args.stayId,
+          state: 'missing',
+          ready: false,
+          late: false,
+          lateReasonRequired: false,
+          blockers: [issue('stayId', 'stay_missing')],
+        }
+      const property = await record(ctx, 'hospitality_core.Property', stay.propertyId)
+      const room = stay.currentRoomId ? await record(ctx, 'hospitality_core.Room', stay.currentRoomId) : null
+      const partner = stay.partnerId ? await record(ctx, 'partner.Partner', stay.partnerId) : null
+      const folio = stay.folioId ? await record(ctx, 'hospitality_core.Folio', stay.folioId) : null
+      const now = new Date()
+      const dueOut = date(stay.checkOut)
+      const late = !!dueOut && now > dueOut
+      const blockers: Issue[] = []
+      if (stay.state === 'checked_out') blockers.push(issue('state', 'stay_already_checked_out'))
+      else if (stay.state !== 'checked_in' || !stay.currentRoomId)
+        blockers.push(issue('state', 'stay_cannot_check_out'))
+      if (!property) blockers.push(issue('propertyId', 'property_missing'))
+
+      const A = ctx.table('hospitality_core.RoomAssignment')
+      const active = await ctx.db.one(from(A).where(eq(A.stayId, stay.id), eq(A.state, 'active')))
+      if (stay.state === 'checked_in' && !active) blockers.push(issue('stayId', 'active_assignment_missing'))
+
+      const C = ctx.table('hospitality_core.Charge')
+      const charges = folio
+        ? await ctx.db.all(
+            from(C)
+              .where(eq(C.folioId, folio.id), eq(C.state, 'active'))
+              .orderBy(asc(C.occurredAt), asc(C.id)),
+          )
+        : []
+
+      // A line a supplier still owes us is not a refusal, but closing the folio
+      // over it is how a charge goes missing. The desk gets to see it first.
+      const E = ctx.table('hospitality_core.ExtraLine')
+      const lines = await ctx.db.all(
+        from(E).where(eq(E.stayId, stay.id), eq(E.active, true)).preload('charges'),
+      )
+      const awaitingFulfilment = lines
+        .filter((line) => String(line.fulfillmentKind ?? 'none') === 'external_stock')
+        .filter(
+          (line) => !((line.charges as Row[] | undefined) ?? []).some((charge) => charge.state === 'active'),
+        )
+        .map((line) => ({ id: line.id, description: line.description, quantity: line.quantity }))
+
+      const lateReasonRequired = property?.enforceTimes === true && late
+      return {
+        stayId: stay.id,
+        state: String(stay.state),
+        ready: blockers.length === 0,
+        roomId: stay.currentRoomId ?? null,
+        roomName: room ? String(room.name ?? room.code ?? room.id) : null,
+        guestName: partner ? String(partner.name ?? '') : null,
+        checkIn: stay.checkIn ?? null,
+        dueOut: stay.checkOut ?? null,
+        late,
+        lateReasonRequired,
+        folioId: folio?.id ?? null,
+        folioState: folio ? String(folio.state) : null,
+        balance: folio ? String(folio.amountTotal ?? '0') : null,
+        charges,
+        awaitingFulfilment,
+        blockers,
+      }
     },
   }),
 

@@ -435,6 +435,44 @@ export const channelError = (
   }
 }
 
+/**
+ * What a channel route answers with instead of doing the work.
+ *
+ * Named because eleven route files were each spelling it out as
+ * `ReturnType<typeof domainFailure>` or leaving it inferred, which made the
+ * one helper below impossible to share without every caller agreeing on a type
+ * none of them had written down.
+ */
+export type ChannelRefusal = { status: number; error: ChannelError }
+
+/**
+ * The replay key a mutating channel route needs, or the refusal to send back.
+ *
+ * `const key = idempotencyKey(ctx, url, req); if (typeof key !== 'string') return key`
+ *
+ * Every staff channel takes it from the same header with the same bounds and
+ * refuses with the same code, and until now every one of them carried its own
+ * copy of these ten lines — eleven files across ten modules, identical in
+ * behaviour and drifting only in shape. One of them is where a difference
+ * would have hidden, and nothing would have caught it: a channel that quietly
+ * accepted a six-character key, or answered 422 where the others answer 400,
+ * looks exactly like a channel that does not.
+ *
+ * The bounds are the domain's, not this module's: a key under eight characters
+ * is refused by `commandKey` downstream anyway, so accepting one here would
+ * only move the refusal somewhere the caller cannot act on.
+ */
+export const idempotencyKey = (ctx: ServeContext, url: URL, req: Req): string | ChannelRefusal => {
+  const key = String(req.headers['idempotency-key'] ?? '').trim()
+  if (key.length >= 8 && key.length <= 200) return key
+  return {
+    status: 400,
+    error: channelError(ctx, url, req, 'channel_api.idempotencyRequired', {
+      messageKey: 'channel_api.error.idempotencyRequired',
+    }),
+  }
+}
+
 export const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
 
 export const hostOf = (req: Req): string =>

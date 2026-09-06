@@ -611,6 +611,416 @@ The test now checks owners first, against a named `UNGOVERNED` list. `website_fo
 shrink: adding a name is how that test stops meaning anything, and a new module that forgets its
 declaration now fails the same way a new function does.
 
+## Half a feature is a trap
+
+### assignTerm was a one-way door
+
+`website.assignTerm` shipped with the taxonomy model and nothing else in the module could see or
+undo what it did. There was no function that read an entry's terms, and none that removed one. So a
+term put on a page went invisible the moment it was assigned — and `deleteTerm` refuses while an
+assignment exists, which made the term itself permanent too. The only way out was raw SQL.
+
+`listEntryTerms` and `unassignTerm` close it. `listEntryTerms` returns the assignment's own id
+alongside the term, because that is the row a remove control has to name. `unassignTerm` answers
+`ok` for a term that was not assigned: removing something that is already gone is the state the
+caller asked for, and making a retry an error only punishes a double-submitted form.
+
+The lesson is not about taxonomy. A write with no matching read is not a feature that is merely
+incomplete — it is a feature that damages the data and hides the damage.
+
+### The arguments no screen passed
+
+A second audit, after the one that looked for functions nothing calls: for every `ctx.call` in
+KetSuite, which of the callee's declared inputs does no caller ever supply? Most answers were paging
+arguments a screen legitimately does not need. Three were not.
+
+#### A guard against a stale base, never passed
+
+`activatePublication` moves the site pointer under compare-and-set, which reads the current pointer
+and then matches against what it just read — so the CAS cannot notice that the *list the row came
+from* is stale. `expectedPublicationId` is the guard for exactly that, and nothing passed it.
+
+The consequence: the publications screen draws a row prepared while nothing was live. Somebody else
+activates a different set. Activating the first row now moves the site off theirs and supersedes it,
+with no conflict reported to anyone. The screen sends the base it was drawn against now, and an empty
+string means "nothing was live then" — a claim, not an absence, and a different thing from omitting
+the argument.
+
+The base is read with `activePublication` rather than found in the rows, because the state filter
+added alongside it can hide the live row, and reading the base off a filtered list would claim the
+site had nothing live and refuse every activation.
+
+#### A preview link was minted by looking at the screen
+
+The preview route minted a token on the GET. Opening the screen twice left two tokens; a link
+prefetcher or a security scanner touching the link left one nobody knew about. `createPreviewToken`
+has always taken `ttlSeconds` (60–3600, default 900) and `oneTime`, and neither was reachable, so
+every link was fifteen minutes and reusable.
+
+Minting is a POST now, with both terms on the form. Expiry is the cheaper control of the two — a link
+that stops working on its own needs no revoking — and `oneTime` is what "send this to exactly one
+reader" means. Both the entry-kind route and the kind-neutral `/admin/website/content/{id}/preview`
+alias got the same treatment; the alias had the same defect.
+
+#### Lists that could not be narrowed
+
+`listSubmissions` and `countSubmissions` take `status`, `listPublications` takes `state`, and no
+screen passed either. Superseded publications accumulate one per activation and are the majority of
+the list within a week, which buries the two rows anybody came to see. Both filters are on their
+screens now.
+
+Still unpassed and deliberately left: `listSites.active` and `listForms.active`. The site list is
+read through `sitesOf`, which every screen's site switcher shares, so filtering there needs a
+separate call rather than a parameter — worth doing, not worth doing while touching six other screens.
+
+### publishEntry had no inverse
+
+A page could go live and never come back down. Nothing set `Entry.status` back, and nothing cleared
+`publishedRevisionId` — which is precisely what the public resolver's per-entry fallback reads to
+decide a page is live. A page published by mistake, an event that is over, a takedown request: the
+only lever was `noindex`, which asks crawlers to forget the page while every visitor holding the
+address reads on.
+
+`unpublishEntry` clears `status`, `publishedRevisionId`, `scheduledRevisionId` and `publishAt`, and
+keeps `publishedAt` — that field is the record of when the page was last live, and clearing it would
+lose that to no purpose while doing nothing to take the page down.
+
+It is also how a schedule is cancelled. `publishScheduled` re-reads `status` before it publishes, so
+a scheduled page moved back to draft stays there and the queued job returns having done nothing.
+Nothing has to reach into the queue and withdraw the job.
+
+What it does not do is take a page out of an **active publication**. That set is frozen by design;
+the way to change what it contains is to prepare and activate another one. The screen says so on the
+control rather than leaving an editor to discover it.
+
+### The schedule was in the contract and not on the screen
+
+`publishEntry` has taken an optional `publishAt` since it was written: a time in the future moves the
+entry to `scheduled` and enqueues `website.publishScheduled` with a unique key. No screen ever offered
+the field, so a page could only go live at the moment somebody pressed the button. The publish control
+is a form with a `datetime-local` field now — empty means now, which is what the contract's optional
+argument has always meant.
+
+### A list you cannot search is a list of the first thirty
+
+`listEntries` and `countEntries` have both taken `search` and `status` since they were written, and no
+screen passed either. With paging added, a site with three hundred pages could be read thirty at a
+time in date order and no other way. Both filters are on the list now, in one GET form together with
+the site switcher — three separate forms would each drop the other two's state on submit.
+
+### A redirect could be created but never corrected
+
+`saveRedirect` is an upsert and the screen minted a fresh id on every submit, so nothing could reach
+the update branch. `Redirect` is unique on `(companyId, siteId, fromPath)`, which made the
+consequence sharper than "you cannot edit": submitting the correction for a mistyped path hit the
+unique index, and — because nothing checked it first — came back as a raw driver exception and a 500
+rather than an answer. The typo kept the address, and the correct redirect could never be added.
+
+Three things close it. `saveRedirect` looks for the path before writing and returns
+`duplicateRedirect` the way `saveDomain` has always returned `duplicateHost`. The row carries an
+edit control that posts to its own id. And the `active` flag, which the contract has always had and
+the screen always wrote as `true`, is now a control — so the list's "active / inactive" column,
+which until now could only ever read "active", says something.
+
+Off rather than deleted, because the unique index holds one row per `fromPath`: deleting to free the
+path and deactivating to stop it are the same reversible act, and one of them keeps the history of
+what that address used to do. `listRedirects` has always taken an `active` filter; the screen passes
+it now, which is what makes an inactive row findable.
+
+### A host could be attached and never detached
+
+The same shape on `saveDomain`: an upsert, a screen that always sent a new id, and a unique index on
+the host. So a host attached to the wrong site, or a decommissioned one, stayed — and kept its claim
+on that name, so nobody could attach it anywhere else either. Neither the primary nor
+`redirectToPrimary` could be changed once set, even though `saveDomain` promotes a new primary and
+demotes the old one in the same transaction.
+
+`deleteDomain` refuses to remove the primary while the site still has other hosts. Canonical URLs
+and the sitemap are built from the primary, so a site left with hosts and no primary publishes the
+wrong address to every crawler that asks; promote another one first. The last host goes freely,
+primary or not — a site with no domains is a site nobody has pointed anywhere yet.
+
+### Reordering a menu was arithmetic
+
+`MenuItem.position` is an integer and the only way to change it was to open the item's form and type
+a different number. Moving the fourth link above the second meant working out what numbers the other
+three would then need — which is not editing, and gets worse the longer the menu is.
+
+`moveMenuItem` takes a direction. Two buttons per row, which are reachable from a keyboard without
+anything having to be dragged; WEB-018 asked for keyboard reordering and this is the version that
+needs no client-side code at all.
+
+It **renumbers the sibling group** rather than swapping two positions. Nothing has ever enforced
+distinct positions and `addMenuItem` defaults them all to zero, so a swap between two items that both
+sit at zero would move nothing and look broken. Renumbering settles the order it found and then
+applies the move, which also quietly repairs a menu whose positions had all collapsed.
+
+Siblings only: moving an item past its parent's neighbour would be a reparent, which is a different
+decision and already has its own field. And the ends are where a move stops, not where it fails — a
+first item asked to go up answers `ok`, because that is the state the caller asked for.
+
+### A question no screen could answer
+
+Every Website screen is scoped to one site, because every contract behind them takes a `siteId`.
+That is right for doing the work and wrong for noticing it: "is anything wrong" could only be
+answered by opening each site in turn and remembering what the last one said.
+
+And the things worth knowing are exactly the ones nobody goes looking for. A site with no primary
+domain publishes the wrong canonical to every crawler that asks — and there is no screen you would
+have opened to find that out, because you had no reason to suspect it. A publication prepared last
+week and never activated looks like nothing at all. An index that has not caught up degrades search
+quietly, by design.
+
+The overview reads what already existed — `listDomains`, `listPublications`, `indexStatus`, one
+round per site — and lists only the sites with something to say, each row leading to the screen that
+fixes it. Two decisions about what *not* to warn about:
+
+- **An index that never existed is not an index that fell behind.** A site nobody has searched has no
+  index and needs none; `state: 'absent'` raises nothing.
+- **No host at all outranks the wrong host.** A site nothing points at answers nowhere, which is not
+  a canonical-URL problem, and stacking both messages would bury the one that matters.
+
+The number of sites read is on the screen whether or not anything is wrong, because a list that only
+ever holds problems cannot tell "nothing is wrong" from "nothing was checked".
+
+### Twelve readers, no writer
+
+`Entry.status === 'trash'` is honoured in twelve places across five modules. The public resolver
+refuses a trashed entry. The sitemap leaves it out. The menu link validator does not count it as a
+target. The search index skips it. Preflight does not check it. The media library does not count it
+as a use. `preparePublication` refuses a set that names one, with its own error message.
+
+**Nothing ever wrote it.** Every consumer of the concept was built, in five modules, and the producer
+did not exist — so a page created by mistake stayed on the list for ever, and the only thing an
+editor could do was give it a title that said to ignore it.
+
+`trashEntry` and `untrashEntry` are that producer. Trash rather than delete, and that is the whole
+design rather than a compromise: `ref:` emits no foreign key, so removing an entry would leave its
+revisions, its term assignments, its preview tokens and — across a module boundary `website` cannot
+reach — its `website_seo.EntrySeo` row all pointing at nothing. Trash keeps every row and answers the
+question people actually have, which is "get this off my list". The eleven readers were right; they
+were just waiting.
+
+Two details. Trashing clears `publishedRevisionId` the way `unpublishEntry` does — the resolver
+checks the status as well, but a pointer left behind is a pointer somebody later trusts. And taking
+something back makes a **draft**, never a published page: what it used to say may be the reason it
+was thrown away.
+
+`listEntries` and `countEntries` now leave the bin out unless `status: 'trash'` is asked for by
+name. They were the last two readers that did not, because until now there was nothing to exclude —
+and the two have to agree, or the pager counts rows the list will not show and the last page comes
+back empty.
+
+### An image could be deleted out from under the pages drawing it
+
+`deleteTerm` has refused a term that is in use since it was written. `deleteMediaMetadata` removed
+its row with no question asked — so an image could vanish from under every page placing it, and those
+pages went on naming an id that no longer resolved. Nothing anywhere said why the picture stopped
+appearing.
+
+The reason it stayed open this long is that a layout had no way to *say* a setting was a media
+reference: `website.hero.image` was `text?`, indistinguishable from a URL or a caption, so a usage
+scan would have been a guess about which strings look like ids.
+
+It did not need a new mechanism. Section settings are parsed by the same type parser as model fields,
+and that parser already understands `ref:module.Model` — `ref` maps to `string` in the settings
+validator, so `image: 'ref:website.MediaMetadata?'` is machine-readable *and* changes nothing about
+what is already stored. `mediaFieldsOf` reads the composed manifest for the settings declared that
+way, so a theme that never declares one is simply never scanned, and a theme that declares three is
+scanned for three.
+
+`mediaUsage` names the pages; `deleteMediaMetadata` refuses while any remain; the media screen shows
+the list, so the refusal is one an editor can act on rather than argue with. A draft counts as much
+as a published page — taking the image away breaks what an editor is working on just as surely as
+what a visitor reads.
+
+**A capped scan refuses too.** The scan reads up to `USAGE_SCAN_LIMIT` entries, and on a site past
+that it cannot answer "nothing uses this". So it does not: the delete is refused with a different
+message, and the screen says the scan did not reach the whole site rather than showing an empty list
+that reads as "safe". This is the same rule the publication preflight follows, for the same reason —
+a partial check presented as a clean bill of health is worse than no check.
+
+### What you see and what you get
+
+The submissions list filters by status. The export ignored it. So narrowing the screen to the four
+rows you meant and pressing Export handed you every row the form has ever taken — silently, in a file
+named the same either way. The export carries the filter now, says so on the form when one is
+applied, and names the file for what it holds.
+
+Two more `active` filters that the contracts always accepted and no screen passed: on the sites list
+and on the forms list. A suspended site and a retired form were indistinguishable from a live one in
+the only place anybody looks. The sites list reads `listSites` directly rather than through
+`sitesOf` — that helper feeds every screen's site switcher, and a switcher that hid suspended sites
+would make them unreachable rather than merely unlisted.
+
+`preflightPublication` takes `entryIds` and nothing passed it, so the only question the screen could
+ask was "every page on the site" — which is the one that hits the scan ceiling and can then only
+answer "ask again by id". The screen offers the published set as well: a named set is never a partial
+scan, so that question has a definite answer however large the site is.
+
+### A field that was stored, returned, and dropped
+
+`Site.tokens` could be written, `resolveSite` answered with it, and the storefront threw it away: the
+scope it builds for the theme is `{ id, title, theme }`. So the column existed, the contract accepted
+it, and no page ever looked different for it. Two sites on one theme were the same site in two
+colours of nothing.
+
+The mechanism was already there and already published. `tokensToCss` writes `--ket-*` custom
+properties into a cascade layer, and the declared order is `ket.reset < ket.theme < ket.app <
+ket.user`. A site's overrides go into `ket.app`, which already beats the theme's own `ket.theme` —
+so a site that sets nothing renders exactly as before, and a site that sets one colour changes one
+colour rather than forking the theme.
+
+The tokens stylesheet is already a per-request route, so it is the natural place: it resolves the
+site alongside the theme and appends the site's layer.
+
+#### A person's typing, in a stylesheet on every page
+
+This is the part that needed care. Theme tokens are written by whoever wrote the theme; site tokens
+are typed into an admin form. `tokensToCss` sanitised the *name* into a custom property and passed
+the **value** through untouched — which was fine while nothing untrusted reached it, and is not fine
+now. A value of `#0a7 } :root { display: none` closes the declaration, closes the rule, and hands the
+rest of the document to whoever typed it.
+
+`partitionTokens` answers with the pairs that are safe to render and the names of those that are not,
+and the two sides of the boundary use it differently on purpose:
+
+- **`saveSite` refuses.** A value that cannot be rendered is not stored, so the question never
+  reaches the reader.
+- **The stylesheet drops.** A row that predates the check, or arrives another way, degrades the
+  branding rather than serving a broken stylesheet or a blank page.
+
+An empty tokens box means "no overrides", not "keep what is stored" — this is the only screen that
+writes them, so a blank field is a decision. Malformed JSON goes down to the contract as the string
+it is, and comes back as `invalidTokens`: sending `{}` instead would erase a site's branding because
+somebody mistyped a brace.
+
+`Site.siteGroup` is the other half of this finding and is **not** fixed here: it is written by the
+contract and read by nothing at all. Removing a column is a migration, and it may yet be what a
+deployment groups sites by; it is written down here so the next person does not have to rediscover
+it.
+
+### The index that was still a scan
+
+`SearchDocument` exists so "a search is a lookup rather than a scan", and `haystack` — title and
+excerpt, lowercased into one column — exists so "a match is one comparison". Both are quotes from the
+model's own comments, and the read path did neither:
+
+```ts
+// File: packages/ketsuite/src/modules/website_search/functions.ts
+const rows = await ctx.db.all(from(Document).where(eq(Document.siteId, args.siteId)))
+const matches = rows.filter((row) => String(row.haystack).includes(needle))
+```
+
+Every document of the site, into memory, on every keystroke, filtered in JavaScript. The index had
+made the *write* side cheap — one row per entry, no revision fetch per match — and left the read side
+exactly what it replaced. The match is a `LIKE` on `haystack` now, with the window in the query and
+the total from `count`, so a page of ten hits reads ten rows.
+
+#### A wildcard a visitor typed
+
+`like` could not escape a pattern and `ilike` could, so every case-sensitive search in the codebase
+passed whatever a person typed straight into a `LIKE`. A `%` matched the whole table and a `_`
+matched any character — someone searching for "50%" or "co_op" got nonsense, and the count beside it
+agreed, which made it look deliberate.
+
+`like` takes the same `escapePattern` flag now, and `likeLiteral` turns what a person typed into a
+literal. Both halves are needed: the backslash is only special when the statement says `ESCAPE`. The
+entry-title search on the pages list uses it too — that box was only exposed to people recently, and
+it had the same hole.
+
+#### An index nobody rebuilt on a schedule
+
+`reindexSite` says in its own comment that it exists "so an operator or a job can drive a long
+rebuild". There was no job. Between publications the index caught up only through `searchIndexed`,
+which builds three passes inline and then answers `stale` — a sound fallback that was also the entire
+schedule, paid for by whichever visitors happened to search first.
+
+`indexSweep` runs hourly across companies and queues `rebuildStale` per legal entity; that job spends
+a bounded number of passes and re-queues itself if a site is still behind, so a first build over a
+large site cannot hold a worker slot long enough to be killed and retried from the beginning. The
+company is in the unique key because a unique job key is unique per tenant, not per company.
+
+The passes moved to `rebuild.ts` because a job cannot reach a declared function — a `JobContext` has
+no `call` — so building has to be an ordinary import, the way `website_form` keeps its purge. The
+split says what the model says: the index is derived, and building it is not the same act as
+answering with it.
+
+### A preview link that opened nothing
+
+`previewEntry` has existed since preview tokens did, and **nothing ever called it**. A link could be
+minted, shown on screen, copied into a chat, expired and revoked — and opening it reached no route at
+all. The whole feature ended at handing over a string.
+
+The renderer is the framework's, because only the framework can draw a theme region: `serve.pages`
+gains `previewResolve`, a function taking `{ token }`, beside the `resolve` that takes a path. A
+request to the preview path with a token resolves through that function instead, and the same
+`pageScope` builds the same scope for the same theme — which is the point. A second shape would have
+meant a second renderer, and a preview drawn by a different renderer is not a preview.
+
+That is why `previewEntry` now answers what `getEntryByPath` answers rather than `{ entry, revision }`.
+Its `meta` is the entry's own rather than the publication's frozen copy: a preview exists to show what
+is about to go out.
+
+`page.path` comes from the row, not the request. A preview is served from one address and is a page
+at another, and the theme writes canonical links from that field.
+
+#### Three headers, and why each
+
+| Header | Value |
+| --- | --- |
+| `cache-control` | `no-store, max-age=0` |
+| `x-robots-tag` | `noindex, nofollow, noarchive` |
+| `referrer-policy` | `no-referrer` |
+
+`no-store` rather than `private`, because the reader's own browser cache is a place the draft outlives
+the link. `no-referrer` because the token is in the URL, and without it the first outbound click hands
+it to a third party. They are set only on the preview path — a published page is meant to be indexed
+and cached, and a test asserts it carries none of them.
+
+#### The path is one no page can claim
+
+`/_ket/preview`, inside the namespace the framework already owns for `/_ket/health` and `/_ket/agent`.
+`reservedPrefixes` derives from module routes, and the framework's own routes are not module routes —
+so `/_ket` was **not** reserved, and a page published at `/_ket/health` would have been advertised in
+the sitemap while the framework served the path. It is in `ALWAYS_RESERVED` now, beside `/api` and
+`/internal/v1`. A deployment that sets `previewPath` outside `/_ket/` is refused at boot rather than
+serving a path a page could take.
+
+### Preview links accumulate
+
+Every visit to an entry's preview screen mints another token. That is deliberate: a preview is
+cheap and short-lived. But the links are pasted into chats and tickets, where they outlive the
+reason they were shared, and `revokePreviewTokens` — which could always call all of them back —
+had no caller. The preview screen now offers it, and lands back on the entry afterwards rather
+than on the preview screen, which would immediately mint a fresh one.
+
+### A GET must not change anything
+
+Four routes added while building these screens changed state on a GET: activating a publication,
+rolling one back, removing a site member, and restoring a revision. Each was reached by an ordinary
+link, so a link prefetcher, a security scanner, or "open all in tabs" was enough to push content
+live or drop somebody's access. All four are POST controls now and all four routes answer 405 to
+anything else, which is what the three older delete routes in the same file already did.
+
+The test that holds this drives the routes with a real request rather than asserting they are
+composed. Removing one guard fails it; asserting composition would not have noticed.
+
+### A list has to say how much it is not showing
+
+`countEntries` and `countSubmissions` existed with no caller, so both screens read the first
+page of a list and presented it as the list. The pager is the shared one from `backend/paging.ts`,
+and it renders through `pagerBar` — extracted from `chromeTail` rather than copied, because the
+Website frames pass `chrome: null` and reach it through `ListPage`'s footer instead. Two call
+sites, one renderer, one thing to keep in step with the stylesheet.
+
+### Where a shared route sends the browser back to
+
+Three routes hang off an entry without caring whether it is a page or a post — the head tags, and
+now the two term routes. Each of them redirected to `/admin/website/pages/{id}`, which answers 404
+for a post, because that route refuses an entry of the other type. `entryHref` reads the entry and
+picks the right one.
+
 ## A layout has identity
 
 ### Where the builder document lives, and why it is not a new table

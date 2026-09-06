@@ -9,6 +9,8 @@ type PageFrameProps = {
   subtitle?: string | null
   frame: Frame
   body: TemplateResult
+  /** Closes the collection: a pager, a count, whatever the list ends with. */
+  footer?: TemplateResult | null
 }
 
 export const ListScreenFrame = ({
@@ -17,6 +19,7 @@ export const ListScreenFrame = ({
   subtitle,
   frame,
   body,
+  footer,
 }: PageFrameProps): TemplateResult =>
   shell(
     _,
@@ -28,6 +31,7 @@ export const ListScreenFrame = ({
       description={subtitle ?? undefined}
       actions={frame.extras?.['topbar.end']}
       body={body}
+      footer={footer ?? undefined}
     />,
     {
       ...frame,
