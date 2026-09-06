@@ -507,7 +507,12 @@ test('design system: KetSuite consumes the public package through aliases and ge
   const packageJson = readFileSync('packages/ketsuite/package.json', 'utf8')
   const backend = readFileSync('packages/ketsuite/src/modules/backend/index.ts', 'utf8')
   const aliases = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
-  assert.match(packageJson, /"@ketvietlab\/design-system": "0\.1\.3"/)
+  // The version this repository ships, not a literal. A release moves five
+  // package.json files and two scaffolds at once, and the release checker
+  // already refuses drift between them; an eighth copy here would only be one
+  // more thing to remember, and the kind of failure whose repair is mechanical.
+  const shipped = JSON.parse(readFileSync('package.json', 'utf8')).version as string
+  assert.match(packageJson, new RegExp(`"@ketvietlab/design-system": "${shipped}"`, 'u'))
   assert.match(backend, /'design-system\.css'/)
   assert.match(aliases, /--admin-bg: var\(--kv-page-bg\)/)
   assert.match(aliases, /--color-primary: var\(--kv-ref-primary\)/)
