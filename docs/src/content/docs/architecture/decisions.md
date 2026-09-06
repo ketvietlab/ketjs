@@ -2389,3 +2389,46 @@ lanes and has to be covered on both.
 
 **Reversible:** yes — a store that reports no `notifies` restores the old interval, and removing the
 publish restores the old mechanism, at the old price.
+
+## D76 — A stream belongs to the database it is about
+
+D75 made a stream reader something that can be told rather than something that polls. It could not be
+used. With a database per tenant there is no single adapter, so the store fell back to memory — per
+process — and the process that knows when a job finished is the worker, not the one holding the
+reader. Two web instances shared nothing either.
+
+The gap was already written down, in the future tense: resumable streams were *not yet* durably
+stored per tenant, and a database-per-tenant deployment *still needed* to choose the backing-store
+ownership model. This is that choice.
+
+**A stream describes something that lives in a record, and that record lives in exactly one
+database.** So the log goes there. `streamsOf(adapter)` makes one `Streams` per adapter and hands the
+same one back, so a job and a reader given the same tenant adapter meet — in the database, and in the
+in-process bus when they happen to share a process.
+
+**`ctx.streams` follows the call.** A function or a job opens a writer in the database it is already
+working in, which is the only database it is allowed to be working in. Nothing new is granted: a call
+that could not reach a tenant's data cannot reach its streams.
+
+**The namespace stays the caller's**, as it already was for `resolveStream`. The framework does not
+derive a topic from an actor or a header, because the writer and the reader have to agree and only
+the module knows what they are agreeing about. Per-tenant storage removes the *cross-tenant* hazard
+that made this sharp; it does not remove the need to agree.
+
+**A dry run opens a writer that discards.** A rehearsal reports what a command would do; announcing
+it to everyone watching would be doing it.
+
+**The endpoint holds a lease for the length of the tail.** It leases the datastore, not a connection:
+reads inside take one and give it back. The lease is what stops the pool evicting a tenant's adapter
+out from under a reader, and it is bounded by `streamTimeoutMs`.
+
+**Cost:** a tenant that streams gets a `ket_stream` table in its own database, created on first use —
+a tenant that never streams still gets none. A deployment with many tenants and many watchers holds
+one pool lease per watched tenant, which is a real ceiling worth knowing before pointing this at
+something every viewer opens.
+
+**What it is still not.** There is no per-connection state on the server, so a client told that
+something changed is a client that then asks for it. That is D75's line, and it has not moved.
+
+**Reversible:** yes — `serve.streamStore` still overrides everything with one store, which is what a
+deployment that wants the old shape passes.

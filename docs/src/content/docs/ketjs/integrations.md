@@ -318,6 +318,34 @@ recovers its sequence once when opened; a resumed reader receives no gap and no 
 Use `memoryStreamStore()` for one-process ephemeral work and `dbStreamStore(adapter)` when streams must
 survive reloads or be visible across processes.
 
+### Whose database a stream belongs to
+
+The one it is about. A stream describes something that lives in a record, and that record lives in
+exactly one database, so its log goes there. With one database that is the only one there is; with a
+database per tenant it is that tenant's, resolved when the request or the job says which tenant it is
+working in.
+
+That is what lets the two halves meet. A job writes from a worker process, and the reader tailing it
+is in a web process; they never share memory, but they do share the database.
+
+```ts
+// File: src/modules/integration/index.ts
+const writer = await ctx.streams.open(`generation:${id}`)
+writer.write({ token: 'Hello' })
+await writer.end({ tokens: 1 })
+```
+
+`ctx.streams` is available to a function and to a job, and opens in the database that call is already
+working in. The topic namespace is the caller's, exactly as it is for `resolveStream`: the framework
+does not infer it, because the two halves have to agree and only the module knows what they are
+agreeing about.
+
+A dry run opens a writer that discards. A rehearsal reports what a command would do; waking every
+screen watching the record would be doing it.
+
+Passing `serve.streamStore` explicitly still means one store for the whole deployment — the caller
+saying they have answered the ownership question a different way.
+
 ### How a reader finds out
 
 `tail` is woken, and reads on a timer only when nothing woke it. Which of the two is doing the work

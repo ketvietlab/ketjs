@@ -750,6 +750,22 @@ export type Ctx = {
    * A dry run reads the sequence without consuming a number, so a preview cannot
    * make the real command that follows skip one.
    */
+  /**
+   * Say that something a screen may be watching has moved.
+   *
+   * The log lives in the database this call is already working in, so a job in a
+   * worker and a reader in a web process reach the same one. The topic namespace
+   * is the caller's, exactly as it is for `serve.resolveStream` — the framework
+   * does not infer it, because the two halves have to agree and only the module
+   * knows what they are agreeing about.
+   *
+   * What a chunk says is up to the caller, and for a screen that re-reads itself
+   * the honest answer is: as little as possible. The read side is authorized by
+   * `resolveStream`; a chunk is not the place to smuggle data past it.
+   */
+  streams: {
+    open(topic: string): Promise<import('./server/stream.ts').Writer>
+  }
   sequence(name: string, options?: import('./server/sequence.ts').SequenceOptions): Promise<number>
   /** Column handles for a model, for building queries. */
   table(model: string): import('./data/query.ts').Table
