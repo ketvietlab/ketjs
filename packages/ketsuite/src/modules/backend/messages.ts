@@ -16,6 +16,18 @@ export const messages: Record<string, Record<string, Message>> = {
     'app.category': 'Hệ thống',
 
     'nav.sections': 'Phân hệ',
+
+    // Headings a deployment can group its menu under. They live here because the
+    // shell owns the sidebar and a group can hold entries from several modules —
+    // there is no one module whose words they could be. A deployment names them
+    // fully (`backend.menu.customers`), which is the form the menu builder falls
+    // back to when a group's label is not a key of the module it lands under.
+    'menu.customers': 'Khách hàng',
+    'menu.care': 'Chăm sóc',
+    'menu.selling': 'Bán hàng',
+    'menu.stock': 'Kho và sản phẩm',
+    'menu.books': 'Kế toán',
+    'menu.setup': 'Thiết lập',
     'nav.search': 'Tìm phân hệ, menu…',
     'nav.noMatch': 'Không có phân hệ hoặc menu nào khớp.',
     // What a person reads when the answer is no. The code stays on the page —
@@ -123,6 +135,13 @@ export const messages: Record<string, Record<string, Message>> = {
     'app.category': 'System',
 
     'nav.sections': 'Modules',
+
+    'menu.customers': 'Customers',
+    'menu.care': 'Care',
+    'menu.selling': 'Selling',
+    'menu.stock': 'Stock and products',
+    'menu.books': 'Accounting',
+    'menu.setup': 'Setup',
     'error.forbidden.title': 'You do not have access to this screen',
     'error.forbidden.message':
       'Your account has not been granted this screen. If this is work you need to do, ask an administrator to grant it.',
