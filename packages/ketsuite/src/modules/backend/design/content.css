@@ -545,6 +545,26 @@
     font-size: 0.8125rem;
     font-weight: 600;
   }
+  /* A line that says work is still going on. It reads as status rather than as
+     content, and it stays put — the whole point is that the page underneath it
+     is no longer being thrown away and rebuilt. */
+  [data-ui="live-region"] {
+    display: flex;
+    align-items: center;
+    gap: var(--admin-gap-xs);
+    margin: 0;
+    color: var(--admin-ink-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  [data-ui="live-region"]::before {
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--admin-accent);
+    content: "";
+  }
   [data-ui="skeleton"] {
     display: grid;
     gap: var(--admin-gap-sm);

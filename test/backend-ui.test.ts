@@ -54,6 +54,7 @@ import {
   docTree,
   kanbanGrid,
   linkButton,
+  liveRegion,
   loadingState,
   loginScreen,
   mailContractCases,
@@ -427,6 +428,9 @@ const componentContract = [
       actions: linkButton({ label: 'Create', href: '/new' }),
     }),
     loadingState('Loading records', 2),
+    // A screen waiting on work it did not do, saying so and saying where to hear
+    // about it — the replacement for reloading the whole document on a timer.
+    liveRegion({ label: 'Đang dựng lại', stream: 'care-backfill:run-1' }),
   ]),
   section({
     eyebrow: 'Operations',
