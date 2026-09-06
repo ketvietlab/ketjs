@@ -63,6 +63,19 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.removeFilter': 'Bỏ bộ lọc',
     'chrome.previous': 'Trang trước',
     'modal.unsaved': 'Rời khỏi đây sẽ mất phần bạn đang nhập. Vẫn tiếp tục?',
+
+    // The nine complaints a form schema can raise, in the words a person reads.
+    // The validator names the key; these are the sentences behind them, kept in
+    // one place so a module that adopts a schema does not carry its own copy.
+    'validation.required': 'Trường này là bắt buộc.',
+    'validation.type': 'Giá trị không đúng định dạng.',
+    'validation.min': 'Giá trị phải từ {min} trở lên.',
+    'validation.max': 'Giá trị phải từ {max} trở xuống.',
+    'validation.minLength': 'Cần ít nhất {min} ký tự.',
+    'validation.maxLength': 'Chỉ được tối đa {max} ký tự.',
+    'validation.oneOf': 'Giá trị không nằm trong danh sách cho phép.',
+    'validation.pattern': 'Giá trị không đúng khuôn dạng.',
+    'validation.unknown': 'Trường này không thuộc biểu mẫu.',
     'chrome.next': 'Trang sau',
     'chrome.views': 'Kiểu xem',
     'chrome.view.list': 'Danh sách',
@@ -153,6 +166,16 @@ export const messages: Record<string, Record<string, Message>> = {
     'chrome.removeFilter': 'Remove filter',
     'chrome.previous': 'Previous page',
     'modal.unsaved': 'Leaving loses what you have typed. Continue?',
+
+    'validation.required': 'This field is required.',
+    'validation.type': 'That is not the right kind of value.',
+    'validation.min': 'Enter {min} or more.',
+    'validation.max': 'Enter {max} or less.',
+    'validation.minLength': 'Enter at least {min} characters.',
+    'validation.maxLength': 'Enter at most {max} characters.',
+    'validation.oneOf': 'That is not one of the accepted values.',
+    'validation.pattern': 'That is not the expected format.',
+    'validation.unknown': 'This field does not belong to the form.',
     'chrome.next': 'Next page',
     'chrome.views': 'Views',
     'chrome.view.list': 'List',
