@@ -67,7 +67,7 @@ export {
   qrCode,
 } from './primitives.tsx'
 export type { Tone } from './primitives.tsx'
-export { notice, emptyState, errorState, loadingState } from './state.tsx'
+export { notice, emptyState, errorState, liveRegion, loadingState } from './state.tsx'
 export type { NoticeTone } from './state.tsx'
 export {
   stack,

@@ -27,6 +27,7 @@ export const HOOKS = [
   'loading-label',
   'skeleton',
   'skeleton-line',
+  'live-region',
 ] as const
 
 export type NoticeTone = 'info' | 'positive' | 'warning' | 'danger'
@@ -91,4 +92,25 @@ export const loadingState = (label: string, lines = 3): TemplateResult => (
       )}
     </div>
   </div>
+)
+
+/**
+ * A screen saying that something it shows is still being built, and where to
+ * hear about it.
+ *
+ * The alternative it replaces is `<meta http-equiv="refresh">`: the whole
+ * document reloaded on a timer, which throws away scroll position, focus and
+ * anything typed, on a schedule that has nothing to do with when the work
+ * actually finished. This says the same thing to the reader — a live status
+ * line, announced to a screen reader — and adds the address the runtime listens
+ * on.
+ *
+ * `stream` is the public id the deployment's `resolveStream` authorizes, never a
+ * storage key. Omit it and this is only a status line: correct, and refreshed by
+ * whatever refreshes the rest of the page.
+ */
+export const liveRegion = (o: { label: string; stream?: string | null }): TemplateResult => (
+  <p data-ui="live-region" data-stream={o.stream ?? null} role="status" aria-live="polite">
+    {o.label}
+  </p>
 )
