@@ -114,6 +114,7 @@ export {
   timeframeFilter,
   topbarSearch,
   emptyState,
+  liveRegion,
   errorState,
   dataTable,
   visibleColumns,

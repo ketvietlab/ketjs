@@ -376,6 +376,28 @@
     overflow: hidden;
   }
 
+  /*
+   * A dialog that asked to be large is a workbench, not a form.
+   *
+   * Two things were wrong with it. `data-size` had no say at all, because
+   * `[data-presentation="dialog"] [data-ui="modal-sheet"]` matches with one
+   * more attribute than `[data-ui="modal-sheet"][data-size="large"]`, so every
+   * screen that asked for both got the width of a form. And the sheet was
+   * sized to its content, so a workbench with tabs was a different dialog on
+   * each tab — growing, shrinking and shifting under the cursor on every
+   * switch, which is the one thing a row of tabs exists to promise it will not
+   * do.
+   *
+   * It takes a fixed frame now. The height is the tall one a workbench wants
+   * until the screen cannot give it, and then it is the screen less a margin,
+   * so the dialog never runs off the top and bottom. The body scrolls inside
+   * it, which the sheet's own grid rows were already written for.
+   */
+  [data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"][data-size="large"] {
+    inline-size: min(1200px, 100%);
+    block-size: min(1000px, calc(100dvh - 100px));
+  }
+
   /* URL-addressable modal workspace. The backdrop is a real close link and
      the sheet owns its scroll, so the document never grows horizontally. */
   [data-ui="modal-layer"] {

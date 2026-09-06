@@ -17,6 +17,7 @@ jobs:
     outputs:
       groups: ${{ steps.groups.outputs.groups }}
       has_groups: ${{ steps.groups.outputs.has_groups }}
+      permissions: ${{ steps.groups.outputs.permissions }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,6 +68,13 @@ jobs:
 
   permission-coverage:
     name: permission coverage
+    # The job asks whether every composed production function has an exact
+    # bundle, and only a declaration can move that answer. A branch that
+    # changed a stylesheet, a translation or a component was rebuilding the
+    # whole deployment to be told nothing. The planner fails safe: an
+    # unrecognised path, or a diff it could not compute, still runs it.
+    needs: [plan]
+    if: needs.plan.outputs.permissions == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

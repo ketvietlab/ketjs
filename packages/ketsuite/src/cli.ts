@@ -6,7 +6,7 @@ import { ketsuite } from './deployment.ts'
 import { ensureDevelopmentAdmin } from './development.ts'
 import { scaffoldKetsuite } from './scaffold/index.ts'
 
-const VERSION = '0.1.3'
+const VERSION = '0.1.4'
 const HELP = `KetSuite ${VERSION}
 
 Usage:

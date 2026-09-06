@@ -1,6 +1,7 @@
 import { FormScreenFrame } from './page-frame.tsx'
 import {
   badge,
+  chargeDescription,
   CHARGE_TYPES,
   dataTable,
   dateTime,
@@ -203,11 +204,7 @@ export const folioDetailScreen = (
                         required: true,
                         options: activeCharges.map((charge) => ({
                           value: charge.id,
-                          label: `${
-                            charge.type === 'room' && charge.description.startsWith('room:')
-                              ? _('hospitality_core.folio.charge.roomDescription')
-                              : charge.description
-                          } · ${formatMoney(_, charge.amount)}`,
+                          label: `${chargeDescription(_, charge)} · ${formatMoney(_, charge.amount)}`,
                         })),
                       },
                       {

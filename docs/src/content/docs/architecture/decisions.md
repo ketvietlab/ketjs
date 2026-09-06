@@ -2348,3 +2348,87 @@ timelines were already written that way, so nothing had to change to adopt it.
 
 **Reversible:** yes — removing the flag restores the previous behaviour, and `ket diff` says so out
 loud when it happens.
+
+## D75 — A reader is told, and the poll is what happens when nobody told it
+
+`streams.tail` had one way of finding out that a chunk had been written: read again in 250ms. The
+store had a notification bus, but it was an `EventEmitter` created inside the store, so it reached
+exactly the process that owned it. A job runs in a worker and the reader tailing it is in a web
+process, which is the case the feature exists for, and it was the case the bus could not serve.
+
+So the read was not a fallback. It was the mechanism, and it cost four queries a second per open
+connection — each of which read the whole topic, because the cursor was applied to the rows in
+JavaScript after they arrived rather than in the `WHERE` clause. A stream that had written a thousand
+chunks re-read and re-parsed all thousand, four times a second, to learn that nothing had changed.
+
+**The primitive was already there.** `Adapter.notifications` is `LISTEN`/`NOTIFY`, implemented in the
+PostgreSQL driver with a dedicated listener connection and reconnect handling. Nothing used it here.
+`dbStreamStore` now publishes on write and listens on first read, and says so through `notifies` —
+which is what lets `tail` choose its fallback interval instead of being told one. Five seconds when
+the store can reach every writer, 250ms when it cannot.
+
+**One channel, the topic in the payload.** A PostgreSQL channel is an identifier — sixty-three bytes,
+with quoting rules — and a topic is chosen by the application. One `LISTEN` per process is also
+cheaper than one per stream. The cost is that a process wakes for every stream and filters, which is
+the right trade while streams are counted in tens and the wrong one at ten thousand.
+
+**Correctness does not depend on any of it.** A missed notification costs latency: the fallback read
+still finds the chunk, and the cursor still guarantees no gap and no duplicate. That is why the
+publish is fire-and-forget — a failed announcement must not fail the write it describes — and why a
+failed `LISTEN` clears itself so a later reader can try again rather than leaving a process
+permanently deaf.
+
+**What it is not.** There is still no per-connection state on the server, so a client learning that
+something changed is a client that then asks for it. Compared with a framework that keeps a process
+per viewer and computes a diff, this delivers a signal and not an update; the second round trip is
+the price of a stateless server, and it is a different decision from this one.
+
+**Cost:** one connection per process that reads, and only after something reads. A deployment on
+SQLite gets none of it and keeps the behaviour it had, which is a real difference between the test
+lanes and has to be covered on both.
+
+**Reversible:** yes — a store that reports no `notifies` restores the old interval, and removing the
+publish restores the old mechanism, at the old price.
+
+## D76 — A stream belongs to the database it is about
+
+D75 made a stream reader something that can be told rather than something that polls. It could not be
+used. With a database per tenant there is no single adapter, so the store fell back to memory — per
+process — and the process that knows when a job finished is the worker, not the one holding the
+reader. Two web instances shared nothing either.
+
+The gap was already written down, in the future tense: resumable streams were *not yet* durably
+stored per tenant, and a database-per-tenant deployment *still needed* to choose the backing-store
+ownership model. This is that choice.
+
+**A stream describes something that lives in a record, and that record lives in exactly one
+database.** So the log goes there. `streamsOf(adapter)` makes one `Streams` per adapter and hands the
+same one back, so a job and a reader given the same tenant adapter meet — in the database, and in the
+in-process bus when they happen to share a process.
+
+**`ctx.streams` follows the call.** A function or a job opens a writer in the database it is already
+working in, which is the only database it is allowed to be working in. Nothing new is granted: a call
+that could not reach a tenant's data cannot reach its streams.
+
+**The namespace stays the caller's**, as it already was for `resolveStream`. The framework does not
+derive a topic from an actor or a header, because the writer and the reader have to agree and only
+the module knows what they are agreeing about. Per-tenant storage removes the *cross-tenant* hazard
+that made this sharp; it does not remove the need to agree.
+
+**A dry run opens a writer that discards.** A rehearsal reports what a command would do; announcing
+it to everyone watching would be doing it.
+
+**The endpoint holds a lease for the length of the tail.** It leases the datastore, not a connection:
+reads inside take one and give it back. The lease is what stops the pool evicting a tenant's adapter
+out from under a reader, and it is bounded by `streamTimeoutMs`.
+
+**Cost:** a tenant that streams gets a `ket_stream` table in its own database, created on first use —
+a tenant that never streams still gets none. A deployment with many tenants and many watchers holds
+one pool lease per watched tenant, which is a real ceiling worth knowing before pointing this at
+something every viewer opens.
+
+**What it is still not.** There is no per-connection state on the server, so a client told that
+something changed is a client that then asks for it. That is D75's line, and it has not moved.
+
+**Reversible:** yes — `serve.streamStore` still overrides everything with one store, which is what a
+deployment that wants the old shape passes.

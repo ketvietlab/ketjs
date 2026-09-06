@@ -8,8 +8,9 @@
 // Chunks are also batched: "resumable" means a reader never sees a gap or a
 // duplicate, not that every token is its own transaction.
 
-import { memoryStreamStore } from './streamstore.ts'
+import { dbStreamStore, memoryStreamStore } from './streamstore.ts'
 import type { StreamStore, SinceResult } from './streamstore.ts'
+import type { Adapter } from '../types.ts'
 
 export type Chunk = { seq: number; data: unknown }
 export type Since = { chunks: Chunk[]; done: boolean; summary: unknown; nextSeq: number }
@@ -96,15 +97,25 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
     },
 
     /**
-     * Live tail. A reader on the same instance is woken by the writer and never
-     * polls; the slow poll is only a fallback for a writer on another instance.
+     * Live tail. The reader is woken by the writer — on this instance through the
+     * store's own bus, and on another through the database's notification channel
+     * where the driver has one. The poll underneath is the fallback for the case
+     * where neither reached: a store that cannot notify at all, or a notification
+     * lost while a listener connection was down.
      */
     async *tail(
       id: string,
       fromSeq = 0,
-      opt: { pollMs?: number; timeoutMs?: number } = {},
+      opt: { pollMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
     ): AsyncGenerator<Chunk> {
-      const pollMs = opt.pollMs ?? 250
+      // How long to wait before reading again when nobody has said anything.
+      //
+      // A store that can reach every writer wakes this loop the moment a chunk
+      // lands, so the read is a safety net for a missed notification rather than
+      // the way news arrives. One that cannot — SQLite, where the database has no
+      // way to tell another process — keeps the tight poll, because there the
+      // read *is* the mechanism.
+      const pollMs = opt.pollMs ?? (store.notifies ? 5_000 : 250)
       const timeoutMs = opt.timeoutMs ?? 30_000
       await ensure()
       let cursor = Math.floor(fromSeq)
@@ -114,8 +125,15 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
       const unsubscribe = store.subscribe(id, () => {
         wake?.()
       })
+      // A reader that has gone away must stop this loop where it is sleeping, not
+      // at the next thing it would have read. The wait can be seconds long now
+      // that a notification is what usually ends it, and a read taken after the
+      // caller has finished is a read against a database that may be closing.
+      const abort = () => wake?.()
+      opt.signal?.addEventListener('abort', abort)
       try {
         for (;;) {
+          if (opt.signal?.aborted) return
           const s = expand(await store.since(id, cursor))
           if (s.chunks.length) cursor = Math.floor(s.chunks[s.chunks.length - 1]!.seq) + 1
           for (const c of s.chunks) yield c
@@ -132,6 +150,7 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
           })
         }
       } finally {
+        opt.signal?.removeEventListener('abort', abort)
         unsubscribe()
       }
     },
@@ -147,3 +166,26 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
 export type Streams = Awaited<ReturnType<typeof createStreams>>
 export { memoryStreamStore, dbStreamStore } from './streamstore.ts'
 export type { StreamStore } from './streamstore.ts'
+
+/**
+ * The streams of one database, made once.
+ *
+ * A stream is about something that lives in a database, so it belongs in that
+ * database. Saying so here rather than at each call site is what lets a job in a
+ * worker and a reader in a web process meet: given the same tenant adapter they
+ * are handed the same `Streams`, which is also what makes the in-process bus
+ * work between them when they do share a process.
+ *
+ * Keyed weakly, because the pool owns the adapter's life and a closed tenant
+ * should take its streams with it rather than pin them.
+ */
+const streamsByAdapter = new WeakMap<Adapter, Promise<Streams>>()
+
+export const streamsOf = (adapter: Adapter): Promise<Streams> => {
+  let held = streamsByAdapter.get(adapter)
+  if (!held) {
+    held = createStreams(dbStreamStore(adapter))
+    streamsByAdapter.set(adapter, held)
+  }
+  return held
+}

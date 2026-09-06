@@ -1863,10 +1863,16 @@ export async function epicTotals(
 /**
  * Remove a sprint that was never started.
  *
- * Only `planned`. A sprint that has run is a record of what a team did in a
- * fortnight, and deleting one would take that away from every figure that
- * reports on it — `closeSprint` is how a sprint ends. This is for the other
- * case: one made by mistake, or planned and then abandoned before it began.
+ * Only `planned`, and there is no way back from `closed` at all. FLW-DEC-015
+ * asked which of the two a sprint is — a record of what a team did in a
+ * fortnight, or a planning tool somebody can take back — and the answer was
+ * the record. So `closed` is final: every figure that reports on the past
+ * reads a closed sprint, and those figures stay put. `closeSprint` is how a
+ * sprint ends; this is for the other case, one made by mistake or planned and
+ * then abandoned before it ever began.
+ *
+ * A sprint closed by accident is recovered by planning the next one, not by
+ * reopening the last.
  *
  * Issues planned into it are let go rather than deleted with it. They go back
  * to the backlog, which is where they were before somebody put them in a

@@ -252,6 +252,44 @@ test('live pg: resumable stream survives on a real table', live, async () => {
   })
 })
 
+test('live pg: a writer on another connection wakes a reader, without a poll', live, async () => {
+  // The case the poll existed to paper over. A job runs in a worker process and
+  // the reader tailing it is in a web process; the store's own bus never crosses
+  // that boundary. Two connections stand in for the two processes, and a sixty
+  // second poll interval means nothing but a real notification can finish this.
+  await withPg(async (a) => {
+    const writerSide = postgresAdapter(URL)
+    await writerSide.open()
+    try {
+      const reader = await createStreams(dbStreamStore(a))
+      const writer = await createStreams(dbStreamStore(writerSide))
+      const w = await writer.open('across-connections')
+      const seen: unknown[] = []
+      const tailing = (async () => {
+        for await (const c of reader.tail('across-connections', 0, { pollMs: 60_000 })) seen.push(c.data)
+      })()
+      // Give the listener its connection before anything is announced.
+      await new Promise((r) => setTimeout(r, 200))
+      const announced = Date.now()
+      w.write('from the worker')
+      await w.flush()
+      // How long it took is the whole assertion. Without the notification the
+      // chunk still arrives — sixty seconds later, when the fallback poll runs —
+      // so a test that only checks the data would pass on a broken path and
+      // merely take a minute doing it.
+      const deadline = announced + 10_000
+      while (!seen.length && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
+      const waited = Date.now() - announced
+      await w.end()
+      await tailing
+      assert.deepEqual(seen, ['from the worker'], 'the chunk crossed the connection boundary')
+      assert.ok(waited < 5_000, `woken by the notification, not the 60s poll — waited ${waited}ms`)
+    } finally {
+      await writerSide.close()
+    }
+  })
+})
+
 test('live pg: SKIP LOCKED hands each job to exactly one worker', live, async () => {
   await withPg(async (a) => {
     const q = await createQueue(a)

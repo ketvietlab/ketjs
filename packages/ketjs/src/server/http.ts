@@ -11,7 +11,9 @@ import { join, normalize, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { callFn } from './fn.ts'
-import { createStreams, dbStreamStore, memoryStreamStore } from './stream.ts'
+import { partitionTokens, tokensToCss } from '../theme/tokens.ts'
+import { createStreams, memoryStreamStore, streamsOf } from './stream.ts'
+import type { Streams } from './stream.ts'
 import type { StreamStore } from './stream.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { KetError } from '../kernel/errors.ts'
@@ -81,6 +83,18 @@ export type ServeOpts = {
    * has authenticated the caller and chosen its tenant.
    */
   resolveStream?: (id: string, url: URL, req: IncomingMessage) => string | null | Promise<string | null>
+  /**
+   * How long one stream connection is held open, and how long the tail waits
+   * before reading again when nothing has woken it.
+   *
+   * The defaults suit a stream with a producer and an end — a generated answer,
+   * a document sync — where the connection lives as long as the work does. A
+   * deployment watching something that changes rarely wants the opposite: a long
+   * connection so the client is not reconnecting all day, and a long fallback
+   * read because the notification, not the read, is how news arrives.
+   */
+  streamTimeoutMs?: number
+  streamPollMs?: number
   /** Maximum buffered JSON body for the generic function transport. Defaults to 1 MiB. */
   maxJsonBodyBytes?: number
   /**
@@ -136,9 +150,36 @@ export type ServeOpts = {
   /** Extra routes, matched before the theme takes the request. */
   routes?: Record<string, HttpRoute>
   pageScope?: (url: URL, req: IncomingMessage) => Record<string, unknown> | Promise<Record<string, unknown>>
+  /**
+   * True for a page nobody but the holder of its link should see — a draft
+   * behind a preview token, say. The response then carries the three headers
+   * that keep it out of a crawler's index, a shared cache, and the referrer of
+   * whatever the reader clicks next.
+   */
+  pagePrivate?: (url: URL, req: IncomingMessage) => boolean
+  /**
+   * Per-site overrides of the theme's tokens, for the stylesheet the framework
+   * already links into every page. They land in `ket.app`, which the published
+   * layer order already puts above `ket.theme`, so two sites on one theme can
+   * differ without either of them forking it.
+   */
+  siteTokens?: (url: URL, req: IncomingMessage) => Promise<Record<string, string> | null>
   /** Theme region returned for progressive GET navigation. */
   pageRegion?: string
 }
+
+/**
+ * A page that is not for the public.
+ *
+ * `no-store` rather than `private`: the reader's own browser cache is a place
+ * the draft outlives the link. `no-referrer` because the token is in the URL,
+ * and without it the first outbound click hands it to a third party.
+ */
+const PRIVATE_PAGE_HEADERS = {
+  'cache-control': 'no-store, max-age=0',
+  'x-robots-tag': 'noindex, nofollow, noarchive',
+  'referrer-policy': 'no-referrer',
+} as const
 
 /**
  * A mount is either a directory, or a function from the rest of the path to an
@@ -558,9 +599,22 @@ export async function createKetServer(o: ServeOpts) {
     return o.pool.with(key, fn)
   }
 
-  // With one database the stream store lives in it. With a database per tenant it
-  // does not: whose database a stream belongs to is a separate question, so the
-  // default stays in memory and the caller passes a store when they have answered it.
+  /**
+   * Whose database a stream belongs to: the one it is about.
+   *
+   * This used to be left open. With a database per tenant there is no single
+   * adapter, so the store fell back to memory — per process, which meant a job in
+   * a worker had nowhere to write and two web instances shared nothing. A stream
+   * is about a record, and that record lives in exactly one tenant's database, so
+   * that is where its log goes.
+   *
+   * A store passed in explicitly is the caller saying they have answered the
+   * question a different way, and it stays one store for the deployment.
+   */
+  const declaredStreams = o.streamStore ? createStreams(o.streamStore) : null
+  const noDatabaseStreams = o.streamStore || o.adapter ? null : createStreams(memoryStreamStore())
+  const streamsFor = (adapter: Adapter | null): Promise<Streams> =>
+    declaredStreams ?? (adapter ? streamsOf(adapter) : (noDatabaseStreams as Promise<Streams>))
   const configuredMounts: AssetMount[] = o.assets ? (Array.isArray(o.assets) ? o.assets : [o.assets]) : []
   // Browser-safe ketjs-view output is framework infrastructure, like /_ket/fn:
   // callers should not need to find and mount a transitive package themselves.
@@ -584,10 +638,6 @@ export async function createKetServer(o: ServeOpts) {
     if (typeof o.islandClients === 'function') return o.islandClients(url, req)
     return o.islandClients ?? theme?.clients ?? {}
   }
-
-  const streams = await createStreams(
-    o.streamStore ?? (o.adapter ? dbStreamStore(o.adapter) : memoryStreamStore()),
-  )
 
   const tenantForLog = (url: URL, req: IncomingMessage): string | null => {
     try {
@@ -708,7 +758,14 @@ export async function createKetServer(o: ServeOpts) {
           'content-type': contentType(theme ? 'text/css' : 'text/plain'),
           'cache-control': 'no-cache',
         })
-        return res.end(theme ? theme.tokensCss : 'not found')
+        if (!theme) return res.end('not found')
+        // The site's own layer comes after the theme's, so a site that
+        // overrides nothing serves exactly what it served before.
+        const overrides = (await o.siteTokens?.(url, req)) ?? null
+        const { safe } = partitionTokens(overrides ?? {})
+        return res.end(
+          Object.keys(safe).length ? `${theme.tokensCss}\n${tokensToCss(safe, 'ket.app')}` : theme.tokensCss,
+        )
       }
       if (url.pathname === '/_ket/islands.js') {
         route = url.pathname
@@ -741,18 +798,35 @@ export async function createKetServer(o: ServeOpts) {
         // moment that happens: the durable log keeps the chunks, and the next
         // connection resumes from its cursor.
         let open = true
+        // Two things have to happen when the reader disappears: stop writing, and
+        // stop reading. The second is the one that matters here — the tail sleeps
+        // between reads, and a read that wakes up after the server has moved on
+        // finds a database that is closing.
+        const gone = new AbortController()
         const stop = () => {
           open = false
+          gone.abort()
         }
         req.on('close', stop)
         res.on('close', stop)
-        for await (const chunk of streams.tail(id, from, { timeoutMs: 30_000 })) {
+        // The lease is held for as long as the tail, which is what keeps this
+        // tenant's adapter from being evicted out from under a reader. It leases
+        // the datastore, not a connection: the reads inside take one and give it
+        // back like any other query.
+        return withDb(url, req, async (adapter) => {
+          const streams = await streamsFor(adapter)
+          for await (const chunk of streams.tail(id, from, {
+            timeoutMs: o.streamTimeoutMs ?? 30_000,
+            signal: gone.signal,
+            ...(o.streamPollMs === undefined ? {} : { pollMs: o.streamPollMs }),
+          })) {
+            if (!open || res.writableEnded) return
+            res.write(`id: ${chunk.seq}\ndata: ${JSON.stringify(chunk.data)}\n\n`)
+          }
           if (!open || res.writableEnded) return
-          res.write(`id: ${chunk.seq}\ndata: ${JSON.stringify(chunk.data)}\n\n`)
-        }
-        if (!open || res.writableEnded) return
-        res.write('event: done\ndata: {}\n\n')
-        return res.end()
+          res.write('event: done\ndata: {}\n\n')
+          return res.end()
+        })
       }
 
       if (url.pathname.startsWith('/_ket/fn/') && req.method === 'POST') {
@@ -797,18 +871,22 @@ export async function createKetServer(o: ServeOpts) {
           return res.end('not found')
         }
         const scope = o.pageScope ? await o.pageScope(url, req) : {}
+        const privatePage = o.pagePrivate?.(url, req) === true
         const pageRegion = o.pageRegion
         if (pageRegion && isNavigationRequest(req)) {
           const page = scope['page'] as { title?: unknown } | undefined
+          const fragment = navigablePage(req, {
+            title: String(page?.title ?? ''),
+            document: () => html``,
+            slots: {
+              [pageRegion]: () => html`${trustedMarkup(theme.renderRegion(pageRegion, scope))}`,
+            },
+          })
           return send(
             res,
-            navigablePage(req, {
-              title: String(page?.title ?? ''),
-              document: () => html``,
-              slots: {
-                [pageRegion]: () => html`${trustedMarkup(theme.renderRegion(pageRegion, scope))}`,
-              },
-            }),
+            privatePage
+              ? { ...fragment, headers: { ...fragment.headers, ...PRIVATE_PAGE_HEADERS } }
+              : fragment,
           )
         }
         const fullHtml = bootstrapDocument(
@@ -817,6 +895,7 @@ export async function createKetServer(o: ServeOpts) {
         res.writeHead(200, {
           'content-type': 'text/html; charset=utf-8',
           ...(o.pageRegion ? { vary: 'X-Ket-Navigation' } : {}),
+          ...(privatePage ? PRIVATE_PAGE_HEADERS : {}),
         })
         return res.end(fullHtml)
       }
@@ -869,7 +948,7 @@ export async function createKetServer(o: ServeOpts) {
 
   return {
     server,
-    streams,
+    streams: await streamsFor(o.adapter ?? null),
     listen(port = o.port ?? 3000): Promise<number> {
       return new Promise((resolve) =>
         server.listen(port, () => resolve((server.address() as { port: number }).port)),

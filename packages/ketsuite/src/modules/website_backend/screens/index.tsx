@@ -9,16 +9,19 @@ import {
   inline,
   linkButton,
   Notice,
+  pagerBar,
   RecordActions,
   RecordForm,
   Section,
   stack,
   Surface,
 } from '../../../ui/index.ts'
-import type { FormOption, Frame } from '../../../ui/index.ts'
+import type { FormOption, Frame, Pager } from '../../../ui/index.ts'
 import { FormScreenFrame, ListScreenFrame } from './page-frame.tsx'
 
 export type SiteRow = {
+  /** Per-site overrides of the theme's own tokens, rendered into `ket.app`. */
+  tokens?: Record<string, string> | null
   id: string
   name: string
   title: string
@@ -37,6 +40,8 @@ export type EntryRow = {
   excerpt?: string | null
   status: string
   updatedAt?: string | null
+  /** Set only while `status` is `scheduled`: when the queued publish fires. */
+  publishAt?: string | null
 }
 
 export type EntryDetail = {
@@ -87,7 +92,37 @@ const statusTone = (status: string): 'positive' | 'info' | 'warning' | 'neutral'
         ? 'warning'
         : 'neutral'
 
-export const sitesScreen = (_: Translator, rows: SiteRow[], frame: Frame, locale = ''): TemplateResult => (
+/**
+ * All / on / off, as three links.
+ *
+ * `active` is on every one of these list contracts and no screen passed it, so
+ * a suspended site and a retired form were indistinguishable from a live one
+ * in the only place anybody looks.
+ */
+const activeFilter = (_: Translator, href: (state: string) => string, chosen: string): TemplateResult =>
+  inline([
+    linkButton({ label: _('website_backend.state.all'), href: href('all'), size: 'compact' }),
+    linkButton({
+      label: _('website_backend.state.active'),
+      href: href('active'),
+      size: 'compact',
+      variant: chosen === 'active' ? 'secondary' : 'tertiary',
+    }),
+    linkButton({
+      label: _('website_backend.state.inactive'),
+      href: href('inactive'),
+      size: 'compact',
+      variant: chosen === 'inactive' ? 'secondary' : 'tertiary',
+    }),
+  ])
+
+export const sitesScreen = (
+  _: Translator,
+  rows: SiteRow[],
+  frame: Frame,
+  locale = '',
+  active = 'all',
+): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.sites.title')}
@@ -105,6 +140,11 @@ export const sitesScreen = (_: Translator, rows: SiteRow[], frame: Frame, locale
           variant: 'secondary',
         }),
       ]),
+      activeFilter(
+        _,
+        (state) => `/admin/website/sites?state=${state}${locale ? `&${locale.slice(1)}` : ''}`,
+        active,
+      ),
       rows.length === 0
         ? emptyState(_('website_backend.sites.empty'), _('website_backend.sites.emptyHint'))
         : dataTable(_, {
@@ -222,6 +262,17 @@ export const siteFormScreen = (
                       required: true,
                     },
                     {
+                      // The layer order already puts a site above its theme, so
+                      // these override rather than replace: a site that sets
+                      // nothing looks exactly as it did.
+                      name: 'tokens',
+                      label: _('website_backend.field.tokens'),
+                      type: 'textarea',
+                      value: JSON.stringify(row.tokens ?? {}, null, 2),
+                      help: _('website_backend.field.tokensHint'),
+                      span: 'full',
+                    },
+                    {
                       name: 'active',
                       label: _('website_backend.field.active'),
                       type: 'checkbox',
@@ -252,12 +303,18 @@ export const contentScreen = (
   frame: Frame,
   locale = '',
   kind: EntryKind = { basePath: '/admin/website/pages', titleKey: 'pages' },
+  pager: Pager | null = null,
+  /** What the URL asked for, so the controls come back showing it. */
+  query: { search?: string; status?: string } = {},
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_(`website_backend.${kind.titleKey}.title`)}
     frame={frame}
+    footer={pager ? pagerBar(_, pager) : null}
     body={stack([
+      // One GET form for all three, because they are one question - which
+      // pages am I looking at - and three forms would each drop the other two.
       <Surface
         padding="compact"
         body={
@@ -273,8 +330,28 @@ export const contentScreen = (
                 value: siteId,
                 options: sites,
               },
+              {
+                name: 'q',
+                label: _('website_backend.field.search'),
+                value: query.search ?? '',
+              },
+              {
+                name: 'status',
+                label: _('website_backend.field.status'),
+                type: 'select',
+                value: query.status ?? 'all',
+                options: [
+                  { value: 'all', label: _('website_backend.state.all') },
+                  { value: 'draft', label: _('website_backend.state.draft') },
+                  { value: 'scheduled', label: _('website_backend.state.scheduled') },
+                  { value: 'published', label: _('website_backend.state.published') },
+                  // Only by asking: the list leaves the bin out otherwise, the
+                  // way every other reader in the module already does.
+                  { value: 'trash', label: _('website_backend.state.trash') },
+                ],
+              },
             ]}
-            submit={_('website_backend.action.switchSite')}
+            submit={_('website_backend.action.apply')}
             submitVariant="secondary"
           />
         }
@@ -327,6 +404,108 @@ export const contentScreen = (
   />
 )
 
+export type EntryTermRow = {
+  /** The assignment's id. `termId` is what removes it, this is what lists it. */
+  id: string
+  termId: string
+  taxonomy: string
+  slug: string
+  name: string
+}
+
+/**
+ * Which taxonomy terms this entry carries.
+ *
+ * assignTerm shipped with the taxonomy module and nothing ever read the
+ * assignment back or took it off, so a term put on a page went invisible the
+ * moment it was assigned - and deleteTerm refuses while an assignment exists,
+ * which made the term itself permanent as well.
+ */
+export const entryTermsSection = (
+  _: Translator,
+  entryId: string,
+  assigned: EntryTermRow[],
+  available: TaxonomyRow[],
+  locale = '',
+): TemplateResult => {
+  const unassigned = available.filter((term) => !assigned.some((row) => row.termId === term.id))
+  return (
+    <Section
+      title={_('website_backend.terms.title')}
+      description={_('website_backend.terms.hint')}
+      body={
+        <Surface
+          body={stack([
+            assigned.length === 0
+              ? emptyState(_('website_backend.terms.empty'), _('website_backend.terms.emptyHint'))
+              : dataTable(_, {
+                  rows: assigned,
+                  id: (row) => row.id,
+                  columns: [
+                    {
+                      key: 'taxonomy',
+                      label: _('website_backend.field.taxonomy'),
+                      cell: (row) => badge(row.taxonomy, 'info'),
+                    },
+                    {
+                      key: 'name',
+                      label: _('website_backend.terms.name'),
+                      priority: 'primary',
+                      cell: (row) => row.name,
+                    },
+                    {
+                      key: 'slug',
+                      label: _('website_backend.field.slug'),
+                      kind: 'identifier',
+                      cell: (row) => code(row.slug),
+                    },
+                    {
+                      key: 'remove',
+                      label: _('website_backend.action.remove'),
+                      cell: (row) => (
+                        <RecordActions
+                          action={`/admin/website/content/${entryId}/terms/${row.termId}/remove${locale}`}
+                          size="compact"
+                          actions={[
+                            {
+                              value: 'remove',
+                              label: _('website_backend.action.remove'),
+                              variant: 'destructive',
+                            },
+                          ]}
+                        />
+                      ),
+                    },
+                  ],
+                }),
+            ...(unassigned.length
+              ? [
+                  <RecordForm
+                    action={`/admin/website/content/${entryId}/terms${locale}`}
+                    layout="inline"
+                    fields={[
+                      {
+                        name: 'termId',
+                        label: _('website_backend.terms.add'),
+                        type: 'select',
+                        options: unassigned.map((term) => ({
+                          value: term.id,
+                          label: `${term.taxonomy} / ${term.name}`,
+                        })),
+                      },
+                    ]}
+                    submit={_('website_backend.action.assign')}
+                    submitVariant="secondary"
+                  />,
+                ]
+              : [emptyState(_('website_backend.terms.none'), _('website_backend.terms.noneHint'))]),
+          ])}
+        />
+      }
+    />
+  )
+}
+
 export const entryFormScreen = (
   _: Translator,
   detail: EntryDetail | null,
@@ -338,6 +517,7 @@ export const entryFormScreen = (
     errors?: string[]
     locale?: string
     seo?: SeoValues | null
+    terms?: { assigned: EntryTermRow[]; available: TaxonomyRow[] } | null
   } = {},
 ): TemplateResult => {
   const entry = detail?.entry
@@ -447,19 +627,77 @@ export const entryFormScreen = (
                 description={_('website_backend.publish.hint')}
                 body={
                   <Surface
-                    body={
-                      <RecordActions
+                    body={stack([
+                      // publishEntry has taken `publishAt` since it was written
+                      // and enqueues website.publishScheduled for it, but no
+                      // screen offered the field - so a page could only ever go
+                      // live the moment somebody pressed the button.
+                      <RecordForm
                         action={`${kind.basePath}/${entry.id}/publish${options.locale ?? ''}`}
                         hidden={revision?.id ? { expectedRevisionId: revision.id } : undefined}
-                        actions={[
+                        layout="inline"
+                        fields={[
                           {
-                            value: 'publish',
-                            label: _('website_backend.action.publish'),
-                            variant: 'primary',
+                            name: 'publishAt',
+                            label: _('website_backend.publish.at'),
+                            type: 'datetime-local',
+                            value: entry.publishAt ? String(entry.publishAt).slice(0, 16) : '',
+                            help: _('website_backend.publish.atHint'),
                           },
                         ]}
-                      />
-                    }
+                        submit={_('website_backend.action.publish')}
+                        submitVariant="primary"
+                      />,
+                      ...(entry.status === 'trash'
+                        ? [
+                            <RecordActions
+                              action={`${kind.basePath}/${entry.id}/untrash${options.locale ?? ''}`}
+                              label={_('website_backend.publish.untrashHint')}
+                              actions={[
+                                {
+                                  value: 'untrash',
+                                  label: _('website_backend.action.untrash'),
+                                  variant: 'primary',
+                                },
+                              ]}
+                            />,
+                          ]
+                        : [
+                            <RecordActions
+                              action={`${kind.basePath}/${entry.id}/trash${options.locale ?? ''}`}
+                              label={_('website_backend.publish.trashHint')}
+                              actions={[
+                                {
+                                  value: 'trash',
+                                  label: _('website_backend.action.trash'),
+                                  variant: 'destructive',
+                                },
+                              ]}
+                            />,
+                          ]),
+                      ...(entry.status === 'published' || entry.status === 'scheduled'
+                        ? [
+                            <RecordActions
+                              action={`${kind.basePath}/${entry.id}/unpublish${options.locale ?? ''}`}
+                              label={
+                                entry.status === 'scheduled'
+                                  ? _('website_backend.publish.cancelHint')
+                                  : _('website_backend.publish.downHint')
+                              }
+                              actions={[
+                                {
+                                  value: 'unpublish',
+                                  label:
+                                    entry.status === 'scheduled'
+                                      ? _('website_backend.action.cancelSchedule')
+                                      : _('website_backend.action.unpublish'),
+                                  variant: 'destructive',
+                                },
+                              ]}
+                            />,
+                          ]
+                        : []),
+                    ])}
                   />
                 }
               />,
@@ -468,6 +706,19 @@ export const entryFormScreen = (
         // Only on a page that exists: the head tags describe a revision, and
         // there is no revision until the page has been saved once.
         ...(existing && options.seo ? [entrySeoSection(_, entry.id, options.seo, options.locale ?? '')] : []),
+        // Same reason: an assignment points at an entry, and there is no entry
+        // to point at until the page has been saved once.
+        ...(existing && options.terms
+          ? [
+              entryTermsSection(
+                _,
+                entry.id,
+                options.terms.assigned,
+                options.terms.available,
+                options.locale ?? '',
+              ),
+            ]
+          : []),
       ])}
     />
   )
@@ -658,12 +909,13 @@ export const revisionsScreen = (
                 // the content back is how it gets repaired.
                 key: 'restore',
                 label: _('website_backend.action.restore'),
-                cell: (row) =>
-                  linkButton({
-                    label: _('website_backend.action.restore'),
-                    href: `${basePath}/${entry.id}/revisions/${row.id}/restore${locale}`,
-                    size: 'compact',
-                  }),
+                cell: (row) => (
+                  <RecordActions
+                    action={`${basePath}/${entry.id}/revisions/${row.id}/restore${locale}`}
+                    size="compact"
+                    actions={[{ value: 'restore', label: _('website_backend.action.restore') }]}
+                  />
+                ),
               },
             ],
           }),
@@ -671,13 +923,20 @@ export const revisionsScreen = (
   />
 )
 
+/**
+ * One preview link, and the way to withdraw all of them.
+ *
+ * Every visit here mints another token, so the links accumulate: a preview
+ * pasted into a chat outlives the reason it was shared, and until now nothing
+ * could call any of them back.
+ */
 export const previewScreen = (
   _: Translator,
   entry: EntryRow,
-  token: string,
-  expiresAt: string,
+  minted: { token: string; expiresAt: string } | null,
   frame: Frame,
   basePath = '/admin/website/pages',
+  locale = '',
 ): TemplateResult => (
   <RecordScreen
     translator={_}
@@ -685,29 +944,88 @@ export const previewScreen = (
     frame={frame}
     body={stack([
       <Notice tone="info" title={entry.title} message={_('website_backend.preview.hint')} />,
+      // Minting used to happen on the GET, so opening this screen - or a link
+      // prefetcher touching it - issued another token every time. It is a
+      // decision now, and the two things the contract has always accepted and
+      // no screen offered are the decision's terms.
       <Surface
         body={
           <RecordForm
-            action={basePath}
-            method="get"
+            action={`${basePath}/${entry.id}/preview${locale}`}
             fields={[
               {
-                name: 'token',
-                label: _('website_backend.preview.token'),
-                value: token,
-                disabled: true,
-                span: 'full',
+                name: 'ttlSeconds',
+                label: _('website_backend.preview.ttl'),
+                type: 'select',
+                value: '900',
+                options: [
+                  { value: '300', label: _('website_backend.preview.ttl5') },
+                  { value: '900', label: _('website_backend.preview.ttl15') },
+                  { value: '3600', label: _('website_backend.preview.ttl60') },
+                ],
+                help: _('website_backend.preview.ttlHint'),
               },
               {
-                name: 'expiresAt',
-                label: _('website_backend.preview.expires'),
-                value: expiresAt,
-                disabled: true,
+                name: 'oneTime',
+                label: _('website_backend.preview.oneTime'),
+                type: 'checkbox',
+                help: _('website_backend.preview.oneTimeHint'),
                 span: 'full',
               },
             ]}
-            submit={_('website_backend.action.backToContent')}
-            submitVariant="secondary"
+            submit={_('website_backend.action.createPreview')}
+            submitVariant="primary"
+          />
+        }
+      />,
+      ...(minted
+        ? [
+            <Surface
+              body={
+                <RecordForm
+                  action={basePath}
+                  method="get"
+                  fields={[
+                    {
+                      name: 'link',
+                      label: _('website_backend.preview.link'),
+                      value: `/_ket/preview?token=${encodeURIComponent(minted.token)}`,
+                      disabled: true,
+                      help: _('website_backend.preview.linkHint'),
+                      span: 'full',
+                    },
+                    {
+                      name: 'expiresAt',
+                      label: _('website_backend.preview.expires'),
+                      value: minted.expiresAt,
+                      disabled: true,
+                      span: 'full',
+                    },
+                  ]}
+                  submit={_('website_backend.action.backToContent')}
+                  submitVariant="secondary"
+                />
+              }
+            />,
+          ]
+        : []),
+      <Section
+        title={_('website_backend.preview.revokeTitle')}
+        description={_('website_backend.preview.revokeHint')}
+        body={
+          <Surface
+            body={
+              <RecordActions
+                action={`${basePath}/${entry.id}/preview/revoke${locale}`}
+                actions={[
+                  {
+                    value: 'revoke',
+                    label: _('website_backend.action.revokePreviews'),
+                    variant: 'destructive',
+                  },
+                ]}
+              />
+            }
           />
         }
       />,
@@ -926,13 +1244,20 @@ export const mediaScreen = (
   />
 )
 
+export type MediaUsage = {
+  used: boolean
+  capped: boolean
+  uses: Array<{ entryId: string; path: string; title: string; published: boolean }>
+}
+
 export const mediaFormScreen = (
   _: Translator,
   row: Partial<MediaRow>,
   frame: Frame,
-  options: { errors?: string[]; locale?: string } = {},
+  options: { errors?: string[]; locale?: string; usage?: MediaUsage | null } = {},
 ): TemplateResult => {
   const existing = !!row.id
+  const usage = options.usage ?? null
   return (
     <FormScreenFrame
       translator={_}
@@ -1009,6 +1334,66 @@ export const mediaFormScreen = (
               />,
             ]
           : []),
+        // Delete refuses while a page draws this, so saying which pages is the
+        // difference between a refusal an editor can act on and one they argue
+        // with.
+        ...(existing && usage
+          ? [
+              <Section
+                title={_('website_backend.media.usage')}
+                description={_('website_backend.media.usageHint')}
+                body={
+                  <Surface
+                    body={
+                      usage.capped ? (
+                        <Notice
+                          tone="warning"
+                          title={_('website_backend.media.usageUnknown')}
+                          message={_('website_backend.media.usageUnknownHint')}
+                        />
+                      ) : usage.uses.length === 0 ? (
+                        emptyState(
+                          _('website_backend.media.usageNone'),
+                          _('website_backend.media.usageNoneHint'),
+                        )
+                      ) : (
+                        dataTable(_, {
+                          rows: usage.uses,
+                          id: (use) => use.entryId,
+                          rowHref: (use) => `/admin/website/pages/${use.entryId}`,
+                          columns: [
+                            {
+                              key: 'title',
+                              label: _('website_backend.field.title'),
+                              priority: 'primary',
+                              cell: (use) => use.title,
+                            },
+                            {
+                              key: 'path',
+                              label: _('website_backend.field.path'),
+                              kind: 'identifier',
+                              cell: (use) => code(use.path),
+                            },
+                            {
+                              key: 'state',
+                              label: _('website_backend.field.status'),
+                              cell: (use) =>
+                                badge(
+                                  use.published
+                                    ? _('website_backend.state.published')
+                                    : _('website_backend.state.draft'),
+                                  use.published ? 'positive' : 'neutral',
+                                ),
+                            },
+                          ],
+                        })
+                      )
+                    }
+                  />
+                }
+              />,
+            ]
+          : []),
       ])}
     />
   )
@@ -1037,6 +1422,7 @@ export const preflightScreen = (
   siteId: string,
   frame: Frame,
   locale = '',
+  scope = 'all',
 ): TemplateResult => (
   <RecordScreen
     translator={_}
@@ -1047,6 +1433,20 @@ export const preflightScreen = (
         linkButton({
           label: _('website_backend.action.backToContent'),
           href: `/admin/website/pages?site=${encodeURIComponent(siteId)}${locale ? `&${locale.slice(1)}` : ''}`,
+        }),
+        // The scan over every page is the one that can be capped; asking about
+        // the published set is a bounded question with a definite answer.
+        linkButton({
+          label: _('website_backend.preflight.scopeAll'),
+          href: `/admin/website/preflight?site=${encodeURIComponent(siteId)}&scope=all${locale ? `&${locale.slice(1)}` : ''}`,
+          size: 'compact',
+          variant: scope === 'all' ? 'secondary' : 'tertiary',
+        }),
+        linkButton({
+          label: _('website_backend.preflight.scopePublished'),
+          href: `/admin/website/preflight?site=${encodeURIComponent(siteId)}&scope=published${locale ? `&${locale.slice(1)}` : ''}`,
+          size: 'compact',
+          variant: scope === 'published' ? 'secondary' : 'tertiary',
         }),
       ]),
       ...(result.capped
@@ -1153,6 +1553,24 @@ export const menusScreen = (
                 label: _('website_backend.field.position'),
                 kind: 'number',
                 cell: (row) => String(row.position),
+              },
+              {
+                // Buttons, so the order is editable from a keyboard without
+                // anything having to be dragged - and without an editor doing
+                // arithmetic in the position box, which was the only way.
+                key: 'move',
+                label: _('website_backend.menus.move'),
+                cell: (row) => (
+                  <RecordActions
+                    action={`/admin/website/menus/${row.id}/move${locale}`}
+                    hidden={{ site: row.siteId }}
+                    size="compact"
+                    actions={[
+                      { value: 'up', label: _('website_backend.menus.up') },
+                      { value: 'down', label: _('website_backend.menus.down') },
+                    ]}
+                  />
+                ),
               },
             ],
           }),
@@ -1263,12 +1681,19 @@ export const formsScreen = (
   siteId: string | null,
   frame: Frame,
   locale = '',
+  active = 'all',
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.forms.title')}
     frame={frame}
     body={stack([
+      activeFilter(
+        _,
+        (state) =>
+          `/admin/website/forms?site=${encodeURIComponent(siteId ?? '')}&state=${state}${locale ? `&${locale.slice(1)}` : ''}`,
+        active,
+      ),
       inline([
         linkButton({
           label: _('website_backend.action.newForm'),
@@ -1650,6 +2075,7 @@ const submissionActions = (
   fields: string[],
   retentionDays: number | null,
   locale: string,
+  status = 'all',
 ): TemplateResult[] => [
   <Section
     title={_('website_backend.submissions.export')}
@@ -1662,12 +2088,16 @@ const submissionActions = (
             action={`/admin/website/forms/${formId}/submissions/export${locale}`}
             method="get"
             layout="inline"
+            hidden={{ status }}
             fields={[
               {
                 name: 'fields',
                 label: _('website_backend.submissions.exportFields'),
                 value: fields.join(', '),
-                help: _('website_backend.submissions.exportFieldsHint'),
+                help:
+                  status === 'all'
+                    ? _('website_backend.submissions.exportFieldsHint')
+                    : `${_('website_backend.submissions.exportFieldsHint')} ${_('website_backend.submissions.exportScoped')}`,
                 required: true,
               },
             ]}
@@ -1713,13 +2143,53 @@ export const submissionsScreen = (
   _: Translator,
   rows: SubmissionRow[],
   frame: Frame,
-  options: { formId?: string; fields?: string[]; retentionDays?: number | null; locale?: string } = {},
+  options: {
+    formId?: string
+    fields?: string[]
+    retentionDays?: number | null
+    locale?: string
+    pager?: Pager | null
+    status?: string
+  } = {},
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
     title={_('website_backend.submissions.title')}
     frame={frame}
+    footer={options.pager ? pagerBar(_, options.pager) : null}
     body={stack([
+      // `listSubmissions` and `countSubmissions` have both taken this since
+      // they were written. Without it a form with a year of entries is read
+      // thirty at a time and the erased rows sit among the live ones.
+      ...(options.formId
+        ? [
+            <Surface
+              padding="compact"
+              body={
+                <RecordForm
+                  action={`/admin/website/forms/${options.formId}/submissions${options.locale ?? ''}`}
+                  method="get"
+                  layout="inline"
+                  fields={[
+                    {
+                      name: 'status',
+                      label: _('website_backend.field.status'),
+                      type: 'select',
+                      value: options.status ?? 'all',
+                      options: [
+                        { value: 'all', label: _('website_backend.state.all') },
+                        { value: 'new', label: _('website_backend.state.new') },
+                        { value: 'purged', label: _('website_backend.state.purged') },
+                      ],
+                    },
+                  ]}
+                  submit={_('website_backend.action.apply')}
+                  submitVariant="secondary"
+                />
+              }
+            />,
+          ]
+        : []),
       ...(options.formId
         ? submissionActions(
             _,
@@ -1727,6 +2197,7 @@ export const submissionsScreen = (
             options.fields ?? [],
             options.retentionDays ?? null,
             options.locale ?? '',
+            options.status ?? 'all',
           )
         : []),
       rows.length === 0
@@ -1889,12 +2360,19 @@ export const siteMembersScreen = (
               {
                 key: 'remove',
                 label: _('website_backend.action.remove'),
-                cell: (row) =>
-                  linkButton({
-                    label: _('website_backend.action.remove'),
-                    href: `/admin/website/sites/${site.id}/members/${row.id}/remove${options.locale ?? ''}`,
-                    size: 'compact',
-                  }),
+                cell: (row) => (
+                  <RecordActions
+                    action={`/admin/website/sites/${site.id}/members/${row.id}/remove${options.locale ?? ''}`}
+                    size="compact"
+                    actions={[
+                      {
+                        value: 'remove',
+                        label: _('website_backend.action.remove'),
+                        variant: 'destructive',
+                      },
+                    ]}
+                  />
+                ),
               },
             ],
           }),
@@ -1914,90 +2392,140 @@ export const siteDomainsScreen = (
   site: SiteRow,
   rows: DomainRow[],
   frame: Frame,
-  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
-): TemplateResult => (
-  <ListScreenFrame
-    translator={_}
-    title={_('website_backend.domains.title')}
-    frame={frame}
-    body={stack([
-      inline([
-        linkButton({
-          label: _('website_backend.action.backToSite'),
-          href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
-        }),
-      ]),
-      <Section
-        title={_('website_backend.domains.add')}
-        description={_('website_backend.domains.addHint')}
-        body={
-          <Surface
-            padding="compact"
-            body={
-              <RecordForm
-                action={`/admin/website/sites/${site.id}/domains${options.locale ?? ''}`}
-                layout="inline"
-                fields={[
-                  {
-                    name: 'host',
-                    label: _('website_backend.domains.host'),
-                    value: options.values?.host,
-                    required: true,
-                  },
-                  {
-                    name: 'primary',
-                    label: _('website_backend.domains.primary'),
-                    type: 'checkbox',
-                    help: _('website_backend.domains.primaryHint'),
-                  },
-                  {
-                    name: 'redirectToPrimary',
-                    label: _('website_backend.domains.redirect'),
-                    type: 'checkbox',
-                  },
-                ]}
-                submit={_('website_backend.action.save')}
-                submitVariant="primary"
-                errors={options.errors}
-              />
-            }
-          />
-        }
-      />,
-      rows.length === 0
-        ? emptyState(_('website_backend.domains.empty'), _('website_backend.domains.emptyHint'))
-        : dataTable(_, {
-            rows,
-            id: (row) => row.id,
-            columns: [
-              {
-                key: 'host',
-                label: _('website_backend.domains.host'),
-                priority: 'primary',
-                cell: (row) => row.host,
-              },
-              {
-                key: 'primary',
-                label: _('website_backend.domains.primary'),
-                cell: (row) =>
-                  row.primary
-                    ? badge(_('website_backend.state.yes'), 'positive')
-                    : badge(_('website_backend.state.no'), 'neutral'),
-              },
-              {
-                key: 'redirect',
-                label: _('website_backend.domains.redirect'),
-                cell: (row) =>
-                  badge(
-                    row.redirectToPrimary ? _('website_backend.state.yes') : _('website_backend.state.no'),
-                    'neutral',
-                  ),
-              },
-            ],
+  options: {
+    values?: Record<string, string>
+    errors?: string[]
+    locale?: string
+    /** The row `?edit=` names, if any: the add form becomes that row's form. */
+    editing?: DomainRow | null
+  } = {},
+): TemplateResult => {
+  const editing = options.editing ?? null
+  const values = options.values ?? {}
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('website_backend.domains.title')}
+      frame={frame}
+      body={stack([
+        inline([
+          linkButton({
+            label: _('website_backend.action.backToSite'),
+            href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
           }),
-    ])}
-  />
-)
+          ...(editing
+            ? [
+                linkButton({
+                  label: _('website_backend.action.cancel'),
+                  href: `/admin/website/sites/${site.id}/domains${options.locale ?? ''}`,
+                }),
+              ]
+            : []),
+        ]),
+        <Section
+          title={editing ? _('website_backend.domains.edit') : _('website_backend.domains.add')}
+          description={_('website_backend.domains.addHint')}
+          body={
+            <Surface
+              padding="compact"
+              body={
+                <RecordForm
+                  action={`/admin/website/sites/${site.id}/domains${editing ? `/${editing.id}` : ''}${options.locale ?? ''}`}
+                  layout="inline"
+                  fields={[
+                    {
+                      name: 'host',
+                      label: _('website_backend.domains.host'),
+                      value: values.host ?? editing?.host,
+                      required: true,
+                    },
+                    {
+                      name: 'primary',
+                      label: _('website_backend.domains.primary'),
+                      type: 'checkbox',
+                      value: values.primary != null ? values.primary === '1' : (editing?.primary ?? false),
+                      help: _('website_backend.domains.primaryHint'),
+                    },
+                    {
+                      name: 'redirectToPrimary',
+                      label: _('website_backend.domains.redirect'),
+                      type: 'checkbox',
+                      value:
+                        values.redirectToPrimary != null
+                          ? values.redirectToPrimary === '1'
+                          : (editing?.redirectToPrimary ?? false),
+                    },
+                  ]}
+                  submit={_('website_backend.action.save')}
+                  submitVariant="primary"
+                  errors={options.errors}
+                />
+              }
+            />
+          }
+        />,
+        rows.length === 0
+          ? emptyState(_('website_backend.domains.empty'), _('website_backend.domains.emptyHint'))
+          : dataTable(_, {
+              rows,
+              id: (row) => row.id,
+              columns: [
+                {
+                  key: 'host',
+                  label: _('website_backend.domains.host'),
+                  priority: 'primary',
+                  cell: (row) => row.host,
+                },
+                {
+                  key: 'primary',
+                  label: _('website_backend.domains.primary'),
+                  cell: (row) =>
+                    row.primary
+                      ? badge(_('website_backend.state.yes'), 'positive')
+                      : badge(_('website_backend.state.no'), 'neutral'),
+                },
+                {
+                  key: 'redirect',
+                  label: _('website_backend.domains.redirect'),
+                  cell: (row) =>
+                    badge(
+                      row.redirectToPrimary ? _('website_backend.state.yes') : _('website_backend.state.no'),
+                      'neutral',
+                    ),
+                },
+                {
+                  key: 'edit',
+                  label: _('website_backend.action.edit'),
+                  cell: (row) =>
+                    linkButton({
+                      label: _('website_backend.action.edit'),
+                      href: `/admin/website/sites/${site.id}/domains?edit=${encodeURIComponent(row.id)}${options.locale ? `&${options.locale.slice(1)}` : ''}`,
+                      size: 'compact',
+                    }),
+                },
+                {
+                  key: 'remove',
+                  label: _('website_backend.action.remove'),
+                  cell: (row) => (
+                    <RecordActions
+                      action={`/admin/website/sites/${site.id}/domains/${row.id}/remove${options.locale ?? ''}`}
+                      size="compact"
+                      actions={[
+                        {
+                          value: 'remove',
+                          label: _('website_backend.action.remove'),
+                          variant: 'destructive',
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ],
+            }),
+      ])}
+    />
+  )
+}
 
 /**
  * Where an address that used to work now goes.
@@ -2012,97 +2540,159 @@ export const redirectsScreen = (
   sites: FormOption[],
   siteId: string | null,
   frame: Frame,
-  options: { values?: Record<string, string>; errors?: string[]; locale?: string } = {},
-): TemplateResult => (
-  <ListScreenFrame
-    translator={_}
-    title={_('website_backend.redirects.title')}
-    frame={frame}
-    body={stack([
-      siteSwitcher(_, '/admin/website/redirects', sites, siteId, options.locale ?? ''),
-      ...(siteId
-        ? [
-            <Section
-              title={_('website_backend.redirects.add')}
-              description={_('website_backend.redirects.addHint')}
-              body={
-                <Surface
-                  padding="compact"
-                  body={
-                    <RecordForm
-                      action={`/admin/website/redirects${options.locale ?? ''}`}
-                      hidden={{ siteId }}
-                      layout="inline"
-                      fields={[
-                        {
-                          name: 'fromPath',
-                          label: _('website_backend.redirects.from'),
-                          value: options.values?.fromPath,
-                          required: true,
-                        },
-                        {
-                          name: 'toPath',
-                          label: _('website_backend.redirects.to'),
-                          value: options.values?.toPath,
-                          required: true,
-                        },
-                        {
-                          name: 'permanent',
-                          label: _('website_backend.redirects.permanent'),
-                          type: 'checkbox',
-                          help: _('website_backend.redirects.permanentHint'),
-                        },
-                      ]}
-                      submit={_('website_backend.action.save')}
-                      submitVariant="primary"
-                      errors={options.errors}
-                    />
-                  }
-                />
-              }
-            />,
-          ]
-        : []),
-      !siteId
-        ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
-        : rows.length === 0
-          ? emptyState(_('website_backend.redirects.empty'), _('website_backend.redirects.emptyHint'))
-          : dataTable(_, {
-              rows,
-              id: (row) => row.id,
-              columns: [
-                {
-                  key: 'from',
-                  label: _('website_backend.redirects.from'),
-                  priority: 'primary',
-                  cell: (row) => row.fromPath,
-                },
-                { key: 'to', label: _('website_backend.redirects.to'), cell: (row) => row.toPath },
-                {
-                  key: 'kind',
-                  label: _('website_backend.redirects.permanent'),
-                  cell: (row) =>
-                    badge(
-                      row.permanent
-                        ? _('website_backend.redirects.p301')
-                        : _('website_backend.redirects.p302'),
-                      row.permanent ? 'info' : 'neutral',
+  options: {
+    values?: Record<string, string>
+    errors?: string[]
+    locale?: string
+    /** The row `?edit=` names, if any: the add form becomes that row's form. */
+    editing?: RedirectRow | null
+  } = {},
+): TemplateResult => {
+  const editing = options.editing ?? null
+  const values = options.values ?? {}
+  const query = (params: Record<string, string>) => {
+    const search = new URLSearchParams({ site: siteId ?? '', ...params })
+    if (options.locale) search.set('lang', options.locale.slice('?lang='.length))
+    return `/admin/website/redirects?${search.toString()}`
+  }
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('website_backend.redirects.title')}
+      frame={frame}
+      body={stack([
+        siteSwitcher(_, '/admin/website/redirects', sites, siteId, options.locale ?? ''),
+        ...(siteId
+          ? [
+              <Section
+                title={editing ? _('website_backend.redirects.edit') : _('website_backend.redirects.add')}
+                description={_('website_backend.redirects.addHint')}
+                body={
+                  <Surface
+                    padding="compact"
+                    body={
+                      <RecordForm
+                        action={`/admin/website/redirects${editing ? `/${editing.id}` : ''}${options.locale ?? ''}`}
+                        hidden={{ siteId }}
+                        layout="inline"
+                        fields={[
+                          {
+                            name: 'fromPath',
+                            label: _('website_backend.redirects.from'),
+                            value: values.fromPath ?? editing?.fromPath,
+                            required: true,
+                          },
+                          {
+                            name: 'toPath',
+                            label: _('website_backend.redirects.to'),
+                            value: values.toPath ?? editing?.toPath,
+                            required: true,
+                          },
+                          {
+                            name: 'permanent',
+                            label: _('website_backend.redirects.permanent'),
+                            type: 'checkbox',
+                            value:
+                              values.permanent != null
+                                ? values.permanent === '1'
+                                : (editing?.permanent ?? true),
+                            help: _('website_backend.redirects.permanentHint'),
+                          },
+                        ]}
+                        submit={_('website_backend.action.save')}
+                        submitVariant="primary"
+                        errors={options.errors}
+                      />
+                    }
+                  />
+                }
+              />,
+              // The list already had a column for a state nothing could produce:
+              // the route wrote `active: true` every time, so every row read
+              // "active" for ever and the off switch on the contract was unreachable.
+              inline([
+                linkButton({ label: _('website_backend.redirects.all'), href: query({}) }),
+                linkButton({
+                  label: _('website_backend.state.active'),
+                  href: query({ state: 'active' }),
+                }),
+                linkButton({
+                  label: _('website_backend.state.inactive'),
+                  href: query({ state: 'inactive' }),
+                }),
+              ]),
+            ]
+          : []),
+        !siteId
+          ? emptyState(_('website_backend.content.noSite'), _('website_backend.content.noSiteHint'))
+          : rows.length === 0
+            ? emptyState(_('website_backend.redirects.empty'), _('website_backend.redirects.emptyHint'))
+            : dataTable(_, {
+                rows,
+                id: (row) => row.id,
+                columns: [
+                  {
+                    key: 'from',
+                    label: _('website_backend.redirects.from'),
+                    priority: 'primary',
+                    cell: (row) => row.fromPath,
+                  },
+                  { key: 'to', label: _('website_backend.redirects.to'), cell: (row) => row.toPath },
+                  {
+                    key: 'kind',
+                    label: _('website_backend.redirects.permanent'),
+                    cell: (row) =>
+                      badge(
+                        row.permanent
+                          ? _('website_backend.redirects.p301')
+                          : _('website_backend.redirects.p302'),
+                        row.permanent ? 'info' : 'neutral',
+                      ),
+                  },
+                  {
+                    key: 'status',
+                    label: _('website_backend.field.status'),
+                    cell: (row) =>
+                      badge(
+                        row.active ? _('website_backend.state.active') : _('website_backend.state.inactive'),
+                        row.active ? 'positive' : 'neutral',
+                      ),
+                  },
+                  {
+                    key: 'edit',
+                    label: _('website_backend.action.edit'),
+                    cell: (row) =>
+                      linkButton({
+                        label: _('website_backend.action.edit'),
+                        href: query({ edit: row.id }),
+                        size: 'compact',
+                      }),
+                  },
+                  {
+                    // Off rather than deleted: the unique index holds one row per
+                    // `fromPath`, so deleting to "free" the path and deactivating
+                    // to stop it are the same reversible act, and one of them
+                    // keeps the history of what that address used to do.
+                    key: 'state',
+                    label: _('website_backend.redirects.state'),
+                    cell: (row) => (
+                      <RecordActions
+                        action={`/admin/website/redirects/${row.id}/state${options.locale ?? ''}`}
+                        size="compact"
+                        actions={[
+                          row.active
+                            ? { value: 'deactivate', label: _('website_backend.action.deactivate') }
+                            : { value: 'activate', label: _('website_backend.action.activate') },
+                        ]}
+                      />
                     ),
-                },
-                {
-                  key: 'status',
-                  label: _('website_backend.field.status'),
-                  cell: (row) =>
-                    badge(
-                      row.active ? _('website_backend.state.active') : _('website_backend.state.inactive'),
-                      row.active ? 'positive' : 'neutral',
-                    ),
-                },
-              ],
-            }),
-    ])}
-  />
-)
+                  },
+                ],
+              }),
+      ])}
+    />
+  )
+}
 
 /**
  * Whether search is answering from the content that is actually live.
@@ -2211,7 +2801,14 @@ export const publicationsScreen = (
   sites: FormOption[],
   siteId: string | null,
   frame: Frame,
-  options: { errors?: string[]; locale?: string; notice?: string | null } = {},
+  options: {
+    errors?: string[]
+    locale?: string
+    notice?: string | null
+    state?: string
+    /** What is live right now, read apart from the list so a filter cannot hide it. */
+    activeId?: string | null
+  } = {},
 ): TemplateResult => (
   <ListScreenFrame
     translator={_}
@@ -2219,6 +2816,39 @@ export const publicationsScreen = (
     frame={frame}
     body={stack([
       siteSwitcher(_, '/admin/website/publications', sites, siteId, options.locale ?? ''),
+      // Superseded sets accumulate one per activation and are the majority of
+      // the list within a week, which buries the two rows anybody came to see.
+      ...(siteId
+        ? [
+            <Surface
+              padding="compact"
+              body={
+                <RecordForm
+                  action={`/admin/website/publications${options.locale ?? ''}`}
+                  method="get"
+                  layout="inline"
+                  hidden={{ site: siteId }}
+                  fields={[
+                    {
+                      name: 'state',
+                      label: _('website_backend.field.status'),
+                      type: 'select',
+                      value: options.state ?? 'all',
+                      options: [
+                        { value: 'all', label: _('website_backend.state.all') },
+                        { value: 'prepared', label: _('website_backend.pubstate.prepared') },
+                        { value: 'active', label: _('website_backend.pubstate.active') },
+                        { value: 'superseded', label: _('website_backend.pubstate.superseded') },
+                      ],
+                    },
+                  ]}
+                  submit={_('website_backend.action.apply')}
+                  submitVariant="secondary"
+                />
+              }
+            />,
+          ]
+        : []),
       ...(options.notice
         ? [<Notice tone="positive" title={_('website_backend.publications.done')} message={options.notice} />]
         : []),
@@ -2285,20 +2915,28 @@ export const publicationsScreen = (
                   key: 'act',
                   label: _('website_backend.publications.action'),
                   cell: (row) =>
-                    row.state === 'prepared'
-                      ? linkButton({
-                          label: _('website_backend.action.activate'),
-                          href: `/admin/website/publications/${row.id}/activate${options.locale ?? ''}`,
-                          size: 'compact',
-                          variant: 'primary',
-                        })
-                      : row.state === 'active'
-                        ? linkButton({
-                            label: _('website_backend.action.rollback'),
-                            href: `/admin/website/publications/${row.id}/rollback${options.locale ?? ''}`,
-                            size: 'compact',
-                          })
-                        : '',
+                    row.state === 'prepared' ? (
+                      <RecordActions
+                        action={`/admin/website/publications/${row.id}/activate${options.locale ?? ''}`}
+                        hidden={{ expectedPublicationId: options.activeId ?? '' }}
+                        size="compact"
+                        actions={[
+                          {
+                            value: 'activate',
+                            label: _('website_backend.action.activate'),
+                            variant: 'primary',
+                          },
+                        ]}
+                      />
+                    ) : row.state === 'active' ? (
+                      <RecordActions
+                        action={`/admin/website/publications/${row.id}/rollback${options.locale ?? ''}`}
+                        size="compact"
+                        actions={[{ value: 'rollback', label: _('website_backend.action.rollback') }]}
+                      />
+                    ) : (
+                      ''
+                    ),
                 },
               ],
             }),
@@ -2364,3 +3002,108 @@ export const entrySeoSection = (
     }
   />
 )
+
+export type SiteHealth = {
+  siteId: string
+  title: string
+  active: boolean
+  /** Null when the site has no domain at all, which is its own problem. */
+  primaryHost: string | null
+  domainCount: number
+  indexState: string
+  indexCurrent: boolean
+  preparedCount: number
+  hasActivePublication: boolean
+}
+
+/** One row's worth of trouble, in the order somebody would act on it. */
+export const concernsOf = (
+  _: Translator,
+  health: SiteHealth,
+): Array<{ key: string; label: string; tone: 'warning' | 'danger' | 'info' }> => {
+  const concerns: Array<{ key: string; label: string; tone: 'warning' | 'danger' | 'info' }> = []
+  // A site with no host answers nowhere, which outranks anything about content.
+  if (health.domainCount === 0)
+    concerns.push({ key: 'noDomain', label: _('website_backend.health.noDomain'), tone: 'danger' })
+  else if (!health.primaryHost)
+    concerns.push({ key: 'noPrimary', label: _('website_backend.health.noPrimary'), tone: 'danger' })
+  if (!health.active)
+    concerns.push({ key: 'suspended', label: _('website_backend.health.suspended'), tone: 'warning' })
+  if (health.preparedCount > 0)
+    concerns.push({ key: 'prepared', label: _('website_backend.health.prepared'), tone: 'info' })
+  if (!health.indexCurrent && health.indexState !== 'absent')
+    concerns.push({ key: 'staleIndex', label: _('website_backend.health.staleIndex'), tone: 'warning' })
+  return concerns
+}
+
+/**
+ * Which site needs looking at, across all of them.
+ *
+ * Every other screen here is scoped to one site, because every contract behind
+ * them takes a `siteId`. That makes "is anything wrong" a question you can only
+ * answer by opening each site in turn and remembering - and the things worth
+ * knowing are exactly the ones nobody goes looking for: a site with no primary
+ * host publishing the wrong canonical to every crawler, a publication prepared
+ * last week and never activated, an index that has not caught up.
+ *
+ * Read-only and built from reads that already existed. It is a place to notice,
+ * and every row leads to the screen that fixes the thing.
+ */
+export const siteHealthScreen = (
+  _: Translator,
+  rows: SiteHealth[],
+  frame: Frame,
+  locale = '',
+): TemplateResult => {
+  const troubled = rows.filter((row) => concernsOf(_, row).length > 0)
+  return (
+    <ListScreenFrame
+      translator={_}
+      title={_('website_backend.health.title')}
+      frame={frame}
+      body={stack([
+        rows.length === 0 ? (
+          emptyState(_('website_backend.sites.empty'), _('website_backend.sites.emptyHint'))
+        ) : troubled.length === 0 ? (
+          <Notice
+            tone="positive"
+            title={_('website_backend.health.allWell')}
+            message={_('website_backend.health.allWellHint')}
+          />
+        ) : (
+          dataTable(_, {
+            rows: troubled,
+            id: (row) => row.siteId,
+            rowHref: (row) => `/admin/website/sites/${row.siteId}${locale}`,
+            columns: [
+              {
+                key: 'site',
+                label: _('website_backend.field.site'),
+                priority: 'primary',
+                cell: (row) => row.title,
+              },
+              {
+                key: 'host',
+                label: _('website_backend.domains.host'),
+                kind: 'identifier',
+                cell: (row) =>
+                  row.primaryHost ? code(row.primaryHost) : badge(_('website_backend.health.none'), 'danger'),
+              },
+              {
+                key: 'concerns',
+                label: _('website_backend.health.concerns'),
+                cell: (row) =>
+                  inline(concernsOf(_, row).map((concern) => badge(concern.label, concern.tone))),
+              },
+            ],
+          })
+        ),
+        // The quiet sites are worth showing too: a list that only ever holds
+        // problems cannot tell "nothing is wrong" from "nothing was checked".
+        ...(rows.length
+          ? [<Notice tone="info" title={_('website_backend.health.checked')} message={`${rows.length}`} />]
+          : []),
+      ])}
+    />
+  )
+}

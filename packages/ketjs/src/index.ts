@@ -182,7 +182,7 @@ export type { ScheduleClaim } from './server/schedule.ts'
 export type { ClassificationInventory, ClassifiedField } from './kernel/classification.ts'
 export { multipart } from './server/multipart.ts'
 export type { MultipartPart, MultipartOptions } from './server/multipart.ts'
-export { createStreams, memoryStreamStore, dbStreamStore } from './server/stream.ts'
+export { createStreams, memoryStreamStore, dbStreamStore, streamsOf } from './server/stream.ts'
 export {
   createSessions,
   memorySessionStore,
@@ -272,6 +272,7 @@ export {
   lte,
   numericCompare,
   like,
+  likeLiteral,
   ilike,
   inArray,
   isNull,
@@ -421,7 +422,7 @@ export { createJoints } from './theme/joints.ts'
 export type { Joints } from './theme/joints.ts'
 export { makeDrop, makeDrops, sealScope } from './theme/viewmodel.ts'
 export type { Drop } from './theme/viewmodel.ts'
-export { tokensToCss, scopedCss, LAYER_ORDER } from './theme/tokens.ts'
+export { tokensToCss, scopedCss, partitionTokens, isTokenValue, LAYER_ORDER } from './theme/tokens.ts'
 
 export { agentTools, agentDescriptor, compositionSchema } from './agent/capabilities.ts'
 export { generateDts } from './codegen/dts.ts'

@@ -15,7 +15,11 @@ test('KetSuite scaffold writes the packaged app and safe development scripts', a
     const output = scaffoldKetsuite('my_suite', target)
     assert.ok(output.some((line) => line.includes('npm install && npm run dev')))
     const pkg = JSON.parse(await readFile(join(target, 'package.json'), 'utf8'))
-    assert.equal(pkg.dependencies['@ketvietlab/ketsuite'], '^0.1.3')
+    // The scaffold has to pin the version this repository ships. Which version
+    // that is belongs in package.json, not in a literal here that a release has
+    // to remember to move.
+    const shipped = JSON.parse(await readFile('package.json', 'utf8')).version
+    assert.equal(pkg.dependencies['@ketvietlab/ketsuite'], `^${shipped}`)
     assert.equal(pkg.scripts.dev, 'ketsuite serve --dev-admin')
     assert.equal(pkg.scripts.start, 'ketsuite serve')
     assert.equal(
