@@ -77,3 +77,14 @@ test('KetSuite every code a schema can raise has words behind it', () => {
   ])
     for (const t of [_, en]) assert.ok(t.resolves(`backend.validation.${key}`), `${key} in ${t.locale}`)
 })
+
+test('KetSuite a screen with two forms does not lose the first refusal to the second', () => {
+  const refused = formRefusal(_)
+  const other = defineFormSchema({ fields: { note: { type: 'text', maxLength: 4 } } })
+
+  assert.equal(refused.check(programme, { name: '', productFilter: 'any' }), null)
+  assert.notEqual(refused.check(other, { note: 'ok' }), null, 'the second form is fine')
+
+  assert.equal(refused.refused(), true, 'the first form is still refused')
+  assert.equal(refused.error('name'), 'Trường này là bắt buộc.')
+})

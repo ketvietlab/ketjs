@@ -48,6 +48,9 @@ export type FormRefusal = {
    * Not every submit is an edit. A row's own archive or restore control posts
    * its identity and nothing else, so it has no form to satisfy — do not put it
    * through here, or it is refused for fields it never carried.
+   *
+   * Refusals accumulate, so a screen holding more than one form does not lose
+   * the first one's marks to the second one passing.
    */
   check<TValues extends FormValues>(schema: FormSchema<TValues>, form: Readonly<FormValues>): TValues | null
   /** Record a refusal the shape rules did not raise — a command that said no. */
