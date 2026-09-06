@@ -444,6 +444,43 @@ test('streams: a dry run says what would happen, and tells nobody it happened', 
   await adapter.close()
 })
 
+test('streams: a reader that goes away stops the tail where it is sleeping', async () => {
+  // The wait between reads is seconds long once a notification is what usually
+  // ends it. A tail that only noticed at its next read would keep a database
+  // open after the caller had finished with it, and then take a read against one
+  // that is closing — which is exactly how this surfaced.
+  const inner = memoryStreamStore()
+  let reads = 0
+  const counted = {
+    ...inner,
+    notifies: true,
+    since: (topic: string, fromSeq: number) => {
+      reads++
+      return inner.since(topic, fromSeq)
+    },
+  }
+  const s = await createStreams(counted)
+  const w = await s.open('leaving')
+  w.write('a')
+  await w.flush()
+
+  const gone = new AbortController()
+  const seen: unknown[] = []
+  const reader = (async () => {
+    for await (const c of s.tail('leaving', 0, { pollMs: 60_000, signal: gone.signal })) seen.push(c.data)
+  })()
+  await new Promise((r) => setTimeout(r, 20))
+  assert.deepEqual(seen, ['a'], 'it read what was there and then went to sleep')
+  const readsWhileWatching = reads
+
+  gone.abort()
+  // It returns now rather than in a minute, which is the whole point, and this
+  // await is what would hang if it did not.
+  await reader
+  assert.equal(reads, readsWhileWatching, 'and took no read on its way out')
+  await w.end()
+})
+
 test('queue: jobs live in their own table, claimed one at a time', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()

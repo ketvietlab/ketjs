@@ -798,8 +798,14 @@ export async function createKetServer(o: ServeOpts) {
         // moment that happens: the durable log keeps the chunks, and the next
         // connection resumes from its cursor.
         let open = true
+        // Two things have to happen when the reader disappears: stop writing, and
+        // stop reading. The second is the one that matters here — the tail sleeps
+        // between reads, and a read that wakes up after the server has moved on
+        // finds a database that is closing.
+        const gone = new AbortController()
         const stop = () => {
           open = false
+          gone.abort()
         }
         req.on('close', stop)
         res.on('close', stop)
@@ -811,6 +817,7 @@ export async function createKetServer(o: ServeOpts) {
           const streams = await streamsFor(adapter)
           for await (const chunk of streams.tail(id, from, {
             timeoutMs: o.streamTimeoutMs ?? 30_000,
+            signal: gone.signal,
             ...(o.streamPollMs === undefined ? {} : { pollMs: o.streamPollMs }),
           })) {
             if (!open || res.writableEnded) return

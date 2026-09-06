@@ -106,7 +106,7 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
     async *tail(
       id: string,
       fromSeq = 0,
-      opt: { pollMs?: number; timeoutMs?: number } = {},
+      opt: { pollMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
     ): AsyncGenerator<Chunk> {
       // How long to wait before reading again when nobody has said anything.
       //
@@ -125,8 +125,15 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
       const unsubscribe = store.subscribe(id, () => {
         wake?.()
       })
+      // A reader that has gone away must stop this loop where it is sleeping, not
+      // at the next thing it would have read. The wait can be seconds long now
+      // that a notification is what usually ends it, and a read taken after the
+      // caller has finished is a read against a database that may be closing.
+      const abort = () => wake?.()
+      opt.signal?.addEventListener('abort', abort)
       try {
         for (;;) {
+          if (opt.signal?.aborted) return
           const s = expand(await store.since(id, cursor))
           if (s.chunks.length) cursor = Math.floor(s.chunks[s.chunks.length - 1]!.seq) + 1
           for (const c of s.chunks) yield c
@@ -143,6 +150,7 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
           })
         }
       } finally {
+        opt.signal?.removeEventListener('abort', abort)
         unsubscribe()
       }
     },
