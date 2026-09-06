@@ -412,6 +412,38 @@ test('streams: a database that can carry a notification is used to carry one', a
   await adapter.close()
 })
 
+test('streams: a dry run says what would happen, and tells nobody it happened', async () => {
+  // Announcing is doing. A preview that woke every screen watching the record
+  // would be a command pretending to be a question.
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const announcing = defineModule({
+    name: 'announcing',
+    functions: {
+      touch: {
+        input: {},
+        output: { ok: 'bool' },
+        dryRun: true,
+        handler: async (ctx) => {
+          const writer = await ctx.streams.open('preview')
+          writer.write('x')
+          await writer.end()
+          return { ok: true }
+        },
+      },
+    },
+  })
+  const manifest = compose([announcing])
+  registerFunctions([announcing])
+  const preview = await callFn('announcing.touch', {}, { adapter, manifest, dryRun: true })
+  assert.deepEqual(preview.value, { ok: true }, 'the rehearsal still answers')
+  assert.equal('ket_stream' in (await adapter.introspect()), false, 'and left no trace for anyone to hear')
+
+  await callFn('announcing.touch', {}, { adapter, manifest })
+  assert.equal('ket_stream' in (await adapter.introspect()), true, 'the real call does announce')
+  await adapter.close()
+})
+
 test('queue: jobs live in their own table, claimed one at a time', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()

@@ -8,8 +8,9 @@
 // Chunks are also batched: "resumable" means a reader never sees a gap or a
 // duplicate, not that every token is its own transaction.
 
-import { memoryStreamStore } from './streamstore.ts'
+import { dbStreamStore, memoryStreamStore } from './streamstore.ts'
 import type { StreamStore, SinceResult } from './streamstore.ts'
+import type { Adapter } from '../types.ts'
 
 export type Chunk = { seq: number; data: unknown }
 export type Since = { chunks: Chunk[]; done: boolean; summary: unknown; nextSeq: number }
@@ -157,3 +158,26 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
 export type Streams = Awaited<ReturnType<typeof createStreams>>
 export { memoryStreamStore, dbStreamStore } from './streamstore.ts'
 export type { StreamStore } from './streamstore.ts'
+
+/**
+ * The streams of one database, made once.
+ *
+ * A stream is about something that lives in a database, so it belongs in that
+ * database. Saying so here rather than at each call site is what lets a job in a
+ * worker and a reader in a web process meet: given the same tenant adapter they
+ * are handed the same `Streams`, which is also what makes the in-process bus
+ * work between them when they do share a process.
+ *
+ * Keyed weakly, because the pool owns the adapter's life and a closed tenant
+ * should take its streams with it rather than pin them.
+ */
+const streamsByAdapter = new WeakMap<Adapter, Promise<Streams>>()
+
+export const streamsOf = (adapter: Adapter): Promise<Streams> => {
+  let held = streamsByAdapter.get(adapter)
+  if (!held) {
+    held = createStreams(dbStreamStore(adapter))
+    streamsByAdapter.set(adapter, held)
+  }
+  return held
+}

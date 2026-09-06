@@ -12,7 +12,8 @@ import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { callFn } from './fn.ts'
 import { partitionTokens, tokensToCss } from '../theme/tokens.ts'
-import { createStreams, dbStreamStore, memoryStreamStore } from './stream.ts'
+import { createStreams, memoryStreamStore, streamsOf } from './stream.ts'
+import type { Streams } from './stream.ts'
 import type { StreamStore } from './stream.ts'
 import { agentDescriptor } from '../agent/capabilities.ts'
 import { KetError } from '../kernel/errors.ts'
@@ -598,9 +599,22 @@ export async function createKetServer(o: ServeOpts) {
     return o.pool.with(key, fn)
   }
 
-  // With one database the stream store lives in it. With a database per tenant it
-  // does not: whose database a stream belongs to is a separate question, so the
-  // default stays in memory and the caller passes a store when they have answered it.
+  /**
+   * Whose database a stream belongs to: the one it is about.
+   *
+   * This used to be left open. With a database per tenant there is no single
+   * adapter, so the store fell back to memory — per process, which meant a job in
+   * a worker had nowhere to write and two web instances shared nothing. A stream
+   * is about a record, and that record lives in exactly one tenant's database, so
+   * that is where its log goes.
+   *
+   * A store passed in explicitly is the caller saying they have answered the
+   * question a different way, and it stays one store for the deployment.
+   */
+  const declaredStreams = o.streamStore ? createStreams(o.streamStore) : null
+  const noDatabaseStreams = o.streamStore || o.adapter ? null : createStreams(memoryStreamStore())
+  const streamsFor = (adapter: Adapter | null): Promise<Streams> =>
+    declaredStreams ?? (adapter ? streamsOf(adapter) : (noDatabaseStreams as Promise<Streams>))
   const configuredMounts: AssetMount[] = o.assets ? (Array.isArray(o.assets) ? o.assets : [o.assets]) : []
   // Browser-safe ketjs-view output is framework infrastructure, like /_ket/fn:
   // callers should not need to find and mount a transitive package themselves.
@@ -624,10 +638,6 @@ export async function createKetServer(o: ServeOpts) {
     if (typeof o.islandClients === 'function') return o.islandClients(url, req)
     return o.islandClients ?? theme?.clients ?? {}
   }
-
-  const streams = await createStreams(
-    o.streamStore ?? (o.adapter ? dbStreamStore(o.adapter) : memoryStreamStore()),
-  )
 
   const tenantForLog = (url: URL, req: IncomingMessage): string | null => {
     try {
@@ -793,16 +803,23 @@ export async function createKetServer(o: ServeOpts) {
         }
         req.on('close', stop)
         res.on('close', stop)
-        for await (const chunk of streams.tail(id, from, {
-          timeoutMs: o.streamTimeoutMs ?? 30_000,
-          ...(o.streamPollMs === undefined ? {} : { pollMs: o.streamPollMs }),
-        })) {
+        // The lease is held for as long as the tail, which is what keeps this
+        // tenant's adapter from being evicted out from under a reader. It leases
+        // the datastore, not a connection: the reads inside take one and give it
+        // back like any other query.
+        return withDb(url, req, async (adapter) => {
+          const streams = await streamsFor(adapter)
+          for await (const chunk of streams.tail(id, from, {
+            timeoutMs: o.streamTimeoutMs ?? 30_000,
+            ...(o.streamPollMs === undefined ? {} : { pollMs: o.streamPollMs }),
+          })) {
+            if (!open || res.writableEnded) return
+            res.write(`id: ${chunk.seq}\ndata: ${JSON.stringify(chunk.data)}\n\n`)
+          }
           if (!open || res.writableEnded) return
-          res.write(`id: ${chunk.seq}\ndata: ${JSON.stringify(chunk.data)}\n\n`)
-        }
-        if (!open || res.writableEnded) return
-        res.write('event: done\ndata: {}\n\n')
-        return res.end()
+          res.write('event: done\ndata: {}\n\n')
+          return res.end()
+        })
       }
 
       if (url.pathname.startsWith('/_ket/fn/') && req.method === 'POST') {
@@ -924,7 +941,7 @@ export async function createKetServer(o: ServeOpts) {
 
   return {
     server,
-    streams,
+    streams: await streamsFor(o.adapter ?? null),
     listen(port = o.port ?? 3000): Promise<number> {
       return new Promise((resolve) =>
         server.listen(port, () => resolve((server.address() as { port: number }).port)),
