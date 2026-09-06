@@ -4,6 +4,7 @@ const tableSelectionMarker = Symbol.for('ket.backend.table-selection')
 const dropdownDismissMarker = Symbol.for('ket.backend.dropdown-dismiss')
 const globalFilterMarker = Symbol.for('ket.backend.global-filter')
 const routeModalMarker = Symbol.for('ket.backend.route-modal')
+const liveRegionMarker = Symbol.for('ket.backend.live-region')
 const dismissibleDropdown = [
   '[data-ui="search-menu"]',
   '[data-ui="col-config"]',
@@ -224,6 +225,60 @@ const mayLeaveModal = (modal: HTMLElement): boolean => {
 }
 
 /** Progressive keyboard behavior for URL-owned create/edit workspaces. */
+/**
+ * Hear when the thing a screen is waiting for actually changed.
+ *
+ * The screens this replaces reloaded the whole document on a timer, which threw
+ * away scroll, focus and anything typed, on a schedule unrelated to when the
+ * work finished. Here the server says so, and the page asks for the fragment it
+ * already knows how to swap — so the reader keeps their place.
+ *
+ * The connection belongs to the element. A fragment swap replaces it, and the
+ * observer opens the new one and closes the old; a screen with nothing to wait
+ * for renders no element and opens nothing.
+ */
+const installLiveRegion = (): void => {
+  if (browserGlobals[liveRegionMarker]) return
+  browserGlobals[liveRegionMarker] = true
+  if (typeof EventSource !== 'function') return
+
+  let watched: Element | null = null
+  let source: EventSource | null = null
+  const close = () => {
+    source?.close()
+    source = null
+    watched = null
+  }
+
+  const sync = (): void => {
+    const region = document.querySelector('[data-ui="live-region"][data-stream]')
+    if (region === watched) return
+    close()
+    const id = region instanceof HTMLElement ? (region.dataset.stream ?? '') : ''
+    if (!id) return
+    watched = region
+    source = new EventSource(`/_ket/stream/${encodeURIComponent(id)}`)
+    // What the chunk says is the deployment's business. That something was said
+    // is the whole signal: the screen is server-rendered, so the way to find out
+    // what changed is to ask for it.
+    const refresh = () => navigateTo(location.href)
+    source.onmessage = refresh
+    source.addEventListener('done', () => {
+      close()
+      refresh()
+    })
+    // EventSource reconnects on its own, and a stream that has ended answers 404
+    // rather than reopening. Leaving the error alone would retry that forever.
+    source.onerror = () => {
+      if (source?.readyState === EventSource.CLOSED) close()
+    }
+  }
+
+  sync()
+  new MutationObserver(sync).observe(document.body, { childList: true, subtree: true })
+  addEventListener('pagehide', close)
+}
+
 const installRouteModal = (): void => {
   if (browserGlobals[routeModalMarker]) return
   browserGlobals[routeModalMarker] = true
@@ -307,5 +362,6 @@ export const tableSelection = (_props: IslandProps): IslandController => {
   installDropdownDismiss()
   installGlobalFilter()
   installRouteModal()
+  installLiveRegion()
   return createTableSelectionView()
 }

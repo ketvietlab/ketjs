@@ -212,6 +212,35 @@ UI layer.
 Do not hydrate an entire page to implement a small selector. Server rendering must remain useful before
 hydration, and island props must contain only data the current viewer is allowed to receive.
 
+### A screen that is waiting for something
+
+A screen whose work finishes elsewhere — a backfill, a projection being rebuilt — used to say so with
+`<meta http-equiv="refresh">`. That reloads the whole document on a timer: it throws away scroll
+position, focus and anything typed, on a schedule with no relation to when the work actually finished.
+
+`liveRegion` says the same thing to the reader, announces it to a screen reader, and names the stream
+the runtime should listen on:
+
+```tsx
+// File: packages/ketsuite/src/modules/example_backend/screens.tsx
+liveRegion({
+  label: _('example.state.rebuilding'),
+  stream: running ? `example-rebuild:${runId}` : null,
+})
+```
+
+The backend runtime island opens `/_ket/stream/:id` for it, and on any chunk asks for the current URL
+again — a fragment navigation, so the page is patched rather than replaced. When the stream ends the
+connection is closed and the screen refreshed once more.
+
+`stream` is the **public** id the deployment's `resolveStream` authorizes, never a storage key. Pass
+`null` and the component is only a status line: correct, and refreshed by whatever refreshes the rest
+of the page. A browser without `EventSource` gets the same — the screen is server-rendered and complete
+without any of this.
+
+The producer is the job, writing to the topic `resolveStream` maps that public id onto. See the
+resumable stream section of the KetJS integration guide for what wakes the reader and what it costs.
+
 ### Charts
 
 A chart is a canvas, so it is an island — `backend.chart`, reached through the
