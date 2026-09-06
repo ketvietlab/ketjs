@@ -292,9 +292,20 @@ Or follow a live stream:
 
 ```ts
 // File: src/modules/integration/index.ts
+for await (const chunk of streams.tail('generation:42', cursor)) {
+  consume(chunk.data)
+}
+```
+
+Both bounds may be given explicitly. `pollMs` is how long to wait before reading again when nothing
+woke the reader; `timeoutMs` is how long one `tail` runs before it gives up, which for the SSE endpoint
+is how often a client reconnects:
+
+```ts
+// File: src/modules/integration/index.ts
 for await (const chunk of streams.tail('generation:42', cursor, {
-  pollMs: 250,
-  timeoutMs: 30_000,
+  pollMs: 30_000,
+  timeoutMs: 600_000,
 })) {
   consume(chunk.data)
 }
@@ -306,6 +317,31 @@ recovers its sequence once when opened; a resumed reader receives no gap and no 
 
 Use `memoryStreamStore()` for one-process ephemeral work and `dbStreamStore(adapter)` when streams must
 survive reloads or be visible across processes.
+
+### How a reader finds out
+
+`tail` is woken, and reads on a timer only when nothing woke it. Which of the two is doing the work
+depends on how far the store can reach.
+
+| | Reader and writer in one process | Writer in another process |
+| --- | --- | --- |
+| `memoryStreamStore()` | woken by the store's own bus | not reachable — the store is that process |
+| `dbStreamStore(postgres)` | woken by the bus | woken by `LISTEN`/`NOTIFY` |
+| `dbStreamStore(sqlite)` | woken by the bus | found on the next read |
+
+A store says which case it is in through `notifies`, and `tail` picks its fallback interval from that:
+five seconds when it can be told, 250ms when the read is the only way news arrives. Pass `pollMs`
+explicitly to override.
+
+The database path uses one channel, `ket_stream`, with the topic as the payload — a PostgreSQL channel
+is an identifier and a topic is not, and one `LISTEN` per process is cheaper than one per stream. The
+listener connection is opened by the first reader in a process, never by a process that only writes.
+Notifications are published on the writing connection, so a write inside a transaction announces itself
+at commit and never before. When the driver reconnects its listener, every reader in that process reads
+once, because what was announced during the gap is not recoverable.
+
+None of this changes what a reader sees. A missed notification costs latency, not correctness: the
+fallback read still finds the chunk, and the cursor still guarantees no gap and no duplicate.
 
 The framework SSE endpoint, `/_ket/stream/:id`, is closed unless the deployment supplies
 `resolveStream`. The resolver is both the authorization boundary and the mapping from a public id to the
@@ -324,6 +360,12 @@ const server = await createKetServer({
 
 const writer = await server.streams.open(`${tenant}:generation:${generationId}`)
 ```
+
+`streamPollMs` and `streamTimeoutMs` set the same two bounds for that endpoint, on `createKetServer`
+and on `serve`. The defaults — a 30 second connection, and the interval the store asks for — suit a
+stream that has a producer and an end. A deployment watching something that changes rarely wants the
+opposite: a long connection so a client is not reconnecting all day, and a long fallback read because
+the notification, not the read, is how news arrives.
 
 Returning `null`, or omitting the resolver, returns `404` without reading the stream store. The
 high-level deployment API exposes the same seam as `serve.resolveStream` and returns the matching

@@ -7,6 +7,7 @@ import {
   createQueue,
   createStreams,
   dbStreamStore,
+  memoryStreamStore,
   defineModule,
   planMigration,
   registerFunctions,
@@ -260,6 +261,155 @@ test('streams: a reader on the same instance is woken, not polled', async () => 
   await w.end()
   await reader
   assert.deepEqual(seen, ['a'], 'with a 60s poll interval this only works if the writer woke the reader')
+})
+
+test('streams: a tail reads only what the reader has not seen', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const queries: string[] = []
+  const watched = {
+    ...adapter,
+    all: (sql: string, params?: unknown[]) => {
+      if (sql.includes('FROM ket_stream')) queries.push(sql)
+      return adapter.all(sql, params)
+    },
+  }
+  const s = await createStreams(dbStreamStore(watched))
+  const w = await s.open('long')
+  for (let index = 0; index < 50; index++) w.write(`chunk${index}`)
+  await w.flush()
+
+  // A tail that has caught up used to re-read and re-parse the whole topic on
+  // every pass, so a stream that had written a thousand chunks paid for a
+  // thousand rows to learn there was nothing new.
+  queries.length = 0
+  const caughtUp = await s.since('long', 50)
+  assert.equal(caughtUp.chunks.length, 0)
+  assert.ok(
+    queries.some((sql) => /seq >= /u.test(sql)),
+    'the cursor is in the query, not applied to the rows afterwards',
+  )
+
+  // And resuming still means resuming. The cursor counts batches, not chunks —
+  // a flush is one row — so the second batch comes back whole and the first does
+  // not come back at all.
+  const resumed = await s.since('long', 1)
+  assert.equal(resumed.chunks.length, 18, 'the second flush, and only it')
+  assert.equal(resumed.chunks[0]?.data, 'chunk32')
+  assert.deepEqual(
+    (await s.since('long', 0)).chunks.map((c) => c.data),
+    Array.from({ length: 50 }, (_, index) => `chunk${index}`),
+    'from the start, everything, in order',
+  )
+  await adapter.close()
+})
+
+test('streams: a reader past the end is still told the stream is over', async () => {
+  // `done` and the summary live on the end marker, and its sequence is behind a
+  // reader who has read everything. Excluding it by cursor would leave that
+  // reader waiting for a stream that finished.
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const s = await createStreams(dbStreamStore(adapter))
+  const w = await s.open('short')
+  w.write('only')
+  await w.end({ tokens: 1 })
+  const after = await s.since('short', 999)
+  assert.equal(after.chunks.length, 0)
+  assert.equal(after.done, true)
+  assert.deepEqual(after.summary, { tokens: 1 })
+  assert.equal(after.nextSeq, 999, 'a cursor beyond the end resumes where the reader is')
+  await adapter.close()
+})
+
+test('streams: a store that cannot reach another process keeps its tight poll', async () => {
+  // SQLite has no way to tell a second process anything, so there the read is
+  // how news arrives and the interval has to stay short.
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const sqlite = dbStreamStore(adapter)
+  assert.ok(!sqlite.notifies, 'sqlite cannot notify across processes')
+  // A single-process store is its own authority, so it may wait.
+  assert.equal(memoryStreamStore().notifies, true)
+  await adapter.close()
+})
+
+test('streams: how often a tail reads follows whether it can be told', async () => {
+  // The interval is the difference between a poll that *is* the mechanism and
+  // one that is only there for the notification that never came.
+  const readsIn = async (notifies: boolean, ms: number): Promise<number> => {
+    const inner = memoryStreamStore()
+    let reads = 0
+    const counted = {
+      ...inner,
+      notifies,
+      since: (topic: string, fromSeq: number) => {
+        reads++
+        return inner.since(topic, fromSeq)
+      },
+    }
+    const s = await createStreams(counted)
+    const w = await s.open('quiet')
+    const reader = (async () => {
+      for await (const _ of s.tail('quiet', 0)) {
+        // nothing is written until the end, so this body never runs
+      }
+    })()
+    await new Promise((r) => setTimeout(r, ms))
+    await w.end()
+    await reader
+    return reads
+  }
+  // 700ms at the tight interval is at least two reads after the first; at the
+  // slow one the first read is still the only one.
+  assert.ok((await readsIn(false, 700)) >= 3, 'a store that cannot notify keeps reading')
+  assert.ok((await readsIn(true, 700)) <= 2, 'a store that can notify waits to be told')
+})
+
+test('streams: a database that can carry a notification is used to carry one', async () => {
+  // The local bus stops at the process boundary, and a job runs in a worker. A
+  // driver with notifications closes that gap; the poll stays underneath for the
+  // notification that never arrives.
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const published: Array<[string, string]> = []
+  let deliver: ((payload: string) => void) | null = null
+  const announcing = {
+    ...adapter,
+    notifications: {
+      async publish(channel: string, payload: string) {
+        published.push([channel, payload])
+        // A different process would receive it; here the same store does, which
+        // is what lets the test observe the path rather than the plumbing.
+        deliver?.(payload)
+      },
+      async subscribe(_channel: string, onMessage: (payload: string) => void, onReady: () => void) {
+        deliver = onMessage
+        onReady()
+        return async () => {
+          deliver = null
+        }
+      },
+    },
+  }
+  const store = dbStreamStore(announcing)
+  assert.equal(store.notifies, true, 'a driver with notifications can reach another process')
+  const s = await createStreams(store)
+  const w = await s.open('across')
+  const seen: unknown[] = []
+  const reader = (async () => {
+    for await (const c of s.tail('across', 0, { pollMs: 60_000 })) seen.push(c.data)
+  })()
+  await new Promise((r) => setTimeout(r, 10))
+  w.write('from a worker')
+  await w.flush()
+  await new Promise((r) => setTimeout(r, 20))
+  await w.end()
+  await reader
+  assert.deepEqual(seen, ['from a worker'], 'with a 60s poll this only works if the notification woke it')
+  assert.deepEqual(published[0]?.[0], 'ket_stream', 'one channel, the topic in the payload')
+  assert.equal(published[0]?.[1], 'across')
+  await adapter.close()
 })
 
 test('queue: jobs live in their own table, claimed one at a time', async () => {
