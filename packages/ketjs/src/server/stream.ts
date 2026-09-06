@@ -96,15 +96,25 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
     },
 
     /**
-     * Live tail. A reader on the same instance is woken by the writer and never
-     * polls; the slow poll is only a fallback for a writer on another instance.
+     * Live tail. The reader is woken by the writer — on this instance through the
+     * store's own bus, and on another through the database's notification channel
+     * where the driver has one. The poll underneath is the fallback for the case
+     * where neither reached: a store that cannot notify at all, or a notification
+     * lost while a listener connection was down.
      */
     async *tail(
       id: string,
       fromSeq = 0,
       opt: { pollMs?: number; timeoutMs?: number } = {},
     ): AsyncGenerator<Chunk> {
-      const pollMs = opt.pollMs ?? 250
+      // How long to wait before reading again when nobody has said anything.
+      //
+      // A store that can reach every writer wakes this loop the moment a chunk
+      // lands, so the read is a safety net for a missed notification rather than
+      // the way news arrives. One that cannot — SQLite, where the database has no
+      // way to tell another process — keeps the tight poll, because there the
+      // read *is* the mechanism.
+      const pollMs = opt.pollMs ?? (store.notifies ? 5_000 : 250)
       const timeoutMs = opt.timeoutMs ?? 30_000
       await ensure()
       let cursor = Math.floor(fromSeq)

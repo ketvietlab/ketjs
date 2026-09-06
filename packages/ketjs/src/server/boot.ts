@@ -285,6 +285,12 @@ export type ServeSpec = {
     url: URL,
     req: IncomingMessage,
   ) => string | null | Promise<string | null>
+  /**
+   * How long a stream connection is held open, and how long its tail waits
+   * before reading again when nothing woke it. See `ServerOptions`.
+   */
+  streamTimeoutMs?: number
+  streamPollMs?: number
   /** Maximum buffered body accepted by the generic JSON function transport. */
   maxJsonBodyBytes?: number
   /**
@@ -1042,6 +1048,8 @@ export async function bootDeployment(
     adapter,
     log: logger,
     ...(serve.streamStore ? { streamStore: serve.streamStore } : {}),
+    ...(serve.streamTimeoutMs === undefined ? {} : { streamTimeoutMs: serve.streamTimeoutMs }),
+    ...(serve.streamPollMs === undefined ? {} : { streamPollMs: serve.streamPollMs }),
     ...(serve.resolveStream
       ? { resolveStream: (id, url, req) => serve.resolveStream!(ctx, id, url, req) }
       : {}),

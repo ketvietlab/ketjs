@@ -82,6 +82,18 @@ export type ServeOpts = {
    * has authenticated the caller and chosen its tenant.
    */
   resolveStream?: (id: string, url: URL, req: IncomingMessage) => string | null | Promise<string | null>
+  /**
+   * How long one stream connection is held open, and how long the tail waits
+   * before reading again when nothing has woken it.
+   *
+   * The defaults suit a stream with a producer and an end — a generated answer,
+   * a document sync — where the connection lives as long as the work does. A
+   * deployment watching something that changes rarely wants the opposite: a long
+   * connection so the client is not reconnecting all day, and a long fallback
+   * read because the notification, not the read, is how news arrives.
+   */
+  streamTimeoutMs?: number
+  streamPollMs?: number
   /** Maximum buffered JSON body for the generic function transport. Defaults to 1 MiB. */
   maxJsonBodyBytes?: number
   /**
@@ -781,7 +793,10 @@ export async function createKetServer(o: ServeOpts) {
         }
         req.on('close', stop)
         res.on('close', stop)
-        for await (const chunk of streams.tail(id, from, { timeoutMs: 30_000 })) {
+        for await (const chunk of streams.tail(id, from, {
+          timeoutMs: o.streamTimeoutMs ?? 30_000,
+          ...(o.streamPollMs === undefined ? {} : { pollMs: o.streamPollMs }),
+        })) {
           if (!open || res.writableEnded) return
           res.write(`id: ${chunk.seq}\ndata: ${JSON.stringify(chunk.data)}\n\n`)
         }
