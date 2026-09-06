@@ -102,6 +102,60 @@ export function groupsForChanges(files) {
   return GROUPS.filter((group) => selected.has(group))
 }
 
+/**
+ * The two files the permission-coverage job runs, and everything that can move
+ * what they read.
+ */
+const PERMISSION_TESTS = ['test/permission-bundles.test.ts', 'test/ketsuite-permission-catalogue.test.ts']
+
+/**
+ * Changes that cannot add, remove or reclassify a function.
+ *
+ * The job asks one question: does every composed production function have an
+ * exact bundle or an exemption. Only a declaration can change that answer, and
+ * these four kinds of file hold none:
+ *
+ * - a stylesheet is never part of the module graph;
+ * - documentation is not either;
+ * - `messages.ts` is a translations record;
+ * - `packages/ketsuite/src/ui` is components, and composes nothing.
+ *
+ * The last two are conventions, so `ci-test-groups.test.ts` asserts them
+ * against the tree rather than trusting them — the day one of those files
+ * declares a function, the test says so instead of the gate quietly going
+ * blind.
+ *
+ * A test file is inert too: one may compose a module of its own, but not the
+ * production deployment this job reads. The two tests the job runs are the
+ * exception, because editing them changes the question being asked.
+ */
+const PERMISSION_INERT = [
+  /\.css$/,
+  /^docs\//,
+  /\.md$/,
+  /^packages\/ketsuite\/src\/modules\/[^/]+\/messages\.ts$/,
+  /^packages\/ketsuite\/src\/ui\//,
+  /^test\//,
+]
+
+/**
+ * Whether a diff could change which functions need a bundle.
+ *
+ * Fails safe in both directions it can: an unrecognised path runs the job, and
+ * so does a diff whose base could not be resolved.
+ *
+ * @param {readonly string[]} files @returns {boolean}
+ */
+export function permissionCoverageNeeded(files) {
+  // Nothing to look at is not the same as nothing to do — an empty list is
+  // what a diff that could not be computed looks like.
+  if (!files.length) return true
+  return !files.every(
+    (file) =>
+      file && !PERMISSION_TESTS.includes(file) && PERMISSION_INERT.some((pattern) => pattern.test(file)),
+  )
+}
+
 /** @param {string | undefined} base @param {string | undefined} head */
 function gitChangedFiles(base, head) {
   if (!base || !head || /^0+$/.test(base)) return null
@@ -142,8 +196,11 @@ function printPlan(base, head) {
     changed === null ? 'No usable base revision; selecting every group.' : `Changed files: ${changed.length}`,
   )
   console.error(`Selected groups: ${groups.join(', ') || 'none'}`)
+  const permissions = changed === null ? true : permissionCoverageNeeded(changed)
+  console.error(`Permission coverage: ${permissions ? 'needed' : 'nothing declared can have moved'}`)
   console.log(`groups=${JSON.stringify(groups)}`)
   console.log(`has_groups=${groups.length > 0}`)
+  console.log(`permissions=${permissions}`)
 }
 
 if (process.argv[1]?.endsWith('ci-test-groups.mjs')) {
