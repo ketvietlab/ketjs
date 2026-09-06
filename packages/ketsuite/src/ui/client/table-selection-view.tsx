@@ -209,10 +209,11 @@ const modalHasDraft = (modal: HTMLElement): boolean => {
 /**
  * The guard, and what it is not.
  *
- * Closing a modal is a link, and a link still works with scripting off — that is
- * the point of building it as one. So this catches the stray backdrop click and
- * the reflexive Escape; it is not a lock, and nothing here should be read as one.
- * The wording comes from the server because this file cannot translate.
+ * Leaving a modal is a link, and a link still works with scripting off — that is
+ * the point of building it as one. So this catches the stray backdrop click, the
+ * reflexive Escape and the tab clicked without thinking about the note already
+ * typed; it is not a lock, and nothing here should be read as one. The wording
+ * comes from the server because this file cannot translate.
  */
 const mayLeaveModal = (modal: HTMLElement): boolean => {
   if (!modalHasDraft(modal)) return true
@@ -247,12 +248,16 @@ const installRouteModal = (): void => {
     (event) => {
       const modal = activeRouteModal()
       if (!modal) return
+      // A tab inside a modal is a third way out of it. It looks like a control
+      // that stays on the screen, which is exactly why losing a half-written
+      // note to one went unnoticed: the reader never meant to leave. It is a
+      // link like the other two, and it leaves the same way.
       const leaving = event
         .composedPath()
         .find(
           (target) =>
             target instanceof HTMLElement &&
-            target.matches('[data-ui="modal-close"], [data-ui="modal-backdrop"]'),
+            target.matches('[data-ui="modal-close"], [data-ui="modal-backdrop"], a[data-ui="tab"]'),
         )
       if (!leaving || !modal.contains(leaving as HTMLElement)) return
       if (!mayLeaveModal(modal)) {
