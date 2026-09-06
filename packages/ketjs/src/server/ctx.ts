@@ -22,10 +22,26 @@ import type { Logger } from './log/logger.ts'
 import { nullLog } from './log/types.ts'
 import { createQueue, queueFor, validateJobInput } from './queue.ts'
 import { nextSequenceNumber } from './sequence.ts'
+import { streamsOf } from './stream.ts'
+import type { Writer } from './stream.ts'
 import type { Adapter, Ctx, Manifest, Row, Scope, WriteRecord } from '../types.ts'
 
 /** What a sensitive value is replaced by everywhere a write record travels. */
 export const SENSITIVE_MASK = '[sensitive]'
+
+/**
+ * A writer for a call that is only rehearsing.
+ *
+ * A dry run reports what a command would do; announcing it to everyone watching
+ * would be doing something. It answers like a writer so the caller needs no
+ * branch of its own.
+ */
+const discardingWriter = (id: string): Writer => ({
+  id,
+  write: () => {},
+  flush: async () => {},
+  end: async () => {},
+})
 
 export function createContext(o: {
   adapter: Adapter
@@ -736,6 +752,11 @@ export function createContext(o: {
       )
       writes.push(...transactionWrites)
       return value
+    },
+    streams: {
+      // A dry run says what would happen; it does not tell anyone it happened.
+      open: async (topic: string) =>
+        dryRun ? discardingWriter(topic) : (await streamsOf(adapter)).open(topic),
     },
     sequence: (name: string, options = {}) =>
       nextSequenceNumber(adapter, name, { ...options, scope, dryRun }),

@@ -182,7 +182,7 @@ export type { ScheduleClaim } from './server/schedule.ts'
 export type { ClassificationInventory, ClassifiedField } from './kernel/classification.ts'
 export { multipart } from './server/multipart.ts'
 export type { MultipartPart, MultipartOptions } from './server/multipart.ts'
-export { createStreams, memoryStreamStore, dbStreamStore } from './server/stream.ts'
+export { createStreams, memoryStreamStore, dbStreamStore, streamsOf } from './server/stream.ts'
 export {
   createSessions,
   memorySessionStore,
