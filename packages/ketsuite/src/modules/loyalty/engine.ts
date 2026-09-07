@@ -1,3 +1,6 @@
+import { membershipPosition } from './membership-functions.ts'
+import { functions as stockFunctions } from '../stock/functions.ts'
+import { civilDateAt, DEFAULT_ACCOUNTING_TIMEZONE } from '../account/date.ts'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
 import {
   canonicalDecimalText,
@@ -90,6 +93,7 @@ export const snapshotOf = (value: unknown): OrderSnapshot | null => {
     orderId: String(held.orderId),
     partnerId: held.partnerId ? String(held.partnerId) : null,
     currency: String(held.currency),
+    warehouseId: held.warehouseId ? String(held.warehouseId) : null,
     pricelistId: held.pricelistId ? String(held.pricelistId) : null,
     date: String(held.date),
     lines,
@@ -198,12 +202,31 @@ const rewardQuote = async (
 ): Promise<RewardQuote | null> => {
   const scale = scaleOf(snapshot.currency)
   const required = n(reward.requiredPoints)
-  const spend = reward.clearWallet ? availablePoints : (requestedPoints ?? required)
+  const spend =
+    program.designVersion === 1
+      ? required
+      : reward.clearWallet
+        ? availablePoints
+        : (requestedPoints ?? required)
   if (!(required > 0) || spend + 0.000001 < required || availablePoints + 0.000001 < spend) return null
   const rewardType = String(reward.rewardType)
   if (!REWARD_TYPES.includes(rewardType as never)) return null
   if (rewardType === 'product') {
     if (!reward.rewardProductId || !(n(reward.rewardProductQuantity) > 0)) return null
+    if (program.designVersion === 1) {
+      const product = await productContext(ctx, String(reward.rewardProductId), cache)
+      if (!product?.product.active || !product.template.active) return null
+      if (product.template.isStorable) {
+        const availability = (await stockFunctions.listProductAvailability!.handler(ctx, {
+          productIds: [reward.rewardProductId],
+          ...(snapshot.warehouseId ? { warehouseId: snapshot.warehouseId } : {}),
+        })) as Row[]
+        const purchased = snapshot.lines
+          .filter((line) => line.productId === reward.rewardProductId && line.lineKind === 'product')
+          .reduce((sum, line) => sum + line.quantity, 0)
+        if (n(availability[0]?.available) < n(reward.rewardProductQuantity) + purchased) return null
+      }
+    }
     return {
       rewardId: String(reward.id),
       programId: String(program.id),
@@ -252,6 +275,10 @@ const rewardQuote = async (
     }
     if (discountAmount > base) discountAmount = base
   }
+  if (rewardType === 'shipping' && reward.discountMaximum) {
+    const maximum = moneyMinor(String(reward.discountMaximum), scale)
+    if (discountAmount > maximum) discountAmount = maximum
+  }
   return {
     rewardId: String(reward.id),
     programId: String(program.id),
@@ -271,7 +298,7 @@ const walletForProgram = (program: Row, snapshot: OrderSnapshot, wallets: readon
     )
     if (byCode) return byCode
   }
-  if (!snapshot.partnerId) return null
+  if (!snapshot.partnerId || (program.designVersion === 1 && program.programType !== 'loyalty')) return null
   return (
     wallets.find(
       (wallet) => wallet.programId === program.id && wallet.partnerId === snapshot.partnerId && wallet.active,
@@ -289,6 +316,9 @@ export const evaluate = async (
   ctx: Ctx,
   snapshot: OrderSnapshot,
   options: {
+    preview?: boolean
+    availablePoints?: number
+    trace?: Row[]
     onlyProgramId?: string
     requestedPoints?: number
     requestedPointsByProgram?: Readonly<Record<string, number>>
@@ -296,7 +326,13 @@ export const evaluate = async (
 ): Promise<EvaluatedProgram[]> => {
   const scale = scaleOf(snapshot.currency)
   const cache = new Map<string, ProductContext | null>()
-  const allPrograms = await ctx.db.select('loyalty.Program', { active: true })
+  const allPrograms = await ctx.db.select(
+    'loyalty.Program',
+    options.preview ? { id: options.onlyProgramId } : { active: true },
+  )
+  const company = (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
+  const day = civilDateAt(snapshot.date, company?.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE)
+  const trace = (code: string, details: Row = {}) => options.trace?.push({ code, ...details })
   const programs = allPrograms
     .filter((program) => !options.onlyProgramId || program.id === options.onlyProgramId)
     .sort((a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)))
@@ -325,7 +361,8 @@ export const evaluate = async (
       if (!walletRows.some((held) => held.id === wallet.id)) walletRows.push(wallet)
   const usage = new Map<string, number>()
   if (programs.some((program) => program.limitUsage && n(program.maxUsage) > 0))
-    for (const application of await ctx.db.select('loyalty.Application', { state: 'finalized' })) {
+    for (const application of await ctx.db.select('loyalty.Application')) {
+      if (!['finalized', 'reversed'].includes(String(application.state)) || !application.rewardId) continue
       const programId = String(application.programId)
       if (programIds.has(programId)) usage.set(programId, (usage.get(programId) ?? 0) + 1)
     }
@@ -362,18 +399,54 @@ export const evaluate = async (
   const output: EvaluatedProgram[] = []
   for (const program of programs) {
     if (!PROGRAM_TYPES.includes(String(program.programType) as never)) continue
-    if (program.currency !== snapshot.currency || !activeAt(program, snapshot.date)) continue
-    if (snapshot.orderType === 'sale' && !program.availableSale) continue
-    if (snapshot.orderType === 'pos' && !program.availablePos) continue
+    if (['gift_card', 'ewallet'].includes(String(program.programType))) continue
+    if (program.designVersion === 1 && program.programType === 'loyalty' && !snapshot.partnerId) {
+      trace('customer')
+      continue
+    }
+    if (program.phase === 'draft' && !options.preview) continue
+    if (!program.active && !(options.preview && program.phase === 'draft')) {
+      trace('stopped')
+      continue
+    }
+    const codedWallet = walletForProgram(program, snapshot, walletRows)
+    const issuedVoucher =
+      program.designVersion === 1 && program.programType === 'next_order_coupons' && codedWallet
+    if (program.currency !== snapshot.currency) {
+      trace('currency')
+      continue
+    }
+    if (
+      !issuedVoucher &&
+      (program.designVersion === 1
+        ? (program.startDate && String(program.startDate) > day) ||
+          (program.endDate && String(program.endDate) < day)
+        : !activeAt(program, snapshot.date))
+    ) {
+      trace('schedule')
+      continue
+    }
+    if (
+      (snapshot.orderType === 'sale' && !program.availableSale) ||
+      (snapshot.orderType === 'pos' && !program.availablePos)
+    ) {
+      trace('channel')
+      continue
+    }
     const mappedPricelists = pricelistsByProgram.get(String(program.id)) ?? []
     if (
       mappedPricelists.length &&
       (!snapshot.pricelistId || !mappedPricelists.some((row) => row.pricelistId === snapshot.pricelistId))
-    )
+    ) {
+      trace('pricelist')
       continue
+    }
     if (program.limitUsage && n(program.maxUsage) > 0) {
       const used = usage.get(String(program.id)) ?? 0
-      if (used >= n(program.maxUsage)) continue
+      if (used >= n(program.maxUsage)) {
+        trace('usage')
+        continue
+      }
     }
     const wallet = walletForProgram(program, snapshot, walletRows)
     if (
@@ -381,8 +454,11 @@ export const evaluate = async (
       (!wallet.active ||
         (wallet.expiresAt &&
           new Date(String(wallet.expiresAt)).getTime() < new Date(snapshot.date).getTime()))
-    )
+    ) {
+      trace('expired')
       continue
+    }
+    trace('scope')
     const rules = rulesByProgram.get(String(program.id)) ?? []
     let earned = 0
     const splitPoints: number[] = []
@@ -394,7 +470,10 @@ export const evaluate = async (
       )
         continue
       if (rule.mode === 'with_code') {
-        if (!(snapshot.codes ?? []).includes(String(rule.normalizedCode))) continue
+        if (!(snapshot.codes ?? []).includes(String(rule.normalizedCode))) {
+          trace('code', { ruleId: rule.id })
+          continue
+        }
         codeMatched = true
       }
       const matched: OrderLineSnapshot[] = []
@@ -405,11 +484,19 @@ export const evaluate = async (
       let amount = 0n
       for (const line of matched)
         amount += moneyMinor(rule.taxMode === 'incl' ? line.total : line.untaxed, scale)
-      if (
-        quantity + 0.000001 < n(rule.minimumQuantity) ||
-        amount < moneyMinor(String(rule.minimumAmount), scale)
-      )
-        continue
+      const passed =
+        matched.length > 0 &&
+        quantity + 0.000001 >= n(rule.minimumQuantity) &&
+        amount >= moneyMinor(String(rule.minimumAmount), scale)
+      trace(passed ? 'rulePassed' : 'ruleFailed', {
+        ruleId: rule.id,
+        quantity,
+        amount: minorText(amount, scale),
+        taxMode: rule.taxMode,
+        minimumQuantity: rule.minimumQuantity,
+        minimumAmount: rule.minimumAmount,
+      })
+      if (!passed) continue
       const pointAmount = n(rule.pointAmount)
       if (!(pointAmount > 0)) continue
       if (program.appliesOn === 'future' && rule.pointSplit && rule.pointMode !== 'order') {
@@ -434,7 +521,7 @@ export const evaluate = async (
     }
     const membershipConfig = configByProgram.get(String(program.id))
     const earnGroups = membershipConfig ? (groupsByProgram.get(String(program.id)) ?? []) : []
-    if (membershipConfig && earnGroups.length) {
+    if (membershipConfig && (earnGroups.length || membershipConfig.fallbackEnabled)) {
       earned = 0
       splitPoints.length = 0
       for (const line of snapshot.lines.filter((candidate) => candidate.lineKind === 'product')) {
@@ -455,20 +542,36 @@ export const evaluate = async (
         }
       }
     }
-    if (!codeMatched && !wallet) continue
+    if (program.designVersion === 1 && program.programType !== 'loyalty') {
+      earned = program.programType === 'coupons' || issuedVoucher ? 0 : earned > 0 ? 1 : 0
+      splitPoints.length = 0
+    }
+    if (!codeMatched && !wallet) {
+      trace('code')
+      continue
+    }
     const ownReservation = wallet
       ? orderReservations
           .filter((reservation) => reservation.walletId === wallet.id)
           .reduce((sum, reservation) => sum + n(reservation.amount), 0)
       : 0
     const available =
-      n(wallet?.balance) -
-      n(wallet?.reserved) +
+      (options.preview && options.availablePoints !== undefined && program.programType === 'loyalty'
+        ? options.availablePoints
+        : n(wallet?.balance) - n(wallet?.reserved)) +
       ownReservation +
       (program.appliesOn === 'future' ? 0 : earned)
+    trace(program.programType === 'next_order_coupons' && !wallet ? 'issuance' : 'points', {
+      earned: round(earned, 2),
+      available: round(available, 6),
+    })
+    const position =
+      program.designVersion === 1 && membershipConfig && snapshot.partnerId
+        ? await membershipPosition(ctx, snapshot.partnerId, snapshot.date)
+        : null
     const rewards: RewardQuote[] = []
     for (const reward of rewardsByProgram.get(String(program.id)) ?? []) {
-      const quote = await rewardQuote(
+      let quote = await rewardQuote(
         ctx,
         program,
         reward,
@@ -478,7 +581,39 @@ export const evaluate = async (
         rewardProducts.get(String(reward.id)) ?? new Set(),
         options.requestedPointsByProgram?.[String(program.id)] ?? options.requestedPoints,
       )
+      if (quote && position && program.programType === 'loyalty') {
+        const step = n(membershipConfig?.minimumRedeemStep)
+        if (
+          step > 0 &&
+          Math.abs(quote.requiredPoints / step - Math.round(quote.requiredPoints / step)) > 0.000001
+        )
+          quote = null
+        else if (quote.rewardType === 'discount') {
+          const merchandise = snapshot.lines
+            .filter((line) => line.lineKind === 'product')
+            .reduce((sum, line) => sum + moneyMinor(line.untaxed, scale), 0n)
+          const maximum = percentOfMinor(merchandise, String(position.tier?.redeemPercent ?? '0'))
+          if (maximum <= 0n) quote = null
+          else if (moneyMinor(quote.discountAmount, scale) > maximum)
+            quote.discountAmount = minorText(maximum, scale)
+        }
+      }
       if (quote) rewards.push(quote)
+      trace(
+        quote
+          ? 'rewardAvailable'
+          : reward.rewardType === 'product' && available >= n(reward.requiredPoints)
+            ? 'stock'
+            : 'rewardUnavailable',
+        {
+          rewardId: reward.id,
+          description: reward.description,
+          requiredPoints: reward.requiredPoints,
+          discountAmount: quote?.discountAmount ?? '0',
+          productId: quote?.productId,
+          productQuantity: quote?.productQuantity,
+        },
+      )
     }
     if (!earned && !splitPoints.length && !rewards.length && !wallet) continue
     output.push({

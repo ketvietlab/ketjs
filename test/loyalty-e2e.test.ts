@@ -234,63 +234,123 @@ test('loyalty HTTP E2E: admin screens create, edit, archive and localize program
   }
 
   const created = await e2e.client.post(
-    '/admin/loyalty/programs',
-    new URLSearchParams({ name: 'Mua X tặng Y', programType: 'buy_x_get_y' }),
+    '/admin/loyalty/programs/new?type=buy_x_get_y',
+    new URLSearchParams({ name: 'Mua X tặng Y', availableSale: '1', availablePos: '1' }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
-  assert.equal(created.status, 303)
+  assert.equal(created.status, 303, await created.text())
   const location = created.headers.get('location') ?? ''
   assert.match(location, /^\/admin\/loyalty\/programs\/[0-9a-f-]+$/)
-
   const detail = await e2e.client.get(location)
-  assert.equal(detail.status, 200)
-  const detailHtml = await detail.text()
-  assert.match(detailHtml, /Mua X tặng Y/)
-  assert.match(detailHtml, /data-ui="record-form"/)
-
-  const id = location.split('/').pop()!
-  await e2e.client.form(location, {
-    action: 'add-rule',
-    priority: '5',
-    pointAmount: '1',
-    pointMode: 'order',
+  assert.equal(detail.status, 200, await detail.clone().text())
+  assert.match(await detail.text(), /Đang thiết lập/)
+  await e2e.client.form(`${location}?tab=rules&modal=rule`, {
+    version: '1',
+    scope: 'all',
     minimumQuantity: '1',
     minimumAmount: '0',
     taxMode: 'excl',
-    mode: 'auto',
   })
-  await e2e.client.form(location, {
-    action: 'add-reward',
+  await e2e.client.form(`${location}?tab=rewards&modal=reward`, {
+    version: '2',
     description: 'Tặng giỏ trái cây',
-    rewardType: 'product',
     rewardProductId: 'fruit-box',
     rewardProductQuantity: '1',
-    requiredPoints: '1',
-    discountMode: 'percent',
-    discountApplicability: 'order',
   })
-  // Rules and rewards are set up on separate occasions and each carries its own
-  // form, so each has its own tab — stacked, adding a reward meant scrolling past
-  // every rule to reach the form for it.
   const rulesTab = await (await e2e.client.get(`${location}?tab=rules`)).text()
-  assert.match(rulesTab, />5</)
+  assert.match(rulesTab, /data-row-href=/)
+  assert.doesNotMatch(rulesTab, /name="pointAmount"/)
   const rewardsTab = await (await e2e.client.get(`${location}?tab=rewards`)).text()
   assert.match(rewardsTab, /Tặng giỏ trái cây/)
-  // And the counts are on the tabs themselves, so the overview says what is
-  // there without anyone opening either.
-  const populated = await (await e2e.client.get(location)).text()
-  assert.match(populated, /data-ui="tabs"/)
-
-  await e2e.client.form(location, { action: 'archive' })
+  await e2e.client.form(`${location}?modal=activate`, { version: '3' })
+  await e2e.client.form(`${location}?modal=archive`, { version: '4' })
   const archived = await (await e2e.client.get(location)).text()
   assert.match(archived, /Đã lưu trữ/)
-
   const english = await e2e.client.get(`${location}?lang=en`)
-  const englishHtml = await english.text()
   assert.equal(english.status, 200)
-  assert.match(englishHtml, /Program settings|Buy X get Y/)
-  assert.doesNotMatch(englishHtml, /loyalty(?:_backend)?\.[A-Za-z]/)
-  assert.equal(id.length > 10, true)
+  assert.doesNotMatch(await english.text(), /loyalty(?:_backend)?\.[A-Za-z]/)
+})
+
+test('loyalty HTTP E2E: tier policy keeps rejected values and tier rows own their modal', async (t) => {
+  const { e2e, call } = await bootLoyalty(t)
+  await saveProgram(call, { id: 'ket-club', name: 'Két Club' })
+
+  const initial = await (await e2e.client.get('/admin/loyalty/tiers')).text()
+  assert.match(initial, /Hạng thành viên/)
+  assert.match(initial, /name="windowMonths"/)
+  assert.match(initial, /value="12"/)
+  assert.match(initial, /6 tháng, 12 tháng = 1 năm, 120 tháng = 10 năm/)
+
+  const badWindow = await e2e.client.post(
+    '/admin/loyalty/tiers',
+    new URLSearchParams({ action: 'policy', programId: 'ket-club', windowMonths: '0' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(badWindow.status, 200)
+  const badWindowHtml = await badWindow.text()
+  assert.match(badWindowHtml, /name="windowMonths"[^>]*value="0"[^>]*aria-invalid="true"/)
+  assert.match(badWindowHtml, /Giá trị phải từ 1 trở lên/)
+
+  const savedWindow = await e2e.client.post(
+    '/admin/loyalty/tiers',
+    new URLSearchParams({ action: 'policy', programId: 'ket-club', windowMonths: '120' }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(savedWindow.status, 303)
+  const policy = await call<Row>('loyalty.membership.config.get', { programId: 'ket-club' })
+  assert.equal(policy.windowMonths, 120)
+
+  const badTier = await e2e.client.post(
+    '/admin/loyalty/tiers?modal=tier',
+    new URLSearchParams({
+      action: 'tier',
+      name: ' ',
+      code: 'gold',
+      sequence: '30',
+      minimumSpend: '10000000',
+      redeemPercent: '20',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(badTier.status, 200)
+  const badTierHtml = await badTier.text()
+  assert.match(badTierHtml, /name="name"[^>]*value=" "[^>]*aria-invalid="true"/)
+  assert.match(badTierHtml, /name="code"[^>]*value="gold"/)
+
+  const created = await e2e.client.post(
+    '/admin/loyalty/tiers?modal=tier',
+    new URLSearchParams({
+      action: 'tier',
+      name: 'Vàng',
+      code: 'gold',
+      sequence: '30',
+      minimumSpend: '10000000',
+      redeemPercent: '20',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(created.status, 303)
+  const tier = (await call<Row[]>('loyalty.tier.list', { includeArchived: true })).find(
+    (row) => row.code === 'gold',
+  )!
+  const list = await (await e2e.client.get('/admin/loyalty/tiers')).text()
+  assert.match(list, new RegExp(`data-row-href="[^"]*tier=${String(tier.id)}`))
+
+  const archived = await e2e.client.post(
+    `/admin/loyalty/tiers?modal=tier&tier=${String(tier.id)}`,
+    new URLSearchParams({ action: 'toggle', id: String(tier.id) }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(archived.status, 303, 'archive is not forced through the edit form schema')
+  assert.equal(
+    (await call<Row[]>('loyalty.tier.list', { includeArchived: true })).find((row) => row.id === tier.id)
+      ?.active,
+    false,
+  )
+
+  const english = await (await e2e.client.get('/admin/loyalty/tiers?lang=en')).text()
+  assert.match(english, /Spend period \(months\)/)
+  assert.doesNotMatch(english, /loyalty(?:_backend)?\.[A-Za-z]/)
 })
 
 test('loyalty HTTP E2E: reservation, concurrent redeem, finalize retry and reversal keep ledger correct', async (t) => {
@@ -1162,4 +1222,366 @@ test('loyalty Sale adapter keeps tax-inclusive points for legacy lines', async (
 
   const evaluated = await call<Row>('loyalty_sale.evaluateOrder', { orderId: 'legacy-order' })
   assert.equal(((evaluated.programs as Row[])[0]?.points as number) ?? 0, 110)
+})
+
+const design = async (call: Call, id = 'design', programType = 'loyalty') => {
+  const program: Row = {
+    name: 'Contract program',
+    programType,
+    currency: 'VND',
+    appliesOn: 'both',
+    availableSale: true,
+    availablePos: true,
+    voucherValidityDays: 30,
+  }
+  assert.equal(
+    (
+      await call<Row>('loyalty.program.configure', {
+        id,
+        expectedVersion: 0,
+        entity: 'program',
+        values: program,
+      })
+    ).ok,
+    true,
+  )
+  const save = async (entity: string, values: Row, entityId?: string, expectedVersion?: number) => {
+    const current = await call<Row>('loyalty.program.inspect', { id })
+    return call<Row>('loyalty.program.configure', {
+      id,
+      expectedVersion: expectedVersion ?? current.configVersion,
+      entity,
+      ...(entityId ? { entityId } : {}),
+      values,
+    })
+  }
+  const transition = async (action: string) => {
+    const current = await call<Row>('loyalty.program.inspect', { id })
+    return call<Row>('loyalty.program.transition', { id, expectedVersion: current.configVersion, action })
+  }
+  const rule: Row = {
+    pointAmount: '10',
+    pointMode: 'order',
+    minimumQuantity: '1',
+    minimumAmount: '100',
+    taxMode: 'excl',
+    scope: 'all',
+  }
+  const reward: Row = {
+    description: 'Capped reward',
+    rewardType: 'discount',
+    discountMode: 'per_order',
+    discount: '80',
+    discountMaximum: '20',
+    requiredPoints: '10',
+    scope: 'all',
+  }
+  return { save, transition, program, rule, reward }
+}
+
+test('program contract: setup, atomic product scope, stale saves, activation and restore', async (t) => {
+  const { call } = await bootLoyalty(t)
+  const d = await design(call)
+  assert.equal((await d.transition('activate')).ok, false)
+  assert.deepEqual((await call<Row>('loyalty.evaluateOrder', { order: snapshot('draft') })).programs, [])
+  assert.equal(
+    (await d.save('rule', { ...d.rule, scope: 'specific', productIds: ['missing'] }, 'design-rule')).ok,
+    false,
+  )
+  let program = await call<Row>('loyalty.program.inspect', { id: 'design' })
+  assert.equal(program.configVersion, 1)
+  assert.equal((program.rules as Row[]).length, 0)
+  assert.equal(
+    (await d.save('rule', { ...d.rule, scope: 'specific', productIds: ['fruit-box'] }, 'design-rule')).ok,
+    true,
+  )
+  assert.equal((await d.save('reward', d.reward, 'design-reward')).ok, true)
+  assert.equal((await d.save('program', d.program, undefined, 1)).ok, false)
+  assert.equal((await call<Row>('loyalty.rule.setProducts', { id: 'design-rule', productIds: [] })).ok, false)
+  const before = await call<Row[]>('loyalty.ledger.list', {})
+  const preview = await call<Row>('loyalty.program.preview', {
+    id: 'design',
+    expectedVersion: 3,
+    order: snapshot('preview'),
+    availablePoints: '0',
+  })
+  assert.equal(preview.ok, true)
+  assert.equal((preview.result as Row).points, 10)
+  const quotes = (preview.result as Row).rewards as Row[]
+  assert.equal(quotes[0]?.discountAmount, '20')
+  assert.equal(quotes[0]?.requiredPoints, 10)
+  assert.deepEqual(await call('loyalty.ledger.list', {}), before)
+  assert.equal((await d.transition('activate')).ok, true)
+  assert.equal(
+    ((await call<Row>('loyalty.evaluateOrder', { order: snapshot('active') })).programs as Row[]).length,
+    1,
+  )
+  assert.equal(
+    (await d.save('reward', { active: false }, 'design-reward')).ok,
+    true,
+    'a reward can be stopped independently',
+  )
+  assert.equal((await d.transition('archive')).ok, true)
+  assert.deepEqual((await call<Row>('loyalty.evaluateOrder', { order: snapshot('stopped') })).programs, [])
+  assert.equal((await d.transition('restore')).ok, true)
+  program = await call<Row>('loyalty.program.inspect', { id: 'design' })
+  assert.equal(program.phase, 'draft')
+  assert.equal(program.active, false)
+  assert.deepEqual((await call<Row>('loyalty.evaluateOrder', { order: snapshot('restored') })).programs, [])
+})
+
+test('program contract: scoped AND thresholds, company end day and shipping cap', async (t) => {
+  const { call } = await bootLoyalty(t)
+  const d = await design(call)
+  assert.equal(
+    (await d.save('program', { ...d.program, startDate: '2099-01-01', endDate: '2099-01-01' })).ok,
+    true,
+  )
+  assert.equal(
+    (
+      await d.save(
+        'rule',
+        { ...d.rule, minimumQuantity: '2', scope: 'specific', productIds: ['fruit-box'] },
+        'condition',
+      )
+    ).ok,
+    true,
+  )
+  assert.equal(
+    (await d.save('reward', { ...d.reward, rewardType: 'shipping', discountMaximum: '30' }, 'shipping')).ok,
+    true,
+  )
+  assert.equal((await d.transition('activate')).ok, true)
+  const order = snapshot('end-day', 100, '2099-01-01T16:59:59.999Z')
+  order.lines[0]!.quantity = 2
+  order.lines.push({
+    id: 'ship',
+    productId: 'fruit-box',
+    quantity: 1,
+    untaxed: '50',
+    total: '50',
+    lineKind: 'shipping',
+  })
+  const eligible = (await call<Row>('loyalty.evaluateOrder', { order })).programs as Row[]
+  assert.equal((eligible[0]!.rewards as Row[])[0]?.discountAmount, '30')
+  assert.deepEqual(
+    (await call<Row>('loyalty.evaluateOrder', { order: { ...order, date: '2099-01-01T17:00:00.000Z' } }))
+      .programs,
+    [],
+  )
+  order.lines[0]!.quantity = 1
+  assert.deepEqual((await call<Row>('loyalty.evaluateOrder', { order })).programs, [])
+})
+
+test('program contract: one next-order voucher, independent expiry, one redemption', async (t) => {
+  const { call } = await bootLoyalty(t)
+  const d = await design(call, 'voucher', 'next_order_coupons')
+  assert.equal((await d.save('rule', d.rule, 'voucher-rule')).ok, true)
+  assert.equal((await d.save('reward', d.reward, 'voucher-reward')).ok, true)
+  assert.equal((await d.transition('activate')).ok, true)
+  const preview = (await call<Row>('loyalty.evaluateOrder', { order: snapshot('issue', 500) }))
+    .programs as Row[]
+  assert.equal(preview[0]?.points, 1)
+  assert.equal((preview[0]!.rewards as Row[]).length, 0)
+  const issued = await call<Row>('loyalty.order.finalize', { order: snapshot('issue', 500) })
+  assert.equal(issued.ok, true)
+  const wallets = await call<Row[]>('loyalty.wallet.list', { programId: 'voucher' })
+  assert.equal(wallets.length, 1)
+  assert.equal(Number(wallets[0]?.balance), 1)
+  assert.ok(new Date(String(wallets[0]?.expiresAt)).getTime() > Date.now() + 29 * 86400000)
+  const order = { ...snapshot('redeem', 50), codes: [String(wallets[0]?.code)] }
+  assert.equal(
+    (await call<Row>('loyalty.applyReward', { order, programId: 'voucher', rewardId: 'voucher-reward' })).ok,
+    true,
+  )
+  assert.equal((await call<Row>('loyalty.order.finalize', { order })).ok, true)
+  const spent = await call<Row[]>('loyalty.wallet.list', { programId: 'voucher', includeArchived: true })
+  assert.equal(Number(spent[0]?.balance), 0)
+  assert.equal(spent[0]?.active, false)
+  assert.equal(
+    (
+      await call<Row>('loyalty.applyReward', {
+        order: { ...order, orderId: 'second-redemption' },
+        programId: 'voucher',
+        rewardId: 'voucher-reward',
+      })
+    ).ok,
+    false,
+  )
+})
+
+test('program contract: gift stock, stopped reservations, fixed point charge and usage after refund', async (t) => {
+  const { call } = await bootLoyalty(t)
+  const d = await design(call)
+  await d.save('program', { ...d.program, appliesOn: 'future', limitUsage: true, maxUsage: 1 })
+  await d.save('rule', d.rule, 'rule')
+  await d.save('reward', d.reward, 'reward')
+  await d.save(
+    'reward',
+    {
+      description: 'Unavailable gift',
+      rewardType: 'product',
+      rewardProductId: 'fruit-box',
+      rewardProductQuantity: '20',
+      requiredPoints: '10',
+    },
+    'gift',
+  )
+  await d.transition('activate')
+  assert.equal(
+    (
+      await call<Row>('loyalty.wallet.create', {
+        id: 'member',
+        programId: 'design',
+        partnerId: 'customer',
+        initialBalance: '100',
+      })
+    ).ok,
+    true,
+  )
+  const order = { ...snapshot('held'), warehouseId: 'wh' }
+  const evaluated = (await call<Row>('loyalty.evaluateOrder', { order })).programs as Row[]
+  assert.deepEqual(
+    (evaluated[0]!.rewards as Row[]).map((row) => row.rewardId),
+    ['reward'],
+  )
+  const applied = await call<Row>('loyalty.applyReward', {
+    order,
+    programId: 'design',
+    rewardId: 'reward',
+    points: '50',
+  })
+  assert.equal(applied.ok, true)
+  assert.equal((applied.reward as Row).requiredPoints, 10)
+  await d.transition('archive')
+  assert.equal(
+    (await call<Row>('loyalty.order.finalize', { order })).ok,
+    true,
+    'an existing reservation survives stopping',
+  )
+  const inspect = await call<Row>('loyalty.program.inspect', { id: 'design' })
+  assert.equal(inspect.usageCount, 1)
+  const reversed = await call<Row>('loyalty.order.reverse', { orderType: 'sale', orderId: 'held' })
+  assert.equal(reversed.ok, true)
+  await d.transition('restore')
+  await d.transition('activate')
+  assert.deepEqual(
+    (await call<Row>('loyalty.evaluateOrder', { order: snapshot('after-refund') })).programs,
+    [],
+  )
+})
+
+test('program contract: stopping prepaid issuance preserves spending and refund authority', async (t) => {
+  const { call } = await bootLoyalty(t)
+  const d = await design(call, 'money', 'gift_card')
+  assert.equal((await d.transition('activate')).ok, true)
+  assert.equal(
+    (
+      await call<Row>('loyalty.storedValue.open', {
+        id: 'money-wallet',
+        programId: 'money',
+        partnerId: 'customer',
+      })
+    ).ok,
+    true,
+  )
+  assert.equal(
+    (
+      await call<Row>('loyalty.storedValue.issue', {
+        id: 'fund',
+        walletId: 'money-wallet',
+        amount: '100',
+        sourceType: 'test',
+        sourceId: 'fund',
+        sourceKey: 'fund',
+      })
+    ).ok,
+    true,
+  )
+  await d.transition('archive')
+  assert.equal(
+    (
+      await call<Row>('loyalty.storedValue.issue', {
+        id: 'fund-again',
+        walletId: 'money-wallet',
+        amount: '100',
+        sourceType: 'test',
+        sourceId: 'fund-again',
+        sourceKey: 'fund-again',
+      })
+    ).ok,
+    false,
+  )
+  assert.equal(
+    (
+      await call<Row>('loyalty.storedValue.reserve', {
+        id: 'spend',
+        walletId: 'money-wallet',
+        amount: '20',
+        sourceType: 'sale',
+        sourceId: 'spend',
+        sourceKey: 'spend',
+      })
+    ).ok,
+    true,
+  )
+  assert.equal((await call<Row>('loyalty.storedValue.finalize', { reservationId: 'spend' })).ok, true)
+  assert.equal(
+    (
+      await call<Row>('loyalty.storedValue.refund', {
+        id: 'refund',
+        walletId: 'money-wallet',
+        amount: '20',
+        sourceType: 'sale',
+        sourceId: 'refund',
+        sourceKey: 'refund',
+      })
+    ).ok,
+    true,
+  )
+})
+
+test('program workspace: every purpose, modal and simulator renders localized controls', async (t) => {
+  const { e2e, call } = await bootLoyalty(t)
+  const d = await design(call)
+  for (const lang of ['vi', 'en']) {
+    for (const type of [
+      'coupons',
+      'gift_card',
+      'loyalty',
+      'promotion',
+      'ewallet',
+      'promo_code',
+      'buy_x_get_y',
+      'next_order_coupons',
+    ]) {
+      const response = await e2e.client.get(`/admin/loyalty/programs/new?type=${type}&lang=${lang}`)
+      assert.equal(response.status, 200)
+      assert.doesNotMatch(await response.text(), /loyalty(?:_backend)?\.[A-Za-z]/)
+    }
+    for (const query of [
+      'tab=rules&modal=rule',
+      'tab=rewards&modal=reward',
+      'tab=rewards&modal=reward&rewardType=product',
+      'tab=rewards&modal=reward&rewardType=shipping',
+      'tab=simulator',
+      'modal=activate',
+      'modal=archive',
+      'modal=restore',
+    ]) {
+      const response = await e2e.client.get(`/admin/loyalty/programs/design?${query}&lang=${lang}`)
+      assert.equal(response.status, 200, query)
+      assert.deepEqual((await response.text()).match(/loyalty(?:_backend)?\.[A-Za-z][\w.]*/g), null, query)
+    }
+  }
+  await d.save('rule', d.rule, 'design-rule')
+  await d.save('reward', d.reward, 'design-reward')
+  const page = async () => (await e2e.client.get('/admin/loyalty/programs/design?lang=en')).text()
+  assert.match(await page(), /Ready to activate/)
+  assert.equal((await d.transition('activate')).ok, true)
+  assert.doesNotMatch(await page(), /Ready to activate|Preview the saved configuration before activating/)
+  assert.equal((await d.transition('archive')).ok, true)
+  assert.doesNotMatch(await page(), /Ready to activate|Preview the saved configuration before activating/)
+  assert.equal((await d.transition('restore')).ok, true)
+  assert.match(await page(), /Ready to activate/)
 })

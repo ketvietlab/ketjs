@@ -1,7 +1,9 @@
+import { civilDateAt, DEFAULT_ACCOUNTING_TIMEZONE } from '../account/date.ts'
 import {
   and,
   asc,
   defineFn,
+  defineFormSchema,
   deleteFrom,
   eq,
   from,
@@ -25,6 +27,27 @@ import {
   validateRuleEnums,
 } from './engine.ts'
 
+/** Shape rules shared by the tier modal and its server route. */
+export const tierFormSchema = defineFormSchema({
+  fields: {
+    name: { type: 'text', required: true, trim: true, minLength: 1 },
+    code: { type: 'text', required: true, trim: true, minLength: 1 },
+    sequence: { type: 'int', min: 0 },
+    minimumSpend: { type: 'decimal', required: true, min: 0 },
+    redeemPercent: { type: 'decimal', required: true, min: 0, max: 100 },
+  },
+  unknown: 'drop',
+})
+
+/** A tier window belongs to the selected program policy and is expressed in whole months. */
+export const tierWindowFormSchema = defineFormSchema({
+  fields: {
+    programId: { type: 'id', required: true },
+    windowMonths: { type: 'int', required: true, min: 1 },
+  },
+  unknown: 'drop',
+})
+
 const asIds = (value: unknown): string[] | null =>
   Array.isArray(value) && value.every((item) => typeof item === 'string')
     ? [...new Set(value.map((item) => item.trim()).filter(Boolean))]
@@ -46,13 +69,34 @@ const codeAvailable = async (
 }
 
 const programDefaults = (type: string) => {
-  const base = { appliesOn: 'current', trigger: 'auto', portalVisible: false, pointName: 'Points' }
+  const base = {
+    appliesOn: 'current',
+    trigger: 'auto',
+    portalVisible: false,
+    pointName: 'Points',
+  }
   if (type === 'coupons') return { ...base, trigger: 'with_code', pointName: 'Coupon points' }
   if (type === 'gift_card')
-    return { ...base, appliesOn: 'future', portalVisible: true, pointName: 'Currency' }
+    return {
+      ...base,
+      appliesOn: 'future',
+      portalVisible: true,
+      pointName: 'Currency',
+    }
   if (type === 'loyalty')
-    return { ...base, appliesOn: 'both', portalVisible: true, pointName: 'Loyalty points' }
-  if (type === 'ewallet') return { ...base, appliesOn: 'future', portalVisible: true, pointName: 'Currency' }
+    return {
+      ...base,
+      appliesOn: 'both',
+      portalVisible: true,
+      pointName: 'Loyalty points',
+    }
+  if (type === 'ewallet')
+    return {
+      ...base,
+      appliesOn: 'future',
+      portalVisible: true,
+      pointName: 'Currency',
+    }
   if (type === 'promo_code') return { ...base, trigger: 'with_code', pointName: 'Promotion points' }
   if (type === 'next_order_coupons') return { ...base, appliesOn: 'future', pointName: 'Coupon points' }
   return { ...base, pointName: 'Promotion points' }
@@ -78,32 +122,57 @@ export const adminFunctions: Record<string, FnSpec> = {
       limit: 'int?',
       offset: 'int?',
     },
-    effects: ['read:loyalty.Program'],
+    effects: ['read:loyalty.Program', 'read:company.Company'],
     agent: true,
     handler: async (ctx, args) => {
       const P = ctx.table('loyalty.Program')
       const at = now()
+      const company = (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
+      const day = civilDateAt(at, company?.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE)
+      const start = or(
+        and(eq(P.designVersion, 1), or(lte(P.startDate, day), isNull(P.startDate))),
+        and(isNull(P.designVersion), or(lte(P.dateFrom, at), isNull(P.dateFrom))),
+      )
+      const end = or(
+        and(eq(P.designVersion, 1), or(gte(P.endDate, day), isNull(P.endDate))),
+        and(isNull(P.designVersion), or(gte(P.dateTo, at), isNull(P.dateTo))),
+      )
+      const upcoming = or(
+        and(eq(P.designVersion, 1), gt(P.startDate, day)),
+        and(isNull(P.designVersion), gt(P.dateFrom, at)),
+      )
+      const ended = or(
+        and(eq(P.designVersion, 1), lt(P.endDate, day)),
+        and(isNull(P.designVersion), lt(P.dateTo, at)),
+      )
       const parts: Expr[] = []
       if (args.programType) parts.push(eq(P.programType, args.programType))
       if (args.search) parts.push(ilike(P.name, `%${String(args.search)}%`))
-      if (args.state === 'running')
-        parts.push(
-          and(
-            eq(P.active, true),
-            or(lte(P.dateFrom, at), isNull(P.dateFrom)),
-            or(gte(P.dateTo, at), isNull(P.dateTo)),
-          ),
-        )
-      else if (args.state === 'upcoming') parts.push(and(eq(P.active, true), gt(P.dateFrom, at)))
-      else if (args.state === 'ended') parts.push(and(eq(P.active, true), lt(P.dateTo, at)))
-      else if (args.state === 'archived') parts.push(eq(P.active, false))
+      if (args.state === 'running') parts.push(and(eq(P.active, true), start, end))
+      else if (args.state === 'upcoming') parts.push(and(eq(P.active, true), upcoming))
+      else if (args.state === 'ended') parts.push(and(eq(P.active, true), ended))
+      else if (args.state === 'draft') parts.push(eq(P.phase, 'draft'))
+      else if (args.state === 'archived')
+        parts.push(and(eq(P.active, false), or(eq(P.phase, 'archived'), isNull(P.phase))))
       else if (!args.includeArchived) parts.push(eq(P.active, true))
 
       let query = from(P).orderBy(asc(P.sequence), asc(P.id))
       if (parts.length) query = query.where(and(...parts))
       const size = Math.min(1000, Math.max(1, n(args.limit ?? 100)))
       const skip = Math.max(0, n(args.offset ?? 0))
-      return ctx.db.all(skip ? query.limit(size).offset(skip) : query.limit(size))
+      return (await ctx.db.all(skip ? query.limit(size).offset(skip) : query.limit(size))).map((row) => ({
+        ...row,
+        state:
+          row.phase === 'draft'
+            ? 'draft'
+            : !row.active
+              ? 'archived'
+              : (row.startDate ?? row.dateFrom) && String(row.startDate ?? row.dateFrom).slice(0, 10) > day
+                ? 'upcoming'
+                : (row.endDate ?? row.dateTo) && String(row.endDate ?? row.dateTo).slice(0, 10) < day
+                  ? 'ended'
+                  : 'running',
+      }))
     },
   }),
 
@@ -122,12 +191,16 @@ export const adminFunctions: Record<string, FnSpec> = {
       const program = (await ctx.db.select('loyalty.Program', { id: args.id }))[0]
       if (!program) return null
       const rules = await ctx.db.select('loyalty.Rule', { programId: args.id })
-      const rewards = await ctx.db.select('loyalty.Reward', { programId: args.id })
+      const rewards = await ctx.db.select('loyalty.Reward', {
+        programId: args.id,
+      })
       return {
         ...program,
-        pricelistIds: (await ctx.db.select('loyalty.ProgramPricelist', { programId: args.id })).map(
-          (row) => row.pricelistId,
-        ),
+        pricelistIds: (
+          await ctx.db.select('loyalty.ProgramPricelist', {
+            programId: args.id,
+          })
+        ).map((row) => row.pricelistId),
         rules: await Promise.all(
           rules.map(async (rule) => ({
             ...rule,
@@ -139,9 +212,11 @@ export const adminFunctions: Record<string, FnSpec> = {
         rewards: await Promise.all(
           rewards.map(async (reward) => ({
             ...reward,
-            productIds: (await ctx.db.select('loyalty.RewardProduct', { rewardId: reward.id })).map(
-              (row) => row.productId,
-            ),
+            productIds: (
+              await ctx.db.select('loyalty.RewardProduct', {
+                rewardId: reward.id,
+              })
+            ).map((row) => row.productId),
           })),
         ),
       }
@@ -214,7 +289,12 @@ export const adminFunctions: Record<string, FnSpec> = {
         updatedAt: now(),
       }
       if (existing) await ctx.db.update('loyalty.Program', { id: args.id }, patch)
-      else await ctx.db.insert('loyalty.Program', { id: args.id, ...patch, createdAt: now() })
+      else
+        await ctx.db.insert('loyalty.Program', {
+          id: args.id,
+          ...patch,
+          createdAt: now(),
+        })
       return { ok: true, id: args.id }
     },
   }),
@@ -444,7 +524,11 @@ export const adminFunctions: Record<string, FnSpec> = {
         errors.push(issue('discountProductId', 'loyalty.error.productMissing'))
       if (
         args.discountCategoryId &&
-        !(await ctx.db.select('product.Category', { id: args.discountCategoryId }))[0]
+        !(
+          await ctx.db.select('product.Category', {
+            id: args.discountCategoryId,
+          })
+        )[0]
       )
         errors.push(issue('discountCategoryId', 'loyalty.error.invalid'))
       if (args.discountTagId && !(await ctx.db.select('loyalty.Tag', { id: args.discountTagId }))[0])
@@ -670,7 +754,11 @@ export const adminFunctions: Record<string, FnSpec> = {
         (args.fallbackEnabled && !(n(args.fallbackCurrencyPerPoint) > 0))
       )
         return invalid(issue('config', 'loyalty.error.membershipConfig'))
-      const duplicate = (await ctx.db.select('loyalty.MembershipConfig', { programId: args.programId }))[0]
+      const duplicate = (
+        await ctx.db.select('loyalty.MembershipConfig', {
+          programId: args.programId,
+        })
+      )[0]
       const existing = (await ctx.db.select('loyalty.MembershipConfig', { id: args.id }))[0]
       const target = existing ?? duplicate
       const values = {
@@ -683,7 +771,11 @@ export const adminFunctions: Record<string, FnSpec> = {
         updatedAt: now(),
       }
       if (target) await ctx.db.update('loyalty.MembershipConfig', { id: target.id }, values)
-      else await ctx.db.insert('loyalty.MembershipConfig', { id: args.id, ...values })
+      else
+        await ctx.db.insert('loyalty.MembershipConfig', {
+          id: args.id,
+          ...values,
+        })
       return { ok: true, id: String(target?.id ?? args.id) }
     },
   }),
@@ -694,7 +786,11 @@ export const adminFunctions: Record<string, FnSpec> = {
     agent: true,
     handler: async (ctx, args) =>
       args.programId
-        ? ((await ctx.db.select('loyalty.MembershipConfig', { programId: args.programId }))[0] ?? null)
+        ? ((
+            await ctx.db.select('loyalty.MembershipConfig', {
+              programId: args.programId,
+            })
+          )[0] ?? null)
         : ((await ctx.db.select('loyalty.MembershipConfig'))[0] ?? null),
   }),
 

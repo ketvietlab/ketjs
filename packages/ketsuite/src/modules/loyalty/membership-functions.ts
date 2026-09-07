@@ -8,7 +8,11 @@ const cutoffFor = (date: string, months: number): number => {
   return cutoff.getTime()
 }
 
-export const refreshMembershipRow = async (ctx: Ctx, partnerId: string, at = now()): Promise<Row | null> => {
+export const membershipPosition = async (
+  ctx: Ctx,
+  partnerId: string,
+  at = now(),
+): Promise<{ config: Row; months: number; spending: number; tier: Row | null } | null> => {
   const config = (await ctx.db.select('loyalty.MembershipConfig'))[0]
   if (!config) return null
   const months = Math.max(1, n(config.windowMonths))
@@ -29,6 +33,13 @@ export const refreshMembershipRow = async (ctx: Ctx, partnerId: string, at = now
         n(a.sequence) - n(b.sequence) ||
         String(a.id).localeCompare(String(b.id)),
     )
+  return { config, months, spending, tier: tiers[0] ?? null }
+}
+
+export const refreshMembershipRow = async (ctx: Ctx, partnerId: string, at = now()): Promise<Row | null> => {
+  const position = await membershipPosition(ctx, partnerId, at)
+  if (!position) return null
+  const { config, months, spending, tier } = position
   const wallets = await ctx.db.select('loyalty.Wallet', {
     partnerId,
     programId: config.programId,
@@ -38,7 +49,7 @@ export const refreshMembershipRow = async (ctx: Ctx, partnerId: string, at = now
   const existing = (await ctx.db.select('loyalty.Membership', { partnerId }))[0]
   const values = {
     partnerId,
-    tierId: tiers[0]?.id ?? null,
+    tierId: tier?.id ?? null,
     rollingSpend: decimal(spending),
     points: decimal(points),
     windowMonths: months,
