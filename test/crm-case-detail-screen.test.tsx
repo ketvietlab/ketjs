@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import type { Translator } from '@ketvietlab/ketjs'
 import { html, renderToString } from '@ketvietlab/ketjs-view'
 import {
+  caseCloseModal,
   caseDetailScreen,
   permissionScreen,
 } from '../packages/ketsuite/src/modules/crm_backend/screens/case-detail.tsx'
@@ -18,6 +19,16 @@ const messages: Record<string, string> = {
   'crm_backend.action.refreshScore': 'Tính lại điểm',
   'crm_backend.action.won': 'Đánh dấu thắng',
   'crm_backend.action.lost': 'Đánh dấu thua',
+  'crm_backend.action.cancel': 'Hủy',
+  'crm_backend.close.title': 'Kết thúc cơ hội',
+  'crm_backend.close.hint': 'Ghi nhận kết quả đã xác minh.',
+  'crm_backend.close.result': 'Kết quả',
+  'crm_backend.close.won': 'Thắng cơ hội',
+  'crm_backend.close.lost': 'Mất cơ hội',
+  'crm_backend.close.reason': 'Ghi nhận kết quả',
+  'crm_backend.close.confirm': 'Xác nhận kết quả',
+  'crm_backend.close.confirmText': 'Tôi đã kiểm tra kết quả với khách hàng.',
+  'crm_backend.close.submit': 'Lưu kết quả',
   'crm_backend.assign.title': 'Phân công',
   'crm_backend.assign.hint': 'Chọn đội và người phụ trách.',
   'crm_backend.assign.submit': 'Phân công',
@@ -126,15 +137,36 @@ test('crm case detail: remains a specialized record workspace with all business 
   assert.match(rendered, /name="action" value="move"/)
   assert.match(rendered, /name="action" value="assign"/)
   assert.match(rendered, /name="action" value="merge"/)
-  assert.match(rendered, /name="action" value="lost"/)
-  assert.match(rendered, /name="lostReason"/)
-  assert.match(rendered, /name="action" value="won"/)
+  assert.doesNotMatch(rendered, /name="action" value="(?:won|lost)"/)
+  assert.doesNotMatch(rendered, /name="lostReason"/)
+  assert.match(
+    rendered,
+    /href="\/admin\/crm\/cases\/case-denim\?tab=overview&amp;modal=close&amp;lang=vi"[\s\S]*?Kết thúc cơ hội/,
+  )
   assert.match(rendered, /data-ui="attachments"/)
   assert.match(rendered, /brief\.pdf/)
   assert.match(rendered, /Gọi lại ngày mai/)
   assert.match(rendered, /action="\/admin\/crm\/cases\/case-denim\?lang=vi"/)
   assert.match(rendered, /action="\/admin\/crm\/cases\/case-denim\/attachments\?lang=vi"/)
   assert.match(rendered, /href="\/admin\/crm\/cases\/case-denim\?tab=timeline&amp;lang=vi"/)
+})
+
+test('crm case close: one route modal captures either result, its reason and confirmation', () => {
+  const rendered = renderToString(
+    caseCloseModal(translate, row, {
+      action: '/admin/crm/cases/case-denim?tab=sales&modal=close&lang=vi',
+      cancelHref: '/admin/crm/cases/case-denim?tab=sales&lang=vi',
+    }),
+  )
+
+  assert.match(rendered, /data-ui="modal-layer"[^>]*data-route-modal="true"/)
+  assert.match(rendered, /Kết thúc cơ hội/)
+  assert.match(rendered, /name="action"[^>]*value="close"/)
+  assert.match(rendered, /name="expectedVersion"[^>]*value="7"/)
+  assert.match(rendered, /name="terminal"[\s\S]*?value="won"[\s\S]*?value="lost"/)
+  assert.match(rendered, /name="closeReason"[^>]*required/)
+  assert.match(rendered, /name="confirm"[\s\S]*?Xác nhận kết quả[\s\S]*?data-ui="form-required"/)
+  assert.match(rendered, /href="\/admin\/crm\/cases\/case-denim\?tab=sales&amp;lang=vi"/)
 })
 
 test('crm case detail: timeline resolves system message keys and keeps the selected tab', () => {

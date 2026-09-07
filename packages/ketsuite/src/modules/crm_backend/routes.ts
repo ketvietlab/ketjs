@@ -4,13 +4,15 @@ import type { ListState, Route, RouteEntry, ServeContext } from '@ketvietlab/ket
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { formatDateTime, formatMoney, modalWorkspace } from '../../ui/index.ts'
 import type { FormField } from '../../ui/index.ts'
-import { readForm, seeOther } from '../backend/forms.ts'
+import { formRefusal, readForm, seeOther } from '../backend/forms.ts'
+import type { FormRefusal } from '../backend/forms.ts'
 import { choices, adminPage, inLocale, localeQuery, optional, timezoneOf } from '../backend/screen.ts'
 import { withParam } from '../backend/paging.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
 import type { RelationOption } from '../backend/relation-select.ts'
 import { receiveAttachment } from '../storage/routes.ts'
 import { caseListSearch } from '../crm/search.ts'
+import { caseFormSchema } from '../crm/functions.ts'
 import {
   assigneeControl,
   caseControl,
@@ -22,6 +24,7 @@ import {
 } from './relation-control.ts'
 import {
   CONFIGURATION_TABS,
+  caseCloseModal,
   caseConvertModal,
   caseCreateScreen,
   caseDetailScreen,
@@ -121,72 +124,109 @@ const caseFields = (
     tags?: JSXChild
     stage?: JSXChild
   } = {},
-): FormField[] => [
-  {
-    name: 'name',
-    label: _('crm_backend.field.name'),
-    value: String(row.name ?? ''),
-    required: true,
-    span: 'full',
-  },
-  {
-    name: 'kind',
-    label: _('crm_backend.field.kind'),
-    type: 'select',
-    value: String(row.kind ?? 'lead'),
-    disabled: Boolean(row.id),
-    required: true,
-    options: ['lead', 'opportunity'].map((value) => ({ value, label: _(`crm.kind.${value}`) })),
-  },
-  /*
-   * Only where creating one. On a record that already exists the stage is moved
-   * by the action beside the form, which records the move on the timeline and
-   * refuses a stale version; a second field quietly writing the same column would
-   * be a change nobody could later account for.
-   */
-  ...(controls.stage
-    ? [{ name: 'stageId', label: _('crm_backend.field.stage'), control: controls.stage }]
-    : []),
-  { name: 'partnerId', label: _('crm_backend.field.partner'), control: controls.partner },
-  { name: 'contactName', label: _('crm_backend.field.contactName'), value: String(row.contactName ?? '') },
-  { name: 'email', label: _('crm_backend.field.email'), type: 'email', value: String(row.email ?? '') },
-  { name: 'phone', label: _('crm_backend.field.phone'), type: 'tel', value: String(row.phone ?? '') },
-  { name: 'teamId', label: _('crm_backend.field.team'), control: controls.team },
-  { name: 'assigneeUserId', label: _('crm_backend.field.assignee'), control: controls.assignee },
-  {
-    name: 'priority',
-    label: _('crm_backend.field.priority'),
-    type: 'select',
-    value: String(row.priority ?? '1'),
-    options: ['0', '1', '2', '3'].map((value) => ({ value, label: _(`crm_backend.priority.${value}`) })),
-  },
-  { name: 'tagIds', label: _('crm_backend.field.tags'), control: controls.tags, span: 'full' },
-  {
-    name: 'expectedRevenue',
-    label: _('crm_backend.field.expectedRevenue'),
-    type: 'decimal',
-    value: String((row.salesDetail as AnyRow | undefined)?.expectedRevenue ?? 0),
-  },
-  {
-    name: 'probability',
-    label: _('crm_backend.field.probability'),
-    type: 'decimal',
-    value: String((row.salesDetail as AnyRow | undefined)?.probability ?? 0),
-  },
-  {
-    name: 'expectedClosing',
-    label: _('crm_backend.field.expectedClosing'),
-    type: 'date',
-    value: String((row.salesDetail as AnyRow | undefined)?.expectedClosing ?? ''),
-  },
-  {
-    name: 'description',
-    label: _('crm_backend.field.description'),
-    type: 'textarea',
-    value: String(row.description ?? ''),
-    span: 'full',
-  },
-]
+  requirements: {
+    partner?: boolean
+    need?: boolean
+    error?: (field: string) => string | null
+  } = {},
+): FormField[] => {
+  const source = String(row.utmSource ?? (requirements.need ? 'pancake' : ''))
+  const sources = ['pancake', 'zalo', 'facebook', 'website', 'customer_care', 'referral']
+  if (source && !sources.includes(source)) sources.push(source)
+  return [
+    {
+      name: 'name',
+      label: _('crm_backend.field.name'),
+      value: String(row.name ?? ''),
+      required: true,
+      span: 'full',
+      error: requirements.error?.('name'),
+    },
+    {
+      name: 'kind',
+      label: _('crm_backend.field.kind'),
+      type: 'select',
+      value: String(row.kind ?? 'lead'),
+      disabled: Boolean(row.id),
+      required: true,
+      error: requirements.error?.('kind'),
+      options: ['lead', 'opportunity'].map((value) => ({ value, label: _(`crm.kind.${value}`) })),
+    },
+    /*
+     * Only where creating one. On a record that already exists the stage is moved
+     * by the action beside the form, which records the move on the timeline and
+     * refuses a stale version; a second field quietly writing the same column would
+     * be a change nobody could later account for.
+     */
+    ...(controls.stage
+      ? [{ name: 'stageId', label: _('crm_backend.field.stage'), control: controls.stage }]
+      : []),
+    {
+      name: 'partnerId',
+      label: _('crm_backend.field.partner'),
+      control: controls.partner,
+      required: requirements.partner,
+      error: requirements.error?.('partnerId'),
+    },
+    {
+      name: 'utmSource',
+      label: _('crm_backend.field.source'),
+      type: 'select',
+      value: source,
+      options: [
+        { value: '', label: '—' },
+        ...sources.map((value) => ({
+          value,
+          label: _.resolves(`crm_backend.source.${value}`) ? _(`crm_backend.source.${value}`) : value,
+        })),
+      ],
+    },
+    { name: 'contactName', label: _('crm_backend.field.contactName'), value: String(row.contactName ?? '') },
+    { name: 'email', label: _('crm_backend.field.email'), type: 'email', value: String(row.email ?? '') },
+    { name: 'phone', label: _('crm_backend.field.phone'), type: 'tel', value: String(row.phone ?? '') },
+    { name: 'teamId', label: _('crm_backend.field.team'), control: controls.team },
+    { name: 'assigneeUserId', label: _('crm_backend.field.assignee'), control: controls.assignee },
+    {
+      name: 'priority',
+      label: _('crm_backend.field.priority'),
+      type: 'select',
+      value: String(row.priority ?? '1'),
+      options: ['0', '1', '2', '3'].map((value) => ({ value, label: _(`crm_backend.priority.${value}`) })),
+      error: requirements.error?.('priority'),
+    },
+    { name: 'tagIds', label: _('crm_backend.field.tags'), control: controls.tags, span: 'full' },
+    {
+      name: 'expectedRevenue',
+      label: _('crm_backend.field.expectedRevenue'),
+      type: 'decimal',
+      value: String((row.salesDetail as AnyRow | undefined)?.expectedRevenue ?? 0),
+      error: requirements.error?.('expectedRevenue'),
+    },
+    {
+      name: 'probability',
+      label: _('crm_backend.field.probability'),
+      type: 'decimal',
+      value: String((row.salesDetail as AnyRow | undefined)?.probability ?? 0),
+      error: requirements.error?.('probability'),
+    },
+    {
+      name: 'expectedClosing',
+      label: _('crm_backend.field.expectedClosing'),
+      type: 'date',
+      value: String((row.salesDetail as AnyRow | undefined)?.expectedClosing ?? ''),
+      error: requirements.error?.('expectedClosing'),
+    },
+    {
+      name: 'description',
+      label: requirements.need ? _('crm_backend.field.need') : _('crm_backend.field.description'),
+      type: 'textarea',
+      value: String(row.description ?? ''),
+      required: requirements.need,
+      span: 'full',
+      error: requirements.error?.('description'),
+    },
+  ]
+}
 
 const caseControls = async (
   ctx: ServeContext,
@@ -248,6 +288,7 @@ const saveInput = (id: string, form: Record<string, string>, kind = form.kind ??
   ...optional(form, 'assigneeUserId'),
   ...optional(form, 'stageId'),
   ...optional(form, 'description'),
+  ...optional(form, 'utmSource'),
   ...optional(form, 'expectedClosing'),
   priority: form.priority ?? '1',
   expectedRevenue: form.expectedRevenue || '0',
@@ -281,12 +322,16 @@ const caseCreateHref = (
   return `${target.pathname}${target.search}`
 }
 
-/** Only the CRM board and case list are valid destinations carried through the create form. */
+/** Only CRM views and a Partner record are valid destinations carried through the create form. */
 const caseReturnTo = (url: URL, raw?: string | null): string => {
-  const fallback = inLocale(url, '/admin/crm/cases')
+  const partnerId = url.searchParams.get('partnerId')
+  const fallback = partnerId
+    ? inLocale(url, `/admin/partner/partners/${encodeURIComponent(partnerId)}`)
+    : inLocale(url, '/admin/crm/cases')
   if (!raw) return fallback
   const target = new URL(raw, 'http://ket.local')
-  return ['/admin/crm/cases', '/admin/crm/pipeline'].includes(target.pathname)
+  return ['/admin/crm/cases', '/admin/crm/pipeline'].includes(target.pathname) ||
+    /^\/admin\/partner\/partners\/[^/]+$/.test(target.pathname)
     ? `${target.pathname}${target.search}`
     : fallback
 }
@@ -299,15 +344,32 @@ const caseCreatePage = async (
     actionPath: '/admin/crm/cases' | '/admin/crm/cases/new'
     errors?: readonly string[]
     form?: Record<string, string>
+    refusal?: FormRefusal
   },
 ) => {
   const _ = ctx.translate(ctx.localeOf(url, req))
   const askedStage = url.searchParams.get('stageId')
   const askedKind = url.searchParams.get('kind')
   const submitted = options.form ?? {}
+  const partnerIntent = url.searchParams.has('partnerId') || submitted.partnerIntent === '1'
+  const askedPartnerId = url.searchParams.get('partnerId') || (partnerIntent ? submitted.partnerId : null)
+  const [selectedPartner, data] = await Promise.all([
+    askedPartnerId
+      ? (ctx.call('partner.getPartner', { id: askedPartnerId }, url, req) as Promise<AnyRow | null>)
+      : Promise.resolve(null),
+    references(ctx, url, req),
+  ])
   const preset: AnyRow = {
     ...(askedStage ? { stageId: askedStage } : {}),
     ...(askedKind === 'lead' || askedKind === 'opportunity' ? { kind: askedKind } : {}),
+    ...(selectedPartner
+      ? {
+          partnerId: selectedPartner.id,
+          contactName: selectedPartner.kind === 'person' ? selectedPartner.name : '',
+          email: selectedPartner.email ?? '',
+          phone: selectedPartner.phone ?? '',
+        }
+      : {}),
     ...submitted,
     ...(options.form
       ? {
@@ -319,7 +381,8 @@ const caseCreatePage = async (
         }
       : {}),
   }
-  const data = await references(ctx, url, req)
+  if (selectedPartner && !data.partners.some((partner) => partner.id === selectedPartner.id))
+    data.partners.unshift(selectedPartner)
   const controls = await caseControls(ctx, url, req, _, data, 'crm-create', preset)
   const returnTo = caseReturnTo(url, submitted.returnTo ?? url.searchParams.get('returnTo'))
   return adminPage(ctx, url, req, {
@@ -327,11 +390,24 @@ const caseCreatePage = async (
     active: '/admin/crm/cases',
     body: (_, frame) =>
       caseCreateScreen(_, frame, {
-        fields: caseFields(_, preset, controls),
+        title: partnerIntent ? _('crm_backend.action.createLead') : _('crm_backend.action.create'),
+        fields: caseFields(_, preset, controls, {
+          partner: Boolean(selectedPartner),
+          need: Boolean(selectedPartner),
+          error: options.refusal?.error,
+        }),
         action: inLocale(url, options.actionPath),
         cancelHref: returnTo,
         returnTo,
         errors: options.errors,
+        guidance:
+          partnerIntent && selectedPartner
+            ? {
+                title: _('crm_backend.case.create.partnerHintTitle'),
+                description: _('crm_backend.case.create.partnerHint'),
+              }
+            : undefined,
+        partnerIntent: partnerIntent && Boolean(selectedPartner),
       }),
   })
 }
@@ -806,13 +882,23 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       if (req.method === 'POST') {
         const form = await readForm(req)
+        const refusal = formRefusal(ctx.translate(ctx.localeOf(url, req)))
+        const fromPartner = form.partnerIntent === '1'
+        if (!refusal.check(caseFormSchema({ partner: fromPartner, need: fromPartner }), form))
+          return caseCreatePage(ctx, url, req, {
+            actionPath: '/admin/crm/cases',
+            form,
+            refusal,
+          })
         const id = randomUUID()
         const result = (await ctx.call('crm.case.save', saveInput(id, form), url, req)) as AnyRow
         if (result.ok) return seeOther(inLocale(url, `/admin/crm/cases/${id}`))
+        refusal.add(errorsOf(result, ctx.translate(ctx.localeOf(url, req))))
         return caseCreatePage(ctx, url, req, {
           actionPath: '/admin/crm/cases',
-          errors: errorsOf(result, ctx.translate(ctx.localeOf(url, req))),
+          errors: refusal.sentences(),
           form,
+          refusal,
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
@@ -874,13 +960,23 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       if (req.method === 'POST') {
         const form = await readForm(req)
+        const refusal = formRefusal(ctx.translate(ctx.localeOf(url, req)))
+        const fromPartner = form.partnerIntent === '1'
+        if (!refusal.check(caseFormSchema({ partner: fromPartner, need: fromPartner }), form))
+          return caseCreatePage(ctx, url, req, {
+            actionPath: '/admin/crm/cases/new',
+            form,
+            refusal,
+          })
         const id = randomUUID()
         const result = (await ctx.call('crm.case.save', saveInput(id, form), url, req)) as AnyRow
         if (result.ok) return seeOther(inLocale(url, `/admin/crm/cases/${id}`))
+        refusal.add(errorsOf(result, ctx.translate(ctx.localeOf(url, req))))
         return caseCreatePage(ctx, url, req, {
           actionPath: '/admin/crm/cases/new',
-          errors: errorsOf(result, ctx.translate(ctx.localeOf(url, req))),
+          errors: refusal.sentences(),
           form,
+          refusal,
         })
       }
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
@@ -903,7 +999,7 @@ export const routes: Record<string, RouteEntry> = {
         // behind these actions match by construction: a stale tab would win
         // silently. A request that does not say which version it saw is refused
         // instead of being handed the current one.
-        const VERSIONED = ['move', 'convert', 'won', 'lost', 'assign', 'merge']
+        const VERSIONED = ['move', 'convert', 'close', 'won', 'lost', 'assign', 'merge']
         if (VERSIONED.includes(String(form.action ?? '')) && !form.expectedVersion)
           return text(_('crm_backend.convert.versionRequired'), { status: 422 })
         const base = {
@@ -926,7 +1022,48 @@ export const routes: Record<string, RouteEntry> = {
               ok: false,
               errors: [{ field: 'confirm', code: 'crm_backend.convert.confirmRequired' }],
             }
-          else result = await call('crm.case.convertLead', { ...base, ...optional(form, 'stageId') })
+          else if (!String(form.expectedRevenue ?? '').trim())
+            result = {
+              ok: false,
+              errors: [{ field: 'expectedRevenue', code: 'crm_backend.convert.revenueRequired' }],
+            }
+          else if (!String(form.expectedClosing ?? '').trim())
+            result = {
+              ok: false,
+              errors: [{ field: 'expectedClosing', code: 'crm_backend.convert.closingRequired' }],
+            }
+          else
+            result = await call('crm.case.convertLead', {
+              ...base,
+              ...optional(form, 'stageId'),
+              ...optional(form, 'expectedRevenue'),
+              ...optional(form, 'expectedClosing'),
+            })
+        } else if (form.action === 'close') {
+          const reason = String(form.closeReason ?? '').trim()
+          if (!form.confirm)
+            result = {
+              ok: false,
+              errors: [{ field: 'confirm', code: 'crm_backend.close.confirmRequired' }],
+            }
+          else if (!reason)
+            result = {
+              ok: false,
+              errors: [{ field: 'closeReason', code: 'crm_backend.close.reasonRequired' }],
+            }
+          else if (form.terminal === 'won')
+            result = await call('crm.case.markWon', { ...base, closeReason: reason })
+          else if (form.terminal === 'lost')
+            result = await call('crm.case.markLost', {
+              ...base,
+              lostReason: reason,
+              closeReason: reason,
+            })
+          else
+            result = {
+              ok: false,
+              errors: [{ field: 'terminal', code: 'crm_backend.close.invalidResult' }],
+            }
         } else if (form.action === 'won') result = await call('crm.case.markWon', base)
         else if (form.action === 'lost')
           result = await call('crm.case.markLost', { ...base, lostReason: form.lostReason ?? '' })
@@ -1043,6 +1180,10 @@ export const routes: Record<string, RouteEntry> = {
       // Converting is confirmed in a step the URL owns, so the opportunity
       // stages are only read when that step is open — and only for a lead.
       const converting = row.kind === 'lead' && url.searchParams.get('modal') === 'convert'
+      const closing =
+        row.kind === 'opportunity' &&
+        row.terminalState === 'open' &&
+        url.searchParams.get('modal') === 'close'
       const conversionStages = converting ? stagesFor('opportunity') : []
       const [warehouses, plans, activityTypes, duplicateResult, quotations, products] = await Promise.all([
         ctx.call('stock.listWarehouses', {}, url, req) as Promise<AnyRow[]>,
@@ -1115,7 +1256,7 @@ export const routes: Record<string, RouteEntry> = {
             }
           : {}),
       }
-      const closeConvert = () => {
+      const closeOverlay = () => {
         const back = new URLSearchParams(url.searchParams)
         back.delete('modal')
         const query = back.toString()
@@ -1137,7 +1278,7 @@ export const routes: Record<string, RouteEntry> = {
             controls,
             // A conversion that was refused belongs to the step that asked for
             // it, not to the save form behind it.
-            errors: converting ? [] : errors,
+            errors: converting || closing ? [] : errors,
             locale: localeQuery(url),
             tab: ['overview', 'sales', 'activities', 'timeline'].includes(url.searchParams.get('tab') ?? '')
               ? String(url.searchParams.get('tab'))
@@ -1150,12 +1291,21 @@ export const routes: Record<string, RouteEntry> = {
                   // Posting back to the step keeps it open when the answer is
                   // no, with the reason inside it rather than on the page behind.
                   action: inLocale(url, `${url.pathname}?${url.searchParams.toString()}`),
-                  cancelHref: inLocale(url, closeConvert()),
+                  cancelHref: inLocale(url, closeOverlay()),
                   control: controls.convertStage,
                   errors,
                 }),
               )
-            : detail
+            : closing
+              ? modalWorkspace(
+                  detail,
+                  caseCloseModal(_, row, {
+                    action: inLocale(url, `${url.pathname}?${url.searchParams.toString()}`),
+                    cancelHref: inLocale(url, closeOverlay()),
+                    errors,
+                  }),
+                )
+              : detail
         },
       })
     },

@@ -94,6 +94,11 @@ test('partner edit: connects Chatter in the rail and keeps save beside the compa
       },
       {
         parents: [],
+        salesActions: (
+          <a data-ui="action" href="/admin/crm/cases/new?partnerId=acme&lang=vi">
+            Tạo lead
+          </a>
+        ),
         collaboration: <div data-ui="partner-chatter-fixture">Chatter</div>,
         addressForms: [{ title: 'Thêm địa chỉ', body: 'Address fields' }],
       },
@@ -106,6 +111,10 @@ test('partner edit: connects Chatter in the rail and keeps save beside the compa
   assert.match(html, /data-ui="form-page-title"[^>]*>[\s\S]*?ACME Distribution/)
   assert.match(html, /data-ui="form-page-status"[\s\S]*?Đang hoạt động/)
   assert.match(html, /data-ui="form-page-actions"[\s\S]*?type="submit"[^>]*form="partner-identity-form"/)
+  assert.match(
+    html,
+    /data-ui="form-page-actions"[\s\S]*?href="\/admin\/crm\/cases\/new\?partnerId=acme&amp;lang=vi"[\s\S]*?Tạo lead/,
+  )
   assert.match(html, /id="partner-identity-form"/)
   assert.match(html, /data-scope="partner-identity"/)
   assert.match(html, /data-kind="checkbox-group"[\s\S]*?Vai trò nghiệp vụ/)

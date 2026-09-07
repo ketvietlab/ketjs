@@ -158,7 +158,7 @@ test('crm: merging carries the whole record and refuses a second pass', async (t
   assert.equal((again.errors as Row[])[0]?.code, 'crm.error.alreadyMerged')
 })
 
-test('crm backend: the case workspace exposes assign, merge and a lost reason', async (t) => {
+test('crm backend: the case workspace exposes assign, merge and the close decision', async (t) => {
   const { app, call } = await boot(t)
   await call('crm.case.save', {
     id: 'workspace',
@@ -182,16 +182,24 @@ test('crm backend: the case workspace exposes assign, merge and a lost reason', 
   // Relational fields render as pickers, not as selects carrying every row.
   assert.match(html, /data-ui="relation-select"/)
   assert.doesNotMatch(html, /<select[^>]*name="partnerId"[^>]*>\s*<option[^>]*>—/)
-  // Three controls the routes have always accepted and no screen ever offered.
+  // Assignment and merging remain inline; closing opens the one decision dialog.
   assert.match(html, /name="action" value="assign"/)
   assert.match(html, /name="action" value="merge"/)
-  assert.match(html, /name="lostReason"/)
+  assert.doesNotMatch(html, /name="lostReason"/)
+  assert.match(html, /href="\/admin\/crm\/cases\/workspace\?tab=overview&amp;modal=close&amp;lang=en"/)
   assert.match(html, /href="\/admin\/crm\/cases\/workspace\?tab=timeline&amp;lang=en"/)
   assert.match(html, /action="\/admin\/crm\/cases\/workspace\?lang=en"/)
   assert.match(html, /action="\/admin\/crm\/cases\/workspace\/attachments\?lang=en"/)
   // Duplicate detection has always run here; now it renders what it found.
   assert.match(html, /Possible duplicates/)
   assert.match(html, /Workspace twin/)
+
+  const closePage = await app.client.get('/admin/crm/cases/workspace?modal=close&lang=en')
+  const closeHtml = await closePage.text()
+  assert.equal(closePage.status, 200)
+  assert.match(closeHtml, /name="terminal"/)
+  assert.match(closeHtml, /name="closeReason"/)
+  assert.match(closeHtml, /name="confirm"/)
 
   // Assignment is restricted to the team, which is why the membership has to
   // exist before the picker's choice is accepted.
