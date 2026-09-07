@@ -331,6 +331,34 @@ for (const viewport of [
   }
 }
 
+test('restores the chosen theme before islands load on a new screen', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.addInitScript(() => localStorage.setItem('ket.backend.theme', 'dark'))
+
+  let releaseIsland!: () => void
+  const islandMayLoad = new Promise<void>((resolve) => {
+    releaseIsland = resolve
+  })
+  const tableSelectionAsset = /\/client\/table-selection\.mjs$/u
+  await page.route(tableSelectionAsset, async (route) => {
+    await islandMayLoad
+    await route.continue()
+  })
+
+  try {
+    await page.goto('/admin/product/templates?lang=vi&view=list', { waitUntil: 'commit' })
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  } finally {
+    releaseIsland()
+  }
+
+  await page.waitForLoadState('domcontentloaded')
+  await expect(page.getByRole('button', { name: 'Đổi giao diện sáng/tối' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+})
+
 test('renders the English locale without falling back to the login screen', async ({ page }) => {
   await page.goto('/admin/product/templates?lang=en&view=list')
   await expect(page).toHaveURL(/\/admin\/product\/templates/)

@@ -1249,6 +1249,27 @@ test('backend responder: a fragment request never renders document infrastructur
   assert.deepEqual({ styles, documents }, { styles: 0, documents: 0 })
 })
 
+test('backend responder: a persisted theme is restored before styles can paint', async () => {
+  const result = await backendPage(
+    {
+      styles: async () => html2`<link rel="stylesheet" href="/backend.css">`,
+      document: ketDocument,
+    } as never,
+    { headers: {} } as never,
+    {
+      lang: 'vi',
+      title: 'Ứng dụng',
+      body: pagesScreen(_, [page()], { menu: MENU }),
+    },
+  )
+  assert.equal(typeof result.body, 'string')
+  const body = result.body as string
+  const restore = body.indexOf("localStorage.getItem('ket.backend.theme')")
+  const styles = body.indexOf('/backend.css')
+  assert.ok(restore > 0, 'the document restores an explicit preference')
+  assert.ok(restore < styles, 'the preference is restored before a stylesheet can paint')
+})
+
 test('design tokens: every admin role used by components is declared', () => {
   const css = STYLESHEETS.map((path) => readFileSync(path, 'utf8')).join('\n')
   const tokens = readFileSync('packages/ketsuite/src/modules/backend/design/tokens.css', 'utf8')
