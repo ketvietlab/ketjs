@@ -1133,6 +1133,9 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
     }),
   )
   assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
+  assert.match(html, /data-ui="action" data-icon-only="true"[\s\S]*name="theme"/)
+  assert.match(html, /aria-label="Đổi giao diện sáng\/tối" aria-pressed="false"/)
+  assert.match(html, /data-theme-icon="dark"[\s\S]*data-theme-icon="light"/)
   assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
   assert.match(html, /data-ui="viewer-presence"/)
   assert.match(html, /data-ui="viewer-context-switcher" href="\/admin\/context"/)

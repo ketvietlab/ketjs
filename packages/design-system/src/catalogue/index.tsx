@@ -1,6 +1,6 @@
 import { each, html } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
-import { ActionGroup, Button, LinkButton } from '../primitives/actions.tsx'
+import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actions.tsx'
 import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
@@ -69,6 +69,7 @@ export const componentGroups: readonly ComponentGroup[] = [
               <Button label="Terminate" variant="destructive" />,
               <Button label="Saving" loading />,
               <Button label="Unavailable" disabled />,
+              <IconButton label="Toggle theme" icon="☾" />,
             ]}
           />
         ),

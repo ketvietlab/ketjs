@@ -172,8 +172,6 @@ thuộc behavior hoặc workflow chưa có contract:
 - thêm status label semantic riêng cho app đã cài/chưa cài;
 - liên kết lý do nút disabled bằng `aria-describedby`;
 - thay mobile navigation tạm thời bằng trigger + drawer khi số menu tăng;
-- thêm toggle `data-theme="light|dark"`; hiện chưa có UI nào đặt thuộc tính này, nên
-  chế độ tối vẫn chỉ chạy theo system preference;
 - trạng thái loading và xử lý lỗi trên giao diện.
 
 Visual QA đã kiểm tra tại `360px`, `768px`, `1024px`, `1440px`, bao gồm danh sách

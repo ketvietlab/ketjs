@@ -84,6 +84,11 @@
     font-size: var(--kv-text-base);
   }
 
+  :where([data-kv-design-system]) [data-ui="action"][data-icon-only="true"] {
+    width: var(--kv-control-height);
+    padding-inline: 0;
+  }
+
   :where([data-kv-design-system]) [data-ui="action"]:disabled {
     border-color: var(--kv-panel-border);
     background: var(--kv-interactive-disabled);
