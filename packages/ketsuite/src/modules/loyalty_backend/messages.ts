@@ -34,11 +34,9 @@ const vi = {
   'tab.rewards': 'Phần thưởng',
   'ledger.title': 'Sổ cái Loyalty',
   'memberships.title': 'Hạng thành viên',
-  'memberships.hint':
-    'Ngưỡng hạng dùng chung; khoảng thời gian chi tiêu được cấu hình theo từng chương trình.',
-  'memberships.config': 'Xét hạng theo chương trình',
-  'memberships.windowHint':
-    'Chọn chương trình và nhập khoảng thời gian chỉ tính các giao dịch chi tiêu hợp lệ.',
+  'memberships.hint': 'Xếp hạng khách hàng theo tổng giá trị mua hàng hợp lệ trong kỳ xét hạng.',
+  'memberships.config': 'Chính sách xét hạng',
+  'memberships.windowHint': 'Nhập khoảng thời gian dùng để cộng toàn bộ giao dịch mua hợp lệ của khách hàng.',
   'memberships.windowExamples': 'Ví dụ: 6 tháng, 12 tháng = 1 năm, 120 tháng = 10 năm.',
   'memberships.members': 'Danh sách thành viên',
   'tiers.title': 'Các hạng',
@@ -261,10 +259,9 @@ const en: Record<keyof typeof vi, string> = {
   'tab.rewards': 'Rewards',
   'ledger.title': 'Loyalty ledger',
   'memberships.title': 'Membership tiers',
-  'memberships.hint': 'Tier thresholds are shared; each program has its own spend period.',
-  'memberships.config': 'Tier evaluation by program',
-  'memberships.windowHint':
-    'Select a program and enter the period that includes eligible spending transactions.',
+  'memberships.hint': 'Rank customers by eligible purchase value during the assessment period.',
+  'memberships.config': 'Tier policy',
+  'memberships.windowHint': 'Enter the period used to total all eligible customer purchases.',
   'memberships.windowExamples': 'Examples: 6 months, 12 months = 1 year, 120 months = 10 years.',
   'memberships.members': 'Members',
   'tiers.title': 'Tiers',

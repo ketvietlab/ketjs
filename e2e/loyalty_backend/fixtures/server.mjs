@@ -79,15 +79,7 @@ const seed = async () => {
     availablePos: true,
     portalVisible: true,
   })
-  await call('loyalty.membership.config.save', {
-    id: 'ket-club:config',
-    programId: 'ket-club',
-    windowMonths: 120,
-    pointValue: '1000',
-    minimumRedeemStep: '10',
-    fallbackCurrencyPerPoint: '1000',
-    fallbackEnabled: true,
-  })
+  await call('loyalty.membership.policy.save', { windowMonths: 120 })
   for (const tier of [
     {
       id: 'member',

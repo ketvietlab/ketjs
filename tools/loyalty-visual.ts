@@ -219,6 +219,7 @@ try {
     fallbackCurrencyPerPoint: '1000',
     fallbackEnabled: true,
   })
+  await call('loyalty.membership.policy.save', { windowMonths: 120 })
   await call('loyalty.wallet.create', {
     id: 'king-wallet',
     programId: 'king-club',

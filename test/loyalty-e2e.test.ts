@@ -278,12 +278,14 @@ test('loyalty HTTP E2E: tier policy keeps rejected values and tier rows own thei
   const initial = await (await e2e.client.get('/admin/loyalty/tiers')).text()
   assert.match(initial, /Hạng thành viên/)
   assert.match(initial, /name="windowMonths"/)
+  assert.doesNotMatch(initial, /name="programId"/)
+  assert.doesNotMatch(initial, /name="redeemPercent"/)
   assert.match(initial, /value="12"/)
   assert.match(initial, /6 tháng, 12 tháng = 1 năm, 120 tháng = 10 năm/)
 
   const badWindow = await e2e.client.post(
     '/admin/loyalty/tiers',
-    new URLSearchParams({ action: 'policy', programId: 'ket-club', windowMonths: '0' }),
+    new URLSearchParams({ action: 'policy', windowMonths: '0' }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(badWindow.status, 200)
@@ -293,11 +295,11 @@ test('loyalty HTTP E2E: tier policy keeps rejected values and tier rows own thei
 
   const savedWindow = await e2e.client.post(
     '/admin/loyalty/tiers',
-    new URLSearchParams({ action: 'policy', programId: 'ket-club', windowMonths: '120' }),
+    new URLSearchParams({ action: 'policy', windowMonths: '120' }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(savedWindow.status, 303)
-  const policy = await call<Row>('loyalty.membership.config.get', { programId: 'ket-club' })
+  const policy = await call<Row>('loyalty.membership.policy.get', {})
   assert.equal(policy.windowMonths, 120)
 
   const badTier = await e2e.client.post(
@@ -308,7 +310,6 @@ test('loyalty HTTP E2E: tier policy keeps rejected values and tier rows own thei
       code: 'gold',
       sequence: '30',
       minimumSpend: '10000000',
-      redeemPercent: '20',
     }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
@@ -325,7 +326,6 @@ test('loyalty HTTP E2E: tier policy keeps rejected values and tier rows own thei
       code: 'gold',
       sequence: '30',
       minimumSpend: '10000000',
-      redeemPercent: '20',
     }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
@@ -521,6 +521,7 @@ test('loyalty HTTP E2E: durable worker drains wallet expiry and membership refre
     fallbackCurrencyPerPoint: '1',
     fallbackEnabled: true,
   })
+  await call<Row>('loyalty.membership.policy.save', { windowMonths: 12 })
   const refresh = await call<Row>('loyalty.membership.refreshAsync', {
     partnerId: 'customer',
     at: '2026-08-20T00:00:00.000Z',
@@ -541,7 +542,7 @@ test('loyalty HTTP E2E: durable worker drains wallet expiry and membership refre
   assert.equal(summary.refreshedAt, '2026-08-20T00:00:00.000Z')
 })
 
-test('loyalty HTTP E2E: tier window, stable earn-group priority and redeem cap are enforced', async (t) => {
+test('loyalty HTTP E2E: company tier window and stable earn-group priority are enforced', async (t) => {
   const { call } = await bootLoyalty(t)
   await saveProgram(call, { id: 'membership', appliesOn: 'both' })
   await saveRule(call, { id: 'membership-rule', programId: 'membership', pointAmount: '1' })
@@ -574,6 +575,7 @@ test('loyalty HTTP E2E: tier window, stable earn-group priority and redeem cap a
     fallbackCurrencyPerPoint: '10',
     fallbackEnabled: true,
   })
+  await call<Row>('loyalty.membership.policy.save', { windowMonths: 12 })
   await call<Row>('loyalty.earnGroup.save', {
     id: 'blocked',
     programId: 'membership',
@@ -613,13 +615,12 @@ test('loyalty HTTP E2E: tier window, stable earn-group priority and redeem cap a
   assert.equal(summary.rollingSpend, 50)
   assert.equal(summary.tierCode, 'bronze')
 
-  const capped = await call<Row>('loyalty.applyReward', {
+  const rewardBeforePromotionTargeting = await call<Row>('loyalty.applyReward', {
     order: snapshot('capped-order', 50),
     programId: 'membership',
     rewardId: 'membership-reward',
   })
-  assert.equal(capped.ok, false)
-  assert.equal((capped.errors as Row[])[0]?.code, 'loyalty.error.redeemCap')
+  assert.equal(rewardBeforePromotionTargeting.ok, true, 'tier membership does not impose a promotion cap')
 
   await call<Row>('loyalty.order.finalize', { order: snapshot('silver-order', 60) })
   summary = (await call<Row>('loyalty.membership.refresh', { partnerId: 'customer' })).summary as Row

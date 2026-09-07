@@ -12,10 +12,10 @@ export const membershipPosition = async (
   ctx: Ctx,
   partnerId: string,
   at = now(),
-): Promise<{ config: Row; months: number; spending: number; tier: Row | null } | null> => {
-  const config = (await ctx.db.select('loyalty.MembershipConfig'))[0]
-  if (!config) return null
-  const months = Math.max(1, n(config.windowMonths))
+): Promise<{ policy: Row; months: number; spending: number; tier: Row | null } | null> => {
+  const policy = (await ctx.db.select('loyalty.MembershipPolicy'))[0]
+  if (!policy) return null
+  const months = Math.max(1, n(policy.windowMonths))
   const cutoff = cutoffFor(at, months)
   const spending = (await ctx.db.select('loyalty.SpendEntry', { partnerId }))
     .filter(
@@ -33,18 +33,14 @@ export const membershipPosition = async (
         n(a.sequence) - n(b.sequence) ||
         String(a.id).localeCompare(String(b.id)),
     )
-  return { config, months, spending, tier: tiers[0] ?? null }
+  return { policy, months, spending, tier: tiers[0] ?? null }
 }
 
 export const refreshMembershipRow = async (ctx: Ctx, partnerId: string, at = now()): Promise<Row | null> => {
   const position = await membershipPosition(ctx, partnerId, at)
   if (!position) return null
-  const { config, months, spending, tier } = position
-  const wallets = await ctx.db.select('loyalty.Wallet', {
-    partnerId,
-    programId: config.programId,
-    active: true,
-  })
+  const { months, spending, tier } = position
+  const wallets = await ctx.db.select('loyalty.Wallet', { partnerId, active: true })
   const points = wallets.reduce((sum, wallet) => sum + n(wallet.balance), 0)
   const existing = (await ctx.db.select('loyalty.Membership', { partnerId }))[0]
   const values = {
@@ -74,7 +70,6 @@ const summaryOf = async (ctx: Ctx, membership: Row | null) => {
     tierCode: tier ? String(tier.code) : null,
     tierName: tier ? String(tier.name) : null,
     rollingSpend: n(membership.rollingSpend),
-    redeemPercent: n(tier?.redeemPercent),
     points: n(membership.points),
     windowMonths: n(membership.windowMonths),
     refreshedAt: String(membership.refreshedAt),
@@ -83,7 +78,7 @@ const summaryOf = async (ctx: Ctx, membership: Row | null) => {
 
 const membershipEffects = [
   'read:partner.Partner',
-  'read:loyalty.MembershipConfig',
+  'read:loyalty.MembershipPolicy',
   'read:loyalty.SpendEntry',
   'read:loyalty.Tier',
   'read:loyalty.Wallet',

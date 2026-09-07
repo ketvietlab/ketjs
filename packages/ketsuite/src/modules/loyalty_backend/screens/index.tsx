@@ -793,7 +793,7 @@ export const ledgerScreen = (_: Translator, frame: Frame, rows: AnyRow[], totals
   />
 )
 
-/** Tier thresholds and the selected program's rolling spend window. */
+/** Company-wide tier thresholds and the rolling spend window. */
 export const tiersScreen = (
   _: Translator,
   frame: Frame,
@@ -873,12 +873,6 @@ export const tiersScreen = (
                       key: 'minimum',
                       label: _('loyalty_backend.field.minimumSpend'),
                       cell: (row) => figure(row.minimumSpend),
-                      align: 'end',
-                    },
-                    {
-                      key: 'cap',
-                      label: _('loyalty_backend.field.redeemPercent'),
-                      cell: (row) => `${figure(row.redeemPercent)}%`,
                       align: 'end',
                     },
                     {

@@ -675,6 +675,8 @@ const sources = {
       'maintenance.expire': ['approve', 'approve', 'loyalty.domain-policy'],
       'membership.config.get': ['read', 'view'],
       'membership.config.save': ['configure', 'configure', 'loyalty.configuration-audit'],
+      'membership.policy.get': ['read', 'view'],
+      'membership.policy.save': ['configure', 'configure', 'loyalty.configuration-audit'],
       'membership.getSummary': ['read', 'report'],
       'membership.list': ['read', 'view'],
       'membership.refresh': ['operate', 'operate'],
