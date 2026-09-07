@@ -162,6 +162,7 @@ export default defineConfig({
               items: [
                 { label: 'Operations reading map', slug: 'operations' },
                 { label: 'Performance benchmarks', slug: 'operations/benchmarks' },
+                { label: 'Lego CSR prototype evidence', slug: 'ketsuite/benchmarks/lego-csr-prototype' },
                 { label: 'Loyalty benchmark evidence', slug: 'ketsuite/benchmarks/loyalty' },
               ],
             },

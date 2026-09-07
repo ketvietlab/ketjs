@@ -207,7 +207,7 @@ export const functions: Record<string, FnSpec> = {
       const P = ctx.table('partner.Partner')
       let q = from(P)
         .select(P.id, P.kind, P.name, P.ref, P.email, P.phone, P.contactConsent, P.active)
-        .orderBy(asc(P.name))
+        .orderBy(asc(P.name), asc(P.id))
       if (a.includeArchived !== true) q = q.where(eq(P.active, true))
       if (a.kind) q = q.where(eq(P.kind, a.kind))
       if (a.search) {
@@ -263,6 +263,93 @@ export const functions: Record<string, FnSpec> = {
         (await ctx.db.all(from(R).select(R.partnerId).where(eq(R.role, a.role)))).map((row) => row.partnerId),
       )
       return { count: rows.filter((row) => holders.has(row.id)).length }
+    },
+  }),
+
+  /**
+   * All counts shown by the directory in one projection. The common no-search
+   * path counts indexed role rows in SQL and only inspects archived partners,
+   * instead of loading the entire partner and role tables five times per open.
+   */
+  directorySummary: defineFn({
+    input: { role: 'text?', search: 'text?', includeArchived: 'bool?' },
+    output: {
+      total: 'int',
+      active: 'int',
+      inclusive: 'int',
+      customers: 'int',
+      suppliers: 'int',
+    },
+    effects: ['read:partner.Partner', 'read:partner.Role'],
+    handler: async (ctx, args) => {
+      const P = ctx.table('partner.Partner')
+      const R = ctx.table('partner.Role')
+      const search = String(args.search ?? '')
+        .normalize('NFKC')
+        .trim()
+
+      if (!search) {
+        const [active, inclusive, archived] = await Promise.all([
+          ctx.db.count(from(P).where(eq(P.active, true))),
+          ctx.db.count(from(P)),
+          ctx.db.all(from(P).select(P.id).where(eq(P.active, false))),
+        ])
+        const archivedIds = archived.map((row) => String(row.id))
+        const countRole = async (role: string, includeArchived: boolean): Promise<number> => {
+          const all = await ctx.db.count(from(R).where(eq(R.role, role)))
+          if (includeArchived || !archivedIds.length) return all
+          let archivedCount = 0
+          for (let at = 0; at < archivedIds.length; at += 400)
+            archivedCount += await ctx.db.count(
+              from(R).where(eq(R.role, role), inArray(R.partnerId, archivedIds.slice(at, at + 400))),
+            )
+          return Math.max(0, all - archivedCount)
+        }
+        const [customers, suppliers] = await Promise.all([
+          countRole('customer', false),
+          countRole('supplier', false),
+        ])
+        const selected = args.role
+          ? await countRole(String(args.role), args.includeArchived === true)
+          : args.includeArchived === true
+            ? inclusive
+            : active
+        return { total: selected, active, inclusive, customers, suppliers }
+      }
+
+      const email = normalizedEmail(search) ?? search
+      const phone = normalizedPhone(search) ?? search
+      const matched = await ctx.db.all(
+        from(P)
+          .select(P.id, P.active)
+          .where(or(like(P.name, `%${search}%`), like(P.email, `%${email}%`), like(P.phone, `%${phone}%`))),
+      )
+      const ids = matched.map((row) => String(row.id))
+      const activeIds = new Set(matched.filter((row) => row.active === true).map((row) => String(row.id)))
+      const roleIds = async (role: string): Promise<Set<string>> => {
+        const found = new Set<string>()
+        for (let at = 0; at < ids.length; at += 400)
+          for (const row of await ctx.db.all(
+            from(R)
+              .select(R.partnerId)
+              .where(eq(R.role, role), inArray(R.partnerId, ids.slice(at, at + 400))),
+          ))
+            found.add(String(row.partnerId))
+        return found
+      }
+      const [customerIds, supplierIds, selectedIds] = await Promise.all([
+        roleIds('customer'),
+        roleIds('supplier'),
+        args.role ? roleIds(String(args.role)) : Promise.resolve(new Set(ids)),
+      ])
+      const activeCount = (set: Set<string>): number => [...set].filter((id) => activeIds.has(id)).length
+      return {
+        total: args.includeArchived === true ? selectedIds.size : activeCount(selectedIds),
+        active: activeIds.size,
+        inclusive: ids.length,
+        customers: activeCount(customerIds),
+        suppliers: activeCount(supplierIds),
+      }
     },
   }),
 

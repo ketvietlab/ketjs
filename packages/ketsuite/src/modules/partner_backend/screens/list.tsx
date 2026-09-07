@@ -75,6 +75,7 @@ export const partnersScreen = (
   locale = '',
   summary?: PartnerListSummary,
   total = rows.length,
+  tableBody?: TemplateResult,
 ): TemplateResult =>
   shell(
     _,
@@ -155,15 +156,17 @@ export const partnersScreen = (
                     },
                   ]}
                 />,
-                rows.length
-                  ? tableFor(_, rows, table, locale)
-                  : emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint')),
+                tableBody ??
+                  (rows.length
+                    ? tableFor(_, rows, table, locale)
+                    : emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint'))),
               ],
               'compact',
             )
-          : rows.length
-            ? tableFor(_, rows, table, locale)
-            : emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint'))
+          : (tableBody ??
+            (rows.length
+              ? tableFor(_, rows, table, locale)
+              : emptyState(_('partner_backend.screen.empty'), _('partner_backend.screen.emptyHint'))))
       }
     />,
     { ...frame, chrome: null, topbar: false },

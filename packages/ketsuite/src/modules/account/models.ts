@@ -193,6 +193,10 @@ export const models: Record<string, ModelDef> = {
       amountResidual: 'decimal',
       sequence: 'int',
     },
+    indexes: {
+      company_partner_open: { fields: ['companyId', 'partnerId', 'reconciled'] },
+      company_move: { fields: ['companyId', 'moveId'] },
+    },
   },
   PartialReconcile: {
     scope: 'company',

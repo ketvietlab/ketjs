@@ -19,7 +19,7 @@
  * balance run over the same window agree.
  */
 
-import { and, defineFn, eq, from, inArray } from '@ketvietlab/ketjs'
+import { and, defineFn, eq, from, inArray, KetError } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { accountsById, ledgerOf, linesOfMoves, postedMoves } from './functions.ts'
 import type { ACCOUNT_TYPES } from './functions.ts'
@@ -205,6 +205,82 @@ const maturityOf = (line: Row, move: Row): string =>
   )
 
 export const analyticsFunctions: Record<string, FnSpec> = {
+  /**
+   * Net open receivable (positive) or payable (negative) for one visible page of
+   * partners. The ids are mandatory and bounded: a list extension may enrich the
+   * rows it already has, never turn a page open into a tenant-wide ledger scan.
+   */
+  partnerBalances: defineFn({
+    input: { ids: 'json' },
+    output: { id: 'id', balance: 'decimal', currency: 'text' },
+    effects: ['read:account.Account', 'read:account.Move', 'read:account.MoveLine', 'read:company.Company'],
+    handler: async (ctx, args) => {
+      if (!Array.isArray(args.ids)) {
+        throw new KetError({
+          code: 'E_ACCOUNT_PARTNER_BATCH',
+          message: 'partner balance ids must be an array',
+        })
+      }
+      const ids = [...new Set(args.ids.map(String).filter(Boolean))]
+      if (ids.length > 500) {
+        throw new KetError({
+          code: 'E_ACCOUNT_PARTNER_BATCH',
+          message: 'partner balance batches are limited to 500 ids',
+        })
+      }
+      if (!ids.length) return []
+
+      const [{ currency, scale }, accounts] = await Promise.all([ledgerOf(ctx), accountsById(ctx)])
+      const control = [...accounts]
+        .filter(([, row]) =>
+          [...RECEIVABLE_TYPES, ...PAYABLE_TYPES].includes(
+            String(row.accountType) as (typeof RECEIVABLE_TYPES | typeof PAYABLE_TYPES)[number],
+          ),
+        )
+        .map(([id]) => id)
+      const zero = minorText(0n, scale)
+      if (!control.length) return ids.map((id) => ({ id, balance: zero, currency }))
+
+      const L = ctx.table('account.MoveLine')
+      const lines: Row[] = []
+      for (let at = 0; at < ids.length; at += 400) {
+        lines.push(
+          ...(await ctx.db.all(
+            from(L).where(
+              and(
+                eq(L.reconciled, false),
+                inArray(L.partnerId, ids.slice(at, at + 400)),
+                inArray(L.accountId, control),
+              ),
+            ),
+          )),
+        )
+      }
+      const moveIds = [...new Set(lines.map((line) => String(line.moveId)))]
+      const posted = new Set<string>()
+      const M = ctx.table('account.Move')
+      for (let at = 0; at < moveIds.length; at += 400) {
+        for (const move of await ctx.db.all(
+          from(M)
+            .select(M.id)
+            .where(and(eq(M.state, 'posted'), inArray(M.id, moveIds.slice(at, at + 400)))),
+        ))
+          posted.add(String(move.id))
+      }
+
+      const totals = new Map(ids.map((id): [string, bigint] => [id, 0n]))
+      for (const line of lines) {
+        const partnerId = String(line.partnerId ?? '')
+        if (!posted.has(String(line.moveId)) || !totals.has(partnerId)) continue
+        const accountType = String(accounts.get(String(line.accountId))?.accountType ?? '')
+        const residual = moneyMinor(line.amountResidual, scale)
+        const signed = (PAYABLE_TYPES as readonly string[]).includes(accountType) ? -residual : residual
+        totals.set(partnerId, totals.get(partnerId)! + signed)
+      }
+      return ids.map((id) => ({ id, balance: minorText(totals.get(id)!, scale), currency }))
+    },
+  }),
+
   /**
    * Revenue, cost, and profit for one window, with the accounts behind each.
    *

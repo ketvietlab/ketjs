@@ -29,6 +29,7 @@ const MODULE_KEYS = new Set([
   'contentTypes',
   'taxonomies',
   'relations',
+  'browser',
   'title',
   'summary',
   'category',
@@ -91,6 +92,7 @@ export function defineModule(spec: ModuleSpec): KetModule {
     contentTypes: spec.contentTypes ?? {},
     taxonomies: spec.taxonomies ?? {},
     relations: spec.relations ?? {},
+    browser: spec.browser ?? {},
     title: spec.title ?? spec.name,
     summary: spec.summary ?? '',
     category: spec.category ?? 'Khác',
@@ -112,6 +114,7 @@ const THEME_FORBIDDEN = [
   'contentTypes',
   'taxonomies',
   'reports',
+  'browser',
 ] as const
 
 /**

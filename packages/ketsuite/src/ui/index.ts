@@ -36,6 +36,12 @@ export { BoardPage } from './board-page.tsx'
 export type { BoardPageProps } from './board-page.tsx'
 export { ListPage } from './list-page.tsx'
 export type { ListPageProps } from './list-page.tsx'
+export { browserList, browserResourceMap, browserTable, browserTableBootstrap } from './browser-list.tsx'
+export type {
+  BrowserListOptions,
+  BrowserListState,
+  BrowserWidgetRenderer,
+} from './browser-list.tsx'
 
 /**
  * Public components a screen uses directly, with no compatibility copy here.
@@ -64,6 +70,8 @@ export {
   person,
   initials,
   code,
+  dataValue,
+  moneyValue,
   qrCode,
 } from './primitives.tsx'
 export type { Tone } from './primitives.tsx'

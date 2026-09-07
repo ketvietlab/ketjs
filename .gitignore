@@ -22,6 +22,10 @@ packages/ketsuite/src/modules/backend/design/client/relation-select.mjs
 packages/ketsuite/src/modules/backend/design/client/relation-select.mjs.map
 packages/ketsuite/src/modules/backend/design/client/table-selection.mjs
 packages/ketsuite/src/modules/backend/design/client/table-selection.mjs.map
+packages/ketsuite/src/modules/backend/design/client/browser-list.mjs
+packages/ketsuite/src/modules/backend/design/client/browser-list.mjs.map
+packages/ketsuite/src/modules/account_partner_backend/client/partner-balance-widget.mjs
+packages/ketsuite/src/modules/account_partner_backend/client/partner-balance-widget.mjs.map
 # The public design-system entry is bundled into the backend asset root so
 # source-mode development and production serve the same fingerprinted bytes.
 packages/ketsuite/src/modules/backend/design/design-system.css
@@ -43,6 +47,7 @@ coverage/
 *.sqlite-journal
 
 # Local configuration and logs
+.artifacts/
 .env
 .env.*
 !.env.example
