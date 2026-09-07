@@ -244,27 +244,15 @@ export const configurationScreen = (
         variant: 'primary',
       })}
       controls={
-        <>
-          <Tabs
-            label={_('crm_backend.configuration.title')}
-            items={CONFIGURATION_TABS.map((id) => ({
-              id,
-              label: _(`crm_backend.configuration.${id}`),
-              href: configurationHref(id, locale),
-              active: options.tab === id,
-            }))}
-          />
-          <nav data-ui="configuration-status" aria-label={_('crm_backend.configuration.statusFilter')}>
-            {(['active', 'archived', 'all'] as const).map((value) =>
-              linkButton({
-                href: configurationHref(options.tab, locale, value),
-                label: _(`crm_backend.configuration.status.${value}`),
-                variant: status === value ? 'secondary' : 'tertiary',
-                size: 'compact',
-              }),
-            )}
-          </nav>
-        </>
+        <Tabs
+          label={_('crm_backend.configuration.title')}
+          items={CONFIGURATION_TABS.map((id) => ({
+            id,
+            label: _(`crm_backend.configuration.${id}`),
+            href: configurationHref(id, locale),
+            active: options.tab === id,
+          }))}
+        />
       }
       status={`${_(`crm_backend.configuration.${options.tab}`)} · ${options.rows.length}`}
       body={
