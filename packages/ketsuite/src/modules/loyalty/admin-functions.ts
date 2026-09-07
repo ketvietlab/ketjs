@@ -34,13 +34,6 @@ export const tierFormSchema = defineFormSchema({
     code: { type: 'text', required: true, trim: true, minLength: 1 },
     sequence: { type: 'int', min: 0 },
     minimumSpend: { type: 'decimal', required: true, min: 0 },
-  },
-  unknown: 'drop',
-})
-
-/** A tier window belongs to the selected program policy and is expressed in whole months. */
-export const membershipPolicyFormSchema = defineFormSchema({
-  fields: {
     windowMonths: { type: 'int', required: true, min: 1 },
   },
   unknown: 'drop',
@@ -698,6 +691,7 @@ export const adminFunctions: Record<string, FnSpec> = {
       code: 'text',
       sequence: 'int?',
       minimumSpend: 'decimal',
+      windowMonths: 'int?',
       redeemPercent: 'decimal',
       active: 'bool?',
     },
@@ -709,7 +703,9 @@ export const adminFunctions: Record<string, FnSpec> = {
       const name = String(args.name).trim(),
         code = String(args.code).trim().toLowerCase()
       if (!name || !code) return invalid(issue(!name ? 'name' : 'code', 'loyalty.error.required'))
-      if (n(args.minimumSpend) < 0 || n(args.redeemPercent) < 0 || n(args.redeemPercent) > 100)
+      if (n(args.minimumSpend) < 0) return invalid(issue('minimumSpend', 'loyalty.error.invalid'))
+      if (!(n(args.windowMonths ?? 12) > 0)) return invalid(issue('windowMonths', 'loyalty.error.invalid'))
+      if (n(args.redeemPercent) < 0 || n(args.redeemPercent) > 100)
         return invalid(issue('redeemPercent', 'loyalty.error.invalid'))
       const duplicate = (await ctx.db.select('loyalty.Tier', { code }))[0]
       if (duplicate && duplicate.id !== args.id) return invalid(issue('code', 'loyalty.error.tierOverlap'))
@@ -719,6 +715,7 @@ export const adminFunctions: Record<string, FnSpec> = {
         code,
         sequence: args.sequence ?? 10,
         minimumSpend: args.minimumSpend,
+        windowMonths: args.windowMonths ?? 12,
         redeemPercent: args.redeemPercent,
         active: args.active ?? true,
       }
@@ -790,30 +787,6 @@ export const adminFunctions: Record<string, FnSpec> = {
             })
           )[0] ?? null)
         : ((await ctx.db.select('loyalty.MembershipConfig'))[0] ?? null),
-  }),
-
-  'membership.policy.save': defineFn({
-    input: { windowMonths: 'int' },
-    output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:loyalty.MembershipPolicy', 'write:loyalty.MembershipPolicy'],
-    idempotent: true,
-    agent: true,
-    handler: async (ctx, args) => {
-      const windowMonths = n(args.windowMonths)
-      if (!(windowMonths > 0)) return invalid(issue('windowMonths', 'loyalty.error.membershipConfig'))
-      const existing = (await ctx.db.select('loyalty.MembershipPolicy'))[0]
-      const values = { windowMonths, updatedAt: now() }
-      if (existing) await ctx.db.update('loyalty.MembershipPolicy', { id: existing.id }, values)
-      else await ctx.db.insert('loyalty.MembershipPolicy', { id: 'membership-policy', ...values })
-      return { ok: true, id: String(existing?.id ?? 'membership-policy') }
-    },
-  }),
-
-  'membership.policy.get': defineFn({
-    input: {},
-    effects: ['read:loyalty.MembershipPolicy'],
-    agent: true,
-    handler: async (ctx) => (await ctx.db.select('loyalty.MembershipPolicy'))[0] ?? null,
   }),
 
   'earnGroup.list': defineFn({

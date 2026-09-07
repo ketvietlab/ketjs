@@ -167,7 +167,6 @@ const walletWriteEffects = [
 ] as const
 
 const membershipEffects = [
-  'read:loyalty.MembershipPolicy',
   'read:loyalty.SpendEntry',
   'write:loyalty.SpendEntry',
   'read:loyalty.Tier',

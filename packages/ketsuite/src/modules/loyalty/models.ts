@@ -214,6 +214,7 @@ export const models: Record<string, ModelDef> = {
       code: 'text',
       sequence: 'int',
       minimumSpend: 'decimal',
+      windowMonths: 'int?',
       redeemPercent: 'decimal',
       active: 'bool',
     },
@@ -253,6 +254,7 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { program: { fields: ['companyId', 'programId'], unique: true } },
   },
+  // Retained as a storage-compatible legacy shape; tier evaluation reads Tier.windowMonths.
   MembershipPolicy: {
     scope: 'company',
     fields: {

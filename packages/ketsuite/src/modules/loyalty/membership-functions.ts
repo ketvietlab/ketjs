@@ -12,28 +12,34 @@ export const membershipPosition = async (
   ctx: Ctx,
   partnerId: string,
   at = now(),
-): Promise<{ policy: Row; months: number; spending: number; tier: Row | null } | null> => {
-  const policy = (await ctx.db.select('loyalty.MembershipPolicy'))[0]
-  if (!policy) return null
-  const months = Math.max(1, n(policy.windowMonths))
-  const cutoff = cutoffFor(at, months)
-  const spending = (await ctx.db.select('loyalty.SpendEntry', { partnerId }))
-    .filter(
-      (entry) =>
-        !entry.reversedAt &&
-        new Date(String(entry.occurredAt)).getTime() >= cutoff &&
-        new Date(String(entry.occurredAt)).getTime() <= new Date(at).getTime(),
-    )
-    .reduce((sum, entry) => sum + n(entry.amount), 0)
-  const tiers = (await ctx.db.select('loyalty.Tier', { active: true }))
-    .filter((tier) => n(tier.minimumSpend) <= spending + 0.000001)
+): Promise<{ months: number; spending: number; tier: Row | null } | null> => {
+  const tiers = await ctx.db.select('loyalty.Tier', { active: true })
+  if (!tiers.length) return null
+  const atTime = new Date(at).getTime()
+  const entries = (await ctx.db.select('loyalty.SpendEntry', { partnerId })).filter(
+    (entry) => !entry.reversedAt && new Date(String(entry.occurredAt)).getTime() <= atTime,
+  )
+  const positions = tiers.map((tier) => {
+    const months = Math.max(1, n(tier.windowMonths ?? 12))
+    const cutoff = cutoffFor(at, months)
+    const spending = entries
+      .filter((entry) => new Date(String(entry.occurredAt)).getTime() >= cutoff)
+      .reduce((sum, entry) => sum + n(entry.amount), 0)
+    return { months, spending, tier }
+  })
+  const qualified = positions
+    .filter((position) => n(position.tier.minimumSpend) <= position.spending + 0.000001)
     .sort(
       (a, b) =>
-        n(b.minimumSpend) - n(a.minimumSpend) ||
-        n(a.sequence) - n(b.sequence) ||
-        String(a.id).localeCompare(String(b.id)),
+        n(b.tier.sequence) - n(a.tier.sequence) ||
+        n(b.tier.minimumSpend) - n(a.tier.minimumSpend) ||
+        String(a.tier.id).localeCompare(String(b.tier.id)),
     )
-  return { policy, months, spending, tier: tiers[0] ?? null }
+  if (qualified[0]) return qualified[0]
+  const baseline = positions.sort(
+    (a, b) => n(a.tier.sequence) - n(b.tier.sequence) || String(a.tier.id).localeCompare(String(b.tier.id)),
+  )[0]!
+  return { months: baseline.months, spending: baseline.spending, tier: null }
 }
 
 export const refreshMembershipRow = async (ctx: Ctx, partnerId: string, at = now()): Promise<Row | null> => {
@@ -78,7 +84,6 @@ const summaryOf = async (ctx: Ctx, membership: Row | null) => {
 
 const membershipEffects = [
   'read:partner.Partner',
-  'read:loyalty.MembershipPolicy',
   'read:loyalty.SpendEntry',
   'read:loyalty.Tier',
   'read:loyalty.Wallet',

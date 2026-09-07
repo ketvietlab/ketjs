@@ -23,17 +23,16 @@ for (const viewport of [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'mobile', width: 390, height: 844 },
 ] as const) {
-  test(`renders the company tier policy on ${viewport.name}`, async ({ page }) => {
+  test(`renders per-tier assessment periods on ${viewport.name}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' })
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await page.goto('/admin/loyalty/tiers?lang=vi')
 
     await expect(page.getByRole('heading', { name: 'Hạng thành viên' })).toBeVisible()
     await expect(page.locator('select[name="programId"]')).toHaveCount(0)
-    await expect(page.locator('input[name="windowMonths"]')).toHaveValue('120')
-    await expect(page.getByText('6 tháng, 12 tháng = 1 năm, 120 tháng = 10 năm')).toBeVisible()
+    await expect(page.getByText('Chính sách xét hạng')).toHaveCount(0)
+    await expect(page.locator('input[name="windowMonths"]')).toHaveCount(0)
     await expect(page.locator('[data-ui="row"]')).toHaveCount(4)
-    await expect(page.locator('[data-ui="surface"]').first()).toHaveCSS('background-color', /rgba?\(/)
 
     const overflow = await page.evaluate(() => ({
       document: document.documentElement.scrollWidth,
@@ -52,6 +51,7 @@ test('opens tier editing from the row and keeps archive separate from editing', 
   await expect(page).toHaveURL(/modal=tier.*tier=gold/)
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.locator('input[name="name"]')).toHaveValue('Vàng')
+  await expect(page.locator('input[name="windowMonths"]')).toHaveValue('12')
   await expect(page.getByRole('button', { name: 'Lưu trữ' })).toBeVisible()
 })
 
