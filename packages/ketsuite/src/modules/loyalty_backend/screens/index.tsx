@@ -793,7 +793,7 @@ export const ledgerScreen = (_: Translator, frame: Frame, rows: AnyRow[], totals
   />
 )
 
-/** Company-wide tier thresholds and the rolling spend window. */
+/** Company-wide tiers with a rolling spend window on each threshold. */
 export const tiersScreen = (
   _: Translator,
   frame: Frame,
@@ -803,8 +803,6 @@ export const tiersScreen = (
     closeHref: string
     createHref: string
     tierHref: (tier: AnyRow) => string
-    policyFields: FormField[]
-    policyErrors?: string[]
     tierFields?: FormField[]
     tierErrors?: string[]
     tier?: AnyRow | null
@@ -828,24 +826,6 @@ export const tiersScreen = (
         },
       }}
       body={stack([
-        <Section
-          title={_('loyalty_backend.memberships.config')}
-          description={_('loyalty_backend.memberships.windowHint')}
-          body={
-            <Surface
-              body={
-                <RecordForm
-                  action={options.action}
-                  hidden={{ action: 'policy' }}
-                  fields={options.policyFields}
-                  errors={options.policyErrors}
-                  submit={_('loyalty_backend.action.saveConfig')}
-                  submitVariant="primary"
-                />
-              }
-            />
-          }
-        />,
         <Section
           title={_('loyalty_backend.tiers.title')}
           description={_('loyalty_backend.tiers.hint')}
@@ -873,6 +853,12 @@ export const tiersScreen = (
                       key: 'minimum',
                       label: _('loyalty_backend.field.minimumSpend'),
                       cell: (row) => figure(row.minimumSpend),
+                      align: 'end',
+                    },
+                    {
+                      key: 'window',
+                      label: _('loyalty_backend.field.windowMonths'),
+                      cell: (row) => figure(row.windowMonths ?? 12),
                       align: 'end',
                     },
                     {

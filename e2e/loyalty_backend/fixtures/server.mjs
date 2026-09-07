@@ -79,7 +79,6 @@ const seed = async () => {
     availablePos: true,
     portalVisible: true,
   })
-  await call('loyalty.membership.policy.save', { windowMonths: 120 })
   for (const tier of [
     {
       id: 'member',
@@ -87,16 +86,34 @@ const seed = async () => {
       code: 'member',
       sequence: 10,
       minimumSpend: '0',
+      windowMonths: 120,
       redeemPercent: '10',
     },
-    { id: 'silver', name: 'Bạc', code: 'silver', sequence: 20, minimumSpend: '5000000', redeemPercent: '20' },
-    { id: 'gold', name: 'Vàng', code: 'gold', sequence: 30, minimumSpend: '20000000', redeemPercent: '30' },
+    {
+      id: 'silver',
+      name: 'Bạc',
+      code: 'silver',
+      sequence: 20,
+      minimumSpend: '5000000',
+      windowMonths: 12,
+      redeemPercent: '20',
+    },
+    {
+      id: 'gold',
+      name: 'Vàng',
+      code: 'gold',
+      sequence: 30,
+      minimumSpend: '20000000',
+      windowMonths: 12,
+      redeemPercent: '30',
+    },
     {
       id: 'diamond',
       name: 'Kim cương',
       code: 'diamond',
       sequence: 40,
       minimumSpend: '50000000',
+      windowMonths: 12,
       redeemPercent: '40',
     },
   ])

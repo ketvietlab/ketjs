@@ -313,6 +313,7 @@ try {
     name: 'Benchmark tier',
     code: 'benchmark',
     minimumSpend: '0',
+    windowMonths: 12,
     redeemPercent: '100',
   })
   await call('loyalty.membership.config.save', {
@@ -324,7 +325,6 @@ try {
     fallbackCurrencyPerPoint: '10',
     fallbackEnabled: true,
   })
-  await call('loyalty.membership.policy.save', { windowMonths: 12 })
   await call('loyalty.order.finalize', { order: snapshot('member-order', 'member') })
   await measure('membership refresh', membershipCount, async (_pass, sample) => {
     for (let index = 0; index < membershipCount; index++)

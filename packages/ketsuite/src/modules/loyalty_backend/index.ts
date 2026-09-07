@@ -6,7 +6,7 @@ import type { FormField, SearchMenu } from '../../ui/index.ts'
 import { formRefusal, readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { LEDGER_OPERATIONS, PROGRAM_TYPES } from '../loyalty/types.ts'
-import { membershipPolicyFormSchema, tierFormSchema } from '../loyalty/admin-functions.ts'
+import { tierFormSchema } from '../loyalty/admin-functions.ts'
 import { messages } from './messages.ts'
 import {
   dashboardScreen,
@@ -625,7 +625,6 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       let submitted: Record<string, string> = {}
       let submittedAction = ''
       let tiers = (await ctx.call('loyalty.tier.list', { includeArchived: true }, url, req)) as AnyRow[]
-      let policy = (await ctx.call('loyalty.membership.policy.get', {}, url, req)) as AnyRow | null
 
       const baseHref = (): string => {
         const target = new URL(inLocale(url, '/admin/loyalty/tiers'), url.origin)
@@ -637,19 +636,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         submitted = form
         submittedAction = form.action ?? ''
         let result: AnyRow = { ok: false }
-        if (submittedAction === 'policy') {
-          const checked = refusal.check(membershipPolicyFormSchema, form)
-          if (checked)
-            result = (await ctx.call(
-              'loyalty.membership.policy.save',
-              { windowMonths: checked.windowMonths },
-              url,
-              req,
-            )) as AnyRow
-          if (result.ok) return seeOther(baseHref())
-          refusal.add(resultErrors(result, _))
-          policy = (await ctx.call('loyalty.membership.policy.get', {}, url, req)) as AnyRow | null
-        } else if (submittedAction === 'tier') {
+        if (submittedAction === 'tier') {
           const checked = refusal.check(tierFormSchema, form)
           if (checked) {
             const existingTier = tiers.find((row) => String(row.id) === form.id)
@@ -661,6 +648,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                 code: checked.code,
                 sequence: checked.sequence ?? 10,
                 minimumSpend: checked.minimumSpend,
+                windowMonths: checked.windowMonths,
                 redeemPercent: String(existingTier?.redeemPercent ?? 100),
                 active: true,
               },
@@ -681,6 +669,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               code: String(tier.code),
               sequence: Number(tier.sequence ?? 10),
               minimumSpend: String(tier.minimumSpend),
+              windowMonths: Number(tier.windowMonths ?? 12),
               redeemPercent: String(tier.redeemPercent),
               active: !tier.active,
             },
@@ -700,17 +689,6 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       const modal = url.searchParams.get('modal') === 'tier' || submittedAction === 'tier'
       const held = (name: string, fallback: unknown, action: string): unknown =>
         submittedAction === action && Object.hasOwn(submitted, name) ? submitted[name] : fallback
-      const policyFields: FormField[] = [
-        {
-          name: 'windowMonths',
-          label: _('loyalty_backend.field.windowMonths'),
-          type: 'number',
-          value: String(held('windowMonths', policy?.windowMonths ?? 12, 'policy')),
-          required: true,
-          help: _('loyalty_backend.memberships.windowExamples'),
-          error: submittedAction === 'policy' ? refusal.error('windowMonths') : null,
-        },
-      ]
       const tierFields: FormField[] | undefined = modal
         ? [
             {
@@ -734,6 +712,15 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               value: String(held('minimumSpend', tier?.minimumSpend ?? 0, 'tier')),
               required: true,
               error: submittedAction === 'tier' ? refusal.error('minimumSpend') : null,
+            },
+            {
+              name: 'windowMonths',
+              label: _('loyalty_backend.field.windowMonths'),
+              type: 'number',
+              value: String(held('windowMonths', tier?.windowMonths ?? 12, 'tier')),
+              required: true,
+              help: _('loyalty_backend.memberships.windowExamples'),
+              error: submittedAction === 'tier' ? refusal.error('windowMonths') : null,
             },
             {
               name: 'sequence',
@@ -760,8 +747,6 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               target.searchParams.set('tier', String(row.id))
               return target.pathname + target.search
             },
-            policyFields,
-            policyErrors: submittedAction === 'policy' ? refusal.sentences() : [],
             tierFields,
             tierErrors: submittedAction === 'tier' ? refusal.sentences() : [],
             tier,

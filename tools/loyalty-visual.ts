@@ -200,6 +200,7 @@ try {
     code: 'silver',
     sequence: 10,
     minimumSpend: '0',
+    windowMonths: 120,
     redeemPercent: '20',
   })
   await call('loyalty.tier.save', {
@@ -208,6 +209,7 @@ try {
     code: 'gold',
     sequence: 20,
     minimumSpend: '5000000',
+    windowMonths: 120,
     redeemPercent: '40',
   })
   await call('loyalty.membership.config.save', {
@@ -219,7 +221,6 @@ try {
     fallbackCurrencyPerPoint: '1000',
     fallbackEnabled: true,
   })
-  await call('loyalty.membership.policy.save', { windowMonths: 120 })
   await call('loyalty.wallet.create', {
     id: 'king-wallet',
     programId: 'king-club',
