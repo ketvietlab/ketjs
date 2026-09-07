@@ -11,6 +11,7 @@ import type { Ctx, FnSpec, Manifest } from '@ketvietlab/ketjs'
 import {
   advanceAuthorizationRevision,
   authorizationFunctions,
+  accessWorkflowFunctions,
   effectiveFunctionKeys,
   managedRoleHealthIssues,
   recordAuthorizationAudit,
@@ -98,6 +99,7 @@ export async function permittedFor(ctx: Ctx, userId: string): Promise<string[] |
 
 export const roleFunctions: Record<string, FnSpec> = {
   ...authorizationFunctions,
+  ...accessWorkflowFunctions,
   permissionCatalogue: defineFn({
     input: {},
     output: { key: 'text', module: 'text', task: 'text' },

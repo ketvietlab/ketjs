@@ -5,6 +5,7 @@ import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   CONFIGURATION_TABS,
   configurationScreen,
+  teamConfigurationScreen,
 } from '../packages/ketsuite/src/modules/crm_backend/screens/configuration.tsx'
 
 const messages: Record<string, string> = {
@@ -39,7 +40,7 @@ translate.locale = 'vi'
 translate.has = (key) => key in messages
 translate.resolves = translate.has
 
-test('crm configuration: keeps the specialized tabbed create workflow and localized row actions', () => {
+test('crm configuration: keeps five specialized tabs and opens the whole team row', () => {
   const rendered = renderToString(
     configurationScreen(
       translate,
@@ -63,57 +64,57 @@ test('crm configuration: keeps the specialized tabbed create workflow and locali
   for (const tab of CONFIGURATION_TABS)
     assert.match(rendered, new RegExp(`href="/admin/crm/configuration\\?tab=${tab}&amp;lang=vi"`))
   assert.match(rendered, /data-active="true"[^>]*href="\/admin\/crm\/configuration\?tab=teams&amp;lang=vi"/)
-  assert.match(rendered, /Tạo cấu hình/)
-  assert.match(rendered, /action="\/admin\/crm\/configuration\?tab=teams&amp;lang=vi"/)
-  assert.match(rendered, /href="\/admin\/crm\/configuration\?tab=teams&amp;edit=team-north&amp;lang=vi"/)
-  assert.match(rendered, /name="action" value="archive"/)
-  assert.match(rendered, /name="expectedVersion" value="3"/)
+  assert.equal(CONFIGURATION_TABS.length, 5)
+  assert.doesNotMatch(rendered, /tab=members/)
+  assert.match(rendered, /href="\/admin\/crm\/configuration\/teams\/new\?lang=vi"/)
+  assert.match(rendered, /data-row-href="\/admin\/crm\/configuration\/teams\/team-north\?lang=vi"/)
+  assert.doesNotMatch(rendered, /data-ui="row-link"/)
+  assert.doesNotMatch(rendered, /name="action" value="archive"/)
   assert.match(rendered, /Đang hoạt động/)
+  assert.doesNotMatch(rendered, /data-ui="configuration-status"/)
+  assert.doesNotMatch(rendered, /status=(?:archived|all)/)
 })
 
-test('crm configuration: preserves edit values, validation, cancel, detail and restore semantics', () => {
+test('crm configuration: edits a team and its members on a full record page', () => {
   const rendered = renderToString(
-    configurationScreen(
+    teamConfigurationScreen(
       translate,
       {},
       {
-        tab: 'members',
-        locale: '?lang=vi',
-        rows: [
+        team: { id: 'team-north', name: 'Miền Bắc', active: true, version: 4 },
+        members: [
           {
             id: 'member-admin',
             userName: 'Quản trị viên',
+            userId: 'admin',
             capacity: 5,
             assignedCount: 2,
             active: false,
-            version: 4,
           },
         ],
-        editing: {
-          id: 'member-admin',
-          userName: 'Quản trị viên',
-          capacity: 5,
-          active: false,
-          version: 4,
-        },
-        fields: [{ name: 'capacity', label: 'Sức chứa', type: 'number', value: '5' }],
+        fields: [{ name: 'name', label: 'Tên', value: 'Miền Bắc' }],
+        action: '/admin/crm/configuration/teams/team-north?lang=vi',
+        cancelHref: '/admin/crm/configuration?tab=teams&lang=vi',
+        memberCreateHref: '/admin/crm/configuration/teams/team-north?member=new&lang=vi',
+        memberEditHref: (row) => `/admin/crm/configuration/teams/team-north?member=${String(row.id)}&lang=vi`,
         errors: ['Sức chứa phải lớn hơn 0'],
-        label: (row) => String(row.userName),
-        detail: (row) => `5 · ${String(row.assignedCount ?? 0)}`,
       },
     ),
   )
 
-  assert.match(rendered, /Chỉnh sửa · Quản trị viên/)
-  assert.match(rendered, /name="id" value="member-admin"/)
+  assert.match(rendered, /data-ui="form-page"[^>]*data-pattern="record"/)
+  assert.match(rendered, /name="id" value="team-north"/)
   assert.match(rendered, /name="expectedVersion" value="4"/)
-  assert.match(rendered, /name="capacity"[^>]*value="5"/)
+  assert.match(
+    rendered,
+    /data-row-href="\/admin\/crm\/configuration\/teams\/team-north\?member=member-admin&amp;lang=vi"/,
+  )
+  assert.doesNotMatch(rendered, /data-ui="row-link"/)
+  assert.match(rendered, /Quản trị viên/)
+  assert.match(rendered, /5/)
+  assert.match(rendered, /2/)
   assert.match(rendered, /Sức chứa phải lớn hơn 0/)
-  assert.match(rendered, /href="\/admin\/crm\/configuration\?tab=members&amp;lang=vi"/)
-  assert.match(rendered, /data-col="detail"/)
-  assert.match(rendered, /5 · 2/)
   assert.match(rendered, /Đã lưu trữ/)
-  assert.match(rendered, /name="action" value="restore"/)
 })
 
 test('crm configuration: keeps large forms in a centered dialog instead of a side sheet', () => {

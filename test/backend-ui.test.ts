@@ -1133,6 +1133,9 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
     }),
   )
   assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
+  assert.match(html, /data-ui="action" data-icon-only="true"[\s\S]*name="theme"/)
+  assert.match(html, /aria-label="Đổi giao diện sáng\/tối" aria-pressed="false"/)
+  assert.match(html, /data-theme-icon="dark"[\s\S]*data-theme-icon="light"/)
   assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
   assert.match(html, /data-ui="viewer-presence"/)
   assert.match(html, /data-ui="viewer-context-switcher" href="\/admin\/context"/)
@@ -1193,6 +1196,18 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
   )
 })
 
+test('record workspace: stacked collaboration keeps the same page gutter as the record body', () => {
+  const css = ADMIN_CSS
+  assert.match(
+    css,
+    /@media \(max-width: 83\.9375rem\) \{[\s\S]*?\[data-ui="record-aside"\] \{[\s\S]*?padding: var\(--admin-gap-md\)/,
+  )
+  assert.match(
+    css,
+    /@media \(max-width: 47\.9375rem\) \{[\s\S]*?\[data-ui="record-body"\] \{[\s\S]*?padding: var\(--admin-gap\);[\s\S]*?\[data-ui="record-aside"\] \{[\s\S]*?padding: var\(--admin-gap\)/,
+  )
+})
+
 test('record workspace: compact identity and actions share the global record header', () => {
   const html = renderToString(
     recordWorkspace({
@@ -1244,6 +1259,27 @@ test('backend responder: a fragment request never renders document infrastructur
   )
   assert.equal(result.type, 'text/vnd.ket.fragments+html')
   assert.deepEqual({ styles, documents }, { styles: 0, documents: 0 })
+})
+
+test('backend responder: a persisted theme is restored before styles can paint', async () => {
+  const result = await backendPage(
+    {
+      styles: async () => html2`<link rel="stylesheet" href="/backend.css">`,
+      document: ketDocument,
+    } as never,
+    { headers: {} } as never,
+    {
+      lang: 'vi',
+      title: 'Ứng dụng',
+      body: pagesScreen(_, [page()], { menu: MENU }),
+    },
+  )
+  assert.equal(typeof result.body, 'string')
+  const body = result.body as string
+  const restore = body.indexOf("localStorage.getItem('ket.backend.theme')")
+  const styles = body.indexOf('/backend.css')
+  assert.ok(restore > 0, 'the document restores an explicit preference')
+  assert.ok(restore < styles, 'the preference is restored before a stylesheet can paint')
 })
 
 test('design tokens: every admin role used by components is declared', () => {
@@ -1601,6 +1637,23 @@ test('table selection: the checkbox cell is a navigation dead zone', () => {
     selectionGuard < linkedRowNavigation,
     'the selection-cell guard must run before linked-row navigation',
   )
+})
+
+test('table rows without a nested link remain keyboard navigable', () => {
+  const html = renderToString(
+    dataTable(_, {
+      rows: [{ id: 'row-1', name: 'One' }],
+      id: (row) => row.id,
+      rowHref: (row) => `/records/${row.id}`,
+      rowLink: false,
+      columns: [{ key: 'name', label: 'Name', cell: (row) => row.name }],
+    }),
+  )
+  assert.match(html, /data-row-href="\/records\/row-1"[^>]*tabindex="0"/)
+  assert.doesNotMatch(html, /data-ui="row-link"/)
+  const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  assert.match(source, /event\.key !== 'Enter'/)
+  assert.match(source, /event\.key !== ' '/)
 })
 
 test('route modal runtime traps focus without focusing the backdrop and keeps close navigation local', () => {

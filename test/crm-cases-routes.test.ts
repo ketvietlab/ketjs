@@ -19,6 +19,7 @@ const boot = async (t: TestContext) => {
     kind: 'person',
     name: 'Nguyễn Minh',
     email: 'minh@example.test',
+    phone: '0909000123',
   })
   await fixture('company.saveCompany', { id: 'acme', code: 'ACME', partnerId: 'acme-party', currency: 'VND' })
   await fixture('user.createUser', {
@@ -131,7 +132,7 @@ test('crm cases routes: new POST and backward-compatible list POST retain safety
   const invalidHtml = await invalid.text()
   assert.equal(invalid.status, 200)
   assert.match(invalidHtml, /data-ui="form-page"/)
-  assert.match(invalidHtml, /data-ui="form-errors"[^>]*role="alert"/)
+  assert.match(invalidHtml, /name="name"[^>]*aria-invalid="true"/)
   assert.match(invalidHtml, /name="kind"[\s\S]*?value="opportunity"[^>]*selected/)
   assert.match(invalidHtml, /name="expectedRevenue"[^>]*value="99000000"/)
   assert.match(invalidHtml, /name="probability"[^>]*value="45"/)
@@ -148,4 +149,40 @@ test('crm cases routes: new POST and backward-compatible list POST retain safety
   assert.equal(refused.status, 403)
   const rows = await call<{ rows: Row[] }>('crm.case.list', { search: 'Cross-site record' })
   assert.equal(rows.rows.length, 0)
+})
+
+test('crm cases routes: Partner intent prefills contact context and returns field refusals in place', async (t) => {
+  const { app } = await boot(t)
+  const create = await app.client.get('/admin/crm/cases/new?kind=lead&partnerId=customer&lang=en')
+  const createHtml = await create.text()
+  assert.equal(create.status, 200)
+  assert.match(createHtml, /data-ui="form-page-title"[^>]*>[\s\S]*?Create lead/)
+  assert.match(createHtml, /A customer does not automatically become a lead/)
+  assert.match(createHtml, /name="email"[^>]*value="minh@example\.test"/)
+  assert.match(createHtml, /name="phone"[^>]*value="0909000123"/)
+  assert.match(createHtml, /name="contactName"[^>]*value="Nguyễn Minh"/)
+  assert.match(createHtml, /name="partnerIntent"[^>]*value="1"/)
+  assert.match(createHtml, /name="utmSource"[\s\S]*?value="pancake"[^>]*selected/)
+  assert.match(createHtml, /name="description"[^>]*required/)
+  assert.match(createHtml, /href="\/admin\/partner\/partners\/customer\?lang=en"/)
+
+  const refused = await app.client.post(
+    '/admin/crm/cases/new?lang=en',
+    new URLSearchParams({
+      partnerIntent: '1',
+      partnerId: 'customer',
+      kind: 'lead',
+      name: '',
+      description: '',
+      expectedRevenue: 'still here',
+      returnTo: '/admin/partner/partners/customer?lang=en',
+    }),
+    post,
+  )
+  const refusedHtml = await refused.text()
+  assert.equal(refused.status, 200)
+  assert.match(refusedHtml, /name="name"[^>]*aria-invalid="true"/)
+  assert.match(refusedHtml, /name="description"[^>]*aria-invalid="true"/)
+  assert.match(refusedHtml, /name="expectedRevenue"[^>]*value="still here"[^>]*aria-invalid="true"/)
+  assert.match(refusedHtml, /href="\/admin\/partner\/partners\/customer\?lang=en"/)
 })

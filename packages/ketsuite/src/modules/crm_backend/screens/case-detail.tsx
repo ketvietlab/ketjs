@@ -37,8 +37,9 @@ const local = (_: Translator, group: string, value: unknown) => {
  */
 const entryBody = (_: Translator, row: AnyRow): string => {
   const body = String(row.body ?? '')
-  if (body && _.resolves(body)) return _(body)
-  if (body) return body
+  const reason = String((row.metadata as AnyRow | undefined)?.reason ?? '').trim()
+  if (body && _.resolves(body)) return `${_(body)}${reason ? ` · ${reason}` : ''}`
+  if (body) return `${body}${reason ? ` · ${reason}` : ''}`
   const fallback = `crm.timeline.${String(row.eventType ?? '')}`
   return _.resolves(fallback) ? _(fallback) : String(row.eventType ?? '—')
 }
@@ -120,6 +121,20 @@ export const caseConvertModal = (
           control: options.control,
         },
         {
+          name: 'expectedRevenue',
+          label: _('crm_backend.field.expectedRevenue'),
+          type: 'decimal',
+          value: String((row.salesDetail as AnyRow | undefined)?.expectedRevenue ?? '0'),
+          required: true,
+        },
+        {
+          name: 'expectedClosing',
+          label: _('crm_backend.field.expectedClosing'),
+          type: 'date',
+          value: String((row.salesDetail as AnyRow | undefined)?.expectedClosing ?? ''),
+          required: true,
+        },
+        {
           // The checkbox is checked again on the server. A required attribute
           // is a hint to a browser, not a condition the record was converted
           // under.
@@ -132,6 +147,61 @@ export const caseConvertModal = (
         },
       ],
       submit: _('crm_backend.action.convert'),
+      submitVariant: 'primary',
+    },
+  })
+
+/** One explicit decision records either terminal outcome and the evidence for it. */
+export const caseCloseModal = (
+  _: Translator,
+  row: AnyRow,
+  options: { action: string; cancelHref: string; errors?: string[] },
+): TemplateResult =>
+  modalForm({
+    id: 'crm-case-close',
+    title: _('crm_backend.close.title'),
+    description: _('crm_backend.close.hint'),
+    closeHref: options.cancelHref,
+    closeLabel: _('crm_backend.action.cancel'),
+    presentation: 'dialog',
+    unsavedPrompt: _('backend.modal.unsaved'),
+    form: {
+      id: 'crm-case-close-form',
+      scope: 'crm-case-close',
+      action: options.action,
+      cancelHref: options.cancelHref,
+      cancelLabel: _('crm_backend.action.cancel'),
+      errors: options.errors,
+      hidden: { action: 'close', expectedVersion: String(row.version ?? 0) },
+      fields: [
+        {
+          name: 'terminal',
+          label: _('crm_backend.close.result'),
+          type: 'select',
+          value: 'won',
+          required: true,
+          options: ['won', 'lost'].map((value) => ({
+            value,
+            label: _(`crm_backend.close.${value}`),
+          })),
+        },
+        {
+          name: 'closeReason',
+          label: _('crm_backend.close.reason'),
+          type: 'textarea',
+          required: true,
+          span: 'full',
+        },
+        {
+          name: 'confirm',
+          label: _('crm_backend.close.confirm'),
+          type: 'checkbox',
+          required: true,
+          span: 'full',
+          help: _('crm_backend.close.confirmText'),
+        },
+      ],
+      submit: _('crm_backend.close.submit'),
       submitVariant: 'primary',
     },
   })
@@ -636,28 +706,6 @@ export const caseDetailScreen = (
         'destructive',
       )}
     />,
-    ...(row.kind === 'opportunity' && row.terminalState === 'open'
-      ? [
-          // Marking a case lost always recorded "not_specified", because the
-          // action bar posts no reason and nothing asked for one.
-          <Section
-            title={_('crm_backend.action.lost')}
-            body={commandForm(
-              'lost',
-              [
-                {
-                  name: 'lostReason',
-                  label: _('crm_backend.field.lostReason'),
-                  required: true,
-                  span: 'full',
-                },
-              ],
-              _('crm_backend.action.lost'),
-              'destructive',
-            )}
-          />,
-        ]
-      : []),
   ])
 
   const main =
@@ -670,14 +718,6 @@ export const caseDetailScreen = (
           : overviewTab
   const actions = [
     { value: 'refreshScore', label: _('crm_backend.action.refreshScore'), variant: 'secondary' as const },
-    // "Convert" is not here either: it changes what the record is, and the
-    // action bar has nowhere to say so or to ask which stage the opportunity
-    // opens in. Its confirmation is a step of its own.
-    // "Lost" is not here: it needs a reason, and a bare action button could only
-    // ever send "not_specified". Its form lives on the overview tab.
-    ...(row.kind === 'opportunity' && row.terminalState === 'open'
-      ? [{ value: 'won', label: _('crm_backend.action.won'), variant: 'primary' as const }]
-      : []),
   ]
   return (
     <RecordScreen
@@ -742,7 +782,13 @@ export const caseDetailScreen = (
                     label: _('crm_backend.action.convert'),
                     variant: 'primary',
                   })
-                : null}
+                : row.kind === 'opportunity' && row.terminalState === 'open'
+                  ? linkButton({
+                      href: localized(`${basePath}?tab=${activeTab}&modal=close`, options.locale ?? ''),
+                      label: _('crm_backend.close.title'),
+                      variant: 'primary',
+                    })
+                  : null}
               <RecordActions
                 action={endpoint}
                 // Without this the route falls back to the version it just read,

@@ -17,6 +17,10 @@ export default defineModule({
   menus,
   joints: {
     'record.actions': { props: { partnerId: 'id', locale: 'text?' } },
+    'record.salesActions': {
+      props: { partnerId: 'id', lang: 'text' },
+      multiple: true,
+    },
     'record.collaboration': {
       props: { resModel: 'text', resId: 'id', lang: 'text' },
       multiple: true,

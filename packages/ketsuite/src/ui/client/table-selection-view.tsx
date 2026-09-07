@@ -1,3 +1,4 @@
+import { installUserWorkflow } from './user-workflow.ts'
 import type { IslandController, IslandProps } from '@ketvietlab/ketjs-view'
 
 const tableSelectionMarker = Symbol.for('ket.backend.table-selection')
@@ -5,6 +6,8 @@ const dropdownDismissMarker = Symbol.for('ket.backend.dropdown-dismiss')
 const globalFilterMarker = Symbol.for('ket.backend.global-filter')
 const routeModalMarker = Symbol.for('ket.backend.route-modal')
 const liveRegionMarker = Symbol.for('ket.backend.live-region')
+const themeToggleMarker = Symbol.for('ket.backend.theme-toggle')
+const themeStorageKey = 'ket.backend.theme'
 const dismissibleDropdown = [
   '[data-ui="search-menu"]',
   '[data-ui="col-config"]',
@@ -21,6 +24,72 @@ type KetBrowserGlobals = typeof globalThis & {
 
 const browserGlobals = globalThis as KetBrowserGlobals
 const eventElement = (event: Event): Element | null => (event.target instanceof Element ? event.target : null)
+
+type ThemePreference = 'light' | 'dark'
+
+const themePreference = (value: string | null | undefined): ThemePreference | null =>
+  value === 'light' || value === 'dark' ? value : null
+
+const storedTheme = (): ThemePreference | null => {
+  try {
+    return themePreference(localStorage.getItem(themeStorageKey))
+  } catch {
+    return null
+  }
+}
+
+const saveTheme = (theme: ThemePreference): void => {
+  try {
+    localStorage.setItem(themeStorageKey, theme)
+  } catch {
+    // Theme selection still works for this document when storage is unavailable.
+  }
+}
+
+const resolvedTheme = (): ThemePreference =>
+  themePreference(document.documentElement.dataset.theme) ??
+  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+
+const syncThemeToggle = (): void => {
+  const pressed = String(resolvedTheme() === 'dark')
+  for (const control of document.querySelectorAll<HTMLElement>(
+    '[data-ui="sidebar-tools"] [data-ui="action"][name="theme"]',
+  ))
+    control.setAttribute('aria-pressed', pressed)
+}
+
+/** Keep the shell preference explicit only after the reader chooses one. */
+const installThemeToggle = (): void => {
+  if (browserGlobals[themeToggleMarker]) return
+  browserGlobals[themeToggleMarker] = true
+
+  const preference = storedTheme()
+  if (preference) document.documentElement.dataset.theme = preference
+  syncThemeToggle()
+
+  document.addEventListener('click', (event) => {
+    const control = eventElement(event)?.closest<HTMLButtonElement>(
+      '[data-ui="sidebar-tools"] [data-ui="action"][name="theme"]',
+    )
+    if (!control || control.disabled) return
+    const next = resolvedTheme() === 'dark' ? 'light' : 'dark'
+    document.documentElement.dataset.theme = next
+    saveTheme(next)
+    syncThemeToggle()
+  })
+
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (!themePreference(document.documentElement.dataset.theme)) syncThemeToggle()
+  })
+
+  addEventListener('storage', (event) => {
+    if (event.key !== themeStorageKey) return
+    const next = themePreference(event.newValue)
+    if (next) document.documentElement.dataset.theme = next
+    else delete document.documentElement.dataset.theme
+    syncThemeToggle()
+  })
+}
 
 const updateSelection = (table: Element): void => {
   const rows = [...table.querySelectorAll<HTMLInputElement>('[data-ui="row-select"]:not(:disabled)')]
@@ -76,15 +145,13 @@ const installTableSelection = (): void => {
     else browserGlobals.location.assign(href)
   })
   document.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
     const target = eventElement(event)
-    if (
-      !(target instanceof HTMLElement) ||
-      !target.matches('[data-ui="row"][data-row-href][tabindex]') ||
-      !['Enter', ' '].includes(event.key)
-    )
-      return
+    const row = target?.matches('[data-ui="row"][data-row-href][tabindex="0"]') ? target : null
+    const href = row?.getAttribute('data-row-href')
+    if (!href) return
     event.preventDefault()
-    navigateTo(target.dataset.rowHref ?? '')
+    navigateTo(href)
   })
 }
 
@@ -393,6 +460,8 @@ export const createTableSelectionView = (): IslandController => ({
 })
 
 export const tableSelection = (_props: IslandProps): IslandController => {
+  installUserWorkflow()
+  installThemeToggle()
   installTableSelection()
   installDropdownDismiss()
   installGlobalFilter()
