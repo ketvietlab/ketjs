@@ -96,7 +96,6 @@ export type MembershipSummary = {
   tierId?: string | null
   tierCode?: string | null
   rollingSpend: number
-  redeemPercent: number
   points: number
   refreshedAt: string
 }

@@ -23,13 +23,13 @@ for (const viewport of [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'mobile', width: 390, height: 844 },
 ] as const) {
-  test(`renders the program tier policy on ${viewport.name}`, async ({ page }) => {
+  test(`renders the company tier policy on ${viewport.name}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' })
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
-    await page.goto('/admin/loyalty/tiers?lang=vi&program=ket-club')
+    await page.goto('/admin/loyalty/tiers?lang=vi')
 
     await expect(page.getByRole('heading', { name: 'Hạng thành viên' })).toBeVisible()
-    await expect(page.locator('select[name="programId"]')).toHaveValue('ket-club')
+    await expect(page.locator('select[name="programId"]')).toHaveCount(0)
     await expect(page.locator('input[name="windowMonths"]')).toHaveValue('120')
     await expect(page.getByText('6 tháng, 12 tháng = 1 năm, 120 tháng = 10 năm')).toBeVisible()
     await expect(page.locator('[data-ui="row"]')).toHaveCount(4)
@@ -45,7 +45,7 @@ for (const viewport of [
 }
 
 test('opens tier editing from the row and keeps archive separate from editing', async ({ page }) => {
-  await page.goto('/admin/loyalty/tiers?lang=vi&program=ket-club')
+  await page.goto('/admin/loyalty/tiers?lang=vi')
   const gold = page.locator('[data-ui="row"]').filter({ hasText: 'Vàng' })
   await expect(gold).toHaveAttribute('data-row-href', /modal=tier.*tier=gold/)
   await gold.locator('[data-ui="cell"]').first().click()
@@ -56,7 +56,7 @@ test('opens tier editing from the row and keeps archive separate from editing', 
 })
 
 test('renders English without untranslated Loyalty keys', async ({ page }) => {
-  await page.goto('/admin/loyalty/tiers?lang=en&program=ket-club')
+  await page.goto('/admin/loyalty/tiers?lang=en')
   await expect(page.getByRole('heading', { name: 'Membership tiers' })).toBeVisible()
   await expect(page.getByText('Spend period (months)')).toBeVisible()
   await expect(page.locator('body')).not.toContainText(/loyalty(?:_backend)?\.[A-Za-z]/)

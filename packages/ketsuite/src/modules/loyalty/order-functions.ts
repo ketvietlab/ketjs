@@ -15,7 +15,7 @@ import {
   or,
 } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Query, Row } from '@ketvietlab/ketjs'
-import { canonicalDecimalText, minorText, moneyMinor, percentOfMinor, scaleOf } from '../account/money.ts'
+import { canonicalDecimalText, minorText, moneyMinor, scaleOf } from '../account/money.ts'
 import { decimal, evaluate, invalid, issue, n, normalizeCode, now, snapshotOf } from './engine.ts'
 import {
   finalizeReservation,
@@ -140,8 +140,6 @@ const upsertApplication = async (
 
 const evaluationEffects = [
   'read:company.Company',
-  'read:loyalty.SpendEntry',
-  'read:loyalty.Tier',
   'read:stock.Quant',
   'read:stock.Location',
   'read:loyalty.Program',
@@ -169,10 +167,11 @@ const walletWriteEffects = [
 ] as const
 
 const membershipEffects = [
-  'read:loyalty.MembershipConfig',
+  'read:loyalty.MembershipPolicy',
   'read:loyalty.SpendEntry',
   'write:loyalty.SpendEntry',
   'read:loyalty.Tier',
+  'read:loyalty.Wallet',
   'read:loyalty.Membership',
   'write:loyalty.Membership',
 ] as const
@@ -248,21 +247,6 @@ export const applyOrderReward = async (
     const step = n(config.minimumRedeemStep)
     if (step > 0 && Math.abs(requestedPoints / step - Math.round(requestedPoints / step)) > 0.000001)
       return invalid(issue('points', 'loyalty.error.redeemStep'))
-    if (!snapshot.partnerId) return invalid(issue('partnerId', 'loyalty.error.partnerMissing'))
-    const membership = await refreshMembershipRow(ctx, snapshot.partnerId)
-    const tier = membership?.tierId
-      ? (await ctx.db.select('loyalty.Tier', { id: membership.tierId }))[0]
-      : null
-    const scale = scaleOf(snapshot.currency)
-    let merchandise = 0n
-    for (const line of snapshot.lines.filter((line) => line.lineKind === 'product'))
-      merchandise += moneyMinor(line.untaxed, scale)
-    const maximumDiscount = percentOfMinor(merchandise, String(tier?.redeemPercent ?? '0'))
-    if (
-      (program.designVersion !== 1 || quote.rewardType === 'discount') &&
-      moneyMinor(quote.discountAmount, scale) > maximumDiscount
-    )
-      return invalid(issue('points', 'loyalty.error.redeemCap'))
   }
   const walletId = String(current?.walletId ?? result.walletId ?? '')
   const fromCurrentOrder = program.appliesOn === 'future' ? 0 : result.points

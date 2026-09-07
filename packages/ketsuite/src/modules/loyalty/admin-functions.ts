@@ -34,15 +34,13 @@ export const tierFormSchema = defineFormSchema({
     code: { type: 'text', required: true, trim: true, minLength: 1 },
     sequence: { type: 'int', min: 0 },
     minimumSpend: { type: 'decimal', required: true, min: 0 },
-    redeemPercent: { type: 'decimal', required: true, min: 0, max: 100 },
   },
   unknown: 'drop',
 })
 
 /** A tier window belongs to the selected program policy and is expressed in whole months. */
-export const tierWindowFormSchema = defineFormSchema({
+export const membershipPolicyFormSchema = defineFormSchema({
   fields: {
-    programId: { type: 'id', required: true },
     windowMonths: { type: 'int', required: true, min: 1 },
   },
   unknown: 'drop',
@@ -792,6 +790,30 @@ export const adminFunctions: Record<string, FnSpec> = {
             })
           )[0] ?? null)
         : ((await ctx.db.select('loyalty.MembershipConfig'))[0] ?? null),
+  }),
+
+  'membership.policy.save': defineFn({
+    input: { windowMonths: 'int' },
+    output: { ok: 'bool', id: 'id?', errors: 'json?' },
+    effects: ['read:loyalty.MembershipPolicy', 'write:loyalty.MembershipPolicy'],
+    idempotent: true,
+    agent: true,
+    handler: async (ctx, args) => {
+      const windowMonths = n(args.windowMonths)
+      if (!(windowMonths > 0)) return invalid(issue('windowMonths', 'loyalty.error.membershipConfig'))
+      const existing = (await ctx.db.select('loyalty.MembershipPolicy'))[0]
+      const values = { windowMonths, updatedAt: now() }
+      if (existing) await ctx.db.update('loyalty.MembershipPolicy', { id: existing.id }, values)
+      else await ctx.db.insert('loyalty.MembershipPolicy', { id: 'membership-policy', ...values })
+      return { ok: true, id: String(existing?.id ?? 'membership-policy') }
+    },
+  }),
+
+  'membership.policy.get': defineFn({
+    input: {},
+    effects: ['read:loyalty.MembershipPolicy'],
+    agent: true,
+    handler: async (ctx) => (await ctx.db.select('loyalty.MembershipPolicy'))[0] ?? null,
   }),
 
   'earnGroup.list': defineFn({

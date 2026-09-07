@@ -1,4 +1,3 @@
-import { membershipPosition } from './membership-functions.ts'
 import { functions as stockFunctions } from '../stock/functions.ts'
 import { civilDateAt, DEFAULT_ACCOUNTING_TIMEZONE } from '../account/date.ts'
 import type { Ctx, Row } from '@ketvietlab/ketjs'
@@ -565,10 +564,6 @@ export const evaluate = async (
       earned: round(earned, 2),
       available: round(available, 6),
     })
-    const position =
-      program.designVersion === 1 && membershipConfig && snapshot.partnerId
-        ? await membershipPosition(ctx, snapshot.partnerId, snapshot.date)
-        : null
     const rewards: RewardQuote[] = []
     for (const reward of rewardsByProgram.get(String(program.id)) ?? []) {
       let quote = await rewardQuote(
@@ -581,22 +576,13 @@ export const evaluate = async (
         rewardProducts.get(String(reward.id)) ?? new Set(),
         options.requestedPointsByProgram?.[String(program.id)] ?? options.requestedPoints,
       )
-      if (quote && position && program.programType === 'loyalty') {
+      if (quote && membershipConfig && program.programType === 'loyalty') {
         const step = n(membershipConfig?.minimumRedeemStep)
         if (
           step > 0 &&
           Math.abs(quote.requiredPoints / step - Math.round(quote.requiredPoints / step)) > 0.000001
         )
           quote = null
-        else if (quote.rewardType === 'discount') {
-          const merchandise = snapshot.lines
-            .filter((line) => line.lineKind === 'product')
-            .reduce((sum, line) => sum + moneyMinor(line.untaxed, scale), 0n)
-          const maximum = percentOfMinor(merchandise, String(position.tier?.redeemPercent ?? '0'))
-          if (maximum <= 0n) quote = null
-          else if (moneyMinor(quote.discountAmount, scale) > maximum)
-            quote.discountAmount = minorText(maximum, scale)
-        }
       }
       if (quote) rewards.push(quote)
       trace(

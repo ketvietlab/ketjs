@@ -253,6 +253,14 @@ export const models: Record<string, ModelDef> = {
     },
     indexes: { program: { fields: ['companyId', 'programId'], unique: true } },
   },
+  MembershipPolicy: {
+    scope: 'company',
+    fields: {
+      id: 'id',
+      windowMonths: 'int',
+      updatedAt: 'datetime',
+    },
+  },
   Membership: {
     scope: 'company',
     fields: {

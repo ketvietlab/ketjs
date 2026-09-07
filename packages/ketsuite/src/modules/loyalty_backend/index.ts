@@ -6,7 +6,7 @@ import type { FormField, SearchMenu } from '../../ui/index.ts'
 import { formRefusal, readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { LEDGER_OPERATIONS, PROGRAM_TYPES } from '../loyalty/types.ts'
-import { tierFormSchema, tierWindowFormSchema } from '../loyalty/admin-functions.ts'
+import { membershipPolicyFormSchema, tierFormSchema } from '../loyalty/admin-functions.ts'
 import { messages } from './messages.ts'
 import {
   dashboardScreen,
@@ -625,22 +625,10 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       let submitted: Record<string, string> = {}
       let submittedAction = ''
       let tiers = (await ctx.call('loyalty.tier.list', { includeArchived: true }, url, req)) as AnyRow[]
-      const programs = (
-        (await ctx.call(
-          'loyalty.program.list',
-          { includeArchived: false, programType: 'loyalty' },
-          url,
-          req,
-        )) as AnyRow[]
-      ).filter((program) => program.active)
-      let programId = url.searchParams.get('program') ?? String(programs[0]?.id ?? '')
-      let config = programId
-        ? ((await ctx.call('loyalty.membership.config.get', { programId }, url, req)) as AnyRow | null)
-        : null
+      let policy = (await ctx.call('loyalty.membership.policy.get', {}, url, req)) as AnyRow | null
 
-      const baseHref = (selectedProgram = programId): string => {
+      const baseHref = (): string => {
         const target = new URL(inLocale(url, '/admin/loyalty/tiers'), url.origin)
-        if (selectedProgram) target.searchParams.set('program', selectedProgram)
         return target.pathname + target.search
       }
 
@@ -650,38 +638,21 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         submittedAction = form.action ?? ''
         let result: AnyRow = { ok: false }
         if (submittedAction === 'policy') {
-          const checked = refusal.check(tierWindowFormSchema, form)
-          programId = form.programId || programId
-          if (checked) {
-            const existing = (await ctx.call(
-              'loyalty.membership.config.get',
-              { programId: checked.programId },
-              url,
-              req,
-            )) as AnyRow | null
+          const checked = refusal.check(membershipPolicyFormSchema, form)
+          if (checked)
             result = (await ctx.call(
-              'loyalty.membership.config.save',
-              {
-                id: String(existing?.id ?? randomUUID()),
-                programId: checked.programId,
-                windowMonths: checked.windowMonths,
-                pointValue: String(existing?.pointValue ?? 1),
-                minimumRedeemStep: String(existing?.minimumRedeemStep ?? 1),
-                fallbackCurrencyPerPoint: String(existing?.fallbackCurrencyPerPoint ?? 1),
-                fallbackEnabled: existing ? Boolean(existing.fallbackEnabled) : true,
-              },
+              'loyalty.membership.policy.save',
+              { windowMonths: checked.windowMonths },
               url,
               req,
             )) as AnyRow
-          }
-          if (result.ok) return seeOther(baseHref(String(checked?.programId ?? programId)))
+          if (result.ok) return seeOther(baseHref())
           refusal.add(resultErrors(result, _))
-          config = programId
-            ? ((await ctx.call('loyalty.membership.config.get', { programId }, url, req)) as AnyRow | null)
-            : null
+          policy = (await ctx.call('loyalty.membership.policy.get', {}, url, req)) as AnyRow | null
         } else if (submittedAction === 'tier') {
           const checked = refusal.check(tierFormSchema, form)
-          if (checked)
+          if (checked) {
+            const existingTier = tiers.find((row) => String(row.id) === form.id)
             result = (await ctx.call(
               'loyalty.tier.save',
               {
@@ -690,12 +661,13 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                 code: checked.code,
                 sequence: checked.sequence ?? 10,
                 minimumSpend: checked.minimumSpend,
-                redeemPercent: checked.redeemPercent,
+                redeemPercent: String(existingTier?.redeemPercent ?? 100),
                 active: true,
               },
               url,
               req,
             )) as AnyRow
+          }
           if (result.ok) return seeOther(baseHref())
           refusal.add(resultErrors(result, _))
         } else if (submittedAction === 'toggle') {
@@ -730,19 +702,10 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         submittedAction === action && Object.hasOwn(submitted, name) ? submitted[name] : fallback
       const policyFields: FormField[] = [
         {
-          name: 'programId',
-          label: _('loyalty_backend.field.program'),
-          type: 'select',
-          value: String(held('programId', config?.programId ?? programId, 'policy')),
-          options: choices(programs),
-          required: true,
-          error: submittedAction === 'policy' ? refusal.error('programId') : null,
-        },
-        {
           name: 'windowMonths',
           label: _('loyalty_backend.field.windowMonths'),
           type: 'number',
-          value: String(held('windowMonths', config?.windowMonths ?? 12, 'policy')),
+          value: String(held('windowMonths', policy?.windowMonths ?? 12, 'policy')),
           required: true,
           help: _('loyalty_backend.memberships.windowExamples'),
           error: submittedAction === 'policy' ? refusal.error('windowMonths') : null,
@@ -771,14 +734,6 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
               value: String(held('minimumSpend', tier?.minimumSpend ?? 0, 'tier')),
               required: true,
               error: submittedAction === 'tier' ? refusal.error('minimumSpend') : null,
-            },
-            {
-              name: 'redeemPercent',
-              label: _('loyalty_backend.field.redeemPercent'),
-              type: 'decimal',
-              value: String(held('redeemPercent', tier?.redeemPercent ?? 20, 'tier')),
-              required: true,
-              error: submittedAction === 'tier' ? refusal.error('redeemPercent') : null,
             },
             {
               name: 'sequence',
