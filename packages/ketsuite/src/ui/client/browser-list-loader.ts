@@ -102,7 +102,23 @@ const responseRows = async (
   }
   const value = envelope.value
   if (!Array.isArray(value)) throw new Error(`${resource.id} did not return rows`)
-  return value as Row[]
+  const expected = new Set(ids)
+  const seen = new Set<string>()
+  const rows = value.map((candidate, index) => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate))
+      throw new Error(`${resource.id} row ${index} is not an object`)
+    const source = candidate as Row
+    const keyValue = source[resource.key]
+    const key = keyValue === undefined || keyValue === null ? '' : String(keyValue)
+    if (!key || seen.has(key))
+      throw new Error(`${resource.id} returned a missing or duplicate ${resource.key}`)
+    if (!expected.has(key)) throw new Error(`${resource.id} returned an unexpected ${resource.key} "${key}"`)
+    seen.add(key)
+    return Object.fromEntries(Object.keys(resource.fields).map((field) => [field, source[field]]))
+  })
+  const missing = ids.filter((id) => !seen.has(id))
+  if (missing.length) throw new Error(`${resource.id} omitted ${missing.length} requested row(s)`)
+  return rows
 }
 
 const runBounded = async (jobs: Array<() => Promise<void>>, concurrency: number): Promise<void> => {
@@ -243,7 +259,13 @@ export class BrowserListLoader {
           for (let at = 0; at < ids.length; at += size) chunks.push(ids.slice(at, at + size))
           rows = []
           for (const chunk of chunks) {
-            const requestKey = `${resource.endpoint ?? ''}:${JSON.stringify(chunk)}`
+            const requestKey = JSON.stringify({
+              endpoint: resource.endpoint ?? '',
+              input: resource.batch?.input ?? '',
+              ids: chunk,
+              key: resource.key,
+              fields: Object.keys(resource.fields).sort(),
+            })
             let request = requests.get(requestKey)
             if (!request) {
               request = responseRows(this.fetcher, resource, chunk, signal)

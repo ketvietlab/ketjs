@@ -30,7 +30,8 @@ the result into one deterministic browser-plan revision. The request path projec
 that plan through both the resource permission and source-function permission;
 denied optional contributions, widget assets, and fetch endpoints are omitted
 together. Each data response is projected to declared fields and must contain
-unique row keys.
+exactly one row for every requested visible key. The browser repeats that
+allowlist projection before a provider response can enter client state.
 
 The generic client path reuses KetJS View and the canonical KetSuite `ListPage` and
 `DataTable`. Its loader:
@@ -41,7 +42,8 @@ The generic client path reuses KetJS View and the canonical KetSuite `ListPage` 
 - cancels on disposal and rejects stale generations;
 - distinguishes primary, essential, and deferred completion;
 - scopes optional failures to their extension; and
-- keys a 15-second context cache by projection, scope, query, resource, and IDs.
+- keys a 15-second context cache by an opaque viewer-session digest, projection,
+  scope, query, resource, and IDs.
 
 Adding or removing a contribution still means changing `DeploymentSpec.modules`
 and releasing. There is no runtime marketplace, tenant-local installation state,
@@ -123,7 +125,7 @@ in-memory data cache. A separate probe confirms that the current tab links also
 reload the document. Same-realm cache hits are covered by loader tests, not claimed
 as a measured navigation improvement.
 
-### Final-code projection validation
+### Post-projection validation
 
 A final review after the full-matrix run found that the primary data endpoint still
 carried the partner model's undeclared `contactConsent` field even though no visible
@@ -133,8 +135,8 @@ function endpoint for the query-aware primary resource. Generic joined endpoints
 also fail composition if their function output contains an undeclared field.
 
 The full tables below retain the accepted 30-sample figures rather than silently
-mixing sample sizes. A separate final-code validation run measured the heaviest cell
-(100,000 partners and ten extensions) from
+mixing sample sizes. A separate post-projection validation run measured the
+heaviest cell (100,000 partners and ten extensions) from
 `2026-09-07T16:43:54Z` to `2026-09-07T16:50:55Z`. Its five principal desktop samples
 per mode at 120 ms RTT produced complete medians of 1,072.8 ms (A), 743.6 ms (B),
 1,411.3 ms (C), and 1,273.4 ms (D). Those values differ from the accepted medians by
@@ -150,6 +152,16 @@ were pending and succeeded on its immediate retry. All server and load responses
 were HTTP 200. A post-run payload and interaction probe confirmed the exact seven
 primary fields, no `contactConsent`, all eight mode/viewport navigations, and the
 Vietnamese mobile keyboard path.
+
+The later cache-isolation and provider-coverage hardening does not change the query
+or request topology behind those comparisons. A final PR-update smoke ran the built
+tree from `2026-09-07T17:21:47Z` to `2026-09-07T17:22:20Z` with 100,000 partners and
+ten extensions. Its 12 server samples were HTTP 200, all eight measured browser
+navigations completed without a recorded error, and eight fresh desktop/mobile
+captures produced 32 evidence files. Every DOM record had 30 rows, the expected
+five or 16 columns, one shell and `ListPage`, zero document overflow, and no fatal
+plan or widget error. This one-sample-per-temperature run is a correctness smoke,
+not a replacement performance sample.
 
 ## Browser result at 120 ms RTT
 
@@ -338,8 +350,9 @@ accepted artifact locations are:
 | Raw samples and database profiles | `.artifacts/lego-csr/run-final-20260907T151828Z/raw/` |
 | Screenshots, HAR, traces, DOM metrics | `.artifacts/lego-csr/run-final-20260907T151828Z/browser-evidence/` |
 | Mobile/keyboard/cache probe | `.artifacts/lego-csr/run-final-20260907T151828Z/browser-acceptance.json` |
-| Final-code validation summary | `.artifacts/lego-csr/run-post-projection-final-20260907T164352Z/validation-summary.json` |
-| Final-code raw samples and evidence | `.artifacts/lego-csr/run-post-projection-final-20260907T164352Z/` |
+| Post-projection validation summary | `.artifacts/lego-csr/run-post-projection-final-20260907T164352Z/validation-summary.json` |
+| Post-projection raw samples and evidence | `.artifacts/lego-csr/run-post-projection-final-20260907T164352Z/` |
+| Final PR-update smoke and evidence | `.artifacts/lego-csr/run-pr-update-final-20260907T1700Z/` |
 | Current task status | `.artifacts/lego-csr/status.json` |
 
 An earlier interrupted run is marked with `invalid.json` and is not used anywhere

@@ -1,5 +1,12 @@
-import { randomUUID } from 'node:crypto'
-import { json, projectBrowserRows, projectBrowserScreen, text } from '@ketvietlab/ketjs'
+import { createHash, randomUUID } from 'node:crypto'
+import {
+  json,
+  parseCookies,
+  projectBrowserRows,
+  projectBrowserScreen,
+  SESSION_COOKIE,
+  text,
+} from '@ketvietlab/ketjs'
 import type { BrowserScreenPlan, Route, RouteEntry, Row, ServeContext, Translator } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
@@ -489,7 +496,15 @@ const planResources = async (
             return value
           }),
         )
-        output[resource.id] = projectBrowserRows(resource, values.flat())
+        const projected = projectBrowserRows(resource, values.flat())
+        const returned = new Set(projected.map((row) => String(row[resource.key])))
+        const missing = ids.filter((id) => !returned.has(id))
+        const unexpected = [...returned].filter((id) => !ids.includes(id))
+        if (missing.length || unexpected.length)
+          throw new Error(
+            `${resource.id} row coverage differs from the requested page (${missing.length} missing, ${unexpected.length} unexpected)`,
+          )
+        output[resource.id] = projected
       } catch (error) {
         errors[resource.id] = error instanceof Error ? error.message : String(error)
       }
@@ -504,6 +519,29 @@ const partnerBrowserPlan = async (ctx: ServeContext, url: URL, req: Req, _: Tran
   return projectBrowserScreen(manifest, 'partner_backend.partners', {
     allows: (name) => ctx.allows(name, url, req),
     translate: (key) => _(key),
+  })
+}
+
+const shortHash = (value: string): string =>
+  createHash('sha256').update(value).digest('base64url').slice(0, 16)
+
+const browserContextKey = (
+  req: Req,
+  plan: BrowserScreenPlan,
+  scope: Awaited<ReturnType<ServeContext['scopeOf']>>,
+  query: string,
+): string => {
+  const session = parseCookies(req.headers.cookie)[SESSION_COOKIE]
+  const projection = {
+    columns: plan.screen.columns.map(({ id, resource, widget }) => ({ id, resource, widget })),
+    resources: Object.keys(plan.resources).sort(),
+  }
+  return JSON.stringify({
+    revision: plan.revision,
+    projection: shortHash(JSON.stringify(projection)),
+    viewer: session ? shortHash(session) : 'anonymous',
+    scope,
+    query,
   })
 }
 
@@ -611,7 +649,7 @@ const browserPrototype = async (
     mode,
     plan,
     baseEndpoint: `${dataUrl.pathname}${dataUrl.search}`,
-    contextKey: JSON.stringify({ revision: plan.revision, scope, query: dataUrl.search }),
+    contextKey: browserContextKey(req, plan, scope, dataUrl.search),
     concurrency: 4,
     initial: {
       rows: state.rows,

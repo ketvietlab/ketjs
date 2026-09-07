@@ -191,6 +191,7 @@ test('browser plan: row projection cannot leak undeclared fields', () => {
     { id: 'p1', name: 'Ada' },
   ])
   assert.throws(() => projectBrowserRows(resource, [{ id: 'p1' }, { id: 'p1' }]), /duplicate/)
+  assert.throws(() => projectBrowserRows(resource, [{ id: 1 }, { id: '1' }]), /duplicate/)
 })
 
 test('browser plan: a generic joined endpoint cannot expose undeclared output fields', () => {

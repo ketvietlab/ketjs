@@ -7,7 +7,6 @@ import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { tableNameFor, type Adapter } from '@ketvietlab/ketjs'
 import { createTestDeployment, type TestDeployment } from '@ketvietlab/ketjs/testing'
-import type { Browser, BrowserContext, CDPSession, Page } from '../e2e/node_modules/playwright/index.js'
 import {
   LEGO_EXTENSION_COUNTS,
   LEGO_PARTNER_COUNTS,
@@ -15,10 +14,43 @@ import {
   seedLegoFixture,
 } from '../bench/lego-csr-fixture.ts'
 
+type PageResponse = { ok(): boolean; status(): number }
+type Page = {
+  on<T>(event: string, listener: (value: T) => void): void
+  goto(input: string, options?: Record<string, unknown>): Promise<PageResponse | null>
+  waitForLoadState(state: string): Promise<void>
+  waitForSelector(selector: string): Promise<unknown>
+  waitForFunction(fn: () => unknown): Promise<unknown>
+  waitForTimeout(ms: number): Promise<void>
+  evaluate<T>(fn: () => T): Promise<T>
+  screenshot(options: Record<string, unknown>): Promise<unknown>
+}
+type CDPSession = {
+  send(method: string, params?: Record<string, unknown>): Promise<unknown>
+  once(event: string, listener: (payload: { stream?: string }) => void): void
+}
+type BrowserContext = {
+  readonly request: {
+    post(input: string, options: { data: Record<string, string> }): Promise<unknown>
+  }
+  addInitScript(script: () => void): Promise<void>
+  newPage(): Promise<Page>
+  newCDPSession(page: Page): Promise<CDPSession>
+  close(): Promise<void>
+}
+type Browser = {
+  newContext(options: Record<string, unknown>): Promise<BrowserContext>
+  close(): Promise<void>
+}
+type PlaywrightModule = {
+  readonly chromium: {
+    launch(options: Record<string, unknown>): Promise<Browser>
+  }
+}
+
 type Mode = 'ssr-current' | 'ssr-matched' | 'csr-two-stage' | 'csr-planned'
 type RoleFilter = 'default' | 'customer'
 type ViewportName = 'desktop' | 'mobile'
-type PlaywrightModule = typeof import('../e2e/node_modules/playwright/index.js')
 const ALL_MODES: Mode[] = ['ssr-current', 'ssr-matched', 'csr-two-stage', 'csr-planned']
 const selected = <T extends string | number>(values: readonly T[], raw: string | undefined): T[] => {
   if (!raw) return [...values]
@@ -842,7 +874,7 @@ const measureBrowserGroup = async (
 const readCdpStream = async (cdp: CDPSession, handle: string): Promise<string> => {
   let output = ''
   while (true) {
-    const chunk = await cdp.send('IO.read', { handle })
+    const chunk = (await cdp.send('IO.read', { handle })) as { data: string; eof: boolean }
     output += chunk.data
     if (chunk.eof) break
   }

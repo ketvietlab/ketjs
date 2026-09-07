@@ -235,13 +235,15 @@ For a list whose columns are genuinely module-extensible, the host may publish a
 joint instead of pairing unrelated header and body HTML fills. The generic list renderer owns one
 `ListPage`, stable row/column identities, loading holes, and extension-scoped errors. The resource loader
 fetches by provider rather than by cell, bounds concurrency, deduplicates identical batches, cancels on
-disposal, rejects stale generations, and keys context-cache entries by the authorized projection and
-all result-affecting query/scope state.
+disposal, rejects stale generations, and keys context-cache entries by an opaque viewer-session digest,
+the authorized projection, and all result-affecting query/scope state.
 
 The server still owns projection. It composes the release manifest outside the request hot path and
 sends only the widgets, columns, resource fields, and endpoints the current reader may use. An optional
 resource denied by policy is absent from the plan and is never requested. Client cache warmth never
-changes that rule, and a full page navigation creates a new JavaScript cache realm.
+changes that rule. Provider batches must return exactly one row per requested visible key, and the
+browser repeats the declared-field projection before storing a response. A full page navigation creates
+a new JavaScript cache realm.
 
 The partner route exposes the prototype only through `prototype=ssr-matched`,
 `prototype=csr-two-stage`, or `prototype=csr-planned`; omitting the parameter retains the production SSR
