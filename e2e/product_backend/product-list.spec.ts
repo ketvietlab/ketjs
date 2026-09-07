@@ -251,6 +251,114 @@ for (const viewport of [
   })
 }
 
+for (const viewport of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+] as const) {
+  for (const locale of ['vi', 'en'] as const) {
+    test(`toggles and persists the shell theme in ${locale} on ${viewport.name}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+      await page.goto(`/admin/product/templates?lang=${locale}&view=list`)
+
+      const label = locale === 'vi' ? 'Đổi giao diện sáng/tối' : 'Toggle light/dark theme'
+      const control = page.getByRole('button', { name: label })
+      const root = page.locator('html')
+      await expect(control).toBeVisible()
+      await expect(control).toHaveAttribute('aria-pressed', 'false')
+      await expect(control.locator('[data-theme-icon="dark"]')).toBeVisible()
+      await expect(control.locator('[data-theme-icon="light"]')).toBeHidden()
+      const lightBackground = await page
+        .locator('body')
+        .evaluate((body) => getComputedStyle(body).backgroundColor)
+
+      await control.click()
+      await expect(root).toHaveAttribute('data-theme', 'dark')
+      await expect(control).toHaveAttribute('aria-pressed', 'true')
+      await expect(control.locator('[data-theme-icon="dark"]')).toBeHidden()
+      await expect(control.locator('[data-theme-icon="light"]')).toBeVisible()
+      const darkBackground = await page
+        .locator('body')
+        .evaluate((body) => getComputedStyle(body).backgroundColor)
+      expect(darkBackground).not.toBe(lightBackground)
+      await expect.poll(() => page.evaluate(() => localStorage.getItem('ket.backend.theme'))).toBe('dark')
+
+      await page.reload()
+      await expect(root).toHaveAttribute('data-theme', 'dark')
+      await expect(page.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true')
+
+      const geometry = await page.evaluate(() => {
+        const toggleBox = document
+          .querySelector<HTMLElement>('[data-ui="action"][name="theme"]')!
+          .getBoundingClientRect()
+        const footerBox = document
+          .querySelector<HTMLElement>('[data-ui="sidebar-foot"]')!
+          .getBoundingClientRect()
+        return {
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: innerWidth,
+          toggleBox: {
+            left: toggleBox.left,
+            right: toggleBox.right,
+            top: toggleBox.top,
+            bottom: toggleBox.bottom,
+            height: toggleBox.height,
+          },
+          footerBox: {
+            left: footerBox.left,
+            right: footerBox.right,
+            top: footerBox.top,
+            bottom: footerBox.bottom,
+          },
+        }
+      })
+      expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth)
+      expect(geometry.toggleBox.height).toBeGreaterThanOrEqual(34)
+      expect(geometry.toggleBox.left).toBeGreaterThanOrEqual(geometry.footerBox.left)
+      expect(geometry.toggleBox.right).toBeLessThanOrEqual(geometry.footerBox.right)
+      expect(geometry.toggleBox.top).toBeGreaterThanOrEqual(geometry.footerBox.top)
+      expect(geometry.toggleBox.bottom).toBeLessThanOrEqual(geometry.footerBox.bottom)
+
+      await page.screenshot({
+        path: join(artifacts, `theme-toggle-${locale}-${viewport.name}.png`),
+        fullPage: true,
+      })
+
+      await page.getByRole('button', { name: label }).click()
+      await expect(root).toHaveAttribute('data-theme', 'light')
+      await expect(page.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'false')
+    })
+  }
+}
+
+test('restores the chosen theme before islands load on a new screen', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.addInitScript(() => localStorage.setItem('ket.backend.theme', 'dark'))
+
+  let releaseIsland!: () => void
+  const islandMayLoad = new Promise<void>((resolve) => {
+    releaseIsland = resolve
+  })
+  const tableSelectionAsset = /\/client\/table-selection\.mjs$/u
+  await page.route(tableSelectionAsset, async (route) => {
+    await islandMayLoad
+    await route.continue()
+  })
+
+  try {
+    await page.goto('/admin/product/templates?lang=vi&view=list', { waitUntil: 'commit' })
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  } finally {
+    releaseIsland()
+  }
+
+  await page.waitForLoadState('domcontentloaded')
+  await expect(page.getByRole('button', { name: 'Đổi giao diện sáng/tối' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+})
+
 test('renders the English locale without falling back to the login screen', async ({ page }) => {
   await page.goto('/admin/product/templates?lang=en&view=list')
   await expect(page).toHaveURL(/\/admin\/product\/templates/)

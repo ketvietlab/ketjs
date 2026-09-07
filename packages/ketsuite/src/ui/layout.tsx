@@ -1,6 +1,6 @@
 // The frame a screen sits in, and the shared arrangements inside it.
 
-import { each } from '@ketvietlab/ketjs-view'
+import { each, html } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
@@ -50,6 +50,16 @@ export type Frame = {
   /** False when a self-titled workspace replaces the shared topbar. */
   topbar?: boolean
 }
+
+/**
+ * Restore an explicit reader preference before the theme stylesheets can paint.
+ *
+ * Doing this in the hydrated island is too late for a full navigation: the new
+ * document paints in the system theme, then changes colour when the client
+ * module arrives. The script is fixed framework-owned text with no interpolated
+ * input, and storage access is guarded for browsers that disable it.
+ */
+const prepaintTheme = html`<script>(()=>{try{const theme=localStorage.getItem('ket.backend.theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch{}})()</script>`
 
 /**
  * The topbar shows the page's name only when nothing below it does.
@@ -134,7 +144,7 @@ export const backendPage = async (
       body: ctx.document({
         lang: options.lang,
         title: options.title,
-        head: await ctx.styles(req),
+        head: html`${prepaintTheme}${await ctx.styles(req)}`,
         body: options.body,
       }),
       status: options.status,

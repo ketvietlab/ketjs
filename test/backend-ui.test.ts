@@ -1133,6 +1133,9 @@ test('sidebar footer: legacy systray order keeps settings and sign-out functiona
     }),
   )
   assert.match(html, /data-ui="sidebar-tools"[\s\S]*data-kind="message"[\s\S]*data-kind="activity"/)
+  assert.match(html, /data-ui="action" data-icon-only="true"[\s\S]*name="theme"/)
+  assert.match(html, /aria-label="Đổi giao diện sáng\/tối" aria-pressed="false"/)
+  assert.match(html, /data-theme-icon="dark"[\s\S]*data-theme-icon="light"/)
   assert.match(html, /<details data-ui="viewer">[\s\S]*<summary data-ui="viewer-trigger"/)
   assert.match(html, /data-ui="viewer-presence"/)
   assert.match(html, /data-ui="viewer-context-switcher" href="\/admin\/context"/)
@@ -1244,6 +1247,27 @@ test('backend responder: a fragment request never renders document infrastructur
   )
   assert.equal(result.type, 'text/vnd.ket.fragments+html')
   assert.deepEqual({ styles, documents }, { styles: 0, documents: 0 })
+})
+
+test('backend responder: a persisted theme is restored before styles can paint', async () => {
+  const result = await backendPage(
+    {
+      styles: async () => html2`<link rel="stylesheet" href="/backend.css">`,
+      document: ketDocument,
+    } as never,
+    { headers: {} } as never,
+    {
+      lang: 'vi',
+      title: 'Ứng dụng',
+      body: pagesScreen(_, [page()], { menu: MENU }),
+    },
+  )
+  assert.equal(typeof result.body, 'string')
+  const body = result.body as string
+  const restore = body.indexOf("localStorage.getItem('ket.backend.theme')")
+  const styles = body.indexOf('/backend.css')
+  assert.ok(restore > 0, 'the document restores an explicit preference')
+  assert.ok(restore < styles, 'the preference is restored before a stylesheet can paint')
 })
 
 test('design tokens: every admin role used by components is declared', () => {
