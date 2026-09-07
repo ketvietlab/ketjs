@@ -46,10 +46,6 @@ export const models: Record<string, ModelDef> = {
       lang: 'text?',
       active: 'bool',
     },
-    indexes: {
-      active_name: { fields: ['active', 'name', 'id'] },
-      name_id: { fields: ['name', 'id'] },
-    },
   },
 
   /**
@@ -108,10 +104,7 @@ export const models: Record<string, ModelDef> = {
       // 'customer' | 'supplier' | 'employee'
       role: 'text',
     },
-    indexes: {
-      partner_role: { fields: ['partnerId', 'role'], unique: true },
-      role_partner: { fields: ['role', 'partnerId'] },
-    },
+    indexes: { partner_role: { fields: ['partnerId', 'role'], unique: true } },
   },
 
   /**

@@ -1158,6 +1158,8 @@ export async function bootDeployment(
             .map(([name, island]) => [name, island.client as { src: string; export: string }]),
         ),
       ),
+    islandNames: (url: URL, req: IncomingMessage) =>
+      tenants.ofRequest(url, req, async (tenant) => Object.keys(tenant.live.islands)),
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !fallbackTheme
       ? {}

@@ -115,13 +115,9 @@ export const shell = (
       {sidebar(_, sidebarOptions)}
       <main data-ui="main">
         {extras.runtime ?? ''}
-        {frame.topbar === false ? (
-          ''
-        ) : (
-          <header data-ui="topbar" data-ket-slot="backend.topbar">
-            {topbarContent(_, title, frame)}
-          </header>
-        )}
+        <header data-ui="topbar" data-ket-slot="backend.topbar">
+          {frame.topbar === false ? '' : topbarContent(_, title, frame)}
+        </header>
         <div data-ui="content" data-ket-slot="backend.content">
           {body}
         </div>
