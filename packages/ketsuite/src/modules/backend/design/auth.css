@@ -235,6 +235,18 @@
     border-block-end: 1px solid var(--admin-line);
   }
 
+  [data-ui="sidebar-tools"] [data-ui="action"][name="theme"] [data-theme-icon] {
+    display: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+  }
+
+  [data-ui="sidebar-tools"] [data-ui="action"][name="theme"][aria-pressed="false"] [data-theme-icon="dark"],
+  [data-ui="sidebar-tools"] [data-ui="action"][name="theme"][aria-pressed="true"] [data-theme-icon="light"] {
+    display: grid;
+    place-items: center;
+  }
+
   [data-ui="indicators"] {
     display: flex;
     min-inline-size: 0;

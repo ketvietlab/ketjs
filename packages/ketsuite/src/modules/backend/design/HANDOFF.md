@@ -107,6 +107,8 @@ Các bạn viết trong `ket.app`, nên luôn thắng theme mà không cần đ�
 
 Chế độ tối chỉ cần đổi token: mỗi vai trò khai một lần bằng `light-dark(sáng, tối)`,
 còn `[data-theme="light"|"dark"]` chỉ đổi `color-scheme`.
+Lựa chọn tường minh được khôi phục trong `<head>` trước stylesheet đầu tiên, không chờ
+island hydrate; vì vậy một full navigation không được phép chớp qua theme hệ thống.
 
 Breakpoint đã chốt thành một thang, liệt kê trong `tokens.css` (`--admin-bp-*`).
 `@media` không nhận custom property nên vẫn phải viết số, nhưng chỉ dùng số trong thang
@@ -172,8 +174,6 @@ thuộc behavior hoặc workflow chưa có contract:
 - thêm status label semantic riêng cho app đã cài/chưa cài;
 - liên kết lý do nút disabled bằng `aria-describedby`;
 - thay mobile navigation tạm thời bằng trigger + drawer khi số menu tăng;
-- thêm toggle `data-theme="light|dark"`; hiện chưa có UI nào đặt thuộc tính này, nên
-  chế độ tối vẫn chỉ chạy theo system preference;
 - trạng thái loading và xử lý lỗi trên giao diện.
 
 Visual QA đã kiểm tra tại `360px`, `768px`, `1024px`, `1440px`, bao gồm danh sách

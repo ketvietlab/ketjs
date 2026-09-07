@@ -13,6 +13,7 @@ import {
   Field,
   FormPage,
   HOOKS,
+  IconButton,
   ListPage,
   NavList,
   Progress,
@@ -485,6 +486,13 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.match(progress, /role="progressbar"/)
   assert.match(progress, /aria-valuenow="100"/)
   assert.match(progress, /width: 100%/)
+
+  const iconAction = renderToString(<IconButton name="theme" label="Toggle theme" icon="moon" pressed />)
+  assert.match(iconAction, /^<button/)
+  assert.match(iconAction, /data-ui="action" data-icon-only="true"/)
+  assert.match(iconAction, /type="button" name="theme"/)
+  assert.match(iconAction, /aria-label="Toggle theme" aria-pressed="true"/)
+  assert.doesNotMatch(iconAction, /data-ui="action-label"/)
 })
 
 test('design system: catalogue renders every registered specimen', () => {
