@@ -186,7 +186,7 @@ export const renderPartnerForm = async (
 ) => {
   const lang = ctx.localeOf(url, req)
   const _ = ctx.translate(lang)
-  const [row, parents, terms, integration, collaboration] = await Promise.all([
+  const [row, parents, terms, integration, salesActions, collaboration] = await Promise.all([
     ctx.call('partner.getPartner', { id }, url, req) as Promise<AnyRow | null>,
     partnerOptions(ctx, url, req, id),
     ctx.call('partner.getTerms', { partnerId: id }, url, req) as Promise<AnyRow | null>,
@@ -195,6 +195,10 @@ export const renderPartnerForm = async (
       locale: url.searchParams.get('lang')
         ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
         : '',
+    }),
+    ctx.joint(url, req, 'partner_backend:record.salesActions', {
+      partnerId: id,
+      lang,
     }),
     ctx.joint(url, req, 'partner_backend:record.collaboration', {
       resModel: 'partner.Partner',
@@ -227,6 +231,7 @@ export const renderPartnerForm = async (
           terms: terms as never,
           errors,
           integration,
+          salesActions,
           collaboration,
           addressForms,
           parentControl,

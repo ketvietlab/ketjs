@@ -35,6 +35,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     name: 'Công ty Minh An',
     vat: '0101234567',
     email: 'hello@minhan.example',
+    phone: '0909000123',
   })
   await call('partner.grantRole', { id: 'customer-role', partnerId: 'customer', role: 'customer' })
   await call('partner.saveAddress', {
@@ -170,6 +171,42 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   assert.doesNotMatch(partnerForm, /href="[^"]*tab=(?:addresses|roles)/)
   assert.match(partnerForm, /name="customer"[^>]*checked/)
   assert.doesNotMatch(partnerForm, /action="[^"]*\/roles/)
+  assert.match(
+    partnerForm,
+    /href="\/admin\/crm\/cases\/new\?kind=lead&amp;partnerId=customer&amp;lang=vi"[\s\S]*?Tạo lead/,
+  )
+
+  const leadCreate = await (
+    await e2e.client.get('/admin/crm/cases/new?kind=lead&partnerId=customer&lang=vi')
+  ).text()
+  assert.match(leadCreate, /data-ui="form-page-title"[^>]*>[\s\S]*?Tạo lead/)
+  assert.match(leadCreate, /Khách hàng không tự trở thành lead/)
+  assert.match(leadCreate, /name="email"[^>]*value="hello@minhan\.example"/)
+  assert.match(leadCreate, /name="phone"[^>]*value="0909000123"/)
+  assert.match(leadCreate, /name="partnerIntent"[^>]*value="1"/)
+  assert.match(leadCreate, /name="utmSource"[\s\S]*?value="pancake"[^>]*selected/)
+  assert.match(leadCreate, /name="description"[^>]*required/)
+  assert.match(leadCreate, /href="\/admin\/partner\/partners\/customer\?lang=vi"/)
+
+  const refusedLead = await e2e.client.post(
+    '/admin/crm/cases/new?lang=vi',
+    new URLSearchParams({
+      partnerIntent: '1',
+      partnerId: 'customer',
+      kind: 'lead',
+      name: '',
+      description: '',
+      expectedRevenue: '1850000',
+      returnTo: '/admin/partner/partners/customer?lang=vi',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  const refusedLeadHtml = await refusedLead.text()
+  assert.equal(refusedLead.status, 200)
+  assert.match(refusedLeadHtml, /name="name"[^>]*aria-invalid="true"/)
+  assert.match(refusedLeadHtml, /name="description"[^>]*aria-invalid="true"/)
+  assert.match(refusedLeadHtml, /name="expectedRevenue"[^>]*value="1850000"/)
+  assert.match(refusedLeadHtml, /href="\/admin\/partner\/partners\/customer\?lang=vi"/)
 
   const accountingForm = await (
     await e2e.client.get('/admin/partner/partners/customer/accounting?lang=vi')

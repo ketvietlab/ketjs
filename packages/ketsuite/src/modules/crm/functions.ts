@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { asc, defineFn, deleteFrom, eq, from, inArray, isNull } from '@ketvietlab/ketjs'
+import { asc, defineFn, defineFormSchema, deleteFrom, eq, from, inArray, isNull } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import {
   activeStage,
@@ -66,6 +66,23 @@ const defaultEffects = [
   'read:activity.Type',
   'write:activity.Type',
 ] as const
+
+/** Shape rules shared by the long CRM create form and its backend route. */
+export const caseFormSchema = (requirements: { partner?: boolean; need?: boolean } = {}) =>
+  defineFormSchema({
+    fields: {
+      name: { type: 'text', required: true, trim: true },
+      kind: { type: 'text', required: true, oneOf: ['lead', 'opportunity'] },
+      partnerId: { type: 'text', required: requirements.partner === true, trim: true },
+      description: { type: 'text', required: requirements.need === true, trim: true },
+      utmSource: { type: 'text', trim: true },
+      priority: { type: 'text', oneOf: ['0', '1', '2', '3'] },
+      expectedRevenue: { type: 'decimal', min: 0 },
+      probability: { type: 'decimal', min: 0, max: 100 },
+      expectedClosing: { type: 'date' },
+    },
+    unknown: 'drop',
+  })
 
 export const caseWriteEffects = [
   ...caseReadEffects,
@@ -151,6 +168,7 @@ async function moveToTerminal(
     expectedVersion: number
     terminal: string
     lostReason?: string
+    closeReason?: string
     idempotencyKey: string
   },
 ) {
@@ -197,6 +215,7 @@ async function moveToTerminal(
       caseId: input.id,
       eventType: event,
       body: `crm.timeline.${event}`,
+      metadata: input.closeReason ? { reason: input.closeReason } : undefined,
       customerVisible: false,
       occurredAt: timestamp,
     })
@@ -601,7 +620,14 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'case.convertLead': defineFn({
-    input: { id: 'id', expectedVersion: 'int', stageId: 'id?', idempotencyKey: 'text' },
+    input: {
+      id: 'id',
+      expectedVersion: 'int',
+      stageId: 'id?',
+      expectedRevenue: 'decimal?',
+      expectedClosing: 'date?',
+      idempotencyKey: 'text',
+    },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
     effects: [
       'read:crm.Case',
@@ -648,7 +674,24 @@ export const functions: Record<string, FnSpec> = {
         if (!('dryRun' in changed) && !changed.matched)
           return invalid(issue('version', 'crm.error.stageConflict', { current: held.version }))
         const detail = (await tx.db.select('crm.SalesDetail', { caseId: args.id }))[0]
-        if (detail) await tx.db.update('crm.SalesDetail', { id: detail.id }, { sourceLeadId: args.id })
+        const salesValues = {
+          sourceLeadId: args.id,
+          ...(args.expectedRevenue === undefined ? {} : { expectedRevenue: String(args.expectedRevenue) }),
+          ...(args.expectedClosing === undefined ? {} : { expectedClosing: args.expectedClosing }),
+        }
+        if (detail) await tx.db.update('crm.SalesDetail', { id: detail.id }, salesValues)
+        else
+          await tx.db.insert('crm.SalesDetail', {
+            id: `sales:${String(args.id)}`,
+            caseId: args.id,
+            expectedRevenue: String(args.expectedRevenue ?? '0'),
+            recurringRevenue: '0',
+            probability: '0',
+            expectedClosing: args.expectedClosing ?? null,
+            forecastCategory: 'pipeline',
+            lostReason: null,
+            ...salesValues,
+          })
         await addTimeline(tx, {
           id: `timeline:${String(args.id)}:convert:${String(args.idempotencyKey)}`,
           caseId: String(args.id),
@@ -782,7 +825,7 @@ export const functions: Record<string, FnSpec> = {
   }),
 
   'case.markWon': defineFn({
-    input: { id: 'id', expectedVersion: 'int', idempotencyKey: 'text' },
+    input: { id: 'id', expectedVersion: 'int', closeReason: 'text?', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', terminalState: 'text?', errors: 'json?' },
     effects: [
       'read:crm.Case',
@@ -803,11 +846,18 @@ export const functions: Record<string, FnSpec> = {
         expectedVersion: Number(args.expectedVersion),
         idempotencyKey: String(args.idempotencyKey),
         terminal: 'won',
+        closeReason: args.closeReason ? String(args.closeReason) : undefined,
       }),
   }),
 
   'case.markLost': defineFn({
-    input: { id: 'id', expectedVersion: 'int', lostReason: 'text', idempotencyKey: 'text' },
+    input: {
+      id: 'id',
+      expectedVersion: 'int',
+      lostReason: 'text',
+      closeReason: 'text?',
+      idempotencyKey: 'text',
+    },
     output: { ok: 'bool', id: 'id?', version: 'int?', terminalState: 'text?', errors: 'json?' },
     effects: [
       'read:crm.Case',
@@ -829,6 +879,7 @@ export const functions: Record<string, FnSpec> = {
         id: String(args.id),
         expectedVersion: Number(args.expectedVersion),
         lostReason: String(args.lostReason),
+        closeReason: args.closeReason ? String(args.closeReason) : undefined,
         idempotencyKey: String(args.idempotencyKey),
         terminal: 'lost',
       }),

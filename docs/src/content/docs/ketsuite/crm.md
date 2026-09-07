@@ -172,8 +172,10 @@ to create was refused.
   holding the stage select and a real POST as the no-JavaScript fallback.
 - **Cases** — the shared list chrome: search, filters, grouping, saved state in the URL.
 - **Record workspace** — duplicates, the record form, and the commands that were previously reachable
-  only over the API: move, assign, merge, and marking a case lost with a reason. Tabs for sales
-  (figures and quotations), activities (open work, meetings, history) and the timeline.
+  only over the API: move, assign and merge. A lead converts through a confirmation dialog that
+  captures the opportunity stage, expected revenue and expected closing date. An open opportunity
+  closes through one dialog for either won or lost, with a required outcome note and confirmation.
+  Tabs cover sales (figures and quotations), activities (open work, meetings, history) and the timeline.
 - **Planner** — CRM activities only, each linked back to its case, with complete and cancel on the row.
 - **Leaderboard** — standings, recalculated on request.
 - **Configuration** — five lists: teams, stages, tags, assignment rules and lead/opportunity scoring.
@@ -198,6 +200,18 @@ that search server-side and, where it makes sense, create the missing record inl
 small fixed vocabulary — kind, priority, warehouse, activity type, plan — stay native selects.
 
 Every mutating admin route refuses a cross-origin POST.
+
+## Partner to closed opportunity
+
+The Partner record contributes **Create lead** when `crm_backend` is installed. That action opens the
+dedicated lead form with the Partner, contact name, email and phone prefilled, and cancel returns to the
+same Partner. This path requires both the Partner and a stated need; a Partner does not become a lead
+merely because it was imported or created.
+
+Conversion updates the existing case from `lead` to `opportunity`. It keeps the case id, Partner,
+owner, conversation and timeline, while storing the expected revenue and closing date in its existing
+`SalesDetail`. Closing also updates that same record. The required outcome note is retained on the
+terminal timeline event; a lost result additionally becomes the sales detail's lost reason.
 
 ## Building on the case
 
