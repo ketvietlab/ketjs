@@ -1,28 +1,19 @@
+import { newProgramRoute, programWorkspaceRoute } from './program-workspace.tsx'
 import { randomUUID } from 'node:crypto'
 import { defineModule, text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import type { FormField, SearchMenu } from '../../ui/index.ts'
-import { readForm, seeOther } from '../backend/forms.ts'
+import { formRefusal, readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
-import {
-  DISCOUNT_APPLICABILITY,
-  DISCOUNT_MODES,
-  POINT_MODES,
-  PROGRAM_APPLIES_ON,
-  PROGRAM_TRIGGERS,
-  LEDGER_OPERATIONS,
-  PROGRAM_TYPES,
-  REWARD_TYPES,
-  TAX_MODES,
-} from '../loyalty/types.ts'
+import { LEDGER_OPERATIONS, PROGRAM_TYPES } from '../loyalty/types.ts'
+import { tierFormSchema, tierWindowFormSchema } from '../loyalty/admin-functions.ts'
 import { messages } from './messages.ts'
 import {
   dashboardScreen,
   ledgerScreen,
-  membershipsScreen,
+  tiersScreen,
   orderLoyaltyScreen,
   portalScreen,
-  programDetailScreen,
   programsScreen,
   walletDetailScreen,
   walletsScreen,
@@ -62,7 +53,10 @@ const filterFacets = (
 ): Array<{ label: string; without: string }> =>
   active
     .filter((entry): entry is { param: string; label: string } => Boolean(entry.label))
-    .map((entry) => ({ label: entry.label, without: withParam(url, entry.param, null) }))
+    .map((entry) => ({
+      label: entry.label,
+      without: withParam(url, entry.param, null),
+    }))
 
 /**
  * A window over a ledger, chosen by name rather than by date.
@@ -77,14 +71,21 @@ const PERIODS = ['month', 'quarter', 'year', 'all'] as const
 const periodWindow = (period: string): { from?: string; to?: string } => {
   const at = new Date()
   const year = at.getUTCFullYear()
-  if (period === 'year') return { from: new Date(Date.UTC(year, 0, 1)).toISOString(), to: at.toISOString() }
+  if (period === 'year')
+    return {
+      from: new Date(Date.UTC(year, 0, 1)).toISOString(),
+      to: at.toISOString(),
+    }
   if (period === 'quarter')
     return {
       from: new Date(Date.UTC(year, Math.floor(at.getUTCMonth() / 3) * 3, 1)).toISOString(),
       to: at.toISOString(),
     }
   if (period === 'month')
-    return { from: new Date(Date.UTC(year, at.getUTCMonth(), 1)).toISOString(), to: at.toISOString() }
+    return {
+      from: new Date(Date.UTC(year, at.getUTCMonth(), 1)).toISOString(),
+      to: at.toISOString(),
+    }
   return {}
 }
 
@@ -107,12 +108,15 @@ const crossSite = (req: Parameters<Route>[1]): boolean => {
 
 type Translator = ReturnType<ServeContext['translate']>
 
-const bool = (value: string | undefined) => value === '1' || value === 'true' || value === 'on'
 const resultErrors = (result: unknown, _: Translator): string[] =>
   (
     (
       result as {
-        errors?: Array<{ code?: string; message?: string; params?: Record<string, unknown> }>
+        errors?: Array<{
+          code?: string
+          message?: string
+          params?: Record<string, unknown>
+        }>
       } | null
     )?.errors ?? []
   ).map((error) =>
@@ -120,7 +124,10 @@ const resultErrors = (result: unknown, _: Translator): string[] =>
   )
 
 const options = (_: Translator, values: readonly string[], group: string) =>
-  values.map((value) => ({ value, label: _(`loyalty_backend.${group}.${value}`) }))
+  values.map((value) => ({
+    value,
+    label: _(`loyalty_backend.${group}.${value}`),
+  }))
 
 const dataFor = async (ctx: ServeContext, url: URL, req: Req) => {
   const [programs, partners, templates] = await Promise.all([
@@ -146,192 +153,6 @@ const createProgramFields = (_: Translator): FormField[] => [
     options: options(_, PROGRAM_TYPES, 'programType'),
     required: true,
   },
-]
-
-const programFields = (_: Translator, row: AnyRow): FormField[] => [
-  { name: 'name', label: _('loyalty_backend.field.name'), value: String(row.name ?? ''), required: true },
-  {
-    name: 'programType',
-    label: _('loyalty_backend.field.programType'),
-    type: 'select',
-    value: String(row.programType ?? ''),
-    options: options(_, PROGRAM_TYPES, 'programType'),
-    required: true,
-  },
-  {
-    name: 'sequence',
-    label: _('loyalty_backend.field.sequence'),
-    type: 'number',
-    value: Number(row.sequence ?? 10),
-  },
-  {
-    name: 'currency',
-    label: _('loyalty_backend.field.currency'),
-    value: String(row.currency ?? ''),
-    required: true,
-  },
-  {
-    name: 'dateFrom',
-    label: _('loyalty_backend.field.dateFrom'),
-    type: 'datetime-local',
-    value: row.dateFrom ? String(row.dateFrom).slice(0, 16) : '',
-  },
-  {
-    name: 'dateTo',
-    label: _('loyalty_backend.field.dateTo'),
-    type: 'datetime-local',
-    value: row.dateTo ? String(row.dateTo).slice(0, 16) : '',
-  },
-  {
-    name: 'limitUsage',
-    label: _('loyalty_backend.field.limitUsage'),
-    type: 'checkbox',
-    value: Boolean(row.limitUsage),
-  },
-  {
-    name: 'maxUsage',
-    label: _('loyalty_backend.field.maxUsage'),
-    type: 'number',
-    value: row.maxUsage == null ? '' : Number(row.maxUsage),
-  },
-  {
-    name: 'appliesOn',
-    label: _('loyalty_backend.field.appliesOn'),
-    type: 'select',
-    value: String(row.appliesOn ?? ''),
-    options: options(_, PROGRAM_APPLIES_ON, 'appliesOn'),
-  },
-  {
-    name: 'trigger',
-    label: _('loyalty_backend.field.trigger'),
-    type: 'select',
-    value: String(row.trigger ?? ''),
-    options: options(_, PROGRAM_TRIGGERS, 'trigger'),
-  },
-  { name: 'pointName', label: _('loyalty_backend.field.pointName'), value: String(row.pointName ?? '') },
-  {
-    name: 'portalVisible',
-    label: _('loyalty_backend.field.portalVisible'),
-    type: 'checkbox',
-    value: Boolean(row.portalVisible),
-  },
-  {
-    name: 'availableSale',
-    label: _('loyalty_backend.field.availableSale'),
-    type: 'checkbox',
-    value: Boolean(row.availableSale),
-  },
-  {
-    name: 'availablePos',
-    label: _('loyalty_backend.field.availablePos'),
-    type: 'checkbox',
-    value: Boolean(row.availablePos),
-  },
-]
-
-const programInput = (id: string, form: Record<string, string>) => ({
-  id,
-  name: form.name ?? '',
-  programType: form.programType ?? '',
-  sequence: Number(form.sequence || 10),
-  ...optional(form, 'currency'),
-  ...optional(form, 'dateFrom'),
-  ...optional(form, 'dateTo'),
-  limitUsage: bool(form.limitUsage),
-  ...(form.maxUsage ? { maxUsage: Number(form.maxUsage) } : {}),
-  ...optional(form, 'appliesOn'),
-  ...optional(form, 'trigger'),
-  ...optional(form, 'pointName'),
-  portalVisible: bool(form.portalVisible),
-  availableSale: bool(form.availableSale),
-  availablePos: bool(form.availablePos),
-})
-
-const ruleFields = (_: Translator, products: AnyRow[]): FormField[] => [
-  { name: 'priority', label: _('loyalty_backend.field.priority'), type: 'number', value: 10 },
-  {
-    name: 'productId',
-    label: _('loyalty_backend.field.rewardProduct'),
-    type: 'select',
-    options: choices(products, true),
-  },
-  {
-    name: 'pointAmount',
-    label: _('loyalty_backend.field.pointAmount'),
-    type: 'decimal',
-    value: 1,
-    required: true,
-  },
-  {
-    name: 'pointMode',
-    label: _('loyalty_backend.field.pointMode'),
-    type: 'select',
-    options: options(_, POINT_MODES, 'pointMode'),
-    required: true,
-  },
-  { name: 'pointSplit', label: _('loyalty_backend.field.pointSplit'), type: 'checkbox' },
-  { name: 'minimumQuantity', label: _('loyalty_backend.field.minimumQuantity'), type: 'decimal', value: 1 },
-  { name: 'minimumAmount', label: _('loyalty_backend.field.minimumAmount'), type: 'decimal', value: 0 },
-  {
-    name: 'taxMode',
-    label: _('loyalty_backend.field.taxMode'),
-    type: 'select',
-    options: options(_, TAX_MODES, 'taxMode'),
-    required: true,
-  },
-  {
-    name: 'mode',
-    label: _('loyalty_backend.field.mode'),
-    type: 'select',
-    options: options(_, PROGRAM_TRIGGERS, 'trigger'),
-    required: true,
-  },
-  { name: 'code', label: _('loyalty_backend.field.code') },
-]
-
-const rewardFields = (_: Translator, products: AnyRow[]): FormField[] => [
-  { name: 'description', label: _('loyalty_backend.field.description'), required: true },
-  {
-    name: 'rewardType',
-    label: _('loyalty_backend.field.rewardType'),
-    type: 'select',
-    options: options(_, REWARD_TYPES, 'rewardType'),
-    required: true,
-  },
-  { name: 'discount', label: _('loyalty_backend.field.discount'), type: 'decimal', value: 10 },
-  {
-    name: 'discountMode',
-    label: _('loyalty_backend.field.discountMode'),
-    type: 'select',
-    options: options(_, DISCOUNT_MODES, 'discountMode'),
-  },
-  {
-    name: 'discountApplicability',
-    label: _('loyalty_backend.field.discountApplicability'),
-    type: 'select',
-    options: options(_, DISCOUNT_APPLICABILITY, 'discountApplicability'),
-  },
-  { name: 'discountMaximum', label: _('loyalty_backend.field.discountMaximum'), type: 'decimal' },
-  {
-    name: 'rewardProductId',
-    label: _('loyalty_backend.field.rewardProduct'),
-    type: 'select',
-    options: choices(products, true),
-  },
-  {
-    name: 'rewardProductQuantity',
-    label: _('loyalty_backend.field.rewardProductQuantity'),
-    type: 'decimal',
-    value: 1,
-  },
-  {
-    name: 'requiredPoints',
-    label: _('loyalty_backend.field.requiredPoints'),
-    type: 'decimal',
-    value: 1,
-    required: true,
-  },
-  { name: 'clearWallet', label: _('loyalty_backend.field.clearWallet'), type: 'checkbox' },
 ]
 
 const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
@@ -360,30 +181,7 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
   '/admin/loyalty/programs':
     (ctx): Route =>
     async (url, req) => {
-      if (req.method === 'POST') {
-        if (crossSite(req)) return text('Forbidden', { status: 403 })
-        const form = await readForm(req)
-        const result = await ctx.call(
-          'loyalty.program.save',
-          { ...programInput(randomUUID(), form), availableSale: true, availablePos: true },
-          url,
-          req,
-        )
-        if ((result as AnyRow).ok)
-          return seeOther(inLocale(url, `/admin/loyalty/programs/${String((result as AnyRow).id)}`))
-        const _ = ctx.translate(ctx.localeOf(url, req))
-        const [rows, totals] = await Promise.all([
-          ctx.call('loyalty.program.list', { includeArchived: true, limit: PAGE_SIZE }, url, req) as Promise<
-            AnyRow[]
-          >,
-          ctx.call('loyalty.program.stats', {}, url, req) as Promise<AnyRow>,
-        ])
-        return adminPage(ctx, url, req, {
-          title: 'loyalty_backend.programs.title',
-          body: (_, frame) =>
-            programsScreen(_, frame, rows, totals, createProgramFields(_), resultErrors(result, _)),
-        })
-      }
+      if (req.method === 'POST') return seeOther(inLocale(url, '/admin/loyalty/programs/new'))
       if (req.method !== 'GET') return text('GET or POST', { status: 405 })
       const page = pageOf(url)
       const search = searchOf(url)
@@ -423,7 +221,10 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                     ...(programType ? { type: programType } : {}),
                   },
                   facets: filterFacets(url, [
-                    { param: 'state', label: state ? _(`loyalty_backend.state.${state}`) : null },
+                    {
+                      param: 'state',
+                      label: state ? _(`loyalty_backend.state.${state}`) : null,
+                    },
                     {
                       param: 'type',
                       label: programType ? _(`loyalty_backend.programType.${programType}`) : null,
@@ -431,10 +232,26 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                   ]),
                   menus: [
                     filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
-                      { value: 'running', label: _('loyalty_backend.state.running') },
-                      { value: 'upcoming', label: _('loyalty_backend.state.upcoming') },
-                      { value: 'archived', label: _('loyalty_backend.state.archived') },
-                      { value: 'ended', label: _('loyalty_backend.state.ended') },
+                      {
+                        value: 'draft',
+                        label: _('loyalty_backend.state.draft'),
+                      },
+                      {
+                        value: 'running',
+                        label: _('loyalty_backend.state.running'),
+                      },
+                      {
+                        value: 'upcoming',
+                        label: _('loyalty_backend.state.upcoming'),
+                      },
+                      {
+                        value: 'archived',
+                        label: _('loyalty_backend.state.archived'),
+                      },
+                      {
+                        value: 'ended',
+                        label: _('loyalty_backend.state.ended'),
+                      },
                     ]),
                     filterMenu(
                       url,
@@ -456,85 +273,8 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       })
     },
 
-  '/admin/loyalty/programs/{id}':
-    (ctx): Route =>
-    async (url, req, params) => {
-      let errors: string[] = []
-      if (req.method === 'POST') {
-        if (crossSite(req)) return text('Forbidden', { status: 403 })
-        const form = await readForm(req)
-        let result: unknown
-        if (form.action === 'save-program')
-          result = await ctx.call('loyalty.program.save', programInput(params.id, form), url, req)
-        else if (form.action === 'archive' || form.action === 'restore')
-          result = await ctx.call(
-            'loyalty.program.archive',
-            { id: params.id, active: form.action === 'restore' },
-            url,
-            req,
-          )
-        else if (form.action === 'add-rule')
-          result = await ctx.call(
-            'loyalty.rule.save',
-            {
-              id: randomUUID(),
-              programId: params.id,
-              priority: Number(form.priority || 10),
-              ...optional(form, 'productId'),
-              pointAmount: form.pointAmount || '1',
-              pointMode: form.pointMode || 'order',
-              pointSplit: bool(form.pointSplit),
-              minimumQuantity: form.minimumQuantity || '1',
-              minimumAmount: form.minimumAmount || '0',
-              taxMode: form.taxMode || 'excl',
-              mode: form.mode || 'auto',
-              ...optional(form, 'code'),
-            },
-            url,
-            req,
-          )
-        else if (form.action === 'add-reward')
-          result = await ctx.call(
-            'loyalty.reward.save',
-            {
-              id: randomUUID(),
-              programId: params.id,
-              description: form.description || '',
-              rewardType: form.rewardType || 'discount',
-              discount: form.discount || '0',
-              discountMode: form.discountMode || 'percent',
-              discountApplicability: form.discountApplicability || 'order',
-              ...optional(form, 'discountMaximum'),
-              ...optional(form, 'rewardProductId'),
-              rewardProductQuantity: form.rewardProductQuantity || '1',
-              requiredPoints: form.requiredPoints || '1',
-              clearWallet: bool(form.clearWallet),
-            },
-            url,
-            req,
-          )
-        else return text('unknown action', { status: 400 })
-        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
-        errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [program, data] = await Promise.all([
-        ctx.call('loyalty.program.get', { id: params.id }, url, req) as Promise<AnyRow | null>,
-        dataFor(ctx, url, req),
-      ])
-      if (!program)
-        return text(ctx.translate(ctx.localeOf(url, req))('loyalty_backend.error.notFound'), { status: 404 })
-      return adminPage(ctx, url, req, {
-        title: 'loyalty_backend.program.detail',
-        body: (_, frame) =>
-          programDetailScreen(_, frame, program, {
-            programFields: programFields(_, program),
-            ruleFields: ruleFields(_, data.products),
-            rewardFields: rewardFields(_, data.products),
-            tab: url.searchParams.get('tab') ?? 'overview',
-            errors,
-          }),
-      })
-    },
+  '/admin/loyalty/programs/new': newProgramRoute,
+  '/admin/loyalty/programs/{id}': programWorkspaceRoute,
 
   '/admin/loyalty/wallets':
     (ctx): Route =>
@@ -606,14 +346,29 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                     ...(programId ? { program: programId } : {}),
                   },
                   facets: filterFacets(url, [
-                    { param: 'state', label: state ? _(`loyalty_backend.state.${state}`) : null },
-                    { param: 'program', label: programId ? (programNames.get(programId) ?? null) : null },
+                    {
+                      param: 'state',
+                      label: state ? _(`loyalty_backend.state.${state}`) : null,
+                    },
+                    {
+                      param: 'program',
+                      label: programId ? (programNames.get(programId) ?? null) : null,
+                    },
                   ]),
                   menus: [
                     filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
-                      { value: 'active', label: _('loyalty_backend.state.running') },
-                      { value: 'locked', label: _('loyalty_backend.state.locked') },
-                      { value: 'expired', label: _('loyalty_backend.state.expired') },
+                      {
+                        value: 'active',
+                        label: _('loyalty_backend.state.running'),
+                      },
+                      {
+                        value: 'locked',
+                        label: _('loyalty_backend.state.locked'),
+                      },
+                      {
+                        value: 'expired',
+                        label: _('loyalty_backend.state.expired'),
+                      },
                     ]),
                     filterMenu(
                       url,
@@ -658,7 +413,11 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                 type: 'decimal',
                 value: 0,
               },
-              { name: 'expiresAt', label: _('loyalty_backend.field.expiresAt'), type: 'datetime-local' },
+              {
+                name: 'expiresAt',
+                label: _('loyalty_backend.field.expiresAt'),
+                type: 'datetime-local',
+              },
             ],
             errors,
           ),
@@ -711,14 +470,24 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
             frame,
             wallet,
             [
-              { name: 'amount', label: _('loyalty_backend.field.amount'), type: 'decimal', required: true },
+              {
+                name: 'amount',
+                label: _('loyalty_backend.field.amount'),
+                type: 'decimal',
+                required: true,
+              },
               {
                 name: 'sourceId',
                 label: _('loyalty_backend.field.sourceId'),
                 value: randomUUID(),
                 required: true,
               },
-              { name: 'note', label: _('loyalty_backend.field.note'), type: 'textarea', span: 'full' },
+              {
+                name: 'note',
+                label: _('loyalty_backend.field.note'),
+                type: 'textarea',
+                span: 'full',
+              },
             ],
             url.searchParams.get('tab') ?? 'overview',
             errors,
@@ -777,13 +546,22 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                     ...(walletId ? { wallet: walletId } : {}),
                   },
                   facets: filterFacets(url, [
-                    { param: 'period', label: _(`loyalty_backend.period.${period}`) },
+                    {
+                      param: 'period',
+                      label: _(`loyalty_backend.period.${period}`),
+                    },
                     {
                       param: 'operation',
                       label: operation ? _(`loyalty_backend.operation.${operation}`) : null,
                     },
-                    { param: 'program', label: programId ? (programNames.get(programId) ?? null) : null },
-                    { param: 'wallet', label: walletId ? (codes.get(walletId) ?? null) : null },
+                    {
+                      param: 'program',
+                      label: programId ? (programNames.get(programId) ?? null) : null,
+                    },
+                    {
+                      param: 'wallet',
+                      label: walletId ? (codes.get(walletId) ?? null) : null,
+                    },
                   ]),
                   menus: [
                     filterMenu(
@@ -821,184 +599,219 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
                 pager: pager(url, page, rows.length, Number(totals.entries ?? 0)),
               },
             },
-            rows.map((row) => ({ ...row, walletCode: codes.get(String(row.walletId)) })),
+            rows.map((row) => ({
+              ...row,
+              walletCode: codes.get(String(row.walletId)),
+            })),
             totals,
           ),
       })
     },
 
   '/admin/loyalty/memberships':
+    (_ctx): Route =>
+    async (url, req) => {
+      if (req.method !== 'GET') return text('GET', { status: 405 })
+      return seeOther(inLocale(url, '/admin/loyalty/tiers'))
+    },
+
+  '/admin/loyalty/tiers':
     (ctx): Route =>
     async (url, req) => {
-      const data = await dataFor(ctx, url, req)
-      const loyaltyPrograms = data.programs.filter(
-        (program) => program.programType === 'loyalty' && program.active,
-      )
-      let errors: string[] = []
-      if (req.method === 'POST') {
-        if (crossSite(req)) return text('Forbidden', { status: 403 })
-        const form = await readForm(req)
-        const result =
-          form.action === 'tier'
-            ? await ctx.call(
-                'loyalty.tier.save',
-                {
-                  id: randomUUID(),
-                  name: form.name ?? '',
-                  code: form.code ?? '',
-                  sequence: Number(form.sequence || 10),
-                  minimumSpend: form.minimumSpend || '0',
-                  redeemPercent: form.redeemPercent || '0',
-                  active: true,
-                },
-                url,
-                req,
-              )
-            : await ctx.call(
-                'loyalty.membership.config.save',
-                {
-                  id: form.id || 'membership-config',
-                  programId: form.programId ?? '',
-                  windowMonths: Number(form.windowMonths || 12),
-                  pointValue: form.pointValue || '1',
-                  minimumRedeemStep: form.minimumRedeemStep || '1',
-                  fallbackCurrencyPerPoint: form.fallbackCurrencyPerPoint || '1',
-                  fallbackEnabled: bool(form.fallbackEnabled),
-                },
-                url,
-                req,
-              )
-        if ((result as AnyRow).ok) return seeOther(inLocale(url, url.pathname))
-        errors = resultErrors(result, ctx.translate(ctx.localeOf(url, req)))
-      } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const page = pageOf(url)
-      const state = url.searchParams.get('state') ?? undefined
-      const tierId = url.searchParams.get('tier') ?? undefined
-      const [tiers, memberships, totals, config] = await Promise.all([
-        ctx.call('loyalty.tier.list', { includeArchived: true }, url, req) as Promise<AnyRow[]>,
-        ctx.call(
-          'loyalty.membership.list',
-          {
-            ...(state ? { state } : {}),
-            ...(tierId ? { tierId } : {}),
-            limit: PAGE_SIZE,
-            offset: (page - 1) * PAGE_SIZE,
-          },
+      if (!['GET', 'POST'].includes(req.method ?? '')) return text('GET or POST', { status: 405 })
+      if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
+      const _ = ctx.translate(ctx.localeOf(url, req))
+      const refusal = formRefusal(_)
+      let submitted: Record<string, string> = {}
+      let submittedAction = ''
+      let tiers = (await ctx.call('loyalty.tier.list', { includeArchived: true }, url, req)) as AnyRow[]
+      const programs = (
+        (await ctx.call(
+          'loyalty.program.list',
+          { includeArchived: false, programType: 'loyalty' },
           url,
           req,
-        ) as Promise<AnyRow[]>,
-        ctx.call('loyalty.membership.stats', { ...(tierId ? { tierId } : {}) }, url, req) as Promise<AnyRow>,
-        ctx.call('loyalty.membership.config.get', {}, url, req) as Promise<AnyRow | null>,
-      ])
-      const names = new Map(data.partners.map((partner) => [String(partner.id), String(partner.name)]))
-      const tierNames = new Map(tiers.map((tier) => [String(tier.id), String(tier.name)]))
+        )) as AnyRow[]
+      ).filter((program) => program.active)
+      let programId = url.searchParams.get('program') ?? String(programs[0]?.id ?? '')
+      let config = programId
+        ? ((await ctx.call('loyalty.membership.config.get', { programId }, url, req)) as AnyRow | null)
+        : null
+
+      const baseHref = (selectedProgram = programId): string => {
+        const target = new URL(inLocale(url, '/admin/loyalty/tiers'), url.origin)
+        if (selectedProgram) target.searchParams.set('program', selectedProgram)
+        return target.pathname + target.search
+      }
+
+      if (req.method === 'POST') {
+        const form = await readForm(req)
+        submitted = form
+        submittedAction = form.action ?? ''
+        let result: AnyRow = { ok: false }
+        if (submittedAction === 'policy') {
+          const checked = refusal.check(tierWindowFormSchema, form)
+          programId = form.programId || programId
+          if (checked) {
+            const existing = (await ctx.call(
+              'loyalty.membership.config.get',
+              { programId: checked.programId },
+              url,
+              req,
+            )) as AnyRow | null
+            result = (await ctx.call(
+              'loyalty.membership.config.save',
+              {
+                id: String(existing?.id ?? randomUUID()),
+                programId: checked.programId,
+                windowMonths: checked.windowMonths,
+                pointValue: String(existing?.pointValue ?? 1),
+                minimumRedeemStep: String(existing?.minimumRedeemStep ?? 1),
+                fallbackCurrencyPerPoint: String(existing?.fallbackCurrencyPerPoint ?? 1),
+                fallbackEnabled: existing ? Boolean(existing.fallbackEnabled) : true,
+              },
+              url,
+              req,
+            )) as AnyRow
+          }
+          if (result.ok) return seeOther(baseHref(String(checked?.programId ?? programId)))
+          refusal.add(resultErrors(result, _))
+          config = programId
+            ? ((await ctx.call('loyalty.membership.config.get', { programId }, url, req)) as AnyRow | null)
+            : null
+        } else if (submittedAction === 'tier') {
+          const checked = refusal.check(tierFormSchema, form)
+          if (checked)
+            result = (await ctx.call(
+              'loyalty.tier.save',
+              {
+                id: form.id || randomUUID(),
+                name: checked.name,
+                code: checked.code,
+                sequence: checked.sequence ?? 10,
+                minimumSpend: checked.minimumSpend,
+                redeemPercent: checked.redeemPercent,
+                active: true,
+              },
+              url,
+              req,
+            )) as AnyRow
+          if (result.ok) return seeOther(baseHref())
+          refusal.add(resultErrors(result, _))
+        } else if (submittedAction === 'toggle') {
+          const tier = tiers.find((row) => String(row.id) === form.id)
+          if (!tier) return text(_('loyalty_backend.error.notFound'), { status: 404 })
+          result = (await ctx.call(
+            'loyalty.tier.save',
+            {
+              id: String(tier.id),
+              name: String(tier.name),
+              code: String(tier.code),
+              sequence: Number(tier.sequence ?? 10),
+              minimumSpend: String(tier.minimumSpend),
+              redeemPercent: String(tier.redeemPercent),
+              active: !tier.active,
+            },
+            url,
+            req,
+          )) as AnyRow
+          if (result.ok) return seeOther(baseHref())
+          refusal.add(resultErrors(result, _))
+        } else return text('unknown action', { status: 400 })
+        tiers = (await ctx.call('loyalty.tier.list', { includeArchived: true }, url, req)) as AnyRow[]
+      }
+
+      const tierId = url.searchParams.get('tier') ?? (submittedAction === 'tier' ? submitted.id : undefined)
+      const tier = tierId ? (tiers.find((row) => String(row.id) === tierId) ?? null) : null
+      if (tierId && !tier && submittedAction !== 'tier')
+        return text(_('loyalty_backend.error.notFound'), { status: 404 })
+      const modal = url.searchParams.get('modal') === 'tier' || submittedAction === 'tier'
+      const held = (name: string, fallback: unknown, action: string): unknown =>
+        submittedAction === action && Object.hasOwn(submitted, name) ? submitted[name] : fallback
+      const policyFields: FormField[] = [
+        {
+          name: 'programId',
+          label: _('loyalty_backend.field.program'),
+          type: 'select',
+          value: String(held('programId', config?.programId ?? programId, 'policy')),
+          options: choices(programs),
+          required: true,
+          error: submittedAction === 'policy' ? refusal.error('programId') : null,
+        },
+        {
+          name: 'windowMonths',
+          label: _('loyalty_backend.field.windowMonths'),
+          type: 'number',
+          value: String(held('windowMonths', config?.windowMonths ?? 12, 'policy')),
+          required: true,
+          help: _('loyalty_backend.memberships.windowExamples'),
+          error: submittedAction === 'policy' ? refusal.error('windowMonths') : null,
+        },
+      ]
+      const tierFields: FormField[] | undefined = modal
+        ? [
+            {
+              name: 'name',
+              label: _('loyalty_backend.field.name'),
+              value: String(held('name', tier?.name ?? '', 'tier')),
+              required: true,
+              error: submittedAction === 'tier' ? refusal.error('name') : null,
+            },
+            {
+              name: 'code',
+              label: _('loyalty_backend.field.code'),
+              value: String(held('code', tier?.code ?? '', 'tier')),
+              required: true,
+              error: submittedAction === 'tier' ? refusal.error('code') : null,
+            },
+            {
+              name: 'minimumSpend',
+              label: _('loyalty_backend.field.minimumSpend'),
+              type: 'decimal',
+              value: String(held('minimumSpend', tier?.minimumSpend ?? 0, 'tier')),
+              required: true,
+              error: submittedAction === 'tier' ? refusal.error('minimumSpend') : null,
+            },
+            {
+              name: 'redeemPercent',
+              label: _('loyalty_backend.field.redeemPercent'),
+              type: 'decimal',
+              value: String(held('redeemPercent', tier?.redeemPercent ?? 20, 'tier')),
+              required: true,
+              error: submittedAction === 'tier' ? refusal.error('redeemPercent') : null,
+            },
+            {
+              name: 'sequence',
+              label: _('loyalty_backend.field.sequence'),
+              type: 'number',
+              value: String(held('sequence', tier?.sequence ?? 10, 'tier')),
+              error: submittedAction === 'tier' ? refusal.error('sequence') : null,
+            },
+          ]
+        : undefined
+      const create = new URL(baseHref(), url.origin)
+      create.searchParams.set('modal', 'tier')
+      const closeHref = baseHref()
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.memberships.title',
         body: (_, frame) =>
-          membershipsScreen(
-            _,
-            {
-              ...frame,
-              chrome: {
-                section: _('loyalty_backend.menu.app'),
-                search: {
-                  name: 'q',
-                  value: '',
-                  placeholder: _('loyalty_backend.chrome.searchMembers'),
-                  keep: { ...(state ? { state } : {}), ...(tierId ? { tier: tierId } : {}) },
-                  facets: filterFacets(url, [
-                    { param: 'state', label: state ? _(`loyalty_backend.state.${state}`) : null },
-                    { param: 'tier', label: tierId ? (tierNames.get(tierId) ?? null) : null },
-                  ]),
-                  menus: [
-                    filterMenu(url, 'state', _('loyalty_backend.field.state'), 'state', state, [
-                      { value: 'active', label: _('loyalty_backend.state.active') },
-                      { value: 'dormant', label: _('loyalty_backend.state.dormant') },
-                    ]),
-                    filterMenu(
-                      url,
-                      'tier',
-                      _('loyalty_backend.field.tier'),
-                      'tier',
-                      tierId,
-                      tiers.map((tier) => ({ value: String(tier.id), label: String(tier.name) })),
-                    ),
-                  ],
-                },
-                pager: pager(url, page, memberships.length, Number(totals.total ?? 0)),
-              },
+          tiersScreen(_, frame, tiers, {
+            action: url.pathname + url.search,
+            closeHref,
+            createHref: create.pathname + create.search,
+            tierHref: (row) => {
+              const target = new URL(closeHref, url.origin)
+              target.searchParams.set('modal', 'tier')
+              target.searchParams.set('tier', String(row.id))
+              return target.pathname + target.search
             },
-            memberships.map((membership) => ({
-              ...membership,
-              partnerName: names.get(String(membership.partnerId)),
-            })),
-            totals,
-            tiers,
-            [
-              { name: 'name', label: _('loyalty_backend.field.name'), required: true },
-              { name: 'code', label: _('loyalty_backend.field.code'), required: true },
-              { name: 'sequence', label: _('loyalty_backend.field.sequence'), type: 'number', value: 10 },
-              {
-                name: 'minimumSpend',
-                label: _('loyalty_backend.field.minimumSpend'),
-                type: 'decimal',
-                value: 0,
-                required: true,
-              },
-              {
-                name: 'redeemPercent',
-                label: _('loyalty_backend.field.redeemPercent'),
-                type: 'decimal',
-                value: 100,
-                required: true,
-              },
-            ],
-            [
-              {
-                name: 'programId',
-                label: _('loyalty_backend.field.program'),
-                type: 'select',
-                value: String(config?.programId ?? loyaltyPrograms[0]?.id ?? ''),
-                options: choices(loyaltyPrograms),
-                required: true,
-              },
-              {
-                name: 'windowMonths',
-                label: _('loyalty_backend.field.windowMonths'),
-                type: 'number',
-                value: Number(config?.windowMonths ?? 12),
-                required: true,
-              },
-              {
-                name: 'pointValue',
-                label: _('loyalty_backend.field.pointValue'),
-                type: 'decimal',
-                value: String(config?.pointValue ?? 1),
-                required: true,
-              },
-              {
-                name: 'minimumRedeemStep',
-                label: _('loyalty_backend.field.minimumRedeemStep'),
-                type: 'decimal',
-                value: String(config?.minimumRedeemStep ?? 1),
-                required: true,
-              },
-              {
-                name: 'fallbackCurrencyPerPoint',
-                label: _('loyalty_backend.field.fallbackCurrencyPerPoint'),
-                type: 'decimal',
-                value: String(config?.fallbackCurrencyPerPoint ?? 1),
-                required: true,
-              },
-              {
-                name: 'fallbackEnabled',
-                label: _('loyalty_backend.field.fallbackEnabled'),
-                type: 'checkbox',
-                value: config ? Boolean(config.fallbackEnabled) : true,
-              },
-            ],
-            errors,
-          ),
+            policyFields,
+            policyErrors: submittedAction === 'policy' ? refusal.sentences() : [],
+            tierFields,
+            tierErrors: submittedAction === 'tier' ? refusal.sentences() : [],
+            tier,
+            modal,
+          }),
       })
     },
 
@@ -1022,7 +835,11 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
         else if (form.action === 'reward')
           result = await ctx.call(
             `${prefix}.applyReward`,
-            { orderId: params.id, programId: form.programId ?? '', rewardId: form.rewardId ?? '' },
+            {
+              orderId: params.id,
+              programId: form.programId ?? '',
+              rewardId: form.rewardId ?? '',
+            },
             url,
             req,
           )
@@ -1081,7 +898,10 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
       if (!session) return seeOther(`/login?next=${encodeURIComponent(url.pathname)}`)
       const user = (await ctx.call('user.getUser', { id: session.userId }, url, req)) as AnyRow | null
       const _ = ctx.translate(ctx.localeOf(url, req))
-      if (!user?.partnerId) return text(_('loyalty_backend.error.partnerRequired'), { status: 403 })
+      if (!user?.partnerId)
+        return text(_('loyalty_backend.error.partnerRequired'), {
+          status: 403,
+        })
       const summary = (await ctx.call(
         'loyalty.portal.summary',
         { partnerId: user.partnerId },
@@ -1130,9 +950,9 @@ export default defineModule({
     'loyalty.memberships': {
       parent: 'loyalty',
       label: 'menu.memberships',
-      path: '/admin/loyalty/memberships',
+      path: '/admin/loyalty/tiers',
       sequence: 30,
-      needs: 'loyalty.membership.list',
+      needs: 'loyalty.tier.list',
     },
     'loyalty.ledger': {
       parent: 'loyalty',

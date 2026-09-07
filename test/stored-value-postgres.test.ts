@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions } from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
-import { address, company, loyalty, partner, pricing, product, uom } from '@ketvietlab/ketsuite'
+import { address, company, loyalty, partner, pricing, product, stock, uom } from '@ketvietlab/ketsuite'
 
 const configured =
   process.env.KET_TEST_PG ?? process.env.DATABASE_URL ?? 'postgres://dev:devpassword@127.0.0.1:5435/ketjs_dev'
@@ -21,8 +21,8 @@ const reachable = await (async () => {
     return false
   }
 })()
-const live = { skip: reachable ? false : `no PostgreSQL CREATE DATABASE role at ${adminUrl.toString()}` }
-const modules = [address, partner, company, uom, product, pricing, loyalty]
+const live = { skip: reachable ? false : `no PostgreSQL CREATE DATABASE role at ${adminUrl.host}` }
+const modules = [address, partner, company, uom, product, pricing, stock, loyalty]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
 const call = (adapter: Adapter, name: string, input: Record<string, unknown>) =>

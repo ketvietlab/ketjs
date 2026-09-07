@@ -9,7 +9,7 @@ import { performance } from 'node:perf_hooks'
 import { callFn, compose, migrateOne, registerFunctions, sqliteAdapter } from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
-import { company, loyalty, partner, pricing, product, uom } from '@ketvietlab/ketsuite'
+import { company, loyalty, partner, pricing, product, stock, uom } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 
 const driver = process.env.KET_BENCH_DRIVER ?? 'sqlite'
@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 }))
   if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`)
 
-const modules = [address, partner, company, uom, product, pricing, loyalty]
+const modules = [address, partner, company, uom, product, pricing, stock, loyalty]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'bench', branches: null }
 registerFunctions(modules)
@@ -117,8 +117,8 @@ const snapshot = (orderId: string, partnerId = 'customer', orderType: 'sale' | '
     id: `${orderId}:line:${line}`,
     productId: `product:${line}`,
     quantity: 1,
-    untaxed: 100 + line,
-    total: 100 + line,
+    untaxed: String(100 + line),
+    total: String(100 + line),
     lineKind: 'product',
   })),
 })
@@ -232,7 +232,8 @@ try {
             rewardId: 'reward',
           })
         ).value as Row
-        if (applied.ok !== true) throw new Error(`reward apply failed at ${pass}:${index}`)
+        if (applied.ok !== true)
+          throw new Error(`reward apply failed at ${pass}:${index}: ${JSON.stringify(applied.errors)}`)
         await call('loyalty.removeReward', {
           orderType: order.orderType,
           orderId: order.orderId,

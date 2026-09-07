@@ -28,8 +28,11 @@ such as a program name or reward description remain user data and are not transl
 - Cancellation and refunds append reversal entries instead of deleting history.
 - Reservation uses a transaction and compare-and-set update. Competing requests cannot reserve
   more than the available balance.
-- Tier spend uses a rolling window (12 months by default). Earn groups are evaluated by priority and
-  stable id order.
+- Tier spend uses a rolling window configured for each program from **Loyalty → Tiers and points**.
+  The window is a positive whole number of months, so an operator can express six months, one year
+  (`12`) or ten years (`120`) without changing the tier thresholds. A program without a saved policy
+  starts with the existing 12-month fallback. Earn groups are evaluated by priority and stable id
+  order.
 - The redeem cap is based on eligible untaxed product lines after commercial discounts and before
   Loyalty reward lines.
 
@@ -77,6 +80,17 @@ winner, non-negative balance and idempotent finalization. The repository gate al
 TypeScript, i18n parity, zero-dependency audit, UI audit and type proofs.
 
 Visual acceptance uses seeded application data rather than mocks.
+
+## Tier management
+
+The tier screen owns tier thresholds and the selected Loyalty program's spend window. It does not
+duplicate the partner directory: customers, employees and suppliers remain Partner records, while
+Loyalty membership is a concern shown from the relevant partner record.
+
+Submitting a tier or spend-window form follows the shared KetSuite form contract. A rejected submit
+keeps the operator's raw input and associates each validation message with its field. Selecting a
+tier row opens its edit dialog. Archive and restore are separate commands and therefore do not run
+the edit-form schema.
 
 ## Deliberate non-scope
 

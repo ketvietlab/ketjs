@@ -50,6 +50,7 @@ export type OrderSnapshot = {
   orderId: string
   partnerId?: string | null
   currency: string
+  warehouseId?: string | null
   pricelistId?: string | null
   date: string
   lines: OrderLineSnapshot[]

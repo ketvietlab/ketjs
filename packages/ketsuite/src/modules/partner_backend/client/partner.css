@@ -19,7 +19,9 @@
     padding-block-end: var(--admin-gap-lg);
     border-block-end: 1px solid var(--admin-divider-subtle);
   }
-  [data-ui="form-page-body"] > [data-ui="stack"] {
+  [data-ui="form-page"]:has([data-ui="record-form"][data-scope^="partner-"])
+    [data-ui="form-page-body"]
+    > [data-ui="stack"] {
     gap: 0;
   }
   [data-ui="form-page-body"] > [data-ui="stack"] > [data-ui="section"] {

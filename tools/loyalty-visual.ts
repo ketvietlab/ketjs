@@ -213,7 +213,7 @@ try {
   await call('loyalty.membership.config.save', {
     id: 'king-club:config',
     programId: 'king-club',
-    windowMonths: 12,
+    windowMonths: 120,
     pointValue: '1000',
     minimumRedeemStep: '10',
     fallbackCurrencyPerPoint: '1000',
