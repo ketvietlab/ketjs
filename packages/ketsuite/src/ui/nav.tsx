@@ -3,6 +3,7 @@
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { MenuNode, Translator } from '@ketvietlab/ketjs'
+import { IconButton } from '@ketvietlab/design-system'
 import { hasIcon, icon } from './icons.ts'
 import { initials } from './primitives.tsx'
 
@@ -283,6 +284,19 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
             {footItems ?? ''}
           </div>
         )}
+
+        <IconButton
+          name="theme"
+          label={_('backend.theme.toggle')}
+          variant="secondary"
+          pressed={false}
+          icon={
+            <>
+              <span data-theme-icon="dark">{icon('moon')}</span>
+              <span data-theme-icon="light">{icon('sun')}</span>
+            </>
+          }
+        />
 
         {!!viewer && (
           <details data-ui="viewer">
