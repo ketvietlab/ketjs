@@ -211,7 +211,12 @@ const rowViews = <R,>(
 ): TemplateResult => (
   <>
     {each(rows, table.id, (row) => (
-      <tr data-ui="row" data-row={table.id(row)} data-row-href={table.rowHref ? table.rowHref(row) : null}>
+      <tr
+        data-ui="row"
+        data-row={table.id(row)}
+        data-row-href={table.rowHref ? table.rowHref(row) : null}
+        tabindex={table.rowHref && table.rowLink === false ? 0 : null}
+      >
         {!!table.selection && (
           <td data-ui="select-cell">
             <input

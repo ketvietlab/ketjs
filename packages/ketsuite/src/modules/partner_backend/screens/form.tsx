@@ -27,6 +27,7 @@ export const partnerFormScreen = (
     terms?: { creditLimit?: string | number | null; note?: string | null } | null
     errors?: string[]
     integration?: JSXChild
+    salesActions?: JSXChild
     collaboration: JSXChild
     addressForms: Array<{ title: string; body: JSXChild }>
     overlay?: JSXChild
@@ -147,6 +148,7 @@ export const partnerFormScreen = (
           form: 'partner-identity-form',
           variant: 'primary',
         }),
+        ...(options.salesActions ? [options.salesActions] : []),
         <RecordMore
           label={_('partner_backend.action.more')}
           body={
