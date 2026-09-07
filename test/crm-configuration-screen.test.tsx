@@ -71,6 +71,8 @@ test('crm configuration: keeps five specialized tabs and opens the whole team ro
   assert.doesNotMatch(rendered, /data-ui="row-link"/)
   assert.doesNotMatch(rendered, /name="action" value="archive"/)
   assert.match(rendered, /Đang hoạt động/)
+  assert.doesNotMatch(rendered, /data-ui="configuration-status"/)
+  assert.doesNotMatch(rendered, /status=(?:archived|all)/)
 })
 
 test('crm configuration: edits a team and its members on a full record page', () => {
