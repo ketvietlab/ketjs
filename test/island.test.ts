@@ -328,6 +328,35 @@ test('island: hydrating one nobody registered says which', () => {
   )
 })
 
+test('island: production hydration isolates a broken island and continues enhancing the page', () => {
+  const serverBad = () => () => html`<span>server tree</span>`
+  const browserBad = () => () => html`<div>browser tree</div>`
+  const good = () => () => html`<button>working</button>`
+  const container = parseFragment(renderIsland('broken', serverBad, {}) + renderIsland('working', good, {}))
+  const errors: unknown[] = []
+  const previousError = console.error
+  console.error = (error) => errors.push(error)
+  try {
+    const live = hydrateIslands(
+      domHost(document),
+      container as never,
+      { broken: browserBad, working: good },
+      { strict: false },
+    )
+    assert.deepEqual(
+      live.map((island) => island.name),
+      ['working'],
+    )
+  } finally {
+    console.error = previousError
+  }
+
+  assert.equal(errors.length, 1)
+  assert.match(String(errors[0]), /hydration mismatch/u)
+  assert.match(container.innerHTML, /server tree/u, 'the failed island keeps its server-rendered fallback')
+  assert.equal(container.querySelectorAll('button').length, 1, 'later islands are still enhanced')
+})
+
 test('island: props must be plain JSON all the way down', () => {
   assert.throws(
     () =>

@@ -238,40 +238,50 @@ export function createIslandManager(
   const hydrate = (root: IslandElement): HydratedIsland[] => {
     const out: HydratedIsland[] = []
     for (const element of elementsOf(root)) {
-      const existing = instances.get(element)
-      if (existing) {
-        out.push(existing.live)
-        continue
+      let controller: IslandController | null = null
+      try {
+        const existing = instances.get(element)
+        if (existing) {
+          out.push(existing.live)
+          continue
+        }
+        const identity = identityOf(element)
+        if (!identity) continue
+        const factory = registry[identity.name]
+        if (!factory) {
+          if (options.strict === false) continue
+          throw new IslandError({
+            code: 'E_UNKNOWN_ISLAND',
+            message: `the page places island "${identity.name}", which no composed module provides`,
+            hint: `registered islands: ${Object.keys(registry).join(', ') || '(none)'}`,
+          })
+        }
+        const parsed = parsedProps(identity.name, element)
+        controller = controllerOf(factory(parsed.props))
+        const mounted = mountHydrated(host, element, controller.view)
+        let disposed = false
+        const live: HydratedIsland = {
+          name: identity.name,
+          key: identity.key,
+          props: parsed.props,
+          element,
+          dispose: () => {
+            if (disposed) return
+            disposed = true
+            mounted.dispose()
+            controller?.dispose?.()
+          },
+        }
+        instances.set(element, { live, controller, rawProps: parsed.raw })
+        out.push(live)
+      } catch (error) {
+        controller?.dispose?.()
+        if (options.strict !== false) throw error
+        // A production page is progressively enhanced. One island whose SSR and
+        // browser trees disagree must stay inert and visible, but it must not
+        // prevent unrelated islands or document navigation from starting.
+        console.error(error)
       }
-      const identity = identityOf(element)
-      if (!identity) continue
-      const factory = registry[identity.name]
-      if (!factory) {
-        if (options.strict === false) continue
-        throw new IslandError({
-          code: 'E_UNKNOWN_ISLAND',
-          message: `the page places island "${identity.name}", which no composed module provides`,
-          hint: `registered islands: ${Object.keys(registry).join(', ') || '(none)'}`,
-        })
-      }
-      const parsed = parsedProps(identity.name, element)
-      const controller = controllerOf(factory(parsed.props))
-      const mounted = mountHydrated(host, element, controller.view)
-      let disposed = false
-      const live: HydratedIsland = {
-        name: identity.name,
-        key: identity.key,
-        props: parsed.props,
-        element,
-        dispose: () => {
-          if (disposed) return
-          disposed = true
-          mounted.dispose()
-          controller.dispose?.()
-        },
-      }
-      instances.set(element, { live, controller, rawProps: parsed.raw })
-      out.push(live)
     }
     return out
   }
