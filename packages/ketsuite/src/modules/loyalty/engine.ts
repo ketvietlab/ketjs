@@ -221,7 +221,11 @@ const rewardQuote = async (
           ...(snapshot.warehouseId ? { warehouseId: snapshot.warehouseId } : {}),
         })) as Row[]
         const purchased = snapshot.lines
-          .filter((line) => line.productId === reward.rewardProductId && line.lineKind === 'product')
+          .filter(
+            (line) =>
+              line.productId === reward.rewardProductId &&
+              (line.lineKind === 'product' || line.lineKind === 'reward'),
+          )
           .reduce((sum, line) => sum + line.quantity, 0)
         if (n(availability[0]?.available) < n(reward.rewardProductQuantity) + purchased) return null
       }
