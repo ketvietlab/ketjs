@@ -1603,6 +1603,23 @@ test('table selection: the checkbox cell is a navigation dead zone', () => {
   )
 })
 
+test('table rows without a nested link remain keyboard navigable', () => {
+  const html = renderToString(
+    dataTable(_, {
+      rows: [{ id: 'row-1', name: 'One' }],
+      id: (row) => row.id,
+      rowHref: (row) => `/records/${row.id}`,
+      rowLink: false,
+      columns: [{ key: 'name', label: 'Name', cell: (row) => row.name }],
+    }),
+  )
+  assert.match(html, /data-row-href="\/records\/row-1"[^>]*tabindex="0"/)
+  assert.doesNotMatch(html, /data-ui="row-link"/)
+  const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  assert.match(source, /event\.key !== 'Enter'/)
+  assert.match(source, /event\.key !== ' '/)
+})
+
 test('route modal runtime traps focus without focusing the backdrop and keeps close navigation local', () => {
   const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
   assert.match(source, /\[data-route-modal="true"\]/)

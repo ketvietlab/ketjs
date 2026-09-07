@@ -169,11 +169,59 @@ test('crm HTTP E2E: global filter/grouping, planner and configuration remain ope
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(configured.status, 303)
+  const stageConfigured = await app.client.post(
+    '/admin/crm/configuration?tab=stages&lang=en',
+    new URLSearchParams({
+      name: 'Qualified lead',
+      code: 'qualified-lead',
+      sequence: '35',
+      kind_lead: '1',
+      terminalState: 'open',
+      fold: 'on',
+      active: 'on',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(stageConfigured.status, 303)
+  const assignmentConfigured = await app.client.post(
+    '/admin/crm/configuration?tab=assignmentRules&lang=en',
+    new URLSearchParams({
+      name: 'High score leads',
+      priority: '5',
+      kind_lead: '1',
+      teamId: 'crm-team-sales',
+      assigneeUserId: 'admin',
+      minimumScore: '25',
+      active: 'on',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(assignmentConfigured.status, 303)
   const config = await call<Record<string, Row[]>>('crm.configuration.get')
   assert.equal(
     config.scoreRules.some((item) => item.name === 'Revenue score'),
     true,
   )
+  const stage = config.stages.find((item) => item.code === 'qualified-lead')!
+  assert.deepEqual(stage.allowedKinds, ['lead'])
+  assert.equal(stage.fold, true)
+  const assignment = config.assignmentRules.find((item) => item.name === 'High score leads')!
+  assert.equal(assignment.teamId, 'crm-team-sales')
+  assert.equal(assignment.assigneeUserId, 'admin')
+  assert.equal(Number(assignment.minimumScore), 25)
+  await call('crm.case.save', {
+    id: 'high-value-opportunity',
+    kind: 'opportunity',
+    name: 'High value opportunity',
+    expectedRevenue: '10000000',
+    idempotencyKey: 'save-high-value-opportunity',
+  })
+  const scored = await call<Row>('crm.case.refreshScore', {
+    id: 'high-value-opportunity',
+    idempotencyKey: 'score-high-value-opportunity',
+  })
+  assert.equal(Number(scored.score), 20)
+  assert.equal((scored.reasons as Row[]).length, 1)
 })
 
 test('crm HTTP E2E: optimistic conflict and company isolation', async (t) => {
