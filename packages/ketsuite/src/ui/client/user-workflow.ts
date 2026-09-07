@@ -13,8 +13,8 @@ export function installUserWorkflow() {
     clearTimeout(timer)
     const request = ++sequence
     const value = input.value.trim(),
-      next = form.querySelector<HTMLButtonElement>('[data-email-next]'),
-      retry = form.querySelector<HTMLButtonElement>('[data-email-retry]')
+      next = form.querySelector<HTMLButtonElement>('button[type="submit"][name="step"]'),
+      retry = form.querySelector<HTMLElement>('[data-email-retry]')
     const paint = (message: string, valid: boolean) => {
       status.textContent = message
       if (next) next.disabled = !valid
@@ -118,7 +118,8 @@ export function installUserWorkflow() {
   })
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement
-    if (target.matches('[data-email-retry]')) void check(target.closest('form')!)
+    const retry = target.closest<HTMLElement>('[data-email-retry]')
+    if (retry) void check(retry.closest('form')!)
   })
   document.addEventListener('submit', (event) => {
     const form = event.target as HTMLFormElement

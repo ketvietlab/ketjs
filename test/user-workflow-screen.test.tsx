@@ -25,6 +25,7 @@ test('create-user workflow renders server refusals on the responsible controls',
   assert.match(identity, /name="login"[^>]*aria-invalid="true"/)
   assert.match(identity, /name="email"[^>]*aria-invalid="true"/)
   assert.match(identity, /id="field-create-user-login-error"[^>]*>[\s\S]*?Trường này là bắt buộc/)
+  assert.match(identity, /data-ui="action"[^>]*name="step"[^>]*value="1"/)
 
   const workplace = renderToString(
     <UserWorkflow
