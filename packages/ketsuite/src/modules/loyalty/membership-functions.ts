@@ -1,10 +1,14 @@
-import { and, asc, defineFn, desc, eq, from, gt, lte } from '@ketvietlab/ketjs'
+import { and, asc, defineFn, deleteFrom, desc, eq, from, gt, lte } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Row } from '@ketvietlab/ketjs'
 import { decimal, invalid, issue, n, now } from './engine.ts'
 
 const cutoffFor = (date: string, months: number): number => {
   const cutoff = new Date(date)
+  const day = cutoff.getUTCDate()
+  cutoff.setUTCDate(1)
   cutoff.setUTCMonth(cutoff.getUTCMonth() - months)
+  const lastDay = new Date(Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth() + 1, 0)).getUTCDate()
+  cutoff.setUTCDate(Math.min(day, lastDay))
   return cutoff.getTime()
 }
 
@@ -44,9 +48,13 @@ export const membershipPosition = async (
 
 export const refreshMembershipRow = async (ctx: Ctx, partnerId: string, at = now()): Promise<Row | null> => {
   const position = await membershipPosition(ctx, partnerId, at)
-  if (!position) return null
+  if (!position) {
+    const Membership = ctx.table('loyalty.Membership')
+    await ctx.db.del(deleteFrom(Membership).where(eq(Membership.partnerId, partnerId)))
+    return null
+  }
   const { months, spending, tier } = position
-  const wallets = await ctx.db.select('loyalty.Wallet', { partnerId, active: true })
+  const wallets = await ctx.db.select('loyalty.Wallet', { partnerId, active: true, unit: 'points' })
   const points = wallets.reduce((sum, wallet) => sum + n(wallet.balance), 0)
   const existing = (await ctx.db.select('loyalty.Membership', { partnerId }))[0]
   const values = {

@@ -61,3 +61,15 @@ test('renders English without untranslated Loyalty keys', async ({ page }) => {
   await expect(page.getByText('Spend period (months)')).toBeVisible()
   await expect(page.locator('body')).not.toContainText(/loyalty(?:_backend)?\.[A-Za-z]/)
 })
+
+test('saves a dirty program before following Loyalty navigation', async ({ page }) => {
+  await page.goto('/admin/loyalty/programs/ket-club?lang=en')
+  const name = page.locator('input[name="name"]')
+  await name.fill('Két Club updated')
+  page.once('dialog', async (dialog) => dialog.accept())
+  await page.getByRole('link', { name: 'Tiers and points' }).click()
+
+  await expect(page).toHaveURL(/\/admin\/loyalty\/tiers(?:\?|$)/)
+  await page.goto('/admin/loyalty/programs/ket-club?lang=en')
+  await expect(page.locator('input[name="name"]')).toHaveValue('Két Club updated')
+})

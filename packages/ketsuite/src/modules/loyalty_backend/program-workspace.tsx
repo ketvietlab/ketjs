@@ -483,8 +483,11 @@ export const programWorkspaceRoute =
       } else result = await configure(ctx, url, req, program, form, 'program', programValues(form, program))
       if (result.ok && !preview) {
         const target = form.returnTo ? new URL(form.returnTo, url.origin) : null
+        const adminDestination =
+          target?.origin === url.origin &&
+          (target.pathname === '/admin' || target.pathname.startsWith('/admin/'))
         return seeOther(
-          target?.origin === url.origin && (target.pathname === path || target.pathname === base)
+          adminDestination
             ? target.pathname + target.search
             : href(`?tab=${modal === 'rule' ? 'rules' : modal === 'reward' ? 'rewards' : tab}`),
         )

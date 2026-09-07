@@ -30,9 +30,10 @@ such as a program name or reward description remain user data and are not transl
   more than the available balance.
 - Each company tier owns its spend threshold and rolling window. The window is a positive whole
   number of months, so an operator can define a tier such as 10,000,000 over ten years (`120`) while
-  another tier uses six or twelve months. Loyalty programs do not own tier criteria and promotions
-  do not apply implicitly from a tier. When several tiers qualify, the highest sequence wins, then
-  the highest threshold. Earn groups are evaluated by priority and stable id order.
+  another tier uses six or twelve months. A month-end cutoff clamps to the last valid day of the
+  target month. Loyalty programs do not own tier criteria and promotions do not apply implicitly
+  from a tier. When several tiers qualify, the highest sequence wins, then the highest threshold.
+  Earn groups are evaluated by priority and stable id order.
 - The redeem cap is based on eligible untaxed product lines after commercial discounts and before
   Loyalty reward lines.
 
@@ -44,6 +45,7 @@ Gift-card and eWallet money is not a reward discount. A currency wallet uses a d
 stored-value reservation keyed by the caller's source identity. Capture reserves value;
 successful settlement finalizes one debit; cancellation releases the reservation; a
 refund appends a credit; expiry appends a debit for the remaining unreserved balance.
+Membership summaries aggregate point wallets only; currency balances never appear as points.
 The generated wallet code is only an opaque authority alias. A channel that accepts a
 customer-facing token owns its hash, pepper and masked presentation outside Loyalty and
 must never store the raw token in a wallet, ledger entry or command result.
@@ -87,6 +89,7 @@ The tier screen owns company-wide tiers, with a spend threshold and rolling wind
 the partner directory: customers, employees and suppliers remain Partner records, while Loyalty
 membership is a concern shown from the relevant customer record. Completed Sale and POS product
 lines contribute to spend; reversals and returns remove the corresponding value.
+If every tier is archived, refreshing a customer removes the obsolete membership projection.
 
 Submitting a tier form follows the shared KetSuite form contract. A rejected submit
 keeps the operator's raw input and associates each validation message with its field. Selecting a

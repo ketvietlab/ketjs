@@ -625,6 +625,56 @@ test('loyalty HTTP E2E: per-tier windows and stable earn-group priority are enfo
   )
 })
 
+test('loyalty HTTP E2E: membership refresh handles month ends, wallet units and archived tiers', async (t) => {
+  const { call } = await bootLoyalty(t)
+  await saveProgram(call, { id: 'points-program' })
+  await saveProgram(call, { id: 'money-program', programType: 'ewallet' })
+  await call<Row>('loyalty.tier.save', {
+    id: 'month-end',
+    name: 'Cuối tháng',
+    code: 'month-end',
+    minimumSpend: '100',
+    windowMonths: 1,
+    redeemPercent: '0',
+  })
+  await call<Row>('loyalty.wallet.create', {
+    id: 'points-wallet',
+    programId: 'points-program',
+    partnerId: 'customer',
+    initialBalance: '5',
+  })
+  await call<Row>('loyalty.wallet.create', {
+    id: 'money-wallet',
+    programId: 'money-program',
+    partnerId: 'customer',
+    initialBalance: '100',
+  })
+  await call<Row>('loyalty.order.finalize', {
+    order: snapshot('february-order', 100, '2026-02-28T12:00:00.000Z'),
+  })
+
+  const refreshed = await call<Row>('loyalty.membership.refresh', {
+    partnerId: 'customer',
+    at: '2026-03-31T12:00:00.000Z',
+  })
+  const summary = refreshed.summary as Row
+  assert.equal(summary.tierCode, 'month-end')
+  assert.equal(summary.rollingSpend, 100)
+  assert.equal(summary.points, 5, 'currency wallets are not membership points')
+
+  await call<Row>('loyalty.tier.save', {
+    id: 'month-end',
+    name: 'Cuối tháng',
+    code: 'month-end',
+    minimumSpend: '100',
+    windowMonths: 1,
+    redeemPercent: '0',
+    active: false,
+  })
+  assert.equal((await call<Row>('loyalty.membership.refresh', { partnerId: 'customer' })).summary, null)
+  assert.equal(await call('loyalty.membership.getSummary', { partnerId: 'customer' }), null)
+})
+
 test('loyalty HTTP E2E: POS payment and refund finalize and reverse through the adapter', async (t) => {
   const { e2e, call } = await bootLoyalty(t, true, loyaltyTransactionDeployment)
   for (const [id, code, name, accountType] of [
@@ -1173,6 +1223,59 @@ test('loyalty Sale keeps percentage rewards and posted contra revenue exact beyo
   assert.equal(credit, debit)
 })
 
+test('loyalty Sale counts reward lines when checking shared product stock', async (t) => {
+  const { call } = await bootLoyalty(t)
+  for (const id of ['gift-a', 'gift-b']) {
+    const d = await design(call, id)
+    await d.save('rule', d.rule, `${id}-rule`)
+    await d.save(
+      'reward',
+      {
+        description: `Gift from ${id}`,
+        rewardType: 'product',
+        rewardProductId: 'fruit-box',
+        rewardProductQuantity: '19',
+        requiredPoints: '10',
+      },
+      `${id}-reward`,
+    )
+    assert.equal((await d.transition('activate')).ok, true)
+  }
+  await call<Row>('sale.createOrder', {
+    id: 'shared-stock-order',
+    partnerId: 'customer',
+    warehouseId: 'wh',
+  })
+  await call<Row>('sale.addLine', {
+    id: 'shared-stock-order:line',
+    orderId: 'shared-stock-order',
+    productId: 'fruit-box',
+    productUomQty: '1',
+    productUomId: 'unit',
+    priceUnit: '100',
+  })
+
+  const first = await call<Row>('loyalty_sale.applyReward', {
+    orderId: 'shared-stock-order',
+    programId: 'gift-a',
+    rewardId: 'gift-a-reward',
+  })
+  assert.equal(first.ok, true, JSON.stringify(first.errors))
+  const second = await call<Row>('loyalty_sale.applyReward', {
+    orderId: 'shared-stock-order',
+    programId: 'gift-b',
+    rewardId: 'gift-b-reward',
+  })
+  assert.equal(second.ok, false, 'the existing gift line consumes the remaining stock')
+  const order = await call<Row>('sale.getOrder', { id: 'shared-stock-order' })
+  assert.equal(
+    (order.lines as Row[])
+      .filter((line) => line.productId === 'fruit-box' && line.lineKind === 'reward')
+      .reduce((sum, line) => sum + Number(line.productUomQty), 0),
+    19,
+  )
+})
+
 test('loyalty Sale adapter keeps tax-inclusive points for legacy lines', async (t) => {
   const { e2e, call } = await bootLoyalty(t)
   await call('account.saveTax', {
@@ -1532,6 +1635,21 @@ test('program contract: stopping prepaid issuance preserves spending and refund 
 test('program workspace: every purpose, modal and simulator renders localized controls', async (t) => {
   const { e2e, call } = await bootLoyalty(t)
   const d = await design(call)
+  const redirected = await e2e.client.post(
+    '/admin/loyalty/programs/design?lang=en',
+    new URLSearchParams({
+      version: '1',
+      name: 'Contract program',
+      availableSale: '1',
+      availablePos: '1',
+      appliesOn: 'both',
+      pointName: 'Points',
+      returnTo: '/admin/loyalty/tiers?lang=en',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(redirected.status, 303, await redirected.text())
+  assert.equal(redirected.headers.get('location'), '/admin/loyalty/tiers?lang=en')
   for (const lang of ['vi', 'en']) {
     for (const type of [
       'coupons',
