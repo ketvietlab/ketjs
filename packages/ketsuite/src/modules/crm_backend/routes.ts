@@ -31,8 +31,14 @@ import {
   plannerScreen,
   permissionScreen,
   pipelineScreen,
+  teamConfigurationScreen,
 } from './screens/index.ts'
-import type { CaseDetailControls, ConfigurationTab, PipelineFigure } from './screens/index.ts'
+import type {
+  CaseDetailControls,
+  ConfigurationStatus,
+  ConfigurationTab,
+  PipelineFigure,
+} from './screens/index.ts'
 import {
   keepForListSearch,
   LIST_PAGE_SIZE,
@@ -470,6 +476,87 @@ const configurationTabOf = (url: URL): ConfigurationTab => {
   const asked = url.searchParams.get('tab') ?? ''
   return (CONFIGURATION_TABS as readonly string[]).includes(asked) ? (asked as ConfigurationTab) : 'teams'
 }
+
+const configurationStatusOf = (url: URL): ConfigurationStatus => {
+  const asked = url.searchParams.get('status') ?? 'active'
+  return ['active', 'archived', 'all'].includes(asked) ? (asked as ConfigurationStatus) : 'active'
+}
+
+const teamConfigurationRoute =
+  (ctx: ServeContext, creating: boolean): Route =>
+  async (url, req, params) => {
+    const refused = refusePost(req)
+    if (refused) return refused
+    const _ = ctx.translate(ctx.localeOf(url, req))
+    const requestedId = creating ? '' : params.id
+    const memberAsked = url.searchParams.get('member')
+    let errors: string[] = []
+    let teamId = requestedId
+    if (req.method === 'POST') {
+      const form = await readForm(req)
+      const call = (name: string, input: Record<string, unknown>) =>
+        ctx.call(name, input, url, req) as Promise<AnyRow>
+      if (memberAsked && !creating) {
+        const result = await teamMemberWrite(call, form, requestedId, form.id || randomUUID())
+        if (result.ok)
+          return seeOther(inLocale(url, `/admin/crm/configuration/teams/${encodeURIComponent(requestedId)}`))
+        errors = errorsOf(result, _)
+      } else {
+        teamId = form.id || requestedId || randomUUID()
+        const result = await configurationWrite(call, 'teams', form, teamId)
+        if (result.ok)
+          return seeOther(inLocale(url, `/admin/crm/configuration/teams/${encodeURIComponent(teamId)}`))
+        errors = errorsOf(result, _)
+      }
+    } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
+
+    const [config, users, listedMembers] = await Promise.all([
+      configuration(ctx, url, req),
+      ctx.call('user.listUsers', { includeArchived: false, limit: 200 }, url, req) as Promise<AnyRow[]>,
+      creating
+        ? Promise.resolve([] as AnyRow[])
+        : (ctx.call('crm.team.member.list', { teamId: requestedId, limit: 200 }, url, req) as Promise<
+            AnyRow[]
+          >),
+    ])
+    const team = creating
+      ? ({} as AnyRow)
+      : ((config.teams ?? []).find((row) => String(row.id) === requestedId) ?? null)
+    if (!team) return text('not found', { status: 404 })
+    const memberEditing =
+      memberAsked && memberAsked !== 'new'
+        ? (listedMembers.find((row) => String(row.id) === memberAsked) ?? null)
+        : null
+    const path = creating
+      ? '/admin/crm/configuration/teams/new'
+      : `/admin/crm/configuration/teams/${encodeURIComponent(requestedId)}`
+    const action = inLocale(url, path)
+    const memberAction = memberAsked
+      ? inLocale(url, `${path}?member=${encodeURIComponent(memberAsked)}`)
+      : undefined
+    return adminPage(ctx, url, req, {
+      title: 'crm_backend.configuration.title',
+      active: '/admin/crm/configuration',
+      body: (_, frame) =>
+        teamConfigurationScreen(_, frame, {
+          team,
+          fields: configurationFields(_, 'teams', team, config.teams ?? [], users),
+          members: listedMembers,
+          action,
+          cancelHref: inLocale(url, '/admin/crm/configuration?tab=teams'),
+          errors,
+          creating,
+          memberCreateHref: creating ? undefined : inLocale(url, `${path}?member=new`),
+          memberEditHref: creating
+            ? undefined
+            : (row) => inLocale(url, `${path}?member=${encodeURIComponent(String(row.id))}`),
+          memberEditing,
+          memberCreating: memberAsked === 'new',
+          memberFields: memberAsked ? teamMemberFields(_, memberEditing, users) : undefined,
+          memberAction,
+        }),
+    })
+  }
 
 export const routes: Record<string, RouteEntry> = {
   '/admin/crm': () => async (url, req) =>
@@ -1228,7 +1315,18 @@ export const routes: Record<string, RouteEntry> = {
       if (refused) return refused
       const _ = ctx.translate(ctx.localeOf(url, req))
       const tab = configurationTabOf(url)
-      const back = inLocale(url, `/admin/crm/configuration?tab=${tab}`)
+      const status = configurationStatusOf(url)
+      const statusQuery = status === 'active' ? '' : `&status=${status}`
+      const back = inLocale(url, `/admin/crm/configuration?tab=${tab}${statusQuery}`)
+      if (tab === 'teams' && url.searchParams.has('edit'))
+        return seeOther(
+          inLocale(
+            url,
+            `/admin/crm/configuration/teams/${encodeURIComponent(String(url.searchParams.get('edit')))}`,
+          ),
+        )
+      if (tab === 'teams' && url.searchParams.get('create') === '1')
+        return seeOther(inLocale(url, '/admin/crm/configuration/teams/new'))
       let errors: string[] = []
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
@@ -1240,21 +1338,17 @@ export const routes: Record<string, RouteEntry> = {
         if (result.ok) return seeOther(back)
         errors = errorsOf(result, _)
       } else if (req.method !== 'GET') return text('GET or POST', { status: 405 })
-      const [config, tags, members, users] = await Promise.all([
+      const [config, tags, users] = await Promise.all([
         configuration(ctx, url, req),
         ctx.call('crm.tag.list', { includeArchived: true, limit: 200 }, url, req) as Promise<AnyRow[]>,
-        tab === 'members'
-          ? (ctx.call('crm.team.member.list', { limit: 200 }, url, req) as Promise<AnyRow[]>)
-          : Promise.resolve([] as AnyRow[]),
-        tab === 'members'
-          ? (ctx.call('user.listUsers', { includeArchived: false, limit: 200 }, url, req) as Promise<
-              AnyRow[]
-            >)
-          : Promise.resolve([] as AnyRow[]),
+        ctx.call('user.listUsers', { includeArchived: false, limit: 200 }, url, req) as Promise<AnyRow[]>,
       ])
-      const rows = tab === 'tags' ? tags : tab === 'members' ? members : ((config[tab] as AnyRow[]) ?? [])
+      const allRows = tab === 'tags' ? tags : ((config[tab] as AnyRow[]) ?? [])
+      const rows = allRows.filter((row) =>
+        status === 'all' ? true : status === 'active' ? row.active !== false : row.active === false,
+      )
       const asked = url.searchParams.get('edit')
-      const editing = asked ? (rows.find((row) => String(row.id) === asked) ?? null) : null
+      const editing = asked ? (allRows.find((row) => String(row.id) === asked) ?? null) : null
       const teams = config.teams ?? []
       return adminPage(ctx, url, req, {
         title: 'crm_backend.configuration.title',
@@ -1266,29 +1360,24 @@ export const routes: Record<string, RouteEntry> = {
             creating: url.searchParams.get('create') === '1' || (req.method === 'POST' && !editing),
             errors,
             locale: localeQuery(url),
+            status,
+            teams,
+            users,
             fields: configurationFields(_, tab, editing, teams, users),
-            ...(tab === 'members'
-              ? {
-                  label: (row: AnyRow) => String(row.userName ?? row.userId),
-                  detail: (row: AnyRow) =>
-                    _('crm_backend.configuration.member.detail', {
-                      capacity: String(row.capacity ?? 1),
-                      assigned: String(row.assignedCount ?? 0),
-                    }),
-                }
-              : {}),
-            ...(tab === 'stages' ? { detail: (row: AnyRow) => String(row.terminalState ?? 'open') } : {}),
           }),
       })
     },
+
+  '/admin/crm/configuration/teams/new': (ctx): Route => teamConfigurationRoute(ctx, true),
+
+  '/admin/crm/configuration/teams/{id}': (ctx): Route => teamConfigurationRoute(ctx, false),
 }
 
 /**
  * One write per configuration tab.
  *
- * The tabs do not share a function signature — a tag saves by name, a team saves
- * a values bag with an idempotency key, a member is a join row — so the mapping
- * is spelled out rather than guessed from the tab name.
+ * The tabs do not share a function signature — a tag saves by name while the
+ * other configuration records save a versioned values bag.
  */
 async function configurationWrite(
   call: (name: string, input: Record<string, unknown>) => Promise<AnyRow>,
@@ -1296,24 +1385,9 @@ async function configurationWrite(
   form: Record<string, string>,
   id: string,
 ): Promise<AnyRow> {
-  const archiving = form.action === 'archive'
-  const restoring = form.action === 'restore'
-  const active = archiving ? false : restoring ? true : bool(form.active)
+  const active = bool(form.active)
   if (tab === 'tags') {
-    if (archiving) return call('crm.tag.archive', { id })
     return call('crm.tag.save', { id, name: form.name ?? '', active })
-  }
-  if (tab === 'members') {
-    if (archiving) return call('crm.team.member.remove', { id })
-    return call('crm.team.member.save', {
-      id,
-      teamId: form.teamId ?? '',
-      userId: form.userId ?? '',
-      capacity: Number(form.capacity ?? 1),
-      sequence: Number(form.sequence ?? 10),
-      active,
-      idempotencyKey: randomUUID(),
-    })
   }
   const fn = {
     teams: 'crm.team.save',
@@ -1326,19 +1400,73 @@ async function configurationWrite(
     id,
     active,
     ...(form.expectedVersion ? { expectedVersion: Number(form.expectedVersion) } : {}),
-    ...(form.allowedKinds === undefined
-      ? {}
-      : {
-          allowedKinds: form.allowedKinds
-            .split(',')
-            .map((item) => item.trim())
-            .filter(Boolean),
-        }),
+    ...(['stages', 'assignmentRules'].includes(tab)
+      ? { allowedKinds: ['lead', 'opportunity'].filter((kind) => bool(form[`kind_${kind}`])) }
+      : {}),
     ...(form.sequence === undefined ? {} : { sequence: Number(form.sequence) }),
     ...(form.priority === undefined ? {} : { priority: Number(form.priority) }),
+    ...(form.minimumScore === undefined || form.minimumScore === ''
+      ? { minimumScore: null }
+      : { minimumScore: form.minimumScore }),
+    ...(form.teamId === '' ? { teamId: null } : {}),
+    ...(form.assigneeUserId === '' ? { assigneeUserId: null } : {}),
+    ...(form.leaderUserId === '' ? { leaderUserId: null } : {}),
+    ...(form.fold === undefined ? {} : { fold: bool(form.fold) }),
   }
   delete values.action
+  delete values.kind_lead
+  delete values.kind_opportunity
   return call(fn as string, { values, idempotencyKey: randomUUID() })
+}
+
+async function teamMemberWrite(
+  call: (name: string, input: Record<string, unknown>) => Promise<AnyRow>,
+  form: Record<string, string>,
+  teamId: string,
+  id: string,
+): Promise<AnyRow> {
+  return call('crm.team.member.save', {
+    id,
+    teamId,
+    userId: form.userId ?? '',
+    capacity: Number(form.capacity ?? 1),
+    sequence: Number(form.sequence ?? 10),
+    active: bool(form.active),
+    idempotencyKey: randomUUID(),
+  })
+}
+
+function teamMemberFields(_: Translator, editing: AnyRow | null, users: AnyRow[]): FormField[] {
+  const value = (name: string, fallback = '') => String(editing?.[name] ?? fallback)
+  return [
+    {
+      name: 'userId',
+      label: _('crm_backend.field.assignee'),
+      type: 'select',
+      required: true,
+      value: value('userId'),
+      options: choices(users),
+    },
+    {
+      name: 'capacity',
+      label: _('crm_backend.field.capacity'),
+      type: 'number',
+      value: value('capacity', '1'),
+      help: _('crm_backend.field.capacityHint'),
+    },
+    {
+      name: 'sequence',
+      label: _('crm_backend.field.sequence'),
+      type: 'number',
+      value: value('sequence', '10'),
+    },
+    {
+      name: 'active',
+      label: _('crm_backend.field.active'),
+      type: 'checkbox',
+      value: editing ? editing.active !== false : true,
+    },
+  ]
 }
 
 /** The form for one configuration tab, pre-filled when a row is being edited. */
@@ -1359,48 +1487,18 @@ function configurationFields(
       value: editing ? editing.active !== false : true,
     },
   ]
-  if (tab === 'members')
-    return [
-      {
-        name: 'teamId',
-        label: _('crm_backend.field.team'),
-        type: 'select',
-        required: true,
-        value: value('teamId'),
-        options: choices(teams),
-      },
-      {
-        name: 'userId',
-        label: _('crm_backend.field.assignee'),
-        type: 'select',
-        required: true,
-        value: value('userId'),
-        options: choices(users),
-      },
-      {
-        name: 'capacity',
-        label: _('crm_backend.field.capacity'),
-        type: 'number',
-        value: value('capacity', '1'),
-      },
-      {
-        name: 'sequence',
-        label: _('crm_backend.field.sequence'),
-        type: 'number',
-        value: value('sequence', '10'),
-      },
-      {
-        name: 'active',
-        label: _('crm_backend.field.active'),
-        type: 'checkbox',
-        value: editing ? editing.active !== false : true,
-      },
-    ]
   if (tab === 'tags') return common
   if (tab === 'teams')
     return [
       ...common,
       { name: 'code', label: _('crm_backend.field.code'), value: value('code'), required: true },
+      {
+        name: 'leaderUserId',
+        label: _('crm_backend.field.teamLeader'),
+        type: 'select',
+        value: value('leaderUserId'),
+        options: [{ value: '', label: _('crm_backend.value.unset') }, ...choices(users)],
+      },
       {
         name: 'assignmentMode',
         label: _('crm_backend.field.assignmentMode'),
@@ -1425,9 +1523,23 @@ function configurationFields(
       {
         name: 'allowedKinds',
         label: _('crm_backend.field.allowedKinds'),
-        value: Array.isArray(editing?.allowedKinds)
-          ? (editing.allowedKinds as unknown[]).map(String).join(',')
-          : 'lead,opportunity',
+        type: 'checkbox-group',
+        required: true,
+        options: ['lead', 'opportunity'].map((kind) => ({
+          name: `kind_${kind}`,
+          value: '1',
+          label: _(`crm.kind.${kind}`),
+          checked: editing
+            ? Array.isArray(editing.allowedKinds) && (editing.allowedKinds as unknown[]).includes(kind)
+            : true,
+        })),
+      },
+      {
+        name: 'teamId',
+        label: _('crm_backend.field.team'),
+        type: 'select',
+        value: value('teamId'),
+        options: [{ value: '', label: _('crm_backend.value.allTeams') }, ...choices(teams)],
       },
       {
         name: 'terminalState',
@@ -1435,6 +1547,12 @@ function configurationFields(
         type: 'select',
         value: value('terminalState', 'open'),
         options: ['open', 'won', 'lost'].map((item) => ({ value: item, label: _(`crm.terminal.${item}`) })),
+      },
+      {
+        name: 'fold',
+        label: _('crm_backend.field.fold'),
+        type: 'checkbox',
+        value: editing?.fold === true,
       },
     ]
   if (tab === 'assignmentRules')
@@ -1449,9 +1567,16 @@ function configurationFields(
       {
         name: 'allowedKinds',
         label: _('crm_backend.field.allowedKinds'),
-        value: Array.isArray(editing?.allowedKinds)
-          ? (editing.allowedKinds as unknown[]).map(String).join(',')
-          : 'lead,opportunity',
+        type: 'checkbox-group',
+        required: true,
+        options: ['lead', 'opportunity'].map((kind) => ({
+          name: `kind_${kind}`,
+          value: '1',
+          label: _(`crm.kind.${kind}`),
+          checked: editing
+            ? Array.isArray(editing.allowedKinds) && (editing.allowedKinds as unknown[]).includes(kind)
+            : true,
+        })),
       },
       {
         name: 'teamId',
@@ -1461,11 +1586,34 @@ function configurationFields(
         value: value('teamId'),
         options: choices(teams),
       },
+      {
+        name: 'assigneeUserId',
+        label: _('crm_backend.field.assignee'),
+        type: 'select',
+        value: value('assigneeUserId'),
+        options: [{ value: '', label: _('crm_backend.value.teamMode') }, ...choices(users)],
+      },
       { name: 'utmSource', label: _('crm_backend.field.utmSource'), value: value('utmSource') },
+      {
+        name: 'minimumScore',
+        label: _('crm_backend.field.minimumScore'),
+        type: 'number',
+        value: value('minimumScore'),
+      },
     ]
   return [
     ...common,
-    { name: 'field', label: _('crm_backend.field.ruleField'), value: value('field'), required: true },
+    {
+      name: 'field',
+      label: _('crm_backend.field.ruleField'),
+      type: 'select',
+      value: value('field', 'email'),
+      required: true,
+      options: ['email', 'utmSource', 'expectedRevenue'].map((field) => ({
+        value: field,
+        label: _(`crm_backend.scoreField.${field}`),
+      })),
+    },
     {
       name: 'operator',
       label: _('crm_backend.field.operator'),

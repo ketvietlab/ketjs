@@ -35,6 +35,7 @@ import {
   stageKinds,
   visibleCases,
 } from './operations.ts'
+import type { CrmResult } from './operations.ts'
 import { ASSIGNMENT_MODES, CASE_KINDS, TERMINAL_STATES } from './types.ts'
 
 const caseReadEffects = [
@@ -212,11 +213,17 @@ async function moveToTerminal(
 const saveConfiguration = (
   model: string,
   prepare: (args: Record<string, unknown>, existing: Row | undefined) => Row,
+  validate?: (
+    ctx: Ctx,
+    args: Record<string, unknown>,
+    existing: Row | undefined,
+  ) => CrmResult | null | Promise<CrmResult | null>,
+  additionalEffects: string[] = [],
 ) =>
   defineFn({
     input: { values: 'json', idempotencyKey: 'text' },
     output: { ok: 'bool', id: 'id?', version: 'int?', errors: 'json?' },
-    effects: [`read:${model}`, `write:${model}`],
+    effects: [`read:${model}`, `write:${model}`, ...additionalEffects],
     idempotent: true,
     agent: true,
     handler: async (ctx: Ctx, args) => {
@@ -228,6 +235,8 @@ const saveConfiguration = (
       const id = String(values.id ?? '')
       if (!id) return invalid(issue('id', 'crm.error.required'))
       const existing = (await ctx.db.select(model, { id }))[0]
+      const validation = await validate?.(ctx, values, existing)
+      if (validation) return validation
       const expectedVersion = values.expectedVersion == null ? undefined : n(values.expectedVersion)
       if (existing && expectedVersion != null && n(existing.version) !== expectedVersion)
         return invalid(issue('version', 'crm.error.stageConflict', { current: n(existing.version) }))
@@ -866,6 +875,7 @@ export const functions: Record<string, FnSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
+      'read:crm.SalesDetail',
       'read:crm.ScoreRule',
       'read:crm.ScoreHistory',
       'write:crm.ScoreHistory',
@@ -1374,41 +1384,98 @@ export const functions: Record<string, FnSpec> = {
       return { ok: true, id: args.id }
     },
   }),
-  'stage.save': saveConfiguration('crm.Stage', (args, existing) => ({
-    code: String(args.code ?? existing?.code ?? args.id).trim(),
-    name: String(args.name ?? '').trim(),
-    sequence: n(args.sequence ?? existing?.sequence ?? 10),
-    allowedKinds: Array.isArray(args.allowedKinds)
-      ? args.allowedKinds.map(String).filter((kind) => CASE_KINDS.includes(kind as never))
-      : (existing?.allowedKinds ?? ['lead', 'opportunity']),
-    terminalState: TERMINAL_STATES.includes(args.terminalState as never)
-      ? args.terminalState
-      : (existing?.terminalState ?? 'open'),
-    teamId: args.teamId ?? existing?.teamId ?? null,
-    fold: args.fold ?? existing?.fold ?? false,
-    active: args.active ?? existing?.active ?? true,
-  })),
-  'assignmentRule.save': saveConfiguration('crm.AssignmentRule', (args, existing) => ({
-    name: String(args.name ?? '').trim(),
-    priority: n(args.priority ?? existing?.priority ?? 10),
-    allowedKinds: Array.isArray(args.allowedKinds)
-      ? args.allowedKinds.map(String)
-      : (existing?.allowedKinds ?? []),
-    teamId: args.teamId ?? existing?.teamId,
-    assigneeUserId: args.assigneeUserId ?? existing?.assigneeUserId ?? null,
-    utmSource: args.utmSource ?? existing?.utmSource ?? null,
-    minimumScore: args.minimumScore ?? existing?.minimumScore ?? null,
-    active: args.active ?? existing?.active ?? true,
-  })),
-  'scoreRule.save': saveConfiguration('crm.ScoreRule', (args, existing) => ({
-    name: String(args.name ?? '').trim(),
-    field: String(args.field ?? '').trim(),
-    operator: String(args.operator ?? 'eq'),
-    value: String(args.value ?? ''),
-    points: String(args.points ?? '0'),
-    active: args.active ?? existing?.active ?? true,
-    sequence: n(args.sequence ?? existing?.sequence ?? 10),
-  })),
+  'stage.save': saveConfiguration(
+    'crm.Stage',
+    (args, existing) => ({
+      code: String(args.code ?? existing?.code ?? args.id).trim(),
+      name: String(args.name ?? '').trim(),
+      sequence: n(args.sequence ?? existing?.sequence ?? 10),
+      allowedKinds: Array.isArray(args.allowedKinds)
+        ? args.allowedKinds.map(String).filter((kind) => CASE_KINDS.includes(kind as never))
+        : (existing?.allowedKinds ?? ['lead', 'opportunity']),
+      terminalState: TERMINAL_STATES.includes(args.terminalState as never)
+        ? args.terminalState
+        : (existing?.terminalState ?? 'open'),
+      teamId: args.teamId ?? existing?.teamId ?? null,
+      fold: args.fold ?? existing?.fold ?? false,
+      active: args.active ?? existing?.active ?? true,
+    }),
+    async (ctx, args) => {
+      if (!String(args.name ?? '').trim() || !String(args.code ?? '').trim())
+        return invalid(issue('name', 'crm.error.required'))
+      if (!Array.isArray(args.allowedKinds) || args.allowedKinds.length === 0)
+        return invalid(issue('allowedKinds', 'crm.error.required'))
+      if (args.teamId && !(await ctx.db.select('crm.Team', { id: args.teamId, active: true }))[0])
+        return invalid(issue('teamId', 'crm.error.notFound'))
+      return null
+    },
+    ['read:crm.Team'],
+  ),
+  'assignmentRule.save': saveConfiguration(
+    'crm.AssignmentRule',
+    (args, existing) => ({
+      name: String(args.name ?? '').trim(),
+      priority: n(args.priority ?? existing?.priority ?? 10),
+      allowedKinds: Array.isArray(args.allowedKinds)
+        ? args.allowedKinds.map(String)
+        : (existing?.allowedKinds ?? []),
+      teamId: args.teamId ?? existing?.teamId,
+      assigneeUserId: args.assigneeUserId ?? existing?.assigneeUserId ?? null,
+      utmSource: args.utmSource ?? existing?.utmSource ?? null,
+      minimumScore: args.minimumScore ?? existing?.minimumScore ?? null,
+      active: args.active ?? existing?.active ?? true,
+    }),
+    async (ctx, args) => {
+      if (!String(args.name ?? '').trim() || !Array.isArray(args.allowedKinds) || !args.allowedKinds.length)
+        return invalid(issue('name', 'crm.error.required'))
+      const team = args.teamId
+        ? (await ctx.db.select('crm.Team', { id: args.teamId, active: true }))[0]
+        : null
+      if (!team) return invalid(issue('teamId', 'crm.error.notFound'))
+      if (args.assigneeUserId) {
+        const member = (
+          await ctx.db.select('crm.TeamMember', {
+            teamId: args.teamId,
+            userId: args.assigneeUserId,
+            active: true,
+          })
+        )[0]
+        if (!member && team.leaderUserId !== args.assigneeUserId)
+          return invalid(issue('assigneeUserId', 'crm.error.notTeamMember'))
+      }
+      return null
+    },
+    ['read:crm.Team', 'read:crm.TeamMember'],
+  ),
+  'scoreRule.save': saveConfiguration(
+    'crm.ScoreRule',
+    (args, existing) => ({
+      name: String(args.name ?? '').trim(),
+      field: String(args.field ?? '').trim(),
+      operator: String(args.operator ?? 'eq'),
+      value: String(args.value ?? ''),
+      points: String(args.points ?? '0'),
+      active: args.active ?? existing?.active ?? true,
+      sequence: n(args.sequence ?? existing?.sequence ?? 10),
+    }),
+    (_ctx, args) => {
+      const field = String(args.field ?? '')
+      const operator = String(args.operator ?? '')
+      const allowed =
+        field === 'expectedRevenue'
+          ? ['gte', 'eq']
+          : field === 'email' || field === 'utmSource'
+            ? ['eq', 'contains', 'present']
+            : []
+      if (!String(args.name ?? '').trim()) return invalid(issue('name', 'crm.error.required'))
+      if (!allowed.includes(operator)) return invalid(issue('operator', 'crm.error.invalidKind'))
+      if (operator !== 'present' && !String(args.value ?? '').trim())
+        return invalid(issue('value', 'crm.error.required'))
+      if (field === 'expectedRevenue' && !Number.isFinite(Number(args.value)))
+        return invalid(issue('value', 'crm.error.invalidKind'))
+      return null
+    },
+  ),
   'enrichment.preview': defineFn({
     input: { caseId: 'id' },
     output: { ok: 'bool', code: 'text', errors: 'json?' },

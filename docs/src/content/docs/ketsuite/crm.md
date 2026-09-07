@@ -101,7 +101,8 @@ or falls through to the team's `assignmentMode`:
 - `round_robin` — the team's cursor walks its active members in `sequence` order;
 - `capacity` — the member with the most headroom against their `capacity` wins.
 
-Both routing modes read `TeamMember`, which is managed from **Configuration → Team members**. A team
+Both routing modes read `TeamMember`. Open **Configuration → Teams**, then open a team row to manage
+its members on the team page. Capacity is a routing weight rather than a maximum record count. A team
 with no members can only be assigned by hand. An ordinary agent can atomically claim only unassigned
 work in one of their queues and can claim it only for themselves.
 
@@ -113,11 +114,12 @@ same key replays the result; a stale version fails without changing the record.
 
 ## Scoring and the leaderboard
 
-`ScoreRule` rows describe what a case is worth: a field, an operator (`eq`, `contains`, `present`,
-`gte`), a value and a number of points. Saving a case enqueues `crm.score`, so the figure follows the
-record rather than waiting for someone to press a button; `crm.case.refreshScore` recomputes on
-demand. The scoring write neither bumps `version` nor overwrites a concurrent edit, so a form left
-open stays valid.
+`ScoreRule` rows describe what a case is worth: a supported field (`email`, `utmSource`, or
+`expectedRevenue`), an operator (`eq`, `contains`, `present`, `gte`), a value and a number of points.
+Email and UTM source come from the case; expected revenue comes from its `SalesDetail`. Saving a case
+enqueues `crm.score`, so the figure follows the record rather than waiting for someone to press a
+button; `crm.case.refreshScore` recomputes on demand. The scoring write neither bumps `version` nor
+overwrites a concurrent edit, so a form left open stays valid.
 
 Closing a case enqueues `crm.gamification` for its owner, which restates one row of the leaderboard
 from counting queries. **CRM → Leaderboard** also recalculates the whole table on request.
@@ -174,12 +176,14 @@ to create was refused.
   (figures and quotations), activities (open work, meetings, history) and the timeline.
 - **Planner** — CRM activities only, each linked back to its case, with complete and cancel on the row.
 - **Leaderboard** — standings, recalculated on request.
-- **Configuration** — teams, team members, stages, tags, assignment rules and scoring rules; each row
-  can be edited and archived, not only created.
+- **Configuration** — five lists: teams, stages, tags, assignment rules and lead/opportunity scoring.
+  Clicking anywhere on a row opens it. Adding or editing a team uses a full page, with member
+  management inside that page; the other four records use centered route dialogs. Each list can show
+  active, archived or all records, and lifecycle changes are made inside the opened record.
 
-All URL-owned CRM overlays use centered dialogs on desktop, including long configuration forms and
-the activity scheduler. On narrow screens the shared dialog contract expands them to the full viewport;
-CRM does not use right-side sheets.
+URL-owned CRM overlays use centered dialogs on desktop, including the four non-team configuration
+forms and the activity scheduler. On narrow screens the shared dialog contract expands them to the
+full viewport; CRM does not use right-side sheets.
 
 The board's figures come from `crm.pipeline.summary`, which takes the screen's filters and answers
 per-stage counts and amounts plus the four totals. Every column keeps its own figures, including Won
