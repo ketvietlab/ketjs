@@ -1200,3 +1200,18 @@
     }
   }
 }
+
+@layer ket.app {
+  /* A disclosure groups fields; it is not a label/control pair. */
+  [data-ui="record-form"][data-layout="default"]
+    > [data-ui="form-grid"]
+    > [data-ui="form-field"][data-kind="group"] {
+    display: block;
+    grid-column: 1 / -1;
+    min-inline-size: 0;
+  }
+  [data-ui="form-field"][data-kind="group"] > [data-ui="disclosure"] {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+}
