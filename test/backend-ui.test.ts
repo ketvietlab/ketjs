@@ -1193,6 +1193,18 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
   )
 })
 
+test('record workspace: stacked collaboration keeps the same page gutter as the record body', () => {
+  const css = ADMIN_CSS
+  assert.match(
+    css,
+    /@media \(max-width: 83\.9375rem\) \{[\s\S]*?\[data-ui="record-aside"\] \{[\s\S]*?padding: var\(--admin-gap-md\)/,
+  )
+  assert.match(
+    css,
+    /@media \(max-width: 47\.9375rem\) \{[\s\S]*?\[data-ui="record-body"\] \{[\s\S]*?padding: var\(--admin-gap\);[\s\S]*?\[data-ui="record-aside"\] \{[\s\S]*?padding: var\(--admin-gap\)/,
+  )
+})
+
 test('record workspace: compact identity and actions share the global record header', () => {
   const html = renderToString(
     recordWorkspace({

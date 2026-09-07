@@ -447,7 +447,7 @@
     [data-ui="record-aside"] {
       position: static;
       max-block-size: none;
-      padding: 0;
+      padding: var(--admin-gap-md);
       overflow: visible;
       border-inline-start: 0;
       background: transparent;
@@ -517,6 +517,9 @@
       display: none;
     }
     [data-ui="record-body"] {
+      padding: var(--admin-gap);
+    }
+    [data-ui="record-aside"] {
       padding: var(--admin-gap);
     }
     [data-ui="record-field-grid"] {
