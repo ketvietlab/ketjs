@@ -1,3 +1,4 @@
+import { accessRoutes, renderAccess } from './access-routes.tsx'
 import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext, SessionContext } from '@ketvietlab/ketjs'
@@ -35,6 +36,8 @@ const crossSite = (req: Req): boolean => {
 const validCreateId = (value?: string): value is string =>
   typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+
+const accountCreationRoute = ['/admin/users/new', 'account'].join('/')
 
 const safeUserReturnTo = (url: URL, submitted?: string | null): string => {
   const fallback = inLocale(url, '/admin/users')
@@ -279,10 +282,13 @@ const failure = (ctx: ServeContext, url: URL, req: Req, result: unknown) =>
   text(translatedErrors(ctx, url, req, result).join('\n'), { status: 400 })
 
 export const routes: Record<string, RouteEntry> = {
+  ...accessRoutes,
   '/admin/users':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
+      if ((await ctx.live(req)).routes['/admin/users/directory'])
+        return seeOther(`/admin/users/directory${url.search}`)
       const _ = ctx.translate(ctx.localeOf(url, req))
       const includeArchived = url.searchParams.get('archived') === '1'
       const search = searchOf(url) ?? ''
@@ -339,6 +345,9 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/users/new':
     (ctx: ServeContext): Route =>
     async (url, req) => {
+      // Identity adapters own this optional account-creation extension route.
+      if ((await ctx.live(req)).routes[accountCreationRoute])
+        return seeOther(inLocale(url, accountCreationRoute))
       const _ = ctx.translate(ctx.localeOf(url, req))
       if (req.method !== 'GET' && req.method !== 'POST') return text('GET or POST', { status: 405 })
       if (req.method === 'POST' && crossSite(req)) return text('Forbidden', { status: 403 })
@@ -403,7 +412,7 @@ export const routes: Record<string, RouteEntry> = {
   '/admin/users/{id}':
     (ctx: ServeContext): Route =>
     async (url, req, params) => {
-      if (req.method === 'GET') return renderUser(ctx, url, req, params.id)
+      if (req.method === 'GET') return renderAccess(ctx, url, req, params.id)
       if (req.method !== 'POST') return text('GET or POST', { status: 405 })
       if (crossSite(req)) return text('Forbidden', { status: 403 })
       const before = await userOf(ctx, url, req, params.id)
@@ -421,7 +430,7 @@ export const routes: Record<string, RouteEntry> = {
           partnerId: form.partnerId || null,
           accessKind: form.accessKind ?? 'internal',
           active: form.active === '1',
-          superuser: form.superuser === '1',
+          superuser: before.superuser === true,
         },
         url,
         req,

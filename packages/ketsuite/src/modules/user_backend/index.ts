@@ -29,3 +29,5 @@ export {
   userFormScreen,
   usersScreen,
 } from './screens/index.ts'
+
+export { accessError, accessOptions } from './access-routes.tsx'

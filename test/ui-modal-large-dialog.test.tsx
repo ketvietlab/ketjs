@@ -70,3 +70,14 @@ test('an ordinary dialog is untouched', () => {
   assert.match(rule(DIALOG) ?? '', /inline-size: min\(56rem, 100%\);/u)
   assert.match(rule(DIALOG) ?? '', /block-size: auto;/u)
 })
+
+test('mobile: all modal sizes and presentations cover the viewport without elevation', () => {
+  const selector = '[data-ui="modal-layer"][data-presentation="dialog"] [data-ui="modal-sheet"][data-size]'
+  const start = forms.indexOf(selector)
+  assert.ok(start > forms.indexOf('@media (max-width: 47.9375rem)'))
+  const mobile = forms.slice(start, forms.indexOf('}', start))
+  assert.match(mobile, /block-size: 100dvh;/u)
+  assert.match(mobile, /inline-size: 100%;/u)
+  assert.match(mobile, /border-radius: 0;/u)
+  assert.match(mobile, /box-shadow: none;/u)
+})

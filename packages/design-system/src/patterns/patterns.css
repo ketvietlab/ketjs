@@ -1251,6 +1251,12 @@
     grid-template-columns: minmax(0, 56rem);
   }
 
+  :where([data-kv-design-system])
+    [data-ui="form-page"][data-has-aside="false"][data-width="wide"]
+    [data-ui="form-page-layout"] {
+    grid-template-columns: minmax(0, calc(68.75rem + var(--kv-page-padding-x) * 2));
+  }
+
   :where([data-kv-design-system]) [data-ui="form-page-body"] {
     display: grid;
     min-width: 0;

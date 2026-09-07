@@ -33,6 +33,16 @@ export { loginScreen } from './login.ts'
 export { legacyPermissionCatalogue, legacyPresetFunctions, permittedFor } from './roles.ts'
 export type { LegacyPermissionCatalogueEntry, LegacyPermissionTask } from './roles.ts'
 export {
+  reserveUserEmail,
+  createInternalUserWithAccess,
+  USER_ACCESS_EFFECTS,
+  addSelectedRoles,
+  assertAssignableRoles,
+  checkUserEmail,
+  authorizationTransaction,
+  abortAuthorization,
+  advanceAuthorizationRevision,
+  recordAuthorizationAudit,
   effectiveFunctionKeys,
   normalizeAssignmentScope,
   resolveEffectivePermissions,
@@ -44,3 +54,5 @@ export type {
   EffectivePermissionPath,
 } from './authorization.ts'
 export { resolveUserSession } from './session-context.ts'
+
+export type { InternalUserInput } from './authorization.ts'

@@ -79,11 +79,34 @@ test('user create/detail preserves stable retry identity, return state and expli
 
   const detailPath = `/admin/users/${id}?lang=en&returnTo=${encodeURIComponent(returnTo)}`
   const detail = await (await app.client.get(detailPath)).text()
-  assert.match(detail, /data-ui="form-page" data-scope="user-form-page" data-has-aside="true"/)
-  assert.match(detail, new RegExp(`action="/admin/users/${id}/companies\\?lang=en&amp;returnTo=`))
-  assert.match(detail, /name="action" value="invitation"/)
+  assert.match(detail, /data-ui="tabs"/)
+  assert.match(detail, /Quyền truy cập/)
+  assert.doesNotMatch(detail, /name="superuser"|Quản lý quyền truy cập/)
   assert.match(detail, /href="\/admin\/users\?q=Draft&amp;archived=1&amp;lang=en"/)
 
+  assert.equal(
+    (
+      await app.client.post(
+        detailPath,
+        new URLSearchParams({
+          action: 'save',
+          login: 'draft.user',
+          name: 'Draft User',
+          email: 'draft@example.test',
+          accessKind: 'internal',
+          active: '1',
+          superuser: '1',
+        }),
+        post,
+      )
+    ).status,
+    303,
+  )
+  assert.equal(
+    (await app.adapter!.all('SELECT superuser FROM user_user WHERE id = ?', [id]))[0]!.superuser,
+    0,
+    'ordinary profile payload cannot grant special access',
+  )
   assert.equal((await app.client.post(path, new URLSearchParams({ id }), post)).status, 400)
   assert.equal(
     (await app.client.post(`${detailPath.replace('?', '/companies?')}`, new URLSearchParams(), post)).status,
@@ -107,80 +130,49 @@ test('user create/detail preserves stable retry identity, return state and expli
   assert.doesNotMatch(unsafe, /attacker\.example/)
 })
 
-test('a scoped role can be taken back from the screen that gave it', async (t) => {
+test('a legacy scoped assignment can be removed directly from its row, with one confirmation', async (t) => {
   const app = await boot(t)
   const scope = { company: 'acme', branch: 'root:acme', branches: ['root:acme'] }
-  const fixture = (name: string, input: Record<string, unknown>) =>
-    app.fixture.call<Row>(name, input, { scope })
-  await fixture('user.createUser', { id: 'staff', login: 'staff', password: 'correct horse', name: 'Staff' })
+  const fixture = async (name: string, input: Record<string, unknown>) =>
+    (await app.fixture.call<any>(name, input, { scope })).value
+  await fixture('user.createUser', { id: 'staff', login: 'staff', name: 'Staff' })
   await fixture('user.grantCompany', { id: 'staff:acme', userId: 'staff', companyId: 'acme' })
   await fixture('user.saveRole', { id: 'cashier', name: 'Cashier' })
-
-  const path = '/admin/users/staff?lang=en'
-  const before = await (await app.client.get(path)).text()
-  const assigned = await app.client.post(
-    '/admin/users/staff/scoped-roles',
-    new URLSearchParams({
-      action: 'assign',
-      id: hidden(before, 'id'),
-      idempotencyKey: hidden(before, 'idempotencyKey'),
-      expectedAuthorizationRevision: hidden(before, 'expectedAuthorizationRevision'),
-      roleId: 'cashier',
-      scopeKind: 'company',
-      companyId: 'acme',
-      reason: 'give the role',
-    }),
-    post,
-  )
-  assert.equal(assigned.status, 303)
-
-  // Before this the screen could only add: the function to take a role back
-  // existed and the route answered 400 for every action but `assign`, so a role
-  // given by mistake stayed given.
-  const withRole = await (await app.client.get(path)).text()
-  assert.match(withRole, /name="assignmentId"/u, 'the screen offers the assignment to remove')
-  const removalId = [...withRole.matchAll(/name="id" value="([^"]*)"/gu)].at(-1)?.[1] ?? ''
-  const revision =
-    [...withRole.matchAll(/name="expectedAuthorizationRevision" value="([^"]*)"/gu)].at(-1)?.[1] ?? ''
-  // The renderer marks its slots with HTML comments, so read the option text
-  // with those removed rather than writing a regex around them.
-  const plain = withRole.replace(/<!--.*?-->/gu, '')
-  const assignmentId =
-    [...plain.matchAll(/<option value="([^"]+)"[^>]*>([^<]*)</gu)].find(([, , label]) =>
-      label.includes('Cashier'),
-    )?.[1] ?? ''
-  assert.ok(assignmentId, 'the assignment is listed by name, not by the pair behind it')
-  // Scoped to the company on purpose: a removal that assumed tenant scope would
-  // find nothing to remove and the role would quietly stay.
-  assert.match(plain, /Cashier · company:acme/u)
-
+  const revision = (await fixture('user.authorizationState', {})).revision
+  await fixture('user.assignScopedRole', {
+    id: 'cashier-assignment',
+    userId: 'staff',
+    roleId: 'cashier',
+    scopeKind: 'company',
+    companyId: 'acme',
+    reason: 'Legacy assignment',
+    expectedAuthorizationRevision: revision,
+    idempotencyKey: 'legacy',
+  })
+  const access = await (await app.client.get('/admin/users/staff/access')).text()
+  assert.match(access, /Cashier/)
+  assert.match(access, /data-row-href=/)
+  const removePath = '/admin/users/staff/remove/cashier-assignment'
+  const form = await (await app.client.get(removePath)).text()
+  assert.match(form, /Xác nhận gỡ vai trò/)
+  assert.doesNotMatch(form, /name="command" value="preview"/)
   const removed = await app.client.post(
-    '/admin/users/staff/scoped-roles',
+    removePath,
     new URLSearchParams({
-      action: 'unassign',
-      id: removalId,
-      idempotencyKey: removalId,
-      expectedAuthorizationRevision: revision,
-      assignmentId,
+      command: 'confirm',
       reason: 'taken back',
+      idempotencyKey: hidden(form, 'idempotencyKey'),
+      expectedAuthorizationRevision: hidden(form, 'expectedAuthorizationRevision'),
     }),
     post,
   )
   assert.equal(removed.status, 303)
-  const after = await (await app.client.get(path)).text()
-  assert.doesNotMatch(after, /name="assignmentId"/u, 'nothing left to remove')
-
-  // The reason is the whole point of routing a removal through the audited
-  // function rather than deleting a row: it has to be the reason the person
-  // typed, not one the route made up on their behalf.
-  const audit = (await fixture('user.listAuthorizationAudit', { limit: 20 })) as unknown as {
-    value?: Array<{ event?: string; reason?: string }>
-  }
-  assert.equal(
-    (audit.value ?? []).some(
-      (entry) => entry.reason === 'taken back' && entry.event === 'authorization.assignment.removed',
+  const after = await (await app.client.get('/admin/users/staff/access')).text()
+  assert.match(after, /Chưa gán vai trò/)
+  const audits = await fixture('user.listAuthorizationAudit', { userId: 'staff' })
+  assert.ok(
+    audits.some(
+      (event: any) => event.reason === 'taken back' && event.event === 'authorization.assignment.removed',
     ),
-    true,
-    'the typed reason reached the audit trail',
   )
 })
