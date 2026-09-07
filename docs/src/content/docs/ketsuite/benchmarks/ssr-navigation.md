@@ -22,6 +22,7 @@ only islands with browser modules are hydrated.
 ## Reproduction
 
 ```sh title="Terminal"
+# Run from: /path/to/ketjs
 npm run bench:ssr-navigation
 ```
 
