@@ -45,6 +45,7 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
       partnerId: 'customer',
       priority: '2',
       email: 'buyer@example.test',
+      utmSource: 'pancake',
       expectedRevenue: '12500000',
     }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
@@ -54,6 +55,7 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   const id = location.split('?')[0]!.split('/').pop()!
   let row = await call<Row>('crm.case.get', { id })
   assert.equal(row.kind, 'lead')
+  assert.equal(row.utmSource, 'pancake')
 
   // Converting is confirmed, not clicked. The acknowledgement is checked on the
   // server, so a post without it leaves a lead as a lead.
@@ -67,6 +69,20 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   assert.match(refused, /Confirm the need before converting/u)
   // The reason stays inside the step that asked, which is still open.
   assert.match(refused, /Convert lead to opportunity/u)
+  assert.equal((await call<Row>('crm.case.get', { id })).kind, 'lead')
+
+  const missingRevenue = await app.client.post(
+    `/admin/crm/cases/${id}?lang=en&modal=convert`,
+    new URLSearchParams({
+      action: 'convert',
+      confirm: 'on',
+      expectedClosing: '2026-09-12',
+      expectedVersion: String(row.version),
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(missingRevenue.status, 200)
+  assert.match(await missingRevenue.text(), /Enter the expected revenue before converting/u)
   assert.equal((await call<Row>('crm.case.get', { id })).kind, 'lead')
 
   // And it says which version it saw. Without that the compare-and-set behind
@@ -85,6 +101,8 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   const stepHtml = await step.text()
   assert.match(stepHtml, /Convert lead to opportunity/u)
   assert.match(stepHtml, /No second customer and no second case are created/u)
+  assert.match(stepHtml, /name="expectedRevenue"[^>]*required/u)
+  assert.match(stepHtml, /name="expectedClosing"[^>]*required/u)
   // The step posts back to itself, so a refusal lands with the step still open.
   assert.match(stepHtml, /<form[^>]*action="[^"]*modal=convert[^"]*"/u)
 
@@ -94,6 +112,8 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
       action: 'convert',
       confirm: 'on',
       stageId: 'crm-stage-qualified',
+      expectedRevenue: '1850000',
+      expectedClosing: '2026-09-12',
       expectedVersion: String(row.version),
     }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
@@ -107,6 +127,8 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   // The same case, not a second one: converting keeps the record it changed.
   assert.equal(row.id, id)
   assert.equal(row.partnerId, 'customer')
+  assert.equal((row.salesDetail as Row).expectedRevenue, '1850000')
+  assert.equal((row.salesDetail as Row).expectedClosing, '2026-09-12')
 
   const moved = await app.client.post(
     '/admin/crm/pipeline/move?lang=en',
@@ -120,13 +142,50 @@ test('crm HTTP E2E: create, convert, move and win a sales record', async (t) => 
   )
   assert.equal(moved.status, 303)
   row = await call<Row>('crm.case.get', { id })
+  const sales = await app.client.get(`/admin/crm/cases/${id}?tab=sales&lang=en`)
+  const salesHtml = await sales.text()
+  assert.equal(sales.status, 200)
+  assert.match(salesHtml, /1,850,000/u)
+  assert.match(salesHtml, /2026-09-12/u)
+
+  const closeStep = await app.client.get(`/admin/crm/cases/${id}?tab=sales&modal=close&lang=en`)
+  const closeStepHtml = await closeStep.text()
+  assert.equal(closeStep.status, 200)
+  assert.match(closeStepHtml, /Close opportunity/u)
+  assert.match(closeStepHtml, /name="terminal"/u)
+  assert.match(closeStepHtml, /name="closeReason"/u)
+  assert.match(closeStepHtml, /name="confirm"/u)
+
+  const unconfirmedClose = await app.client.post(
+    `/admin/crm/cases/${id}?tab=sales&modal=close&lang=en`,
+    new URLSearchParams({
+      action: 'close',
+      terminal: 'won',
+      closeReason: 'Customer approved the proposal',
+      expectedVersion: String(row.version),
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(unconfirmedClose.status, 200)
+  assert.match(await unconfirmedClose.text(), /Confirm the outcome with the customer before closing/u)
+  assert.equal((await call<Row>('crm.case.get', { id })).terminalState, 'open')
+
   const won = await app.client.post(
-    `/admin/crm/cases/${id}?lang=en`,
-    new URLSearchParams({ action: 'won', expectedVersion: String(row.version) }),
+    `/admin/crm/cases/${id}?tab=sales&modal=close&lang=en`,
+    new URLSearchParams({
+      action: 'close',
+      terminal: 'won',
+      closeReason: 'Customer approved the proposal',
+      confirm: 'on',
+      expectedVersion: String(row.version),
+    }),
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(won.status, 303)
-  assert.equal((await call<Row>('crm.case.get', { id })).terminalState, 'won')
+  assert.doesNotMatch(String(won.headers.get('location')), /modal=close/u)
+  const closed = await call<Row>('crm.case.get', { id })
+  assert.equal(closed.terminalState, 'won')
+  assert.match(JSON.stringify(closed.timeline), /Customer approved the proposal/u)
 })
 
 test('crm HTTP E2E: global filter/grouping, planner and configuration remain operational', async (t) => {
@@ -169,11 +228,59 @@ test('crm HTTP E2E: global filter/grouping, planner and configuration remain ope
     { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
   )
   assert.equal(configured.status, 303)
+  const stageConfigured = await app.client.post(
+    '/admin/crm/configuration?tab=stages&lang=en',
+    new URLSearchParams({
+      name: 'Qualified lead',
+      code: 'qualified-lead',
+      sequence: '35',
+      kind_lead: '1',
+      terminalState: 'open',
+      fold: 'on',
+      active: 'on',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(stageConfigured.status, 303)
+  const assignmentConfigured = await app.client.post(
+    '/admin/crm/configuration?tab=assignmentRules&lang=en',
+    new URLSearchParams({
+      name: 'High score leads',
+      priority: '5',
+      kind_lead: '1',
+      teamId: 'crm-team-sales',
+      assigneeUserId: 'admin',
+      minimumScore: '25',
+      active: 'on',
+    }),
+    { headers: { 'content-type': 'application/x-www-form-urlencoded' }, redirect: 'manual' },
+  )
+  assert.equal(assignmentConfigured.status, 303)
   const config = await call<Record<string, Row[]>>('crm.configuration.get')
   assert.equal(
     config.scoreRules.some((item) => item.name === 'Revenue score'),
     true,
   )
+  const stage = config.stages.find((item) => item.code === 'qualified-lead')!
+  assert.deepEqual(stage.allowedKinds, ['lead'])
+  assert.equal(stage.fold, true)
+  const assignment = config.assignmentRules.find((item) => item.name === 'High score leads')!
+  assert.equal(assignment.teamId, 'crm-team-sales')
+  assert.equal(assignment.assigneeUserId, 'admin')
+  assert.equal(Number(assignment.minimumScore), 25)
+  await call('crm.case.save', {
+    id: 'high-value-opportunity',
+    kind: 'opportunity',
+    name: 'High value opportunity',
+    expectedRevenue: '10000000',
+    idempotencyKey: 'save-high-value-opportunity',
+  })
+  const scored = await call<Row>('crm.case.refreshScore', {
+    id: 'high-value-opportunity',
+    idempotencyKey: 'score-high-value-opportunity',
+  })
+  assert.equal(Number(scored.score), 20)
+  assert.equal((scored.reasons as Row[]).length, 1)
 })
 
 test('crm HTTP E2E: optimistic conflict and company isolation', async (t) => {

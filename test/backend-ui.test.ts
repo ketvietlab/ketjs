@@ -1196,6 +1196,18 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
   )
 })
 
+test('record workspace: stacked collaboration keeps the same page gutter as the record body', () => {
+  const css = ADMIN_CSS
+  assert.match(
+    css,
+    /@media \(max-width: 83\.9375rem\) \{[\s\S]*?\[data-ui="record-aside"\] \{[\s\S]*?padding: var\(--admin-gap-md\)/,
+  )
+  assert.match(
+    css,
+    /@media \(max-width: 47\.9375rem\) \{[\s\S]*?\[data-ui="record-body"\] \{[\s\S]*?padding: var\(--admin-gap\);[\s\S]*?\[data-ui="record-aside"\] \{[\s\S]*?padding: var\(--admin-gap\)/,
+  )
+})
+
 test('record workspace: compact identity and actions share the global record header', () => {
   const html = renderToString(
     recordWorkspace({
@@ -1625,6 +1637,23 @@ test('table selection: the checkbox cell is a navigation dead zone', () => {
     selectionGuard < linkedRowNavigation,
     'the selection-cell guard must run before linked-row navigation',
   )
+})
+
+test('table rows without a nested link remain keyboard navigable', () => {
+  const html = renderToString(
+    dataTable(_, {
+      rows: [{ id: 'row-1', name: 'One' }],
+      id: (row) => row.id,
+      rowHref: (row) => `/records/${row.id}`,
+      rowLink: false,
+      columns: [{ key: 'name', label: 'Name', cell: (row) => row.name }],
+    }),
+  )
+  assert.match(html, /data-row-href="\/records\/row-1"[^>]*tabindex="0"/)
+  assert.doesNotMatch(html, /data-ui="row-link"/)
+  const source = readFileSync('packages/ketsuite/src/ui/client/table-selection-view.tsx', 'utf8')
+  assert.match(source, /event\.key !== 'Enter'/)
+  assert.match(source, /event\.key !== ' '/)
 })
 
 test('route modal runtime traps focus without focusing the backdrop and keeps close navigation local', () => {

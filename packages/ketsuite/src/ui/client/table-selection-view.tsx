@@ -144,6 +144,16 @@ const installTableSelection = (): void => {
     if (browserGlobals.__ketNavigation?.navigate) void browserGlobals.__ketNavigation.navigate(href)
     else browserGlobals.location.assign(href)
   })
+
+  document.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
+    const target = eventElement(event)
+    const row = target?.matches('[data-ui="row"][data-row-href][tabindex="0"]') ? target : null
+    const href = row?.getAttribute('data-row-href')
+    if (!href) return
+    event.preventDefault()
+    navigateTo(href)
+  })
 }
 
 const openDropdowns = (): HTMLDetailsElement[] => [

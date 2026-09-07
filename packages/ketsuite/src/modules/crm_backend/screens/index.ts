@@ -7,7 +7,7 @@ export type { CaseListRow, CasesListScreenOptions } from './cases-list.tsx'
 export { caseCreateScreen } from './case-create.tsx'
 export type { CaseCreateScreenOptions } from './case-create.tsx'
 
-export { caseConvertModal, caseDetailScreen, permissionScreen } from './case-detail.tsx'
+export { caseCloseModal, caseConvertModal, caseDetailScreen, permissionScreen } from './case-detail.tsx'
 export type { CaseDetailControls } from './case-detail.tsx'
 
 export { plannerScreen } from './activity-planner.tsx'
@@ -15,5 +15,5 @@ export { plannerScreen } from './activity-planner.tsx'
 export { leaderboardColumns, leaderboardScreen } from './leaderboard.tsx'
 export type { LeaderboardProfile, LeaderboardScreenOptions } from './leaderboard.tsx'
 
-export { CONFIGURATION_TABS, configurationScreen } from './configuration.tsx'
-export type { ConfigurationTab } from './configuration.tsx'
+export { CONFIGURATION_TABS, configurationScreen, teamConfigurationScreen } from './configuration.tsx'
+export type { ConfigurationStatus, ConfigurationTab } from './configuration.tsx'

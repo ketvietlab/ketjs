@@ -9,7 +9,7 @@ export default defineModule({
   // The backend renders leads that arrive from the website but never calls into
   // that module; the dependency was pulling a public-site concern into the admin
   // shell for nothing.
-  depends: ['crm', 'crm_sale', 'backend', 'stock', 'activity', 'partner', 'user'],
+  depends: ['crm', 'crm_sale', 'backend', 'stock', 'activity', 'partner_backend', 'user'],
   title: 'CRM',
   summary: 'Lead, opportunity, pipeline and sales activities.',
   category: 'Sales',
@@ -17,7 +17,10 @@ export default defineModule({
   styles: ['crm.css'],
   islands,
   joints: { 'screen.pipeline': { props: { lang: 'text?', data: 'text?' } } },
-  fills: { 'crm_backend:screen.pipeline': `{% island "crm.pipeline" %}` },
+  fills: {
+    'crm_backend:screen.pipeline': `{% island "crm.pipeline" %}`,
+    'partner_backend:record.salesActions': `<a data-ui="action" data-variant="secondary" href="/admin/crm/cases/new?kind=lead&amp;partnerId={{ partnerId }}&amp;lang={{ lang }}"><span data-ui="action-label">{{ 'crm_backend.action.createLead' | _ }}</span></a>`,
+  },
   menus: {
     crm: { label: 'menu.app', icon: 'contact-round', sequence: 18 },
     'crm.pipeline': {
