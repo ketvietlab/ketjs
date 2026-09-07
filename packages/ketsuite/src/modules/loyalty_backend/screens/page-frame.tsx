@@ -1,6 +1,6 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { FormPage, ListPage, shell } from '../../../ui/index.ts'
+import { FormPage, ListPage, listChrome, shell } from '../../../ui/index.ts'
 import type { Frame } from '../../../ui/index.ts'
 
 type PageFrameProps = {
@@ -27,6 +27,7 @@ export const ListScreenFrame = ({
       title={title}
       description={subtitle ?? undefined}
       actions={frame.extras?.['topbar.end']}
+      controls={frame.chrome ? listChrome(_, title, frame.chrome, false) : undefined}
       body={body}
     />,
     {

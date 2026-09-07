@@ -144,7 +144,6 @@ const installTableSelection = (): void => {
     if (browserGlobals.__ketNavigation?.navigate) void browserGlobals.__ketNavigation.navigate(href)
     else browserGlobals.location.assign(href)
   })
-
   document.addEventListener('keydown', (event) => {
     if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) return
     const target = eventElement(event)
@@ -391,7 +390,8 @@ const installRouteModal = (): void => {
         .find(
           (target) =>
             target instanceof HTMLElement &&
-            target.matches('[data-ui="modal-close"], [data-ui="modal-backdrop"], a[data-ui="tab"]'),
+            (target.matches('[data-ui="modal-close"], [data-ui="modal-backdrop"], a[data-ui="tab"]') ||
+              target.matches('a[data-ui="action"][href]')),
         )
       if (!leaving || !modal.contains(leaving as HTMLElement)) return
       if (!mayLeaveModal(modal)) {
@@ -402,6 +402,29 @@ const installRouteModal = (): void => {
     true,
   )
 
+  document.addEventListener(
+    'click',
+    (event) => {
+      const container = document.querySelector<HTMLElement>('[data-save-before-navigation]')
+      const form =
+        container instanceof HTMLFormElement ? container : container?.querySelector<HTMLFormElement>('form')
+      const anchor = eventElement(event)?.closest<HTMLAnchorElement>('a[href]')
+      if (!container || !form || !anchor || activeRouteModal() || !modalHasDraft(container)) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (!browserGlobals.confirm(container.dataset.saveBeforeNavigation)) return
+      let destination = form.querySelector<HTMLInputElement>('input[name="returnTo"]')
+      if (!destination) {
+        destination = document.createElement('input')
+        destination.type = 'hidden'
+        destination.name = 'returnTo'
+        form.append(destination)
+      }
+      destination.value = anchor.href
+      form.requestSubmit()
+    },
+    true,
+  )
   document.addEventListener('keydown', (event) => {
     const modal = activeRouteModal()
     if (!modal) return
