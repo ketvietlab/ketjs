@@ -58,7 +58,10 @@ test('relational select HTTP: generated browser islands are served by backend', 
   const e2e = await boot(t)
   for (const [asset, hooks] of [
     ['relation-select.mjs', ['relation-footer', 'relation-native', 'relationSelect']],
-    ['table-selection.mjs', ['select-cell', 'chrome-search-modal', 'route-modal', 'tableSelection']],
+    [
+      'table-selection.mjs',
+      ['select-cell', 'chrome-search-modal', 'route-modal', 'ket.backend.theme', 'tableSelection'],
+    ],
   ] as const) {
     const response = await e2e.client.get(`/_ket/asset/backend/client/${asset}`)
     assert.equal(response.status, 200, asset)
