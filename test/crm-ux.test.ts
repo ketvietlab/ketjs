@@ -158,7 +158,7 @@ test('crm: merging carries the whole record and refuses a second pass', async (t
   assert.equal((again.errors as Row[])[0]?.code, 'crm.error.alreadyMerged')
 })
 
-test('crm backend: the case workspace exposes assign, merge and a lost reason', async (t) => {
+test('crm backend: the case workspace exposes assign, merge and the close decision', async (t) => {
   const { app, call } = await boot(t)
   await call('crm.case.save', {
     id: 'workspace',
@@ -182,16 +182,24 @@ test('crm backend: the case workspace exposes assign, merge and a lost reason', 
   // Relational fields render as pickers, not as selects carrying every row.
   assert.match(html, /data-ui="relation-select"/)
   assert.doesNotMatch(html, /<select[^>]*name="partnerId"[^>]*>\s*<option[^>]*>—/)
-  // Three controls the routes have always accepted and no screen ever offered.
+  // Assignment and merging remain inline; closing opens the one decision dialog.
   assert.match(html, /name="action" value="assign"/)
   assert.match(html, /name="action" value="merge"/)
-  assert.match(html, /name="lostReason"/)
+  assert.doesNotMatch(html, /name="lostReason"/)
+  assert.match(html, /href="\/admin\/crm\/cases\/workspace\?tab=overview&amp;modal=close&amp;lang=en"/)
   assert.match(html, /href="\/admin\/crm\/cases\/workspace\?tab=timeline&amp;lang=en"/)
   assert.match(html, /action="\/admin\/crm\/cases\/workspace\?lang=en"/)
   assert.match(html, /action="\/admin\/crm\/cases\/workspace\/attachments\?lang=en"/)
   // Duplicate detection has always run here; now it renders what it found.
   assert.match(html, /Possible duplicates/)
   assert.match(html, /Workspace twin/)
+
+  const closePage = await app.client.get('/admin/crm/cases/workspace?modal=close&lang=en')
+  const closeHtml = await closePage.text()
+  assert.equal(closePage.status, 200)
+  assert.match(closeHtml, /name="terminal"/)
+  assert.match(closeHtml, /name="closeReason"/)
+  assert.match(closeHtml, /name="confirm"/)
 
   // Assignment is restricted to the team, which is why the membership has to
   // exist before the picker's choice is accepted.
@@ -311,31 +319,28 @@ test('crm backend: configuration records can be edited and archived, not only cr
   assert.match(invalidHtml, /data-ui="list-page"/)
   assert.match(invalidHtml, /data-ui="form-errors"/)
   assert.match(invalidHtml, /action="\/admin\/crm\/configuration\?tab=tags&amp;lang=en&amp;create=1"/)
-  assert.match(invalidHtml, /href="\/admin\/crm\/configuration\?tab=members&amp;lang=en"/)
+  assert.doesNotMatch(invalidHtml, /tab=members/)
 
   const created = await app.client.post(
-    '/admin/crm/configuration?tab=teams&lang=en',
+    '/admin/crm/configuration/teams/new?lang=en',
     new URLSearchParams({ name: 'Field sales', code: 'field', active: 'on', assignmentMode: 'round_robin' }),
     post,
   )
   assert.equal(created.status, 303)
-  assert.equal(created.headers.get('location'), '/admin/crm/configuration?tab=teams&lang=en')
+  assert.match(String(created.headers.get('location')), /\/admin\/crm\/configuration\/teams\/[^?]+\?lang=en/)
   const teamOf = async () =>
     (await call<Record<string, Row[]>>('crm.configuration.get')).teams.find((row) => row.code === 'field')!
   let team = await teamOf()
   assert.equal(team.name, 'Field sales')
 
-  const page = await app.client.get(`/admin/crm/configuration?tab=teams&edit=${String(team.id)}&lang=en`)
+  const page = await app.client.get(`/admin/crm/configuration/teams/${String(team.id)}?lang=en`)
   const html = await page.text()
   assert.match(html, /value="Field sales"/, 'the edit form is pre-filled from the row')
   assert.match(html, /href="\/admin\/crm\/configuration\?tab=teams&amp;lang=en"/)
-  assert.match(
-    html,
-    new RegExp(`action="/admin/crm/configuration\\?tab=teams&amp;lang=en&amp;edit=${String(team.id)}"`),
-  )
+  assert.match(html, new RegExp(`action="/admin/crm/configuration/teams/${String(team.id)}\\?lang=en"`))
 
   const renamed = await app.client.post(
-    '/admin/crm/configuration?tab=teams&lang=en',
+    `/admin/crm/configuration/teams/${String(team.id)}?lang=en`,
     new URLSearchParams({
       id: String(team.id),
       name: 'Field sales North',
@@ -351,24 +356,35 @@ test('crm backend: configuration records can be edited and archived, not only cr
   assert.equal(team.name, 'Field sales North', 'editing updates the row instead of minting a second one')
 
   const archived = await app.client.post(
-    '/admin/crm/configuration?tab=teams&lang=en',
-    new URLSearchParams({ action: 'archive', id: String(team.id), expectedVersion: String(team.version) }),
+    `/admin/crm/configuration/teams/${String(team.id)}?lang=en`,
+    new URLSearchParams({
+      id: String(team.id),
+      name: String(team.name),
+      code: String(team.code),
+      assignmentMode: String(team.assignmentMode),
+      expectedVersion: String(team.version),
+    }),
     post,
   )
   assert.equal(archived.status, 303)
   assert.equal((await teamOf()).active, false)
+  const activeList = await (await app.client.get('/admin/crm/configuration?tab=teams&lang=en')).text()
+  assert.doesNotMatch(activeList, /Field sales North/)
+  const archivedList = await (
+    await app.client.get('/admin/crm/configuration?tab=teams&status=archived&lang=en')
+  ).text()
+  assert.match(archivedList, /Field sales North/)
 })
 
 test('crm backend: team membership and tags are managed from configuration', async (t) => {
   const { app, call } = await boot(t)
-  const members = await app.client.get('/admin/crm/configuration?tab=members&lang=en')
+  const members = await app.client.get('/admin/crm/configuration/teams/crm-team-sales?lang=en')
   assert.equal(members.status, 200)
   assert.match(await members.text(), /Team members/)
 
   const added = await app.client.post(
-    '/admin/crm/configuration?tab=members&lang=en',
+    '/admin/crm/configuration/teams/crm-team-sales?member=new&lang=en',
     new URLSearchParams({
-      teamId: 'crm-team-sales',
       userId: 'admin',
       capacity: '5',
       sequence: '10',
@@ -381,8 +397,7 @@ test('crm backend: team membership and tags are managed from configuration', asy
   assert.equal(listed.length, 1)
   assert.equal(listed[0]!.userName, 'Administrator')
 
-  // Round-robin routing depends on these rows existing, which is why the tab
-  // had to exist before the assignment modes meant anything.
+  // Round-robin routing depends on members configured inside the team record.
   const routed = await call<Row>('crm.case.save', {
     id: 'routed',
     kind: 'lead',

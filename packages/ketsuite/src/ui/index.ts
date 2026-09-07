@@ -102,7 +102,7 @@ export type {
   ProductMediaManagementOptions,
   ProductMediaVariantView,
 } from './product-media.tsx'
-export { recordForm, recordActions, formCluster } from './form.tsx'
+export { recordForm, recordActions, formCluster, formField, formFields } from './form.tsx'
 export { authTokenScreen, loginScreen } from './auth.tsx'
 export type { FormField, FormOption, RecordFormOptions } from './form.tsx'
 export { datePicker } from './date-picker.tsx'
@@ -188,6 +188,7 @@ export {
 export { section as Section, surface as Surface, contentCard as ContentCard } from './surfaces.tsx'
 export { cardGrid as CardGrid, metric as Metric } from './surfaces.tsx'
 export { recordForm as RecordForm, formCluster as FormCluster } from './form.tsx'
+export { formField as FormFieldControl, formFields as FormFields } from './form.tsx'
 export { recordActions as RecordActions } from './form.tsx'
 export { recordWorkspace as RecordWorkspace, recordToggle as RecordToggle } from './record.tsx'
 export {
@@ -219,3 +220,6 @@ export {
 export { navGroup as NavGroup } from './nav.tsx'
 export { barChart as BarChart, chart as Chart, delta as Delta } from './charts.tsx'
 export { definitionList as DefinitionList } from './layout.tsx'
+export { UserWorkflow, UserSummary, RoleSelection } from './user-workflow.tsx'
+export type { UserWorkflowOptions, UserWorkflowValues, UserRoleOption } from './user-workflow.tsx'
+export { AccessScope, AccessContext, CredentialDelivery } from './user-workflow.tsx'

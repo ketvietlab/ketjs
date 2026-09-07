@@ -18,6 +18,7 @@ export const jobs: Record<string, JobSpec> = {
     effects: [
       'read:crm.Case',
       'write:crm.Case',
+      'read:crm.SalesDetail',
       'read:crm.ScoreRule',
       'read:crm.ScoreHistory',
       'write:crm.ScoreHistory',

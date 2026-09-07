@@ -1427,13 +1427,15 @@ export async function applyCaseScore(ctx: Ctx, caseId: string, sourceKey: string
     const tx = ctx
     const held = (await tx.db.select('crm.Case', { id: caseId }))[0]
     if (!held || !(await canEditCase(tx, held))) return invalid(issue('caseId', 'crm.error.notFound'))
+    const salesDetail = (await tx.db.select('crm.SalesDetail', { caseId }))[0]
     const rules = (await tx.db.select('crm.ScoreRule', { active: true })).sort(
       (a, b) => n(a.sequence) - n(b.sequence) || String(a.id).localeCompare(String(b.id)),
     )
     let score = 0
     const reasons: Array<{ ruleId: string; points: number }> = []
     for (const rule of rules) {
-      const actual = held[String(rule.field)]
+      const actual =
+        rule.field === 'expectedRevenue' ? salesDetail?.expectedRevenue : held[String(rule.field)]
       const wanted = String(rule.value)
       const matches =
         (rule.operator === 'eq' && normalized(actual) === normalized(wanted)) ||

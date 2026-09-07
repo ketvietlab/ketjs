@@ -36,6 +36,7 @@ export default defineModule({
     'controls.css',
     'record.css',
     'forms.css',
+    'user-workflow.css',
     'content.css',
     'charts.css',
   ],

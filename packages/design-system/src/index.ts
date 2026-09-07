@@ -1,8 +1,9 @@
-export { Button, LinkButton, ActionGroup } from './primitives/actions.tsx'
+export { ActionGroup, Button, IconButton, LinkButton } from './primitives/actions.tsx'
 export type {
   ActionSize,
   ActionVariant,
   ButtonProps,
+  IconButtonProps,
   LinkButtonProps,
 } from './primitives/actions.tsx'
 export { Avatar, Badge, Code, CountBadge, Tag, initials } from './primitives/status.tsx'
