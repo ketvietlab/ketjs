@@ -8,6 +8,11 @@ the shared component kit in `@ketvietlab/ketsuite/ui`; it is not a replaceable s
 Client JavaScript is added only as an island for interaction that cannot be represented by a normal
 request, response, or URL.
 
+The partner-directory experiment also has an opt-in generic browser-list path. It composes a KetJS
+browser plan into the same canonical `ListPage` and `DataTable` on the server and client. This is a
+measured prototype, not the default backend architecture: ordinary routes continue to use SSR and
+islands until a migration decision is supported by equivalent-feature measurements.
+
 ## Request-to-screen flow
 
 ```mermaid
@@ -223,6 +228,24 @@ UI layer.
 
 Do not hydrate an entire page to implement a small selector. Server rendering must remain useful before
 hydration, and island props must contain only data the current viewer is allowed to receive.
+
+### Experimental composed lists
+
+For a list whose columns are genuinely module-extensible, the host may publish a typed `browser` column
+joint instead of pairing unrelated header and body HTML fills. The generic list renderer owns one
+`ListPage`, stable row/column identities, loading holes, and extension-scoped errors. The resource loader
+fetches by provider rather than by cell, bounds concurrency, deduplicates identical batches, cancels on
+disposal, rejects stale generations, and keys context-cache entries by the authorized projection and
+all result-affecting query/scope state.
+
+The server still owns projection. It composes the release manifest outside the request hot path and
+sends only the widgets, columns, resource fields, and endpoints the current reader may use. An optional
+resource denied by policy is absent from the plan and is never requested. Client cache warmth never
+changes that rule, and a full page navigation creates a new JavaScript cache realm.
+
+The partner route exposes the prototype only through `prototype=ssr-matched`,
+`prototype=csr-two-stage`, or `prototype=csr-planned`; omitting the parameter retains the production SSR
+path. The benchmark and its limitations are recorded in [Lego CSR prototype evidence](/ketsuite/benchmarks/lego-csr-prototype/).
 
 ### A screen that is waiting for something
 

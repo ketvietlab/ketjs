@@ -66,6 +66,66 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     name: 'Ngân hàng',
     accountType: 'asset_cash',
   })
+  await call('account.saveJournal', {
+    id: 'general',
+    name: 'Sổ cái',
+    code: 'GL',
+    type: 'general',
+  })
+  await call('account.createMove', { id: 'receivable-move', journalId: 'general', partnerId: 'customer' })
+  await call('account.addMoveLine', {
+    id: 'receivable-line',
+    moveId: 'receivable-move',
+    name: 'Phải thu',
+    accountId: 'receivable',
+    partnerId: 'customer',
+    debit: '125000',
+  })
+  await call('account.addMoveLine', {
+    id: 'receivable-bank',
+    moveId: 'receivable-move',
+    name: 'Đối ứng',
+    accountId: 'bank',
+    credit: '125000',
+  })
+  await call('account.postMove', { id: 'receivable-move' })
+  await call('account.createMove', { id: 'payable-move', journalId: 'general', partnerId: 'customer' })
+  await call('account.addMoveLine', {
+    id: 'payable-line',
+    moveId: 'payable-move',
+    name: 'Phải trả',
+    accountId: 'payable',
+    partnerId: 'customer',
+    credit: '25000',
+  })
+  await call('account.addMoveLine', {
+    id: 'payable-bank',
+    moveId: 'payable-move',
+    name: 'Đối ứng',
+    accountId: 'bank',
+    debit: '25000',
+  })
+  await call('account.postMove', { id: 'payable-move' })
+  await call('account.createMove', { id: 'draft-move', journalId: 'general', partnerId: 'customer' })
+  await call('account.addMoveLine', {
+    id: 'draft-receivable',
+    moveId: 'draft-move',
+    name: 'Bản nháp',
+    accountId: 'receivable',
+    partnerId: 'customer',
+    debit: '900000',
+  })
+  await call('account.addMoveLine', {
+    id: 'draft-bank',
+    moveId: 'draft-move',
+    name: 'Đối ứng nháp',
+    accountId: 'bank',
+    credit: '900000',
+  })
+  assert.deepEqual((await call<Row[]>('account.partnerBalances', { ids: ['customer', 'missing'] })).value, [
+    { id: 'customer', balance: '100000', currency: 'VND' },
+    { id: 'missing', balance: '0', currency: 'VND' },
+  ])
   await call('account.savePaymentTerm', { id: 'net30', name: '30 ngày' })
   const wrongAccount = (
     await call<Row>('account_partner.saveAccountingTerms', {
@@ -116,6 +176,53 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
     assert.match(html, expected, path)
     assert.doesNotMatch(html, /(?:partner|account_partner)_backend\.[A-Za-z]/, path)
   }
+
+  const matched = await (
+    await e2e.client.get('/admin/partner/partners?prototype=ssr-matched', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(matched, /data-lego-screen="partner_backend\.partners"/)
+  assert.match(matched, /data-col="balance"/)
+  assert.match(matched, /100000/)
+  assert.equal((matched.match(/data-ui="list-page"/g) ?? []).length, 1)
+
+  const planned = await (
+    await e2e.client.get('/admin/partner/partners?prototype=csr-planned', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(planned, /data-lego-bootstrap=/)
+  assert.match(planned, /browser-list\.mjs/)
+  assert.match(planned, /account_partner_backend\.partnerBalances/)
+  assert.match(planned, /100000/)
+
+  const twoStage = await (
+    await e2e.client.get('/admin/partner/partners?prototype=csr-two-stage', {
+      headers: { accept: 'text/html' },
+    })
+  ).text()
+  assert.match(twoStage, /data-lego-phase="shell"/)
+  assert.doesNotMatch(twoStage, /Partner 999999/)
+  for (const [mode, markup] of [
+    ['ssr-matched', matched],
+    ['csr-planned', planned],
+    ['csr-two-stage', twoStage],
+  ] as const) {
+    assert.equal((markup.match(/data-ui="shell"/g) ?? []).length, 1, mode)
+    assert.equal((markup.match(/data-ui="list-page"/g) ?? []).length, 1, mode)
+    assert.equal((markup.match(/data-ui="tabs"/g) ?? []).length, 1, mode)
+    assert.match(markup, /data-ui="search-menu"/, mode)
+    assert.equal((markup.match(/data-ui="bulk-form"/g) ?? []).length, 1, mode)
+    assert.match(markup, /data-kv-design-system/, mode)
+  }
+  assert.match(matched, /data-ui="select-all"/)
+  assert.match(planned, /data-ui="select-all"/)
+  const browserData = await e2e.client.json<{ rows: Row[]; total: number }>(
+    '/admin/partner/partners/browser-data',
+  )
+  assert.equal(browserData.total, 2)
+  assert.ok(browserData.rows.some((row) => row.id === 'customer'))
 
   const partnerList = await (
     await e2e.client.get('/admin/partner/partners', { headers: { accept: 'text/html' } })

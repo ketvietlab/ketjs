@@ -45,7 +45,7 @@ Local keys are qualified during composition. `Warehouse` becomes `inventory.Ware
 | Data | `models`, `extend`, `relations`, `views` |
 | Operations | `functions`, `permissions`, `jobs`, `routes` |
 | Navigation and language | `menus`, `messages` |
-| Presentation contracts | `joints`, `fills`, `omits`, `sections`, `islands` |
+| Presentation contracts | `joints`, `fills`, `omits`, `sections`, `islands`, `browser` |
 | Theme resources | `templates`, `tokens`, `requires`, `provides` |
 | Printable documents | `reports` |
 | Static resources | `assets`, `styles` |
@@ -141,6 +141,36 @@ The extension field must be optional because existing rows predate the extending
 extend a model or fill a joint only when it depends on the owner. Duplicate fields, missing
 dependencies, and unpublished joints are composition errors.
 
+## Experimental browser screen plans
+
+The optional `browser` declaration is a release-time contract for data-driven client screens. It is
+experimental and currently supports generic list screens only. A host declares widgets, row resources,
+a screen, and named typed joints. A depending bridge can fill a published column joint without the host
+importing the bridge or branching on its presence.
+
+| Declaration | Contract |
+| --- | --- |
+| `widgets` | Scalar props and exactly one built-in or trusted client-asset implementation; a client widget may declare a built-in SSR fallback. |
+| `resources` | A server function, an explicit permission requirement, a stable row key, an allowlisted field projection, and optional batch/cache bounds. |
+| `screens` | A versioned list contract, primary resource, stable row key, base columns, and named column joints. |
+| `fills` | Columns contributed to a compatible published joint by a module that depends on its owner. |
+
+Resources have three phases. `primary` supplies the rows and is required for the screen to exist;
+`essential` must succeed before the current rows are considered usable; `deferred` may finish later and
+may show an extension-scoped error. Display enrichment runs only after visible row IDs are known, so a
+column marked with only the `display` operation does not claim global sort or filter semantics.
+
+Composition qualifies all widget, resource, and screen references, rejects missing dependencies and
+duplicate column IDs, validates widget bindings and joint major versions, and hashes the resulting
+browser contract into `manifest.browser.revision`. `DeploymentSpec.modules` remains the only selection
+list: adding or removing a browser contribution requires a new release rather than runtime installation.
+
+`projectBrowserScreen()` creates the per-reader plan. Both the resource requirement and its HTTP source
+must be allowed. A rejected optional resource, its columns, and its client widget are omitted together,
+so the browser cannot speculatively fetch hidden data. `projectBrowserRows()` then retains only declared
+fields and rejects missing or duplicate row keys. Tenant, company, branch, and function authorization
+remain server checks on every request; the browser plan is not an authorization token.
+
 ## Compose the manifest
 
 ```ts
@@ -163,6 +193,7 @@ Composition topologically orders modules and produces one immutable manifest:
 | `joints`, `fills`, `regions` | Extension and theme contracts | Ownership and unpublished targets |
 | `routes`, `menus` | Request dispatch and navigation | Duplicate paths and IDs |
 | `islands`, `sections`, `styles` | Interactive and static presentation | Duplicate providers and asset boundaries |
+| `browser` | Versioned browser screen registry and authorized projections | Resource/function dependencies, widget bindings, joint compatibility, duplicate stable IDs |
 | `messages`, `tokens` | Translation and CSS variables | Deterministic merge and provenance |
 | `reports` | Printable documents | Target and read-only source exist; IDs are unique |
 

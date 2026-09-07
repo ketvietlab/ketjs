@@ -25,6 +25,7 @@
     "bench:i18n": "npm run build --silent && node .build/bench/i18n.bench.js",
     "bench:modules": "npm run build --silent && node .build/bench/module-path.bench.js",
     "bench:collaboration": "npm run build --silent && node .build/bench/collaboration.bench.js",
+    "bench:lego-csr": "npm run build --silent && node .build/tools/lego-csr-benchmark.js",
     "e2e:collaboration": "npm run build --silent && node .build/tools/collaboration-browser-e2e.js",
     "bench:queue": "npm run build --silent && node .build/bench/queue.bench.js",
     "bench:storage": "npm run build --silent && node .build/bench/storage.bench.js",
