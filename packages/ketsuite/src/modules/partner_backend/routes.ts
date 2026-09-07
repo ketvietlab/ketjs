@@ -1,22 +1,13 @@
-import { createHash, randomUUID } from 'node:crypto'
-import {
-  json,
-  parseCookies,
-  projectBrowserRows,
-  projectBrowserScreen,
-  SESSION_COOKIE,
-  text,
-} from '@ketvietlab/ketjs'
-import type { BrowserScreenPlan, Route, RouteEntry, Row, ServeContext, Translator } from '@ketvietlab/ketjs'
+import { randomUUID } from 'node:crypto'
+import { text } from '@ketvietlab/ketjs'
+import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import { readForm, seeOther } from '../backend/forms.ts'
 import { PAGE_SIZE, pageOf, pager, searchOf, withParam } from '../backend/paging.ts'
 import { newPartnerScreen, partnerFormScreen, partnersScreen } from './screens/index.ts'
 import { partnerRelationControl } from './relation-control.ts'
 import { adminPage, inLocale } from '../backend/screen.ts'
 import type { AnyRow, Req } from '../backend/screen.ts'
-import type { Frame, TableSelection } from '../../ui/index.ts'
-import { browserResourceMap, browserTable, browserTableBootstrap } from '../../ui/index.ts'
-import type { PartnerListSummary } from './screens/types.ts'
+import type { TableSelection } from '../../ui/index.ts'
 
 const crossSite = (req: Req): boolean => {
   const origin = req.headers.origin as string | undefined
@@ -297,415 +288,11 @@ const savePartner = async (
   return (roles as { ok?: boolean }).ok === false ? roles : result
 }
 
-type PartnerDirectoryData = {
-  rows: AnyRow[]
-  total: number
-  activeTotal: number
-  inclusiveTotal: number
-  customerTotal: number
-  supplierTotal: number
-}
-
-type PartnerDirectorySummaryData = {
-  total: number
-  active: number
-  inclusive: number
-  customers: number
-  suppliers: number
-}
-
-const optimizedDirectorySummary = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-): Promise<PartnerDirectorySummaryData> =>
-  ctx.call(
-    'partner.directorySummary',
-    {
-      search: searchOf(url),
-      role: url.searchParams.get('role') || undefined,
-      includeArchived: url.searchParams.get('archived') === '1',
-    },
-    url,
-    req,
-  ) as Promise<PartnerDirectorySummaryData>
-
-const optimizedDirectoryData = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-): Promise<PartnerDirectoryData> => {
-  const current = pageOf(url)
-  const search = searchOf(url)
-  const role = url.searchParams.get('role') || undefined
-  const includeArchived = url.searchParams.get('archived') === '1'
-  const [rows, summary] = await Promise.all([
-    ctx.call(
-      'partner.listPartners',
-      { search, role, includeArchived, limit: PAGE_SIZE, offset: (current - 1) * PAGE_SIZE },
-      url,
-      req,
-    ) as Promise<AnyRow[]>,
-    optimizedDirectorySummary(ctx, url, req),
-  ])
-  return {
-    rows,
-    total: summary.total,
-    activeTotal: summary.active,
-    inclusiveTotal: summary.inclusive,
-    customerTotal: summary.customers,
-    supplierTotal: summary.suppliers,
-  }
-}
-
-const directorySelection = (url: URL, _: Translator, includeArchived: boolean): TableSelection => ({
-  formId: 'partner-directory-bulk',
-  action: inLocale(url, '/admin/partner/partners/bulk'),
-  hidden: { returnTo: `${url.pathname}${url.search}` },
-  actions: [
-    { id: 'archive', label: _('partner_backend.action.bulkArchive') },
-    ...(includeArchived ? [{ id: 'restore', label: _('partner_backend.action.bulkRestore') }] : []),
-  ],
-})
-
-const directoryFrame = (
-  url: URL,
-  _: Translator,
-  frame: Frame,
-  selection: TableSelection,
-  rowCount: number,
-  total: number,
-): Frame => {
-  const current = pageOf(url)
-  const search = searchOf(url)
-  const role = url.searchParams.get('role') || undefined
-  const includeArchived = url.searchParams.get('archived') === '1'
-  const prototype = url.searchParams.get('prototype')
-  return {
-    ...frame,
-    chrome: {
-      create: {
-        label: _('partner_backend.action.create'),
-        path: inLocale(url, '/admin/partner/partners/new'),
-      },
-      selection,
-      search: {
-        name: 'q',
-        value: search ?? '',
-        placeholder: _('partner_backend.chrome.search'),
-        keep: {
-          ...(role ? { role } : {}),
-          ...(includeArchived ? { archived: '1' } : {}),
-          ...(prototype ? { prototype } : {}),
-          ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
-        },
-        facets: role ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }] : [],
-        menus: [
-          {
-            id: 'filters',
-            label: _('backend.chrome.filters'),
-            items: [
-              {
-                id: 'customers',
-                label: _('partner_backend.filter.customers'),
-                path: withParam(url, 'role', role === 'customer' ? null : 'customer'),
-                active: role === 'customer',
-              },
-              {
-                id: 'suppliers',
-                label: _('partner_backend.filter.suppliers'),
-                path: withParam(url, 'role', role === 'supplier' ? null : 'supplier'),
-                active: role === 'supplier',
-              },
-              {
-                id: 'archived',
-                label: _('partner_backend.filter.includeArchived'),
-                path: withParam(url, 'archived', includeArchived ? null : '1'),
-                active: includeArchived,
-              },
-            ],
-          },
-        ],
-      },
-      pager: pager(url, current, rowCount, total),
-    },
-  }
-}
-
-const directorySummary = (url: URL, data: PartnerDirectoryData): PartnerListSummary => {
-  const role = url.searchParams.get('role') || undefined
-  const includeArchived = url.searchParams.get('archived') === '1'
-  const listHref = (changes: Record<string, string | null>) => {
-    const target = new URL(url)
-    target.searchParams.delete('page')
-    for (const [key, value] of Object.entries(changes)) {
-      if (value === null) target.searchParams.delete(key)
-      else target.searchParams.set(key, value)
-    }
-    return `${target.pathname}${target.search}`
-  }
-  return {
-    total: data.activeTotal,
-    customers: data.customerTotal,
-    suppliers: data.supplierTotal,
-    archived: Math.max(0, data.inclusiveTotal - data.activeTotal),
-    allHref: listHref({ role: null, archived: null }),
-    customersHref: listHref({ role: 'customer', archived: null }),
-    suppliersHref: listHref({ role: 'supplier', archived: null }),
-    archivedHref: listHref({ role: null, archived: '1' }),
-    active: includeArchived
-      ? 'archived'
-      : role === 'customer'
-        ? 'customers'
-        : role === 'supplier'
-          ? 'suppliers'
-          : 'all',
-  }
-}
-
-const planResources = async (
-  ctx: ServeContext,
-  plan: BrowserScreenPlan,
-  rows: Row[],
-  phases: ReadonlySet<string>,
-  url: URL,
-  req: Req,
-): Promise<{ rows: Record<string, Row[]>; errors: Record<string, string> }> => {
-  const selected = Object.values(plan.resources).filter(
-    (resource) => resource.id !== plan.screen.primary && phases.has(resource.phase),
-  )
-  const ids = [...new Set(rows.map((row) => String(row[plan.screen.rowKey])))]
-  const output: Record<string, Row[]> = {}
-  const errors: Record<string, string> = {}
-  let next = 0
-  const worker = async (): Promise<void> => {
-    while (next < selected.length) {
-      const resource = selected[next++]!
-      try {
-        const batches: string[][] = []
-        const size = resource.batch?.max ?? (ids.length || 1)
-        for (let at = 0; at < ids.length; at += size) batches.push(ids.slice(at, at + size))
-        const values = await Promise.all(
-          batches.map(async (batch) => {
-            const value = await ctx.call(
-              resource.source,
-              resource.batch ? { [resource.batch.input]: batch } : {},
-              url,
-              req,
-            )
-            return value
-          }),
-        )
-        const projected = projectBrowserRows(resource, values.flat())
-        const returned = new Set(projected.map((row) => String(row[resource.key])))
-        const missing = ids.filter((id) => !returned.has(id))
-        const unexpected = [...returned].filter((id) => !ids.includes(id))
-        if (missing.length || unexpected.length)
-          throw new Error(
-            `${resource.id} row coverage differs from the requested page (${missing.length} missing, ${unexpected.length} unexpected)`,
-          )
-        output[resource.id] = projected
-      } catch (error) {
-        errors[resource.id] = error instanceof Error ? error.message : String(error)
-      }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(4, selected.length) }, () => worker()))
-  return { rows: output, errors }
-}
-
-const partnerBrowserPlan = async (ctx: ServeContext, url: URL, req: Req, _: Translator) => {
-  const manifest = await ctx.live(req)
-  return projectBrowserScreen(manifest, 'partner_backend.partners', {
-    allows: (name) => ctx.allows(name, url, req),
-    translate: (key) => _(key),
-  })
-}
-
-const shortHash = (value: string): string =>
-  createHash('sha256').update(value).digest('base64url').slice(0, 16)
-
-const browserContextKey = (
-  req: Req,
-  plan: BrowserScreenPlan,
-  scope: Awaited<ReturnType<ServeContext['scopeOf']>>,
-  query: string,
-): string => {
-  const session = parseCookies(req.headers.cookie)[SESSION_COOKIE]
-  const projection = {
-    columns: plan.screen.columns.map(({ id, resource, widget }) => ({ id, resource, widget })),
-    resources: Object.keys(plan.resources).sort(),
-  }
-  return JSON.stringify({
-    revision: plan.revision,
-    projection: shortHash(JSON.stringify(projection)),
-    viewer: session ? shortHash(session) : 'anonymous',
-    scope,
-    query,
-  })
-}
-
-const browserPrototype = async (
-  ctx: ServeContext,
-  url: URL,
-  req: Req,
-  mode: 'ssr-matched' | 'csr-two-stage' | 'csr-planned',
-) => {
-  const lang = ctx.localeOf(url, req)
-  const _ = ctx.translate(lang)
-  const plan = await partnerBrowserPlan(ctx, url, req, _)
-  if (!plan) return text(_('backend.error.forbidden.title'), { status: 403 })
-
-  const rawBase = mode === 'csr-two-stage' ? null : await optimizedDirectoryData(ctx, url, req)
-  const base = rawBase
-    ? {
-        ...rawBase,
-        rows: projectBrowserRows(plan.resources[plan.screen.primary]!, rawBase.rows),
-      }
-    : null
-  const summaryOnly = base ? null : await optimizedDirectorySummary(ctx, url, req)
-  const directory: PartnerDirectoryData = base ?? {
-    rows: [],
-    total: summaryOnly!.total,
-    activeTotal: summaryOnly!.active,
-    inclusiveTotal: summaryOnly!.inclusive,
-    customerTotal: summaryOnly!.customers,
-    supplierTotal: summaryOnly!.suppliers,
-  }
-  const loaded = base
-    ? await planResources(
-        ctx,
-        plan,
-        base.rows,
-        mode === 'ssr-matched' ? new Set(['essential', 'deferred']) : new Set(['essential']),
-        url,
-        req,
-      )
-    : { rows: {}, errors: {} }
-  const state = {
-    rows: (base?.rows ?? []) as Row[],
-    resources: Object.fromEntries(
-      Object.entries(loaded.rows).map(([id, resourceRows]) => [
-        id,
-        browserResourceMap(resourceRows, plan.resources[id]!.key),
-      ]),
-    ),
-    loading: [],
-    errors: loaded.errors,
-    total: directory.total,
-    requiredReady:
-      base !== null &&
-      Object.values(plan.resources)
-        .filter(({ phase }) => phase === 'essential')
-        .every(({ id }) => Object.hasOwn(loaded.rows, id)),
-    phase: mode === 'ssr-matched' ? ('complete' as const) : base ? ('primary' as const) : ('shell' as const),
-  }
-  const includeArchived = url.searchParams.get('archived') === '1'
-  const selection = directorySelection(url, _, includeArchived)
-  const locale = url.searchParams.get('lang')
-    ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}`
-    : ''
-  const rowBase = '/admin/partner/partners'
-  const rowQuery = locale || undefined
-  const rowHref = (row: Row) =>
-    `${rowBase}/${encodeURIComponent(String(row[plan.screen.rowKey]))}${rowQuery ?? ''}`
-  const rowCount = base
-    ? state.rows.length
-    : Math.min(PAGE_SIZE, Math.max(0, directory.total - (pageOf(url) - 1) * PAGE_SIZE))
-  const tableOptions = {
-    emptyTitle: _('partner_backend.screen.empty'),
-    emptyMessage: _('partner_backend.screen.emptyHint'),
-    loadingLabel: _('partner_backend.screen.loading'),
-    locale: lang,
-    rowHref,
-    responsive: 'stack' as const,
-    selection,
-    selectAllLabel: _('backend.table.selectAll'),
-    selectRowLabel: _('backend.table.selectRow'),
-  }
-  if (mode === 'ssr-matched') {
-    return adminPage(ctx, url, req, {
-      title: plan.screen.title,
-      translate: false,
-      body: (_, frame) =>
-        partnersScreen(
-          _,
-          state.rows as never,
-          directoryFrame(url, _, frame, selection, rowCount, directory.total),
-          { selection },
-          locale,
-          directorySummary(url, directory),
-          directory.total,
-          browserTable(plan, state, {}, tableOptions),
-        ),
-    })
-  }
-
-  const dataUrl = new URL(url)
-  dataUrl.pathname = '/admin/partner/partners/browser-data'
-  dataUrl.searchParams.delete('prototype')
-  const scope = await ctx.scopeOf(url, req)
-  const bootstrap = {
-    mode,
-    plan,
-    baseEndpoint: `${dataUrl.pathname}${dataUrl.search}`,
-    contextKey: browserContextKey(req, plan, scope, dataUrl.search),
-    concurrency: 4,
-    initial: {
-      rows: state.rows,
-      total: state.total,
-      resources: loaded.rows,
-      errors: loaded.errors,
-    },
-    emptyTitle: _('partner_backend.screen.empty'),
-    emptyMessage: _('partner_backend.screen.emptyHint'),
-    loadingLabel: _('partner_backend.screen.loading'),
-    locale: lang,
-    rowBase,
-    rowQuery,
-    selection,
-    selectAllLabel: _('backend.table.selectAll'),
-    selectRowLabel: _('backend.table.selectRow'),
-  }
-  return adminPage(ctx, url, req, {
-    title: plan.screen.title,
-    translate: false,
-    body: (_, frame) =>
-      partnersScreen(
-        _,
-        state.rows as never,
-        directoryFrame(url, _, frame, selection, rowCount, directory.total),
-        { selection },
-        locale,
-        directorySummary(url, directory),
-        directory.total,
-        browserTableBootstrap(bootstrap, browserTable(plan, state, {}, tableOptions)),
-      ),
-  })
-}
-
 export const routes: Record<string, RouteEntry> = {
-  '/admin/partner/partners/browser-data':
-    (ctx: ServeContext): Route =>
-    async (url, req) => {
-      if (req.method !== 'GET') return text('GET', { status: 405 })
-      const _ = ctx.translate(ctx.localeOf(url, req))
-      const plan = await partnerBrowserPlan(ctx, url, req, _)
-      if (!plan) return text(_('backend.error.forbidden.title'), { status: 403 })
-      const data = await optimizedDirectoryData(ctx, url, req)
-      return json({
-        rows: projectBrowserRows(plan.resources[plan.screen.primary]!, data.rows),
-        total: data.total,
-      })
-    },
-
   '/admin/partner/partners':
     (ctx: ServeContext): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const prototype = url.searchParams.get('prototype')
-      if (prototype === 'ssr-matched' || prototype === 'csr-two-stage' || prototype === 'csr-planned')
-        return browserPrototype(ctx, url, req, prototype)
       const lang = ctx.localeOf(url, req)
       const _ = ctx.translate(lang)
       const current = pageOf(url)
@@ -713,6 +300,15 @@ export const routes: Record<string, RouteEntry> = {
       const role = url.searchParams.get('role') || undefined
       const includeArchived = url.searchParams.get('archived') === '1'
       const filter = { search, role, includeArchived }
+      const listHref = (changes: Record<string, string | null>) => {
+        const target = new URL(url)
+        target.searchParams.delete('page')
+        for (const [key, value] of Object.entries(changes)) {
+          if (value === null) target.searchParams.delete(key)
+          else target.searchParams.set(key, value)
+        }
+        return `${target.pathname}${target.search}`
+      }
       const [rows, total, activeTotal, inclusiveTotal, customerTotal, supplierTotal] = await Promise.all([
         ctx.call(
           'partner.listPartners',
@@ -740,26 +336,91 @@ export const routes: Record<string, RouteEntry> = {
           req,
         ) as Promise<{ count: number }>,
       ])
-      const data: PartnerDirectoryData = {
-        rows,
-        total: total.count,
-        activeTotal: activeTotal.count,
-        inclusiveTotal: inclusiveTotal.count,
-        customerTotal: customerTotal.count,
-        supplierTotal: supplierTotal.count,
+      const selection: TableSelection = {
+        formId: 'partner-directory-bulk',
+        action: inLocale(url, '/admin/partner/partners/bulk'),
+        hidden: { returnTo: `${url.pathname}${url.search}` },
+        actions: [
+          { id: 'archive', label: _('partner_backend.action.bulkArchive') },
+          ...(includeArchived ? [{ id: 'restore', label: _('partner_backend.action.bulkRestore') }] : []),
+        ],
       }
-      const selection = directorySelection(url, _, includeArchived)
       return adminPage(ctx, url, req, {
         title: 'partner_backend.screen.title',
         body: (_, frame) =>
           partnersScreen(
             _,
             rows as never,
-            directoryFrame(url, _, frame, selection, rows.length, data.total),
+            {
+              ...frame,
+              chrome: {
+                create: {
+                  label: _('partner_backend.action.create'),
+                  path: inLocale(url, '/admin/partner/partners/new'),
+                },
+                selection,
+                search: {
+                  name: 'q',
+                  value: search ?? '',
+                  placeholder: _('partner_backend.chrome.search'),
+                  keep: {
+                    ...(role ? { role } : {}),
+                    ...(includeArchived ? { archived: '1' } : {}),
+                    ...(url.searchParams.get('lang') ? { lang: url.searchParams.get('lang')! } : {}),
+                  },
+                  facets: role
+                    ? [{ label: _(`partner.role.${role}`), without: withParam(url, 'role', null) }]
+                    : [],
+                  menus: [
+                    {
+                      id: 'filters',
+                      label: _('backend.chrome.filters'),
+                      items: [
+                        {
+                          id: 'customers',
+                          label: _('partner_backend.filter.customers'),
+                          path: withParam(url, 'role', role === 'customer' ? null : 'customer'),
+                          active: role === 'customer',
+                        },
+                        {
+                          id: 'suppliers',
+                          label: _('partner_backend.filter.suppliers'),
+                          path: withParam(url, 'role', role === 'supplier' ? null : 'supplier'),
+                          active: role === 'supplier',
+                        },
+                        {
+                          id: 'archived',
+                          label: _('partner_backend.filter.includeArchived'),
+                          path: withParam(url, 'archived', includeArchived ? null : '1'),
+                          active: includeArchived,
+                        },
+                      ],
+                    },
+                  ],
+                },
+                pager: pager(url, current, rows.length, total.count),
+              },
+            },
             { selection },
             url.searchParams.get('lang') ? `?lang=${encodeURIComponent(url.searchParams.get('lang')!)}` : '',
-            directorySummary(url, data),
-            data.total,
+            {
+              total: activeTotal.count,
+              customers: customerTotal.count,
+              suppliers: supplierTotal.count,
+              archived: Math.max(0, inclusiveTotal.count - activeTotal.count),
+              allHref: listHref({ role: null, archived: null }),
+              customersHref: listHref({ role: 'customer', archived: null }),
+              suppliersHref: listHref({ role: 'supplier', archived: null }),
+              archivedHref: listHref({ role: null, archived: '1' }),
+              active: includeArchived
+                ? 'archived'
+                : role === 'customer'
+                  ? 'customers'
+                  : role === 'supplier'
+                    ? 'suppliers'
+                    : 'all',
+            },
+            total.count,
           ),
       })
     },

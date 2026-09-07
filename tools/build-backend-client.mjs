@@ -10,7 +10,6 @@ import * as esbuild from 'esbuild'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const UI_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/ui/client')
 const BACKEND_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/modules/backend/design/client')
-const ACCOUNT_PARTNER_CLIENT_DIR = join(ROOT, 'packages/ketsuite/src/modules/account_partner_backend/client')
 const entries = [
   {
     source: join(UI_CLIENT_DIR, 'relation-select-view.tsx'),
@@ -21,16 +20,8 @@ const entries = [
     output: join(BACKEND_CLIENT_DIR, 'table-selection.mjs'),
   },
   {
-    source: join(UI_CLIENT_DIR, 'browser-list-entry.ts'),
-    output: join(BACKEND_CLIENT_DIR, 'browser-list.mjs'),
-  },
-  {
     source: join(UI_CLIENT_DIR, 'mail-entry.mjs'),
     output: join(UI_CLIENT_DIR, 'mail-bundle.mjs'),
-  },
-  {
-    source: join(ACCOUNT_PARTNER_CLIENT_DIR, 'partner-balance-widget.ts'),
-    output: join(ACCOUNT_PARTNER_CLIENT_DIR, 'partner-balance-widget.mjs'),
   },
 ]
 

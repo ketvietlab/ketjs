@@ -1161,6 +1161,16 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
 })
 
+test('backend shell: suppressed topbar content keeps the stable navigation slot', () => {
+  const html = renderToString(shell(_, 'List title', html2`<p>Page body</p>`, { topbar: false }))
+  assert.equal((html.match(/data-ket-slot="backend\.topbar"/g) ?? []).length, 1)
+  const topbar = html.match(
+    /<header data-ui="topbar" data-ket-slot="backend\.topbar">[\s\S]*?<\/header>/,
+  )?.[0]
+  assert.ok(topbar)
+  assert.doesNotMatch(topbar, /List title|data-ui="title"/)
+})
+
 test('backend layout: canonical screen wrappers supply context and flatten around rich records', () => {
   const list = renderToString(pagesScreen(_, [page()], {}))
   assert.match(list, /data-ui="list-page"[^>]*data-pattern="list"/)

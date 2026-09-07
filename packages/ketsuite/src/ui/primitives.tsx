@@ -54,34 +54,6 @@ export const code = (value: string | null, context?: string): TemplateResult => 
   </code>
 )
 
-/** A human label carrying the exact scalar value used to produce it. */
-export const dataValue = (value: string, label: string): TemplateResult => <data value={value}>{label}</data>
-
-const DECIMAL_VALUE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u
-
-/** Format a decimal string without first rounding it through a JavaScript number. */
-export const moneyValue = (value: unknown, currency: unknown, locale = 'vi'): TemplateResult => {
-  const exact = String(value ?? '0')
-  const rawCurrency = String(currency ?? '')
-    .trim()
-    .toUpperCase()
-  const code = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : ''
-  let label = `${exact}${code ? ` ${code}` : ''}`
-  if (DECIMAL_VALUE.test(exact)) {
-    try {
-      const formatter = new Intl.NumberFormat(locale === 'qps' ? 'en' : locale || 'vi', {
-        style: code ? 'currency' : 'decimal',
-        ...(code ? { currency: code } : {}),
-      })
-      const format = formatter.format as unknown as (amount: string) => string
-      label = format(exact)
-    } catch {
-      // Keep the exact value and safe ISO code when locale data is unavailable.
-    }
-  }
-  return dataValue(exact, label)
-}
-
 /**
  * A status, as a word with a colour behind it.
  *

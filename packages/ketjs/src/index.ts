@@ -36,25 +36,8 @@ export type {
   RoleTemplateDef,
   CompiledPermissionBundle,
   CompiledRoleTemplate,
-  BrowserResourcePhase,
-  BrowserWidgetBuiltin,
-  BrowserWidgetDef,
-  BrowserResourceDef,
-  BrowserColumnDef,
-  BrowserScreenJointDef,
-  BrowserScreenDef,
-  BrowserFillDef,
-  BrowserModuleDef,
-  ComposedBrowserWidget,
-  ComposedBrowserResource,
-  ComposedBrowserColumn,
-  ComposedBrowserScreen,
-  BrowserManifest,
-  BrowserScreenPlan,
-  BrowserPlanProjection,
 } from './types.ts'
 export { compose } from './kernel/compose.ts'
-export { projectBrowserRows, projectBrowserScreen } from './kernel/browser-plan.ts'
 export { compilePermissionBundles, permissionDigest } from './kernel/permissions.ts'
 export type { CompilePermissionOptions } from './kernel/permissions.ts'
 export {

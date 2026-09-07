@@ -150,148 +150,6 @@ export type ModelDef = {
 }
 export type JointDef = { props?: Record<string, string>; multiple?: boolean }
 
-/** When a browser resource joins the first usable screen payload. */
-export type BrowserResourcePhase = 'primary' | 'essential' | 'deferred'
-export type BrowserWidgetBuiltin = 'text' | 'badge' | 'code' | 'money'
-
-/**
- * A renderer contract that browser code may implement.
- *
- * Props are scalar declarations, not callbacks. A module can therefore validate
- * every column binding before any request is served, while the browser imports
- * only the widgets that remain visible after permission projection.
- */
-export type BrowserWidgetDef = {
-  props: Record<string, string>
-  builtin?: BrowserWidgetBuiltin
-  /** Declarative server/loading fallback for a widget implemented by a client asset. */
-  ssrBuiltin?: BrowserWidgetBuiltin
-  client?: string
-  export?: string
-}
-
-/** A bounded, permission-bearing row resource used by a composed browser screen. */
-export type BrowserResourceDef = {
-  source: string
-  needs: string
-  phase: BrowserResourcePhase
-  key: string
-  fields: Record<string, string>
-  batch?: { input: string; max: number }
-  cache?: { scope: 'request' | 'context'; ttlMs: number }
-}
-
-/** One declarative column; every widget prop is bound to a named resource field. */
-export type BrowserColumnDef = {
-  id: string
-  label: string
-  resource: string
-  widget: string
-  bind: Record<string, string>
-  priority?: 'primary' | 'secondary' | 'optional'
-  width?: 'narrow' | 'normal' | 'wide'
-  operations?: Array<'display' | 'sort' | 'filter'>
-}
-
-export type BrowserScreenJointDef = {
-  kind: 'columns'
-  contract: string
-  multiple?: boolean
-}
-
-/** A generic ListPage contract. RecordPage can be added without widening list declarations. */
-export type BrowserScreenDef = {
-  kind: 'list'
-  contract: string
-  primary: string
-  rowKey: string
-  title: string
-  description?: string
-  columns: BrowserColumnDef[]
-  joints?: Record<string, BrowserScreenJointDef>
-}
-
-export type BrowserFillDef = {
-  compatible: string
-  columns: BrowserColumnDef[]
-}
-
-export type BrowserModuleDef = {
-  widgets?: Record<string, BrowserWidgetDef>
-  resources?: Record<string, BrowserResourceDef>
-  screens?: Record<string, BrowserScreenDef>
-  fills?: Record<string, BrowserFillDef>
-}
-
-export type ComposedBrowserWidget = Omit<BrowserWidgetDef, 'client' | 'export'> & {
-  id: string
-  by: string
-  props: Record<string, string>
-  client?: { src: string; export: string }
-}
-
-export type ComposedBrowserResource = BrowserResourceDef & {
-  id: string
-  by: string
-  source: string
-  needs: string
-  fields: Record<string, string>
-}
-
-export type ComposedBrowserColumn = BrowserColumnDef & {
-  id: string
-  by: string
-  resource: string
-  widget: string
-  bind: Record<string, string>
-  operations: Array<'display' | 'sort' | 'filter'>
-}
-
-export type ComposedBrowserScreen = Omit<BrowserScreenDef, 'primary' | 'columns' | 'joints'> & {
-  id: string
-  by: string
-  primary: string
-  columns: ComposedBrowserColumn[]
-  joints: Record<string, BrowserScreenJointDef & { owner: string }>
-}
-
-export type BrowserManifest = {
-  version: 1
-  revision: string
-  widgets: Record<string, ComposedBrowserWidget>
-  resources: Record<string, ComposedBrowserResource>
-  screens: Record<string, ComposedBrowserScreen>
-  fills: Array<{ joint: string; by: string; compatible: string; columns: string[] }>
-}
-
-/** The permission-projected, JSON-safe plan sent to one browser screen. */
-export type BrowserScreenPlan = {
-  version: 1
-  revision: string
-  screen: {
-    id: string
-    kind: 'list'
-    contract: string
-    primary: string
-    rowKey: string
-    title: string
-    description?: string
-    columns: Array<
-      Omit<ComposedBrowserColumn, 'label'> & {
-        label: string
-      }
-    >
-  }
-  /** Primary data comes from the host's query-aware endpoint; joined resources expose an endpoint. */
-  resources: Record<string, ComposedBrowserResource & { endpoint?: string }>
-  widgets: Record<string, ComposedBrowserWidget>
-}
-
-export type BrowserPlanProjection = {
-  allows: (functionName: string) => boolean | Promise<boolean>
-  translate?: (messageKey: string) => string
-}
-
 /**
  * One entry in the navigation tree — a root section, a nested section, or a link.
  *
@@ -735,8 +593,6 @@ export type ModuleSpec = ModuleMeta & {
   contentTypes?: Record<string, ContentTypeDef>
   taxonomies?: Record<string, TaxonomyDef>
   relations?: Record<string, Record<string, RelationDef>>
-  /** Typed resources, widgets and screens composed into a versioned browser plan. */
-  browser?: BrowserModuleDef
   /** Strings this module owns, per locale. Keys get the module name prefixed. */
   messages?: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
 }
@@ -771,7 +627,6 @@ export type KetModule = Readonly<ModuleMeta> & {
   readonly contentTypes: Record<string, ContentTypeDef>
   readonly taxonomies: Record<string, TaxonomyDef>
   readonly relations: Record<string, Record<string, RelationDef>>
-  readonly browser: BrowserModuleDef
   readonly messages: Record<string, Record<string, import('./kernel/i18n.ts').Message>>
 }
 
@@ -800,7 +655,6 @@ export type Manifest = {
   contentTypes: Record<string, ComposedContentType>
   taxonomies: Record<string, ComposedTaxonomy>
   relations: Record<string, Record<string, ComposedRelation>>
-  browser: BrowserManifest
   messages?: import('./kernel/i18n.ts').Messages
   tokens: Record<string, string>
   /** Static file directories, per module, behind /_ket/asset/<module>/. */
