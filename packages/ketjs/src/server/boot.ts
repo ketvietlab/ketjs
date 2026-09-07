@@ -81,6 +81,11 @@ export type ServeContext = {
   /** Same manifest for every tenant; request-shaped for convenient route composition. */
   live: (req: IncomingMessage) => Promise<Manifest>
   config: RuntimeConfig
+  /** Identity already resolved for this request, whether asserted by a gateway or loaded from a session. */
+  requestIdentityOf: (
+    url: URL,
+    req: IncomingMessage,
+  ) => Promise<(RequestIdentity & { sessionId: string }) | null>
   scopeOf: (url: URL, req: IncomingMessage) => Promise<Scope>
   localeOf: (url: URL, req: IncomingMessage) => string
   translate: (locale: string) => Translator
@@ -588,6 +593,23 @@ export async function bootDeployment(
   const actorOf = async (url: URL, req: IncomingMessage): Promise<string | null> =>
     (await sessionRecordOf(url, req))?.userId ?? null
 
+  const requestIdentityOf = async (
+    url: URL,
+    req: IncomingMessage,
+  ): Promise<(RequestIdentity & { sessionId: string }) | null> => {
+    const record = await sessionRecordOf(url, req)
+    if (!record) return null
+    return {
+      userId: record.userId,
+      sessionId: record.id,
+      companies: [...record.companies],
+      company: record.company,
+      branch: record.branch,
+      branches: record.branches ? [...record.branches] : null,
+      securityVersion: record.securityVersion,
+    }
+  }
+
   /**
    * The one place a request's identity is decided — one function since D27,
    * precisely so that replacing headers with a login would be one change.
@@ -719,6 +741,7 @@ export async function bootDeployment(
     deploymentName: spec.name,
     clientCompatibility: serve.clientCompatibility ?? null,
     config,
+    requestIdentityOf,
     scopeOf,
     localeOf,
     translate,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test, type TestContext } from 'node:test'
-import type { ClientCompatibilityPolicy, Row } from '@ketvietlab/ketjs'
+import type { ClientCompatibilityPolicy, RequestIdentityResolveContext, Row } from '@ketvietlab/ketjs'
 import { createTestDeployment } from '@ketvietlab/ketjs/testing'
 import { ketsuite } from '../apps/ketsuite/deployment.ts'
 
@@ -10,10 +10,33 @@ type Envelope<T> = {
   meta: { requestId: string }
 }
 
-const boot = async (t: TestContext, clientCompatibility?: ClientCompatibilityPolicy) => {
-  const deployment = clientCompatibility
-    ? { ...ketsuite, serve: { ...ketsuite.serve!, clientCompatibility } }
-    : ketsuite
+const boot = async (
+  t: TestContext,
+  clientCompatibility?: ClientCompatibilityPolicy,
+  gatewayIdentity = false,
+) => {
+  const deployment = {
+    ...ketsuite,
+    serve: {
+      ...ketsuite.serve!,
+      ...(clientCompatibility ? { clientCompatibility } : {}),
+      ...(gatewayIdentity
+        ? {
+            resolveIdentity: async ({ req }: RequestIdentityResolveContext) =>
+              req.headers['x-ket-gateway-assertion'] === 'verified-by-test-gateway'
+                ? {
+                    userId: 'operator',
+                    companies: ['acme'],
+                    company: 'acme',
+                    branches: null,
+                    branch: null,
+                    securityVersion: 1,
+                  }
+                : null,
+          }
+        : {}),
+    },
+  }
   const e2e = await createTestDeployment(deployment, { worker: false })
   t.after(() => e2e.close())
   const scope = { company: 'acme', branches: null }
@@ -61,6 +84,17 @@ test('staff channel: a route declaring auth refuses a caller with no session', a
   const response = await stranger.request('/api/staff/v1/bootstrap')
   assert.equal(response.status, 401)
   assert.equal(((await response.json()) as Envelope<null>).error?.code, 'channel_api.unauthenticated')
+})
+
+test('staff channel: a trusted gateway identity can use the browser API without a second session', async (t) => {
+  const e2e = await boot(t, undefined, true)
+  const response = await e2e.client.anonymous().request('/api/staff/v1/bootstrap', {
+    headers: { 'x-ket-gateway-assertion': 'verified-by-test-gateway' },
+  })
+  assert.equal(response.status, 200)
+  const body = (await response.json()) as Envelope<{ user: { id: string }; scope: { companyId: string } }>
+  assert.equal(body.data.user.id, 'operator')
+  assert.equal(body.data.scope.companyId, 'acme')
 })
 
 test('staff channel: the company comes from the session, never from the request', async (t) => {

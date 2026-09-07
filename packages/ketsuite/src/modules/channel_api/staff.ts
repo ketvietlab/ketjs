@@ -106,17 +106,16 @@ const meData = {
 }
 
 export const staffIdentity = async (ctx: ServeContext, url: URL, req: Req): Promise<StaffIdentity | null> => {
-  const sessions = await ctx.sessionsOf(url, req)
-  const record = await sessions?.of(req)
-  if (!record) return null
+  const identity = await ctx.requestIdentityOf(url, req)
+  if (!identity?.company || !identity.companies.length) return null
   return {
-    userId: record.userId,
-    companyId: record.company,
-    branchId: record.branch,
-    companies: record.companies,
-    branches: record.branches,
-    securityVersion: record.securityVersion,
-    sessionId: record.id,
+    userId: identity.userId,
+    companyId: identity.company,
+    branchId: identity.branch ?? null,
+    companies: identity.companies,
+    branches: identity.branches ?? null,
+    securityVersion: identity.securityVersion ?? 0,
+    sessionId: identity.sessionId,
     presentation: 'cookie',
   }
 }
@@ -125,6 +124,7 @@ registerChannelIdentityPresentation('staff', {
   owner: 'ketjs.staff-cookie',
   presentation: 'cookie',
   presented: (req) =>
+    Boolean(String(req.headers['x-ket-gateway-assertion'] ?? '').trim()) ||
     String(req.headers.cookie ?? '')
       .split(';')
       .some((part) => part.trim().split('=', 1)[0] === SESSION_COOKIE),
