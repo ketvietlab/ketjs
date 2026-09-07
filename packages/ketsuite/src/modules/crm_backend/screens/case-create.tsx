@@ -5,7 +5,7 @@ import {
   FormCluster,
   FormPage,
   linkButton,
-  notice,
+  Notice,
   RecordForm,
   shell,
   stack,
@@ -65,13 +65,7 @@ export const caseCreateScreen = (
       }
       body={stack([
         ...(options.guidance
-          ? [
-              notice({
-                title: options.guidance.title,
-                message: options.guidance.description,
-                tone: 'info',
-              }),
-            ]
+          ? [<Notice title={options.guidance.title} message={options.guidance.description} tone="info" />]
           : []),
         <Surface
           body={
