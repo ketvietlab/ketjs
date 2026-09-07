@@ -107,6 +107,8 @@ Các bạn viết trong `ket.app`, nên luôn thắng theme mà không cần đ�
 
 Chế độ tối chỉ cần đổi token: mỗi vai trò khai một lần bằng `light-dark(sáng, tối)`,
 còn `[data-theme="light"|"dark"]` chỉ đổi `color-scheme`.
+Lựa chọn tường minh được khôi phục trong `<head>` trước stylesheet đầu tiên, không chờ
+island hydrate; vì vậy một full navigation không được phép chớp qua theme hệ thống.
 
 Breakpoint đã chốt thành một thang, liệt kê trong `tokens.css` (`--admin-bp-*`).
 `@media` không nhận custom property nên vẫn phải viết số, nhưng chỉ dùng số trong thang
