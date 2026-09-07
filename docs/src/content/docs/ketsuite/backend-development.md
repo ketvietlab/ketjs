@@ -138,6 +138,18 @@ node --test .build/test/design-system.test.js
 npm --prefix e2e run test:design-system -- page-surfaces.spec.ts
 ```
 
+### Theme preference
+
+Backend pages follow the operating-system colour scheme until the reader uses the theme icon in the
+sidebar footer. In light mode the button shows a moon; in dark mode it shows a sun. The shell writes
+`data-theme="light|dark"` on the document root and stores the explicit preference under
+`ket.backend.theme` in local storage, so it survives reloads and stays in sync across tabs.
+
+Applications consume the public design-system `IconButton`; they must not copy icon-only action markup
+or persist another theme key. The button keeps one stable accessible name (`Toggle light/dark theme` in
+English), exposes the current dark-mode state through `aria-pressed`, and lets the KetSuite browser
+runtime fall back to `prefers-color-scheme` whenever no explicit selection exists.
+
 ### List page layout
 
 Use the design system's `ListPage` as the baseline for an operational collection. The screen provides

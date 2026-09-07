@@ -46,6 +46,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.pages': 'Trang',
     brand: 'KetSuite',
     switchCompany: 'Chuyển công ty',
+    'theme.toggle': 'Đổi giao diện sáng/tối',
     'context.rootBranch': 'Chi nhánh gốc',
 
     'table.columns': 'Chọn cột',
@@ -156,6 +157,7 @@ export const messages: Record<string, Record<string, Message>> = {
     'nav.pages': 'Pages',
     brand: 'KetSuite',
     switchCompany: 'Switch company',
+    'theme.toggle': 'Toggle light/dark theme',
     'context.rootBranch': 'Root branch',
 
     'table.columns': 'Columns',

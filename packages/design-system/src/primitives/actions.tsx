@@ -24,8 +24,12 @@ export type ButtonProps = ActionBase & {
 }
 
 export type LinkButtonProps = ActionBase & { href: string }
+export type IconButtonProps = Omit<ButtonProps, 'leading'> & {
+  icon: JSXChild
+  pressed?: boolean
+}
 
-const ActionContent = (props: ActionBase): TemplateResult => (
+const ActionContent = (props: ActionBase & { iconOnly?: boolean }): TemplateResult => (
   <>
     {props.loading === true && <span data-ui="action-spinner" aria-hidden="true" />}
     {props.loading !== true && props.leading !== undefined && (
@@ -33,7 +37,7 @@ const ActionContent = (props: ActionBase): TemplateResult => (
         {props.leading}
       </span>
     )}
-    <span data-ui="action-label">{props.label}</span>
+    {!props.iconOnly && <span data-ui="action-label">{props.label}</span>}
   </>
 )
 
@@ -51,6 +55,28 @@ export const Button = (props: ButtonProps): TemplateResult => (
     aria-describedby={props.describedBy ?? null}
   >
     <ActionContent {...props} />
+  </button>
+)
+
+/** An icon-only action with a visible tooltip and accessible name. */
+export const IconButton = (props: IconButtonProps): TemplateResult => (
+  <button
+    data-ui="action"
+    data-icon-only="true"
+    data-variant={props.variant ?? 'tertiary'}
+    data-size={props.size ?? 'default'}
+    type={props.type ?? 'button'}
+    name={props.name ?? null}
+    value={props.value ?? null}
+    form={props.form ?? null}
+    disabled={props.disabled === true || props.loading === true}
+    aria-label={props.label}
+    aria-pressed={props.pressed === undefined ? null : String(props.pressed)}
+    aria-busy={props.loading === true ? 'true' : null}
+    aria-describedby={props.describedBy ?? null}
+    title={props.label}
+  >
+    <ActionContent {...props} leading={props.icon} iconOnly />
   </button>
 )
 

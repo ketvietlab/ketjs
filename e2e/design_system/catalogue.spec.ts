@@ -5,7 +5,8 @@ test('renders every component group and persists catalogue preferences', async (
   await page.goto('/?theme=dark&density=default')
 
   await expect(page.getByRole('heading', { name: 'Operational UI, kept honest.' })).toBeVisible()
-  await expect(page.locator('[data-ui="catalogue-specimen"]')).toHaveCount(16)
+  await expect(page.locator('[data-ui="catalogue-specimen"]')).toHaveCount(22)
+  await expect(page.getByRole('button', { name: 'Toggle theme' })).toHaveAttribute('data-icon-only', 'true')
   await expect(page.locator('#data-table [data-ui="row"]')).toHaveCount(3)
   await expect(page.locator('#record-form [data-ui="field"]')).toHaveCount(3)
   await expect(page.locator('#modal-sheet [role="dialog"]')).toBeVisible()
@@ -37,7 +38,7 @@ test('renders every component group and persists catalogue preferences', async (
 test('keeps the catalogue and component stages inside a mobile viewport', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?theme=dark&density=comfortable')
-  await expect(page.locator('[data-ui="catalogue-specimen"]')).toHaveCount(16)
+  await expect(page.locator('[data-ui="catalogue-specimen"]')).toHaveCount(22)
 
   const dimensions = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,
