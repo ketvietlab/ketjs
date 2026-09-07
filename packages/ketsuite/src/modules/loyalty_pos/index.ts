@@ -6,7 +6,7 @@ import { jobs } from './jobs.ts'
 export default defineModule({
   name: 'loyalty_pos',
   version: '0.1.0',
-  depends: ['loyalty', 'pos', 'product', 'partner', 'channel_api', 'pos_channel'],
+  depends: ['company', 'stock', 'loyalty', 'pos', 'product', 'partner', 'channel_api', 'pos_channel'],
   compatible: { channel_api: '^1' },
   title: 'Loyalty tại điểm bán',
   summary: 'Áp ưu đãi, tích và đổi điểm trên đơn POS.',

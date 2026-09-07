@@ -15,7 +15,7 @@ import {
   or,
 } from '@ketvietlab/ketjs'
 import type { Ctx, Expr, FnSpec, Query, Row } from '@ketvietlab/ketjs'
-import { canonicalDecimalText, minorText, moneyMinor, percentOfMinor, scaleOf } from '../account/money.ts'
+import { canonicalDecimalText, minorText, moneyMinor, scaleOf } from '../account/money.ts'
 import { decimal, evaluate, invalid, issue, n, normalizeCode, now, snapshotOf } from './engine.ts'
 import {
   finalizeReservation,
@@ -139,6 +139,9 @@ const upsertApplication = async (
 }
 
 const evaluationEffects = [
+  'read:company.Company',
+  'read:stock.Quant',
+  'read:stock.Location',
   'read:loyalty.Program',
   'read:loyalty.ProgramPricelist',
   'read:loyalty.Rule',
@@ -164,16 +167,17 @@ const walletWriteEffects = [
 ] as const
 
 const membershipEffects = [
-  'read:loyalty.MembershipConfig',
   'read:loyalty.SpendEntry',
   'write:loyalty.SpendEntry',
   'read:loyalty.Tier',
+  'read:loyalty.Wallet',
   'read:loyalty.Membership',
   'write:loyalty.Membership',
 ] as const
 
 const orderWriteEffects = [
   ...evaluationEffects,
+  'write:loyalty.Program',
   ...walletWriteEffects,
   ...membershipEffects,
   'read:loyalty.Reservation',
@@ -231,7 +235,8 @@ export const applyOrderReward = async (
   const result = evaluated[0],
     quote = result?.rewards.find((candidate) => candidate.rewardId === args.rewardId)
   if (!result || !quote) return invalid(issue('rewardId', 'loyalty.error.ineligible'))
-  const requestedPoints = n(args.points ?? quote.requiredPoints)
+  const requestedPoints =
+    program.designVersion === 1 ? quote.requiredPoints : n(args.points ?? quote.requiredPoints)
   const config = (
     await ctx.db.select('loyalty.MembershipConfig', {
       programId: args.programId,
@@ -241,18 +246,6 @@ export const applyOrderReward = async (
     const step = n(config.minimumRedeemStep)
     if (step > 0 && Math.abs(requestedPoints / step - Math.round(requestedPoints / step)) > 0.000001)
       return invalid(issue('points', 'loyalty.error.redeemStep'))
-    if (!snapshot.partnerId) return invalid(issue('partnerId', 'loyalty.error.partnerMissing'))
-    const membership = await refreshMembershipRow(ctx, snapshot.partnerId)
-    const tier = membership?.tierId
-      ? (await ctx.db.select('loyalty.Tier', { id: membership.tierId }))[0]
-      : null
-    const scale = scaleOf(snapshot.currency)
-    let merchandise = 0n
-    for (const line of snapshot.lines.filter((line) => line.lineKind === 'product'))
-      merchandise += moneyMinor(line.untaxed, scale)
-    const maximumDiscount = percentOfMinor(merchandise, String(tier?.redeemPercent ?? '0'))
-    if (moneyMinor(quote.discountAmount, scale) > maximumDiscount)
-      return invalid(issue('points', 'loyalty.error.redeemCap'))
   }
   const walletId = String(current?.walletId ?? result.walletId ?? '')
   const fromCurrentOrder = program.appliesOn === 'future' ? 0 : result.points
@@ -260,6 +253,11 @@ export const applyOrderReward = async (
   if (walletSpend > 0 && !walletId) return invalid(issue('points', 'loyalty.error.insufficientPoints'))
   try {
     const application = await transact(ctx, options, async (tx) => {
+      if (program.designVersion === 1) {
+        const currentProgram = (await tx.db.select('loyalty.Program', { id: program.id }))[0]
+        if (!currentProgram?.active || currentProgram.configVersion !== program.configVersion)
+          throw new LoyaltyConflict('program configuration changed')
+      }
       for (const held of await tx.db.select('loyalty.Reservation', {
         orderType: snapshot.orderType,
         orderId: snapshot.orderId,
@@ -285,7 +283,11 @@ export const applyOrderReward = async (
         pointsEarned: result.points,
         pointsSpent: requestedPoints,
         discountAmount: quote.discountAmount,
-        rewardPayload: { ...quote, requiredPoints: requestedPoints },
+        rewardPayload: {
+          ...quote,
+          requiredPoints: requestedPoints,
+          configVersion: program.configVersion ?? null,
+        },
         currency: snapshot.currency,
         state: walletSpend > 0 ? 'reserved' : 'draft',
       })
@@ -369,11 +371,62 @@ export const finalizeOrderLoyalty = async (
         ...snapshot,
         codes: [...new Set(codes)],
       })
+      for (const held of prior.filter((row) => row.state === 'reserved')) {
+        const index = evaluated.findIndex((row) => row.programId === held.programId)
+        const saved = {
+          programId: String(held.programId),
+          programName: '',
+          programType: 'loyalty' as const,
+          points: n(held.pointsEarned),
+          splitPoints: [],
+          rewards: [],
+          walletId: held.walletId ? String(held.walletId) : null,
+          availablePoints: 0,
+          pointName: '',
+        }
+        if (index >= 0) evaluated[index] = saved
+        else evaluated.push(saved)
+      }
+      for (const held of prior.filter((row) => row.state === 'draft' && row.rewardId)) {
+        const result = evaluated.find((row) => row.programId === held.programId)
+        const quote = result?.rewards.find((row) => row.rewardId === held.rewardId)
+        const payload = held.rewardPayload as Row | null
+        if (
+          payload?.configVersion != null &&
+          (!quote ||
+            quote.discountAmount !== held.discountAmount ||
+            quote.requiredPoints !== n(held.pointsSpent))
+        )
+          throw new LoyaltyConflict('unconfirmed reward changed')
+      }
       const applications: Row[] = []
       const issuedWallets: Row[] = []
       for (const result of evaluated) {
         const program = (await tx.db.select('loyalty.Program', { id: result.programId }))[0]!
         const previous = priorByProgram.get(result.programId)
+        if (
+          program.designVersion === 1 &&
+          previous?.rewardId &&
+          !['finalized', 'reversed'].includes(String(previous.state))
+        ) {
+          const used =
+            program.usageCount == null
+              ? (await tx.db.select('loyalty.Application', { programId: program.id })).filter(
+                  (row) => row.rewardId && ['finalized', 'reversed'].includes(String(row.state)),
+                ).length
+              : n(program.usageCount)
+          if (program.limitUsage && used >= n(program.maxUsage))
+            throw new LoyaltyConflict('program usage limit reached')
+          if (
+            !(await tx.db.compareAndSet(
+              'loyalty.Program',
+              { id: program.id },
+              { usageCount: program.usageCount ?? null },
+              { usageCount: used + 1 },
+            ))
+          )
+            throw new LoyaltyConflict('program usage changed')
+        }
         let wallet: Row | null = previous?.walletId
           ? ((await tx.db.select('loyalty.Wallet', { id: previous.walletId }))[0] ?? null)
           : result.walletId
@@ -417,6 +470,10 @@ export const finalizeOrderLoyalty = async (
               wallet = await ensureWallet(tx, program, {
                 id: `coupon:${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:0`,
                 partnerId: snapshot.partnerId,
+                expiresAt:
+                  program.programType === 'next_order_coupons' && n(program.voucherValidityDays) > 0
+                    ? new Date(Date.now() + n(program.voucherValidityDays) * 86400000).toISOString()
+                    : null,
               })
             await postDelta(tx, {
               id: `${snapshot.orderType}:${snapshot.orderId}:${String(program.id)}:earn`,
@@ -457,6 +514,13 @@ export const finalizeOrderLoyalty = async (
               descriptionCode: 'loyalty.ledger.description.redeem',
             })
         }
+        if (
+          program.designVersion === 1 &&
+          ['coupons', 'next_order_coupons'].includes(String(program.programType)) &&
+          previous?.rewardId &&
+          wallet
+        )
+          await tx.db.update('loyalty.Wallet', { id: wallet.id }, { active: false })
         applications.push(
           await upsertApplication(tx, {
             orderType: snapshot.orderType,
@@ -741,6 +805,14 @@ export const orderFunctions: Record<string, FnSpec> = {
       if (existing) return { ok: true, wallet: walletSummary(existing) }
       const program = (await ctx.db.select('loyalty.Program', { id: args.programId }))[0]
       if (!program) return invalid(issue('programId', 'loyalty.error.programMissing'))
+      if (
+        program.designVersion === 1 &&
+        (!program.active ||
+          ['gift_card', 'ewallet', 'next_order_coupons'].includes(String(program.programType)))
+      )
+        return invalid(issue('programId', 'loyalty.error.state'))
+      if (program.designVersion === 1 && program.programType === 'coupons' && n(args.initialBalance) !== 1)
+        return invalid(issue('initialBalance', 'loyalty.error.invalid'))
       if (args.partnerId && !(await ctx.db.select('partner.Partner', { id: args.partnerId }))[0])
         return invalid(issue('partnerId', 'loyalty.error.partnerMissing'))
       if (program.programType === 'loyalty' && args.expiresAt)

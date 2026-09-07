@@ -1,3 +1,4 @@
+import { civilDateAt, DEFAULT_ACCOUNTING_TIMEZONE } from '../account/date.ts'
 /**
  * The figures a loyalty screen leads with, counted by the database.
  *
@@ -63,24 +64,56 @@ export const statsFunctions: Record<string, FnSpec> = {
     input: {},
     output: {
       total: 'int',
+      draft: 'int',
       running: 'int',
       upcoming: 'int',
       archived: 'int',
       ended: 'int',
     },
-    effects: ['read:loyalty.Program'],
+    effects: ['read:loyalty.Program', 'read:company.Company'],
     agent: true,
     handler: async (ctx) => {
       const P = ctx.table('loyalty.Program')
       const at = now()
-      const started = or(lte(P.dateFrom, at), isNull(P.dateFrom))
-      const notFinished = or(gte(P.dateTo, at), isNull(P.dateTo))
+      const company = (await ctx.db.select('company.Company', { id: ctx.scope.company }))[0]
+      const day = civilDateAt(at, company?.accountingTimezone ?? DEFAULT_ACCOUNTING_TIMEZONE)
+      const started = or(
+        and(eq(P.designVersion, 1), or(lte(P.startDate, day), isNull(P.startDate))),
+        and(isNull(P.designVersion), or(lte(P.dateFrom, at), isNull(P.dateFrom))),
+      )
+      const notFinished = or(
+        and(eq(P.designVersion, 1), or(gte(P.endDate, day), isNull(P.endDate))),
+        and(isNull(P.designVersion), or(gte(P.dateTo, at), isNull(P.dateTo))),
+      )
       return {
         total: await ctx.db.count(from(P)),
+        draft: await ctx.db.count(from(P).where(eq(P.phase, 'draft'))),
         running: await ctx.db.count(from(P).where(and(eq(P.active, true), started, notFinished))),
-        upcoming: await ctx.db.count(from(P).where(and(eq(P.active, true), gt(P.dateFrom, at)))),
-        archived: await ctx.db.count(from(P).where(eq(P.active, false))),
-        ended: await ctx.db.count(from(P).where(and(eq(P.active, true), lt(P.dateTo, at)))),
+        upcoming: await ctx.db.count(
+          from(P).where(
+            and(
+              eq(P.active, true),
+              or(
+                and(eq(P.designVersion, 1), gt(P.startDate, day)),
+                and(isNull(P.designVersion), gt(P.dateFrom, at)),
+              ),
+            ),
+          ),
+        ),
+        archived: await ctx.db.count(
+          from(P).where(and(eq(P.active, false), or(eq(P.phase, 'archived'), isNull(P.phase)))),
+        ),
+        ended: await ctx.db.count(
+          from(P).where(
+            and(
+              eq(P.active, true),
+              or(
+                and(eq(P.designVersion, 1), lt(P.endDate, day)),
+                and(isNull(P.designVersion), lt(P.dateTo, at)),
+              ),
+            ),
+          ),
+        ),
       }
     },
   }),
