@@ -110,6 +110,39 @@ test('browser list loader: identical provider batches are deduplicated', async (
   assert.equal(loader.state.resources['extension_1.values']?.size, 25)
 })
 
+test('browser list loader: batches with different input contracts are not deduplicated', async () => {
+  let calls = 0
+  const fetcher: BrowserFetch = async (_url, init) => {
+    calls++
+    const input = JSON.parse(init?.body ?? '{}') as { ids?: string[]; partnerIds?: string[] }
+    const ids = input.ids ?? input.partnerIds ?? []
+    return ok(ids.map((id) => ({ id, value: id })))
+  }
+  const screenPlan = plan(2, true)
+  screenPlan.resources['extension_1.values']!.batch = { input: 'partnerIds', max: 10 }
+  const loader = new BrowserListLoader(bootstrap(screenPlan, 'distinct-inputs'), () => {}, fetcher)
+  await loader.start()
+  assert.equal(calls, 6)
+})
+
+test('browser list loader: batches with different projections are not deduplicated', async () => {
+  let calls = 0
+  const fetcher: BrowserFetch = async (_url, init) => {
+    calls++
+    const ids = (JSON.parse(init?.body ?? '{}').ids ?? []) as string[]
+    return ok(ids.map((id) => ({ id, value: id, alternate: id })))
+  }
+  const screenPlan = plan(2, true)
+  screenPlan.resources['extension_1.values']!.fields = { id: 'id', alternate: 'text' }
+  const loader = new BrowserListLoader(bootstrap(screenPlan, 'distinct-projections'), () => {}, fetcher)
+  await loader.start()
+  assert.equal(calls, 6)
+  assert.deepEqual(loader.state.resources['extension_1.values']?.get('p0'), {
+    id: 'p0',
+    alternate: 'p0',
+  })
+})
+
 test('browser list loader: one optional provider failure stays scoped', async () => {
   const fetcher: BrowserFetch = async (url, init) => {
     if (url.endsWith('extension_0.values')) throw new Error('provider unavailable')
@@ -140,6 +173,38 @@ test('browser list loader: a failed essential provider never marks required data
   assert.equal(loader.state.requiredReady, false)
   assert.equal(loader.state.phase, 'primary')
   assert.equal(loader.state.errors['extension_0.values'], 'required provider unavailable')
+})
+
+test('browser list loader: an incomplete essential provider cannot mark required data complete', async () => {
+  const screenPlan = plan(1)
+  screenPlan.resources['extension_0.values']!.phase = 'essential'
+  const fetcher: BrowserFetch = async (url, init) => {
+    if (url === '/base')
+      return { ok: true, status: 200, json: async () => ({ rows: [{ id: 'p1' }, { id: 'p2' }], total: 2 }) }
+    const ids = (JSON.parse(init?.body ?? '{}').ids ?? []) as string[]
+    return ok(ids.slice(0, 1).map((id) => ({ id, value: id })))
+  }
+  const loader = new BrowserListLoader(
+    { ...bootstrap(screenPlan, 'incomplete-required', []), mode: 'csr-two-stage' },
+    () => {},
+    fetcher,
+  )
+  await assert.rejects(() => loader.start(), /required browser resources failed/)
+  assert.equal(loader.state.requiredReady, false)
+  assert.match(loader.state.errors['extension_0.values'] ?? '', /omitted 1 requested row/)
+})
+
+test('browser list loader: provider rows are projected again before entering client state', async () => {
+  const fetcher: BrowserFetch = async (_url, init) => {
+    const ids = (JSON.parse(init?.body ?? '{}').ids ?? []) as string[]
+    return ok(ids.map((id) => ({ id, value: 'visible', secret: 'hidden' })))
+  }
+  const loader = new BrowserListLoader(bootstrap(plan(1), 'client-projection'), () => {}, fetcher)
+  await loader.start()
+  assert.deepEqual(loader.state.resources['extension_0.values']?.get('p0'), {
+    id: 'p0',
+    value: 'visible',
+  })
 })
 
 test('browser list loader: planned mode requires every embedded essential resource', async () => {

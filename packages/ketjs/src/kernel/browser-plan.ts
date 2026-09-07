@@ -99,7 +99,7 @@ export function projectBrowserRows(resource: ComposedBrowserResource, value: unk
       message: `browser resource "${resource.id}" must return an array of rows`,
     })
   }
-  const seen = new Set<unknown>()
+  const seen = new Set<string>()
   return value.map((candidate, index) => {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
       throw new KetError({
@@ -109,8 +109,9 @@ export function projectBrowserRows(resource: ComposedBrowserResource, value: unk
       })
     }
     const source = candidate as Row
-    const key = source[resource.key]
-    if (key === undefined || key === null || seen.has(key)) {
+    const value = source[resource.key]
+    const key = value === undefined || value === null ? '' : String(value)
+    if (!key || seen.has(key)) {
       throw new KetError({
         code: 'E_BROWSER_RESOURCE_KEY',
         module: resource.by,
