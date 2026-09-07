@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import {
-  asc,
+  and,
+  desc,
+  ilike,
+  lt,
+  or,
+  isNull,
   defineFn,
   deleteFrom,
   eq,
@@ -30,11 +35,11 @@ class AuthorizationAbort extends Error {
   }
 }
 
-const abort = (result: ReturnType<typeof invalid>): never => {
+export const abortAuthorization = (result: ReturnType<typeof invalid>): never => {
   throw new AuthorizationAbort(result)
 }
 
-const authorizationTransaction = async <T>(ctx: Ctx, body: (tx: Ctx) => Promise<T>) => {
+export const authorizationTransaction = async <T>(ctx: Ctx, body: (tx: Ctx) => Promise<T>) => {
   try {
     return await ctx.tx(body)
   } catch (error) {
@@ -215,6 +220,8 @@ export const recordAuthorizationAudit = async (
     scopeKey?: string | null
     source: string
     reason: string
+    userId?: string
+    metadata?: Record<string, unknown>
     before: unknown
     after: unknown
     revision: number
@@ -223,11 +230,12 @@ export const recordAuthorizationAudit = async (
 ) => {
   await ctx.db.insert('user.SecurityAudit', {
     id: randomUUID(),
-    userId: null,
+    userId:
+      values.userId ?? (values.after as Row | null)?.userId ?? (values.before as Row | null)?.userId ?? null,
     event: values.event,
     occurredAt: nowIso(),
     networkFingerprint: null,
-    metadata: null,
+    metadata: values.metadata ?? { roleId: values.source, assignmentId: values.targetId },
     actorKey: ctx.actor,
     targetKind: values.targetKind,
     targetId: values.targetId,
@@ -328,13 +336,26 @@ export const managedRoleHealthIssues = (
 }
 
 /** Resolve and explain the exact set used by request authorization. */
-export async function resolveEffectivePermissions(ctx: Ctx, userId: string): Promise<EffectiveAccess> {
+export type AccessProjection = {
+  companyId?: string | null
+  branchId?: string | null
+  assignments?: Row[]
+  companies?: Set<string>
+  branches?: Map<string, string>
+}
+export async function resolveEffectivePermissions(
+  ctx: Ctx,
+  userId: string,
+  projection: AccessProjection = {},
+): Promise<EffectiveAccess> {
+  const selectedCompany = projection.companyId === undefined ? ctx.scope.company : projection.companyId
+  const selectedBranch = projection.branchId === undefined ? ctx.scope.branch : projection.branchId
   const revision = await authorizationRevisionOf(ctx)
   const empty = (issues: EffectiveAccess['issues'] = []): EffectiveAccess => ({
     revision,
     context: {
-      companyId: ctx.scope.company ?? null,
-      branchId: ctx.scope.branch ?? null,
+      companyId: selectedCompany ?? null,
+      branchId: selectedBranch ?? null,
     },
     superuser: false,
     functions: [],
@@ -347,18 +368,18 @@ export async function resolveEffectivePermissions(ctx: Ctx, userId: string): Pro
     const expiresAt = user.superuserExpiresAt ? Date.parse(String(user.superuserExpiresAt)) : null
     if (expiresAt == null || expiresAt > Date.now()) return { ...empty(), superuser: true }
   }
-  const companyId = String(ctx.scope.company ?? '')
+  const companyId = String(selectedCompany ?? '')
   if (!companyId) return empty([{ code: 'invalid-company-context' }])
-  const companyIds = await activeCompanyMemberships(ctx, userId)
+  const companyIds = projection.companies ?? (await activeCompanyMemberships(ctx, userId))
   if (!companyIds.has(companyId)) return empty([{ code: 'invalid-company-context' }])
-  const branchId = String(ctx.scope.branch ?? '')
-  const branches = await activeBranchMemberships(ctx, userId, companyIds)
+  const branchId = String(selectedBranch ?? '')
+  const branches = projection.branches ?? (await activeBranchMemberships(ctx, userId, companyIds))
   if (branchId && branches.get(branchId) !== companyId) return empty([{ code: 'invalid-branch-context' }])
 
   const A = ctx.table('user.Assignment')
-  const assignments = (await ctx.db.all(from(A).where(eq(A.userId, userId)))).filter((assignment) =>
-    roleApplies(assignment, companyId, branchId),
-  )
+  const assignments = (
+    projection.assignments ?? (await ctx.db.all(from(A).where(eq(A.userId, userId))))
+  ).filter((assignment) => roleApplies(assignment, companyId, branchId))
   if (!assignments.length) return empty()
   const roleIds = [...new Set(assignments.map((assignment) => String(assignment.roleId)))]
   const R = ctx.table('user.Role')
@@ -521,7 +542,7 @@ const roleTemplatePreview = async (ctx: Ctx, roleId: string, templateKey: string
   }
 }
 
-const AUTHORIZATION_EFFECTS = [
+export const AUTHORIZATION_EFFECTS = [
   'read:user.User',
   'write:user.User',
   'read:user.Role',
@@ -573,7 +594,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
   }),
 
   effectiveAccess: defineFn({
-    input: { userId: 'id' },
+    input: { userId: 'id', companyId: 'id?', branchId: 'id?' },
     output: {
       revision: 'int',
       context: 'json',
@@ -582,7 +603,11 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       issues: 'json',
     },
     effects: AUTHORIZATION_EFFECTS.filter((effect) => !effect.startsWith('write:')),
-    handler: (ctx: Ctx, args) => resolveEffectivePermissions(ctx, String(args.userId)),
+    handler: (ctx: Ctx, args) =>
+      resolveEffectivePermissions(ctx, String(args.userId), {
+        companyId: args.companyId as string | null | undefined,
+        branchId: args.branchId as string | null | undefined,
+      }),
   }),
 
   previewRoleTemplate: defineFn({
@@ -632,7 +657,8 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
-        if ('conflict' in replay) abort(invalid([issue('idempotencyKey', 'E_ROLE_TEMPLATE_CONFLICT')]))
+        if ('conflict' in replay)
+          abortAuthorization(invalid([issue('idempotencyKey', 'E_ROLE_TEMPLATE_CONFLICT')]))
         if ('replay' in replay && replay.replay)
           return {
             ...(replay.result as Record<string, unknown>),
@@ -643,15 +669,17 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         const role = await tx.db.one(from(R).where(eq(R.id, roleId)))
         const expectedRoleRevision = Number(args.expectedRoleRevision)
         if (Number(role?.revision ?? 0) !== expectedRoleRevision)
-          abort(invalid([issue('expectedRoleRevision', 'E_ROLE_TEMPLATE_CONFLICT')]))
+          abortAuthorization(invalid([issue('expectedRoleRevision', 'E_ROLE_TEMPLATE_CONFLICT')]))
         if (role && String(role.mode ?? 'custom') !== 'managed')
-          abort(invalid([issue('roleId', 'E_ROLE_TEMPLATE_CONFLICT')]))
+          abortAuthorization(invalid([issue('roleId', 'E_ROLE_TEMPLATE_CONFLICT')]))
         if (role && Number(role.templateVersion ?? 0) > template.version)
-          abort(invalid([issue('templateKey', 'E_ROLE_TEMPLATE_STALE')]))
+          abortAuthorization(invalid([issue('templateKey', 'E_ROLE_TEMPLATE_STALE')]))
         if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const preview = await roleTemplatePreview(tx, roleId, templateKey)
-        const validPreview = preview.ok ? preview : abort(preview)
+        const validPreview = preview.ok ? preview : abortAuthorization(preview)
         if (
           role &&
           role.templateKey === templateKey &&
@@ -669,7 +697,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
           validPreview.managedRemoved.length === 0
         ) {
           if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-            abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+            abortAuthorization(
+              invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+            )
           const result = {
             ok: true,
             roleId,
@@ -693,7 +723,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
             revision: 1,
           })
           if (!('dryRun' in inserted) && !inserted.inserted)
-            abort(invalid([issue('roleId', 'E_ROLE_TEMPLATE_CONFLICT')]))
+            abortAuthorization(invalid([issue('roleId', 'E_ROLE_TEMPLATE_CONFLICT')]))
         } else {
           const changed = await tx.db.compareAndSet(
             'user.Role',
@@ -710,7 +740,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
             },
           )
           if (!('dryRun' in changed) && !changed.matched)
-            abort(invalid([issue('expectedRoleRevision', 'E_ROLE_TEMPLATE_CONFLICT')]))
+            abortAuthorization(invalid([issue('expectedRoleRevision', 'E_ROLE_TEMPLATE_CONFLICT')]))
         }
         const S = tx.table('user.GrantSource')
         const G = tx.table('user.Grant')
@@ -747,7 +777,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         }
         const revision =
           (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const result = {
           ok: true,
           roleId,
@@ -805,13 +837,13 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       if (!reason || operationId.endsWith(':')) return invalid([issue('reason', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const liveScope = await normalizeAssignmentScope(tx, String(args.userId), args)
-        const scope = liveScope.ok ? liveScope.scope : abort(liveScope)
+        const scope = liveScope.ok ? liveScope.scope : abortAuthorization(liveScope)
         const replay = await operationReplay(tx, operationId, {
           ...args,
           scope,
         })
         if ('conflict' in replay)
-          abort(invalid([issue('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(invalid([issue('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
         if ('replay' in replay && replay.replay)
           return {
             ...(replay.result as Record<string, unknown>),
@@ -819,9 +851,11 @@ export const authorizationFunctions: Record<string, FnSpec> = {
           }
         const R = tx.table('user.Role')
         if (!(await tx.db.one(from(R).where(eq(R.id, args.roleId)))))
-          abort(invalid([issue('roleId', 'user.error.roleMissing')]))
+          abortAuthorization(invalid([issue('roleId', 'user.error.roleMissing')]))
         if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const A = tx.table('user.Assignment')
         const held = await tx.db.one(
           from(A).where(eq(A.userId, args.userId), eq(A.roleId, args.roleId), eq(A.scopeKey, scope.scopeKey)),
@@ -829,7 +863,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         const assignmentId = String(held?.id ?? args.id)
         if (held) {
           if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-            abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+            abortAuthorization(
+              invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+            )
           const result = {
             ok: true,
             id: assignmentId,
@@ -848,7 +884,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         })
         const revision =
           (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const result = {
           ok: true,
           id: assignmentId,
@@ -876,6 +914,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
   unassignScopedRole: defineFn({
     input: {
       userId: 'id',
+      assignmentId: 'id?',
       roleId: 'id',
       scopeKey: 'text',
       expectedAuthorizationRevision: 'int',
@@ -898,21 +937,31 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
         if ('conflict' in replay)
-          abort(invalid([issue('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(invalid([issue('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
         if ('replay' in replay && replay.replay)
           return {
             ...(replay.result as Record<string, unknown>),
             replayed: true,
           }
         if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const A = tx.table('user.Assignment')
-        const before = await tx.db.one(
-          from(A).where(eq(A.userId, args.userId), eq(A.roleId, args.roleId), eq(A.scopeKey, args.scopeKey)),
+        let selected = from(A).where(
+          eq(A.userId, args.userId),
+          eq(A.roleId, args.roleId),
+          args.scopeKey === 'tenant'
+            ? or(eq(A.scopeKey, 'tenant'), isNull(A.scopeKey))
+            : eq(A.scopeKey, args.scopeKey),
         )
+        if (args.assignmentId) selected = selected.where(eq(A.id, args.assignmentId))
+        const before = await tx.db.one(selected)
         if (!before) {
           if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-            abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+            abortAuthorization(
+              invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+            )
           const result = {
             ok: true,
             removed: 0,
@@ -922,18 +971,12 @@ export const authorizationFunctions: Record<string, FnSpec> = {
           await completeOperation(tx, operationId, result)
           return result
         }
-        const removed = (
-          await tx.db.del(
-            deleteFrom(A).where(
-              eq(A.userId, args.userId),
-              eq(A.roleId, args.roleId),
-              eq(A.scopeKey, args.scopeKey),
-            ),
-          )
-        ).changes
+        const removed = (await tx.db.del(deleteFrom(A).where(eq(A.id, before.id)))).changes
         const revision =
           (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const result = { ok: true, removed, revision, replayed: false }
         await recordAuthorizationAudit(tx, {
           event: 'authorization.assignment.removed',
@@ -978,7 +1021,8 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         return invalid([issue('name', 'user.error.required')])
       return authorizationTransaction(ctx, async (tx) => {
         const replay = await operationReplay(tx, operationId, args)
-        if ('conflict' in replay) abort(invalid([issue('idempotencyKey', 'E_ROLE_TEMPLATE_CONFLICT')]))
+        if ('conflict' in replay)
+          abortAuthorization(invalid([issue('idempotencyKey', 'E_ROLE_TEMPLATE_CONFLICT')]))
         if ('replay' in replay && replay.replay)
           return {
             ...(replay.result as Record<string, unknown>),
@@ -989,9 +1033,11 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         const source =
           sourceRow && String(sourceRow.mode ?? 'custom') === 'managed'
             ? sourceRow
-            : abort(invalid([issue('sourceRoleId', 'E_ROLE_TEMPLATE_CONFLICT')]))
+            : abortAuthorization(invalid([issue('sourceRoleId', 'E_ROLE_TEMPLATE_CONFLICT')]))
         if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const inserted = await tx.db.insertIfAbsent('user.Role', {
           id: args.id,
           name,
@@ -1003,7 +1049,7 @@ export const authorizationFunctions: Record<string, FnSpec> = {
           revision: 1,
         })
         if (!('dryRun' in inserted) && !inserted.inserted)
-          abort(invalid([issue('id', 'E_ROLE_TEMPLATE_CONFLICT')]))
+          abortAuthorization(invalid([issue('id', 'E_ROLE_TEMPLATE_CONFLICT')]))
         const G = tx.table('user.Grant')
         for (const grant of await tx.db.all(from(G).where(eq(G.roleId, args.sourceRoleId)))) {
           const fnKey = String(grant.fnKey)
@@ -1023,7 +1069,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         }
         const revision =
           (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const result = { ok: true, id: args.id, revision, replayed: false }
         await recordAuthorizationAudit(tx, {
           event: 'authorization.role.cloned',
@@ -1082,19 +1130,21 @@ export const authorizationFunctions: Record<string, FnSpec> = {
           reason,
         })
         if ('conflict' in replay)
-          abort(invalid([issue('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(invalid([issue('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
         if ('replay' in replay && replay.replay)
           return {
             ...(replay.result as Record<string, unknown>),
             replayed: true,
           }
         if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const U = tx.table('user.User')
-        const user = await tx.db.one(from(U).where(eq(U.id, args.userId), eq(U.active, true)))
+        const user = await tx.db.one(from(U).where(eq(U.id, args.userId)))
         if (!user || String(user.accessKind) !== 'internal')
-          abort(invalid([issue('userId', 'user.error.userMissing')]))
-        const target = user ?? abort(invalid([issue('userId', 'user.error.userMissing')]))
+          abortAuthorization(invalid([issue('userId', 'user.error.userMissing')]))
+        const target = user ?? abortAuthorization(invalid([issue('userId', 'user.error.userMissing')]))
         const after = enabled
           ? {
               superuser: true,
@@ -1116,7 +1166,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
             after.superuserExpiresAt
         if (unchanged) {
           if ((await authorizationRevisionOf(tx)) !== Number(args.expectedAuthorizationRevision))
-            abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+            abortAuthorization(
+              invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+            )
           const result = {
             ok: true,
             userId: String(args.userId),
@@ -1131,7 +1183,9 @@ export const authorizationFunctions: Record<string, FnSpec> = {
         await tx.db.update('user.User', { id: args.userId }, after)
         const revision =
           (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
-          abort(invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]))
+          abortAuthorization(
+            invalid([issue('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')]),
+          )
         const result = {
           ok: true,
           userId: String(args.userId),
@@ -1165,11 +1219,21 @@ export const authorizationFunctions: Record<string, FnSpec> = {
   }),
 
   listAuthorizationAudit: defineFn({
-    input: { targetKind: 'text?', targetId: 'text?', limit: 'int?' },
+    input: {
+      id: 'id?',
+      targetKind: 'text?',
+      targetId: 'text?',
+      userId: 'id?',
+      limit: 'int?',
+      beforeRevision: 'int?',
+      beforeId: 'id?',
+    },
     output: {
       id: 'id',
       event: 'text',
       occurredAt: 'datetime',
+      userId: 'id?',
+      metadata: 'json?',
       actorKey: 'text?',
       targetKind: 'text?',
       targetId: 'text?',
@@ -1186,10 +1250,436 @@ export const authorizationFunctions: Record<string, FnSpec> = {
       const A = ctx.table('user.SecurityAudit')
       let query = from(A)
         .where(isNotNull(A.authorizationRevision))
-        .orderBy(asc(A.authorizationRevision), asc(A.id))
+        .orderBy(desc(A.authorizationRevision), desc(A.id))
+      if (args.id) query = query.where(eq(A.id, args.id))
+      if (args.beforeRevision != null)
+        query = query.where(
+          args.beforeId
+            ? or(
+                lt(A.authorizationRevision, args.beforeRevision),
+                and(eq(A.authorizationRevision, args.beforeRevision), lt(A.id, args.beforeId)),
+              )
+            : lt(A.authorizationRevision, args.beforeRevision),
+        )
+      if (args.userId) query = query.where(eq(A.userId, args.userId))
       if (args.targetKind) query = query.where(eq(A.targetKind, args.targetKind))
       if (args.targetId) query = query.where(eq(A.targetId, args.targetId))
       return ctx.db.all(query.limit(Math.max(1, Math.min(500, Number(args.limit ?? 100)))))
     },
   }),
+}
+
+/** Transaction-aware primitives shared by the backend and identity adapter. */
+export const USER_ACCESS_EFFECTS = [
+  ...AUTHORIZATION_EFFECTS,
+  'write:user.Membership',
+  'write:user.BranchMembership',
+  'read:user.EmailReservation',
+  'write:user.EmailReservation',
+]
+export type RoleSelection = {
+  userId: string
+  roleIds: string[]
+  scopeKind: string
+  companyId?: string | null
+  branchId?: string | null
+  addMembership?: boolean
+}
+const required = (field: string, code: string): never => abortAuthorization(invalid([issue(field, code)]))
+
+export async function assertAssignableRoles(ctx: Ctx, ids: string[]): Promise<Row[]> {
+  if (ids.length > 100 || new Set(ids).size !== ids.length) required('roleIds', 'E_ROLE_SELECTION_INVALID')
+  const result: Row[] = []
+  for (const id of ids) {
+    const R = ctx.table('user.Role')
+    const row = await ctx.db.one(from(R).where(eq(R.id, id)))
+    if (row?.mode !== 'managed') required('roleIds', 'E_ROLE_NOT_ASSIGNABLE')
+    const template = ctx.manifest.permissions.roleTemplates[String(row!.templateKey)]
+    if (
+      !template ||
+      template.version !== Number(row!.templateVersion) ||
+      template.digest !== row!.templateDigest
+    )
+      required('roleIds', 'E_ROLE_NOT_ASSIGNABLE')
+    const G = ctx.table('user.Grant'),
+      S = ctx.table('user.GrantSource')
+    const grants = await ctx.db.all(from(G).where(eq(G.roleId, id)))
+    const sources = await ctx.db.all(from(S).where(eq(S.roleId, id)))
+    if (managedRoleHealthIssues(ctx.manifest, row!, grants, sources).length)
+      required('roleIds', 'E_ROLE_NOT_ASSIGNABLE')
+    result.push(row!)
+  }
+  return result
+}
+
+async function selectionState(ctx: Ctx, args: RoleSelection, removing = false) {
+  const U = ctx.table('user.User')
+  const person = await ctx.db.one(from(U).where(eq(U.id, args.userId)))
+  if (!person || (!removing && (!person.active || person.accessKind !== 'internal')))
+    required('userId', 'user.error.userMissing')
+  if (!['tenant', 'company', 'branch'].includes(args.scopeKind))
+    required('scopeKind', 'E_ASSIGNMENT_SCOPE_INVALID')
+  const companies = await activeCompanyMemberships(ctx, args.userId)
+  const branches = await activeBranchMemberships(ctx, args.userId, companies)
+  const companyId = args.scopeKind === 'tenant' ? null : args.companyId || null
+  const branchId = args.scopeKind === 'branch' ? args.branchId || null : null
+  if (companyId && !removing) {
+    const C = ctx.table('company.Company')
+    if (!(await ctx.db.one(from(C).where(eq(C.id, companyId), eq(C.active, true)))))
+      required('companyId', 'E_ASSIGNMENT_SCOPE_INVALID')
+  } else if (!companyId && args.scopeKind !== 'tenant' && !removing)
+    required('companyId', 'E_ASSIGNMENT_SCOPE_INVALID')
+  if (args.scopeKind === 'branch' && !removing) {
+    const B = ctx.table('company.Branch')
+    if (
+      !branchId ||
+      !(await ctx.db.one(from(B).where(eq(B.id, branchId), eq(B.companyId, companyId), eq(B.active, true))))
+    )
+      required('branchId', 'E_ASSIGNMENT_SCOPE_INVALID')
+  }
+  const addCompany = !!companyId && !companies.has(companyId)
+  const addBranch = !!branchId && !branches.has(branchId)
+  if (!removing && (addCompany || addBranch)) {
+    if (!args.addMembership) required('addMembership', 'E_ASSIGNMENT_MEMBERSHIP_REQUIRED')
+    if (!ctx.actor) required('actor', 'E_ACTOR_REQUIRED')
+    const allowed = await effectiveFunctionKeys(ctx, ctx.actor!)
+    if (
+      allowed &&
+      ((addCompany && !allowed.includes('user.grantCompany')) ||
+        (addBranch && !allowed.includes('user.grantBranch')))
+    )
+      required('addMembership', 'E_MEMBERSHIP_FORBIDDEN')
+  }
+  if (companyId && !removing) companies.add(companyId)
+  if (branchId && !removing) branches.set(branchId, companyId!)
+  if (!companies.size && !removing) required('companyId', 'E_ASSIGNMENT_MEMBERSHIP_REQUIRED')
+  const scope: AssignmentScope = {
+    scopeKind: args.scopeKind as AssignmentScope['scopeKind'],
+    companyId,
+    branchId,
+    scopeKey:
+      args.scopeKind === 'tenant'
+        ? 'tenant'
+        : branchId
+          ? `branch:${companyId}:${branchId}`
+          : `company:${companyId}`,
+  }
+  const A = ctx.table('user.Assignment')
+  const assignments = await ctx.db.all(from(A).where(eq(A.userId, args.userId)))
+  return { companies, branches, scope, assignments, addCompany, addBranch }
+}
+
+export async function addSelectedRoles(ctx: Ctx, args: RoleSelection) {
+  await assertAssignableRoles(ctx, args.roleIds)
+  const state = await selectionState(ctx, args)
+  if (
+    state.assignments.some(
+      (a) =>
+        args.roleIds.includes(String(a.roleId)) && String(a.scopeKey ?? 'tenant') === state.scope.scopeKey,
+    )
+  )
+    required('roleIds', 'E_ROLE_ALREADY_ASSIGNED')
+  if (state.addCompany)
+    await ctx.db.insert('user.Membership', {
+      id: randomUUID(),
+      userId: args.userId,
+      companyId: state.scope.companyId,
+    })
+  if (state.addBranch)
+    await ctx.db.insert('user.BranchMembership', {
+      id: randomUUID(),
+      userId: args.userId,
+      branchId: state.scope.branchId,
+    })
+  const added: Row[] = []
+  for (const roleId of args.roleIds) {
+    const row = { id: randomUUID(), userId: args.userId, roleId, ...state.scope }
+    await ctx.db.insert('user.Assignment', row)
+    added.push(row)
+  }
+  return { assignments: added, scope: state.scope }
+}
+
+const selectionInput = {
+  userId: 'id',
+  roleIds: 'json',
+  scopeKind: 'text',
+  companyId: 'id?',
+  branchId: 'id?',
+  addMembership: 'bool?',
+} as const
+const parseSelection = (args: Record<string, unknown>): RoleSelection => ({
+  userId: String(args.userId),
+  roleIds: Array.isArray(args.roleIds)
+    ? args.roleIds.map(String)
+    : required('roleIds', 'E_ROLE_SELECTION_INVALID'),
+  scopeKind: String(args.scopeKind),
+  companyId: args.companyId as string | null,
+  branchId: args.branchId as string | null,
+  addMembership: args.addMembership === true,
+})
+
+export async function checkUserEmail(ctx: Ctx, email: string, userId?: string) {
+  const normalized = email.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalized)) return { ok: false, available: false, code: 'invalid' }
+  const U = ctx.table('user.User'),
+    E = ctx.table('user.EmailReservation')
+  const users = await ctx.db.all(from(U).where(ilike(U.email, normalized.replace(/[\\%_]/g, '\\$&'), true)))
+  const held = await ctx.db.one(from(E).where(eq(E.id, normalized)))
+  return { ok: true, available: !users.some((p) => p.id !== userId) && (!held || held.userId === userId) }
+}
+
+export async function reserveUserEmail(ctx: Ctx, email: string | null, userId: string) {
+  const normalized = email?.trim().toLowerCase() ?? ''
+  const E = ctx.table('user.EmailReservation')
+  if (normalized && !(await checkUserEmail(ctx, normalized, userId)).available)
+    required('email', 'E_EMAIL_UNAVAILABLE')
+  const previous = await ctx.db.all(from(E).where(eq(E.userId, userId)))
+  if (previous.some((row) => row.id === normalized)) return
+  await ctx.db.del(deleteFrom(E).where(eq(E.userId, userId)))
+  if (normalized) {
+    const held = await ctx.db.insertIfAbsent('user.EmailReservation', { id: normalized, userId })
+    if (!('dryRun' in held) && !held.inserted) required('email', 'E_EMAIL_UNAVAILABLE')
+  }
+}
+
+export const accessWorkflowFunctions: Record<string, FnSpec> = {
+  checkUserEmail: defineFn({
+    input: { email: 'text' },
+    output: { ok: 'bool', available: 'bool', code: 'text?' },
+    effects: ['read:user.User', 'read:user.EmailReservation'],
+    handler: (ctx, args) => checkUserEmail(ctx, String(args.email)),
+  }),
+  assignRoles: defineFn({
+    input: {
+      ...selectionInput,
+      reason: 'text',
+      expectedAuthorizationRevision: 'int',
+      idempotencyKey: 'text',
+    },
+    output: { ok: 'bool', revision: 'int?', errors: 'json?', replayed: 'bool?' },
+    effects: USER_ACCESS_EFFECTS,
+    idempotent: true,
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const op = `role-batch:${String(args.idempotencyKey).trim()}`
+        if (!String(args.reason).trim() || op.endsWith(':')) required('reason', 'user.error.required')
+        const replay = await operationReplay(tx, op, args)
+        if ('conflict' in replay) required('idempotencyKey', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        if ('replay' in replay && replay.replay) return { ...(replay.result as object), replayed: true }
+        const selection = parseSelection(args)
+        if (!selection.roleIds.length) required('roleIds', 'E_ROLE_SELECTION_INVALID')
+        if ((await authorizationRevisionOf(tx)) !== args.expectedAuthorizationRevision)
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        const added = await addSelectedRoles(tx, selection)
+        const revision =
+          (await bumpRevision(tx, Number(args.expectedAuthorizationRevision))) ??
+          required('expectedAuthorizationRevision', 'E_AUTHORIZATION_REVISION_CONFLICT')
+        await recordAuthorizationAudit(tx, {
+          event: 'authorization.assignment.created',
+          targetKind: 'user',
+          targetId: selection.userId,
+          userId: selection.userId,
+          scopeKey: added.scope.scopeKey,
+          source: 'system-roles',
+          reason: String(args.reason).trim(),
+          before: null,
+          after: added.assignments,
+          revision,
+          metadata: { roleIds: selection.roleIds, assignmentIds: added.assignments.map((a) => a.id) },
+        })
+        const result = { ok: true, revision }
+        await completeOperation(tx, op, result)
+        return result
+      }),
+  }),
+  previewRoleAssignment: defineFn({
+    input: { ...selectionInput, assignmentId: 'id?' },
+    output: { ok: 'bool', revision: 'int?', contexts: 'json?', errors: 'json?' },
+    effects: AUTHORIZATION_EFFECTS.filter((x) => !x.startsWith('write:')),
+    handler: (ctx, args) =>
+      authorizationTransaction(ctx, async (tx) => {
+        const selection = parseSelection(args),
+          state = await selectionState(tx, selection, !!args.assignmentId)
+        let next: Row[]
+        if (args.assignmentId) {
+          if (!state.assignments.some((a) => a.id === args.assignmentId))
+            required('assignmentId', 'user.error.roleMissing')
+          next = state.assignments.filter((a) => a.id !== args.assignmentId)
+        } else {
+          await assertAssignableRoles(tx, selection.roleIds)
+          if (
+            state.assignments.some(
+              (a) =>
+                selection.roleIds.includes(String(a.roleId)) &&
+                String(a.scopeKey ?? 'tenant') === state.scope.scopeKey,
+            )
+          )
+            required('roleIds', 'E_ROLE_ALREADY_ASSIGNED')
+          next = [
+            ...state.assignments,
+            ...selection.roleIds.map((roleId) => ({
+              id: `preview:${roleId}`,
+              userId: selection.userId,
+              roleId,
+              ...state.scope,
+            })),
+          ]
+        }
+        const contexts = [...state.companies]
+          .filter((c) => !state.scope.companyId || c === state.scope.companyId)
+          .flatMap((companyId) => [
+            ...(!state.scope.branchId ? [{ companyId, branchId: null as string | null }] : []),
+            ...[...state.branches]
+              .filter(([b, c]) => c === companyId && (!state.scope.branchId || b === state.scope.branchId))
+              .map(([branchId]) => ({ companyId, branchId })),
+          ])
+        const results: Array<{
+          companyId: string
+          branchId: string | null
+          superuser: boolean
+          added: string[]
+          removed: string[]
+          retained: string[]
+          bundles: unknown[]
+          retainedBundles: unknown[]
+          sensitiveChange: boolean
+        }> = []
+        for (const context of contexts) {
+          const before = await resolveEffectivePermissions(tx, selection.userId, context)
+          const after = await resolveEffectivePermissions(tx, selection.userId, {
+            ...context,
+            assignments: next,
+            companies: state.companies,
+            branches: state.branches,
+          })
+          const old = new Set(before.functions.map((f) => f.key)),
+            fresh = new Set(after.functions.map((f) => f.key))
+          const added = [...fresh].filter((k) => !old.has(k)),
+            removed = [...old].filter((k) => !fresh.has(k))
+          const bundles = Object.values(tx.manifest.permissions.bundles)
+            .filter((b) => b.functions.some((k) => added.includes(k) || removed.includes(k)))
+            .map((b) => ({
+              key: b.key,
+              labels: b.labels,
+              before: b.functions.filter((k) => old.has(k)).length,
+              after: b.functions.filter((k) => fresh.has(k)).length,
+              total: b.functions.length,
+            }))
+          results.push({
+            ...context,
+            superuser: before.superuser,
+            added,
+            removed,
+            bundles,
+            retainedBundles: Object.values(tx.manifest.permissions.bundles)
+              .filter((b) => b.functions.some((k) => old.has(k) && fresh.has(k)))
+              .map((b) => ({
+                key: b.key,
+                labels: b.labels,
+                complete: b.functions.every((k) => fresh.has(k)),
+              })),
+            sensitiveChange: [...added, ...removed].some((k) =>
+              ['sensitive', 'security'].includes(tx.manifest.permissions.functions[k]?.risk ?? ''),
+            ),
+            retained: [...old].filter((k) => fresh.has(k)),
+          })
+        }
+        const B = tx.table('company.Branch')
+        const roots = new Set((await tx.db.all(from(B).where(isNotNull(B.rootKey)))).map((b) => String(b.id)))
+        const contextsWithoutDuplicateRoots = results.filter((c) => {
+          if (!c.branchId || !roots.has(c.branchId)) return true
+          const parent = results.find((p) => p.companyId === c.companyId && !p.branchId)
+          return (
+            !parent ||
+            permissionDigest({
+              added: parent.added,
+              removed: parent.removed,
+              retained: parent.retained,
+              superuser: parent.superuser,
+            }) !==
+              permissionDigest({
+                added: c.added,
+                removed: c.removed,
+                retained: c.retained,
+                superuser: c.superuser,
+              })
+          )
+        })
+        return {
+          ok: true,
+          revision: await authorizationRevisionOf(tx),
+          contexts: contextsWithoutDuplicateRoots,
+        }
+      }),
+  }),
+}
+
+export type InternalUserInput = {
+  id: string
+  name: string
+  login: string
+  email: string
+  companyId: string
+  branchId?: string | null
+  roleIds: string[]
+  reason: string
+}
+/** Caller owns the identity adapter; this primitive owns the atomic local account/access boundary. */
+export async function createInternalUserWithAccess<T extends Record<string, unknown>>(
+  ctx: Ctx,
+  input: InternalUserInput,
+  afterCreate: (tx: Ctx) => Promise<T>,
+) {
+  return authorizationTransaction(ctx, async (tx) => {
+    const name = input.name.trim(),
+      login = input.login.normalize('NFKC').trim().toLowerCase(),
+      email = input.email.trim().toLowerCase()
+    if (!name || !login || !input.reason.trim()) required('name', 'user.error.required')
+    const U = tx.table('user.User')
+    if (await tx.db.one(from(U).where(eq(U.login, login)))) required('login', 'user.error.loginUnique')
+    if (!(await checkUserEmail(tx, email)).available) required('email', 'E_EMAIL_UNAVAILABLE')
+    const reserved = await tx.db.insertIfAbsent('user.EmailReservation', { id: email, userId: input.id })
+    if (!('dryRun' in reserved) && !reserved.inserted) required('email', 'E_EMAIL_UNAVAILABLE')
+    await tx.db.insert('user.User', {
+      id: input.id,
+      name,
+      login,
+      email,
+      passwordHash: null,
+      partnerId: null,
+      lang: null,
+      timezone: null,
+      defaultCompanyId: input.companyId,
+      defaultBranchId: input.branchId || null,
+      accessKind: 'internal',
+      securityVersion: 0,
+      lastLoginAt: null,
+      superuser: false,
+      active: true,
+    })
+    const added = await addSelectedRoles(tx, {
+      userId: input.id,
+      roleIds: input.roleIds,
+      scopeKind: input.branchId ? 'branch' : 'company',
+      companyId: input.companyId,
+      branchId: input.branchId,
+      addMembership: true,
+    })
+    const revision = await advanceAuthorizationRevision(tx)
+    await recordAuthorizationAudit(tx, {
+      event: 'authorization.user.created',
+      targetKind: 'user',
+      targetId: input.id,
+      userId: input.id,
+      scopeKey: added.scope.scopeKey,
+      source: 'system-roles',
+      reason: input.reason.trim(),
+      before: null,
+      after: added.assignments,
+      revision,
+      metadata: { roleIds: input.roleIds, assignmentIds: added.assignments.map((a) => a.id) },
+    })
+    return { ok: true, userId: input.id, ...(await afterCreate(tx)) }
+  })
 }

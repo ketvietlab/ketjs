@@ -1,3 +1,4 @@
+import { installUserWorkflow } from './user-workflow.ts'
 import type { IslandController, IslandProps } from '@ketvietlab/ketjs-view'
 
 const tableSelectionMarker = Symbol.for('ket.backend.table-selection')
@@ -426,6 +427,7 @@ export const createTableSelectionView = (): IslandController => ({
 })
 
 export const tableSelection = (_props: IslandProps): IslandController => {
+  installUserWorkflow()
   installThemeToggle()
   installTableSelection()
   installDropdownDismiss()

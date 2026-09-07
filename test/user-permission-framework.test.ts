@@ -565,8 +565,8 @@ test('managed roles and scoped assignments resolve live, audited, and fail close
       'authorization.assignment.removed',
       'authorization.break-glass.activated',
       'authorization.break-glass.revoked',
-    ],
+    ].reverse(),
   )
-  assert.ok(audits.every((event) => event.beforeDigest && event.afterDigest && !('metadata' in event)))
+  assert.ok(audits.every((event) => event.beforeDigest && event.afterDigest))
   assert.ok(audits.every((event) => event.actorKey === 'root'))
 })
