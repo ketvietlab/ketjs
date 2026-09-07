@@ -284,19 +284,25 @@ test('e2e: SSE stream resumes from a cursor after a reload', async () => {
     const { value } = await reader.read()
     seen += new TextDecoder().decode(value)
   }
-  const lastId = Number([...seen.matchAll(/^id: (\d+)$/gm)].pop()![1])
+  const lastId = Number([...seen.matchAll(/^id: (\d+(?:\.\d+)?)$/gm)].pop()![1])
   ac.abort()
 
   // generation continues while nobody is listening
   w.write(' bạn')
   await w.end()
 
-  const res2 = await fetch(`${base}/_ket/stream/gen1?from=${lastId + 1}`, {
-    headers: { authorization: 'Bearer e2e-stream' },
+  // Native EventSource resumes with Last-Event-ID; callers using fetch may keep
+  // using ?from=. The endpoint accepts both representations of the same cursor.
+  const res2 = await fetch(`${base}/_ket/stream/gen1`, {
+    headers: { authorization: 'Bearer e2e-stream', 'last-event-id': String(lastId) },
   })
   const text = await res2.text()
   assert.match(text, /bạn/)
   assert.ok(!text.includes('Xin'), 'a resumed stream must not replay chunks the client already had')
+  assert.ok(
+    !text.includes('chào'),
+    'Last-Event-ID may resume inside a stored batch without replaying its prefix',
+  )
   assert.match(text, /event: done/)
   await app.close()
   await adapter.close()

@@ -788,7 +788,17 @@ export async function createKetServer(o: ServeOpts) {
         // framework endpoint closed, and null does not reveal whether a topic exists.
         const id = await o.resolveStream?.(publicId, url, req)
         if (!id) return json(res, 404, { code: 'E_STREAM_NOT_FOUND', message: 'stream not found' })
-        const from = Number(url.searchParams.get('from') ?? 0)
+        const queryFrom = url.searchParams.get('from')
+        const lastEventId = req.headers['last-event-id']
+        const headerCursor = Array.isArray(lastEventId) ? lastEventId[0] : lastEventId
+        const resumeFrom = queryFrom ?? headerCursor ?? '0'
+        const from = Number(resumeFrom)
+        if (!Number.isFinite(from) || from < 0)
+          return json(res, 400, { code: 'E_STREAM_CURSOR', message: 'stream cursor must be non-negative' })
+        // ?from= is the next batch cursor used by programmatic clients. Native
+        // EventSource instead sends the id of the last event it received, which
+        // may point inside a batch; read that batch and suppress its seen prefix.
+        const lastSeen = queryFrom === null && headerCursor !== undefined ? from : null
         res.writeHead(200, {
           'content-type': 'text/event-stream',
           'cache-control': 'no-cache',
@@ -815,12 +825,13 @@ export async function createKetServer(o: ServeOpts) {
         // back like any other query.
         return withDb(url, req, async (adapter) => {
           const streams = await streamsFor(adapter)
-          for await (const chunk of streams.tail(id, from, {
+          for await (const chunk of streams.tail(id, lastSeen === null ? from : Math.floor(from), {
             timeoutMs: o.streamTimeoutMs ?? 30_000,
             signal: gone.signal,
             ...(o.streamPollMs === undefined ? {} : { pollMs: o.streamPollMs }),
           })) {
             if (!open || res.writableEnded) return
+            if (lastSeen !== null && chunk.seq <= lastSeen) continue
             res.write(`id: ${chunk.seq}\ndata: ${JSON.stringify(chunk.data)}\n\n`)
           }
           if (!open || res.writableEnded) return

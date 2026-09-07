@@ -481,6 +481,82 @@ test('streams: a reader that goes away stops the tail where it is sleeping', asy
   await w.end()
 })
 
+test('streams: a notification arriving during a read is not lost before sleep', async () => {
+  let notify = () => {}
+  let release!: () => void
+  let entered!: () => void
+  const reading = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let reads = 0
+  const inner = memoryStreamStore()
+  const store = {
+    ...inner,
+    notifies: true,
+    subscribe: (_topic: string, cb: () => void) => {
+      notify = cb
+      return () => {
+        notify = () => {}
+      }
+    },
+    async since() {
+      reads++
+      if (reads === 1) {
+        entered()
+        await blocked
+        return { batches: [], done: false, summary: null, nextSeq: 0 }
+      }
+      return { batches: [], done: true, summary: null, nextSeq: 0 }
+    },
+  }
+  const streams = await createStreams(store)
+  const reader = (async () => {
+    for await (const _ of streams.tail('between', 0, { pollMs: 60_000 })) {
+      // no chunks; the second read only observes the end marker
+    }
+  })()
+  await reading
+  notify()
+  release()
+  await reader
+  assert.equal(reads, 2, 'the notification forces a second read without waiting for the fallback poll')
+})
+
+test('streams: aborting while a read is in flight never enters the fallback sleep', async () => {
+  let release!: () => void
+  let entered!: () => void
+  const reading = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const inner = memoryStreamStore()
+  const store = {
+    ...inner,
+    notifies: true,
+    async since() {
+      entered()
+      await blocked
+      return { batches: [], done: false, summary: null, nextSeq: 0 }
+    },
+  }
+  const gone = new AbortController()
+  const streams = await createStreams(store)
+  const reader = (async () => {
+    for await (const _ of streams.tail('leaving-mid-read', 0, { pollMs: 60_000, signal: gone.signal })) {
+      // no chunks
+    }
+  })()
+  await reading
+  gone.abort()
+  release()
+  await reader
+})
+
 test('queue: jobs live in their own table, claimed one at a time', async () => {
   const adapter = sqliteAdapter()
   await adapter.open()

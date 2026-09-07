@@ -122,7 +122,9 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
       const started = Date.now()
 
       let wake: (() => void) | null = null
+      let revision = 0
       const unsubscribe = store.subscribe(id, () => {
+        revision++
         wake?.()
       })
       // A reader that has gone away must stop this loop where it is sleeping, not
@@ -134,19 +136,30 @@ export async function createStreams(store: StreamStore = memoryStreamStore(), o:
       try {
         for (;;) {
           if (opt.signal?.aborted) return
+          const beforeRead = revision
           const s = expand(await store.since(id, cursor))
+          if (opt.signal?.aborted) return
           if (s.chunks.length) cursor = Math.floor(s.chunks[s.chunks.length - 1]!.seq) + 1
           for (const c of s.chunks) yield c
           if (s.done) return
           if (Date.now() - started > timeoutMs)
             throw new Error(`stream "${id}" timed out after ${timeoutMs}ms`)
+          // A notification that lands while `since` is reading has already made
+          // the result stale. Read again now instead of losing it because the
+          // sleeping callback has not been installed yet.
+          if (revision !== beforeRead) continue
           await new Promise<void>((resolve) => {
-            const t = setTimeout(resolve, pollMs)
-            wake = () => {
+            const observed = revision
+            const finish = () => {
               clearTimeout(t)
               wake = null
               resolve()
             }
+            const t = setTimeout(finish, pollMs)
+            wake = finish
+            // Close the two gaps between the checks above and installing `wake`:
+            // both a notification and an abort must win over the fallback timer.
+            if (revision !== observed || opt.signal?.aborted) wake()
           })
         }
       } finally {

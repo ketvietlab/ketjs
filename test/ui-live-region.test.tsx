@@ -38,11 +38,12 @@ test('live island: it opens nothing when the browser has no EventSource', () => 
   assert.match(behaviour, /^ {2}if \(typeof EventSource !== 'function'\) return$/mu)
 })
 
-test('live island: the connection belongs to the element, and follows a swap', () => {
-  // A fragment navigation replaces the region, so the old connection has to go
-  // with the old element rather than outliving it.
+test('live island: a fragment swap keeps the cursor when the stream id is unchanged', () => {
+  // The element is replaced by navigation, but reopening the same stream from
+  // zero would replay the chunk that caused the navigation forever.
   assert.match(behaviour, /if \(region === watched\) return/u)
-  assert.match(behaviour, /^ {4}close\(\)$/mu)
+  assert.match(behaviour, /if \(source && id && id === watchedId\)/u)
+  assert.match(behaviour, /watched = region\s+return/u)
   assert.match(
     behaviour,
     /new MutationObserver\(sync\)\.observe\(document\.body, \{ childList: true, subtree: true \}\)/u,

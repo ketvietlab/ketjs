@@ -243,20 +243,30 @@ const installLiveRegion = (): void => {
   if (typeof EventSource !== 'function') return
 
   let watched: Element | null = null
+  let watchedId = ''
   let source: EventSource | null = null
   const close = () => {
     source?.close()
     source = null
     watched = null
+    watchedId = ''
   }
 
   const sync = (): void => {
     const region = document.querySelector('[data-ui="live-region"][data-stream]')
     if (region === watched) return
-    close()
     const id = region instanceof HTMLElement ? (region.dataset.stream ?? '') : ''
+    // A fragment swap replaces the element even when the work being watched did
+    // not change. Keep that stream connection (and its EventSource cursor) alive;
+    // reopening it would replay old chunks from the beginning.
+    if (source && id && id === watchedId) {
+      watched = region
+      return
+    }
+    close()
     if (!id) return
     watched = region
+    watchedId = id
     source = new EventSource(`/_ket/stream/${encodeURIComponent(id)}`)
     // What the chunk says is the deployment's business. That something was said
     // is the whole signal: the screen is server-rendered, so the way to find out
