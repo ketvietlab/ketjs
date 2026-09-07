@@ -2,7 +2,13 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { asc, defineFn, deleteFrom, eq, from, inArray, isTimezone, like, or } from '@ketvietlab/ketjs'
 import type { Ctx, FnSpec, Row } from '@ketvietlab/ketjs'
 import { hashPassword, needsRehash, verifyPassword } from './password.ts'
-import { advanceAuthorizationRevision, recordAuthorizationAudit } from './authorization.ts'
+import {
+  advanceAuthorizationRevision,
+  recordAuthorizationAudit,
+  reserveUserEmail,
+  authorizationTransaction,
+  abortAuthorization,
+} from './authorization.ts'
 import { roleFunctions } from './roles.ts'
 
 type Issue = { field: string; code: string; params?: Record<string, unknown> }
@@ -11,7 +17,7 @@ const issue = (field: string, code: string, params?: Record<string, unknown>): I
   code,
   ...(params ? { params } : {}),
 })
-const invalid = (errors: Issue[]) => ({ ok: false, errors })
+const invalid = (errors: Issue[]) => ({ ok: false as const, errors })
 const nowIso = () => new Date().toISOString()
 const normalizeLogin = (value: unknown): string =>
   String(value ?? '')
@@ -322,7 +328,12 @@ export const functions: Record<string, FnSpec> = {
       superuser: 'bool?',
     },
     output: { ok: 'bool', id: 'id?', errors: 'json?' },
-    effects: ['read:user.User', 'write:user.User'],
+    effects: [
+      'read:user.User',
+      'write:user.User',
+      'read:user.EmailReservation',
+      'write:user.EmailReservation',
+    ],
     idempotent: true,
     // Deliberately not an agent tool: an agent that can mint logins is an agent
     // that can mint itself one.
@@ -360,25 +371,28 @@ export const functions: Record<string, FnSpec> = {
           samePassword
         return same ? { ok: true, id: a.id } : invalid([issue('id', 'user.error.idConflict')])
       }
-      const inserted = await ctx.db.insertIfAbsent('user.User', {
-        id: a.id,
-        login,
-        passwordHash: password ? await hashPassword(password) : null,
-        name: String(a.name).trim(),
-        email: a.email || null,
-        timezone: a.timezone && isTimezone(String(a.timezone)) ? String(a.timezone) : null,
-        partnerId: a.partnerId || null,
-        defaultCompanyId: a.defaultCompanyId || null,
-        defaultBranchId: a.defaultBranchId || null,
-        accessKind,
-        securityVersion: 0,
-        lastLoginAt: null,
-        active: true,
-        superuser: a.superuser === true,
+      return authorizationTransaction(ctx, async (tx) => {
+        await reserveUserEmail(tx, a.email ? String(a.email) : null, String(a.id))
+        const inserted = await tx.db.insertIfAbsent('user.User', {
+          id: a.id,
+          login,
+          passwordHash: password ? await hashPassword(password) : null,
+          name: String(a.name).trim(),
+          email: a.email || null,
+          timezone: a.timezone && isTimezone(String(a.timezone)) ? String(a.timezone) : null,
+          partnerId: a.partnerId || null,
+          defaultCompanyId: a.defaultCompanyId || null,
+          defaultBranchId: a.defaultBranchId || null,
+          accessKind,
+          securityVersion: 0,
+          lastLoginAt: null,
+          active: true,
+          superuser: a.superuser === true,
+        })
+        return 'dryRun' in inserted || inserted.inserted
+          ? { ok: true, id: a.id }
+          : abortAuthorization(invalid([issue('login', 'user.error.loginUnique')]))
       })
-      return 'dryRun' in inserted || inserted.inserted
-        ? { ok: true, id: a.id }
-        : invalid([issue('login', 'user.error.loginUnique')])
     },
   }),
 
@@ -534,7 +548,14 @@ export const functions: Record<string, FnSpec> = {
       superuser: 'bool',
     },
     output: { ok: 'bool', id: 'id?', securityVersion: 'int?', errors: 'json?' },
-    effects: ['read:user.User', 'write:user.User', 'read:user.SecurityGuard', 'write:user.SecurityGuard'],
+    effects: [
+      'read:user.User',
+      'write:user.User',
+      'read:user.SecurityGuard',
+      'write:user.SecurityGuard',
+      'read:user.EmailReservation',
+      'write:user.EmailReservation',
+    ],
     handler: async (ctx: Ctx, a) => {
       const U = ctx.table('user.User')
       const row = await ctx.db.one(from(U).where(eq(U.id, a.id)))
@@ -561,6 +582,15 @@ export const functions: Record<string, FnSpec> = {
         const securityChange =
           login !== held.login || a.active !== held.active || accessKind !== held.accessKind
         const securityVersion = Number(held.securityVersion ?? 0) + (securityChange ? 1 : 0)
+        if (
+          String(a.email ?? '')
+            .trim()
+            .toLowerCase() !==
+          String(held.email ?? '')
+            .trim()
+            .toLowerCase()
+        )
+          await reserveUserEmail(writeCtx, a.email ? String(a.email) : null, String(a.id))
         await writeCtx.db.update(
           'user.User',
           { id: a.id },
@@ -578,8 +608,8 @@ export const functions: Record<string, FnSpec> = {
         )
         return { ok: true, id: a.id, securityVersion }
       }
-      if (!removesLiveSuperuser) return update(ctx, row)
-      return ctx.tx(async (tx) => {
+      if (!removesLiveSuperuser) return authorizationTransaction(ctx, (tx) => update(tx, row))
+      return authorizationTransaction(ctx, async (tx) => {
         await lockLastSuperuser(tx)
         const U2 = tx.table('user.User')
         const held = await tx.db.one(from(U2).where(eq(U2.id, a.id)))

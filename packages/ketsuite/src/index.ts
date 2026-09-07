@@ -432,6 +432,16 @@ export type { DependencyRelation, IssuePriority, SprintState } from './modules/f
 export { hashPassword, verifyPassword, needsRehash } from './modules/user/password.ts'
 export { legacyPermissionCatalogue, legacyPresetFunctions, permittedFor } from './modules/user/roles.ts'
 export {
+  reserveUserEmail,
+  createInternalUserWithAccess,
+  USER_ACCESS_EFFECTS,
+  addSelectedRoles,
+  assertAssignableRoles,
+  checkUserEmail,
+  authorizationTransaction,
+  abortAuthorization,
+  advanceAuthorizationRevision,
+  recordAuthorizationAudit,
   effectiveFunctionKeys,
   normalizeAssignmentScope,
   resolveEffectivePermissions,

@@ -31,6 +31,7 @@ export type RecordPageProps = {
   body: JSXChild
   context?: JSXChild
   variant?: 'operational'
+  width?: 'default' | 'wide'
   scope?: string | null
   description?: string | null
   status?: JSXChild
@@ -62,6 +63,7 @@ export const recordPage = (props: RecordPageProps, compatibilityKind?: Compatibi
       data-scope={props.scope ?? null}
       data-has-aside={String(props.aside !== undefined)}
       data-variant={props.variant ?? null}
+      data-width={props.width ?? 'default'}
       data-pattern="record"
     >
       {props.context !== undefined && <div data-ui={`${kind}-context`}>{props.context}</div>}

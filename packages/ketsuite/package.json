@@ -47,6 +47,10 @@
     "./backend": {
       "types": "./dist/modules/backend/index.d.ts",
       "default": "./dist/modules/backend/index.js"
+    },
+    "./user-backend": {
+      "types": "./dist/modules/user_backend/index.d.ts",
+      "default": "./dist/modules/user_backend/index.js"
     }
   },
   "dependencies": {

@@ -39,7 +39,7 @@ test('user-auth-e2e: every administration and profile screen crosses real HTTP',
   const { e2e } = await bootIdentity(t)
   for (const [path, expected] of [
     ['/admin/users?lang=vi', /Người dùng/],
-    ['/admin/users/admin?lang=en', /Login identity/],
+    ['/admin/users/admin?lang=en', /Thông tin người dùng/],
     ['/admin/users/new?lang=vi', /Tạo người dùng/],
     ['/admin/roles?lang=en', /Roles/],
     ['/admin/roles/new?lang=vi', /Tạo vai trò/],

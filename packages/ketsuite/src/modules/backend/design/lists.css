@@ -821,7 +821,9 @@
   /* A list runs to both edges of the pane and starts directly under the bar:
      the border, the radius and the drop shadow were drawing a card around
      something that is not a card. */
-  [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"])) {
+  [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"])):not(
+    :has(> [data-ui="form-page"])
+  ) {
     padding: 0;
   }
 
@@ -835,7 +837,9 @@
     margin: 0;
   }
 
-  [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"]))
+  [data-ui="content"]:has([data-ui="table-scroll"]):not(:has([data-ui="record-workspace"])):not(
+      :has(> [data-ui="form-page"])
+    )
     [data-ui="table-scroll"]:not([data-gutter="compact"]) {
     border-radius: 0;
     border-block-start: 0;
