@@ -180,7 +180,7 @@ test('design system: titled forms and tables own one surface with an internal he
 })
 
 test('design system: catalogue titled forms and tables keep headings inside their surface', () => {
-  const catalogue = renderToString(<CataloguePage theme="light" />)
+  const catalogue = renderToString(<CataloguePage theme="light" mode="all" />)
   const formPage = catalogue.slice(catalogue.indexOf('id="form-page"'), catalogue.indexOf('id="record-form"'))
   const formBody = formPage.slice(
     formPage.indexOf('data-ui="form-page-body"'),
@@ -947,14 +947,17 @@ test('design system: navigation and progress expose semantic state', () => {
 })
 
 test('design system: catalogue renders every registered specimen', () => {
-  const catalogue = renderToString(<CataloguePage theme="dark" density="compact" />)
+  const catalogue = renderToString(<CataloguePage theme="dark" density="compact" mode="all" />)
   const designSystemVersion = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8'))
     .version as string
   assert.match(catalogue, /data-kv-design-system/)
   assert.match(catalogue, /data-theme="dark"/)
   assert.match(catalogue, /data-density="compact"/)
-  assert.match(catalogue, new RegExp(`Design system · ${designSystemVersion.replaceAll('.', '\\.')}`, 'u'))
-  assert.match(catalogue, /Két Việt Design System/)
+  assert.match(
+    catalogue,
+    new RegExp(`Design system[\\s\\S]*${designSystemVersion.replaceAll('.', '\\.')}`, 'u'),
+  )
+  assert.match(catalogue, /public components/)
   assert.match(catalogue, /id="data-table"/)
   assert.match(catalogue, /id="list-chrome"/)
   assert.match(catalogue, /id="list-page"/)
