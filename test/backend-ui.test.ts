@@ -1161,6 +1161,25 @@ test('backend shell: fragment navigation emits only replaceable slots', () => {
   assert.doesNotMatch(html, /data-ui="sidebar-foot"|persistent foot|data-ui="indicator"/)
 })
 
+test('backend shell: suppressed topbar content keeps the stable navigation slot', () => {
+  const html = renderToString(shell(_, 'List title', html2`<p>Page body</p>`, { topbar: false }))
+  assert.equal((html.match(/data-ket-slot="backend\.topbar"/g) ?? []).length, 1)
+  assert.doesNotMatch(html, /data-ui="topbar"|List title|data-ui="title"/)
+})
+
+test('backend shell: visible topbar stays inside the stable navigation slot', () => {
+  const html = renderToString(shell(_, 'Page title', html2`<p>Page body</p>`))
+  assert.match(
+    html,
+    /<div data-ket-slot="backend\.topbar">[\s\S]*?<header data-ui="topbar">[\s\S]*?Page title/,
+  )
+  const navigation = renderToString(shell(_, 'Next title', html2`<p>Next body</p>`, { navigation: true }))
+  assert.match(
+    navigation,
+    /<template data-ket-slot="backend\.topbar">[\s\S]*?<header data-ui="topbar">[\s\S]*?Next title/,
+  )
+})
+
 test('backend layout: canonical screen wrappers supply context and flatten around rich records', () => {
   const list = renderToString(pagesScreen(_, [page()], {}))
   assert.match(list, /data-ui="list-page"[^>]*data-pattern="list"/)
@@ -1192,7 +1211,7 @@ test('record workspace: collaboration aligns with the sheet when the topbar coll
   assert.match(css, /\[data-ui="record-aside"\][\s\S]*?inset-block-start: 0/)
   assert.match(
     css,
-    /\[data-ui="main"\]:has\(> \[data-ui="topbar"\] > \*\) \[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
+    /\[data-ui="main"\]:has\(> \[data-ket-slot="backend\.topbar"\] > \[data-ui="topbar"\] > \*\)[\s\S]*?\[data-ui="record-aside"\][\s\S]*?max-block-size: calc\(100dvh - var\(--admin-topbar-height\)/,
   )
 })
 

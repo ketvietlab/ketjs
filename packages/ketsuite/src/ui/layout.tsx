@@ -84,6 +84,9 @@ const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResu
   )
 }
 
+const topbarRegion = (_: Translator, title: string, frame: Frame): JSXChild =>
+  frame.topbar === false ? '' : <header data-ui="topbar">{topbarContent(_, title, frame)}</header>
+
 export const shell = (
   _: Translator,
   title: string,
@@ -104,9 +107,7 @@ export const shell = (
     return (
       <ket-fragments data-title={title}>
         <template data-ket-slot="backend.sidebar-main">{sidebarMain(_, sidebarOptions)}</template>
-        <template data-ket-slot="backend.topbar">
-          {frame.topbar === false ? '' : topbarContent(_, title, frame)}
-        </template>
+        <template data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
@@ -115,13 +116,7 @@ export const shell = (
       {sidebar(_, sidebarOptions)}
       <main data-ui="main">
         {extras.runtime ?? ''}
-        {frame.topbar === false ? (
-          ''
-        ) : (
-          <header data-ui="topbar" data-ket-slot="backend.topbar">
-            {topbarContent(_, title, frame)}
-          </header>
-        )}
+        <div data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</div>
         <div data-ui="content" data-ket-slot="backend.content">
           {body}
         </div>
