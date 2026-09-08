@@ -4,9 +4,11 @@ import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   AppShell,
+  ActionMenu,
   Badge,
   BoardPage,
   Button,
+  ConfirmDialog,
   DashboardPage,
   DataTable,
   Disclosure,
@@ -15,15 +17,21 @@ import {
   HOOKS,
   IconButton,
   LinkButton,
+  Menu,
   ListChrome,
   ListPage,
   ModalSheet,
   NavList,
   Progress,
+  Popover,
   RecordForm,
   RecordPage,
   Surface,
+  Skeleton,
+  Spinner,
   Tabs,
+  ToastRegion,
+  Tooltip,
 } from '@ketvietlab/design-system'
 import {
   CataloguePage,
@@ -946,6 +954,85 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.doesNotMatch(iconAction, /data-ui="action-label"/)
 })
 
+test('design system: interaction essentials preserve native and accessible fallbacks', () => {
+  const menu = renderToString(
+    <Menu
+      id="record-actions"
+      label="Record actions"
+      open
+      items={[
+        { id: 'open', label: 'Open', href: '/records/1' },
+        { id: 'archive', label: 'Archive', value: 'archive', form: 'record', destructive: true },
+        { id: 'locked', label: 'Locked', disabled: true },
+      ]}
+    />,
+  )
+  assert.match(menu, /^<details[^>]*data-ui="menu"[^>]*open/)
+  assert.match(menu, /role="menu" aria-label="Record actions"/)
+  assert.match(menu, /role="menuitem" href="\/records\/1"/)
+  assert.match(menu, /type="submit" name="intent" value="archive" form="record"/)
+  assert.match(menu, /role="menuitem" aria-disabled="true"/)
+  assert.match(renderToString(<ActionMenu id="more" label="More" items={[]} />), /data-align="end"/)
+
+  const closed = renderToString(
+    <Popover
+      id="owner"
+      label="Owner"
+      trigger="Owner"
+      body="Ngọc Linh"
+      open={false}
+      openHref="?owner=open"
+      closeHref="?owner="
+      closeLabel="Close"
+    />,
+  )
+  assert.match(closed, /data-ui="popover-trigger"[^>]*href="\?owner=open"/)
+  assert.match(closed, /data-ui="popover-trigger"[^>]*aria-expanded="false"/)
+  assert.doesNotMatch(closed, /role="dialog"/)
+  const open = renderToString(
+    <Popover
+      id="owner"
+      label="Owner"
+      trigger="Owner"
+      body="Ngọc Linh"
+      open
+      openHref="?owner=open"
+      closeHref="?owner="
+      closeLabel="Close"
+    />,
+  )
+  assert.match(open, /role="dialog" aria-label="Owner" tabindex="-1"/)
+  assert.match(renderToString(<Tooltip id="tip" text="Synchronized" trigger="Status" />), /role="tooltip"/)
+
+  const confirm = renderToString(
+    <ConfirmDialog
+      id="archive"
+      title="Archive?"
+      message="This remains in history."
+      closeHref="/record"
+      closeLabel="Cancel"
+      confirmLabel="Archive"
+      confirmForm="archive-form"
+    />,
+  )
+  assert.match(confirm, /role="dialog"[^>]*aria-modal="true"/)
+  assert.match(confirm, /type="submit"[^>]*value="confirm"[^>]*form="archive-form"/)
+
+  const feedback = renderToString(
+    <ToastRegion
+      label="Notifications"
+      toasts={[{ id: 'failed', title: 'Save failed', message: 'Retry later.', tone: 'danger' }]}
+    />,
+  )
+  assert.match(feedback, /aria-live="polite"/)
+  assert.match(feedback, /data-ui="toast"[^>]*role="alert"/)
+  assert.match(renderToString(<Spinner label="Saving" />), /role="status"/)
+  assert.match(
+    renderToString(<Skeleton label="Loading record" />),
+    /role="status" aria-label="Loading record"/,
+  )
+})
+
 test('design system: catalogue renders every registered specimen', () => {
   const catalogue = renderToString(<CataloguePage theme="dark" density="compact" mode="all" />)
   const designSystemVersion = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8'))
@@ -979,7 +1066,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 43)
+  assert.equal(names.length, 53)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1016,8 +1103,9 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 85)
-  assert.equal(designSystemInventory.summary.runtimeExports, 46)
+  assert.equal(designSystemInventory.summary.publicExports, 102)
+  assert.equal(designSystemInventory.summary.runtimeExports, 57)
+  assert.equal(designSystemInventory.summary.plannedComponents, 40)
   assert.equal(designSystemInventory.summary.compatibilityModules, 38)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(

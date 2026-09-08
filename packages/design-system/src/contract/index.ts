@@ -4,6 +4,13 @@ import { HOOKS as fieldHooks } from '../primitives/field/index.tsx'
 import { HOOKS as statusHooks } from '../primitives/status/index.tsx'
 import { HOOKS as navigationHooks } from '../primitives/navigation/index.tsx'
 import { HOOKS as progressHooks } from '../primitives/progress/index.tsx'
+import { HOOKS as menuHooks } from '../interactions/menu/index.tsx'
+import { HOOKS as popoverHooks } from '../interactions/popover/index.tsx'
+import { HOOKS as tooltipHooks } from '../interactions/tooltip/index.tsx'
+import { HOOKS as dialogHooks } from '../interactions/dialog/index.tsx'
+import { HOOKS as toastHooks } from '../interactions/toast/index.tsx'
+import { HOOKS as spinnerHooks } from '../interactions/spinner/index.tsx'
+import { HOOKS as skeletonHooks } from '../interactions/skeleton/index.tsx'
 import { HOOKS as layoutHooks } from '../layouts/layout/index.tsx'
 import { HOOKS as shellHooks } from '../layouts/shell/index.tsx'
 import { HOOKS as tableHooks } from '../patterns/data-table/index.tsx'
@@ -24,6 +31,13 @@ const GROUPS = {
   status: statusHooks,
   navigation: navigationHooks,
   progress: progressHooks,
+  menu: menuHooks,
+  popover: popoverHooks,
+  tooltip: tooltipHooks,
+  dialog: dialogHooks,
+  toast: toastHooks,
+  spinner: spinnerHooks,
+  skeleton: skeletonHooks,
   layouts: layoutHooks,
   shell: shellHooks,
   table: tableHooks,

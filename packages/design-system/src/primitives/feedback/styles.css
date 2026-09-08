@@ -105,38 +105,6 @@
     text-transform: uppercase;
   }
 
-  :where([data-kv-design-system]) [data-ui="skeleton"] {
-    display: grid;
-    gap: var(--kv-space-2);
-  }
-
-  :where([data-kv-design-system]) [data-ui="skeleton-line"] {
-    height: 0.7rem;
-    border-radius: var(--kv-radius-xs);
-    background: linear-gradient(
-      90deg,
-      var(--kv-color-surface-subtle),
-      var(--kv-color-line),
-      var(--kv-color-surface-subtle)
-    );
-    background-size: 200% 100%;
-    animation: kv-shimmer 1.5s ease infinite;
-  }
-
-  :where([data-kv-design-system]) [data-ui="skeleton-line"][data-line="2"] {
-    width: 82%;
-  }
-
-  :where([data-kv-design-system]) [data-ui="skeleton-line"][data-line="3"] {
-    width: 58%;
-  }
-
-  @keyframes kv-shimmer {
-    to {
-      background-position: -200% 0;
-    }
-  }
-
   @media (max-width: 42rem) {
     :where([data-kv-design-system]) [data-ui="notice"] {
       grid-template-columns: auto minmax(0, 1fr);

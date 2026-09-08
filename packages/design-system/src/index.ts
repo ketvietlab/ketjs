@@ -17,6 +17,19 @@ export type { NavItemProps, TabItem } from './primitives/navigation/index.tsx'
 export { Progress } from './primitives/progress/index.tsx'
 export type { ProgressTone } from './primitives/progress/index.tsx'
 
+export { ActionMenu, Menu } from './interactions/menu/index.tsx'
+export type { MenuItem, MenuProps } from './interactions/menu/index.tsx'
+export { Popover } from './interactions/popover/index.tsx'
+export type { PopoverProps } from './interactions/popover/index.tsx'
+export { Tooltip } from './interactions/tooltip/index.tsx'
+export { ConfirmDialog, Dialog } from './interactions/dialog/index.tsx'
+export type { ConfirmDialogProps, DialogProps } from './interactions/dialog/index.tsx'
+export { Toast, ToastRegion } from './interactions/toast/index.tsx'
+export type { ToastProps } from './interactions/toast/index.tsx'
+export { Spinner } from './interactions/spinner/index.tsx'
+export { Skeleton } from './interactions/skeleton/index.tsx'
+export { attachDesignSystemInteractions } from './runtime/index.js'
+
 export {
   ContentCard,
   Disclosure,

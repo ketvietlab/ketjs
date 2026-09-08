@@ -15,8 +15,6 @@ export const HOOKS = [
   'empty-actions',
   'loading',
   'loading-label',
-  'skeleton',
-  'skeleton-line',
 ] as const
 
 export type NoticeTone = 'info' | 'positive' | 'warning' | 'danger'

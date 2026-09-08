@@ -36,6 +36,11 @@ export const groupGovernance: Readonly<
     states: ['default', 'responsive'],
   },
   navigation: { owner: 'Navigation', maturity: 'stable', states: ['default', 'selected', 'responsive'] },
+  interactions: {
+    owner: 'Interaction foundations',
+    maturity: 'stable',
+    states: ['default', 'disabled', 'loading', 'responsive'],
+  },
   patterns: { owner: 'Page patterns', maturity: 'stable', states: ['default', 'empty', 'responsive'] },
 })
 
