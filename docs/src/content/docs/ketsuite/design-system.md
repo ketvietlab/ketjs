@@ -42,6 +42,23 @@ The inventory is evidence, not an automatic promotion mechanism. A compatibility
 independent consumers or a canonical dependency reason, domain-neutral props, an SSR fallback, states,
 accessibility behavior, specimens, and tests.
 
+## Source and catalogue governance
+
+Wave 1 gives every public component family a directory entry point. The root package remains the only
+application import path; the former source files are temporary internal forwards so repository code can
+migrate mechanically without changing the published API or `data-ui` markup.
+
+The catalogue has three separate responsibilities:
+
+- `catalogue/registry.ts` maps every public component to its owner, directory, maturity, states, group,
+  and specimen.
+- `catalogue/groups.ts` adds owner, maturity, and state coverage to documentation groups.
+- `catalogue/specimens.tsx` contains rendered examples, separate from the page renderer and navigation.
+
+Run `npm run design:governance:check` to enforce public-export coverage, unique registrations, valid
+component directories, specimen references, unique hook declarations, selector ownership, and the ban
+on unsupported package deep imports. This check is part of `npm run verify`.
+
 ## CSS delivery
 
 Component source owns its selectors. The package continues to publish one ordered production stylesheet
@@ -51,6 +68,11 @@ directories, their CSS moves with them and the aggregate entry remains compatibl
 KetSuite compatibility CSS loads after the public stylesheet. It may adapt legacy markup, but it must not
 copy public selectors or create another token scale. A compatibility file is removed only after inventory
 shows no remaining consumer.
+
+The public cascade order is declared once as `ket.reset`, `ket.theme`, `ket.app`, then `ket.user`.
+Component styles remain aggregated through `styles.css`, but selector-bearing files live below their
+owning component directory. Density changes the shared control height, row height, and content gap.
+Layer, focus, reduced-motion, and container breakpoints use named tokens rather than local numbers.
 
 Responsive behavior belongs to component and container contracts. Form fields remain inline, with the
 label on the left and the control on the right, including narrow panels; only the number of field pairs in
