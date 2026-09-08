@@ -249,6 +249,8 @@ export type RequestIdentityResolveContext = {
 export type ServeSpec = {
   pages?: PagesSpec
   assets?: { prefix: string; dir: string }
+  /** Immutable release/image identifier used to reject a stale browser runtime. */
+  buildId?: string
   routes?: (ctx: ServeContext) => Record<string, Route>
   /** Anything other than SQLite; the framework cannot depend on a driver. */
   openStore?: OpenStore
@@ -1047,6 +1049,7 @@ export async function bootDeployment(
     manifest,
     adapter,
     log: logger,
+    ...(serve.buildId === undefined ? {} : { buildId: serve.buildId }),
     ...(serve.streamStore ? { streamStore: serve.streamStore } : {}),
     ...(serve.streamTimeoutMs === undefined ? {} : { streamTimeoutMs: serve.streamTimeoutMs }),
     ...(serve.streamPollMs === undefined ? {} : { streamPollMs: serve.streamPollMs }),
@@ -1160,6 +1163,18 @@ export async function bootDeployment(
       ),
     islandNames: (url: URL, req: IncomingMessage) =>
       tenants.ofRequest(url, req, async (tenant) => Object.keys(tenant.live.islands)),
+    browserBehaviors: (url: URL, req: IncomingMessage) =>
+      tenants.ofRequest(url, req, async (tenant) =>
+        Object.fromEntries(
+          Object.entries(tenant.live.behaviors).map(([name, behavior]) => [
+            name,
+            {
+              ...behavior.client,
+              ...(behavior.when === undefined ? {} : { when: behavior.when }),
+            },
+          ]),
+        ),
+      ),
     assets: serve.assets ? [assetMount, serve.assets] : [assetMount],
     ...(spec.headless || !fallbackTheme
       ? {}

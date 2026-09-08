@@ -8,6 +8,13 @@ export default defineModule({
   depends: ['stock', 'backend'],
   assets: new URL('./client/', import.meta.url),
   islands,
+  behaviors: {
+    'stock.editor': {
+      client: 'stock.mjs',
+      export: 'editorBehavior',
+      when: 'form[data-scope="stock-transfer"], form[data-scope="stock-lot"]',
+    },
+  },
   title: 'Kho trong quản trị',
   summary: 'Warehouse, tồn kho, dịch chuyển và routes.',
   category: 'Hệ thống',

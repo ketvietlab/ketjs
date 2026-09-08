@@ -195,24 +195,25 @@ behavior; a theme may place it but cannot write code.
 ```ts
 // File: src/modules/example/islands.ts
 import { defineModule } from '@ketvietlab/ketjs'
-import { html, signal } from '@ketvietlab/ketjs-view'
-import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
+import { defineIsland, html, signal } from '@ketvietlab/ketjs-view'
 
-const islands: Record<string, IslandDefinition> = {
-  'cart.counter': {
+type CartCounterProps = { cartId: string; initial: number }
+
+const islands = {
+  'cart.counter': defineIsland<CartCounterProps>()({
     props: { cartId: 'id', initial: 'int' },
     key: ['cartId'],
     client: 'cart-counter.mjs',
     export: 'cartCounter',
-    view: (props: IslandProps) => {
-      const count = signal(Number(props.initial))
+    view: (props) => {
+      const count = signal(props.initial)
       return () => html`
         <button on:click=${() => count.set((value) => value + 1)}>
           Cart (${count()})
         </button>
       `
     },
-  },
+  }),
 }
 
 export default defineModule({
@@ -226,6 +227,10 @@ Island props are declared scalar contracts and must be plain JSON all the way do
 serializes exactly those props beside the rendered island. Functions, cyclic objects, non-finite
 numbers, and class instances are rejected.
 
+Use `defineIsland<Props>()` rather than annotating a heterogeneous registry with
+`Record<string, IslandDefinition>`. The helper keeps the props schema, identity keys, `view()` input,
+and `update()` input on one TypeScript contract; a broad registry annotation erases those checks.
+
 The browser client export must create the same view for the same props. KetJS publishes a tenant-aware
 island bootstrap and serves the module under `/_ket/asset/<module>/`.
 
@@ -237,12 +242,13 @@ Every server-rendered island carries canonical JSON in `data-key`. Its identity 
 | Declaration | Identity |
 | --- | --- |
 | `key: ['cartId']` | The listed prop values, in declaration order. |
-| `key: []` | One global instance for that island name. |
+| `key: []` | One stable identity for that island name inside a reconciliation boundary. |
 | No `key` | All canonicalized props. |
 
 A key field must name a required scalar prop. Optional, missing, or `json` props fail composition
 because they cannot provide a stable identity contract. Two instances with the same identity in one
-document are ambiguous: KetJS warns and remounts them instead of preserving an arbitrary one.
+replacement boundary are ambiguous: KetJS warns and remounts them instead of preserving an arbitrary
+one. `key: []` therefore suits a singleton shell indicator, not repeated row widgets.
 
 During fragment reconciliation, an island with the same identity and unchanged props keeps its exact
 DOM node, signals, subscriptions, focus, and local state. If props changed, preservation requires an
@@ -258,24 +264,78 @@ import type { IslandController, IslandFactory } from '@ketvietlab/ketjs-view'
 
 const cartCounter: IslandFactory = (initialProps) => {
   const props = signal(initialProps)
-  const request = new AbortController()
+  let request: AbortController | null = null
 
   const controller: IslandController = {
     view: () => html`<button>Cart ${props().initial}</button>`,
+    mount({ root, lifetime }) {
+      // DOM, URL, storage, timers, observers, and network start only here. SSR
+      // and the browser's first hydration pass therefore produce the same tree.
+      request = new AbortController()
+      lifetime.addEventListener('abort', () => request?.abort(), { once: true })
+      const target = Array.from(root.querySelectorAll('[data-autofocus]'))[0]
+      ;(target as HTMLElement | undefined)?.focus()
+    },
     update(next) {
       props.set(next)
     },
     dispose() {
-      request.abort()
+      request?.abort()
     },
   }
   return controller
 }
 ```
 
-Use `dispose()` to stop module-owned requests, polling, observers, and document-level listeners. KetJS
-always stops the reactive root first, then calls the controller cleanup once. An exception from
-`update()` aborts fragment reconciliation so the navigation runtime can fall back to a full reload.
+`mount()` runs once in the browser after hydration adopts the server DOM; it never runs during SSR.
+Scope DOM queries to `root`, and bind event listeners to `lifetime` where the browser supports an
+abort signal. On removal KetJS aborts `lifetime`, stops the reactive root, then calls `dispose()` once.
+Use `dispose()` for resources that do not accept an abort signal. An exception from `update()` aborts
+fragment reconciliation so the navigation runtime can fall back to a full reload.
+
+Do not read `window`, URL state, storage, or the document while constructing the controller. Doing so
+can make the browser's first tree differ from SSR. Adopt browser-only state in `mount()` and let signals
+render the next state after hydration. An island owns its root descendants; code outside it must not
+replace that DOM behind the renderer.
+
+### Browser-wide behaviors
+
+An island owns a local rendered tree. A behavior progressively enhances an existing document surface
+without pretending to be a visual component. Use a behavior for delegated shell actions, navigation
+guards, or form interception that spans several server-rendered regions:
+
+```ts
+// File: src/modules/backend/index.ts
+export default defineModule({
+  name: 'backend',
+  assets: new URL('./client/', import.meta.url),
+  behaviors: {
+    'backend.shell': {
+      client: 'backend-shell.mjs',
+      export: 'backendShell',
+      when: '[data-ui="shell"]',
+    },
+  },
+})
+```
+
+```ts
+// File: src/modules/backend/client/backend-shell.ts
+import type { BrowserBehavior } from '@ketvietlab/ketjs'
+
+export const backendShell: BrowserBehavior = ({ document, navigation, lifetime }) => {
+  document.addEventListener('submit', handleSubmit, { signal: lifetime })
+  // navigation.navigate(url), navigation.apply(response), navigation.replace(url),
+  // and navigation.reload(url) are the public routing boundary.
+}
+```
+
+`when` is an optional CSS selector. KetJS loads and mounts the behavior while it matches, aborts its
+lifetime and cleanup when it stops matching, then evaluates it again after every fragment update.
+Behavior failures emit `ket:behavior-error` and do not prevent unrelated enhancements from mounting.
+A behavior may listen, focus, toggle attributes, or submit through `navigation`; it must not take over
+an island's rendered descendants or keep module-global “installed” flags. The runtime, not a private
+global such as `__ketNavigation`, owns history and fragment application.
 
 ## Hydrate islands
 

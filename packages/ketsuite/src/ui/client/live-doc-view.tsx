@@ -1125,7 +1125,7 @@ export function createLiveDocView(props: LiveDocProps) {
     })
   }
 
-  async function mount(el: HTMLElement) {
+  async function mountEditor(el: HTMLElement) {
     container = el
     shell = (el.closest('[data-ui="flow-editor"]') as HTMLElement | null) ?? el.parentElement
     el.addEventListener('compositionstart', () => {
@@ -1233,7 +1233,7 @@ export function createLiveDocView(props: LiveDocProps) {
       if (heartbeat) clearInterval(heartbeat)
       if (typeof document !== 'undefined') document.removeEventListener('selectionchange', onSelectionChange)
     },
-    mount,
+    mountEditor,
     containerId,
   }
 }
@@ -1248,14 +1248,17 @@ export function createLiveDocView(props: LiveDocProps) {
  * already does — so the entry, and the `client-src` directory it lived in, are
  * gone.
  *
- * `IslandController` has no "mounted" hook, so the DOM mount is queued for
- * after the view has rendered and finds its container by id.
+ * Browser resources start only after KetJS has adopted the server-rendered
+ * tree, and the lookup stays inside this island's stable root.
  */
 export const liveDoc = (props: IslandProps): IslandController => {
   const controller = createLiveDocView(props as unknown as LiveDocProps)
-  queueMicrotask(() => {
-    const el = document.getElementById(controller.containerId)
-    if (el) void controller.mount(el)
-  })
-  return { view: controller.view, dispose: controller.dispose }
+  return {
+    view: controller.view,
+    mount: ({ root }) => {
+      const el = [...root.querySelectorAll('[data-ui="flow-editor-content"]')][0]
+      if (el instanceof HTMLElement) void controller.mountEditor(el)
+    },
+    dispose: controller.dispose,
+  }
 }
