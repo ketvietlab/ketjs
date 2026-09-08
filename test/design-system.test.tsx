@@ -52,6 +52,7 @@ import {
   ToastRegion,
   Tooltip,
   Tree,
+  TreeGrid,
   ViewSettings,
   withQueryState,
 } from '@ketvietlab/design-system'
@@ -1196,6 +1197,16 @@ test('design system: data operations preserve URL state and bounded rendering', 
   assert.match(grid, /Showing 3 of 6 rows/)
   assert.equal([...grid.matchAll(/data-ui="data-grid-cell"/g)].length, 3)
   assert.match(grid, /data-pinned="start"/)
+  const largeGrid = renderToString(
+    <DataGrid
+      label="Large rows"
+      rows={Array.from({ length: 5_001 }, (_, index) => ({ id: String(index) }))}
+      id={(row) => row.id}
+      columns={[{ key: 'id', label: 'ID', cell: (row) => row.id }]}
+    />,
+  )
+  assert.match(largeGrid, /Showing 500 of 5001 rows/)
+  assert.equal([...largeGrid.matchAll(/data-ui="data-grid-cell"/g)].length, 500)
 
   const list = renderToString(
     <ResourceList
@@ -1209,10 +1220,37 @@ test('design system: data operations preserve URL state and bounded rendering', 
   )
   assert.equal([...list.matchAll(/data-ui="resource-list-link"/g)].length, 2)
   assert.match(list, /data-selected="true"/)
-  assert.match(
-    renderToString(<Tree label="Pages" nodes={[{ id: 'one', label: 'One', href: '/one' }]} />),
-    /role="tree"[\s\S]*role="treeitem"/,
+  const tree = renderToString(
+    <Tree
+      label="Pages"
+      nodes={[
+        {
+          id: 'one',
+          label: 'One',
+          expanded: true,
+          children: [{ id: 'child', label: 'Child', href: '/child', active: true }],
+        },
+      ]}
+    />,
   )
+  assert.match(tree, /role="tree"[\s\S]*role="treeitem"/)
+  assert.equal([...tree.matchAll(/tabindex="0"/g)].length, 1)
+  assert.match(tree, /href="\/child" role="treeitem" tabindex="0"/)
+  const treeGrid = renderToString(
+    <TreeGrid
+      label="Accounts"
+      rows={[
+        { row: { id: '100' }, level: 1, hasChildren: true },
+        { row: { id: '110' }, level: 2 },
+      ]}
+      id={(row) => row.id}
+      primary={(row) => row.id}
+      columns={[]}
+    />,
+  )
+  assert.match(treeGrid, /role="treegrid"/)
+  assert.equal([...treeGrid.matchAll(/tabindex="0"/g)].length, 1)
+  assert.match(treeGrid, /data-ui="tree-grid-row"[^>]*role="row"[^>]*tabindex="0"/)
   assert.match(
     renderToString(
       <ViewSettings

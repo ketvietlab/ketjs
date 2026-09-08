@@ -231,7 +231,7 @@ try {
     },
     {
       key: 'data-operations-en',
-      path: '/?theme=light&density=compact#data-operations',
+      path: '/components/data-operations?theme=light&density=compact',
       selector: '#data-operations',
     },
     { key: 'list-en', path: '/surfaces?kind=list&lang=en&theme=light', selector: '[data-ui="list-page"]' },
@@ -320,6 +320,26 @@ try {
         assert.equal(interactionAudit.focusRestored, true)
         assert.equal(interactionAudit.popoverPositioned, 'true')
         assert.match(String(interactionAudit.popoverPlacement), /^(?:top|bottom)-(?:start|end)$/u)
+      }
+      if (review.key === 'data-operations-en' && viewport.key === 'desktop') {
+        const hierarchyAudit: Json = await evaluate<Json>(
+          cdp,
+          `(() => {
+            const treeItem = document.querySelector('[data-ui="tree"] [role="treeitem"][tabindex="0"]')
+            treeItem?.focus()
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+            const nextTreeItem = document.activeElement?.textContent?.trim()
+            const firstRow = document.querySelector('[data-ui="tree-grid-row"][tabindex="0"]')
+            firstRow?.focus()
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+            return {
+              nextTreeItem,
+              nextTreeGridRow: document.activeElement?.textContent?.trim(),
+            }
+          })()`,
+        )
+        assert.match(String(hierarchyAudit.nextTreeItem), /Reports/u)
+        assert.match(String(hierarchyAudit.nextTreeGridRow), /110 · Cash/u)
       }
       const captured: Json = await cdp.send('Page.captureScreenshot', {
         format: 'png',

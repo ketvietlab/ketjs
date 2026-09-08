@@ -5,30 +5,35 @@
       "owner": "Data display",
       "maturity": "stable",
       "decision": "build",
+      "wave": 4,
       "gapTask": "DS-031"
     },
     "./data-display/resource-list/index.tsx": {
       "owner": "Data display",
       "maturity": "stable",
       "decision": "build",
+      "wave": 4,
       "gapTask": "DS-029"
     },
     "./data-display/tree/index.tsx": {
       "owner": "Data display",
       "maturity": "stable",
       "decision": "build",
+      "wave": 4,
       "gapTask": "DS-032"
     },
     "./data-operations/inline-edit/index.tsx": {
       "owner": "Data operations",
       "maturity": "stable",
       "decision": "build",
+      "wave": 4,
       "gapTask": "DS-033"
     },
     "./data-operations/list-controls/index.tsx": {
       "owner": "Data operations",
       "maturity": "stable",
       "decision": "build",
+      "wave": 4,
       "gapTask": "DS-027"
     },
     "./contract/index.ts": {
