@@ -38,10 +38,8 @@ const PENDING: Record<string, string> = {
   'packages/ketsuite/src/modules/backend/catalogue.ts':
     'the design harness; its own chrome is not a product screen',
   'apps/admin/serve.ts': 'the design harness page, same reason',
-  'apps/design-system/serve.tsx':
-    'the public catalogue and sales demo; its chrome is not a product screen',
-  'apps/design-system/demo.tsx':
-    'the public catalogue and sales demo; its chrome is not a product screen',
+  'apps/design-system/serve.tsx': 'the public catalogue and sales demo; its chrome is not a product screen',
+  'apps/design-system/demo.tsx': 'the public catalogue and sales demo; its chrome is not a product screen',
 }
 
 /**
