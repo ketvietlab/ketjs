@@ -91,7 +91,7 @@ const publicRows = publicExports.map((entry) => {
     maturity: held.maturity,
     decision: held.decision,
     target: '@ketvietlab/design-system',
-    wave: 0,
+    wave: held.wave ?? 0,
     consumers: 0,
     specimen: entry.kind === 'type' ? 'not-applicable' : specimens.length ? 'present' : 'gap',
     specimenFiles: specimens,
