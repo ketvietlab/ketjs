@@ -1307,6 +1307,11 @@ test('design system: record composition covers facts, activity, redaction and me
     />,
   )
   assert.match(facts, /datetime="2026-09-08"/)
+  const invalidDate = renderToString(
+    <FormattedDate value="2026-02-31" locale="en-GB" emptyLabel="Invalid date" />,
+  )
+  assert.match(invalidDate, />[\s\S]*Invalid date[\s\S]*<\/time>/)
+  assert.doesNotMatch(invalidDate, /datetime=/)
   assert.match(facts, /value="1200"/)
   assert.match(facts, /data-currency="VND"/)
   assert.match(renderToString(<Person name="Ngọc Linh" detail="Owner" />), /data-ui="person"/)

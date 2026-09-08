@@ -8,13 +8,18 @@ export const FormattedDate = (props: {
   emptyLabel?: string
 }): TemplateResult => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(props.value)
-  const formatted = match
-    ? new Intl.DateTimeFormat(props.locale ?? 'vi-VN', { dateStyle: 'medium', timeZone: 'UTC' }).format(
-        new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))),
-      )
+  const date = match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : null
+  const valid =
+    !!match &&
+    !!date &&
+    date.getUTCFullYear() === Number(match[1]) &&
+    date.getUTCMonth() === Number(match[2]) - 1 &&
+    date.getUTCDate() === Number(match[3])
+  const formatted = valid
+    ? new Intl.DateTimeFormat(props.locale ?? 'vi-VN', { dateStyle: 'medium', timeZone: 'UTC' }).format(date)
     : (props.emptyLabel ?? '—')
   return (
-    <time data-ui="formatted-date" datetime={match ? props.value : null}>
+    <time data-ui="formatted-date" datetime={valid ? props.value : null}>
       {formatted}
     </time>
   )

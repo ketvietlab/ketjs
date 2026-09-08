@@ -244,30 +244,35 @@
       "owner": "Activity",
       "maturity": "stable",
       "decision": "build",
+      "wave": 5,
       "gapTask": "DS-037"
     },
     "./record/composition/index.tsx": {
       "owner": "Record",
       "maturity": "stable",
       "decision": "build",
+      "wave": 5,
       "gapTask": "DS-036"
     },
     "./record/display/index.tsx": {
       "owner": "Record",
       "maturity": "stable",
       "decision": "build",
+      "wave": 5,
       "gapTask": "DS-035"
     },
     "./record/formatted-values/index.tsx": {
       "owner": "Formatted values",
       "maturity": "stable",
       "decision": "build",
+      "wave": 5,
       "gapTask": "DS-035"
     },
     "./record/media/index.tsx": {
       "owner": "Media",
       "maturity": "stable",
       "decision": "build",
+      "wave": 5,
       "gapTask": "DS-038"
     },
     "./runtime/index.js": {

@@ -236,7 +236,7 @@ try {
     },
     {
       key: 'record-workspace-en',
-      path: '/?theme=light&density=default#record-workspace',
+      path: '/components/record-workspace?theme=light&density=default',
       selector: '#record-workspace',
     },
     { key: 'list-en', path: '/surfaces?kind=list&lang=en&theme=light', selector: '[data-ui="list-page"]' },
