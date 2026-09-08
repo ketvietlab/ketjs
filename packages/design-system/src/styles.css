@@ -8,6 +8,13 @@
 @import "./primitives/field/styles.css";
 @import "./primitives/navigation/styles.css";
 @import "./primitives/progress/styles.css";
+@import "./interactions/menu/styles.css";
+@import "./interactions/popover/styles.css";
+@import "./interactions/tooltip/styles.css";
+@import "./interactions/dialog/styles.css";
+@import "./interactions/toast/styles.css";
+@import "./interactions/spinner/styles.css";
+@import "./interactions/skeleton/styles.css";
 @import "./layouts/layout/styles.css";
 @import "./layouts/shell/styles.css";
 /* FormPage rail contract: desktop content is 2:1; narrow screens stack. */

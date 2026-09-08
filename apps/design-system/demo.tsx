@@ -868,7 +868,7 @@ export function createDemoRoutes() {
       body: document({
         lang: 'vi',
         title: 'An Việt · Bán hàng',
-        head: html`<link rel="stylesheet" href="/design-system/styles.css"><link rel="stylesheet" href="/demo/styles.css"><script type="module" src="/demo/client.js"></script>`,
+        head: html`<link rel="stylesheet" href="/design-system/styles.css"><link rel="stylesheet" href="/demo/styles.css"><script type="module" src="/design-system/runtime/auto.js"></script><script type="module" src="/demo/client.js"></script>`,
         body: (
           <div data-kv-design-system data-theme={theme} data-presentation="grouped" data-demo-app>
             <AppShell
