@@ -23,7 +23,7 @@
     text-decoration: none;
   }
 
-  :where([data-kv-design-system]) [data-ui="tree-item"][aria-current="page"] > [data-ui="tree-link"] {
+  :where([data-kv-design-system]) [data-ui="tree-link"][aria-current="page"] {
     background: var(--kv-nav-selected);
   }
 

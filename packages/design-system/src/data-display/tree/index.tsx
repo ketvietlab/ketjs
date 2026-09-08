@@ -12,27 +12,51 @@ export type TreeNode = {
   children?: readonly TreeNode[]
 }
 
-const nodes = (items: readonly TreeNode[], level: number): TemplateResult => (
+const activeNode = (items: readonly TreeNode[]): TreeNode | undefined => {
+  for (const item of items) {
+    if (item.active) return item
+    if (item.children?.length && item.expanded !== false) {
+      const nested = activeNode(item.children)
+      if (nested) return nested
+    }
+  }
+  return undefined
+}
+
+const nodes = (items: readonly TreeNode[], level: number, tabbableId: string | undefined): TemplateResult => (
   <ul role={level === 1 ? 'tree' : 'group'}>
     {each(
       items,
       (item) => item.id,
       (item) => (
-        <li
-          data-ui="tree-item"
-          role="treeitem"
-          aria-level={String(level)}
-          aria-expanded={item.children?.length ? String(item.expanded !== false) : null}
-          aria-current={item.active ? 'page' : null}
-        >
+        <li data-ui="tree-item" role="none">
           {item.href ? (
-            <a data-ui="tree-link" href={item.href}>
+            <a
+              data-ui="tree-link"
+              href={item.href}
+              role="treeitem"
+              tabindex={item.id === tabbableId ? '0' : '-1'}
+              aria-level={String(level)}
+              aria-expanded={item.children?.length ? String(item.expanded !== false) : null}
+              aria-current={item.active ? 'page' : null}
+            >
               {item.label}
             </a>
           ) : (
-            <span data-ui="tree-link">{item.label}</span>
+            <span
+              data-ui="tree-link"
+              role="treeitem"
+              tabindex={item.id === tabbableId ? '0' : '-1'}
+              aria-level={String(level)}
+              aria-expanded={item.children?.length ? String(item.expanded !== false) : null}
+              aria-current={item.active ? 'page' : null}
+            >
+              {item.label}
+            </span>
           )}
-          {item.children?.length && item.expanded !== false ? nodes(item.children, level + 1) : null}
+          {item.children?.length && item.expanded !== false
+            ? nodes(item.children, level + 1, tabbableId)
+            : null}
         </li>
       ),
     )}
@@ -41,7 +65,7 @@ const nodes = (items: readonly TreeNode[], level: number): TemplateResult => (
 
 export const Tree = (props: { label: string; nodes: readonly TreeNode[] }): TemplateResult => (
   <nav data-ui="tree" aria-label={props.label}>
-    {nodes(props.nodes, 1)}
+    {nodes(props.nodes, 1, activeNode(props.nodes)?.id ?? props.nodes[0]?.id)}
   </nav>
 )
 
@@ -75,6 +99,9 @@ export const TreeGrid = <Row,>(props: {
           <tr
             data-ui="tree-grid-row"
             role="row"
+            tabindex={
+              props.id(item.row) === (props.rows[0] ? props.id(props.rows[0].row) : null) ? '0' : '-1'
+            }
             aria-level={String(item.level)}
             aria-expanded={item.hasChildren ? String(item.expanded !== false) : null}
           >
