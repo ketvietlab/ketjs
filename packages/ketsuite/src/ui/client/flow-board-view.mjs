@@ -96,14 +96,13 @@ export function createFlowBoardView(runtime, props, seed = {}) {
       // `issue.move` refuses more than a stale version: dropping a card into
       // a terminal column while a `blocks` dependency is unfinished answers
       // `flow.error.blocked`. Reporting every refusal as a conflict told the
-      // user to reload and showed them the same card in the same place with
+      // user to retry and showed them the same card in the same place with
       // no reason given, while the real message sat translated in the
-      // catalogue. Only a genuine version clash is worth a reload — the rest
-      // leave the board as it is and say what happened.
+      // catalogue. Leave the board intact and say what happened; forcing a
+      // page reload would also discard unrelated client state.
       const code = String(caught?.message ?? '')
       const known = labels.errors?.[code]
       error.set(known ?? labels.conflict)
-      if (!known && typeof window !== 'undefined') setTimeout(() => window.location.reload(), 900)
     } finally {
       busy.set('')
     }

@@ -5,8 +5,8 @@ description: Build KetSuite admin routes, server-rendered screens, forms, menus,
 
 KetSuite's backend is trusted first-party UI. It is server-rendered with `@ketvietlab/ketjs-view` and
 the shared component kit in `@ketvietlab/ketsuite/ui`; it is not a replaceable storefront theme.
-Client JavaScript is added only as an island for interaction that cannot be represented by a normal
-request, response, or URL.
+Client JavaScript is added through one of two explicit contracts: an island for a local rendered
+component, or a browser behavior for progressive enhancement spanning server-owned shell DOM.
 
 ## Request-to-screen flow
 
@@ -347,18 +347,21 @@ use a labelled `aside`. This keeps the primary reading region unambiguous for as
 
 ## Islands
 
-An island declares a validated prop contract, a stable identity key, server view, and client export:
+An island declares a validated prop contract, a stable identity key, server view, and client export.
+Use the typed helper so those four pieces cannot drift:
 
 ```ts
 // File: packages/ketsuite/src/modules/example_backend/islands.ts
+type EditorProps = { identity: string; recordId?: string; lang?: string }
+
 export const islands = {
-  'example.editor': {
+  'example.editor': defineIsland<EditorProps>()({
     props: { identity: 'text', recordId: 'id?', lang: 'text?' },
     key: ['identity'],
     client: 'example.mjs',
     export: 'editor',
     view: (props) => createExampleEditorView(props),
-  },
+  }),
 }
 ```
 
@@ -371,6 +374,17 @@ UI layer.
 
 Do not hydrate an entire page to implement a small selector. Server rendering must remain useful before
 hydration, and island props must contain only data the current viewer is allowed to receive.
+
+Factories are render-pure on both server and browser. They must not schedule `queueMicrotask`, fetch,
+read storage/URL state, or query the document. Return a controller and start that work from
+`mount({ root, lifetime })`; scope element lookup to `root`, bind listeners to `lifetime`, and keep
+`dispose()` for timers, observers, sockets, or APIs without abort support.
+
+Use a module `behaviors` declaration for delegated shell/form logic that has no component tree of its own. A
+behavior receives `{ document, navigation, lifetime }`; call `navigation.apply(response, { signal })`
+for enhanced POST responses so cancellation, build, MIME, slot, history, and island reconciliation
+remain framework-owned. Do not use `globalThis.__ketNavigation`, module-level `installed` flags, or
+manually replace slot HTML.
 
 ### A screen that is waiting for something
 

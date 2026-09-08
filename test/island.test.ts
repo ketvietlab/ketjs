@@ -8,6 +8,8 @@ import {
   createTheme,
   defineModule,
   defineTheme,
+  fragment,
+  page,
   sqliteAdapter,
 } from '@ketvietlab/ketjs'
 import type { KetError } from '@ketvietlab/ketjs'
@@ -138,6 +140,84 @@ test('island: prop contracts and browser module paths are validated while compos
   )
 })
 
+test('browser behavior: composition owns its asset, selector, and unique name', () => {
+  const behavior = defineModule({
+    name: 'shell_behavior',
+    assets: new URL('.', import.meta.url),
+    behaviors: {
+      'shell.shortcuts': { client: 'shortcuts.mjs', export: 'shortcuts', when: '[data-shell]' },
+    },
+  })
+  assert.deepEqual(compose([behavior]).behaviors, {
+    'shell.shortcuts': {
+      by: 'shell_behavior',
+      client: { src: '/_ket/asset/shell_behavior/shortcuts.mjs', export: 'shortcuts' },
+      when: '[data-shell]',
+    },
+  })
+  assert.throws(
+    () =>
+      compose([
+        defineModule({
+          name: 'bad_behavior',
+          assets: new URL('.', import.meta.url),
+          behaviors: { bad: { client: '../escape.mjs' } },
+        }),
+      ]),
+    /client path must stay inside/,
+  )
+  assert.throws(
+    () =>
+      defineTheme({
+        name: 'behavior_theme',
+        behaviors: { bad: { client: 'bad.mjs' } },
+      }),
+    /theme .* declares "behaviors".*not allowed/,
+  )
+})
+
+test('browser behavior: a document gets the shell bootstrap without contaminating HTML snippets', async () => {
+  const behavior = defineModule({
+    name: 'shell_behavior_http',
+    assets: new URL('.', import.meta.url),
+    behaviors: {
+      'shell.shortcuts': { client: 'shortcuts.mjs', when: '[data-shell]' },
+    },
+  })
+  const manifest = compose([behavior])
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const server = await createKetServer({
+    manifest,
+    adapter,
+    buildId: 'release-test',
+    routes: {
+      '/': async () => page({ body: html`<html><body><main data-shell></main></body></html>` }),
+      '/snippet': async () => fragment(html`<p>server-owned snippet</p>`),
+    },
+  })
+  const port = await server.listen(0)
+  const base = `http://127.0.0.1:${port}`
+  try {
+    const documentResponse = await fetch(base)
+    assert.equal(documentResponse.headers.get('x-ket-build'), 'release-test')
+    assert.match(await documentResponse.text(), /\/_ket\/islands\.js/)
+    assert.doesNotMatch(
+      await fetch(`${base}/snippet`).then((response) => response.text()),
+      /\/_ket\/islands\.js/,
+    )
+    const bootstrapResponse = await fetch(`${base}/_ket/islands.js`)
+    assert.equal(bootstrapResponse.headers.get('x-ket-build'), 'release-test')
+    const bootstrap = await bootstrapResponse.text()
+    assert.match(bootstrap, /const buildId = "release-test"/)
+    assert.match(bootstrap, /reportBehaviorError/)
+    assert.match(bootstrap, /mounted\.dispose/)
+  } finally {
+    await server.close()
+    await adapter.close()
+  }
+})
+
 test('island: only the island hydrates; the rest of the page stays inert', () => {
   const manifest = compose([cart, shop])
   const rt = createTheme(manifest, [cart, shop])
@@ -182,6 +262,63 @@ test('island: a controller owns browser cleanup and server instances are finaliz
   live[0]!.dispose()
   live[0]!.dispose()
   assert.equal(disposed, 2, 'browser cleanup runs once even if disposal is repeated')
+})
+
+test('island: mount runs after hydration with a scoped lifetime', () => {
+  let mounted = 0
+  let disposed = 0
+  let mountedRoot: unknown
+  let lifetime: AbortSignal | undefined
+  let abortedBeforeDispose = false
+  const factory = () => ({
+    view: () => html`<button>mounted</button>`,
+    mount: (context: { root: unknown; lifetime: AbortSignal }) => {
+      mounted++
+      mountedRoot = context.root
+      lifetime = context.lifetime
+    },
+    dispose: () => {
+      disposed++
+      abortedBeforeDispose = lifetime?.aborted === true
+    },
+  })
+
+  const markup = renderIsland('mounted', factory, {})
+  assert.equal(mounted, 0, 'SSR never mounts browser resources')
+  assert.equal(disposed, 1, 'SSR still finalizes its short-lived controller')
+
+  const container = parseFragment(markup)
+  const element = container.querySelectorAll(ISLAND_TAG)[0]!
+  const live = hydrateIslands(domHost(document), container as never, { mounted: factory })
+  assert.equal(mounted, 1)
+  assert.equal(mountedRoot, element)
+  assert.equal(lifetime?.aborted, false)
+
+  live[0]!.dispose()
+  assert.equal(lifetime?.aborted, true)
+  assert.equal(disposed, 2)
+  assert.equal(abortedBeforeDispose, true)
+})
+
+test('island: a failed mount releases the adopted root and controller', () => {
+  let disposed = 0
+  let lifetime: AbortSignal | undefined
+  const factory = () => ({
+    view: () => html`<button>broken</button>`,
+    mount: (context: { lifetime: AbortSignal }) => {
+      lifetime = context.lifetime
+      throw new Error('mount refused')
+    },
+    dispose: () => disposed++,
+  })
+  const container = parseFragment(renderIsland('broken', factory, {}))
+  disposed = 0
+  assert.throws(
+    () => hydrateIslands(domHost(document), container as never, { broken: factory }),
+    /mount refused/,
+  )
+  assert.equal(lifetime?.aborted, true)
+  assert.equal(disposed, 1)
 })
 
 test('island manager: same identity preserves DOM and local reactive state', () => {
@@ -294,14 +431,19 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
     assert.match(page, /<ket-island/)
     assert.match(page, /<script type="module" src="\/_ket\/islands\.js"><\/script><\/body>/)
 
+    const pageResponse = await fetch(base)
+    assert.match(pageResponse.headers.get('x-ket-build') ?? '', /^[a-f0-9]{16}$/)
+
     const bootstrap = await fetch(`${base}/_ket/islands.js`)
     assert.match(bootstrap.headers.get('content-type') ?? '', /^text\/javascript/)
+    assert.equal(bootstrap.headers.get('x-ket-build'), pageResponse.headers.get('x-ket-build'))
     const bootstrapSource = await bootstrap.text()
     assert.match(bootstrapSource, /\/_ket\/asset\/website_search\/search\.mjs/)
     assert.match(bootstrapSource, /createIslandManager/)
     assert.match(bootstrapSource, /x-ket-navigation/)
     assert.match(bootstrapSource, /new Set\(\[\.\.\.Object\.keys\(definitions\),/)
     assert.match(bootstrapSource, /navigation fragment contains unknown island/)
+    assert.match(bootstrapSource, /server and browser builds differ/)
 
     const runtime = await fetch(`${base}/_ket/view/index.js`)
     assert.equal(runtime.status, 200)

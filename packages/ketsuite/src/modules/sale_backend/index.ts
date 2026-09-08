@@ -794,6 +794,13 @@ export default defineModule({
   depends: ['sale', 'backend', 'partner_backend'],
   assets: new URL('./client/', import.meta.url),
   islands,
+  behaviors: {
+    'sale.editor': {
+      client: 'sale.mjs',
+      export: 'editorBehavior',
+      when: 'form[data-scope="sale-order"]',
+    },
+  },
   joints: {
     'order.loyalty': { props: { orderId: 'id', locale: 'text?' } },
     'order.collaboration': {
