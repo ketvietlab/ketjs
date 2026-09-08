@@ -81,13 +81,14 @@ export const IconButton = (props: IconButtonProps): TemplateResult => (
 )
 
 export const LinkButton = (props: LinkButtonProps): TemplateResult =>
-  props.disabled ? (
+  props.disabled || props.loading ? (
     <button
       data-ui="action"
       data-variant={props.variant ?? 'secondary'}
       data-size={props.size ?? 'default'}
       type="button"
       disabled
+      aria-busy={props.loading === true ? 'true' : null}
       aria-describedby={props.describedBy ?? null}
     >
       <ActionContent {...props} />

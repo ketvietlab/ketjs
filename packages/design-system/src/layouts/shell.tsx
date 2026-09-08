@@ -30,7 +30,11 @@ export const AppShell = (props: {
     data-mode={props.mode ?? 'viewport'}
   >
     <aside data-ui="app-sidebar">{props.sidebar}</aside>
-    <main data-ui="app-main">{props.main}</main>
+    {props.mode === 'embedded' ? (
+      <div data-ui="app-main">{props.main}</div>
+    ) : (
+      <main data-ui="app-main">{props.main}</main>
+    )}
     {props.rightRail !== undefined && <aside data-ui="app-right-rail">{props.rightRail}</aside>}
   </div>
 )

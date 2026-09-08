@@ -44,10 +44,10 @@ export type RecordPageProps = {
   slots?: RecordPageSlots
 }
 
-type CompatibilityKind = Extract<PageIdentityKind, 'form-page'>
+type RecordPageKind = Extract<PageIdentityKind, 'record-page' | 'form-page'>
 
-export const recordPage = (props: RecordPageProps, compatibilityKind?: CompatibilityKind): TemplateResult => {
-  const kind = compatibilityKind ?? 'form-page'
+export const recordPage = (props: RecordPageProps, compatibilityKind?: RecordPageKind): TemplateResult => {
+  const kind = compatibilityKind ?? 'record-page'
   if (props.slots?.fragmentTitle !== undefined)
     return (
       <ket-fragments data-title={props.slots.fragmentTitle}>

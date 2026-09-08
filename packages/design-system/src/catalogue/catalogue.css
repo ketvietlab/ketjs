@@ -15,11 +15,7 @@
     display: grid;
     min-height: 100dvh;
     grid-template-columns: 15rem minmax(0, 1fr);
-    background:
-      linear-gradient(var(--kv-color-line) 1px, transparent 1px),
-      linear-gradient(90deg, var(--kv-color-line) 1px, transparent 1px), var(--kv-color-canvas);
-    background-size: 4rem 4rem;
-    background-position: -1px -1px;
+    background: var(--kv-color-canvas);
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-rail"] {
@@ -63,7 +59,7 @@
     font-family: var(--kv-font-mono);
     font-size: var(--kv-text-xs);
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     text-transform: uppercase;
   }
 
@@ -108,20 +104,9 @@
     grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.45fr);
     gap: var(--kv-space-8);
     align-items: end;
-    min-height: 19rem;
-    margin-bottom: 5rem;
-    padding: clamp(var(--kv-space-6), 5vw, var(--kv-space-12));
-    border: 1px solid var(--kv-color-line-strong);
-    border-radius: var(--kv-radius-lg);
-    background:
-      radial-gradient(
-        circle at 88% 12%,
-        color-mix(in srgb, var(--kv-color-accent) 20%, transparent),
-        transparent 32%
-      ),
-      linear-gradient(142deg, var(--kv-color-surface), var(--kv-color-canvas-raised));
-    box-shadow: var(--kv-shadow-float);
-    overflow: hidden;
+    margin-bottom: var(--kv-space-8);
+    padding-bottom: var(--kv-space-6);
+    border-bottom: 1px solid var(--kv-color-line-strong);
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-hero"] [data-ui="catalogue-kicker"] {
@@ -130,13 +115,13 @@
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-title"] {
-    max-width: 13ch;
+    overflow-wrap: anywhere;
     margin-bottom: var(--kv-space-4);
     font-family: var(--kv-font-display);
-    font-size: var(--kv-text-3xl);
+    font-size: 1.5rem;
     font-weight: var(--kv-weight-semibold);
-    letter-spacing: -0.035em;
-    line-height: 0.98;
+    letter-spacing: 0;
+    line-height: var(--kv-leading-tight);
   }
 
   :where([data-kv-design-system]) [data-ui="catalogue-intro"] {
@@ -164,7 +149,7 @@
     font-family: var(--kv-font-mono);
     font-size: var(--kv-text-xs);
     font-weight: 800;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     text-transform: uppercase;
   }
 
@@ -187,7 +172,7 @@
   :where([data-kv-design-system]) [data-ui="catalogue-group"] {
     display: grid;
     gap: var(--kv-space-4);
-    margin-top: 5rem;
+    margin-top: var(--kv-space-10);
     scroll-margin-top: var(--kv-space-5);
   }
 
@@ -203,7 +188,7 @@
   :where([data-kv-design-system]) [data-ui="catalogue-group-head"] h2 {
     margin-bottom: 0;
     font-family: var(--kv-font-display);
-    font-size: 1.8rem;
+    font-size: var(--kv-text-xl);
     font-weight: 650;
   }
 
@@ -250,13 +235,20 @@
 
   :where([data-kv-design-system]) [data-ui="catalogue-stage"] {
     min-width: 0;
-    padding: clamp(var(--kv-space-4), 4vw, var(--kv-space-8));
-    background: radial-gradient(
-      circle at 1px 1px,
-      color-mix(in srgb, var(--kv-color-line) 74%, transparent) 1px,
-      transparent 0
-    );
-    background-size: 1rem 1rem;
+    padding: var(--kv-space-4);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="catalogue-stage"] > [data-ui="app-shell"][data-mode="embedded"] {
+    height: min(44rem, 88dvh);
+    min-height: 34rem;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="catalogue-stage"]
+    > [data-ui="app-shell"][data-mode="embedded"]
+    [data-ui="app-main"] {
+    overflow-y: auto;
   }
 
   :where([data-kv-design-system]) [data-ui="shell-demo-sidebar"],
@@ -324,6 +316,21 @@
     :where([data-kv-design-system]) [data-ui="catalogue-specimen-head"] {
       align-items: stretch;
       flex-direction: column;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="catalogue-stage"]
+      > [data-ui="app-shell"][data-mode="embedded"] {
+      height: auto;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="catalogue-stage"]
+      > [data-ui="app-shell"][data-mode="embedded"]
+      [data-ui="app-main"] {
+      overflow-y: visible;
     }
   }
 

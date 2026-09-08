@@ -102,7 +102,7 @@ test('crm configuration: edits a team and its members on a full record page', ()
     ),
   )
 
-  assert.match(rendered, /data-ui="form-page"[^>]*data-pattern="record"/)
+  assert.match(rendered, /data-ui="record-page"[^>]*data-pattern="record"/)
   assert.match(rendered, /name="id" value="team-north"/)
   assert.match(rendered, /name="expectedVersion" value="4"/)
   assert.match(
