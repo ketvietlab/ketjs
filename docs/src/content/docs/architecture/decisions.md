@@ -1122,6 +1122,20 @@ is a build error, exactly like filling a joint nobody publishes.
 **Only islands hydrate.** The rest of the page stays inert markup, which is the
 point of rendering a theme to a string at all.
 
+**Two client contracts, not one overloaded component.** An island owns one local
+server-rendered tree. Its controller may `mount({ root, lifetime })` only after
+hydration and must release browser resources when that lifetime ends. Delegated
+shell actions and form interception span server-owned DOM, so modules declare
+them as browser behaviors with an optional selector instead of hiding them in an
+empty island. Behaviors receive the public navigation service directly; a shared
+mutable global is not an application contract.
+
+**A fragment and its runtime must be one build.** Responses carry `X-Ket-Build`.
+The browser refuses to combine a fragment from another build with its current
+controller code and performs a full navigation. This is part of correctness, not
+only cache invalidation: a new server prop shape cannot safely update an old
+client factory.
+
 **An API note worth keeping:** `hydrateIslands` first took the mount function as a
 parameter, and its first caller passed the one that BUILDS instead of the one that
 ADOPTS — so an island quietly rendered a second copy of itself beside the server's.

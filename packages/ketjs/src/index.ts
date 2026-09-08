@@ -36,6 +36,10 @@ export type {
   RoleTemplateDef,
   CompiledPermissionBundle,
   CompiledRoleTemplate,
+  BrowserBehaviorDefinition,
+  BrowserBehaviorContext,
+  BrowserBehavior,
+  BrowserNavigation,
 } from './types.ts'
 export { compose } from './kernel/compose.ts'
 export { compilePermissionBundles, permissionDigest } from './kernel/permissions.ts'
@@ -354,6 +358,7 @@ export {
   renderIsland,
   hydrateIslands,
   createIslandManager,
+  defineIsland,
   IslandError,
   ISLAND_TAG,
   validationIssue,
@@ -378,8 +383,10 @@ export type {
   Markup,
   IslandView,
   IslandController,
+  IslandMountContext,
   IslandFactory,
   IslandDefinition,
+  AnyIslandDefinition,
   IslandRegistry,
   IslandProps,
   HydratedIsland,

@@ -1,5 +1,4 @@
-import { each, html, signal } from '@ketvietlab/ketjs-view'
-import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
+import { defineIsland, each, html, signal } from '@ketvietlab/ketjs-view'
 import { createCrmKanbanView } from './client/crm-kanban-view.mjs'
 
 const runtime = { each, html, signal }
@@ -11,11 +10,13 @@ export const kanbanMovePayload = (
   idempotencyKey: string,
 ) => ({ id, stageId, expectedVersion, idempotencyKey })
 
-export const islands: Record<string, IslandDefinition> = {
-  'crm.pipeline': {
+type CrmPipelineProps = { lang?: string; data?: string }
+
+export const islands = {
+  'crm.pipeline': defineIsland<CrmPipelineProps>()({
     props: { lang: 'text?', data: 'text?' },
     client: 'crm-kanban.mjs',
     export: 'pipeline',
-    view: (props: IslandProps) => createCrmKanbanView(runtime, props),
-  },
+    view: (props) => createCrmKanbanView(runtime, props),
+  }),
 }

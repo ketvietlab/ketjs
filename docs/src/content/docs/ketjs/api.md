@@ -151,7 +151,8 @@ include `ReportDocument`, `ReportElement`, `ReportNode`, `PdfRenderOptions`, `Tr
 | `makeDrop`, `makeDrops`, `sealScope` | Expose controlled view-model values to KTL. |
 | `tokensToCss`, `scopedCss` | Convert design tokens into layered and scoped CSS. |
 | `renderToString`, `hydrateRoot`, `mount`, `mountHydrated` | Selected `@ketvietlab/ketjs-view` rendering helpers. |
-| `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Server-render, hydrate, and reconcile named islands. |
+| `defineIsland`, `renderIsland`, `hydrateIslands`, `createIslandManager`, `ISLAND_TAG` | Type, server-render, hydrate, and reconcile named islands. |
+| `BrowserBehavior`, `BrowserBehaviorContext`, `BrowserNavigation` | Document-wide progressive enhancement and the public fragment-navigation service. |
 | `reachOf`, `functionsOf`, `formatReach`, `formatInventory` | Inspect function and data/effect permission reach. |
 | `permissionInventory` | Build a deterministic, serializable module/function permission inventory, including modules with no functions. |
 | `agentTools`, `agentDescriptor`, `compositionSchema` | Describe the composed application for tooling and agents. |
@@ -209,11 +210,11 @@ The entrypoint also exports `TestDeployment`, `CreateTestDeploymentOptions`, `Te
 | `renderToString`, `trustedMarkup` | Server rendering and explicit trusted markup. |
 | `HydrationMismatch`, `HOLE_MARKER`, `HOLE_OPEN` | Hydration diagnostics and the pair of protocol markers. |
 | `EVENT_PREFIX` | The attribute prefix that makes an attribute a listener rather than markup. |
-| `renderIsland`, `hydrateIslands`, `createIslandManager`, `IslandError`, `ISLAND_TAG` | Island serialization, hydration, reconciliation, disposal, and failures. |
+| `defineIsland`, `renderIsland`, `hydrateIslands`, `createIslandManager`, `IslandError`, `ISLAND_TAG` | Typed island declarations, serialization, hydration, reconciliation, disposal, and failures. |
 | `countingHost`, `domHost`, `escapeHtml` | Host implementations and escaping primitive. |
 
 The view entrypoint also exports `EachResult`, `IslandDefinition`, `IslandFactory`,
-`IslandController`, `IslandManager`, and their related prop/instance types.
+`IslandController`, `IslandMountContext`, `IslandManager`, and their related prop/instance types.
 
 `@ketvietlab/ketjs` re-exports this entrypoint whole, so an application that installs both packages
 may import any of these names from either one.

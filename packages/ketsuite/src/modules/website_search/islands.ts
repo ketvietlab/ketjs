@@ -1,5 +1,4 @@
-import { html, signal } from '@ketvietlab/ketjs-view'
-import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
+import { defineIsland, html, signal } from '@ketvietlab/ketjs-view'
 
 /**
  * The interactive half a theme is not allowed to write. The theme decides whether
@@ -11,15 +10,17 @@ import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
  * the query lives in the URL, and a page resolver is handed a path rather than a
  * query string — there is no server-rendered surface that could see it.
  */
-export const islands: Record<string, IslandDefinition> = {
-  'website.search': {
+type WebsiteSearchProps = { label?: string; placeholder?: string; emptyLabel?: string }
+
+export const islands = {
+  'website.search': defineIsland<WebsiteSearchProps>()({
     props: { label: 'text?', placeholder: 'text?', emptyLabel: 'text?' },
     key: [],
     client: 'search.mjs',
-    view: (props: IslandProps) => {
+    view: (props) => {
       const open = signal(false)
       const term = signal('')
-      return () => html`<div class="search" data-open=${open()}>
+      return () => html`<div class="search" data-open=${open()} data-state="idle">
         <button on:click=${() => open.set((v) => !v)} aria-expanded=${open()}>${props.label ?? 'Tìm'}</button>
         ${
           open()
@@ -28,5 +29,5 @@ export const islands: Record<string, IslandDefinition> = {
         }
       </div>`
     },
-  },
+  }),
 }

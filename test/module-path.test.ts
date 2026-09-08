@@ -23,7 +23,7 @@ export default Object.freeze({
   models: {}, extend: {}, joints: {}, fills: {}, functions: {}, jobs: {}, views: {},
   requires: Object.freeze([]), tokens: {}, templates: {}, provides: Object.freeze([]),
   assets: null, styles: Object.freeze([]), routes: {}, menus: {}, omits: Object.freeze([]),
-  islands: {}, sections: {}, relations: {}, title: ${JSON.stringify(name)},
+  islands: {}, behaviors: {}, sections: {}, relations: {}, title: ${JSON.stringify(name)},
   summary: '', category: 'Custom', messages: {},
 })
 `

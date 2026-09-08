@@ -1,9 +1,4 @@
-// @ts-nocheck Dependency-free progressive enhancement for the Product form.
-//
-// The native form remains the fallback. In a hydrated admin page we submit it
-// in place and replace only the server-rendered Product header/body. Chatter,
-// Activity and the sidebar are separate islands and keep their DOM identity and
-// local state throughout the save.
+// @ts-nocheck Progressive enhancement for Product record forms.
 
 const LABELS = {
   vi: {
@@ -19,6 +14,7 @@ const LABELS = {
 }
 
 const labelsOf = (props) => LABELS[String(props.lang ?? '').toLowerCase()] ?? LABELS.vi
+const scopeOf = (props) => (props.productId ? 'product-variant' : 'product-detail')
 
 const errorText = async (response, fallback) => {
   try {
@@ -34,108 +30,86 @@ const errorText = async (response, fallback) => {
   }
 }
 
-const replaceProductParts = (markup) => {
-  const parsed = new DOMParser().parseFromString(markup, 'text/html')
-  const envelope = parsed.querySelector('ket-fragments')
-  const nextHeader = parsed.querySelector('template[data-ket-slot="product.record-header"]')
-  const nextBody = parsed.querySelector('template[data-ket-slot="product.record-body"]')
-  const currentHeader = document.querySelector('[data-ket-slot="product.record-header"]')
-  const currentBody = document.querySelector('[data-ket-slot="product.record-body"]')
-  if (!nextHeader || !nextBody || !currentHeader || !currentBody)
-    throw new Error('The refreshed Product fragment is incomplete.')
-
-  currentHeader.replaceChildren(document.importNode(nextHeader.content, true))
-  currentBody.replaceChildren(document.importNode(nextBody.content, true))
-  if (envelope?.getAttribute('data-title') !== null) document.title = envelope.getAttribute('data-title')
-}
-
-const editorHostFor = (props) => {
-  if (typeof document === 'undefined') return null
-  return Array.from(document.querySelectorAll('ket-island[data-island="product.editor"]')).find((element) => {
-    try {
-      const hostProps = JSON.parse(element.getAttribute('data-props') ?? '{}')
-      return props.productId
-        ? hostProps.productId === props.productId
-        : hostProps.templateId === props.templateId
-    } catch {
-      return false
-    }
-  })
-}
-
-export function createProductEditorView(runtime, props) {
-  const { html, signal } = runtime
+export function createProductEditorStatusView(runtime, props) {
   const labels = labelsOf(props)
-  const state = signal('idle')
-  const message = signal('')
-  const host = editorHostFor(props)
-  const scope = props.productId ? 'product-variant' : 'product-detail'
+  return () => runtime.html`<aside
+    data-ui="notice"
+    data-tone="info"
+    data-record-save-status=${scopeOf(props)}
+    data-saving=${labels.saving}
+    data-saved=${labels.saved}
+    data-failed=${labels.failed}
+    role="status"
+    aria-live="polite"
+    hidden
+  ><div data-ui="notice-copy"><p data-ui="notice-title" data-record-save-message></p></div></aside>`
+}
+
+const statusFor = (scope) => document.querySelector(`[data-record-save-status="${CSS.escape(scope)}"]`)
+
+const showState = (status, state, message) => {
+  status.hidden = false
+  status.dataset.tone = state === 'saved' ? 'positive' : state === 'error' ? 'danger' : 'info'
+  status.setAttribute('role', state === 'error' ? 'alert' : 'status')
+  const copy = status.querySelector('[data-record-save-message]')
+  if (copy) copy.textContent = message
+}
+
+export const productEditorBehavior = ({ navigation, lifetime }) => {
   let activeRequest = null
-  let disposed = false
-  if (host) host.hidden = true
-
-  const showState = (nextState, nextMessage) => {
-    if (host) host.hidden = false
-    state.set(nextState)
-    message.set(nextMessage)
-  }
-
   const submit = async (event) => {
     const form = event.target
-    if (!(form instanceof HTMLFormElement) || form.dataset.scope !== scope) return
+    if (!(form instanceof HTMLFormElement)) return
+    const scope = form.dataset.scope
+    if (scope !== 'product-detail' && scope !== 'product-variant') return
+    const status = statusFor(scope)
+    if (!(status instanceof HTMLElement)) return
     event.preventDefault()
-    if (state() === 'saving') return
 
     const submitters = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'))
-    showState('saving', labels.saving)
+    showState(status, 'saving', status.dataset.saving)
     form.setAttribute('aria-busy', 'true')
     for (const submitter of submitters) submitter.disabled = true
 
+    activeRequest?.abort()
+    const request = new AbortController()
+    activeRequest = request
     try {
-      activeRequest?.abort()
-      activeRequest = new AbortController()
       const body = new URLSearchParams()
       for (const [name, value] of new FormData(form)) if (typeof value === 'string') body.append(name, value)
       const response = await fetch(form.action, {
         method: String(form.method || 'post').toUpperCase(),
         credentials: 'same-origin',
         headers: {
-          accept: 'text/html',
+          accept: 'text/vnd.ket.fragments+html',
           'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
           'x-ket-partial': scope,
         },
         body,
-        signal: activeRequest.signal,
+        signal: request.signal,
       })
-      if (!response.ok) throw new Error(await errorText(response, labels.failed))
-      const markup = await response.text()
-      if (globalThis.__ketNavigation?.applyFragments) await globalThis.__ketNavigation.applyFragments(markup)
-      else replaceProductParts(markup)
-      if (disposed) return
-      showState('saved', labels.saved)
+      const isFragment = response.headers
+        .get('content-type')
+        ?.toLowerCase()
+        .startsWith('text/vnd.ket.fragments+html')
+      if (!response.ok && !isFragment) throw new Error(await errorText(response, status.dataset.failed))
+      await navigation.apply(response, { signal: request.signal })
+      const nextStatus = statusFor(scope)
+      if (!lifetime.aborted && nextStatus instanceof HTMLElement)
+        showState(
+          nextStatus,
+          response.ok ? 'saved' : 'error',
+          response.ok ? nextStatus.dataset.saved : nextStatus.dataset.failed,
+        )
     } catch (caught) {
-      if (disposed || caught?.name === 'AbortError') return
-      showState('error', caught instanceof Error ? caught.message : labels.failed)
+      if (lifetime.aborted || caught?.name === 'AbortError') return
+      showState(status, 'error', caught instanceof Error ? caught.message : status.dataset.failed)
     } finally {
-      activeRequest = null
+      if (activeRequest === request) activeRequest = null
       form.removeAttribute('aria-busy')
       for (const submitter of submitters) submitter.disabled = false
     }
   }
-  if (typeof document !== 'undefined') document.addEventListener('submit', submit)
-
-  return {
-    view: () => html`<aside
-    data-ui="notice"
-    data-tone=${state() === 'saved' ? 'positive' : state() === 'error' ? 'danger' : 'info'}
-    role=${state() === 'error' ? 'alert' : 'status'}
-    aria-live="polite"
-    hidden=${state() === 'idle'}
-  ><div data-ui="notice-copy"><p data-ui="notice-title">${message()}</p></div></aside>`,
-    dispose: () => {
-      disposed = true
-      activeRequest?.abort()
-      if (typeof document !== 'undefined') document.removeEventListener('submit', submit)
-    },
-  }
+  document.addEventListener('submit', submit, { signal: lifetime })
+  return () => activeRequest?.abort()
 }
