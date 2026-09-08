@@ -46,6 +46,11 @@ export const groupGovernance: Readonly<
     maturity: 'stable',
     states: ['default', 'disabled', 'loading', 'empty', 'invalid', 'responsive', 'selected'],
   },
+  'data-operations': {
+    owner: 'Data operations',
+    maturity: 'stable',
+    states: ['default', 'selected', 'loading', 'empty', 'invalid', 'responsive'],
+  },
   patterns: { owner: 'Page patterns', maturity: 'stable', states: ['default', 'empty', 'responsive'] },
 })
 

@@ -16,6 +16,11 @@ import { HOOKS as comboboxHooks } from '../forms/combobox/index.tsx'
 import { HOOKS as dateTimeHooks } from '../forms/date-time/index.tsx'
 import { HOOKS as uploadHooks } from '../forms/upload/index.tsx'
 import { HOOKS as relationPickerHooks } from '../forms/relation-picker/index.tsx'
+import { HOOKS as listControlHooks } from '../data-operations/list-controls/index.tsx'
+import { HOOKS as inlineEditHooks } from '../data-operations/inline-edit/index.tsx'
+import { HOOKS as resourceListHooks } from '../data-display/resource-list/index.tsx'
+import { HOOKS as dataGridHooks } from '../data-display/data-grid/index.tsx'
+import { HOOKS as treeHooks } from '../data-display/tree/index.tsx'
 import { HOOKS as layoutHooks } from '../layouts/layout/index.tsx'
 import { HOOKS as shellHooks } from '../layouts/shell/index.tsx'
 import { HOOKS as tableHooks } from '../patterns/data-table/index.tsx'
@@ -48,6 +53,11 @@ const GROUPS = {
   dateTime: dateTimeHooks,
   upload: uploadHooks,
   relationPicker: relationPickerHooks,
+  listControls: listControlHooks,
+  inlineEdit: inlineEditHooks,
+  resourceList: resourceListHooks,
+  dataGrid: dataGridHooks,
+  tree: treeHooks,
   layouts: layoutHooks,
   shell: shellHooks,
   table: tableHooks,
