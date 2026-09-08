@@ -1,0 +1,34 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="inline-edit"] {
+    display: grid;
+    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--kv-space-3);
+  }
+
+  :where([data-kv-design-system]) [data-ui="inline-edit-value"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="inline-edit-form"] {
+    display: grid;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="inline-edit-form"] > input {
+    min-height: var(--kv-control-height);
+    padding-inline: var(--kv-space-2-5);
+    border: 1px solid var(--kv-field-border);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-input-bg);
+    color: var(--kv-input-text);
+  }
+
+  :where([data-kv-design-system]) [data-ui="inline-edit-actions"] {
+    display: flex;
+    gap: var(--kv-space-2);
+  }
+}

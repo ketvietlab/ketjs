@@ -41,6 +41,18 @@ import { Combobox, MultiCombobox, TagPicker } from '../forms/combobox/index.tsx'
 import { DatePicker, DateRangePicker, DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
 import { DropZone, FileUpload } from '../forms/upload/index.tsx'
 import { RelationPicker } from '../forms/relation-picker/index.tsx'
+import {
+  AppliedFilters,
+  FilterBar,
+  SavedViews,
+  SearchBar,
+  SortMenu,
+  ViewSettings,
+} from '../data-operations/list-controls/index.tsx'
+import { InlineEdit } from '../data-operations/inline-edit/index.tsx'
+import { ResourceList } from '../data-display/resource-list/index.tsx'
+import { DataGrid } from '../data-display/data-grid/index.tsx'
+import { Tree, TreeGrid } from '../data-display/tree/index.tsx'
 
 export type ComponentExample = {
   id: string
@@ -1683,6 +1695,187 @@ export const componentGroups: readonly ComponentGroup[] = [
             open
             openHref="#relation-picker"
             closeHref="#relation-picker"
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'data-operations',
+    name: 'Data operations',
+    description: 'URL-owned collection controls and bounded data renderers for operational work.',
+    examples: [
+      {
+        id: 'collection-controls',
+        name: 'Search, filter and sort',
+        description: 'Every control has a canonical URL and preserves unrelated query state.',
+        render: () => (
+          <Stack
+            items={[
+              <SearchBar action="/orders" value="An Việt" hidden={{ state: 'open' }} />,
+              <FilterBar
+                filters={[
+                  <LinkButton href="/orders?state=open" label="Open" size="compact" />,
+                  <LinkButton href="/orders?owner=me" label="My records" size="compact" />,
+                  <SortMenu
+                    id="sort-orders"
+                    choices={[
+                      {
+                        id: 'updated',
+                        label: 'Recently updated',
+                        href: '/orders?sort=updated',
+                        active: true,
+                      },
+                      { id: 'value', label: 'Highest value', href: '/orders?sort=value' },
+                    ]}
+                  />,
+                ]}
+              />,
+              <AppliedFilters
+                filters={[
+                  { id: 'state', label: 'State', value: 'Open', removeHref: '/orders?q=An+Việt' },
+                  { id: 'owner', label: 'Owner', value: 'Me', removeHref: '/orders?state=open' },
+                ]}
+                clearHref="/orders"
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'saved-views',
+        name: 'Saved views and settings',
+        description:
+          'The renderer carries version tokens while the application owns persistence and permission.',
+        render: () => (
+          <Stack
+            items={[
+              <SavedViews
+                views={[
+                  {
+                    id: 'all',
+                    label: 'All orders',
+                    href: '/orders',
+                    active: true,
+                    description: '148 records',
+                  },
+                  {
+                    id: 'review',
+                    label: 'Needs review',
+                    href: '/orders?view=review',
+                    description: '7 records',
+                  },
+                ]}
+              />,
+              <ViewSettings
+                id="order-view"
+                action="/orders/views"
+                version="7"
+                settings={[
+                  { id: 'customer', label: 'Customer', visible: true, disabled: true },
+                  { id: 'total', label: 'Total', visible: true },
+                  { id: 'owner', label: 'Owner', visible: false },
+                ]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'resource-list',
+        name: 'Resource list',
+        description: 'One keyboard link per row with optional selection and paging composition.',
+        render: () => (
+          <ResourceList
+            label="Orders"
+            rows={orders}
+            id={(row) => row.id}
+            href={(row) => `/orders/${row.id}`}
+            primary={(row) => `${row.id} · ${row.customer}`}
+            secondary={(row) => row.total}
+            meta={(row) => <Badge label={row.state} tone={toneOf(row.state)} />}
+            selectedIds={['SO-1042']}
+            pager={{ summary: '1–3 of 148', nextHref: '/orders?page=2' }}
+          />
+        ),
+      },
+      {
+        id: 'data-grid',
+        name: 'Bounded data grid',
+        description:
+          'Column order, visibility and pinning are explicit; row rendering is capped before virtualization.',
+        render: () => (
+          <DataGrid
+            label="Order analysis"
+            rows={orders}
+            id={(row) => row.id}
+            maxRows={500}
+            columns={[
+              { key: 'id', label: 'Order', cell: (row) => row.id, pinned: 'start', width: '8rem' },
+              { key: 'customer', label: 'Customer', cell: (row) => row.customer, width: '18rem' },
+              { key: 'total', label: 'Total', cell: (row) => row.total, width: '10rem' },
+              { key: 'state', label: 'State', cell: (row) => row.state, width: '9rem' },
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'tree',
+        name: 'Tree and tree grid',
+        description:
+          'Hierarchy uses native links; tabular hierarchy is reserved for independent multi-column data.',
+        render: () => (
+          <Grid
+            columns={2}
+            items={[
+              <Tree
+                label="Workspace pages"
+                nodes={[
+                  {
+                    id: 'sales',
+                    label: 'Sales',
+                    expanded: true,
+                    children: [
+                      { id: 'orders', label: 'Orders', href: '/orders', active: true },
+                      { id: 'reports', label: 'Reports', href: '/reports' },
+                    ],
+                  },
+                ]}
+              />,
+              <TreeGrid
+                label="Account hierarchy"
+                rows={[
+                  {
+                    row: { id: '100', name: 'Assets', balance: '120.000.000 ₫' },
+                    level: 1,
+                    hasChildren: true,
+                  },
+                  { row: { id: '110', name: 'Cash', balance: '42.000.000 ₫' }, level: 2 },
+                ]}
+                id={(row) => row.id}
+                primary={(row) => `${row.id} · ${row.name}`}
+                columns={[{ key: 'balance', label: 'Balance', cell: (row) => row.balance }]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'inline-edit',
+        name: 'Inline edit',
+        description: 'Controlled edit state keeps a native form fallback, stale version and rejected input.',
+        render: () => (
+          <InlineEdit
+            id="customer-name"
+            label="Customer"
+            value="An Việt"
+            editing
+            editHref="?edit=customer"
+            cancelHref="?edit="
+            action="/orders/SO-1042/customer"
+            name="customer"
+            inputValue="An Việt Trading"
+            version="7"
           />
         ),
       },

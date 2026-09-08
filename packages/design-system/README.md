@@ -171,3 +171,8 @@ Typed form exports cover scalar and selection fields, controlled combobox/tag pi
 civil date and local-time values, native file inputs, and a generic relation renderer.
 Applications retain validation, query, permission, timezone, upload, and persistence
 ownership; renderers preserve submitted text and expose native fallbacks.
+
+Data-operation exports compose URL-owned search/filter/sort/view state, one-link
+resource rows, bounded grids, hierarchy, and inline native forms. The package renders
+state and carries version tokens; application adapters own persistence, conflicts,
+permissions, cross-page selection, and dataset queries.

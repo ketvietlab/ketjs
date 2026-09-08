@@ -5,6 +5,7 @@ import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   AppShell,
   ActionMenu,
+  AppliedFilters,
   Badge,
   BoardPage,
   Button,
@@ -15,13 +16,16 @@ import {
   DateTimePicker,
   DashboardPage,
   DataTable,
+  DataGrid,
   Disclosure,
   Field,
   FileUpload,
+  FilterBar,
   FormPage,
   HOOKS,
   IconButton,
   LinkButton,
+  InlineEdit,
   Menu,
   MoneyField,
   MultiCombobox,
@@ -33,6 +37,7 @@ import {
   Popover,
   RadioGroup,
   RelationPicker,
+  ResourceList,
   RecordForm,
   RecordPage,
   Surface,
@@ -46,6 +51,9 @@ import {
   TimePicker,
   ToastRegion,
   Tooltip,
+  Tree,
+  ViewSettings,
+  withQueryState,
 } from '@ketvietlab/design-system'
 import {
   CataloguePage,
@@ -1158,6 +1166,84 @@ test('design system: typed form controls preserve native values and controlled p
   )
 })
 
+test('design system: data operations preserve URL state and bounded rendering', () => {
+  assert.equal(
+    withQueryState('/orders?q=An&page=3&view=mine', { page: null, sort: 'updated' }),
+    '/orders?q=An&view=mine&sort=updated',
+  )
+  const filters = renderToString(
+    <AppliedFilters
+      filters={[{ id: 'state', label: 'State', value: 'Open', removeHref: '/orders?q=An' }]}
+      clearHref="/orders"
+    />,
+  )
+  assert.match(filters, /aria-label="Remove State: Open"/)
+  assert.match(
+    renderToString(<FilterBar filters={[<a href="?state=open">Open</a>]} />),
+    /aria-label="Filters"/,
+  )
+
+  const rows = Array.from({ length: 6 }, (_, index) => ({ id: String(index), name: `Row ${index}` }))
+  const grid = renderToString(
+    <DataGrid
+      label="Rows"
+      rows={rows}
+      id={(row) => row.id}
+      maxRows={3}
+      columns={[{ key: 'name', label: 'Name', cell: (row) => row.name, pinned: 'start' }]}
+    />,
+  )
+  assert.match(grid, /Showing 3 of 6 rows/)
+  assert.equal([...grid.matchAll(/data-ui="data-grid-cell"/g)].length, 3)
+  assert.match(grid, /data-pinned="start"/)
+
+  const list = renderToString(
+    <ResourceList
+      label="Rows"
+      rows={rows.slice(0, 2)}
+      id={(row) => row.id}
+      href={(row) => `/rows/${row.id}`}
+      primary={(row) => row.name}
+      selectedIds={['0']}
+    />,
+  )
+  assert.equal([...list.matchAll(/data-ui="resource-list-link"/g)].length, 2)
+  assert.match(list, /data-selected="true"/)
+  assert.match(
+    renderToString(<Tree label="Pages" nodes={[{ id: 'one', label: 'One', href: '/one' }]} />),
+    /role="tree"[\s\S]*role="treeitem"/,
+  )
+  assert.match(
+    renderToString(
+      <ViewSettings
+        id="orders"
+        action="/views"
+        version="9"
+        settings={[{ id: 'name', label: 'Name', visible: true }]}
+      />,
+    ),
+    /name="version" value="9"/,
+  )
+  const edit = renderToString(
+    <InlineEdit
+      id="name"
+      label="Name"
+      value="Old"
+      editing
+      editHref="?edit=name"
+      cancelHref="?edit="
+      action="/save"
+      name="name"
+      inputValue="what the user typed"
+      version="4"
+      error="Stale version"
+    />,
+  )
+  assert.match(edit, /value="what the user typed"/)
+  assert.match(edit, /name="version" value="4"/)
+  assert.match(edit, /aria-invalid="true"/)
+})
+
 test('design system: catalogue renders every registered specimen', () => {
   const catalogue = renderToString(<CataloguePage theme="dark" density="compact" mode="all" />)
   const designSystemVersion = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8'))
@@ -1191,7 +1277,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 73)
+  assert.equal(names.length, 84)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1228,9 +1314,9 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 132)
-  assert.equal(designSystemInventory.summary.runtimeExports, 77)
-  assert.equal(designSystemInventory.summary.plannedComponents, 22)
+  assert.equal(designSystemInventory.summary.publicExports, 156)
+  assert.equal(designSystemInventory.summary.runtimeExports, 89)
+  assert.equal(designSystemInventory.summary.plannedComponents, 11)
   assert.equal(designSystemInventory.summary.compatibilityModules, 38)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
