@@ -185,7 +185,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   assert.match(leadCreate, /name="email"[^>]*value="hello@minhan\.example"/)
   assert.match(leadCreate, /name="phone"[^>]*value="0909000123"/)
   assert.match(leadCreate, /name="partnerIntent"[^>]*value="1"/)
-  assert.match(leadCreate, /name="utmSource"[\s\S]*?value="pancake"[^>]*selected/)
+  assert.match(leadCreate, /name="utmSource"[\s\S]*?value="marketplace"[^>]*selected/)
   assert.match(leadCreate, /name="description"[^>]*required/)
   assert.match(leadCreate, /href="\/admin\/partner\/partners\/customer\?lang=vi"/)
 
