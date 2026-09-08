@@ -1102,13 +1102,17 @@ test('design system: typed form controls preserve native values and controlled p
     closeHref: '?owner=',
   } as const
   const combo = renderToString(<Combobox {...comboProps} value="linh" />)
+  assert.match(combo, /type="hidden" name="owner" value="linh"/)
+  assert.match(combo, /name="ownerQuery" value="Ngọc"[^>]*role="combobox"/)
   assert.match(combo, /role="combobox"[^>]*aria-expanded="true"/)
   assert.match(combo, /role="listbox"/)
   assert.match(combo, /role="option" aria-selected="true"/)
-  assert.match(
-    renderToString(<MultiCombobox {...comboProps} values={['linh']} removeHref={() => '?remove=linh'} />),
-    /Remove Ngọc Linh/,
+  const multi = renderToString(
+    <MultiCombobox {...comboProps} values={['linh']} removeHref={() => '?remove=linh'} />,
   )
+  assert.match(multi, /type="hidden" name="owner" value="linh"/)
+  assert.match(multi, /name="ownerQuery" value="Ngọc"[^>]*role="combobox"/)
+  assert.match(multi, /Remove Ngọc Linh/)
   assert.match(
     renderToString(<TagPicker {...comboProps} values={['linh']} removeHref={() => '?remove=linh'} />),
     /data-ui="tag-picker"/,
@@ -1144,12 +1148,13 @@ test('design system: typed form controls preserve native values and controlled p
     renderToString(
       <RelationPicker
         {...comboProps}
+        value="linh"
         results={[{ id: 'linh', name: 'Ngọc Linh' }]}
         getValue={(person) => person.id}
         getLabel={(person) => person.name}
       />,
     ),
-    /data-ui="relation-picker"[\s\S]*Ngọc Linh/,
+    /data-ui="relation-picker"[\s\S]*type="hidden" name="owner" value="linh"[\s\S]*Ngọc Linh/,
   )
 })
 

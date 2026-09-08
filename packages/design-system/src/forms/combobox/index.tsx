@@ -17,6 +17,8 @@ export type ComboboxOption = { value: string; label: string; description?: strin
 export type ComboboxProps = {
   id: string
   name: string
+  /** Name used for the human-readable search text; defaults to `${name}Query`. */
+  queryName?: string
   label: string
   query: string
   value?: string | null
@@ -35,13 +37,18 @@ export type ComboboxProps = {
   span?: 'half' | 'full'
 }
 
-const ComboControl = (props: ComboboxProps & { resolvedError: string | null }): TemplateResult => (
+const ComboControl = (
+  props: ComboboxProps & { resolvedError: string | null; submitValue: boolean },
+): TemplateResult => (
   <div data-ui="combobox" data-open={String(props.open)}>
+    {props.submitValue && (
+      <input type="hidden" name={props.name} value={props.value ?? ''} disabled={props.disabled === true} />
+    )}
     <div data-ui="combobox-input-row">
       <input
         data-ui="field-control"
         id={props.id}
-        name={props.name}
+        name={props.queryName ?? `${props.name}Query`}
         value={props.query}
         role="combobox"
         aria-autocomplete="list"
@@ -94,7 +101,7 @@ const ComboControl = (props: ComboboxProps & { resolvedError: string | null }): 
   </div>
 )
 
-export const Combobox = (props: ComboboxProps): TemplateResult => {
+const ComboboxField = (props: ComboboxProps & { submitValue: boolean }): TemplateResult => {
   const error = props.error ?? issueFor(props.issues, props.name)
   return (
     <FieldFrame
@@ -106,6 +113,8 @@ export const Combobox = (props: ComboboxProps): TemplateResult => {
   )
 }
 
+export const Combobox = (props: ComboboxProps): TemplateResult => <ComboboxField {...props} submitValue />
+
 export type MultiComboboxProps = Omit<ComboboxProps, 'value'> & {
   values: readonly string[]
   removeHref: (value: string) => string
@@ -113,17 +122,20 @@ export type MultiComboboxProps = Omit<ComboboxProps, 'value'> & {
 
 export const MultiCombobox = (props: MultiComboboxProps): TemplateResult => (
   <div data-ui="tag-picker">
-    <Combobox {...props} value={null} />
+    <ComboboxField {...props} value={null} submitValue={false} />
     {each(
       props.values,
       (value) => value,
       (value) => (
-        <a
-          href={props.removeHref(value)}
-          aria-label={`Remove ${props.options.find((option) => option.value === value)?.label ?? value}`}
-        >
-          {props.options.find((option) => option.value === value)?.label ?? value} ×
-        </a>
+        <>
+          <input type="hidden" name={props.name} value={value} disabled={props.disabled === true} />
+          <a
+            href={props.removeHref(value)}
+            aria-label={`Remove ${props.options.find((option) => option.value === value)?.label ?? value}`}
+          >
+            {props.options.find((option) => option.value === value)?.label ?? value} ×
+          </a>
+        </>
       ),
     )}
   </div>
