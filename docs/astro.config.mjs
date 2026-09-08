@@ -163,6 +163,7 @@ export default defineConfig({
                 { label: 'Operations reading map', slug: 'operations' },
                 { label: 'Performance benchmarks', slug: 'operations/benchmarks' },
                 { label: 'Loyalty benchmark evidence', slug: 'ketsuite/benchmarks/loyalty' },
+                { label: 'SSR fragment navigation', slug: 'ketsuite/benchmarks/ssr-navigation' },
               ],
             },
             {

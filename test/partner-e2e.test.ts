@@ -120,6 +120,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   const partnerList = await (
     await e2e.client.get('/admin/partner/partners', { headers: { accept: 'text/html' } })
   ).text()
+  assert.match(partnerList, /data-ket-slot="backend\.topbar"/)
   assert.doesNotMatch(partnerList, /data-ui="topbar"/)
   assert.match(partnerList, /data-ui="list-page"/)
   assert.match(

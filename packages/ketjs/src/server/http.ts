@@ -71,6 +71,8 @@ export type ServeOpts = {
   islandClients?:
     | ThemeRuntime['clients']
     | ((url: URL, req: IncomingMessage) => Promise<ThemeRuntime['clients']>)
+  /** All island names, including server-only islands without browser modules. */
+  islandNames?: readonly string[] | ((url: URL, req: IncomingMessage) => Promise<readonly string[]>)
   port?: number
   /** Defaults to a table on the deployment adapter; swap for memory on a single instance. */
   streamStore?: StreamStore
@@ -286,12 +288,16 @@ const bootstrapDocument = (body: string): string => {
     : body.slice(0, closingBody) + islandScript + body.slice(closingBody)
 }
 
-const browserBootstrap = (clients: ThemeRuntime['clients']): string => `import {
+const browserBootstrap = (
+  clients: ThemeRuntime['clients'],
+  islandNames: readonly string[],
+): string => `import {
   createIslandManager,
   domHost,
 } from ${JSON.stringify(viewRuntimeUrl)}
 
 const definitions = ${JSON.stringify(clients)}
+const knownIslands = new Set([...Object.keys(definitions), ...${JSON.stringify(islandNames)}])
 const registry = Object.create(null)
 const loading = new Map()
 const loadFactory = async (name) => {
@@ -314,7 +320,7 @@ const loadFactory = async (name) => {
 const loadPlaced = async (root, requireKnown = false) => {
   const names = new Set(Array.from(root.querySelectorAll('ket-island'), (element) => element.getAttribute('data-island')).filter(Boolean))
   if (requireKnown) {
-    const unknown = Array.from(names).find((name) => !definitions[name])
+    const unknown = Array.from(names).find((name) => !knownIslands.has(name))
     if (unknown) throw new Error('navigation fragment contains unknown island "' + unknown + '"')
   }
   await Promise.all(Array.from(names, loadFactory))
@@ -638,6 +644,14 @@ export async function createKetServer(o: ServeOpts) {
     if (typeof o.islandClients === 'function') return o.islandClients(url, req)
     return o.islandClients ?? theme?.clients ?? {}
   }
+  const resolveIslandNames = async (
+    url: URL,
+    req: IncomingMessage,
+    theme?: ThemeRuntime | null,
+  ): Promise<readonly string[]> => {
+    if (typeof o.islandNames === 'function') return o.islandNames(url, req)
+    return o.islandNames ?? Object.keys(theme?.islands ?? {})
+  }
 
   const tenantForLog = (url: URL, req: IncomingMessage): string | null => {
     try {
@@ -771,11 +785,12 @@ export async function createKetServer(o: ServeOpts) {
         route = url.pathname
         const theme = await resolveTheme(url, req)
         const clients = await resolveIslandClients(url, req, theme)
+        const islandNames = await resolveIslandNames(url, req, theme)
         res.writeHead(200, {
           'content-type': 'text/javascript; charset=utf-8',
           'cache-control': 'no-cache',
         })
-        return res.end(browserBootstrap(clients))
+        return res.end(browserBootstrap(clients, islandNames))
       }
 
       // Resumable stream: the client reconnects with ?from=<cursor> and gets
