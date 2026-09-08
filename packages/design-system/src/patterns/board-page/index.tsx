@@ -28,6 +28,8 @@ export type BoardPageProps = Omit<WorkspacePageProps, 'layout'>
  * belongs to the same application hierarchy. The pattern keeps location,
  * identity and global controls in stable compact bands while leaving scrolling,
  * columns and interaction to the specialised board supplied by the application.
+ *
+ * @deprecated Compose canvas recipes with WorkspacePage layout="canvas".
  */
 export const BoardPage = (props: BoardPageProps): TemplateResult =>
   workspacePage({ ...props, layout: 'canvas' }, 'board-page')
