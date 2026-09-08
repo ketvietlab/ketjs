@@ -7,12 +7,46 @@ KetSuite routes, translators, models, functions, sessions, or deployments.
 
 ```ts
 // File: src/ui/orders.tsx
-import { AppShell, Button, DataTable, FormPage, ListPage, Page, Section, Surface } from '@ketvietlab/design-system'
+import {
+  AppShell,
+  Button,
+  DataTable,
+  ListChrome,
+  ListPage,
+  ModalSheet,
+  Page,
+  RecordPage,
+  Section,
+  Surface,
+} from '@ketvietlab/design-system'
 ```
 
 Load `@ketvietlab/design-system/styles.css` and put `data-kv-design-system` on the
 application root. Components own their markup and `data-ui` hooks; applications
 provide business data and translated labels.
+
+Compose content with unframed `Section`, `Stack` and `Grid`. `DataTable`, `Metric`
+and `ContentCard` already own their surfaces; do not wrap them in `Surface` or
+another card. Reserve `Surface` for unframed content that needs a working panel,
+such as a form group or a standalone process tool.
+
+Section headings have no bottom border or divider padding in any page pattern.
+Separate sections with layout gaps; add a divider only when the content explicitly
+requires one, never through a page-specific section override.
+
+For titled working blocks, use `Surface title="..." body={form}` or
+`DataTable title="..."`. The title sits inside the panel at 18px (`--kv-text-xl`),
+with optional `actions` beside it. A titled table owns one panel, with a borderless,
+transparent scrolling viewport inside; never wrap it in another `Surface`.
+The title is retained in its empty state, with optional `emptyActions` for recovery.
+Omitting `title` preserves the existing unheaded form surface or standalone table.
+
+The app structure is demonstrated as four practical layouts inside `AppShell`:
+collection (`ListPage`), record (`RecordPage`), flow workspace (`WorkspacePage`
+with `layout="flow"`), and canvas workspace (`WorkspacePage` with
+`layout="canvas"`). Compatibility adapters remain available for migrated
+screens, but new catalogue examples should show one of those practical surfaces
+inside the shell.
 
 The catalogue is isolated behind `@ketvietlab/design-system/catalogue`, so the
 production entry point does not load its specimen data or catalogue chrome.
@@ -20,10 +54,56 @@ production entry point does not load its specimen data or catalogue chrome.
 Run the component catalogue from the repository root:
 
 ```bash
+# Run from: ketjs/
 npm run design:system
 ```
 
 Then open `http://127.0.0.1:4100`.
+
+### Operational demo
+
+Run the same app on a separate port to inspect a connected sales workflow:
+
+```bash
+# Run from: ketjs/
+PORT=4000 npm run design:system
+```
+
+Open `http://127.0.0.1:4000/demo`. The Vietnamese demo includes a flow overview,
+searchable and paginated order collection, inline record forms, activity and
+document tabs, a delivery board, creation sheet and state confirmation dialog.
+It consumes public design-system components directly. App-owned behavior includes
+selection, native form submission, validation, modal focus management and CSV export.
+Synthetic orders live in the server process only and reset when it restarts;
+the demo has no connection to production records, email or delivery services.
+
+The demo uses `data-presentation="grouped"` on its design-system root: a light grey
+canvas, grey page chrome and white working groups, with a grey KetSuite sidebar in
+light mode.
+The default light palette uses a neutral `#F6F6F7` canvas and a `#F7F5F5`
+sidebar, with a `#E9E7E8` sidebar border and a pale indigo
+`#EEF0FB` selected item. Header and context use the page grey; cards stay white, with
+`#E2E4E8` content dividers. The dark sidebar remains optional.
+Forms and titled tables own one boundary with an 18px heading inside;
+table viewports have no second frame. Titled tables use 12px inset on every side,
+matching the sales demo card, without extra viewport margins or an inner frame.
+The record context column is a continuous
+white region with unframed subsections and metric. Disclosures inside a working
+group are unframed. Kanban cards retain individual boundaries because each is a
+separate navigable record. Do not wrap a whole page or arbitrary sections in cards.
+Grouped layouts use 8px between cards and 12px padding around each entire card,
+including its heading and body. Page gutters and heading-to-body spacing are 12px.
+Field and table-row density is unchanged.
+Collection paging lives in `ListChrome.pager` above the table, alongside search and bulk controls.
+The demo shows the visible record range and previous/next links, with no page-number strip or
+separate `ListPage.footer` pagination panel. Paging, search and status filters preserve the
+current query and sort order.
+ListChrome is one command bar: a bounded search field on the leading side, with
+filters and the result range clustered at the trailing edge. On compact widths
+search and paging stay on the first row; filters wrap on the row below.
+Bulk actions occupy space only when a selection exists.
+The earlier `data-presentation="flat"` experiment remains opt-in; the catalogue
+and other consumers retain the default presentation.
 
 The contract is intentionally strict:
 
@@ -36,13 +116,33 @@ The contract is intentionally strict:
 
 The public entry exports actions, status and feedback objects, fields, navigation,
 tabs, progress, layout primitives, the three-region app shell, page/record layouts,
-the canonical list-page and form-page compositions, data tables, forms, and modal sheets. Use
-`ListPage` for operational collections: applications provide translated identity,
-URL-driven controls and result content while the pattern keeps header, controls,
-status, body and footer in one stable order. The primary action stays beside the
-title, while result status and controls share one command bar. Use `FormPage` for
-create and edit screens: the primary decision stays beside record identity, the
-business form keeps one reading column, and durable facts may occupy the optional
-context rail. Form fields keep labels on the left and controls on the right at
-every viewport; responsive layouts tighten those columns instead of changing the
-reading direction. Every supported state appears in the catalogue.
+`ListChrome` with `BulkActions` and `PagerBar`, the canonical list and record page
+compositions, data tables, forms, and modal sheets. Use `ListPage` for operational
+collections: applications provide translated identity, URL-driven controls and
+result content while the pattern keeps header, controls, status, body and footer in
+one stable order. `DataTable` covers the common collection contract: responsive
+stacking, row selection, sorting, grouping, visible columns and row links. Do not
+place record action buttons inside table rows; link the row to the record instead.
+Use `RecordPage` for durable subjects, and the compatibility `FormPage` only for
+existing create/edit screens that have not migrated. Form fields support native
+controls, custom controls, checkbox/radio groups and nested field groups. Route-owned
+`ModalSheet` instances carry close/backdrop metadata and become fullscreen at the
+mobile breakpoint. The catalogue includes common component states; the page preview
+also covers loading, empty, error, validation and read-only states in English and Vietnamese.
+
+`rowHref` provides one keyboard link per row, including the full row pointer target.
+Linked cells are display-only. Associate `selection.form` and `bulk.form` with the
+same native form to submit selected IDs and the bulk command. Selection syncing
+and select-all remain application runtime responsibilities.
+
+Forms keep labels on the left and controls on the right, including on mobile.
+Help and errors align below the control. Narrow panels reduce the number of field
+pairs per row without stacking labels above inputs. Native inputs support `readOnly`,
+`min` and `max`; choices can be disabled individually, and invalid nested groups
+open automatically. Give repeated search/sort controls unique IDs. Loading links
+are disabled, and empty query rows do not occupy space.
+
+Route-modal focus trapping, background inertness, Escape, focus restoration and
+unsaved-change confirmation belong to the route runtime. ARIA metadata alone
+does not implement those interactions. See the backend development guide for the
+full composition and integration contract.

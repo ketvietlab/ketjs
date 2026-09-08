@@ -39,6 +39,7 @@
     --kv-ref-text-inverse: #111318;
 
     /* Reference: brand. */
+    --kv-ref-accent-100: #efe9e7;
     --kv-ref-primary-50: #eef2ff;
     --kv-ref-primary-100: #e0e7ff;
     --kv-ref-primary-200: #c7d2fe;
@@ -258,7 +259,7 @@
     --kv-page-chrome-bg: light-dark(var(--kv-page-bg), var(--kv-panel-bg));
     --kv-page-content-bg: var(--kv-page-bg);
     --kv-action-primary-bg: var(--kv-accent);
-    --kv-action-primary-hover: var(--kv-accent-hover);
+    --kv-action-primary-hover: light-dark(var(--kv-accent-hover), var(--kv-accent-active));
     --kv-action-primary-active: var(--kv-accent-active);
     --kv-action-primary-ink: var(--kv-on-accent);
     --kv-input-bg: light-dark(#ffffff, #20252b);

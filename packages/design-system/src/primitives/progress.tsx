@@ -16,7 +16,7 @@ export const Progress = (props: {
   tone?: ProgressTone
   showValue?: boolean
 }): TemplateResult => {
-  const value = Math.max(0, Math.min(100, props.value))
+  const value = Number.isFinite(props.value) ? Math.max(0, Math.min(100, props.value)) : 0
   return (
     <div data-ui="progress" data-tone={props.tone ?? 'primary'}>
       {(props.showValue ?? true) && (
