@@ -41,13 +41,22 @@ export const attachDesignSystemInteractions = (root = document) => {
     if (!(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) continue
     const box = trigger.getBoundingClientRect()
     const gap = 8
-    const left = Math.max(8, Math.min(box.left, window.innerWidth - panel.offsetWidth - 8))
-    const below = box.bottom + gap
-    const top =
-      below + panel.offsetHeight <= window.innerHeight
-        ? below
-        : Math.max(8, box.top - panel.offsetHeight - gap)
+    const placement = popover.getAttribute('data-placement') ?? 'bottom-start'
+    const prefersTop = placement.startsWith('top')
+    const prefersEnd = placement.endsWith('end')
+    const topPosition = box.top - panel.offsetHeight - gap
+    const bottomPosition = box.bottom + gap
+    const topFits = topPosition >= 8
+    const bottomFits = bottomPosition + panel.offsetHeight <= window.innerHeight - 8
+    const useTop = prefersTop ? topFits || !bottomFits : !bottomFits && topFits
+    const requestedLeft = prefersEnd ? box.right - panel.offsetWidth : box.left
+    const left = Math.max(8, Math.min(requestedLeft, window.innerWidth - panel.offsetWidth - 8))
+    const top = Math.max(
+      8,
+      Math.min(useTop ? topPosition : bottomPosition, window.innerHeight - panel.offsetHeight - 8),
+    )
     panel.dataset.runtimePositioned = 'true'
+    panel.dataset.runtimePlacement = `${useTop ? 'top' : 'bottom'}-${prefersEnd ? 'end' : 'start'}`
     panel.style.left = `${Math.round(left)}px`
     panel.style.top = `${Math.round(top)}px`
     panel.style.right = 'auto'
@@ -57,10 +66,42 @@ export const attachDesignSystemInteractions = (root = document) => {
   /** @param {KeyboardEvent} event */
   const onKeydown = (event) => {
     const openMenu = document.activeElement?.closest('[data-ui="menu"][open]')
+    if (openMenu instanceof HTMLDetailsElement) {
+      const trigger = openMenu.querySelector('[data-ui="menu-trigger"]')
+      const items = /** @type {HTMLElement[]} */ (
+        [...openMenu.querySelectorAll('[role="menuitem"]')].filter(
+          (item) => item instanceof HTMLElement && item.getAttribute('aria-disabled') !== 'true',
+        )
+      )
+      const activeIndex = items.findIndex((item) => item === document.activeElement)
+      let nextIndex = -1
+      if (event.key === 'ArrowDown') nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length
+      else if (event.key === 'ArrowUp')
+        nextIndex = activeIndex < 0 ? items.length - 1 : (activeIndex - 1 + items.length) % items.length
+      else if (event.key === 'Home') nextIndex = 0
+      else if (event.key === 'End') nextIndex = items.length - 1
+      if (nextIndex >= 0 && items[nextIndex] instanceof HTMLElement) {
+        items[nextIndex].focus()
+        event.preventDefault()
+        return
+      }
+      if ((event.key === 'Enter' || event.key === ' ') && document.activeElement === trigger) {
+        if (items[0] instanceof HTMLElement) items[0].focus()
+        event.preventDefault()
+        return
+      }
+    }
     if (event.key === 'Escape' && openMenu instanceof HTMLDetailsElement) {
       openMenu.open = false
       const trigger = openMenu.querySelector('[data-ui="menu-trigger"]')
       if (trigger instanceof HTMLElement) trigger.focus()
+      event.preventDefault()
+      return
+    }
+    const openPopover = document.activeElement?.closest('[data-ui="popover"][data-open="true"]')
+    if (event.key === 'Escape' && openPopover instanceof HTMLElement) {
+      const close = openPopover.querySelector('[data-ui="popover-close"]')
+      if (close instanceof HTMLElement) close.click()
       event.preventDefault()
       return
     }
