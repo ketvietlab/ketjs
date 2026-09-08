@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { text, json } from '@ketvietlab/ketjs'
+import { defineFormSchema, text, json } from '@ketvietlab/ketjs'
 import type { Route, RouteEntry, ServeContext } from '@ketvietlab/ketjs'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { adminPage, inLocale as localized } from '../backend/screen.ts'
-import { readForm, seeOther } from '../backend/forms.ts'
+import { formRefusal, readForm, seeOther } from '../backend/forms.ts'
 import {
   AccessContext,
   AccessScope,
@@ -17,6 +17,7 @@ import {
   UserSummary,
   UserWorkflow,
   ModalSheet,
+  inline,
   shell,
 } from '../../ui/index.ts'
 import type { UserRoleOption } from '../../ui/index.ts'
@@ -43,6 +44,30 @@ const selection = (v: Record<string, string>) =>
   Object.keys(v)
     .filter((k) => k.startsWith('role.'))
     .map((k) => k.slice(5))
+const requiredIssue = (field: string) => ({
+  field,
+  code: 'required',
+  messageKey: 'validation.required',
+})
+const assignRoleForm = defineFormSchema({
+  fields: {
+    scopeKind: { type: 'text', required: true, oneOf: ['tenant', 'company', 'branch'] },
+    companyId: { type: 'text', trim: true },
+    branchId: { type: 'text', trim: true },
+    addMembership: { type: 'bool' },
+    reason: { type: 'text', required: true, trim: true },
+  },
+  unknown: 'drop',
+  validate: (values) => {
+    if (values.scopeKind !== 'tenant' && !values.companyId) return requiredIssue('companyId')
+    if (values.scopeKind === 'branch' && !values.branchId) return requiredIssue('branchId')
+    return true
+  },
+})
+const removeRoleForm = defineFormSchema({
+  fields: { reason: { type: 'text', required: true, trim: true } },
+  unknown: 'drop',
+})
 const messages: Record<string, string> = {
   E_ROLE_NOT_ASSIGNABLE: 'Có vai trò không còn khả dụng. Vui lòng chọn lại.',
   E_ROLE_ALREADY_ASSIGNED: 'Vai trò đã được gán tại phạm vi này.',
@@ -217,9 +242,11 @@ export async function renderAccess(
       groups.set(key, [...(groups.get(key) ?? []), a])
     }
     content = stack([
-      canAssign ? (
-        <LinkButton label="Gán vai trò" href={inLocale(url, path(id, '/assign'))} variant="primary" />
-      ) : null,
+      canAssign
+        ? inline([
+            <LinkButton label="Gán vai trò" href={inLocale(url, path(id, '/assign'))} variant="primary" />,
+          ])
+        : null,
       ...[...groups].map(([, rows]) => (
         <AccessScope
           title={scopeName(rows[0], options)}
@@ -484,19 +511,40 @@ async function assignmentRoute(ctx: ServeContext, url: URL, req: Req, id: string
     branchId: removing ? assignment.branchId : values.branchId || null,
     addMembership: values.addMembership === 'on',
   }
-  const preview = (await ctx.call(
-    'user.previewRoleAssignment',
-    { ...args, ...(removing ? { assignmentId } : {}) },
-    url,
-    req,
-  )) as Row
-  let error = ''
-  if (req.method === 'POST' && values.command === 'confirm') {
+  const refusal = formRefusal(options.translate)
+  const fieldErrors: Record<string, string> = {}
+  const reject = (result: Row) => {
+    for (const held of result.errors ?? []) {
+      const message = accessError({ errors: [held] })
+      if (['scopeKind', 'companyId', 'branchId', 'addMembership', 'roleIds', 'reason'].includes(held.field))
+        fieldErrors[held.field] = message
+      else refusal.add([message])
+    }
+  }
+  const validating =
+    req.method === 'POST' && (values.command === 'confirm' || (!removing && values.command === 'preview'))
+  if (validating) refusal.check(removing ? removeRoleForm : assignRoleForm, values)
+  let preview: Row = { ok: false }
+  if (removing || !validating || !refusal.refused()) {
+    preview = (await ctx.call(
+      'user.previewRoleAssignment',
+      { ...args, ...(removing ? { assignmentId } : {}) },
+      url,
+      req,
+    )) as Row
+  }
+  if (validating && !removing && !preview.ok) reject(preview)
+  if (
+    req.method === 'POST' &&
+    values.command === 'confirm' &&
+    !refusal.refused() &&
+    Object.keys(fieldErrors).length === 0
+  ) {
     if (
       !values.expectedAuthorizationRevision ||
       !Number.isSafeInteger(Number(values.expectedAuthorizationRevision))
     )
-      error = 'Nội dung đã hết hạn. Kiểm tra lại trước khi xác nhận.'
+      refusal.add(['Nội dung đã hết hạn. Kiểm tra lại trước khi xác nhận.'])
     else {
       const result = (await ctx.call(
         authority,
@@ -520,16 +568,16 @@ async function assignmentRoute(ctx: ServeContext, url: URL, req: Req, id: string
         req,
       )) as Row
       if (result.ok) return seeOther(inLocale(url, path(id, '/access')))
-      error = accessError(result)
+      reject(result)
     }
   }
   const review =
     !removing &&
     !!preview.ok &&
+    !refusal.refused() &&
+    Object.keys(fieldErrors).length === 0 &&
     selection(values).length > 0 &&
     ['preview', 'confirm'].includes(values.command)
-  if (!removing && req.method === 'POST' && values.command === 'preview' && !preview.ok)
-    error = accessError(preview)
   const body = stack([
     removing ? (
       <UserSummary
@@ -568,7 +616,13 @@ async function assignmentRoute(ctx: ServeContext, url: URL, req: Req, id: string
       }))}
       emailCheckUrl=""
       mode={removing ? 'remove' : 'assign'}
-      error={error}
+      error={refusal.sentences().join(' ')}
+      fieldErrors={Object.fromEntries(
+        ['scopeKind', 'companyId', 'branchId', 'addMembership', 'roleIds', 'reason'].map((field) => [
+          field,
+          refusal.error(field) ?? fieldErrors[field],
+        ]),
+      )}
       review={review}
       preview={removing || review ? previewContent(preview, options) : undefined}
     />,
