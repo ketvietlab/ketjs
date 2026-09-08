@@ -297,7 +297,7 @@ const browserBootstrap = (
 } from ${JSON.stringify(viewRuntimeUrl)}
 
 const definitions = ${JSON.stringify(clients)}
-const knownIslands = new Set(${JSON.stringify(islandNames)})
+const knownIslands = new Set([...Object.keys(definitions), ...${JSON.stringify(islandNames)}])
 const registry = Object.create(null)
 const loading = new Map()
 const loadFactory = async (name) => {

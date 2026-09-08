@@ -25,6 +25,7 @@
     "bench:i18n": "npm run build --silent && node .build/bench/i18n.bench.js",
     "bench:modules": "npm run build --silent && node .build/bench/module-path.bench.js",
     "bench:ssr-navigation": "npm run build --silent && node tools/ssr-navigation-benchmark.mjs",
+    "test:ssr-navigation-browser": "npm run build --silent && SSR_NAV_SIZES=10000 SSR_NAV_SAMPLES=1 node tools/ssr-navigation-benchmark.mjs",
     "bench:collaboration": "npm run build --silent && node .build/bench/collaboration.bench.js",
     "e2e:collaboration": "npm run build --silent && node .build/tools/collaboration-browser-e2e.js",
     "bench:queue": "npm run build --silent && node .build/bench/queue.bench.js",

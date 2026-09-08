@@ -57,8 +57,9 @@ try {
         if (message.text().startsWith('KET_NAVIGATION_ERROR: '))
           reportedNavigationErrors.push(message.text().slice('KET_NAVIGATION_ERROR: '.length))
       })
-      for (const mode of ['document', 'fragment']) {
-        for (let sample = 0; sample < samples; sample++) {
+      for (let sample = 0; sample < samples; sample++) {
+        const modes = sample % 2 === 0 ? ['document', 'fragment'] : ['fragment', 'document']
+        for (const mode of modes) {
           await page.goto(`${deployment.baseUrl}/admin/partner/partners`, { waitUntil: 'load' })
           await page.evaluate(() => {
             globalThis.__ketBenchmarkRealm = globalThis.__ketBenchmarkRealm ?? crypto.randomUUID()
@@ -71,13 +72,14 @@ try {
           const started = performance.now()
           if (mode === 'document') {
             await page.goto(`${deployment.baseUrl}/admin/partner/partners?role=customer`, {
-              waitUntil: 'load',
+              waitUntil: 'commit',
             })
           } else {
             await page.locator('a[data-ui="tab"][href="/admin/partner/partners?role=customer"]').click()
-            await page.waitForFunction(() => location.search === '?role=customer')
-            await page.locator('[data-ui="row"]').first().waitFor()
           }
+          await page.waitForFunction(
+            () => location.search === '?role=customer' && document.querySelector('[data-ui="row"]'),
+          )
           const durationMs = performance.now() - started
           page.off('request', onRequest)
           const state = await page.evaluate(() => ({
@@ -99,11 +101,30 @@ try {
             slots: state.slots,
             navigationErrors: [...reportedNavigationErrors, ...state.navigationErrors],
           })
+          const measured = raw.at(-1)
+          if (
+            mode === 'fragment' &&
+            (measured.documentRequests !== 0 ||
+              !measured.realmPreserved ||
+              measured.navigationErrors.length > 0)
+          )
+            throw new Error(`fragment navigation regressed: ${JSON.stringify(measured)}`)
         }
       }
       await page.goto(`${deployment.baseUrl}/admin/partner/partners`, { waitUntil: 'load' })
       await page.locator('a[data-ui="tab"][href="/admin/partner/partners?role=customer"]').click()
       await page.waitForFunction(() => location.search === '?role=customer')
+      const historyRealm = await page.evaluate(
+        () => (globalThis.__ketBenchmarkRealm = globalThis.__ketBenchmarkRealm ?? crypto.randomUUID()),
+      )
+      await page.goBack({ waitUntil: 'commit' }).catch(() => undefined)
+      await page.waitForFunction(() => location.search === '')
+      await page.goForward({ waitUntil: 'commit' }).catch(() => undefined)
+      await page.waitForFunction(
+        () => location.search === '?role=customer' && document.querySelector('[data-ui="row"]'),
+      )
+      if ((await page.evaluate(() => globalThis.__ketBenchmarkRealm)) !== historyRealm)
+        throw new Error('history navigation replaced the JavaScript realm')
       await page.screenshot({
         path: join(runDir, 'browser-evidence', `${size}-fragment-customer.png`),
         fullPage: true,
