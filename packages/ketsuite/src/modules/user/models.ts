@@ -70,6 +70,12 @@ export const models: Record<string, ModelDef> = {
    * and `ket permissions` can print what any list reaches because there is nothing
    * to traverse — a function cannot touch a model it did not declare.
    */
+  EmailReservation: {
+    scope: 'shared',
+    fields: { id: 'id', userId: 'text' },
+    indexes: { user: { fields: ['userId'], unique: true } },
+  },
+
   Role: {
     scope: 'shared',
     fields: {

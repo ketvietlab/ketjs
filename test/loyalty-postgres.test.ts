@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { callFn, compose, migrateOne, registerFunctions } from '@ketvietlab/ketjs'
 import type { Adapter, Row } from '@ketvietlab/ketjs'
 import { postgresAdapter } from '@ketvietlab/ketjs-postgres'
-import { company, loyalty, partner, pricing, product, uom } from '@ketvietlab/ketsuite'
+import { company, loyalty, partner, pricing, product, stock, uom } from '@ketvietlab/ketsuite'
 import { address } from '@ketvietlab/ketsuite'
 
 const configured =
@@ -15,17 +15,17 @@ const reachable = await (async () => {
   const adapter = postgresAdapter(adminUrl.toString())
   try {
     await adapter.open()
-    await adapter.all('SELECT 1')
+    const role = (await adapter.all('SELECT rolcreatedb FROM pg_roles WHERE rolname = current_user'))[0]
     await adapter.close()
-    return true
+    return Boolean(role?.rolcreatedb)
   } catch {
     await adapter.close().catch(() => {})
     return false
   }
 })()
 
-const live = { skip: reachable ? false : `no PostgreSQL at ${adminUrl.toString()}` }
-const modules = [address, partner, company, uom, product, pricing, loyalty]
+const live = { skip: reachable ? false : `no PostgreSQL CREATE DATABASE role at ${adminUrl.host}` }
+const modules = [address, partner, company, uom, product, pricing, stock, loyalty]
 const manifest = compose(modules, { headless: true })
 const scope = { company: 'acme', branches: null }
 

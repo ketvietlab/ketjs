@@ -101,7 +101,8 @@ or falls through to the team's `assignmentMode`:
 - `round_robin` — the team's cursor walks its active members in `sequence` order;
 - `capacity` — the member with the most headroom against their `capacity` wins.
 
-Both routing modes read `TeamMember`, which is managed from **Configuration → Team members**. A team
+Both routing modes read `TeamMember`. Open **Configuration → Teams**, then open a team row to manage
+its members on the team page. Capacity is a routing weight rather than a maximum record count. A team
 with no members can only be assigned by hand. An ordinary agent can atomically claim only unassigned
 work in one of their queues and can claim it only for themselves.
 
@@ -113,11 +114,12 @@ same key replays the result; a stale version fails without changing the record.
 
 ## Scoring and the leaderboard
 
-`ScoreRule` rows describe what a case is worth: a field, an operator (`eq`, `contains`, `present`,
-`gte`), a value and a number of points. Saving a case enqueues `crm.score`, so the figure follows the
-record rather than waiting for someone to press a button; `crm.case.refreshScore` recomputes on
-demand. The scoring write neither bumps `version` nor overwrites a concurrent edit, so a form left
-open stays valid.
+`ScoreRule` rows describe what a case is worth: a supported field (`email`, `utmSource`, or
+`expectedRevenue`), an operator (`eq`, `contains`, `present`, `gte`), a value and a number of points.
+Email and UTM source come from the case; expected revenue comes from its `SalesDetail`. Saving a case
+enqueues `crm.score`, so the figure follows the record rather than waiting for someone to press a
+button; `crm.case.refreshScore` recomputes on demand. The scoring write neither bumps `version` nor
+overwrites a concurrent edit, so a form left open stays valid.
 
 Closing a case enqueues `crm.gamification` for its owner, which restates one row of the leaderboard
 from counting queries. **CRM → Leaderboard** also recalculates the whole table on request.
@@ -170,16 +172,20 @@ to create was refused.
   holding the stage select and a real POST as the no-JavaScript fallback.
 - **Cases** — the shared list chrome: search, filters, grouping, saved state in the URL.
 - **Record workspace** — duplicates, the record form, and the commands that were previously reachable
-  only over the API: move, assign, merge, and marking a case lost with a reason. Tabs for sales
-  (figures and quotations), activities (open work, meetings, history) and the timeline.
+  only over the API: move, assign and merge. A lead converts through a confirmation dialog that
+  captures the opportunity stage, expected revenue and expected closing date. An open opportunity
+  closes through one dialog for either won or lost, with a required outcome note and confirmation.
+  Tabs cover sales (figures and quotations), activities (open work, meetings, history) and the timeline.
 - **Planner** — CRM activities only, each linked back to its case, with complete and cancel on the row.
 - **Leaderboard** — standings, recalculated on request.
-- **Configuration** — teams, team members, stages, tags, assignment rules and scoring rules; each row
-  can be edited and archived, not only created.
+- **Configuration** — five lists: teams, stages, tags, assignment rules and lead/opportunity scoring.
+  Clicking anywhere on a row opens it. Adding or editing a team uses a full page, with member
+  management inside that page; the other four records use centered route dialogs. Each list can show
+  active, archived or all records, and lifecycle changes are made inside the opened record.
 
-All URL-owned CRM overlays use centered dialogs on desktop, including long configuration forms and
-the activity scheduler. On narrow screens the shared dialog contract expands them to the full viewport;
-CRM does not use right-side sheets.
+URL-owned CRM overlays use centered dialogs on desktop, including the four non-team configuration
+forms and the activity scheduler. On narrow screens the shared dialog contract expands them to the
+full viewport; CRM does not use right-side sheets.
 
 The board's figures come from `crm.pipeline.summary`, which takes the screen's filters and answers
 per-stage counts and amounts plus the four totals. Every column keeps its own figures, including Won
@@ -194,6 +200,18 @@ that search server-side and, where it makes sense, create the missing record inl
 small fixed vocabulary — kind, priority, warehouse, activity type, plan — stay native selects.
 
 Every mutating admin route refuses a cross-origin POST.
+
+## Partner to closed opportunity
+
+The Partner record contributes **Create lead** when `crm_backend` is installed. That action opens the
+dedicated lead form with the Partner, contact name, email and phone prefilled, and cancel returns to the
+same Partner. This path requires both the Partner and a stated need; a Partner does not become a lead
+merely because it was imported or created.
+
+Conversion updates the existing case from `lead` to `opportunity`. It keeps the case id, Partner,
+owner, conversation and timeline, while storing the expected revenue and closing date in its existing
+`SalesDetail`. Closing also updates that same record. The required outcome note is retained on the
+terminal timeline event; a lost result additionally becomes the sales detail's lost reason.
 
 ## Building on the case
 

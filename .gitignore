@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.artifacts/
 
 # Build and type artifacts
 .build/

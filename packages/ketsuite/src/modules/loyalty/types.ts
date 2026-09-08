@@ -50,6 +50,7 @@ export type OrderSnapshot = {
   orderId: string
   partnerId?: string | null
   currency: string
+  warehouseId?: string | null
   pricelistId?: string | null
   date: string
   lines: OrderLineSnapshot[]
@@ -95,7 +96,6 @@ export type MembershipSummary = {
   tierId?: string | null
   tierCode?: string | null
   rollingSpend: number
-  redeemPercent: number
   points: number
   refreshedAt: string
 }

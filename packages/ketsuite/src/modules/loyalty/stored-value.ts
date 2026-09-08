@@ -25,7 +25,7 @@ const activeStoredValueWallet = async (ctx: Ctx, walletId: unknown, at = now()):
   if (
     !program ||
     !(STORED_VALUE_PROGRAM_TYPES as readonly string[]).includes(String(program.programType)) ||
-    program.active === false ||
+    (program.active === false && program.designVersion !== 1) ||
     String(program.currency) !== String(company?.currency ?? '')
   )
     throw new LoyaltyConflict('wallet is not backed by an active stored value program')
@@ -114,7 +114,11 @@ const creditStoredValue = async (
     })
     return { entry: posted.entry, wallet: posted.wallet, replayed: true }
   }
-  await activeStoredValueWallet(ctx, args.walletId)
+  const creditedWallet = await activeStoredValueWallet(ctx, args.walletId)
+  if (operation === 'issue') {
+    const program = (await ctx.db.select('loyalty.Program', { id: creditedWallet.programId }))[0]
+    if (!program?.active) throw new LoyaltyConflict('stored value issuance stopped')
+  }
   const posted = await postDelta(ctx, {
     id: args.id,
     walletId: args.walletId,

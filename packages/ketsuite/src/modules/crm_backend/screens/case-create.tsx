@@ -1,9 +1,21 @@
 import type { Translator } from '@ketvietlab/ketjs'
 import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { button, FormCluster, FormPage, linkButton, RecordForm, shell, Surface } from '../../../ui/index.ts'
+import {
+  button,
+  FormCluster,
+  FormPage,
+  linkButton,
+  Notice,
+  RecordForm,
+  shell,
+  stack,
+  Surface,
+} from '../../../ui/index.ts'
 import type { FormField, Frame } from '../../../ui/index.ts'
 
 export type CaseCreateScreenOptions = {
+  /** Context-specific heading such as "Create lead" when starting from a partner. */
+  title?: string
   fields: FormField[]
   /** Locale-aware endpoint supplied by the route. */
   action: string
@@ -12,6 +24,8 @@ export type CaseCreateScreenOptions = {
   /** Carried through POST so validation does not lose the originating query state. */
   returnTo: string
   errors?: readonly string[]
+  guidance?: { title: string; description: string }
+  partnerIntent?: boolean
 }
 
 export const caseCreateScreen = (
@@ -20,22 +34,23 @@ export const caseCreateScreen = (
   options: CaseCreateScreenOptions,
 ): TemplateResult => {
   const formId = 'crm-case-create-form'
+  const title = options.title ?? _('crm_backend.action.create')
 
   return shell(
     _,
-    _('crm_backend.action.create'),
+    title,
     <FormPage
       variant="operational"
       frame={frame}
       scope="crm-case-create"
-      title={_('crm_backend.action.create')}
+      title={title}
       description={_('crm_backend.case.create.subtitle')}
       actions={
         <FormCluster
-          label={_('crm_backend.action.create')}
+          label={title}
           forms={[
             button({
-              label: _('crm_backend.action.create'),
+              label: title,
               type: 'submit',
               form: formId,
               variant: 'primary',
@@ -48,23 +63,29 @@ export const caseCreateScreen = (
           ]}
         />
       }
-      body={
+      body={stack([
+        ...(options.guidance
+          ? [<Notice title={options.guidance.title} message={options.guidance.description} tone="info" />]
+          : []),
         <Surface
           body={
             <RecordForm
               id={formId}
               scope="crm-case-create"
               action={options.action}
-              submit={_('crm_backend.action.create')}
+              submit={title}
               submitVariant="primary"
               submitPlacement="external"
               errors={options.errors}
-              hidden={{ returnTo: options.returnTo }}
+              hidden={{
+                returnTo: options.returnTo,
+                ...(options.partnerIntent ? { partnerIntent: '1' } : {}),
+              }}
               fields={options.fields}
             />
           }
-        />
-      }
+        />,
+      ])}
     />,
     { ...frame, topbar: false, titled: false },
   )

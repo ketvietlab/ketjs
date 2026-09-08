@@ -220,7 +220,11 @@
       flex: 1 0 100%;
     }
 
-    [data-ui="main"]:has(> [data-ui="topbar"] [data-ui="list-chrome"][data-layout="catalogue"])
+    [data-ui="main"]:has(
+        > [data-ket-slot="backend.topbar"]
+          > [data-ui="topbar"]
+          [data-ui="list-chrome"][data-layout="catalogue"]
+      )
       > [data-ui="content"] {
       padding: 0 var(--admin-gap) var(--admin-gap-lg);
     }
