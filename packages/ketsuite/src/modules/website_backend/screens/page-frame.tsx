@@ -9,6 +9,7 @@ type PageFrameProps = {
   subtitle?: string | null
   frame: Frame
   body: TemplateResult
+  width?: 'default' | 'wide'
   /** Closes the collection: a pager, a count, whatever the list ends with. */
   footer?: TemplateResult | null
 }
@@ -46,6 +47,7 @@ export const FormScreenFrame = ({
   subtitle,
   frame,
   body,
+  width,
 }: PageFrameProps): TemplateResult =>
   shell(
     _,
@@ -57,6 +59,7 @@ export const FormScreenFrame = ({
       description={subtitle ?? undefined}
       actions={frame.extras?.['topbar.end']}
       body={body}
+      width={width}
     />,
     {
       ...frame,
