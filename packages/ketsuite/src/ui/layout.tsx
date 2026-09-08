@@ -1,6 +1,6 @@
 // The frame a screen sits in, and the shared arrangements inside it.
 
-import { each } from '@ketvietlab/ketjs-view'
+import { each, html } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { NAVIGATION_TYPE, fragment, isNavigationRequest, page, withHeaders } from '@ketvietlab/ketjs'
 import type { MenuNode, Route, ServeContext, Translator } from '@ketvietlab/ketjs'
@@ -52,6 +52,16 @@ export type Frame = {
 }
 
 /**
+ * Restore an explicit reader preference before the theme stylesheets can paint.
+ *
+ * Doing this in the hydrated island is too late for a full navigation: the new
+ * document paints in the system theme, then changes colour when the client
+ * module arrives. The script is fixed framework-owned text with no interpolated
+ * input, and storage access is guarded for browsers that disable it.
+ */
+const prepaintTheme = html`<script>(()=>{try{const theme=localStorage.getItem('ket.backend.theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch{}})()</script>`
+
+/**
  * The topbar shows the page's name only when nothing below it does.
  *
  * A framed screen already opens with `record-heading`, so putting the title in the
@@ -74,6 +84,9 @@ const topbarContent = (_: Translator, title: string, frame: Frame): TemplateResu
   )
 }
 
+const topbarRegion = (_: Translator, title: string, frame: Frame): JSXChild =>
+  frame.topbar === false ? '' : <header data-ui="topbar">{topbarContent(_, title, frame)}</header>
+
 export const shell = (
   _: Translator,
   title: string,
@@ -94,9 +107,7 @@ export const shell = (
     return (
       <ket-fragments data-title={title}>
         <template data-ket-slot="backend.sidebar-main">{sidebarMain(_, sidebarOptions)}</template>
-        <template data-ket-slot="backend.topbar">
-          {frame.topbar === false ? '' : topbarContent(_, title, frame)}
-        </template>
+        <template data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
     )
@@ -105,13 +116,7 @@ export const shell = (
       {sidebar(_, sidebarOptions)}
       <main data-ui="main">
         {extras.runtime ?? ''}
-        {frame.topbar === false ? (
-          ''
-        ) : (
-          <header data-ui="topbar" data-ket-slot="backend.topbar">
-            {topbarContent(_, title, frame)}
-          </header>
-        )}
+        <div data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</div>
         <div data-ui="content" data-ket-slot="backend.content">
           {body}
         </div>
@@ -134,7 +139,7 @@ export const backendPage = async (
       body: ctx.document({
         lang: options.lang,
         title: options.title,
-        head: await ctx.styles(req),
+        head: html`${prepaintTheme}${await ctx.styles(req)}`,
         body: options.body,
       }),
       status: options.status,

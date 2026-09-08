@@ -1,3 +1,4 @@
+import { Disclosure } from '@ketvietlab/design-system'
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import { actionGroup, button, linkButton } from './actions.tsx'
@@ -28,6 +29,10 @@ export type FormOption = {
   checked?: boolean
 }
 export type FormField = {
+  /** Secondary fields inside the same form; no nested form or separate save. */
+  fields?: readonly FormField[]
+  open?: boolean
+
   name: string
   label: string
   /** A trusted control such as a progressively enhanced relational selector. */
@@ -133,6 +138,57 @@ const control = (field: FormField, id: string, describedBy: string | null): Temp
   )
 }
 
+/** A standalone design-system field for workflows that own their surrounding form. */
+export const formField = (field: FormField, scope = 'workflow'): TemplateResult => {
+  const id = `field-${scope}-${field.name}`.replace(/[^a-zA-Z0-9_-]/g, '-')
+  const helpId = field.help ? `${id}-help` : null
+  const errorId = field.error ? `${id}-error` : null
+  const describedBy = [helpId, errorId].filter(Boolean).join(' ') || null
+  return (
+    <label
+      data-ui="form-field"
+      data-span={field.span ?? 'half'}
+      data-kind={field.type ?? (field.control === undefined ? 'text' : 'relation')}
+      data-invalid={String(!!field.error)}
+      for={id}
+    >
+      <span data-ui="form-label">
+        {field.label}
+        {field.required && (
+          <span data-ui="form-required" aria-hidden="true">
+            {' *'}
+          </span>
+        )}
+      </span>
+      {control(field, id, describedBy)}
+      {!!field.help && (
+        <small data-ui="form-help" id={helpId ?? undefined}>
+          {field.help}
+        </small>
+      )}
+      {!!field.error && (
+        <small data-ui="form-error" id={errorId ?? undefined}>
+          {field.error}
+        </small>
+      )}
+    </label>
+  )
+}
+
+export const formFields = (
+  fields: readonly FormField[],
+  scope = 'workflow',
+  layout: 'grid' | 'record' = 'grid',
+): TemplateResult => (
+  <div data-ui="form-grid" data-layout={layout}>
+    {each(
+      fields,
+      (field) => field.name,
+      (field) => formField(field, scope),
+    )}
+  </div>
+)
+
 /** A native, server-rendered form. Domain modules provide data, never markup. */
 export type RecordFormOptions = {
   /** Optional DOM id lets controls in a dense record header belong to this form. */
@@ -149,6 +205,7 @@ export type RecordFormOptions = {
   method?: 'get' | 'post'
   /** Optional behavior scope for a progressively enhanced form. */
   scope?: string | null
+  saveBeforeNavigation?: string
   errors?: readonly string[]
   hidden?: Record<string, string>
 } & (
@@ -164,6 +221,7 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
     data-has-fields={String(o.fields.length > 0)}
     data-submit-variant={o.submitVariant}
     data-scope={o.scope ?? null}
+    data-save-before-navigation={o.saveBeforeNavigation ?? null}
     method={o.method ?? 'post'}
     action={o.action}
   >
@@ -181,175 +239,7 @@ export const recordForm = (o: RecordFormOptions): TemplateResult => (
         )}
       </ul>
     )}
-    <div data-ui="form-grid">
-      {each(
-        o.fields,
-        (field) => field.name,
-        (field) => {
-          const scope = [o.action, o.hidden?.id, o.hidden?.action, field.name].filter(Boolean).join('-')
-          const id = `field-${scope}`.replace(/[^a-zA-Z0-9_-]/g, '-')
-          const helpId = field.help ? `${id}-help` : null
-          const errorId = field.error ? `${id}-error` : null
-          const describedBy = [helpId, errorId].filter(Boolean).join(' ') || null
-          const fieldLabel = (
-            <span data-ui="form-label">
-              {field.label}
-              {field.required && (
-                <span data-ui="form-required" aria-hidden="true">
-                  {' *'}
-                </span>
-              )}
-            </span>
-          )
-          if (field.type === 'checkbox-group')
-            return (
-              <div
-                data-ui="form-field"
-                data-span={field.span ?? 'half'}
-                data-kind="checkbox-group"
-                data-invalid={String(!!field.error)}
-              >
-                <span data-ui="form-label" id={`${id}-label`}>
-                  {field.label}
-                  {field.required && (
-                    <span data-ui="form-required" aria-hidden="true">
-                      {' *'}
-                    </span>
-                  )}
-                </span>
-                <div data-ui="form-options" role="group" aria-labelledby={`${id}-label`}>
-                  {each(
-                    field.options ?? [],
-                    (option) => option.name ?? option.value,
-                    (option) => (
-                      <label data-ui="form-option">
-                        <input
-                          data-ui="form-option-input"
-                          type="checkbox"
-                          name={option.name ?? `${field.name}[]`}
-                          autocomplete="off"
-                          value={option.value}
-                          checked={option.checked === true}
-                          disabled={field.disabled === true}
-                          aria-invalid={field.error ? 'true' : null}
-                          aria-describedby={describedBy}
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ),
-                  )}
-                </div>
-                {!!field.help && (
-                  <small data-ui="form-help" id={helpId ?? undefined}>
-                    {field.help}
-                  </small>
-                )}
-                {!!field.error && (
-                  <small data-ui="form-error" id={errorId ?? undefined}>
-                    {field.error}
-                  </small>
-                )}
-              </div>
-            )
-          if (field.type === 'radio')
-            return (
-              <div
-                data-ui="form-field"
-                data-span={field.span ?? 'half'}
-                data-kind="radio"
-                data-invalid={String(!!field.error)}
-              >
-                <span data-ui="form-label" id={`${id}-label`}>
-                  {field.label}
-                  {field.required && (
-                    <span data-ui="form-required" aria-hidden="true">
-                      {' *'}
-                    </span>
-                  )}
-                </span>
-                <div data-ui="form-options" role="radiogroup" aria-labelledby={`${id}-label`}>
-                  {each(
-                    field.options ?? [],
-                    (option) => option.value,
-                    (option) => (
-                      <label data-ui="form-option">
-                        <input
-                          data-ui="form-option-input"
-                          type="radio"
-                          name={field.name}
-                          autocomplete="off"
-                          value={option.value}
-                          checked={String(field.value ?? '') === option.value}
-                          required={field.required === true}
-                          disabled={field.disabled === true}
-                          aria-invalid={field.error ? 'true' : null}
-                          aria-describedby={describedBy}
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ),
-                  )}
-                </div>
-                {!!field.help && (
-                  <small data-ui="form-help" id={helpId ?? undefined}>
-                    {field.help}
-                  </small>
-                )}
-                {!!field.error && (
-                  <small data-ui="form-error" id={errorId ?? undefined}>
-                    {field.error}
-                  </small>
-                )}
-              </div>
-            )
-          if (field.control !== undefined)
-            return (
-              <div
-                data-ui="form-field"
-                data-span={field.span ?? 'half'}
-                data-kind="relation"
-                data-invalid={String(!!field.error)}
-              >
-                {fieldLabel}
-                {field.control}
-                {!!field.help && (
-                  <small data-ui="form-help" id={helpId ?? undefined}>
-                    {field.help}
-                  </small>
-                )}
-                {!!field.error && (
-                  <small data-ui="form-error" id={errorId ?? undefined}>
-                    {field.error}
-                  </small>
-                )}
-              </div>
-            )
-          return (
-            <label
-              data-ui="form-field"
-              data-span={field.span ?? 'half'}
-              data-kind={field.type ?? 'text'}
-              data-invalid={String(!!field.error)}
-              for={id}
-            >
-              {field.type === 'checkbox' && control(field, id, describedBy)}
-              {fieldLabel}
-              {field.type !== 'checkbox' && control(field, id, describedBy)}
-              {!!field.help && (
-                <small data-ui="form-help" id={helpId ?? undefined}>
-                  {field.help}
-                </small>
-              )}
-              {!!field.error && (
-                <small data-ui="form-error" id={errorId ?? undefined}>
-                  {field.error}
-                </small>
-              )}
-            </label>
-          )
-        },
-      )}
-    </div>
+    {recordFormFields(o.fields, [o.action, o.hidden?.id, o.hidden?.action].filter(Boolean).join('-'))}
     {o.submitPlacement !== 'external' && (
       <div data-ui="form-actions">
         {actionGroup({
@@ -425,3 +315,188 @@ export const recordActions = (o: {
     </form>
   )
 }
+
+const recordFormFields = (fields: readonly FormField[], scopeKey: string): TemplateResult => (
+  <div data-ui="form-grid">
+    {each(
+      fields,
+      (field) => field.name,
+      (field) => {
+        const scope = [scopeKey, field.name].filter(Boolean).join('-')
+        const id = `field-${scope}`.replace(/[^a-zA-Z0-9_-]/g, '-')
+        const helpId = field.help ? `${id}-help` : null
+        const errorId = field.error ? `${id}-error` : null
+        const describedBy = [helpId, errorId].filter(Boolean).join(' ') || null
+        const fieldLabel = (
+          <span data-ui="form-label">
+            {field.label}
+            {field.required && (
+              <span data-ui="form-required" aria-hidden="true">
+                {' *'}
+              </span>
+            )}
+          </span>
+        )
+        if (field.fields)
+          return (
+            <div data-ui="form-field" data-kind="group" data-span="full">
+              <Disclosure
+                summary={field.label}
+                open={field.open}
+                body={recordFormFields(
+                  field.fields.map((child) => ({ ...child, disabled: field.disabled || child.disabled })),
+                  scope,
+                )}
+              />
+            </div>
+          )
+        if (field.type === 'checkbox-group')
+          return (
+            <div
+              data-ui="form-field"
+              data-span={field.span ?? 'half'}
+              data-kind="checkbox-group"
+              data-invalid={String(!!field.error)}
+            >
+              <span data-ui="form-label" id={`${id}-label`}>
+                {field.label}
+                {field.required && (
+                  <span data-ui="form-required" aria-hidden="true">
+                    {' *'}
+                  </span>
+                )}
+              </span>
+              <div data-ui="form-options" role="group" aria-labelledby={`${id}-label`}>
+                {each(
+                  field.options ?? [],
+                  (option) => option.name ?? option.value,
+                  (option) => (
+                    <label data-ui="form-option">
+                      <input
+                        data-ui="form-option-input"
+                        type="checkbox"
+                        name={option.name ?? `${field.name}[]`}
+                        autocomplete="off"
+                        value={option.value}
+                        checked={option.checked === true}
+                        disabled={field.disabled === true}
+                        aria-invalid={field.error ? 'true' : null}
+                        aria-describedby={describedBy}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ),
+                )}
+              </div>
+              {!!field.help && (
+                <small data-ui="form-help" id={helpId ?? undefined}>
+                  {field.help}
+                </small>
+              )}
+              {!!field.error && (
+                <small data-ui="form-error" id={errorId ?? undefined}>
+                  {field.error}
+                </small>
+              )}
+            </div>
+          )
+        if (field.type === 'radio')
+          return (
+            <div
+              data-ui="form-field"
+              data-span={field.span ?? 'half'}
+              data-kind="radio"
+              data-invalid={String(!!field.error)}
+            >
+              <span data-ui="form-label" id={`${id}-label`}>
+                {field.label}
+                {field.required && (
+                  <span data-ui="form-required" aria-hidden="true">
+                    {' *'}
+                  </span>
+                )}
+              </span>
+              <div data-ui="form-options" role="radiogroup" aria-labelledby={`${id}-label`}>
+                {each(
+                  field.options ?? [],
+                  (option) => option.value,
+                  (option) => (
+                    <label data-ui="form-option">
+                      <input
+                        data-ui="form-option-input"
+                        type="radio"
+                        name={field.name}
+                        autocomplete="off"
+                        value={option.value}
+                        checked={String(field.value ?? '') === option.value}
+                        required={field.required === true}
+                        disabled={field.disabled === true}
+                        aria-invalid={field.error ? 'true' : null}
+                        aria-describedby={describedBy}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ),
+                )}
+              </div>
+              {!!field.help && (
+                <small data-ui="form-help" id={helpId ?? undefined}>
+                  {field.help}
+                </small>
+              )}
+              {!!field.error && (
+                <small data-ui="form-error" id={errorId ?? undefined}>
+                  {field.error}
+                </small>
+              )}
+            </div>
+          )
+        if (field.control !== undefined)
+          return (
+            <div
+              data-ui="form-field"
+              data-span={field.span ?? 'half'}
+              data-kind="relation"
+              data-invalid={String(!!field.error)}
+            >
+              {fieldLabel}
+              {field.control}
+              {!!field.help && (
+                <small data-ui="form-help" id={helpId ?? undefined}>
+                  {field.help}
+                </small>
+              )}
+              {!!field.error && (
+                <small data-ui="form-error" id={errorId ?? undefined}>
+                  {field.error}
+                </small>
+              )}
+            </div>
+          )
+        return (
+          <label
+            data-ui="form-field"
+            data-span={field.span ?? 'half'}
+            data-kind={field.type ?? 'text'}
+            data-invalid={String(!!field.error)}
+            for={id}
+          >
+            {field.type === 'checkbox' && control(field, id, describedBy)}
+            {fieldLabel}
+            {field.type !== 'checkbox' && control(field, id, describedBy)}
+            {!!field.help && (
+              <small data-ui="form-help" id={helpId ?? undefined}>
+                {field.help}
+              </small>
+            )}
+            {!!field.error && (
+              <small data-ui="form-error" id={errorId ?? undefined}>
+                {field.error}
+              </small>
+            )}
+          </label>
+        )
+      },
+    )}
+  </div>
+)
