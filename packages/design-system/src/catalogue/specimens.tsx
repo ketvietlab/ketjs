@@ -53,6 +53,11 @@ import { InlineEdit } from '../data-operations/inline-edit/index.tsx'
 import { ResourceList } from '../data-display/resource-list/index.tsx'
 import { DataGrid } from '../data-display/data-grid/index.tsx'
 import { Tree, TreeGrid } from '../data-display/tree/index.tsx'
+import { AvatarGroup, DescriptionList, Person, Status } from '../record/display/index.tsx'
+import { FormattedDate, FormattedMoney, FormattedNumber } from '../record/formatted-values/index.tsx'
+import { RecordActions, RecordRail, RecordSummary } from '../record/composition/index.tsx'
+import { ActivityTimeline, AuditLog } from '../record/activity/index.tsx'
+import { Attachments, MediaGallery } from '../record/media/index.tsx'
 
 export type ComponentExample = {
   id: string
@@ -1877,6 +1882,194 @@ export const componentGroups: readonly ComponentGroup[] = [
             inputValue="An Việt Trading"
             version="7"
           />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'record-workspace',
+    name: 'Record and workspace composition',
+    description: 'Neutral record facts, activity and media compose inside the three canonical page patterns.',
+    examples: [
+      {
+        id: 'record-display',
+        name: 'Record facts and formatted values',
+        description: 'Identity, status and locale-aware values remain small, reusable display primitives.',
+        render: () => (
+          <Stack
+            items={[
+              <Inline
+                items={[
+                  <Person name="Ngọc Linh" detail="Sales operations" />,
+                  <AvatarGroup
+                    label="Order collaborators"
+                    people={[
+                      { id: 'linh', name: 'Ngọc Linh' },
+                      { id: 'minh', name: 'Minh Anh' },
+                      { id: 'ha', name: 'Thu Hà' },
+                      { id: 'nam', name: 'Hoàng Nam' },
+                      { id: 'vy', name: 'Thảo Vy' },
+                    ]}
+                    max={4}
+                  />,
+                  <Status label="Ready" tone="positive" />,
+                ]}
+              />,
+              <DescriptionList
+                columns={3}
+                items={[
+                  { id: 'date', label: 'Delivery date', value: <FormattedDate value="2026-09-08" /> },
+                  { id: 'quantity', label: 'Quantity', value: <FormattedNumber value={1200} /> },
+                  {
+                    id: 'total',
+                    label: 'Total',
+                    value: <FormattedMoney value={18450000} currency="VND" />,
+                  },
+                ]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'record-composition',
+        name: 'Record summary, actions and rail',
+        description: 'One identity header and one neutral aside prevent nested-card drift.',
+        render: () => (
+          <Grid
+            columns={2}
+            items={[
+              <Stack
+                items={[
+                  <RecordSummary
+                    title="SO-1042"
+                    subtitle="An Việt Trading"
+                    person={{ name: 'Ngọc Linh', detail: 'Owner' }}
+                    status={{ label: 'Ready', tone: 'positive' }}
+                    facts={[
+                      { id: 'date', label: 'Delivery', value: '08/09/2026' },
+                      { id: 'total', label: 'Total', value: '18.450.000 ₫' },
+                    ]}
+                  />,
+                  <RecordActions
+                    actions={[
+                      <Button label="Confirm" variant="primary" />,
+                      <ActionMenu id="record-more" label="More" items={[]} />,
+                    ]}
+                  />,
+                ]}
+              />,
+              <RecordRail
+                sections={[
+                  {
+                    id: 'owner',
+                    title: 'Owner',
+                    body: <Person name="Ngọc Linh" detail="Sales operations" />,
+                  },
+                  { id: 'health', title: 'Health', body: <Status label="On track" tone="positive" /> },
+                ]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'activity-audit',
+        name: 'Activity timeline and audit log',
+        description:
+          'Applications own permission, redaction and queries; renderers expose all result states.',
+        render: () => {
+          const activity = [
+            {
+              id: 'a1',
+              actor: 'Ngọc Linh',
+              action: 'moved the order to Ready',
+              datetime: '2026-09-08T14:30:00+07:00',
+              timeLabel: '14:30 today',
+            },
+            {
+              id: 'a2',
+              actor: 'System',
+              action: 'synchronized a protected value',
+              datetime: '2026-09-08T14:25:00+07:00',
+              timeLabel: '14:25 today',
+              redacted: true,
+            },
+          ]
+          return (
+            <Grid
+              columns={2}
+              items={[
+                <ActivityTimeline label="Activity" items={activity} />,
+                <AuditLog label="Audit log" items={activity} />,
+              ]}
+            />
+          )
+        },
+      },
+      {
+        id: 'attachments-media',
+        name: 'Attachments and media',
+        description:
+          'Storage URLs and mutations stay in the application; public components render authorized results.',
+        render: () => (
+          <Grid
+            columns={2}
+            items={[
+              <Attachments
+                label="Order attachments"
+                items={[
+                  { id: 'invoice', name: 'invoice-SO-1042.pdf', href: '/files/invoice', meta: '238 KB' },
+                  { id: 'contract', name: 'Restricted contract', redacted: true },
+                ]}
+              />,
+              <MediaGallery
+                label="Delivery media"
+                items={[
+                  { id: 'restricted', alt: '', redacted: true, caption: 'Permission required' },
+                  {
+                    id: 'proof',
+                    alt: 'Delivery proof placeholder',
+                    src: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect width=%22400%22 height=%22300%22 fill=%22%23eef0fb%22/%3E%3Cpath d=%22M80 220l70-80 50 50 50-70 80 100%22 fill=%22none%22 stroke=%22%23566fd1%22 stroke-width=%2212%22/%3E%3C/svg%3E',
+                    caption: 'Delivery proof',
+                  },
+                ]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'canonical-recipes',
+        name: 'Canonical page recipes',
+        description:
+          'Worklist, analytical list, settings and master-detail vary slots—not page-pattern count.',
+        render: () => (
+          <Grid
+            columns={3}
+            items={[
+              <ContentCard title="ListPage" body="Worklist · analytical list · settings" />,
+              <ContentCard title="RecordPage" body="Summary · facts · timeline · attachments" />,
+              <ContentCard title="WorkspacePage" body="Master-detail · board · schedule · timeline canvas" />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'canvas-recipes',
+        name: 'Optional canvas recipes',
+        description: 'Board, schedule and timeline keep spatial columns and local horizontal overflow.',
+        render: () => (
+          <div data-pattern="workspace" data-workspace-mode="canvas">
+            <Grid
+              columns={3}
+              items={[
+                <ContentCard title="Backlog" body="SO-1047 · SO-1048" />,
+                <ContentCard title="In progress" body="SO-1042 · SO-1043" />,
+                <ContentCard title="Done" body="SO-1039 · SO-1040" />,
+              ]}
+            />
+          </div>
         ),
       },
     ],

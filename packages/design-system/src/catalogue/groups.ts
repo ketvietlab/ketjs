@@ -51,6 +51,11 @@ export const groupGovernance: Readonly<
     maturity: 'stable',
     states: ['default', 'selected', 'loading', 'empty', 'invalid', 'responsive'],
   },
+  'record-workspace': {
+    owner: 'Record composition',
+    maturity: 'stable',
+    states: ['default', 'loading', 'empty', 'invalid', 'responsive'],
+  },
   patterns: { owner: 'Page patterns', maturity: 'stable', states: ['default', 'empty', 'responsive'] },
 })
 
