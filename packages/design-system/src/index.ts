@@ -81,6 +81,19 @@ export type { DataGridColumn, DataGridProps } from './data-display/data-grid/ind
 export { Tree, TreeGrid } from './data-display/tree/index.tsx'
 export type { TreeGridColumn, TreeGridRow, TreeNode } from './data-display/tree/index.tsx'
 
+export { AvatarGroup, DescriptionList, KeyValue, Person, Status } from './record/display/index.tsx'
+export type { KeyValueProps, PersonProps } from './record/display/index.tsx'
+export { FormattedDate, FormattedMoney, FormattedNumber } from './record/formatted-values/index.tsx'
+export { RecordActions, RecordRail, RecordSummary } from './record/composition/index.tsx'
+export type {
+  RecordRailSection,
+  RecordSummaryProps,
+} from './record/composition/index.tsx'
+export { ActivityTimeline, AuditLog } from './record/activity/index.tsx'
+export type { ActivityItem } from './record/activity/index.tsx'
+export { Attachments, MediaGallery } from './record/media/index.tsx'
+export type { AttachmentItem, MediaItem } from './record/media/index.tsx'
+
 export {
   ContentCard,
   Disclosure,
