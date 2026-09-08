@@ -72,7 +72,7 @@ No publish command is part of either local script.
    required checks pass.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
-4. Create and publish GitHub release `v0.1.5` at that exact `master` commit.
+4. Create and publish GitHub release `v0.1.8` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
 6. Confirm all five packages and provenance attestations on npm.
 7. Update each downstream repository to pin the exact released `master` commit SHA, then run that
@@ -81,7 +81,7 @@ No publish command is part of either local script.
 
 ```bash
 # Run from: /path/to/projects
-npx -y @ketvietlab/ketjs@0.1.5 new public_smoke
+npx -y @ketvietlab/ketjs@0.1.8 new public_smoke
 cd public_smoke
 npm install
 npm test
