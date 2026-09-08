@@ -7,6 +7,9 @@ export const HOOKS = [
   'inline',
   'grid',
   'surface',
+  'surface-head',
+  'surface-title',
+  'surface-actions',
   'disclosure',
   'disclosure-summary',
   'disclosure-body',
@@ -38,9 +41,7 @@ const Items = (props: { items: readonly JSXChild[] }): TemplateResult => (
     {each(
       props.items,
       (_, index) => index,
-      (item) => (
-        <>{item}</>
-      ),
+      (item) => (typeof item === 'string' || typeof item === 'number' ? <span>{item}</span> : <>{item}</>),
     )}
   </>
 )
@@ -68,10 +69,23 @@ export const Grid = (props: { items: readonly JSXChild[]; columns?: 2 | 3 | 4 })
 
 export const Surface = (props: {
   body: JSXChild
+  title?: string
+  actions?: JSXChild
   tone?: 'default' | 'subtle' | 'raised'
   padding?: 'none' | 'compact' | 'default'
 }): TemplateResult => (
-  <div data-ui="surface" data-tone={props.tone ?? 'default'} data-padding={props.padding ?? 'default'}>
+  <div
+    data-ui="surface"
+    data-tone={props.tone ?? 'default'}
+    data-padding={props.padding ?? 'default'}
+    data-has-heading={props.title ? 'true' : null}
+  >
+    {props.title && (
+      <header data-ui="surface-head">
+        <h2 data-ui="surface-title">{props.title}</h2>
+        {props.actions !== undefined && <div data-ui="surface-actions">{props.actions}</div>}
+      </header>
+    )}
     {props.body}
   </div>
 )

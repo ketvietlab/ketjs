@@ -7,12 +7,15 @@ import { Field } from '../primitives/field.tsx'
 import { NavList, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
 import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
-import { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from '../layouts/shell.tsx'
+import { AppShell } from '../layouts/shell.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
+import { ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
 import { DashboardPage } from '../patterns/dashboard-page.tsx'
 import { ListPage } from '../patterns/list-page.tsx'
 import { FormPage } from '../patterns/form-page.tsx'
+import { RecordPage } from '../patterns/record-page.tsx'
+import { WorkspacePage } from '../patterns/workspace-page.tsx'
 import { ModalSheet } from '../patterns/modal-sheet.tsx'
 import { Pipeline } from '../patterns/pipeline.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
@@ -49,6 +52,154 @@ const orders: OrderRow[] = [
 const toneOf = (state: OrderRow['state']) =>
   state === 'Ready' ? ('positive' as const) : state === 'Review' ? ('warning' as const) : ('danger' as const)
 
+type DemoLayout = 'collection' | 'record' | 'flow' | 'canvas'
+
+const demoNavItems = (active: DemoLayout) => [
+  { label: 'Collection', href: '#app-shell', leading: '≡', active: active === 'collection', count: 148 },
+  { label: 'Record', href: '#record-page', leading: '◇', active: active === 'record' },
+  { label: 'Flow', href: '#workspace-flow', leading: '▦', active: active === 'flow', count: 7 },
+  { label: 'Canvas', href: '#workspace-canvas', leading: '□', active: active === 'canvas' },
+]
+
+const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
+  <div data-ui="shell-demo-sidebar">
+    <strong>KétSuite</strong>
+    <NavList label="Workspace layouts" items={demoNavItems(props.active)} />
+  </div>
+)
+
+const DemoRail = (props: {
+  title: string
+  detail: string
+  progress?: number
+  items?: readonly JSXChild[]
+}): TemplateResult => (
+  <div data-ui="shell-demo-rail">
+    <p data-ui="catalogue-kicker">Context</p>
+    <strong>{props.title}</strong>
+    <p>{props.detail}</p>
+    {props.progress !== undefined && <Progress label={props.title} value={props.progress} />}
+    {props.items !== undefined && <Stack gap="compact" items={props.items} />}
+  </div>
+)
+
+const DemoShell = (props: {
+  active: DemoLayout
+  main: JSXChild
+  railTitle?: string
+  railDetail?: string
+  railProgress?: number
+  railItems?: readonly JSXChild[]
+}): TemplateResult => (
+  <AppShell
+    mode="embedded"
+    sidebar={<DemoSidebar active={props.active} />}
+    main={props.main}
+    rightRail={
+      props.railTitle !== undefined ? (
+        <DemoRail
+          title={props.railTitle}
+          detail={props.railDetail ?? ''}
+          progress={props.railProgress}
+          items={props.railItems}
+        />
+      ) : undefined
+    }
+  />
+)
+
+const OrdersTable = (props: { grouped?: boolean; title?: string } = {}): TemplateResult => (
+  <DataTable
+    title={props.title}
+    rows={props.grouped ? ([] as OrderRow[]) : orders}
+    id={(row) => row.id}
+    rowHref={(row) => `#${row.id}`}
+    responsive="stack"
+    selection={{ selectedIds: ['SO-1042'] }}
+    groups={
+      props.grouped
+        ? [
+            {
+              id: 'ready',
+              label: 'Ready to invoice',
+              count: 2,
+              rows: orders.slice(0, 2),
+              pager: { label: '2 shown in Ready', nextHref: '#data-table' },
+            },
+            {
+              id: 'blocked',
+              label: 'Needs decision',
+              count: 1,
+              rows: orders.slice(2),
+            },
+          ]
+        : undefined
+    }
+    columns={[
+      {
+        key: 'id',
+        label: 'Order',
+        cell: (row) => row.id,
+        priority: 'primary',
+        kind: 'identifier',
+        sort: { href: '#data-table', direction: 'descending' },
+      },
+      { key: 'customer', label: 'Customer', cell: (row) => row.customer },
+      { key: 'total', label: 'Total', cell: (row) => row.total, align: 'end', kind: 'currency' },
+      {
+        key: 'state',
+        label: 'State',
+        cell: (row) => <Badge label={row.state} tone={toneOf(row.state)} />,
+        kind: 'status',
+      },
+    ]}
+  />
+)
+
+const ListDemoChrome = (props: { id: string; selected?: number }): TemplateResult => (
+  <ListChrome
+    search={{
+      id: `${props.id}-query`,
+      action: `#${props.id}`,
+      value: props.id === 'list-page' ? 'Mùa Hạ' : '',
+      placeholder: 'Search records',
+      hidden: { view: 'table' },
+    }}
+    facets={[
+      { id: 'all', label: 'All', href: `#${props.id}`, active: true, count: 148 },
+      { id: 'ready', label: 'Ready', href: `#${props.id}`, count: 91 },
+      { id: 'review', label: 'Review', href: `#${props.id}`, count: 7 },
+    ]}
+    views={[
+      { id: 'table', label: 'Table', href: `#${props.id}`, active: true },
+      { id: 'kanban', label: 'Kanban', href: `#${props.id}` },
+    ]}
+    sort={{
+      id: `${props.id}-sort`,
+      action: `#${props.id}`,
+      choices: [
+        { value: 'date-desc', label: 'Newest first', selected: true },
+        { value: 'total-desc', label: 'Largest total' },
+      ],
+    }}
+    bulk={{
+      selectedCount: props.selected ?? 1,
+      summary: `${props.selected ?? 1} selected`,
+      clearHref: `#${props.id}`,
+      actions: [{ id: 'approve', label: 'Approve', name: 'intent', value: 'approve', variant: 'primary' }],
+    }}
+    pager={{
+      summary: 'Showing 1-3 of 148',
+      previousHref: null,
+      nextHref: `#${props.id}`,
+      pages: [
+        { label: '1', href: `#${props.id}`, active: true },
+        { label: '2', href: `#${props.id}` },
+      ],
+    }}
+  />
+)
+
 export const componentGroups: readonly ComponentGroup[] = [
   {
     id: 'actions',
@@ -69,6 +220,7 @@ export const componentGroups: readonly ComponentGroup[] = [
               <Button label="Terminate" variant="destructive" />,
               <Button label="Saving" loading />,
               <Button label="Unavailable" disabled />,
+              <LinkButton label="Opening record" href="#record-page" loading />,
               <IconButton label="Toggle theme" icon="☾" />,
             ]}
           />
@@ -85,6 +237,8 @@ export const componentGroups: readonly ComponentGroup[] = [
               <Button label="Compact" size="compact" />,
               <Button label="Default" />,
               <Button label="Prominent decision" size="prominent" variant="primary" />,
+              <IconButton label="Compact theme toggle" icon="☾" size="compact" />,
+              <IconButton label="Prominent theme toggle" icon="☾" size="prominent" />,
               <LinkButton label="Open record" href="#data-table" variant="tertiary" leading="↗" />,
             ]}
           />
@@ -192,32 +346,153 @@ export const componentGroups: readonly ComponentGroup[] = [
         name: 'Field',
         description: 'Text, select, checkbox and error states without application-owned markup.',
         render: () => (
-          <Grid
-            columns={2}
-            items={[
-              <Field id="company-name" name="company" label="Company name" value="Két Việt" required />,
-              <Field
-                id="deployment"
-                name="deployment"
-                label="Deployment"
-                type="select"
-                value="commerce"
-                options={[
-                  { value: 'commerce', label: 'Commerce' },
-                  { value: 'cosmetic', label: 'Cosmetic' },
-                  { value: 'hospitality', label: 'Hospitality' },
+          <Surface
+            body={
+              <Grid
+                columns={2}
+                items={[
+                  <Field id="company-name" name="company" label="Company name" value="Két Việt" required />,
+                  <Field
+                    id="deployment"
+                    name="deployment"
+                    label="Deployment"
+                    type="select"
+                    value="commerce"
+                    options={[
+                      { value: 'commerce', label: 'Commerce' },
+                      { value: 'cosmetic', label: 'Cosmetic' },
+                      { value: 'hospitality', label: 'Hospitality' },
+                    ]}
+                    help="A tenant belongs to exactly one deployment."
+                  />,
+                  <Field
+                    id="database-key"
+                    name="databaseKey"
+                    label="Database key"
+                    value="Invalid Key"
+                    error="Use lowercase letters, numbers and hyphens only."
+                  />,
+                  <Field
+                    id="active"
+                    name="active"
+                    label="Active for new orders"
+                    type="checkbox"
+                    value
+                    help="New orders can be assigned to this company."
+                  />,
                 ]}
-                help="A tenant belongs to exactly one deployment."
-              />,
-              <Field
-                id="database-key"
-                name="databaseKey"
-                label="Database key"
-                value="Invalid Key"
-                error="Use lowercase letters, numbers and hyphens only."
-              />,
-              <Field id="active" name="active" label="Active for new orders" type="checkbox" value />,
-            ]}
+              />
+            }
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'field-states',
+    name: 'Field states',
+    description: 'Native input types, validation, read-only values and nested groups.',
+    examples: [
+      {
+        id: 'advanced-fields',
+        name: 'Operational fields',
+        description: 'Numeric constraints, dates, options and nested validation use the same field contract.',
+        render: () => (
+          <Surface
+            title="Settings"
+            body={
+              <RecordForm
+                action="#advanced-fields"
+                submitLabel="Save settings"
+                fields={[
+                  {
+                    id: 'settings-reference',
+                    name: 'reference',
+                    label: 'Reference',
+                    value: 'CUS-0042',
+                    readOnly: true,
+                    help: 'Assigned when the account was created.',
+                  },
+                  {
+                    id: 'settings-locked',
+                    name: 'locked',
+                    label: 'External reference',
+                    value: 'Pending verification',
+                    disabled: true,
+                  },
+                  {
+                    id: 'settings-limit',
+                    name: 'limit',
+                    label: 'Credit limit',
+                    type: 'decimal',
+                    value: 80000000,
+                    min: 0,
+                    step: '1000',
+                  },
+                  {
+                    id: 'settings-date',
+                    name: 'date',
+                    label: 'Effective date',
+                    type: 'date',
+                    value: '2026-09-08',
+                  },
+                  { id: 'settings-time', name: 'time', label: 'Delivery time', type: 'time', value: '09:00' },
+                  {
+                    id: 'settings-color',
+                    name: 'color',
+                    label: 'Calendar colour',
+                    type: 'color',
+                    value: '#5167c4',
+                  },
+                  {
+                    id: 'settings-billing',
+                    name: 'billing',
+                    label: 'Billing frequency',
+                    type: 'radio',
+                    value: 'monthly',
+                    required: true,
+                    options: [
+                      { value: 'monthly', label: 'Monthly' },
+                      { value: 'quarterly', label: 'Quarterly' },
+                    ],
+                  },
+                  {
+                    id: 'settings-channels',
+                    name: 'channels',
+                    label: 'Notifications',
+                    type: 'checkbox-group',
+                    options: [
+                      { value: 'email', label: 'Email', checked: true },
+                      { value: 'sms', label: 'SMS' },
+                    ],
+                  },
+                  {
+                    id: 'settings-address',
+                    name: 'address',
+                    label: 'Delivery address',
+                    error: 'Check the delivery address.',
+                    fields: [
+                      {
+                        id: 'settings-street',
+                        name: 'street',
+                        label: 'Street',
+                        value: '',
+                        required: true,
+                        error: 'Enter a street address.',
+                        span: 'full',
+                      },
+                      {
+                        id: 'settings-city',
+                        name: 'city',
+                        label: 'City',
+                        value: 'Hồ Chí Minh',
+                        autocomplete: 'address-level2',
+                      },
+                    ],
+                  },
+                ]}
+              />
+            }
           />
         ),
       },
@@ -332,80 +607,287 @@ export const componentGroups: readonly ComponentGroup[] = [
   {
     id: 'application-structure',
     name: 'Application structure',
-    description: 'Sidebar, content and context rail are peer regions—not cards nested inside a card.',
+    description:
+      'Four practical layouts inside the same shell: collection, record, flow workspace and canvas workspace.',
     examples: [
       {
         id: 'app-shell',
-        name: 'App shell',
-        description: 'The sidebar and right rail stay square while independent KPI objects use a 7px radius.',
+        name: 'Collection shell',
+        description:
+          'A full list workspace with sidebar navigation, URL-owned list chrome, selectable rows and a context rail.',
         render: () => (
-          <AppShell
-            mode="embedded"
-            sidebar={
-              <div data-ui="shell-demo-sidebar">
-                <strong>KétSuite</strong>
-                <NavList
-                  label="Workspace"
-                  items={[
-                    { label: 'Overview', href: '#app-shell', leading: '⌂', active: true },
-                    { label: 'Orders', href: '#data-table', leading: '□', count: 148 },
-                    { label: 'Products', href: '#record-page', leading: '◇' },
-                  ]}
-                />
-              </div>
-            }
+          <DemoShell
+            active="collection"
             main={
-              <Page
-                title="Operations"
-                description="Today across all active tenants"
+              <ListPage
+                variant="operational"
+                context="Sales / Sales orders"
+                title="Sales orders"
+                description="Review demand, fulfillment and payment state from one operational list."
                 actions={<Button label="Create order" variant="primary" />}
-                body={
-                  <Grid
-                    columns={3}
-                    items={[
-                      <Metric label="Orders" value="148" detail="+12 today" tone="positive" />,
-                      <Metric label="Review queue" value="7" detail="Oldest 42 min" tone="warning" />,
-                      <Metric label="Blocked" value="2" detail="Credential required" tone="danger" />,
-                    ]}
-                  />
-                }
+                controls={<ListDemoChrome id="app-shell" />}
+                body={<OrdersTable title="Order list" />}
               />
             }
-            rightRail={
-              <div data-ui="shell-demo-rail">
-                <p data-ui="catalogue-kicker">Context</p>
-                <strong>Today</strong>
-                <p>Three items need an operational decision.</p>
-                <Progress label="Daily target" value={72} />
-              </div>
-            }
+            railTitle="List health"
+            railDetail="Seven orders need a human decision before invoicing."
+            railProgress={72}
+            railItems={[
+              <Badge label="91 ready" tone="positive" />,
+              <Badge label="7 review" tone="warning" />,
+            ]}
           />
         ),
       },
       {
         id: 'record-page',
-        name: 'Record page',
+        name: 'Record shell',
         description:
-          'Sections use separators and spacing instead of a rounded container around the whole record.',
+          'A durable subject with record identity, tabs, form content and a right-hand facts rail.',
         render: () => (
-          <RecordCanvas
-            body={
-              <>
-                <PageHeader
-                  title="Mùa Hạ Riverside"
-                  description="Customer · CUS-0042"
-                  actions={<Button label="Edit" size="compact" />}
-                />
-                <RecordSection
-                  title="Overview"
-                  body="Stable customer with six active locations and no overdue invoices."
-                />
-                <RecordSection
-                  title="Delivery"
-                  body={<Progress label="Onboarding complete" value={84} tone="positive" />}
-                />
-              </>
+          <DemoShell
+            active="record"
+            main={
+              <RecordPage
+                variant="operational"
+                context="Customers / Mùa Hạ Riverside"
+                title="Mùa Hạ Riverside"
+                description="Customer · CUS-0042"
+                status={<Badge label="Active" tone="positive" />}
+                actions={
+                  <ActionGroup
+                    actions={[
+                      <Button label="Save" variant="primary" size="compact" />,
+                      <Button label="Archive" variant="tertiary" size="compact" />,
+                    ]}
+                  />
+                }
+                navigation={
+                  <Tabs
+                    label="Customer record"
+                    items={[
+                      { id: 'details', label: 'Details', href: '#record-page', active: true },
+                      { id: 'orders', label: 'Orders', href: '#record-page', count: 6 },
+                      { id: 'activity', label: 'Activity', href: '#record-page', count: 8 },
+                    ]}
+                  />
+                }
+                body={
+                  <Stack
+                    items={[
+                      <Surface
+                        title="Main information"
+                        body={
+                          <RecordForm
+                            action="#record-page"
+                            fields={[
+                              {
+                                id: 'layout-partner-name',
+                                span: 'full',
+                                name: 'name',
+                                label: 'Name',
+                                value: 'Mùa Hạ Riverside',
+                              },
+                              {
+                                id: 'layout-partner-email',
+                                span: 'full',
+                                name: 'email',
+                                label: 'Email',
+                                type: 'email',
+                                value: 'hello@muaha.example',
+                              },
+                              {
+                                id: 'layout-partner-tags',
+                                name: 'tags',
+                                label: 'Tags',
+                                type: 'checkbox-group',
+                                span: 'full',
+                                options: [
+                                  { value: 'vip', label: 'VIP', checked: true },
+                                  { value: 'hospitality', label: 'Hospitality', checked: true },
+                                ],
+                              },
+                            ]}
+                            submitLabel="Save"
+                          />
+                        }
+                      />,
+                      <OrdersTable title="Recent orders" />,
+                    ]}
+                  />
+                }
+                aside={
+                  <Stack
+                    items={[
+                      <Metric label="Credit limit" value="80m ₫" detail="42m ₫ available" />,
+                      <Progress label="Onboarding complete" value={84} tone="positive" />,
+                    ]}
+                  />
+                }
+                asideLabel="Customer context"
+              />
             }
+          />
+        ),
+      },
+      {
+        id: 'workspace-flow',
+        name: 'Flow workspace',
+        description:
+          'A vertical operations overview where metrics, process state and exception lists sit on one grey canvas.',
+        render: () => (
+          <DemoShell
+            active="flow"
+            main={
+              <WorkspacePage
+                variant="operational"
+                layout="flow"
+                context="Sales / Overview"
+                title="Revenue operations"
+                description="Follow confirmed demand, open work and handoffs across the team."
+                actions={<Button label="Create quotation" variant="primary" />}
+                controls={
+                  <ActionGroup
+                    label="Flow controls"
+                    actions={[
+                      <LinkButton label="Today" href="#workspace-flow" size="compact" />,
+                      <LinkButton
+                        label="This week"
+                        href="#workspace-flow"
+                        size="compact"
+                        variant="tertiary"
+                      />,
+                    ]}
+                  />
+                }
+                body={
+                  <Stack
+                    gap="loose"
+                    items={[
+                      <Grid
+                        columns={4}
+                        items={[
+                          <Metric label="Quotations" value={24} detail="5 new today" />,
+                          <Metric label="Sent" value={9} detail="Awaiting reply" tone="info" />,
+                          <Metric label="Confirmed" value={18} detail="82,000,000 ₫" tone="positive" />,
+                          <Metric label="Blocked" value={2} detail="Needs attention" tone="danger" />,
+                        ]}
+                      />,
+                      <Surface
+                        title="Sales flow"
+                        body={
+                          <Pipeline
+                            label="Sales flow"
+                            steps={[
+                              { id: 'draft', label: 'Quotation', value: 24 },
+                              { id: 'sent', label: 'Sent', value: 9, tone: 'info' },
+                              { id: 'confirmed', label: 'Confirmed', value: 18, tone: 'positive' },
+                              { id: 'invoice', label: 'To invoice', value: 6, tone: 'warning' },
+                            ]}
+                          />
+                        }
+                      />,
+                      <OrdersTable grouped title="Exceptions" />,
+                    ]}
+                  />
+                }
+              />
+            }
+            railTitle="Daily target"
+            railDetail="56 of 82 confirmed orders have been invoiced today."
+            railProgress={68}
+          />
+        ),
+      },
+      {
+        id: 'workspace-canvas',
+        name: 'Canvas workspace',
+        description:
+          'A horizontal board-style surface where the main content can scroll without changing the shell.',
+        render: () => (
+          <DemoShell
+            active="canvas"
+            main={
+              <WorkspacePage
+                variant="operational"
+                layout="canvas"
+                context="CRM / Pipeline"
+                title="Opportunities board"
+                description="Move active opportunities through a spatial workflow."
+                actions={<Button label="Create opportunity" variant="primary" />}
+                controls={
+                  <Inline
+                    items={[
+                      <LinkButton label="My pipeline" href="#workspace-canvas" size="compact" />,
+                      <LinkButton
+                        label="All teams"
+                        href="#workspace-canvas"
+                        size="compact"
+                        variant="tertiary"
+                      />,
+                      <Tag label="High value" removeHref="#workspace-canvas" removeLabel="Remove filter" />,
+                    ]}
+                  />
+                }
+                body={
+                  <Grid
+                    columns={3}
+                    items={[
+                      <Section
+                        title="Qualified"
+                        body={
+                          <Stack
+                            gap="compact"
+                            items={[
+                              <ContentCard
+                                title="Mùa Hạ Riverside"
+                                meta="42,000,000 ₫"
+                                body="Needs proposal"
+                              />,
+                              <ContentCard title="Ánh Dương Group" meta="18,000,000 ₫" body="Demo booked" />,
+                            ]}
+                          />
+                        }
+                      />,
+                      <Section
+                        title="Proposal"
+                        body={
+                          <Stack
+                            gap="compact"
+                            items={[
+                              <ContentCard title="Lotus Hotels" meta="64,000,000 ₫" body="Awaiting CFO" />,
+                              <ContentCard
+                                title="Bình Minh Retail"
+                                meta="30,000,000 ₫"
+                                body="Legal review"
+                              />,
+                            ]}
+                          />
+                        }
+                      />,
+                      <Section
+                        title="Negotiation"
+                        body={
+                          <Stack
+                            gap="compact"
+                            items={[
+                              <ContentCard title="Sông Xanh" meta="52,000,000 ₫" body="Discount requested" />,
+                              <ContentCard title="Urban Stay" meta="40,000,000 ₫" body="Close this week" />,
+                            ]}
+                          />
+                        }
+                      />,
+                    ]}
+                  />
+                }
+              />
+            }
+            railTitle="Pipeline risk"
+            railDetail="Three opportunities need owner follow-up before Friday."
+            railItems={[
+              <Badge label="2 overdue" tone="danger" />,
+              <Badge label="6 due this week" tone="warning" />,
+            ]}
           />
         ),
       },
@@ -467,6 +949,52 @@ export const componentGroups: readonly ComponentGroup[] = [
     description: 'Generic workflows assembled from the same primitives.',
     examples: [
       {
+        id: 'list-chrome',
+        name: 'List chrome',
+        description: 'Search, filters, view switch, bulk state and paging for URL-driven collection screens.',
+        render: () => (
+          <ListChrome
+            search={{
+              id: 'customer-query',
+              action: '#list-chrome',
+              placeholder: 'Search customers',
+            }}
+            facets={[
+              { id: 'active', label: 'Active', href: '#list-chrome', active: true, count: 42 },
+              { id: 'draft', label: 'Draft', href: '#list-chrome', count: 6 },
+            ]}
+            views={[
+              { id: 'table', label: 'Table', href: '#list-chrome', active: true },
+              { id: 'cards', label: 'Cards', href: '#list-chrome' },
+            ]}
+            sort={{
+              id: 'customer-sort',
+              action: '#list-chrome',
+              choices: [
+                { value: 'updated-desc', label: 'Recently updated', selected: true },
+                { value: 'name-asc', label: 'Name A-Z' },
+              ],
+            }}
+            status="48 customers"
+            actions={<Button label="Create" variant="primary" size="compact" />}
+            bulk={{
+              selectedCount: 2,
+              summary: '2 customers selected',
+              clearHref: '#list-chrome',
+              actions: [{ id: 'archive', label: 'Archive', name: 'intent', value: 'archive' }],
+            }}
+            pager={{
+              summary: 'Showing 1-25 of 48',
+              nextHref: '#list-chrome',
+              pages: [
+                { label: '1', href: '#list-chrome', active: true },
+                { label: '2', href: '#list-chrome' },
+              ],
+            }}
+          />
+        ),
+      },
+      {
         id: 'list-page',
         name: 'List page',
         description:
@@ -480,21 +1008,61 @@ export const componentGroups: readonly ComponentGroup[] = [
             description="Review demand, fulfillment and payment state from one operational list."
             actions={<Button label="Create order" variant="primary" />}
             controls={
-              <ActionGroup
-                label="List controls"
-                actions={[
-                  <LinkButton label="All orders" href="#list-page" size="compact" />,
-                  <LinkButton label="Ready" href="#list-page" size="compact" variant="tertiary" />,
-                  <LinkButton label="Needs review" href="#list-page" size="compact" variant="tertiary" />,
+              <ListChrome
+                search={{
+                  id: 'orders-query',
+                  action: '#list-page',
+                  value: 'Mùa Hạ',
+                  placeholder: 'Search orders',
+                  hidden: { view: 'all' },
+                }}
+                facets={[
+                  { id: 'all', label: 'All', href: '#list-page', active: true, count: 148 },
+                  { id: 'ready', label: 'Ready', href: '#list-page', count: 91 },
+                  { id: 'review', label: 'Review', href: '#list-page', count: 7 },
                 ]}
+                views={[
+                  { id: 'table', label: 'Table', href: '#list-page', active: true },
+                  { id: 'kanban', label: 'Kanban', href: '#list-page' },
+                ]}
+                sort={{
+                  id: 'orders-sort',
+                  action: '#list-page',
+                  choices: [
+                    { value: 'date-desc', label: 'Newest first', selected: true },
+                    { value: 'total-desc', label: 'Largest total' },
+                    { value: 'customer-asc', label: 'Customer A-Z' },
+                  ],
+                }}
+                bulk={{
+                  selectedCount: 1,
+                  summary: '1 order selected',
+                  clearHref: '#list-page',
+                  actions: [
+                    { id: 'approve', label: 'Approve', name: 'intent', value: 'approve', variant: 'primary' },
+                    { id: 'export', label: 'Export', name: 'intent', value: 'export' },
+                  ],
+                }}
+                pager={{
+                  summary: 'Showing 1-3 of 148',
+                  previousHref: null,
+                  nextHref: '#list-page',
+                  pages: [
+                    { label: '1', href: '#list-page', active: true },
+                    { label: '2', href: '#list-page' },
+                    { label: '3', href: '#list-page' },
+                  ],
+                }}
               />
             }
-            status="3 of 148 orders · Updated just now"
             body={
               <DataTable
+                title="Order list"
                 rows={orders}
                 id={(row) => row.id}
                 rowHref={(row) => `#${row.id}`}
+                responsive="stack"
+                selection={{ selectedIds: ['SO-1042'] }}
                 columns={[
                   {
                     key: 'id',
@@ -502,6 +1070,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                     cell: (row) => row.id,
                     priority: 'primary',
                     kind: 'identifier',
+                    sort: { href: '#list-page', direction: 'descending' },
                   },
                   { key: 'customer', label: 'Customer', cell: (row) => row.customer },
                   { key: 'total', label: 'Total', cell: (row) => row.total, align: 'end', kind: 'currency' },
@@ -543,9 +1112,8 @@ export const componentGroups: readonly ComponentGroup[] = [
                       <Metric label="To invoice" value={6} detail="Needs attention" tone="warning" />,
                     ]}
                   />,
-                  <Section
+                  <Surface
                     title="Sales flow"
-                    description="From quotation through to invoicing"
                     body={
                       <Pipeline
                         label="Sales flow"
@@ -622,12 +1190,39 @@ export const componentGroups: readonly ComponentGroup[] = [
         description: 'Columns are data; rows remain semantic and horizontally contained.',
         render: () => (
           <DataTable
-            caption="Recent sales orders"
-            rows={orders}
+            title="Recent sales orders"
+            actions={<LinkButton label="View all orders" href="#app-shell" variant="tertiary" />}
+            rows={[] as OrderRow[]}
             id={(row) => row.id}
             rowHref={(row) => `#${row.id}`}
+            responsive="stack"
+            gutter="compact"
+            selection={{ selectedIds: ['SO-1042'] }}
+            groups={[
+              {
+                id: 'ready',
+                label: 'Ready to invoice',
+                count: 2,
+                href: '#data-table',
+                rows: orders.slice(0, 2),
+                pager: { label: '2 shown in Ready', nextHref: '#data-table' },
+              },
+              {
+                id: 'blocked',
+                label: 'Needs decision',
+                count: 1,
+                rows: orders.slice(2),
+              },
+            ]}
             columns={[
-              { key: 'id', label: 'Order', cell: (row) => row.id, priority: 'primary', kind: 'identifier' },
+              {
+                key: 'id',
+                label: 'Order',
+                cell: (row) => row.id,
+                priority: 'primary',
+                kind: 'identifier',
+                sort: { href: '#data-table', direction: 'descending' },
+              },
               { key: 'customer', label: 'Customer', cell: (row) => row.customer },
               { key: 'total', label: 'Total', cell: (row) => row.total, align: 'end', kind: 'currency' },
               {
@@ -654,34 +1249,30 @@ export const componentGroups: readonly ComponentGroup[] = [
             status={<Badge label="Active" tone="positive" />}
             actions={<Button label="Save partner" variant="primary" />}
             body={
-              <Section
+              <Surface
                 title="Main information"
                 body={
-                  <Surface
-                    body={
-                      <RecordForm
-                        action="#form-page"
-                        fields={[
-                          { id: 'partner-name', name: 'name', label: 'Name', value: 'Mùa Hạ Riverside' },
-                          { id: 'partner-ref', name: 'ref', label: 'Reference', value: 'CUS-0042' },
-                          {
-                            id: 'partner-email',
-                            name: 'email',
-                            label: 'Email',
-                            type: 'email',
-                            value: 'hello@muaha.example',
-                          },
-                          {
-                            id: 'partner-phone',
-                            name: 'phone',
-                            label: 'Phone',
-                            type: 'tel',
-                            value: '+84 28 3822 0042',
-                          },
-                        ]}
-                        submitLabel="Save partner"
-                      />
-                    }
+                  <RecordForm
+                    action="#form-page"
+                    fields={[
+                      { id: 'partner-name', name: 'name', label: 'Name', value: 'Mùa Hạ Riverside' },
+                      { id: 'partner-ref', name: 'ref', label: 'Reference', value: 'CUS-0042' },
+                      {
+                        id: 'partner-email',
+                        name: 'email',
+                        label: 'Email',
+                        type: 'email',
+                        value: 'hello@muaha.example',
+                      },
+                      {
+                        id: 'partner-phone',
+                        name: 'phone',
+                        label: 'Phone',
+                        type: 'tel',
+                        value: '+84 28 3822 0042',
+                      },
+                    ]}
+                    submitLabel="Save partner"
                   />
                 }
               />
@@ -702,6 +1293,7 @@ export const componentGroups: readonly ComponentGroup[] = [
         description: 'Application supplies translated labels and values, not form markup.',
         render: () => (
           <Surface
+            title="Main information"
             body={
               <RecordForm
                 action="#record-form"
@@ -814,7 +1406,7 @@ export const CataloguePage = (
           <span aria-hidden="true">K</span>
           <strong>Két Việt</strong>
         </a>
-        <p data-ui="catalogue-kicker">Design system · 0.1.3</p>
+        <p data-ui="catalogue-kicker">Design system · 0.1.7</p>
         <nav data-ui="catalogue-nav" aria-label="Component groups">
           {each(
             componentGroups,
@@ -832,7 +1424,7 @@ export const CataloguePage = (
         <header data-ui="catalogue-hero">
           <div>
             <p data-ui="catalogue-kicker">Public components · server rendered</p>
-            <h1 data-ui="catalogue-title">Operational UI, kept honest.</h1>
+            <h1 data-ui="catalogue-title">Két Việt Design System</h1>
             <p data-ui="catalogue-intro">
               {String(count)} specimens from one markup, token and state contract. Dense enough for daily
               work; quiet enough for decisions.
@@ -893,7 +1485,7 @@ export const CataloguePage = (
                         <h3 data-ui="catalogue-specimen-name">{example.name}</h3>
                         <p data-ui="catalogue-specimen-description">{example.description}</p>
                       </div>
-                      <Code value={`@ketvietlab/design-system/${example.name}`} context="component" />
+                      <Code value="@ketvietlab/design-system" context="package" />
                     </header>
                     <div data-ui="catalogue-stage">{example.render()}</div>
                   </article>

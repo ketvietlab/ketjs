@@ -1,7 +1,26 @@
-import type { TemplateResult } from '@ketvietlab/ketjs-view'
-import { RecordPage, type RecordPageProps } from './record-page.tsx'
+import {
+  FormPage as DesignSystemFormPage,
+  type FormPageProps as DesignSystemFormPageProps,
+} from '@ketvietlab/design-system'
+import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
+import type { Frame } from './layout.tsx'
+import { pageContextFromFrame } from './navigation.tsx'
 
-export type FormPageProps = RecordPageProps
+type FormPageFrame = Pick<Frame, 'menu' | 'viewer'>
 
-/** @deprecated Use RecordPage. */
-export const FormPage = (props: FormPageProps): TemplateResult => <RecordPage {...props} />
+type ContextSource =
+  | { frame: FormPageFrame; context?: never }
+  | { frame?: FormPageFrame; context: Exclude<JSXChild, undefined> }
+
+export type FormPageProps = Omit<DesignSystemFormPageProps, 'context'> & ContextSource
+
+/** @deprecated Use RecordPage. Retained so existing screens keep data-ui="form-page". */
+export const FormPage = (props: FormPageProps): TemplateResult => {
+  if (props.context !== undefined) {
+    const { frame: _frame, context, ...page } = props
+    return <DesignSystemFormPage {...page} context={context} />
+  }
+
+  const { frame, context: _context, ...page } = props
+  return <DesignSystemFormPage {...page} context={pageContextFromFrame(props.title, frame)} />
+}

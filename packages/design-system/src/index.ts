@@ -21,7 +21,28 @@ export { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface 
 export { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell.tsx'
 
 export { DataTable } from './patterns/data-table.tsx'
-export type { Cell, Column, DataTableProps } from './patterns/data-table.tsx'
+export type {
+  Cell,
+  Column,
+  DataTableLabels,
+  DataTableProps,
+  SortDirection,
+  TableGroup,
+  TablePager,
+  TableSelection,
+} from './patterns/data-table.tsx'
+export { BulkActions, ListChrome, PagerBar } from './patterns/list-chrome.tsx'
+export type {
+  BulkAction,
+  BulkActionsProps,
+  ListChromeProps,
+  ListFacet,
+  ListSearch,
+  ListSort,
+  ListSortChoice,
+  PagerBarProps,
+  PagerPage,
+} from './patterns/list-chrome.tsx'
 export { ListPage } from './patterns/list-page.tsx'
 export type { ListPageProps } from './patterns/list-page.tsx'
 export { FormPage } from './patterns/form-page.tsx'
