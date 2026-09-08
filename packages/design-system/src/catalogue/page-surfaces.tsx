@@ -59,6 +59,7 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
         readonly: 'Bạn đang ở chế độ chỉ xem',
         validation: 'Vui lòng bổ sung tên.',
         column: 'Hồ sơ',
+        records: 'Danh sách',
         status: 'Trạng thái',
         ready: 'Sẵn sàng',
         pending: 'Cần kiểm tra',
@@ -84,6 +85,7 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
         readonly: 'You have read-only access',
         validation: 'Enter a display name.',
         column: 'Record',
+        records: 'Records',
         status: 'Status',
         ready: 'Ready',
         pending: 'Needs review',
@@ -99,6 +101,7 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
   const blocked = ['loading', 'empty', 'error', 'readonly'].includes(props.state)
   const table = (
     <DataTable
+      title={props.kind === 'list' ? labels.records : labels.details}
       responsive={canvas ? 'scroll' : 'stack'}
       rows={[
         { id: 'REC-001', status: labels.ready },
@@ -114,31 +117,27 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
   const form = (
     <form data-ui="record-form" id="specimen-form">
       <Surface
+        title={props.tab === 'details' ? labels.section : labels.activity}
         body={
-          <Section
-            title={props.tab === 'details' ? labels.section : labels.activity}
-            body={
-              <Stack
-                items={[
-                  <Field
-                    id="display-name"
-                    name="name"
-                    label={labels.name}
-                    value="Example record"
-                    disabled={blocked}
-                    error={props.state === 'validation' ? labels.validation : undefined}
-                  />,
-                  <Field
-                    id="notes"
-                    name="notes"
-                    label={labels.note}
-                    type="textarea"
-                    value={labels.hint}
-                    disabled={blocked}
-                  />,
-                ]}
-              />
-            }
+          <Stack
+            items={[
+              <Field
+                id="display-name"
+                name="name"
+                label={labels.name}
+                value="Example record"
+                disabled={blocked}
+                error={props.state === 'validation' ? labels.validation : undefined}
+              />,
+              <Field
+                id="notes"
+                name="notes"
+                label={labels.note}
+                type="textarea"
+                value={labels.hint}
+                disabled={blocked}
+              />,
+            ]}
           />
         }
       />
@@ -159,7 +158,7 @@ export const PageSurfacePreview = (props: PageSurfaceProps): TemplateResult => {
             <Metric label={labels.activity} value="12" />,
           ]}
         />,
-        <Surface body={<Section title={labels.details} body={table} />} />,
+        table,
       ]}
     />
   )

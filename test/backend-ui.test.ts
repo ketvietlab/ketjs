@@ -1200,10 +1200,10 @@ test('backend layout: canonical screen wrappers supply context and flatten aroun
   )
   assert.equal(rich.match(/data-ui="record-workspace"/g)?.length, 1)
   assert.equal(rich.match(/data-pattern="record"/g)?.length, 1)
-  assert.match(rich, /data-ui="form-page-context"[\s\S]*data-ui="breadcrumbs"/)
+  assert.match(rich, /data-ui="record-page-context"[\s\S]*data-ui="breadcrumbs"/)
 
   const css = ADMIN_CSS
-  assert.match(css, /\[data-ui="form-page"\]:has\([\s\S]*?\[data-ui="record-workspace"\]/)
+  assert.match(css, /\[data-ui="record-page"\]:has\([\s\S]*?\[data-ui="record-workspace"\]/)
 })
 
 test('record workspace: collaboration aligns with the sheet when the topbar collapses', () => {

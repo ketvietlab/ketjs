@@ -7,3 +7,5 @@
 @import "./layouts/shell.css";
 /* FormPage rail contract: desktop content is 2:1; narrow screens stack. */
 @import "./patterns/patterns.css";
+@import "./layouts/flat.css";
+@import "./layouts/grouped.css";

@@ -21,11 +21,56 @@ flowchart LR
   kit --> page["adminPage() response"]
 ```
 
-Backend companions normally contain `index.ts`, `routes.ts`, `screens.tsx` or a `screens/` directory,
-`menus.ts`, and optional `islands.ts` plus client assets. Use a `screens/` directory when list, detail,
-edit, and secondary record views have independent responsibilities; export their public entry points
-from `screens/index.ts`. Their manifest depends on the domain and `backend`; it may declare assets,
-styles, routes, menus, messages, islands, joints, and fills.
+Backend companions contain `index.ts`, route declarations/adapters, a `screens/` directory,
+`menus.ts`, and optional `islands.ts` plus client assets. Their manifest depends on the domain and
+`backend`; it may declare assets, styles, routes, menus, messages, islands, joints, and fills.
+
+## Screen organization
+
+Every routed business screen owns one `screens/<name>.tsx` file and composes its UI with JSX.
+Shared business components may live in `screens/shared.tsx` or another appropriate UI directory;
+generic presentation belongs in the design system. `screens/index.ts` only exports screen entry
+points and types, with no composition or business logic.
+
+```text
+# File: packages/ketsuite/src/modules/example_backend
+packages/ketsuite/src/modules/example_backend/
+├── index.ts
+├── routes.ts
+├── screens/
+│   ├── index.ts
+│   ├── example-list.tsx
+│   ├── example-form.tsx
+│   └── shared.tsx
+└── menus.ts
+```
+
+This tree starts at the public module source root. Private deployments put the same organization
+under their module's `src/`; see [module source roots](/ketsuite/module-development/#module-source-roots).
+Do not change build entry points as part of moving a screen.
+
+**When changing a routed business screen or its route, migrate the complete affected screen to its
+own JSX file in the same change.** The rule follows the code's role, not its name: it covers
+`screen.ts`, `screen.tsx`, `screens.ts`, `screens.tsx`, `routes.ts`, `routes.tsx`, and differently named
+files. Do not add new template-string or legacy view-builder screens, or leave one affected screen
+split between the new component and its old route. Unrelated screens do not need a simultaneous rewrite.
+
+Route files, whether `.ts` or `.tsx`, must not contain JSX, view builders, screen-specific state,
+form/table markup, action layouts, or other rendering logic. They may call exported screen components
+as ordinary functions; this keeps JSX composition in the screen file without requiring a route rename.
+
+The shared `modules/backend/screen.ts` helpers (`adminPage`, `screen`, and `frameOf`) provide frame,
+locale, session context, and document/fragment responses. They are infrastructure, not legacy
+business screens; keep valid consumers and do not duplicate their behavior in each module. API and
+webhook routes and public website theme/template pipelines are not business screens. A portal or
+kiosk still organizes its business UI in JSX files, but must not gain an admin shell through this rule.
+Administration screens continue to use the canonical `ListPage`, `RecordPage`, or `WorkspacePage`
+contract and the owning repository's design-system rules.
+
+Update imports, re-exports, and source-based audits when moving a screen. Preserve route paths,
+authorization, locale, query-owned state, form refusals, and document/fragment behavior. Run focused
+HTTP and browser E2E coverage for the affected screens, including desktop/mobile and relevant locales;
+read the generated evidence before handoff.
 
 ## Route responsibilities
 
@@ -38,6 +83,7 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { adminPage, inLocale, readForm, seeOther } from '@ketvietlab/ketsuite/backend'
+import { ExampleFormScreen } from './screens/index.ts'
 
 export const routes = {
   '/admin/example/new':
@@ -46,7 +92,7 @@ export const routes = {
       if (request.method === 'GET')
         return adminPage(ctx, url, request, {
           title: 'example_backend.create.title',
-          body: (_, frame) => exampleForm(_, frame),
+          body: (_, frame) => ExampleFormScreen({ translator: _, frame }),
         })
 
       if (request.method !== 'POST') return text('GET or POST', { status: 405 })
@@ -57,11 +103,15 @@ export const routes = {
         ? seeOther(inLocale(url, `/admin/example/${id}`))
         : adminPage(ctx, url, request, {
             title: 'example_backend.create.title',
-            body: (_, frame) => exampleForm(_, frame, result),
+            body: (_, frame) => ExampleFormScreen({ translator: _, frame, result }),
           })
     },
 }
 ```
+
+`ExampleFormScreen` is exported from `screens/example-form.tsx` through the export-only
+`screens/index.ts`. Its JSX owns the form, errors, actions, and page composition; the callback above
+only passes route data and the shared frame to that component.
 
 Use `ctx.call()` for staff-facing operations so the request's session, permissions, scope, and effects
 are enforced. `ctx.callUnchecked()` is for narrow infrastructure boundaries that perform their own
@@ -79,10 +129,11 @@ Screens should compose components rather than authoring raw tags or new `data-ui
 `tools/ui-audit.ts` protects that contract so markup and styles do not drift across dozens of screens.
 Run `npm run design:system` to inspect every public specimen at `http://127.0.0.1:4100/`.
 
-The kit includes list chrome, tables, cards, record workspaces, forms, actions, tabs, progressive
-`Disclosure` for secondary detail, notices, empty and error states, media and attachment panels, date
-pickers, calendars, and scheduling primitives.
-Prefer PascalCase exports in TSX where available.
+The public kit includes list chrome, tables, cards, record workspaces, forms, actions, tabs,
+progressive `Disclosure` for secondary detail, notices, empty and error states, and route-owned
+modal sheets. Compatibility-only KetSuite UI may still provide domain-specific media, attachments,
+date pickers, calendars, and scheduling primitives until those contracts move into the public
+package. Prefer PascalCase exports in TSX where available.
 
 Keep list state in the URL: search terms, filters, grouping, page, view, visible columns, archived state,
 and locale should survive a copied link. Reuse the backend paging and search helpers instead of creating
@@ -102,17 +153,45 @@ do not implement the hierarchy with a route-local background override or another
 | Controls and record tabs | `--kv-page-bg`: continuous quiet navigation band |
 | List and record content canvas | `--kv-page-content-bg` aliases `--kv-page-bg`; the space around content stays grey in light |
 | Workspace canvas, both flow and spatial | `--kv-page-bg`: keep the gaps grey; cards, table surfaces and timelines remain independent objects |
-| Content blocks in every page pattern | Existing `Surface`, `ContentCard`, `Metric` and table tokens own the white fill; compose `Surface` + `Section` for each content/form group, never wrap the whole page in one white surface |
+| Content blocks in every page pattern | `Section`, `Stack` and `Grid` group content without a frame. `DataTable`, `ContentCard` and `Metric` own their surfaces and must not be wrapped in another `Surface` or card. Use `Surface` only for content that needs a frame and does not already own one, such as a form group or standalone process tool. |
 | Tables | `--kv-table-bg`: opaque white in light; transparent in dark, preserving row hover/selection |
 | Sidebar and record rail | Existing sidebar / subtle panel tokens, separated with low-contrast borders |
 
+For a titled table such as recent orders, use `DataTable title="Recent orders"` directly.
+For a titled form, use `Surface title="Main information"` with `RecordForm` as its body.
+Titles sit inside their owning panel at 18px (`--kv-text-xl`), with optional header `actions`.
+The titled table shares one white panel in light mode (the existing panel tone in dark mode):
+its internal `table-scroll` is borderless and transparent, not a second surface. The sales demo is
+the reference card: 12px inset on every side, with no extra viewport margins. Empty table states
+retain the same heading and support `emptyActions`. Do not add an outer `Section` title for the same
+block or wrap `DataTable` in a consumer-owned `Surface`. Untitled tables remain supported.
+A facts rail uses `Stack` to
+place a `Metric` beside supporting progress or text. Board columns use unframed `Section` + `Stack`
+with `ContentCard` items. Do not add a white panel around a whole section, column, rail or page;
+each independently framed item owns its border, fill and padding exactly once.
+Section headings have no bottom border or divider padding in any page pattern,
+including compatibility adapters. Separate sections with layout gaps, without
+implicit section borders or page-specific heading overrides. Add a divider only
+where the content explicitly requires one; surface borders remain component-owned.
+When a `RecordPage` already owns its context aside, omit the shell's right rail unless it serves a
+separate application-wide workflow; do not duplicate record context in two adjacent rails.
+
+`Stack`, `Inline` and `Grid` give each plain-text item its own layout box so adjacent facts keep
+their intended gaps. `Grid` aligns independent sections at their top edge. A direct grid in a canvas workspace keeps
+columns at least 16rem wide and scrolls inside the workspace body, including on phones. Flow content
+can stack vertically. Embedded `AppShell` previews do not create another `main` landmark inside the
+catalogue. A viewport shell preserves its main landmark and lets long side navigation scroll.
+
+Component typography uses normal letter spacing. Icon actions keep square dimensions at each
+explicit size. Use the existing semantic token names; required CSS variables must resolve without
+depending on a consuming application's private aliases.
+
 For narrow tables, use `responsive="stack"`: labelled cells stack at 768px and below, and row/cell
 heights grow with their contents. The default `responsive="scroll"` preserves the wide table,
-suitable for spatial schedules and inventory grids. The option reads the same on the design-system
-`DataTable` and on the KetSuite `dataTable` helper, which adds selection, groups, sorting and
-configurable columns on top of the same markup — a stacked row hides the header, so the helper
-labels every cell it renders. Do not duplicate mobile table CSS in consumer modules. Browser
-coverage must assert cell/row bounds as well as page overflow.
+suitable for spatial schedules and inventory grids. The public `DataTable` owns row selection,
+groups, sorting, visible columns, row links and the matching mobile labels. Do not place record
+action buttons inside table rows; link the row to the record instead. Do not duplicate mobile table
+CSS in consumer modules. Browser coverage must assert cell/row bounds as well as page overflow.
 
 Prefer `stack` for an operational collection a person reads on a phone. A scrolling table there
 does not shorten the row, it moves the row sideways, so every column past the first is a value the
@@ -124,10 +203,40 @@ additional page patterns. Do not add new consumers of those adapters.
 
 Open the catalogue's **Review page surfaces** link, or
 `http://127.0.0.1:4100/surfaces?kind=record&theme=light&lang=vi` to inspect a full-page specimen.
+
+For a connected operational workflow, start the catalogue with `PORT=4000 npm run design:system`
+and open `http://127.0.0.1:4000/demo`. This app composes the public components into a sales overview,
+order collection, inline order record and spatial delivery board. Creation sheets, confirmation
+dialogs, search, pagination, selection, validation, activity notes and CSV export work with synthetic
+in-memory records. The app owns business behavior and modal focus management; the design system owns
+all component surfaces. Data resets on server restart and is never sent to production services.
+
+The sales demo uses the opt-in `data-presentation="grouped"` root attribute: light grey
+canvas, grey page chrome and white working groups, with a grey KetSuite sidebar in light
+mode.
+The default light palette pairs a neutral `#F6F6F7` canvas with a `#F7F5F5`
+sidebar, a `#E9E7E8` sidebar border and a pale indigo `#EEF0FB`
+selected item. Header and context use the page grey; cards remain white with `#E2E4E8`
+content separators. A dark sidebar remains available explicitly.
+Form and table headings sit inside one owning boundary; the inner table viewport is unframed.
+The record aside is one continuous white context region, with unframed sections and metric.
+Disclosures inside a working group have no second border. Kanban keeps separate record cards;
+dialogs keep their overlay boundary and become fullscreen on mobile. Do not frame entire pages
+or add cards around arbitrary sections. The previous `flat` mode remains available explicitly;
+neither mode changes the default catalogue presentation.
+Grouped spacing is 8px between cards, with 12px padding around the entire card, including
+heading and body. Page gutters, heading-to-body and context-column spacing are 12px.
+Form-field and table-row density stays unchanged.
 The permalink supports `kind=list|record|flow|canvas`, `lang=en|vi`, `theme=light|dark`, and
 `state=baseline|loading|empty|error|validation|readonly`. Record tabs preserve page padding; optional
 rails and controls can be hidden without leaving empty chrome. Compatibility specimens are available
 as `form-compat`, `dashboard-compat`, and `board-compat` for migration regression checks.
+
+The catalogue's application-structure group must show the four practical app layouts inside
+`AppShell`: collection (`ListPage`), record (`RecordPage`), flow workspace (`WorkspacePage` with
+`layout="flow"`), and canvas workspace (`WorkspacePage` with `layout="canvas"`). These examples should
+use real page chrome, controls, body surfaces and right-rail context; do not reduce them to isolated KPI
+cards or placeholder panels.
 
 Run targeted component and surface browser coverage when changing these roles:
 
@@ -157,14 +266,53 @@ translated identity, the primary action, URL-driven list chrome, optional result
 body. `ListPage` keeps those regions in a stable order and owns their responsive spacing; a module must
 not recreate that hierarchy with a route-specific header or a card around the whole page.
 
-Keep the primary create action in `actions`, where it stays beside the title. Put
-search/filter/view/paging controls in `controls` and the result count in `status`; the pattern combines
-those two slots into one command bar instead of scattering them over separate rows. The table, kanban,
-or empty state belongs in `body`. More capable KetSuite tables can still provide selection, groups,
-sorting, and configurable columns inside the public page pattern. The product catalogue at
+Keep the primary create action in `actions`, where it stays beside the title. Put `ListChrome` in
+`controls` for search, facets, view switching, sorting, bulk action state and paging. Put result
+context in `ListChrome.status` and paging in `ListChrome.pager`, above the collection; do not put a
+separate pagination bar in `ListPage.footer`. Prefer the visible record range and previous/next links
+over a row of page numbers. Search, status filters and paging should keep the current query and sort
+in the URL. The table, kanban, or empty state belongs in `body`. The product catalogue at
 `/admin/product/templates` is the reference integration for this composition.
 
+ListChrome is one command bar: a bounded search field on the leading side, with filters and the
+result range clustered at the trailing edge. On compact widths search and paging stay on the first
+row; filters wrap on the row below. Bulk actions occupy space only when a selection exists.
+
+Supply unique `search.id` and `sort.id` values when several `ListChrome` instances share a document.
+Translate `filtersLabel` and `viewsLabel` with the other control labels. An empty query row occupies
+no space. `ActionGroup` groups commands; `Tabs` navigates named views and retains its underline design.
+
+`DataTable.rowHref` creates one keyboard link per row and extends its pointer target over the row.
+Selection checkboxes remain separate targets. Cells in a linked row must be display-only; move
+record commands to the opened record. For native bulk submission, give `selection.form` and
+`bulk.form` the same form ID. Row inputs submit their selected IDs and bulk buttons submit their
+command name/value. The application still owns selection synchronisation, select-all behaviour,
+selected-count updates, URL changes and domain validation. The presentation package does not install
+an event runtime. A loading `LinkButton` is disabled and cannot navigate.
+
+### Route modals
+
+Use the public `ModalSheet` for URL-addressable create/edit flows that are genuinely short enough for
+a modal. It owns the overlay layer, backdrop close link, dialog labelling, optional description,
+action footer, presentation (`sheet` or `dialog`), size and unsaved-change metadata. Route modals must
+be fullscreen at the mobile breakpoint; do not recreate mobile modal CSS in a module stylesheet.
+
+The route runtime must move focus into the dialog, trap focus, make the background inert, handle
+Escape, restore focus on close and implement the unsaved-change prompt. The component's ARIA and
+route metadata do not implement those behaviours on their own. `mode="embedded"` is a visual specimen,
+not an active modal.
+
 ### Record workspace layout
+
+Forms use inline field pairs at every width: label on the left, control on the right, with help and
+errors below the control. `RecordForm` reduces the number of field pairs per row in narrow panels;
+it never moves labels above inputs. Label text may wrap within its left column. Use `Field.readOnly` for native text/date/number
+controls whose values must remain selectable and submitted; `disabled` values are not submitted by
+the browser. Selects and checkbox/radio controls have no native read-only state; use a disabled
+control plus an application-owned hidden value when submission is required. Numeric and date bounds
+use `min`/`max`, while choices can be individually disabled. A nested group opens when it or a child
+has validation errors. Checkbox-group requirements need group-level application validation, not
+`required` on every option.
 
 Use `RecordWorkspace` for a deep record or edit screen. The shared layout owns the hierarchy rather
 than each module rebuilding it:
@@ -234,7 +382,7 @@ position, focus and anything typed, on a schedule with no relation to when the w
 the runtime should listen on:
 
 ```tsx
-// File: packages/ketsuite/src/modules/example_backend/screens.tsx
+// File: packages/ketsuite/src/modules/example_backend/screens/example-detail.tsx
 liveRegion({
   label: _('example.state.rebuilding'),
   stream: running ? `example-rebuild:${runId}` : null,
@@ -260,7 +408,7 @@ A chart is a canvas, so it is an island — `backend.chart`, reached through the
 resolves a picker:
 
 ```ts
-// File: packages/ketsuite/src/modules/example_backend/routes.ts
+// File: packages/ketsuite/src/modules/example_backend/screens/example-revenue.tsx
 const plot = await chartControl(ctx, url, req, 'example-revenue', {
   kind: 'line',
   label: _('example_backend.revenue.title'),
