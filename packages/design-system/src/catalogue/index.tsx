@@ -1406,7 +1406,7 @@ export const CataloguePage = (
           <span aria-hidden="true">K</span>
           <strong>Két Việt</strong>
         </a>
-        <p data-ui="catalogue-kicker">Design system · 0.1.5</p>
+        <p data-ui="catalogue-kicker">Design system · 0.1.7</p>
         <nav data-ui="catalogue-nav" aria-label="Component groups">
           {each(
             componentGroups,
