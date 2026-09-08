@@ -10,6 +10,7 @@ import { HOOKS as tableHooks } from '../patterns/data-table.tsx'
 import { HOOKS as listChromeHooks } from '../patterns/list-chrome.tsx'
 import { HOOKS as listPageHooks } from '../patterns/list-page.tsx'
 import { HOOKS as formPageHooks } from '../patterns/form-page.tsx'
+import { HOOKS as recordPageHooks } from '../patterns/record-page.tsx'
 import { HOOKS as dashboardPageHooks } from '../patterns/dashboard-page.tsx'
 import { HOOKS as boardPageHooks } from '../patterns/board-page.tsx'
 import { HOOKS as modalHooks } from '../patterns/modal-sheet.tsx'
@@ -29,6 +30,7 @@ const GROUPS = {
   listChrome: listChromeHooks,
   listPage: listPageHooks,
   formPage: formPageHooks,
+  recordPage: recordPageHooks,
   dashboardPage: dashboardPageHooks,
   boardPage: boardPageHooks,
   modal: modalHooks,
