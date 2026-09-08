@@ -41,6 +41,11 @@ export const groupGovernance: Readonly<
     maturity: 'stable',
     states: ['default', 'disabled', 'loading', 'responsive'],
   },
+  'form-controls': {
+    owner: 'Forms',
+    maturity: 'stable',
+    states: ['default', 'disabled', 'loading', 'empty', 'invalid', 'responsive', 'selected'],
+  },
   patterns: { owner: 'Page patterns', maturity: 'stable', states: ['default', 'empty', 'responsive'] },
 })
 
