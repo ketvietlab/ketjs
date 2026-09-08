@@ -32,26 +32,49 @@ export class IslandError extends Error {
 export type IslandProps = Record<string, unknown>
 /** One mounted island instance. Signals and other local state live in this closure. */
 export type IslandView = () => TemplateResult
+/** Browser-only resources available after the server tree has been adopted. */
+export type IslandMountContext = {
+  /** The stable `<ket-island>` element that owns this instance's DOM. */
+  root: IslandElement
+  /** Aborted before reactive and controller cleanup starts. */
+  lifetime: AbortSignal
+}
 /** Optional lifecycle around a mounted island. A plain IslandView remains valid. */
-export type IslandController = {
+export type IslandController<Props extends IslandProps = IslandProps> = {
   view: IslandView
-  update?(props: Readonly<IslandProps>): void
+  /** Runs once in the browser, after hydration has adopted the server DOM. */
+  mount?(context: IslandMountContext): void
+  update?: { call(props: Readonly<Props>): void }['call']
   dispose?(): void
 }
 /** Create one isolated instance from serializable server props. */
-export type IslandFactory = (props: IslandProps) => IslandView | IslandController
-export type IslandDefinition = {
-  view: IslandFactory
+export type IslandFactory<Props extends IslandProps = IslandProps> = {
+  call(props: Readonly<Props>): IslandView | IslandController<Props>
+}['call']
+export type IslandDefinition<Props extends IslandProps = IslandProps> = {
+  view: IslandFactory<Props>
   /** The only surrounding scope keys that may cross into the island. */
-  props?: Record<string, string>
-  /** Props that identify one persistent instance. Empty means one global instance. */
-  key?: readonly string[]
+  props?: { [Key in keyof Props]-?: string }
+  /** Props that identify one persistent instance within its reconciliation boundary. */
+  key?: readonly (keyof Props & string)[]
   /** Browser module, relative to the declaring module's assets directory. */
   client?: string
   /** Named browser export; defaults to `default`. */
   export?: string
 }
+/** Heterogeneous registry entry; prefer defineIsland<Props>() when authoring one. */
+export type AnyIslandDefinition = IslandDefinition
 export type IslandRegistry = Record<string, IslandFactory>
+
+/**
+ * Preserve one props type across its schema, identity key, and server factory.
+ * Runtime validation remains the composition layer's job; this closes the
+ * compile-time casts that otherwise hide drift between those three declarations.
+ */
+export const defineIsland =
+  <Props extends IslandProps>() =>
+  <Definition extends IslandDefinition<Props>>(definition: Definition): Definition =>
+    definition
 
 const controllerOf = (created: IslandView | IslandController): IslandController =>
   typeof created === 'function' ? { view: created } : created
@@ -256,7 +279,17 @@ export function createIslandManager(
       }
       const parsed = parsedProps(identity.name, element)
       const controller = controllerOf(factory(parsed.props))
-      const mounted = mountHydrated(host, element, controller.view)
+      const lifetime = new AbortController()
+      let mounted: ReturnType<typeof mountHydrated> | null = null
+      try {
+        mounted = mountHydrated(host, element, controller.view)
+        controller.mount?.({ root: element, lifetime: lifetime.signal })
+      } catch (error) {
+        lifetime.abort()
+        mounted?.dispose()
+        controller.dispose?.()
+        throw error
+      }
       let disposed = false
       const live: HydratedIsland = {
         name: identity.name,
@@ -266,7 +299,8 @@ export function createIslandManager(
         dispose: () => {
           if (disposed) return
           disposed = true
-          mounted.dispose()
+          lifetime.abort()
+          mounted?.dispose()
           controller.dispose?.()
         },
       }

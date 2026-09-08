@@ -41,12 +41,21 @@ export { countingHost, domHost, escapeHtml } from './host.ts'
 export type { Host, HostNode } from './host.ts'
 export { renderToString, HydrationMismatch, HOLE_MARKER, HOLE_OPEN, trustedMarkup, isMarkup } from './ssr.ts'
 export type { Markup } from './ssr.ts'
-export { renderIsland, hydrateIslands, createIslandManager, IslandError, ISLAND_TAG } from './island.ts'
+export {
+  renderIsland,
+  hydrateIslands,
+  createIslandManager,
+  defineIsland,
+  IslandError,
+  ISLAND_TAG,
+} from './island.ts'
 export type {
   IslandView,
   IslandController,
+  IslandMountContext,
   IslandFactory,
   IslandDefinition,
+  AnyIslandDefinition,
   IslandRegistry,
   IslandProps,
   HydratedIsland,
