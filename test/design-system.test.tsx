@@ -9,27 +9,41 @@ import {
   BoardPage,
   Button,
   ConfirmDialog,
+  Combobox,
+  DatePicker,
+  DateRangePicker,
+  DateTimePicker,
   DashboardPage,
   DataTable,
   Disclosure,
   Field,
+  FileUpload,
   FormPage,
   HOOKS,
   IconButton,
   LinkButton,
   Menu,
+  MoneyField,
+  MultiCombobox,
   ListChrome,
   ListPage,
   ModalSheet,
   NavList,
   Progress,
   Popover,
+  RadioGroup,
+  RelationPicker,
   RecordForm,
   RecordPage,
   Surface,
   Skeleton,
   Spinner,
+  Switch,
+  TagPicker,
   Tabs,
+  TextArea,
+  TextField,
+  TimePicker,
   ToastRegion,
   Tooltip,
 } from '@ketvietlab/design-system'
@@ -1037,6 +1051,108 @@ test('design system: interaction essentials preserve native and accessible fallb
   )
 })
 
+test('design system: typed form controls preserve native values and controlled picker state', () => {
+  const text = renderToString(
+    <TextField
+      id="customer"
+      name="customer"
+      label="Customer"
+      value="what the user typed"
+      issues={[{ path: 'customer', message: 'Choose a customer.' }]}
+      required
+    />,
+  )
+  assert.match(text, /value="what the user typed"/)
+  assert.match(text, /aria-invalid="true"/)
+  assert.match(text, /Choose a customer\./)
+  assert.match(
+    renderToString(<TextArea id="note" name="note" label="Note" value="preserved" />),
+    />preserved<\/textarea>/,
+  )
+  assert.match(
+    renderToString(<MoneyField id="total" name="total" label="Total" value="12.30" />),
+    /step="0.01"/,
+  )
+  assert.match(
+    renderToString(<Switch id="notify" name="notify" label="Notify" checked />),
+    /role="switch"[^>]*checked/,
+  )
+  assert.match(
+    renderToString(
+      <RadioGroup
+        id="speed"
+        name="speed"
+        label="Speed"
+        value="fast"
+        options={[{ value: 'fast', label: 'Fast' }]}
+      />,
+    ),
+    /role="radiogroup"/,
+  )
+
+  const options = [{ value: 'linh', label: 'Ngọc Linh' }]
+  const comboProps = {
+    id: 'owner',
+    name: 'owner',
+    label: 'Owner',
+    query: 'Ngọc',
+    options,
+    open: true,
+    openHref: '?owner=open',
+    closeHref: '?owner=',
+  } as const
+  const combo = renderToString(<Combobox {...comboProps} value="linh" />)
+  assert.match(combo, /role="combobox"[^>]*aria-expanded="true"/)
+  assert.match(combo, /role="listbox"/)
+  assert.match(combo, /role="option" aria-selected="true"/)
+  assert.match(
+    renderToString(<MultiCombobox {...comboProps} values={['linh']} removeHref={() => '?remove=linh'} />),
+    /Remove Ngọc Linh/,
+  )
+  assert.match(
+    renderToString(<TagPicker {...comboProps} values={['linh']} removeHref={() => '?remove=linh'} />),
+    /data-ui="tag-picker"/,
+  )
+
+  assert.match(
+    renderToString(<DatePicker id="day" name="day" label="Day" value="2026-09-08" />),
+    /value="2026-09-08"/,
+  )
+  assert.match(
+    renderToString(
+      <DateRangePicker
+        id="range"
+        label="Range"
+        start={{ id: 'from', name: 'from', value: '2026-09-01' }}
+        end={{ id: 'to', name: 'to', value: '2026-09-30' }}
+        startLabel="From"
+        endLabel="To"
+      />,
+    ),
+    /value="2026-09-01"[\s\S]*value="2026-09-30"/,
+  )
+  assert.match(
+    renderToString(<DateTimePicker id="at" name="at" label="At" value="2026-09-08T14:30" />),
+    /type="datetime-local"[^>]*value="2026-09-08T14:30"/,
+  )
+  assert.match(renderToString(<TimePicker id="time" name="time" label="Time" value="14:30" />), /type="time"/)
+  assert.match(
+    renderToString(<FileUpload id="file" name="file" label="File" accept="application/pdf" />),
+    /type="file"[^>]*accept="application\/pdf"/,
+  )
+  assert.match(
+    renderToString(
+      <RelationPicker
+        {...comboProps}
+        results={[{ id: 'linh', name: 'Ngọc Linh' }]}
+        getValue={(person) => person.id}
+        getLabel={(person) => person.name}
+      />,
+    ),
+    /data-ui="relation-picker"[\s\S]*Ngọc Linh/,
+  )
+})
+
 test('design system: catalogue renders every registered specimen', () => {
   const catalogue = renderToString(<CataloguePage theme="dark" density="compact" mode="all" />)
   const designSystemVersion = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8'))
@@ -1070,7 +1186,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 53)
+  assert.equal(names.length, 73)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1107,9 +1223,9 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 102)
-  assert.equal(designSystemInventory.summary.runtimeExports, 57)
-  assert.equal(designSystemInventory.summary.plannedComponents, 40)
+  assert.equal(designSystemInventory.summary.publicExports, 132)
+  assert.equal(designSystemInventory.summary.runtimeExports, 77)
+  assert.equal(designSystemInventory.summary.plannedComponents, 22)
   assert.equal(designSystemInventory.summary.compatibilityModules, 38)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
