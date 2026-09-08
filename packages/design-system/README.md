@@ -181,3 +181,7 @@ Record composition exports cover facts, people, formatted values, one identity s
 one neutral rail, activity/audit, attachments, and media. Applications pass authorized,
 redacted results and retain storage and mutation ownership. Catalogue recipes vary slots
 within `ListPage`, `RecordPage`, and `WorkspacePage`; they do not add a fourth page pattern.
+
+Before release, run `npm run design:release:check` from the repository root. It
+requires zero planned components, current migration/rollback notes, and locked
+deprecation admission. Publishing remains a post-merge operation from `master`.
