@@ -29,10 +29,41 @@ import {
   CataloguePage,
   InventoryPage,
   PageSurfacePreview,
+  componentGroups,
+  componentRegistry,
   designSystemInventory,
 } from '@ketvietlab/design-system/catalogue'
 
 const css = globSync('packages/design-system/src/**/*.css')
+  .map((path) => readFileSync(path, 'utf8'))
+  .join('\n')
+const primitiveCss = [
+  'packages/design-system/src/primitives/actions/styles.css',
+  'packages/design-system/src/primitives/status/styles.css',
+  'packages/design-system/src/primitives/feedback/styles.css',
+  'packages/design-system/src/primitives/field/styles.css',
+  'packages/design-system/src/primitives/navigation/styles.css',
+  'packages/design-system/src/primitives/progress/styles.css',
+]
+  .map((path) => readFileSync(path, 'utf8'))
+  .join('\n')
+const layoutCss = globSync('packages/design-system/src/layouts/*/*.css')
+  .map((path) => readFileSync(path, 'utf8'))
+  .join('\n')
+const patternCss = [
+  'packages/design-system/src/patterns/list-page/styles.css',
+  'packages/design-system/src/patterns/data-table/styles.css',
+  'packages/design-system/src/patterns/list-chrome/styles.css',
+  'packages/design-system/src/patterns/record-form/styles.css',
+  'packages/design-system/src/patterns/modal-sheet/styles.css',
+  'packages/design-system/src/patterns/list-page/responsive.css',
+  'packages/design-system/src/patterns/pipeline/styles.css',
+  'packages/design-system/src/patterns/board-page/styles.css',
+  'packages/design-system/src/patterns/dashboard-page/styles.css',
+  'packages/design-system/src/patterns/form-page/styles.css',
+  'packages/design-system/src/patterns/record-page/styles.css',
+  'packages/design-system/src/patterns/workspace-page/styles.css',
+]
   .map((path) => readFileSync(path, 'utf8'))
   .join('\n')
 
@@ -108,8 +139,8 @@ test('design system: foundations expose reference, semantic and component tokens
 })
 
 test('design system: section headings are unframed across page patterns', () => {
-  const layouts = readFileSync('packages/design-system/src/layouts/layouts.css', 'utf8')
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const layouts = layoutCss
+  const patterns = patternCss
   const heading = layouts.match(/\[data-ui="section-head"\]\s*\{([^}]+)\}/)?.[1]
   assert.ok(heading)
   assert.match(heading, /align-items: flex-start/)
@@ -173,18 +204,18 @@ test('design system: catalogue titled forms and tables keep headings inside thei
 })
 
 test('design system: flat workspace is opt-in and keeps sidebar styling independent', () => {
-  const flat = readFileSync('packages/design-system/src/layouts/flat.css', 'utf8')
+  const flat = readFileSync('packages/design-system/src/layouts/flat/styles.css', 'utf8')
   assert.match(flat, /\[data-kv-design-system\]\[data-presentation="flat"\]/)
   assert.match(flat, /color-scheme: light/)
   assert.match(flat, /--kv-page-bg: var\(--kv-ref-white\)/)
   assert.match(flat, /border-radius: 0/)
   assert.doesNotMatch(flat, /\[data-ui="app-sidebar"\]/)
   const entry = readFileSync('packages/design-system/src/styles.css', 'utf8')
-  assert.match(entry, /layouts\/flat\.css/)
+  assert.match(entry, /layouts\/flat\/styles\.css/)
 })
 
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
-  const grouped = readFileSync('packages/design-system/src/layouts/grouped.css', 'utf8')
+  const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
   assert.match(grouped, /\[data-kv-design-system\]\[data-presentation="grouped"\]/)
   assert.match(grouped, /color-scheme: light/)
   assert.match(grouped, /--kv-page-bg: light-dark\(#f6f6f7,/)
@@ -208,12 +239,12 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   assert.match(grouped, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\)/)
   assert.match(grouped, /\[data-ui="record-page-aside"\] \[data-ui="metric"\]/)
   assert.doesNotMatch(grouped, /\[data-ui="app-sidebar"\]/)
-  assert.match(readFileSync('packages/design-system/src/styles.css', 'utf8'), /layouts\/grouped\.css/)
+  assert.match(readFileSync('packages/design-system/src/styles.css', 'utf8'), /layouts\/grouped\/styles\.css/)
 })
 
 test('design system: titled tables use the demo card inset', () => {
-  const layouts = readFileSync('packages/design-system/src/layouts/layouts.css', 'utf8')
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const layouts = layoutCss
+  const patterns = patternCss
   assert.match(
     layouts,
     /\[data-ui="surface"\]\[data-padding="none"\]\[data-has-heading="true"\] \{\s*padding: var\(--kv-space-3\)/,
@@ -229,14 +260,14 @@ test('design system: titled tables use the demo card inset', () => {
 })
 
 test('design system: card surfaces use the shared radius scale', () => {
-  const layouts = readFileSync('packages/design-system/src/layouts/layouts.css', 'utf8')
+  const layouts = layoutCss
   const metricRule = layouts.match(/\[data-ui="metric"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
   assert.match(metricRule, /border-radius: var\(--kv-radius-md\)/)
   assert.doesNotMatch(metricRule, /border-radius:\s*0/)
 })
 
 test('design system: application regions are square while independent objects are rounded', () => {
-  const shellCss = readFileSync('packages/design-system/src/layouts/shell.css', 'utf8')
+  const shellCss = readFileSync('packages/design-system/src/layouts/shell/styles.css', 'utf8')
   for (const hook of ['app-sidebar', 'app-main', 'app-right-rail']) {
     const rule = shellCss.match(new RegExp(`\\[data-ui="${hook}"\\]\\s*\\{(?<body>[^}]+)\\}`))?.groups?.body
     assert.match(rule ?? '', /border-radius: var\(--kv-radius-app-region\)/)
@@ -255,7 +286,7 @@ test('design system: a stacked FormPage rail keeps space above its content', () 
 })
 
 test('design system: an operational ListPage body keeps a dense header gap', () => {
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const patterns = patternCss
   const rule =
     patterns.match(
       /\[data-ui="list-page"\]\[data-variant="operational"\]\s*\[data-ui="list-page-body"\]\s*\{(?<body>[^}]+)\}/,
@@ -264,7 +295,7 @@ test('design system: an operational ListPage body keeps a dense header gap', () 
 })
 
 test('design system: canonical page titles share one dense hierarchy', () => {
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const patterns = patternCss
   const kinds = ['list-page', 'record-page', 'form-page', 'dashboard-page', 'board-page']
   for (const kind of kinds) {
     const hook = `${kind}-title`
@@ -288,14 +319,14 @@ test('design system: canonical page titles share one dense hierarchy', () => {
 })
 
 test('design system: canonical page headers share compact responsive padding', () => {
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const patterns = patternCss
   const compactPadding = /padding: var\(--kv-space-4\) var\(--kv-space-4\) var\(--kv-space-3\)/g
   assert.equal((patterns.match(compactPadding) ?? []).length >= 4, true)
 })
 
 test('design system: light page surfaces use component roles without changing the palette', () => {
   const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const patterns = patternCss
   assert.match(tokens, /--kv-page-chrome-bg: light-dark\(var\(--kv-page-bg\), var\(--kv-panel-bg\)\)/)
   assert.match(tokens, /--kv-page-content-bg: var\(--kv-page-bg\)/)
   assert.match(tokens, /--kv-table-bg: light-dark\(var\(--kv-panel-bg\), transparent\)/)
@@ -321,8 +352,8 @@ test('design system: light page surfaces use component roles without changing th
 })
 
 test('design system: workspace canvas stays grey between independent white surfaces', () => {
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
-  const layouts = readFileSync('packages/design-system/src/layouts/layouts.css', 'utf8')
+  const patterns = patternCss
+  const layouts = layoutCss
   for (const hook of ['dashboard-page', 'dashboard-page-body', 'board-page']) {
     const rule = patterns.match(new RegExp(`\\[data-ui="${hook}"\\]\\s*\\{([^}]+)\\}`))?.[1]
     assert.match(rule ?? '', /background: var\(--kv-page-bg\)/, hook)
@@ -404,7 +435,7 @@ test('design system: operational tables expose sort, selection, grouping and row
   assert.doesNotMatch(table, /data-col="total"/)
 
   const selectRule =
-    [...css.matchAll(/\[data-ui="select-cell"\]\s*\{(?<body>[^}]+)\}/g)]
+    [...patternCss.matchAll(/\[data-ui="select-cell"\]\s*\{(?<body>[^}]+)\}/g)]
       .map((match) => match.groups?.body ?? '')
       .find((body) => body.includes('padding:')) ?? ''
   assert.match(selectRule, /min-width: 3\.5rem/)
@@ -459,7 +490,7 @@ test('design system: ListChrome assembles URL-driven collection controls', () =>
     /data-row="query"[\s\S]*data-ui="list-search"[\s\S]*data-row="tail"[\s\S]*data-row="filters"[\s\S]*data-ui="list-facets"[\s\S]*data-ui="pager-bar"/,
   )
   assert.doesNotMatch(renderToString(<ListChrome />), /data-row="query"[\s\S]*data-ui="list-search"/)
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const patterns = patternCss
   assert.match(patterns, /\[data-row="query"\] \{\s*flex-wrap: nowrap;\s*align-items: center/)
   assert.match(patterns, /\[data-ui="list-search"\] \{\s*display: flex;\s*flex: 1 1 16rem/)
   assert.match(patterns, /max-width: 32rem/)
@@ -515,9 +546,9 @@ test('design system: RecordPage renders a record surface rather than the form co
 })
 
 test('design system: form rows collapse while field pairs remain inline', () => {
-  const primitives = readFileSync('packages/design-system/src/primitives/primitives.css', 'utf8')
+  const primitives = primitiveCss
   assert.match(primitives, /grid-template-columns: minmax\(0, min\(35%, 9rem\)\) minmax\(0, 1fr\)/)
-  const patterns = readFileSync('packages/design-system/src/patterns/patterns.css', 'utf8')
+  const patterns = patternCss
   const compatibility = readFileSync('packages/ketsuite/src/modules/backend/design/forms.css', 'utf8')
   const partner = readFileSync('packages/ketsuite/src/modules/partner_backend/client/partner.css', 'utf8')
   for (const source of [patterns, compatibility]) {
@@ -651,7 +682,7 @@ test('design system: modal sheets expose route metadata and become fullscreen on
 })
 
 test('design system: action labels leave room for Vietnamese diacritics while truncating', () => {
-  const primitives = readFileSync('packages/design-system/src/primitives/primitives.css', 'utf8')
+  const primitives = primitiveCss
   const rule = primitives.match(/\[data-ui="action-label"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
   assert.match(rule, /min-width: 0/)
   assert.match(rule, /overflow: hidden/)
@@ -940,6 +971,45 @@ test('design system: catalogue renders every registered specimen', () => {
   assert.match(catalogue, /data-ui="record-page"/)
   assert.match(catalogue, /data-ui="dashboard-page"/)
   assert.match(catalogue, /data-ui="board-page"/)
+  assert.match(catalogue, /data-ui="catalogue-governance"/)
+})
+
+test('design system: governance connects public components to owners and specimens', () => {
+  const names = componentRegistry.map((component) => component.name)
+  assert.equal(names.length, 43)
+  assert.equal(new Set(names).size, names.length)
+  const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
+  assert.deepEqual(
+    componentRegistry.filter((component) => !examples.has(component.specimenId)),
+    [],
+  )
+  assert.deepEqual(
+    componentGroups.filter((group) => !group.owner || !group.maturity || !group.states.length),
+    [],
+  )
+})
+
+test('design system: density, layer, focus, motion and container tokens are contractual', () => {
+  const tokens = readFileSync('packages/design-system/src/foundations/tokens.css', 'utf8')
+  const reset = readFileSync('packages/design-system/src/foundations/reset.css', 'utf8')
+  const entry = readFileSync('packages/design-system/src/styles.css', 'utf8')
+  assert.match(entry, /@layer ket\.reset, ket\.theme, ket\.app, ket\.user;/)
+  for (const token of [
+    '--kv-density-control-height',
+    '--kv-density-row-height',
+    '--kv-density-content-gap',
+    '--kv-layer-menu',
+    '--kv-layer-popover',
+    '--kv-layer-dialog',
+    '--kv-layer-toast',
+    '--kv-container-field-narrow',
+    '--kv-container-rail-collapse',
+    '--kv-container-page-wide',
+  ])
+    assert.match(tokens, new RegExp(`${token}:`, 'u'))
+  assert.match(tokens, /prefers-reduced-motion: reduce/)
+  assert.match(reset, /:focus-visible/)
+  assert.match(reset, /outline: 2px solid var\(--kv-color-focus\)/)
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {

@@ -1,0 +1,74 @@
+/* Opt-in white, unframed workspace. Sidebar appearance is independent. */
+@layer ket.app {
+  [data-kv-design-system][data-presentation="flat"] :is([data-ui="app-main"], [data-ui="modal-layer"]) {
+    color-scheme: light;
+    --kv-page-bg: var(--kv-ref-white);
+    --kv-page-chrome-bg: var(--kv-ref-white);
+    --kv-page-content-bg: var(--kv-ref-white);
+    --kv-panel-bg: var(--kv-ref-white);
+    --kv-panel-bg-subtle: var(--kv-ref-white);
+    --kv-table-bg: var(--kv-ref-white);
+    --kv-table-header-bg: var(--kv-ref-white);
+    --kv-table-row-bg: var(--kv-ref-white);
+    color: var(--kv-text-main);
+  }
+
+  [data-kv-design-system][data-presentation="flat"] [data-ui="app-main"] {
+    background: var(--kv-ref-white);
+  }
+
+  [data-kv-design-system][data-presentation="flat"]
+    :is([data-ui="app-main"], [data-ui="modal-layer"])
+    :is(
+      [data-ui="surface"],
+      [data-ui="metric"],
+      [data-ui="content-card"],
+      [data-ui="table-scroll"],
+      [data-ui="disclosure"],
+      [data-ui="notice"],
+      [data-ui="list-page-footer"]
+    ) {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  [data-kv-design-system][data-presentation="flat"]
+    :is([data-ui="app-main"], [data-ui="modal-layer"])
+    :is([data-ui="surface"], [data-ui="metric"], [data-ui="content-card"], [data-ui="notice"]) {
+    padding: 0;
+  }
+
+  [data-kv-design-system][data-presentation="flat"] [data-ui="surface"] {
+    overflow: visible;
+  }
+
+  [data-kv-design-system][data-presentation="flat"] [data-ui="surface"] > [data-ui="surface-head"] {
+    padding: 0;
+    margin-bottom: var(--kv-space-5);
+  }
+
+  [data-kv-design-system][data-presentation="flat"] [data-ui="metric"] {
+    min-height: 0;
+  }
+
+  [data-kv-design-system][data-presentation="flat"] [data-ui="content-card"] {
+    padding-block: var(--kv-space-3);
+  }
+
+  [data-kv-design-system][data-presentation="flat"] [data-ui="card-title"] a:hover {
+    text-decoration: underline;
+  }
+
+  [data-kv-design-system][data-presentation="flat"]
+    :is([data-ui="disclosure-summary"], [data-ui="disclosure-body"]) {
+    padding-inline: 0;
+  }
+
+  [data-kv-design-system][data-presentation="flat"] [data-ui="modal-sheet"] {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

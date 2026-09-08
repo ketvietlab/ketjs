@@ -131,6 +131,14 @@
     font-size: var(--kv-text-md);
   }
 
+  :where([data-kv-design-system]) [data-ui="catalogue-governance"] {
+    margin: var(--kv-space-2) 0 0;
+    color: var(--kv-color-ink-muted);
+    font-family: var(--kv-font-mono);
+    font-size: var(--kv-text-xs);
+    text-transform: uppercase;
+  }
+
   :where([data-kv-design-system]) [data-ui="catalogue-controls"] {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

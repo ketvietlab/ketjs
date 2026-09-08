@@ -1,0 +1,169 @@
+@layer ket.app {
+  /* Dashboards are working canvases, not records. Their context and identity use
+     the same quiet bands as lists and forms; KPI, workflow and analytical blocks
+     own their surfaces on the grey page canvas below. Never paint the whole
+     workspace white: the gaps must separate independent cards and tables. */
+  :where([data-kv-design-system]) [data-ui="dashboard-page"] {
+    display: grid;
+    min-width: 0;
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0 0 var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="dashboard-page"][data-variant="operational"]
+    [data-ui="dashboard-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-header"] {
+    display: grid;
+    min-width: 0;
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="dashboard-page"][data-variant="operational"]
+    [data-ui="dashboard-page-header"] {
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-eyebrow"] {
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-2xs);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0;
+    line-height: var(--kv-leading-normal);
+    text-transform: uppercase;
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-title-row"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-description"] {
+    max-width: 56rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-subline"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-status"],
+  :where([data-kv-design-system]) [data-ui="dashboard-page-meta"] {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-body"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-6);
+    padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-toolbar"] {
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="dashboard-page-body"] > [data-ui="stack"] {
+    gap: var(--kv-space-6);
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="dashboard-page"][data-variant="operational"] {
+      padding-bottom: var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="dashboard-page"][data-variant="operational"]
+      [data-ui="dashboard-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-title-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-title"] {
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-actions"] > [data-ui="inline"] {
+      width: 100%;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="dashboard-page-actions"]
+      [data-ui="action"][data-variant="primary"] {
+      min-height: 2.75rem;
+      flex: 1 1 auto;
+    }
+
+    :where([data-kv-design-system]) [data-ui="dashboard-page-body"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-8);
+    }
+  }
+}

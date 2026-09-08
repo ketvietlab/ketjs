@@ -1,0 +1,9 @@
+@layer ket.app {
+  :where([data-kv-design-system])
+    [data-pattern="workspace"][data-layout="canvas"]
+    > [data-ui="board-page-body"]
+    > [data-ui="grid"] {
+    grid-template-columns: repeat(var(--kv-grid-columns, 3), minmax(16rem, 1fr));
+    align-items: start;
+  }
+}
