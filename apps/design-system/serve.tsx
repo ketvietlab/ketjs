@@ -7,7 +7,11 @@ import { BulkActions, DataTable, ListChrome, ListPage } from '@ketvietlab/design
 import {
   CatalogueHead,
   CataloguePage,
+  InventoryPage,
   PageSurfacePreview,
+  inventoryDecisions,
+  inventoryKinds,
+  inventoryScopes,
   surfaceKinds,
   surfaceStates,
 } from '@ketvietlab/design-system/catalogue'
@@ -100,6 +104,22 @@ const app = await createKetServer({
         }),
       })
     },
+    '/inventory': (url) =>
+      page({
+        body: document({
+          lang: 'en',
+          title: 'Design-system inventory · Két Việt',
+          head: CatalogueHead(),
+          body: (
+            <InventoryPage
+              scope={oneOf(url.searchParams.get('scope'), inventoryScopes, 'all')}
+              kind={oneOf(url.searchParams.get('kind'), inventoryKinds, 'all')}
+              decision={oneOf(url.searchParams.get('decision'), inventoryDecisions, 'all')}
+              query={url.searchParams.get('q') ?? ''}
+            />
+          ),
+        }),
+      }),
     '/': (url) => {
       const theme = oneOf(url.searchParams.get('theme'), ['light', 'dark', 'system'] as const, 'light')
       const density = oneOf(
@@ -127,6 +147,7 @@ console.log(`
     light      http://127.0.0.1:${port}/?theme=light
     dark       http://127.0.0.1:${port}/?theme=dark
     compact    http://127.0.0.1:${port}/?density=compact
+    inventory  http://127.0.0.1:${port}/inventory
 
   Package source:
     ${ASSETS}

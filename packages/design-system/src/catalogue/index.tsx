@@ -21,6 +21,14 @@ import { Pipeline } from '../patterns/pipeline.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
 
 export { PageSurfacePreview, surfaceKinds, surfaceStates } from './page-surfaces.tsx'
+export {
+  InventoryPage,
+  inventoryDecisions,
+  inventoryKinds,
+  inventoryScopes,
+} from './inventory.tsx'
+export type { InventoryPageProps } from './inventory.tsx'
+export { designSystemInventory } from './inventory.generated.ts'
 
 export type ComponentExample = {
   id: string
@@ -1434,6 +1442,7 @@ export const CataloguePage = (
               href="/surfaces?kind=record&theme=light"
               variant="secondary"
             />
+            <LinkButton label="Review inventory" href="/inventory" variant="secondary" />
           </div>
           <div data-ui="catalogue-controls" role="group" aria-label="Catalogue preferences">
             <span>Theme</span>

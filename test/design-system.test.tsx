@@ -25,7 +25,12 @@ import {
   Surface,
   Tabs,
 } from '@ketvietlab/design-system'
-import { CataloguePage, PageSurfacePreview } from '@ketvietlab/design-system/catalogue'
+import {
+  CataloguePage,
+  InventoryPage,
+  PageSurfacePreview,
+  designSystemInventory,
+} from '@ketvietlab/design-system/catalogue'
 
 const css = globSync('packages/design-system/src/**/*.css')
   .map((path) => readFileSync(path, 'utf8'))
@@ -935,6 +940,36 @@ test('design system: catalogue renders every registered specimen', () => {
   assert.match(catalogue, /data-ui="record-page"/)
   assert.match(catalogue, /data-ui="dashboard-page"/)
   assert.match(catalogue, /data-ui="board-page"/)
+})
+
+test('design system: inventory classifies every public and compatibility export', () => {
+  assert.equal(designSystemInventory.summary.publicExports, 85)
+  assert.equal(designSystemInventory.summary.runtimeExports, 46)
+  assert.equal(designSystemInventory.summary.compatibilityModules, 38)
+  assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
+  assert.deepEqual(
+    designSystemInventory.rows.filter((row) => !row.owner || !row.decision || !row.gapTask),
+    [],
+  )
+  assert.equal(
+    new Set(designSystemInventory.rows.map((row) => `${row.scope}:${row.kind}:${row.name}`)).size,
+    designSystemInventory.rows.length,
+  )
+})
+
+test('design system: inventory is an SSR review surface with URL-owned filters', () => {
+  const inventory = renderToString(
+    <InventoryPage scope="public" kind="runtime" decision="keep" query="Page" />,
+  )
+  assert.match(inventory, /data-ui="inventory-page"/)
+  assert.match(inventory, /Design-system inventory/)
+  assert.match(inventory, /action="\/inventory" method="get"/)
+  assert.match(inventory, /name="q" value="Page"/)
+  assert.match(inventory, /data-decision="keep"/)
+  assert.match(inventory.replace(/<!--k\[?-->/gu, ''), /3 entries in this view/)
+  assert.match(inventory, /CSS and JavaScript delivery/)
+  assert.doesNotMatch(inventory, /<script/)
+  assert.doesNotMatch(inventory, /FormPage<\/code>/)
 })
 
 test('design system: KetSuite consumes the public package through aliases and generated assets', () => {
