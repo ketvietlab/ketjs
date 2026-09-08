@@ -38,6 +38,10 @@ const PENDING: Record<string, string> = {
   'packages/ketsuite/src/modules/backend/catalogue.ts':
     'the design harness; its own chrome is not a product screen',
   'apps/admin/serve.ts': 'the design harness page, same reason',
+  'apps/design-system/serve.tsx':
+    'the public catalogue and sales demo; its chrome is not a product screen',
+  'apps/design-system/demo.tsx':
+    'the public catalogue and sales demo; its chrome is not a product screen',
 }
 
 /**
@@ -84,6 +88,10 @@ const NOT_THE_BACKEND: Record<string, string> = {
   'packages/ketsuite/src/modules/attendance_backend/routes.ts':
     'the kiosk is answered anonymously on a shared tablet, so it gets no viewer and no menu',
   'apps/admin/serve.ts': 'the design harness serves the catalogue, not a product screen',
+  'apps/design-system/serve.tsx':
+    'the public catalogue and sales demo are the design harness, not a product screen',
+  'apps/design-system/demo.tsx':
+    'the public catalogue and sales demo are the design harness, not a product screen',
 }
 
 /** Where the PascalCase name is not just the capitalised one. */
