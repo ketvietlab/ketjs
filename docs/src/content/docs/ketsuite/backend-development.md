@@ -21,11 +21,56 @@ flowchart LR
   kit --> page["adminPage() response"]
 ```
 
-Backend companions normally contain `index.ts`, `routes.ts`, `screens.tsx` or a `screens/` directory,
-`menus.ts`, and optional `islands.ts` plus client assets. Use a `screens/` directory when list, detail,
-edit, and secondary record views have independent responsibilities; export their public entry points
-from `screens/index.ts`. Their manifest depends on the domain and `backend`; it may declare assets,
-styles, routes, menus, messages, islands, joints, and fills.
+Backend companions contain `index.ts`, route declarations/adapters, a `screens/` directory,
+`menus.ts`, and optional `islands.ts` plus client assets. Their manifest depends on the domain and
+`backend`; it may declare assets, styles, routes, menus, messages, islands, joints, and fills.
+
+## Screen organization
+
+Every routed business screen owns one `screens/<name>.tsx` file and composes its UI with JSX.
+Shared business components may live in `screens/shared.tsx` or another appropriate UI directory;
+generic presentation belongs in the design system. `screens/index.ts` only exports screen entry
+points and types, with no composition or business logic.
+
+```text
+# File: packages/ketsuite/src/modules/example_backend
+packages/ketsuite/src/modules/example_backend/
+├── index.ts
+├── routes.ts
+├── screens/
+│   ├── index.ts
+│   ├── example-list.tsx
+│   ├── example-form.tsx
+│   └── shared.tsx
+└── menus.ts
+```
+
+This tree starts at the public module source root. Private deployments put the same organization
+under their module's `src/`; see [module source roots](/ketsuite/module-development/#module-source-roots).
+Do not change build entry points as part of moving a screen.
+
+**When changing a routed business screen or its route, migrate the complete affected screen to its
+own JSX file in the same change.** The rule follows the code's role, not its name: it covers
+`screen.ts`, `screen.tsx`, `screens.ts`, `screens.tsx`, `routes.ts`, `routes.tsx`, and differently named
+files. Do not add new template-string or legacy view-builder screens, or leave one affected screen
+split between the new component and its old route. Unrelated screens do not need a simultaneous rewrite.
+
+Route files, whether `.ts` or `.tsx`, must not contain JSX, view builders, screen-specific state,
+form/table markup, action layouts, or other rendering logic. They may call exported screen components
+as ordinary functions; this keeps JSX composition in the screen file without requiring a route rename.
+
+The shared `modules/backend/screen.ts` helpers (`adminPage`, `screen`, and `frameOf`) provide frame,
+locale, session context, and document/fragment responses. They are infrastructure, not legacy
+business screens; keep valid consumers and do not duplicate their behavior in each module. API and
+webhook routes and public website theme/template pipelines are not business screens. A portal or
+kiosk still organizes its business UI in JSX files, but must not gain an admin shell through this rule.
+Administration screens continue to use the canonical `ListPage`, `RecordPage`, or `WorkspacePage`
+contract and the owning repository's design-system rules.
+
+Update imports, re-exports, and source-based audits when moving a screen. Preserve route paths,
+authorization, locale, query-owned state, form refusals, and document/fragment behavior. Run focused
+HTTP and browser E2E coverage for the affected screens, including desktop/mobile and relevant locales;
+read the generated evidence before handoff.
 
 ## Route responsibilities
 
@@ -38,6 +83,7 @@ import { randomUUID } from 'node:crypto'
 import { text } from '@ketvietlab/ketjs'
 import type { Route, ServeContext } from '@ketvietlab/ketjs'
 import { adminPage, inLocale, readForm, seeOther } from '@ketvietlab/ketsuite/backend'
+import { ExampleFormScreen } from './screens/index.ts'
 
 export const routes = {
   '/admin/example/new':
@@ -46,7 +92,7 @@ export const routes = {
       if (request.method === 'GET')
         return adminPage(ctx, url, request, {
           title: 'example_backend.create.title',
-          body: (_, frame) => exampleForm(_, frame),
+          body: (_, frame) => ExampleFormScreen({ translator: _, frame }),
         })
 
       if (request.method !== 'POST') return text('GET or POST', { status: 405 })
@@ -57,11 +103,15 @@ export const routes = {
         ? seeOther(inLocale(url, `/admin/example/${id}`))
         : adminPage(ctx, url, request, {
             title: 'example_backend.create.title',
-            body: (_, frame) => exampleForm(_, frame, result),
+            body: (_, frame) => ExampleFormScreen({ translator: _, frame, result }),
           })
     },
 }
 ```
+
+`ExampleFormScreen` is exported from `screens/example-form.tsx` through the export-only
+`screens/index.ts`. Its JSX owns the form, errors, actions, and page composition; the callback above
+only passes route data and the shared frame to that component.
 
 Use `ctx.call()` for staff-facing operations so the request's session, permissions, scope, and effects
 are enforced. `ctx.callUnchecked()` is for narrow infrastructure boundaries that perform their own
@@ -234,7 +284,7 @@ position, focus and anything typed, on a schedule with no relation to when the w
 the runtime should listen on:
 
 ```tsx
-// File: packages/ketsuite/src/modules/example_backend/screens.tsx
+// File: packages/ketsuite/src/modules/example_backend/screens/example-detail.tsx
 liveRegion({
   label: _('example.state.rebuilding'),
   stream: running ? `example-rebuild:${runId}` : null,
@@ -260,7 +310,7 @@ A chart is a canvas, so it is an island — `backend.chart`, reached through the
 resolves a picker:
 
 ```ts
-// File: packages/ketsuite/src/modules/example_backend/routes.ts
+// File: packages/ketsuite/src/modules/example_backend/screens/example-revenue.tsx
 const plot = await chartControl(ctx, url, req, 'example-revenue', {
   kind: 'line',
   label: _('example_backend.revenue.title'),
