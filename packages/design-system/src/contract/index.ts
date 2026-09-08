@@ -7,6 +7,7 @@ import { HOOKS as progressHooks } from '../primitives/progress.tsx'
 import { HOOKS as layoutHooks } from '../layouts/index.tsx'
 import { HOOKS as shellHooks } from '../layouts/shell.tsx'
 import { HOOKS as tableHooks } from '../patterns/data-table.tsx'
+import { HOOKS as listChromeHooks } from '../patterns/list-chrome.tsx'
 import { HOOKS as listPageHooks } from '../patterns/list-page.tsx'
 import { HOOKS as formPageHooks } from '../patterns/form-page.tsx'
 import { HOOKS as dashboardPageHooks } from '../patterns/dashboard-page.tsx'
@@ -25,6 +26,7 @@ const GROUPS = {
   layouts: layoutHooks,
   shell: shellHooks,
   table: tableHooks,
+  listChrome: listChromeHooks,
   listPage: listPageHooks,
   formPage: formPageHooks,
   dashboardPage: dashboardPageHooks,
