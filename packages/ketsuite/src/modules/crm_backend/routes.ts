@@ -130,8 +130,8 @@ const caseFields = (
     error?: (field: string) => string | null
   } = {},
 ): FormField[] => {
-  const source = String(row.utmSource ?? (requirements.need ? 'pancake' : ''))
-  const sources = ['pancake', 'zalo', 'facebook', 'website', 'customer_care', 'referral']
+  const source = String(row.utmSource ?? (requirements.need ? 'marketplace' : ''))
+  const sources = ['marketplace', 'social', 'website', 'support', 'referral']
   if (source && !sources.includes(source)) sources.push(source)
   return [
     {
