@@ -300,7 +300,7 @@ test('island: the server publishes a tenant-specific browser bootstrap and view 
     assert.match(bootstrapSource, /\/_ket\/asset\/website_search\/search\.mjs/)
     assert.match(bootstrapSource, /createIslandManager/)
     assert.match(bootstrapSource, /x-ket-navigation/)
-    assert.match(bootstrapSource, /knownIslands/)
+    assert.match(bootstrapSource, /new Set\(\[\.\.\.Object\.keys\(definitions\),/)
     assert.match(bootstrapSource, /navigation fragment contains unknown island/)
 
     const runtime = await fetch(`${base}/_ket/view/index.js`)

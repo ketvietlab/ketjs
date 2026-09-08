@@ -279,7 +279,7 @@
     border-inline-start: 1px solid var(--admin-divider-subtle);
     background: var(--admin-rail-bg);
   }
-  [data-ui="main"]:has(> [data-ui="topbar"] > *) [data-ui="record-aside"] {
+  [data-ui="main"]:has(> [data-ket-slot="backend.topbar"] > [data-ui="topbar"] > *) [data-ui="record-aside"] {
     max-block-size: calc(100dvh - var(--admin-topbar-height) - 2 * var(--admin-gap));
   }
   [data-ui="record-aside"] :is([data-ui="chatter"], [data-ui="activity-record"]) {

@@ -31,18 +31,20 @@ the customer tab, and writes raw JSON plus screenshots under `.artifacts/ssr-nav
 
 ## 2026-09-07 result
 
-Ten warm-browser samples were collected for each mode on the same machine and route. Times are click or
-navigation start through a usable 30-row result.
+Ten warm-browser samples were collected for each mode on the same machine and route. Modes alternate on
+each sample to limit cache-order bias. Both timers stop at the same condition: the customer URL and a
+usable result row. The browser check also traverses back and forward and fails if the JavaScript realm is
+replaced.
 
 | Partners | Mode | Median | p95 | Requests | Document requests | JS realm preserved |
 | ---: | --- | ---: | ---: | ---: | ---: | --- |
-| 10,000 | Full document | 329 ms | 342 ms | 37 | 1 | No |
-| 10,000 | SSR fragment | 360 ms | 404 ms | 1 | 0 | Yes |
-| 100,000 | Full document | 1,093 ms | 1,155 ms | 37 | 1 | No |
-| 100,000 | SSR fragment | 1,136 ms | 1,224 ms | 1 | 0 | Yes |
+| 10,000 | Full document | 316 ms | 334 ms | 33 | 1 | No |
+| 10,000 | SSR fragment | 354 ms | 379 ms | 1 | 0 | Yes |
+| 100,000 | Full document | 1,104 ms | 1,218 ms | 33 | 1 | No |
+| 100,000 | SSR fragment | 1,145 ms | 1,251 ms | 1 | 0 | Yes |
 
 The result proves the no-reload property, but does not claim a local latency win: fragment reconciliation
-added roughly 31–43 ms in this run. At 100,000 partners, the server-side list query dominates both modes.
+added roughly 38–40 ms in this run. At 100,000 partners, the server-side list query dominates both modes.
 The material benefit is continuity—one request, preserved JavaScript state, and no document replacement—
 while retaining a single SSR rendering and authorization path.
 
