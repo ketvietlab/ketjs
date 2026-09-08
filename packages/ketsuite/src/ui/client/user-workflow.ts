@@ -1,7 +1,4 @@
-let installed = false
-export function installUserWorkflow() {
-  if (installed) return
-  installed = true
+export function installUserWorkflow(lifetime: AbortSignal): () => void {
   let abort: AbortController | undefined,
     timer: ReturnType<typeof setTimeout> | undefined,
     sequence = 0
@@ -95,40 +92,62 @@ export function installUserWorkflow() {
         void check(form)
       }
   }
-  document.addEventListener('input', (event) => {
-    const input = event.target as HTMLInputElement,
-      form = input.closest<HTMLFormElement>('form[data-user-workflow]')
-    if (!form) return
-    if (input.type === 'email') void check(form)
-    if (input.matches('[data-role-search]')) {
-      let n = 0
-      for (const row of form.querySelectorAll<HTMLElement>('[data-role-option]')) {
-        row.hidden = !row.textContent?.toLocaleLowerCase('vi').includes(input.value.toLocaleLowerCase('vi'))
-        if (!row.hidden) n++
+  document.addEventListener(
+    'input',
+    (event) => {
+      const input = event.target as HTMLInputElement,
+        form = input.closest<HTMLFormElement>('form[data-user-workflow]')
+      if (!form) return
+      if (input.type === 'email') void check(form)
+      if (input.matches('[data-role-search]')) {
+        let n = 0
+        for (const row of form.querySelectorAll<HTMLElement>('[data-role-option]')) {
+          row.hidden = !row.textContent?.toLocaleLowerCase('vi').includes(input.value.toLocaleLowerCase('vi'))
+          if (!row.hidden) n++
+        }
+        const empty = form.querySelector<HTMLElement>('[data-role-empty]')
+        if (empty) empty.hidden = n > 0
       }
-      const empty = form.querySelector<HTMLElement>('[data-role-empty]')
-      if (empty) empty.hidden = n > 0
-    }
-  })
-  document.addEventListener('change', (event) => {
-    const input = event.target as HTMLElement,
-      form = input.closest<HTMLFormElement>('form[data-user-workflow]')
-    if (form && input.matches('select[name="companyId"],select[name="branchId"],select[name="scopeKind"]'))
-      scope(form, input.matches('select[name="companyId"]'))
-  })
-  document.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement
-    if (target.matches('[data-email-retry]')) void check(target.closest('form')!)
-  })
-  document.addEventListener('submit', (event) => {
-    const form = event.target as HTMLFormElement
-    if (
-      form.matches('form[data-user-workflow]') &&
-      form.querySelector('input[type=email]') &&
-      form.dataset.emailAvailable !== 'true'
-    )
-      event.preventDefault()
-  })
-  new MutationObserver(scan).observe(document.documentElement, { childList: true, subtree: true })
+    },
+    { signal: lifetime },
+  )
+  document.addEventListener(
+    'change',
+    (event) => {
+      const input = event.target as HTMLElement,
+        form = input.closest<HTMLFormElement>('form[data-user-workflow]')
+      if (form && input.matches('select[name="companyId"],select[name="branchId"],select[name="scopeKind"]'))
+        scope(form, input.matches('select[name="companyId"]'))
+    },
+    { signal: lifetime },
+  )
+  document.addEventListener(
+    'click',
+    (event) => {
+      const target = event.target as HTMLElement
+      if (target.matches('[data-email-retry]')) void check(target.closest('form')!)
+    },
+    { signal: lifetime },
+  )
+  document.addEventListener(
+    'submit',
+    (event) => {
+      const form = event.target as HTMLFormElement
+      if (
+        form.matches('form[data-user-workflow]') &&
+        form.querySelector('input[type=email]') &&
+        form.dataset.emailAvailable !== 'true'
+      )
+        event.preventDefault()
+    },
+    { signal: lifetime },
+  )
+  const observer = new MutationObserver(scan)
+  observer.observe(document.documentElement, { childList: true, subtree: true })
   scan()
+  return () => {
+    abort?.abort()
+    clearTimeout(timer)
+    observer.disconnect()
+  }
 }

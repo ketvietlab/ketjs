@@ -27,6 +27,13 @@ export default defineModule({
   assets: new URL('./client/', import.meta.url),
   styles: ['product.css'],
   islands,
+  behaviors: {
+    'product.editor': {
+      client: 'product.mjs',
+      export: 'editorBehavior',
+      when: 'form[data-scope="product-detail"], form[data-scope="product-variant"]',
+    },
+  },
   routes,
   menus,
   joints: {

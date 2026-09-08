@@ -17,7 +17,7 @@ const entries = [
   },
   {
     source: join(UI_CLIENT_DIR, 'table-selection-view.tsx'),
-    output: join(BACKEND_CLIENT_DIR, 'table-selection.mjs'),
+    output: join(BACKEND_CLIENT_DIR, 'backend-shell.mjs'),
   },
   {
     source: join(UI_CLIENT_DIR, 'mail-entry.mjs'),

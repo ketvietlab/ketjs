@@ -190,8 +190,6 @@ export function createCalendarView(runtime, props, seed = {}) {
       busy.set(false)
     }
   }
-  if (typeof window !== 'undefined') queueMicrotask(load)
-
   const eventCard = (entry) => html`<article data-ui="calendar-event" data-all-day=${entry.allDay}>
     <strong data-ui="calendar-event-title">${entry.name}</strong>
     <span data-ui="calendar-event-time">${entry.allDay ? labels.allDay : `${eventTimeFormatter.format(new Date(entry.startAt))}–${eventTimeFormatter.format(new Date(entry.stopAt))}`}</span>
@@ -259,6 +257,7 @@ export function createCalendarView(runtime, props, seed = {}) {
   }
   return {
     view: render,
+    mount: () => void load(),
     dispose: () => {
       disposed = true
       activeRequest?.abort()
