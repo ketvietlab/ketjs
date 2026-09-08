@@ -4,8 +4,8 @@ test('renders every component group and persists catalogue preferences', async (
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/?theme=dark&density=default')
 
-  await expect(page.getByRole('heading', { name: 'Operational UI, kept honest.' })).toBeVisible()
-  await expect(page.locator('[data-ui="catalogue-specimen"]')).toHaveCount(22)
+  await expect(page.getByRole('heading', { name: 'Két Việt Design System', exact: true })).toBeVisible()
+  await expect(page.locator('[data-ui="catalogue-specimen"]')).toHaveCount(26)
   await expect(page.getByRole('button', { name: 'Toggle theme' })).toHaveAttribute('data-icon-only', 'true')
   await expect(page.locator('#data-table [data-ui="row"]')).toHaveCount(3)
   await expect(page.locator('#record-form [data-ui="field"]')).toHaveCount(3)
@@ -38,7 +38,7 @@ test('renders every component group and persists catalogue preferences', async (
 test('keeps the catalogue and component stages inside a mobile viewport', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?theme=dark&density=comfortable')
-  await expect(page.locator('[data-ui="catalogue-specimen"]')).toHaveCount(22)
+  await expect(page.locator('[data-ui="catalogue-specimen"]')).toHaveCount(26)
 
   const dimensions = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,

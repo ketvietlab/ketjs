@@ -61,7 +61,7 @@
     min-height: var(--kv-table-header-height);
     align-items: center;
     gap: 1.625rem;
-    border-bottom: 1px solid var(--kv-border-subtle);
+    border-bottom: 1px solid var(--kv-panel-border);
     overflow-x: auto;
   }
 
