@@ -2,7 +2,7 @@
 //
 // Deliberately NOT a theme. A storefront theme is a stranger's code, so it is
 // written in a restricted language that cannot run (D3, D18). A backend screen is
-// ours: it needs forms, filters and real interaction, so it is written in `html`
+// ours: it needs forms, filters and real interaction, so it uses trusted view helpers
 // with islands like any trusted view. Letting a third party replace a backend
 // template is precisely the mechanism that made the domain contract's upgrades painful.
 //
@@ -46,9 +46,15 @@ export default defineModule({
   menus,
   joints,
   islands,
+  behaviors: {
+    'backend.shell': {
+      client: 'client/backend-shell.mjs',
+      export: 'backendShell',
+      when: '[data-ui="shell"][data-kv-design-system]',
+    },
+  },
   fills: {
     'backend:relation.select': `{% island "backend.relation-select" %}`,
-    'backend:runtime': `{% island "backend.table-selection" %}`,
     'backend:screen.chart': `{% island "backend.chart" %}`,
   },
   messages,

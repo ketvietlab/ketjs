@@ -101,6 +101,7 @@ export function compose(
     reports: {},
     regions: { required: [...(opts.requiredRegions ?? [])], provided: {} },
     islands: {},
+    behaviors: {},
     sections: {},
     contentTypes: {},
     taxonomies: {},
@@ -1023,6 +1024,67 @@ export function compose(
           message: `joint "${key}" prop "${name}" has unknown type "${spec}"`,
           hint: 'use a scalar type or a composed view-model key',
         })
+      }
+    }
+  }
+
+  // --- browser behaviours --------------------------------------------------
+  for (const m of order) {
+    for (const [name, def] of Object.entries(m.behaviors)) {
+      const existing = manifest.behaviors[name]
+      if (existing) {
+        diag.add({
+          code: 'E_BEHAVIOR_DUPLICATE',
+          module: m.name,
+          message: `browser behavior "${name}" is already provided by "${existing.by}"`,
+        })
+        continue
+      }
+      if (!def || typeof def !== 'object' || typeof def.client !== 'string' || !def.client) {
+        diag.add({
+          code: 'E_BEHAVIOR_SHAPE',
+          module: m.name,
+          message: `browser behavior "${name}" needs a non-empty client module`,
+        })
+        continue
+      }
+      if (!m.assets) {
+        diag.add({
+          code: 'E_BEHAVIOR_WITHOUT_ASSETS',
+          module: m.name,
+          message: `browser behavior "${name}" declares "${def.client}" but "${m.name}" has no assets directory`,
+        })
+        continue
+      }
+      if (
+        def.client.startsWith('/') ||
+        def.client.includes('\\') ||
+        def.client.includes('?') ||
+        def.client.includes('#') ||
+        def.client.split('/').includes('..')
+      ) {
+        diag.add({
+          code: 'E_BEHAVIOR_CLIENT_PATH',
+          module: m.name,
+          message: `browser behavior "${name}" client path must stay inside the module assets directory`,
+        })
+        continue
+      }
+      if (def.when !== undefined && (typeof def.when !== 'string' || !def.when.trim())) {
+        diag.add({
+          code: 'E_BEHAVIOR_SELECTOR',
+          module: m.name,
+          message: `browser behavior "${name}" when must be a non-empty selector`,
+        })
+        continue
+      }
+      manifest.behaviors[name] = {
+        by: m.name,
+        client: {
+          src: `/_ket/asset/${m.name}/${def.client}`,
+          export: def.export ?? 'default',
+        },
+        ...(def.when === undefined ? {} : { when: def.when }),
       }
     }
   }

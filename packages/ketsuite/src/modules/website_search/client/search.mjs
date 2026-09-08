@@ -16,38 +16,41 @@ import { html, signal } from '/_ket/view/index.js'
  * @param {{ label?: string, placeholder?: string, emptyLabel?: string }} props
  */
 export default function websiteSearch(props) {
-  const params = new URLSearchParams(location.search)
-  const initial = params.get('q') ?? ''
-
-  const open = signal(initial.trim().length > 0)
-  const term = signal(initial)
+  // Keep the initial browser tree identical to SSR. URL-only state is adopted
+  // from mount(), after hydration has claimed the server-rendered DOM.
+  const open = signal(false)
+  const term = signal('')
   const state = signal(/** @type {'idle'|'loading'|'ready'|'failed'} */ ('idle'))
   const hits = signal(
     /** @type {Array<{id: string, path: string, title: string, excerpt: string|null}>} */ ([]),
   )
   const total = signal(0)
   const capped = signal(false)
+  let request = /** @type {AbortController | null} */ (null)
+  let sequence = 0
 
-  /** @param {string} fn @param {Record<string, unknown>} input */
-  const post = async (fn, input) => {
+  /** @param {string} fn @param {Record<string, unknown>} input @param {AbortSignal} signal */
+  const post = async (fn, input, signal) => {
     const response = await fetch(`/_ket/fn/${fn}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
+      signal,
     })
     if (!response.ok) throw new Error(String(response.status))
     return (await response.json()).data
   }
 
-  /** @param {string} q */
-  const load = async (q) => {
+  /** @param {string} q @param {AbortSignal} signal @param {number} currentSequence */
+  const load = async (q, signal, currentSequence) => {
     // The site is resolved from the request host, the same way the storefront
     // resolved the page this box is rendered on.
-    const site = await post('website.resolveSite', { host: location.host })
+    const site = await post('website.resolveSite', { host: location.host }, signal)
     if (!site?.id) throw new Error('no site')
     // One call rather than two: the index answers the page and the total
     // together, and tells us whether it is behind what is being served.
-    const found = await post('website_search.searchIndexed', { siteId: site.id, q, limit: 20 })
+    const found = await post('website_search.searchIndexed', { siteId: site.id, q, limit: 20 }, signal)
+    if (currentSequence !== sequence) return
     hits.set(Array.isArray(found?.hits) ? found.hits : [])
     total.set(Number(found?.total ?? 0))
     capped.set(found?.stale === true)
@@ -56,6 +59,9 @@ export default function websiteSearch(props) {
 
   /** @param {string} q */
   const search = (q) => {
+    request?.abort()
+    request = null
+    const currentSequence = ++sequence
     // Two characters is the same floor searchPublished applies; asking below it
     // spends a request to be told nothing.
     if (q.trim().length < 2) {
@@ -64,10 +70,11 @@ export default function websiteSearch(props) {
       return
     }
     state.set('loading')
-    load(q).catch(() => state.set('failed'))
+    request = new AbortController()
+    load(q, request.signal, currentSequence).catch((error) => {
+      if (error?.name !== 'AbortError' && currentSequence === sequence) state.set('failed')
+    })
   }
-
-  if (initial) search(initial)
 
   function toggleOpen() {
     open.set(!open())
@@ -85,7 +92,7 @@ export default function websiteSearch(props) {
     const next = new URL(location.href)
     if (q.trim()) next.searchParams.set('q', q)
     else next.searchParams.delete('q')
-    history.replaceState(null, '', next)
+    history.replaceState(history.state ?? {}, '', next)
     search(q)
   }
 
@@ -97,7 +104,7 @@ export default function websiteSearch(props) {
     return `${total()}${capped() ? '+' : ''} kết quả cho “${term()}”`
   }
 
-  return () => html`<div class="search" data-open=${open()} data-state=${state()}>
+  const view = () => html`<div class="search" data-open=${open()} data-state=${state()}>
     <button on:click=${toggleOpen} aria-expanded=${open()}>${props.label ?? 'Tìm'}</button>
     ${
       open()
@@ -128,4 +135,18 @@ export default function websiteSearch(props) {
         : ''
     }
   </div>`
+
+  return {
+    view,
+    /** @param {{ lifetime: AbortSignal }} context */
+    mount: ({ lifetime }) => {
+      lifetime.addEventListener('abort', () => request?.abort(), { once: true })
+      const initial = new URLSearchParams(location.search).get('q') ?? ''
+      if (!initial.trim()) return
+      open.set(true)
+      term.set(initial)
+      search(initial)
+    },
+    dispose: () => request?.abort(),
+  }
 }

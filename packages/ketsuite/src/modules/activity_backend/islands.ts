@@ -1,22 +1,24 @@
-import { each, html, signal } from '@ketvietlab/ketjs-view'
-import type { IslandDefinition, IslandProps } from '@ketvietlab/ketjs-view'
+import { defineIsland, each, html, signal } from '@ketvietlab/ketjs-view'
 import { createActivityIndicatorView, createRecordActivityView } from '../../ui/client/activity-view.mjs'
 
 const runtime = { each, html, signal }
 
-export const islands: Record<string, IslandDefinition> = {
-  'activity.record': {
+type RecordActivityProps = { resModel: string; resId: string; lang?: string }
+type IndicatorProps = { lang?: string }
+
+export const islands = {
+  'activity.record': defineIsland<RecordActivityProps>()({
     props: { resModel: 'text', resId: 'id', lang: 'text?' },
     key: ['resModel', 'resId'],
     client: 'activity.mjs',
     export: 'record',
-    view: (props: IslandProps) => createRecordActivityView(runtime, props),
-  },
-  'activity.indicator': {
+    view: (props) => createRecordActivityView(runtime, props),
+  }),
+  'activity.indicator': defineIsland<IndicatorProps>()({
     props: { lang: 'text?' },
     key: [],
     client: 'activity.mjs',
     export: 'indicator',
-    view: (props: IslandProps) => createActivityIndicatorView(runtime, props),
-  },
+    view: (props) => createActivityIndicatorView(runtime, props),
+  }),
 }
