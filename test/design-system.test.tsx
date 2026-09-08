@@ -999,10 +999,14 @@ test('design system: interaction essentials preserve native and accessible fallb
       openHref="?owner=open"
       closeHref="?owner="
       closeLabel="Close"
+      placement="top-end"
     />,
   )
+  assert.match(open, /data-placement="top-end"/)
   assert.match(open, /role="dialog" aria-label="Owner" tabindex="-1"/)
-  assert.match(renderToString(<Tooltip id="tip" text="Synchronized" trigger="Status" />), /role="tooltip"/)
+  const tooltip = renderToString(<Tooltip id="tip" text="Synchronized" trigger="Status" placement="right" />)
+  assert.match(tooltip, /data-placement="right"/)
+  assert.match(tooltip, /role="tooltip"/)
 
   const confirm = renderToString(
     <ConfirmDialog

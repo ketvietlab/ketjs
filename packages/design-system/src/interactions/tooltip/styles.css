@@ -28,8 +28,38 @@
       transform var(--kv-motion-fast);
   }
 
+  :where([data-kv-design-system]) [data-ui="tooltip"][data-placement="bottom"] [data-ui="tooltip-content"] {
+    top: calc(100% + var(--kv-space-2));
+    bottom: auto;
+    transform: translate(-50%, calc(-1 * var(--kv-space-1)));
+  }
+
+  :where([data-kv-design-system]) [data-ui="tooltip"][data-placement="left"] [data-ui="tooltip-content"] {
+    top: 50%;
+    right: calc(100% + var(--kv-space-2));
+    bottom: auto;
+    left: auto;
+    transform: translate(var(--kv-space-1), -50%);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tooltip"][data-placement="right"] [data-ui="tooltip-content"] {
+    top: 50%;
+    bottom: auto;
+    left: calc(100% + var(--kv-space-2));
+    transform: translate(calc(-1 * var(--kv-space-1)), -50%);
+  }
+
   :where([data-kv-design-system]) [data-ui="tooltip"]:is(:hover, :focus-within) [data-ui="tooltip-content"] {
     opacity: 1;
     transform: translate(-50%, 0);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="tooltip"][data-placement="left"]:is(:hover, :focus-within)
+    [data-ui="tooltip-content"],
+  :where([data-kv-design-system])
+    [data-ui="tooltip"][data-placement="right"]:is(:hover, :focus-within)
+    [data-ui="tooltip-content"] {
+    transform: translate(0, -50%);
   }
 }
