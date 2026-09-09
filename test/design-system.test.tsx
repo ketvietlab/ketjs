@@ -973,9 +973,14 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.match(nav, /data-ui="nav-item-count"[^>]*>[\s\S]*7/)
 
   const tabs = renderToString(
-    <Tabs label="Views" items={[{ id: 'all', label: 'All', href: '/all', active: true }]} />,
+    <Tabs
+      label="Views"
+      items={[{ id: 'all', label: 'All', href: '/all', active: true }]}
+      extension={<a data-ui="tab" href="/custom">Custom</a>}
+    />,
   )
   assert.match(tabs, /data-ui="tabs"/)
+  assert.match(tabs, /href="\/all"[\s\S]*href="\/custom"/)
   assert.match(tabs, /aria-current="page"/)
 
   const progress = renderToString(<Progress label="Complete" value={118} tone="positive" />)

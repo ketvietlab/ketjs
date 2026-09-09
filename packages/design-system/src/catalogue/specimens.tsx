@@ -957,6 +957,11 @@ export const componentGroups: readonly ComponentGroup[] = [
                   { id: 'activity', label: 'Activity', href: '#navigation-items', count: 8 },
                   { id: 'files', label: 'Files', href: '#navigation-items', count: 3 },
                 ]}
+                extension={
+                  <a data-ui="tab" href="#navigation-items">
+                    Extension
+                  </a>
+                }
               />,
             ]}
           />
