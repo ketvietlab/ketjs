@@ -1,0 +1,25 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="date-range"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    gap: var(--kv-space-3);
+    margin: 0;
+    padding: var(--kv-space-3);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="date-range"] legend {
+    padding-inline: var(--kv-space-1);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-medium);
+  }
+
+  @container (max-width: 34rem) {
+    :where([data-kv-design-system]) [data-ui="date-range"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}

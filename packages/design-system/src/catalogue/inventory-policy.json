@@ -1,0 +1,554 @@
+{
+  "schemaVersion": "ketjs.design-system-inventory-policy.v1",
+  "publicModules": {
+    "./data-display/data-grid/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
+    "./data-display/resource-list/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-029"
+    },
+    "./data-display/tree/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-032"
+    },
+    "./data-operations/inline-edit/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-033"
+    },
+    "./data-operations/list-controls/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-027"
+    },
+    "./contract/index.ts": {
+      "owner": "Governance",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-011"
+    },
+    "./forms/combobox/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-021"
+    },
+    "./forms/date-time/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-022"
+    },
+    "./forms/relation-picker/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-024"
+    },
+    "./forms/scalar-fields/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    "./forms/upload/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-023"
+    },
+    "./interactions/dialog/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-015"
+    },
+    "./interactions/menu/index.tsx": {
+      "owner": "Actions",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-013"
+    },
+    "./interactions/popover/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-014"
+    },
+    "./interactions/skeleton/index.tsx": {
+      "owner": "Feedback",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-016"
+    },
+    "./interactions/spinner/index.tsx": {
+      "owner": "Feedback",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-016"
+    },
+    "./interactions/toast/index.tsx": {
+      "owner": "Feedback",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-016"
+    },
+    "./interactions/tooltip/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-014"
+    },
+    "./layouts/layout/index.tsx": {
+      "owner": "Layout",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-009"
+    },
+    "./layouts/shell/index.tsx": {
+      "owner": "Shell",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-009"
+    },
+    "./patterns/board-page/index.tsx": {
+      "owner": "Page recipes",
+      "maturity": "deprecated",
+      "decision": "recipe",
+      "gapTask": "DS-044"
+    },
+    "./patterns/dashboard-page/index.tsx": {
+      "owner": "Page recipes",
+      "maturity": "deprecated",
+      "decision": "recipe",
+      "gapTask": "DS-044"
+    },
+    "./patterns/data-table/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-030"
+    },
+    "./patterns/form-page/index.tsx": {
+      "owner": "Page recipes",
+      "maturity": "deprecated",
+      "decision": "recipe",
+      "gapTask": "DS-044"
+    },
+    "./patterns/list-chrome/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-027"
+    },
+    "./patterns/list-page/index.tsx": {
+      "owner": "Page patterns",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-009"
+    },
+    "./patterns/modal-sheet/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-015"
+    },
+    "./patterns/pipeline/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-009"
+    },
+    "./patterns/record-form/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-019"
+    },
+    "./patterns/record-page/index.tsx": {
+      "owner": "Page patterns",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-009"
+    },
+    "./patterns/workspace-page/index.tsx": {
+      "owner": "Page patterns",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-009"
+    },
+    "./primitives/actions/index.tsx": {
+      "owner": "Actions",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-013"
+    },
+    "./primitives/feedback/index.tsx": {
+      "owner": "Feedback",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-016"
+    },
+    "./primitives/field/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-019"
+    },
+    "./primitives/navigation/index.tsx": {
+      "owner": "Navigation",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-009"
+    },
+    "./primitives/progress/index.tsx": {
+      "owner": "Feedback",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-009"
+    },
+    "./primitives/status/index.tsx": {
+      "owner": "Status",
+      "maturity": "stable",
+      "decision": "refactor",
+      "gapTask": "DS-035"
+    },
+    "./record/activity/index.tsx": {
+      "owner": "Activity",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-037"
+    },
+    "./record/composition/index.tsx": {
+      "owner": "Record",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-036"
+    },
+    "./record/display/index.tsx": {
+      "owner": "Record",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    "./record/formatted-values/index.tsx": {
+      "owner": "Formatted values",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    "./record/media/index.tsx": {
+      "owner": "Media",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-038"
+    },
+    "./runtime/index.js": {
+      "owner": "Interaction runtime",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-017"
+    }
+  },
+  "compatibilityModules": {
+    "./actions.tsx": {
+      "owner": "Actions",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "gapTask": "DS-013"
+    },
+    "./activity.ts": {
+      "owner": "Activity",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 5,
+      "gapTask": "DS-037"
+    },
+    "./attachments.tsx": {
+      "owner": "Attachments",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 5,
+      "gapTask": "DS-038"
+    },
+    "./auth.tsx": {
+      "owner": "Authentication",
+      "decision": "domain",
+      "target": "KetSuite",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./board-page.tsx": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "Public recipes",
+      "wave": 1,
+      "gapTask": "DS-044"
+    },
+    "./calendar.ts": {
+      "owner": "Calendar",
+      "decision": "defer",
+      "target": "Undecided",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./charts.tsx": {
+      "owner": "Charts",
+      "decision": "defer",
+      "target": "Optional package",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./chrome.tsx": {
+      "owner": "Data operations",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 4,
+      "gapTask": "DS-027"
+    },
+    "./dashboard-page.tsx": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "Public recipes",
+      "wave": 1,
+      "gapTask": "DS-044"
+    },
+    "./data.tsx": {
+      "owner": "Data display",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 4,
+      "gapTask": "DS-029"
+    },
+    "./date-picker.tsx": {
+      "owner": "Forms",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 3,
+      "gapTask": "DS-022"
+    },
+    "./form-page.tsx": {
+      "owner": "Page recipes",
+      "decision": "recipe",
+      "target": "Public recipes",
+      "wave": 1,
+      "gapTask": "DS-044"
+    },
+    "./form.tsx": {
+      "owner": "Forms",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 3,
+      "gapTask": "DS-019"
+    },
+    "./format.ts": {
+      "owner": "Formatted values",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    "./gantt.tsx": {
+      "owner": "Spatial views",
+      "decision": "defer",
+      "target": "Undecided",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./hooks.ts": {
+      "owner": "Governance",
+      "decision": "refactor",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-011"
+    },
+    "./icons.ts": {
+      "owner": "Icons",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-010"
+    },
+    "./layout.tsx": {
+      "owner": "Page patterns",
+      "decision": "refactor",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-007"
+    },
+    "./list-page.tsx": {
+      "owner": "Page patterns",
+      "decision": "refactor",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-007"
+    },
+    "./mail.ts": {
+      "owner": "Mail",
+      "decision": "domain",
+      "target": "KetSuite",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./media.tsx": {
+      "owner": "Media",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 5,
+      "gapTask": "DS-038"
+    },
+    "./modal.tsx": {
+      "owner": "Overlays",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "gapTask": "DS-015"
+    },
+    "./nav.tsx": {
+      "owner": "Shell",
+      "decision": "refactor",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-007"
+    },
+    "./navigation.tsx": {
+      "owner": "Navigation",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-009"
+    },
+    "./partner.tsx": {
+      "owner": "Partner",
+      "decision": "domain",
+      "target": "KetSuite",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./primitives.tsx": {
+      "owner": "Primitives",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-010"
+    },
+    "./product-media.tsx": {
+      "owner": "Product",
+      "decision": "domain",
+      "target": "Optional kit",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./product-variants.tsx": {
+      "owner": "Product",
+      "decision": "domain",
+      "target": "Optional kit",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./record-detail.tsx": {
+      "owner": "Record",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 5,
+      "gapTask": "DS-036"
+    },
+    "./record-page.tsx": {
+      "owner": "Page patterns",
+      "decision": "refactor",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-007"
+    },
+    "./record.tsx": {
+      "owner": "Record",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 5,
+      "gapTask": "DS-036"
+    },
+    "./schedule.tsx": {
+      "owner": "Spatial views",
+      "decision": "defer",
+      "target": "Undecided",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./state.tsx": {
+      "owner": "Feedback",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 2,
+      "gapTask": "DS-016"
+    },
+    "./surfaces.tsx": {
+      "owner": "Layout",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-007"
+    },
+    "./table.tsx": {
+      "owner": "Data display",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 4,
+      "gapTask": "DS-030"
+    },
+    "./timeframe.tsx": {
+      "owner": "Forms",
+      "decision": "promote",
+      "target": "Public core",
+      "wave": 3,
+      "gapTask": "DS-022"
+    },
+    "./user-workflow.tsx": {
+      "owner": "Identity",
+      "decision": "domain",
+      "target": "KetSuite",
+      "wave": 6,
+      "gapTask": "DS-043"
+    },
+    "./workspace-page.tsx": {
+      "owner": "Page patterns",
+      "decision": "refactor",
+      "target": "Public core",
+      "wave": 1,
+      "gapTask": "DS-007"
+    }
+  },
+  "plannedComponents": []
+}
