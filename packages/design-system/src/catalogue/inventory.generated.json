@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 76,
     "cssFiles": 68,
-    "cssLines": 13050
+    "cssLines": 13053
   },
   "rows": [
     {
@@ -8744,7 +8744,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/interactions/menu/styles.css",
-      "lines": 82,
+      "lines": 85,
       "hooks": ["menu", "menu-item", "menu-item-copy", "menu-panel", "menu-trigger"]
     },
     {

@@ -441,10 +441,14 @@ try {
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
             const keyboardItem = document.activeElement?.textContent?.trim()
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+            const menuEscapeClosed = menu instanceof HTMLDetailsElement && !menu.open
+            trigger?.click()
+            document.body.click()
             const positioned = document.querySelector('[data-ui="popover-panel"]')
             return {
               attached: document.documentElement.dataset.kvInteractions,
-              menuClosed: menu instanceof HTMLDetailsElement && !menu.open,
+              menuClosed: menuEscapeClosed,
+              menuOutsideClosed: menu instanceof HTMLDetailsElement && !menu.open,
               menuKeyboard: keyboardItem,
               focusRestored: document.activeElement === trigger,
               popoverPositioned: positioned?.getAttribute('data-runtime-positioned'),
@@ -454,6 +458,7 @@ try {
         )
         assert.equal(interactionAudit.attached, 'attached')
         assert.equal(interactionAudit.menuClosed, true)
+        assert.equal(interactionAudit.menuOutsideClosed, true)
         assert.match(String(interactionAudit.menuKeyboard), /Duplicate/u)
         assert.equal(interactionAudit.focusRestored, true)
         assert.equal(interactionAudit.popoverPositioned, 'true')
