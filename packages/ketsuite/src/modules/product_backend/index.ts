@@ -40,6 +40,14 @@ export default defineModule({
     /** Presentation-only entries owned by modules that add product operations. */
     'catalogue.actions': { props: { locale: 'text?' }, multiple: true },
     'template.actions': { props: { templateId: 'id', locale: 'text?' }, multiple: true },
+    'template.tabs': {
+      props: { templateId: 'id', activeTab: 'text', locale: 'text?', querySuffix: 'text?' },
+      multiple: true,
+    },
+    'template.panel': {
+      props: { templateId: 'id', activeTab: 'text', locale: 'text?', querySuffix: 'text?' },
+      multiple: true,
+    },
     'template.media': { props: { templateId: 'id' } },
     'variant.media': { props: { productId: 'id' } },
     'template.collaboration': {
