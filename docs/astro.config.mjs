@@ -132,6 +132,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { label: 'Backend UI development', slug: 'ketsuite/backend-development' },
+                { label: 'Design system', slug: 'ketsuite/design-system' },
                 { label: 'Channel API architecture', slug: 'ketsuite/channel-api' },
                 { label: 'Customer API reference', slug: 'ketsuite/channel-api-reference' },
               ],

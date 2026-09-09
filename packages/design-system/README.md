@@ -60,6 +60,19 @@ npm run design:system
 
 Then open `http://127.0.0.1:4100`.
 
+Open `http://127.0.0.1:4100/inventory` for the documentation-style governance
+registry. It lists current public exports, the KetSuite compatibility kit, and
+the planned component catalog with ownership, maturity, Wave, evidence posture,
+and promotion decisions. Filters are URL-owned and work without client JavaScript.
+
+Regenerate and verify its source snapshot with:
+
+```bash
+# Run from: ketjs/
+npm run design:inventory
+npm run design:inventory:check
+```
+
 ### Operational demo
 
 Run the same app on a separate port to inspect a connected sales workflow:
