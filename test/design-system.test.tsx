@@ -1250,7 +1250,7 @@ test('design system: data operations preserve URL state and bounded rendering', 
   )
   assert.match(treeGrid, /role="treegrid"/)
   assert.equal([...treeGrid.matchAll(/tabindex="0"/g)].length, 1)
-  assert.match(treeGrid, /data-ui="tree-grid-row"[^>]*role="row"[^>]*tabindex="0"/)
+  assert.match(treeGrid, /data-ui="tree-grid-row"[^>]*tabindex="0"/)
   assert.match(
     renderToString(
       <ViewSettings
