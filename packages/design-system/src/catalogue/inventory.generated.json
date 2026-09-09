@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -16,8 +16,8 @@
     "publicGaps": 78,
     "runtimeGaps": 5,
     "typeGaps": 73,
-    "cssFiles": 68,
-    "cssLines": 12744
+    "cssFiles": 67,
+    "cssLines": 12742
   },
   "rows": [
     {
@@ -9357,12 +9357,6 @@
         "timeframe-trigger",
         "timeframe-value"
       ]
-    },
-    {
-      "layer": "compatibility",
-      "file": "packages/ketsuite/src/modules/backend/design/design-system.css",
-      "lines": 2,
-      "hooks": []
     },
     {
       "layer": "compatibility",
