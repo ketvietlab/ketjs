@@ -27,12 +27,7 @@ export type MenuProps = {
 
 export const Menu = (props: MenuProps): TemplateResult => (
   <details data-ui="menu" data-align={props.align ?? 'start'} open={props.open === true ? true : undefined}>
-    <summary
-      data-ui="menu-trigger"
-      aria-haspopup="menu"
-      aria-controls={`${props.id}-panel`}
-      aria-expanded={props.open === true ? 'true' : 'false'}
-    >
+    <summary data-ui="menu-trigger" aria-haspopup="menu" aria-controls={`${props.id}-panel`}>
       {props.trigger ?? props.label}
     </summary>
     <div data-ui="menu-panel" id={`${props.id}-panel`} role="menu" aria-label={props.label}>
@@ -51,7 +46,7 @@ export const Menu = (props: MenuProps): TemplateResult => (
           )
           if (item.disabled)
             return (
-              <span data-ui="menu-item" role="menuitem" aria-disabled="true">
+              <span data-ui="menu-item" role="menuitem" aria-disabled="true" tabIndex="-1">
                 {content}
               </span>
             )

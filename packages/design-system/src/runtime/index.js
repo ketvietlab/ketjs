@@ -73,7 +73,8 @@ export const attachDesignSystemInteractions = (root = document) => {
           (item) => item instanceof HTMLElement && item.getAttribute('aria-disabled') !== 'true',
         )
       )
-      const activeIndex = items.findIndex((item) => item === document.activeElement)
+      const active = document.activeElement
+      const activeIndex = active instanceof HTMLElement ? items.indexOf(active) : -1
       let nextIndex = -1
       if (event.key === 'ArrowDown') nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length
       else if (event.key === 'ArrowUp')
