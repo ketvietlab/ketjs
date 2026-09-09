@@ -1,5 +1,6 @@
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { Translator } from '@ketvietlab/ketjs'
+import { Tabs } from '@ketvietlab/design-system'
 import {
   badge,
   button,
@@ -15,7 +16,6 @@ import {
   shell,
   stack,
   Surface,
-  Tabs,
 } from '../../../ui/index.ts'
 import type { FormOption, Frame, MediaItem, MediaPanelProps } from '../../../ui/index.ts'
 import { localized } from '../../backend/screen.ts'
@@ -109,6 +109,9 @@ export const productDetailScreen = (
     editor?: JSXChild
     /** Actions contributed through the public Product Template extension joint. */
     actions?: JSXChild
+    /** Tabs and active content contributed by modules extending Product Template records. */
+    tabs?: JSXChild
+    panel?: JSXChild
     /**
      * Relation pickers, built by the route because they need a request to reach
      * their joint. Absent ones fall back to the plain select beside them, so this
@@ -125,7 +128,7 @@ export const productDetailScreen = (
   collaboration: JSXChild,
   frame: Frame = {},
   locale = '',
-  activeTab: ProductDetailTab = 'general',
+  activeTab: string = 'general',
   partial = false,
 ): TemplateResult => {
   const images = media.images ?? []
@@ -566,9 +569,18 @@ export const productDetailScreen = (
               count: images.length,
             },
           ]}
+          extension={management.tabs}
         />
       }
-      body={activeTab === 'variants' ? variants : activeTab === 'media' ? mediaTab : generalTab}
+      body={
+        activeTab === 'variants'
+          ? variants
+          : activeTab === 'media'
+            ? mediaTab
+            : activeTab === 'general'
+              ? generalTab
+              : management.panel || generalTab
+      }
       aside={collaboration}
       asideLabel={_('product_backend.collaboration.label')}
       controller={management.editor}

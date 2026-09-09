@@ -32,6 +32,7 @@
 @import "./record/media/styles.css";
 @import "./layouts/layout/styles.css";
 @import "./layouts/shell/styles.css";
+@import "./layouts/app-navigation/styles.css";
 /* FormPage rail contract: desktop content is 2:1; narrow screens stack. */
 @import "./patterns/list-page/styles.css";
 @import "./patterns/data-table/styles.css";

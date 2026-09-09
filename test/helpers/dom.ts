@@ -102,8 +102,20 @@ export function makeNode(nodeType: number, nodeName: string, data = ''): TNode {
     },
     querySelectorAll(sel) {
       const out: TNode[] = []
+      const selectors = sel.split(',').map((part) => part.trim())
+      const matches = (x: TNode, selector: string): boolean => {
+        const withAttribute = /^([a-z][a-z0-9-]*)?\[([^\]]+)\]$/i.exec(selector)
+        if (withAttribute) {
+          const [, tag, attribute] = withAttribute
+          return (
+            (!tag || x.nodeName.toLowerCase() === tag.toLowerCase()) &&
+            x.getAttribute(attribute as string) !== null
+          )
+        }
+        return x.nodeName.toLowerCase() === selector.toLowerCase()
+      }
       const walk = (x: TNode) => {
-        if (x.nodeType === ELEMENT && x.nodeName.toLowerCase() === sel.toLowerCase()) out.push(x)
+        if (x.nodeType === ELEMENT && selectors.some((selector) => matches(x, selector))) out.push(x)
         for (const c of x.childNodes) walk(c)
       }
       for (const c of n.childNodes) walk(c)

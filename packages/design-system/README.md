@@ -41,12 +41,57 @@ transparent scrolling viewport inside; never wrap it in another `Surface`.
 The title is retained in its empty state, with optional `emptyActions` for recovery.
 Omitting `title` preserves the existing unheaded form surface or standalone table.
 
-The app structure is demonstrated as four practical layouts inside `AppShell`:
+The app structure is demonstrated with `AppNavigation` and four practical layouts inside `AppShell`:
 collection (`ListPage`), record (`RecordPage`), flow workspace (`WorkspacePage`
 with `layout="flow"`), and canvas workspace (`WorkspacePage` with
 `layout="canvas"`). Compatibility adapters remain available for migrated
 screens, but new catalogue examples should show one of those practical surfaces
 inside the shell.
+
+`AppNavigation` is the canonical dashboard menu. Supply one grouped item model and
+place it in `AppShell.sidebar`; it is a persistent sidebar above 768px and a native
+`details` drawer below that breakpoint. The markup remains usable without JavaScript.
+Items may contain recursive `children`; a parent expands its submenu directly below
+the parent row, and an active descendant opens the complete path on first render.
+Only leaf links expose the active state. Top-level branches form one accordion across
+the complete sidebar, and the interaction adapter keeps the open branch from being
+collapsed without choosing another branch. Use `expanded` when a branch should start
+open without an active descendant.
+The optional interaction adapter adds mobile dialog semantics, Escape/backdrop/link
+closing, focus trapping and restoration, background inertness, and scroll locking.
+
+```tsx
+// File: src/ui/workspace.tsx
+<AppShell
+  sidebar={
+    <AppNavigation
+      id="main-navigation"
+      label="Main navigation"
+      identity="KétSuite"
+      context="Operations workspace"
+      groups={[
+        {
+          id: 'sales',
+          label: 'Sales',
+          items: [
+            { id: 'orders', label: 'Orders', href: '/orders', active: true, count: 7 },
+            { id: 'customers', label: 'Customers', href: '/customers' },
+            {
+              id: 'reports',
+              label: 'Reports',
+              children: [
+                { id: 'sales-report', label: 'Sales report', href: '/reports/sales' },
+                { id: 'stock-report', label: 'Inventory report', href: '/reports/inventory' },
+              ],
+            },
+          ],
+        },
+      ]}
+    />
+  }
+  main={<ListPage title="Orders" body={orders} />}
+/>
+```
 
 The catalogue is isolated behind `@ketvietlab/design-system/catalogue`, so the
 production entry point does not load its specimen data or catalogue chrome.
@@ -133,7 +178,8 @@ The contract is intentionally strict:
 - component CSS consumes semantic/component roles, not numbered palette swatches.
 
 The public entry exports actions, status and feedback objects, fields, navigation,
-tabs, progress, layout primitives, the three-region app shell, page/record layouts,
+tabs, progress, layout primitives, the responsive application navigation, the
+three-region app shell, page/record layouts,
 `ListChrome` with `BulkActions` and `PagerBar`, the canonical list and record page
 compositions, data tables, forms, and modal sheets. Use `ListPage` for operational
 collections: applications provide translated identity, URL-driven controls and
@@ -160,9 +206,10 @@ pairs per row without stacking labels above inputs. Native inputs support `readO
 open automatically. Give repeated search/sort controls unique IDs. Loading links
 are disabled, and empty query rows do not occupy space.
 
-Route-modal focus trapping, background inertness, Escape, focus restoration and
-anchored positioning are provided by the optional `attachDesignSystemInteractions`
-adapter. Route state, unsaved-change decisions and submit outcomes remain application
+Route-modal and mobile-navigation focus trapping, background inertness, Escape,
+focus restoration, scroll locking, and anchored positioning are provided by the
+optional `attachDesignSystemInteractions` adapter. Route state, unsaved-change
+decisions and submit outcomes remain application
 responsibilities. Menu, popover, tooltip, dialog, toast, spinner and skeleton renderers
 retain native links/forms and useful no-script behavior. See the backend development
 guide for the full composition and integration contract.

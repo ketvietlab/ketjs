@@ -1,4 +1,55 @@
 @layer ket.app {
+  :where([data-kv-design-system]) [data-ui="breadcrumbs"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumbs"] ol {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--kv-space-1-5);
+    padding: 0;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb"] {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--kv-space-1-5);
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb"] + [data-ui="breadcrumb"]::before {
+    flex: none;
+    color: var(--kv-border-strong);
+    content: "/";
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb"] :is(a, span) {
+    overflow: hidden;
+    color: inherit;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb"] a {
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb"] a:hover {
+    color: var(--kv-text-main);
+    text-decoration: underline;
+    text-underline-offset: 0.1875rem;
+  }
+
+  :where([data-kv-design-system]) [data-ui="breadcrumb"] [aria-current="page"] {
+    color: var(--kv-text-main);
+    font-weight: var(--kv-weight-medium);
+  }
+
   :where([data-kv-design-system]) [data-ui="nav-list"] {
     display: grid;
     gap: var(--kv-space-1);

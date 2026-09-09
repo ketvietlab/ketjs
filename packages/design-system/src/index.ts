@@ -12,8 +12,8 @@ export { EmptyState, LoadingState, Notice } from './primitives/feedback/index.ts
 export type { NoticeTone } from './primitives/feedback/index.tsx'
 export { Field } from './primitives/field/index.tsx'
 export type { FieldOption, FieldProps } from './primitives/field/index.tsx'
-export { NavItem, NavList, Tabs } from './primitives/navigation/index.tsx'
-export type { NavItemProps, TabItem } from './primitives/navigation/index.tsx'
+export { Breadcrumbs, NavItem, NavList, Tabs } from './primitives/navigation/index.tsx'
+export type { BreadcrumbItem, NavItemProps, TabItem } from './primitives/navigation/index.tsx'
 export { Progress } from './primitives/progress/index.tsx'
 export type { ProgressTone } from './primitives/progress/index.tsx'
 
@@ -105,6 +105,19 @@ export {
   Surface,
 } from './layouts/layout/index.tsx'
 export { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell/index.tsx'
+export {
+  AppNavigation,
+  NavigationDrawer,
+  NavigationGroup,
+  NavigationHeader,
+  NavigationItem,
+  NavigationTrigger,
+} from './layouts/app-navigation/index.tsx'
+export type {
+  AppNavigationProps,
+  NavigationGroupData,
+  NavigationItemData,
+} from './layouts/app-navigation/index.tsx'
 
 export { DataTable } from './patterns/data-table/index.tsx'
 export type {

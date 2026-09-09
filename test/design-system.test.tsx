@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   AppShell,
+  AppNavigation,
   ActionMenu,
   ActivityTimeline,
   AppliedFilters,
@@ -11,6 +12,7 @@ import {
   AuditLog,
   AvatarGroup,
   Badge,
+  Breadcrumbs,
   BoardPage,
   Button,
   ConfirmDialog,
@@ -41,6 +43,7 @@ import {
   ListPage,
   ModalSheet,
   NavList,
+  NavigationItem,
   Person,
   Progress,
   Popover,
@@ -262,7 +265,7 @@ test('design system: flat workspace is opt-in and keeps sidebar styling independ
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
   const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
   assert.match(grouped, /\[data-kv-design-system\]\[data-presentation="grouped"\]/)
-  assert.match(grouped, /color-scheme: light/)
+  assert.doesNotMatch(grouped, /color-scheme: light/)
   assert.match(grouped, /--kv-page-bg: light-dark\(#f6f6f7,/)
   assert.match(grouped, /--kv-sidebar-bg: light-dark\(#f7f5f5,/)
   assert.match(grouped, /--kv-sidebar-border: light-dark\(#e9e7e8,/)
@@ -283,6 +286,10 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   )
   assert.match(grouped, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\)/)
   assert.match(grouped, /\[data-ui="record-page-aside"\] \[data-ui="metric"\]/)
+  assert.match(
+    grouped,
+    /\[data-ui="record-page-aside"\] \{[\s\S]*?margin: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) 0;[\s\S]*?border-radius: var\(--kv-radius-md\)/,
+  )
   assert.doesNotMatch(grouped, /\[data-ui="app-sidebar"\]/)
   assert.match(readFileSync('packages/design-system/src/styles.css', 'utf8'), /layouts\/grouped\/styles\.css/)
 })
@@ -321,6 +328,132 @@ test('design system: application regions are square while independent objects ar
   const shell = renderToString(<AppShell sidebar="Menu" main="Content" rightRail="Context" />)
   assert.match(shell, /data-has-right-rail="true"/)
   assert.match(shell, /data-ui="app-right-rail"/)
+})
+
+test('design system: application navigation shares one semantic model across breakpoints', () => {
+  const navigation = renderToString(
+    <AppNavigation
+      id="workspace-navigation"
+      label="Workspace"
+      identity="KétSuite"
+      context="Công ty Mùa Hạ"
+      menuLabel="Open workspace menu"
+      closeLabel="Close workspace menu"
+      groups={[
+        {
+          id: 'operations',
+          label: 'Operations',
+          items: [
+            {
+              id: 'orders',
+              label: 'Sales orders',
+              description: 'Review and fulfil',
+              href: '/orders',
+              leading: 'O',
+              count: 7,
+              active: true,
+            },
+            {
+              id: 'reports',
+              label: 'Reports',
+              leading: 'R',
+              expanded: true,
+              children: [{ id: 'sales-report', label: 'Sales report', href: '/reports/sales' }],
+            },
+          ],
+        },
+      ]}
+      footer="Signed in"
+    />,
+  )
+  assert.match(navigation, /data-ui="app-navigation"/)
+  assert.match(navigation, /data-ui="navigation-trigger"[^>]*aria-controls="workspace-navigation-drawer"/)
+  assert.match(navigation, /data-open="false"/)
+  assert.match(navigation, /data-ui="navigation-drawer"[^>]*id="workspace-navigation-drawer"/)
+  assert.match(
+    navigation,
+    /data-ui="navigation-group"[^>]*aria-labelledby="workspace-navigation-drawer-operations-label"/,
+  )
+  assert.match(navigation, /aria-current="page"/)
+  assert.match(navigation, /Review and fulfil/)
+  assert.match(navigation, /data-ui="navigation-item-count"[\s\S]*7/)
+  assert.match(
+    navigation,
+    /data-ui="navigation-branch"[^>]*name="workspace-navigation-drawer-branches"[^>]*open="true"/,
+  )
+  assert.match(navigation, /data-ui="navigation-branch-trigger"/)
+  assert.doesNotMatch(navigation, /data-ui="navigation-branch-indicator"/)
+  assert.doesNotMatch(navigation, /data-ui="navigation-branch"[^>]*data-active=/)
+  assert.match(navigation, /data-ui="navigation-children"[^>]*data-level="2"/)
+  assert.match(navigation, /href="\/reports\/sales"/)
+  assert.match(navigation, /aria-label="Close workspace menu"/)
+  assert.match(navigation, /data-ui="navigation-footer"[\s\S]*Signed in/)
+  assert.doesNotMatch(navigation, /role="dialog"/)
+
+  const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
+  assert.match(navigationCss, /@media \(max-width: 48rem\)/)
+  assert.match(navigationCss, /position: fixed/)
+  assert.match(navigationCss, /var\(--kv-layer-dialog\)/)
+  const packageJson = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8')) as {
+    exports: Record<string, unknown>
+  }
+  assert.equal(packageJson.exports['./runtime/auto.js'], './dist/runtime/auto.js')
+})
+
+test('design system: breadcrumbs expose linked ancestors and one current location', () => {
+  const breadcrumbs = renderToString(
+    <Breadcrumbs
+      label="Current location"
+      items={[{ label: 'Workspace', href: '/' }, { label: 'Sales', href: '/sales' }, { label: 'Orders' }]}
+    />,
+  )
+  assert.match(breadcrumbs, /data-ui="breadcrumbs"[^>]*aria-label="Current location"/)
+  assert.match(breadcrumbs, /data-ui="breadcrumb"[\s\S]*href="\/"/)
+  assert.match(breadcrumbs, /href="\/sales"/)
+  assert.match(breadcrumbs, /aria-current="page"[^>]*>[^<]*<!--k\[-->Orders/)
+})
+
+test('design system: standalone navigation items keep nested accordion groups independent', () => {
+  const navigation = renderToString(
+    <NavigationItem
+      id="reports"
+      label="Reports"
+      expanded
+      children={[
+        {
+          id: 'finance',
+          label: 'Finance',
+          expanded: true,
+          children: [{ id: 'profit', label: 'Profit', href: '/reports/profit', active: true }],
+        },
+      ]}
+    />,
+  )
+  const names = [...navigation.matchAll(/data-ui="navigation-branch"[^>]*name="([^"]+)"/g)].map(
+    (match) => match[1],
+  )
+  assert.deepEqual(names, ['reports-root-branches', 'reports-branches'])
+  assert.equal([...navigation.matchAll(/open="true"/g)].length, 2)
+  assert.match(navigation, /href="\/reports\/profit"[^>]*aria-current="page"/)
+})
+
+test('design system: application navigation stays dense enough for operational menus', () => {
+  const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
+  const itemRule =
+    navigationCss.match(
+      /:is\(\[data-ui="navigation-item"\], \[data-ui="navigation-branch-trigger"\]\)\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
+  assert.match(itemRule, /min-height: var\(--kv-sidebar-item-height\)/)
+  assert.match(itemRule, /padding: var\(--kv-space-1\) var\(--kv-space-2\)/)
+  assert.match(itemRule, /font-size: var\(--kv-text-md\)/)
+  assert.match(navigationCss, /\[data-ui="navigation-children"\][\s\S]*border-left/)
+
+  const mobileLayer = navigationCss.match(
+    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n  \}\n\n  @keyframes/,
+  )?.groups?.body
+  assert.match(mobileLayer ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
+  assert.match(mobileLayer ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)
+  assert.match(mobileLayer ?? '', /\[data-ui="navigation-backdrop"\] \{\s*display: block;\s*grid-column: 2/)
 })
 
 test('design system: a stacked FormPage rail keeps space above its content', () => {
@@ -973,9 +1106,18 @@ test('design system: navigation and progress expose semantic state', () => {
   assert.match(nav, /data-ui="nav-item-count"[^>]*>[\s\S]*7/)
 
   const tabs = renderToString(
-    <Tabs label="Views" items={[{ id: 'all', label: 'All', href: '/all', active: true }]} />,
+    <Tabs
+      label="Views"
+      items={[{ id: 'all', label: 'All', href: '/all', active: true }]}
+      extension={
+        <a data-ui="tab" href="/custom">
+          Custom
+        </a>
+      }
+    />,
   )
   assert.match(tabs, /data-ui="tabs"/)
+  assert.match(tabs, /href="\/all"[\s\S]*href="\/custom"/)
   assert.match(tabs, /aria-current="page"/)
 
   const progress = renderToString(<Progress label="Complete" value={118} tone="positive" />)
@@ -1400,7 +1542,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 99)
+  assert.equal(names.length, 106)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1437,8 +1579,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 178)
-  assert.equal(designSystemInventory.summary.runtimeExports, 104)
+  assert.equal(designSystemInventory.summary.publicExports, 189)
+  assert.equal(designSystemInventory.summary.runtimeExports, 111)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 38)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
