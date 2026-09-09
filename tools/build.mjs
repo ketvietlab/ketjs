@@ -209,7 +209,7 @@ try {
         cpSync(join(stageDist, name), dist, { recursive: true })
       }
 
-      for (const name of ['ketjs', 'ketsuite']) {
+      for (const name of ['create-view', 'ketjs', 'ketjs-view-tools', 'ketsuite']) {
         const cli = join(PACKAGES, name, 'dist', 'cli.js')
         if (existsSync(cli)) chmodSync(cli, 0o755)
       }
