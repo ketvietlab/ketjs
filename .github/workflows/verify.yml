@@ -1,8 +1,10 @@
 name: verify
 
 on:
+  # Stacked feature PRs target the preceding feature branch. Run the same
+  # verification there instead of leaving every PR above the stack root
+  # without CI.
   pull_request:
-    branches: [develop, master]
   push:
     branches: [develop, master]
 
