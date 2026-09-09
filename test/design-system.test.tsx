@@ -976,7 +976,11 @@ test('design system: navigation and progress expose semantic state', () => {
     <Tabs
       label="Views"
       items={[{ id: 'all', label: 'All', href: '/all', active: true }]}
-      extension={<a data-ui="tab" href="/custom">Custom</a>}
+      extension={
+        <a data-ui="tab" href="/custom">
+          Custom
+        </a>
+      }
     />,
   )
   assert.match(tabs, /data-ui="tabs"/)
