@@ -152,7 +152,7 @@ test('partner-e2e: directory, defaults, roles and accounting bridge cross real H
   for (const hiddenMenu of ['/admin/activities', '/admin/inbox', '/admin/outbox', '/admin/inbound-email']) {
     assert.doesNotMatch(
       partnerList,
-      new RegExp(`data-ui="app-entry"[^>]+href="${hiddenMenu}"`),
+      new RegExp(`data-ui="navigation-item"[^>]+href="${hiddenMenu}"`),
       `${hiddenMenu} is opened outside the sidebar app list`,
     )
   }
