@@ -9,7 +9,7 @@ import {
   RecordPage as DesignSystemRecordPage,
   WorkspacePage as DesignSystemWorkspacePage,
 } from '@ketvietlab/design-system'
-import { sidebar, sidebarMain } from './nav.tsx'
+import { sidebar, sidebarNavigationContent } from './nav.tsx'
 import type { Indicator, Viewer } from './nav.tsx'
 import { listChrome } from './chrome.tsx'
 import type { ListChrome } from './chrome.tsx'
@@ -106,7 +106,9 @@ export const shell = (
   if (frame.navigation)
     return (
       <ket-fragments data-title={title}>
-        <template data-ket-slot="backend.sidebar-main">{sidebarMain(_, sidebarOptions)}</template>
+        <template data-ket-slot="backend.sidebar-main">
+          {sidebarNavigationContent(_, sidebarOptions)}
+        </template>
         <template data-ket-slot="backend.topbar">{topbarRegion(_, title, frame)}</template>
         <template data-ket-slot="backend.content">{body}</template>
       </ket-fragments>
