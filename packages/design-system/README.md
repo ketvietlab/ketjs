@@ -51,6 +51,9 @@ inside the shell.
 `AppNavigation` is the canonical dashboard menu. Supply one grouped item model and
 place it in `AppShell.sidebar`; it is a persistent sidebar above 768px and a native
 `details` drawer below that breakpoint. The markup remains usable without JavaScript.
+Items may contain recursive `children`; a parent expands its submenu directly below
+the parent row, and an active descendant opens the complete path on first render.
+Use `expanded` when a branch should start open without an active descendant.
 The optional interaction adapter adds mobile dialog semantics, Escape/backdrop/link
 closing, focus trapping and restoration, background inertness, and scroll locking.
 
@@ -70,6 +73,14 @@ closing, focus trapping and restoration, background inertness, and scroll lockin
           items: [
             { id: 'orders', label: 'Orders', href: '/orders', active: true, count: 7 },
             { id: 'customers', label: 'Customers', href: '/customers' },
+            {
+              id: 'reports',
+              label: 'Reports',
+              children: [
+                { id: 'sales-report', label: 'Sales report', href: '/reports/sales' },
+                { id: 'stock-report', label: 'Inventory report', href: '/reports/inventory' },
+              ],
+            },
           ],
         },
       ]}
