@@ -29,6 +29,10 @@ account supports that transition.
 Update the root and all workspace package versions together. Also update every internal dependency and the
 version used by `ket new`. The release checker rejects drift between any of these locations.
 
+The design-system inventory reads tracked files and non-ignored new source files when Git metadata is
+available. Generated or ignored local bundles must not influence the committed inventory or release gate.
+Source archives without Git metadata use the same deterministic directory walk over their packaged files.
+
 The first coordinated scoped release was `0.1.1`. The unscoped `ketjs-view@0.1.0` was published during the
 initial bootstrap attempt and is not part of the supported package set. Preview releases follow semantic
 versioning but do not promise API stability before 1.0.
@@ -51,10 +55,11 @@ npm run release:check
   check and integration test.
 
 The KetJS package has a 1.2 MB packed-size ceiling. Its baseline includes the three licensed Inter font faces
-embedded by the deterministic PDF renderer. KetSuite has a 4 MB packed-size ceiling for its composed business
-modules, address catalogues, browser clients, and source maps. Both ceilings leave limited headroom for
-accidental growth. A release that crosses a ceiling must inspect the tarball contents before changing the
-budget.
+embedded by the deterministic PDF renderer. The design-system package has a 200 KB ceiling for its public
+component catalogue, machine-readable inventory and KetAtlas adapter. KetSuite has a 4 MB ceiling for its
+composed business modules, address catalogues, browser clients, and source maps. These ceilings leave limited
+headroom for accidental growth. A release that crosses a ceiling must inspect the tarball contents before
+changing the budget.
 
 To retain inspectable tarballs under `.release/`:
 
@@ -72,7 +77,7 @@ No publish command is part of either local script.
    required checks pass.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
-4. Create and publish GitHub release `v0.1.5` at that exact `master` commit.
+4. Create and publish GitHub release `v0.1.13` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
 6. Confirm all five packages and provenance attestations on npm.
 7. Update each downstream repository to pin the exact released `master` commit SHA, then run that
@@ -81,14 +86,15 @@ No publish command is part of either local script.
 
 ```bash
 # Run from: /path/to/projects
-npx -y @ketvietlab/ketjs@0.1.5 new public_smoke
+npx -y @ketvietlab/ketjs@0.1.13 new public_smoke
 cd public_smoke
 npm install
 npm test
 ```
 
 The workflow also supports manual dispatch for an existing tag. It refuses a tag that does not exactly match
-the coordinated package version.
+the coordinated package version. Release checkout retains full Git history so the design-system admission
+gate can compare the tagged source with `origin/develop` before publishing.
 
 ## Failure and recovery
 
