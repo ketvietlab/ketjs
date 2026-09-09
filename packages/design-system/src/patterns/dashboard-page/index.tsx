@@ -25,6 +25,8 @@ export type DashboardPageProps = Omit<WorkspacePageProps, 'layout' | 'controls'>
  * Applications own the translated copy, business actions and dashboard blocks.
  * This pattern keeps location, identity and the overview canvas in a stable,
  * compact hierarchy without pretending that the dashboard is a business record.
+ *
+ * @deprecated Compose the overview recipe with WorkspacePage layout="flow".
  */
 export const DashboardPage = (props: DashboardPageProps): TemplateResult =>
   workspacePage({ ...props, layout: 'flow' }, 'dashboard-page')

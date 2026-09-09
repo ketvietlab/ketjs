@@ -160,3 +160,14 @@ consumers have migrated.
 Do not add category subpaths while root exports remain manageable. The current public subpaths are for
 the contract, catalogue, and styles. Source directories are ownership boundaries, not consumer import
 paths.
+
+## Release readiness
+
+`npm run design:release:check` requires a current zero-planned inventory, aligned workspace/package
+versions, deprecation metadata, migration notes, rollback instructions, and an explicit classification
+for optional/deferred capabilities. On feature branches it also rejects newly added `FormPage`,
+`DashboardPage`, or `BoardPage` consumers outside the compatibility layer.
+
+This check establishes release readiness; it does not publish. Publication must run from a commit
+reachable from `master`. Private Két Việt pinning, cohort migrations, zero-consumer deletion, and rollback
+evidence follow the released exact SHA.
