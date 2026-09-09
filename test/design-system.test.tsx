@@ -1075,7 +1075,7 @@ test('design system: typed form controls preserve native values and controlled p
   )
   assert.match(
     renderToString(<Switch id="notify" name="notify" label="Notify" checked />),
-    /role="switch"[^>]*checked/,
+    /role="switch"[^>]*checked[^>]*aria-checked="true"/,
   )
   assert.match(
     renderToString(

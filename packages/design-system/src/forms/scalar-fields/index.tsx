@@ -43,6 +43,7 @@ export type SwitchProps = Omit<CommonProps, 'options' | 'placeholder' | 'step' |
 
 export const Switch = (props: SwitchProps): TemplateResult => {
   const error = props.error ?? issueFor(props.issues, props.name)
+  const checked = props.checked ?? props.value === '1'
   return (
     <FieldFrame
       id={props.id}
@@ -60,7 +61,8 @@ export const Switch = (props: SwitchProps): TemplateResult => {
             role="switch"
             name={props.name}
             value={props.value ?? '1'}
-            checked={props.checked ?? props.value === '1'}
+            checked={checked}
+            aria-checked={String(checked)}
             disabled={props.disabled === true}
             required={props.required === true}
             aria-invalid={error ? 'true' : null}
