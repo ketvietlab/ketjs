@@ -4,7 +4,7 @@
   "title": "KetAtlas design-system adapter",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "id", "materializer", "document", "assets", "composition", "stateOwnership"],
+  "required": ["schemaVersion", "id", "assets"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": "ketatlas.design-system-adapter.v1" },
@@ -23,7 +23,7 @@
     "document": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rootAttribute", "scriptMode"],
+      "minProperties": 1,
       "properties": {
         "rootAttribute": {
           "type": "object",
@@ -54,7 +54,7 @@
     "composition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["global", "templatesProperty", "attachProperty", "slotPattern", "hookAttribute"],
+      "minProperties": 1,
       "properties": {
         "global": { "type": "string", "minLength": 1 },
         "templatesProperty": { "type": "string", "minLength": 1 },

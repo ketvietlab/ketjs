@@ -1,9 +1,15 @@
 # KetAtlas design-system adapter
 
 KetAtlas is not coupled to Két. A design system can expose a generic
-`ketatlas.design-system-adapter.v1` descriptor that declares its materializer, document root contract,
-portable assets, composition API, state ownership and verification lock. The JSON Schema in this folder
-is the portable contract; `profile.json` is the Két implementation of it.
+`ketatlas.design-system-adapter.v1` descriptor. Only its identity and assets are required. A descriptor
+may additionally declare a materializer and verification lock, document-root requirements, a composition
+API, or state ownership. This lets a CSS-only library, Web Components package, server renderer or
+JavaScript component system implement the same protocol without pretending to expose Két's runtime.
+The JSON Schema in this folder is the portable contract; `profile.json` is one Két implementation.
+
+Without a materializer, asset paths resolve relative to the descriptor (and may be absolute URLs). With
+a materializer, they resolve relative to the target atlas after the declared command runs. KetAtlas must
+only consume optional capabilities that are actually declared.
 
 KetAtlas screens run as self-contained HTML documents in an opaque iframe. This adapter therefore ships
 a materializer instead of requiring module imports inside each screen.
