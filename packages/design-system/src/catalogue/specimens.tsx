@@ -118,7 +118,18 @@ const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
       {
         id: `demo-manage-${props.active}`,
         label: 'Manage',
-        items: [{ id: `${props.active}-settings`, label: 'Settings', href: '#app-navigation', leading: '⚙' }],
+        items: [
+          { id: `${props.active}-settings`, label: 'Settings', href: '#app-navigation', leading: '⚙' },
+          {
+            id: `${props.active}-reports`,
+            label: 'Reports',
+            leading: '▤',
+            children: [
+              { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table' },
+              { id: `${props.active}-stock-report`, label: 'Inventory', href: '#metric' },
+            ],
+          },
+        ],
       },
     ]}
     footer="Signed in · Duy Kieu"

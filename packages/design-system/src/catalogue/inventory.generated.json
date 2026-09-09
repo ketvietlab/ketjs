@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 76,
     "cssFiles": 68,
-    "cssLines": 13053
+    "cssLines": 13111
   },
   "rows": [
     {
@@ -8780,10 +8780,14 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/app-navigation/styles.css",
-      "lines": 298,
+      "lines": 356,
       "hooks": [
         "app-navigation",
         "navigation-backdrop",
+        "navigation-branch",
+        "navigation-branch-indicator",
+        "navigation-branch-trigger",
+        "navigation-children",
         "navigation-close",
         "navigation-context",
         "navigation-drawer",

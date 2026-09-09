@@ -351,6 +351,13 @@ test('design system: application navigation shares one semantic model across bre
               count: 7,
               active: true,
             },
+            {
+              id: 'reports',
+              label: 'Reports',
+              leading: 'R',
+              expanded: true,
+              children: [{ id: 'sales-report', label: 'Sales report', href: '/reports/sales' }],
+            },
           ],
         },
       ]}
@@ -368,6 +375,10 @@ test('design system: application navigation shares one semantic model across bre
   assert.match(navigation, /aria-current="page"/)
   assert.match(navigation, /Review and fulfil/)
   assert.match(navigation, /data-ui="navigation-item-count"[\s\S]*7/)
+  assert.match(navigation, /data-ui="navigation-branch"[^>]*open="true"/)
+  assert.match(navigation, /data-ui="navigation-branch-trigger"/)
+  assert.match(navigation, /data-ui="navigation-children"[^>]*data-level="2"/)
+  assert.match(navigation, /href="\/reports\/sales"/)
   assert.match(navigation, /aria-label="Close workspace menu"/)
   assert.match(navigation, /data-ui="navigation-footer"[\s\S]*Signed in/)
   assert.doesNotMatch(navigation, /role="dialog"/)
@@ -385,10 +396,13 @@ test('design system: application navigation shares one semantic model across bre
 test('design system: application navigation stays dense enough for operational menus', () => {
   const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
   const itemRule =
-    navigationCss.match(/\[data-ui="navigation-item"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
+    navigationCss.match(
+      /:is\(\[data-ui="navigation-item"\], \[data-ui="navigation-branch-trigger"\]\)\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body ?? ''
   assert.match(itemRule, /min-height: var\(--kv-sidebar-item-height\)/)
   assert.match(itemRule, /padding: var\(--kv-space-1\) var\(--kv-space-2\)/)
   assert.match(itemRule, /font-size: var\(--kv-text-md\)/)
+  assert.match(navigationCss, /\[data-ui="navigation-children"\][\s\S]*border-left/)
 
   const mobileLayer = navigationCss.match(
     /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n  \}\n\n  @keyframes/,

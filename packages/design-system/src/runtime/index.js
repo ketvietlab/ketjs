@@ -14,7 +14,10 @@ const focusableSelector = [
 const focusables = (root) =>
   [...root.querySelectorAll(focusableSelector)].filter(
     (element) =>
-      element instanceof HTMLElement && !element.hidden && element.getAttribute('aria-hidden') !== 'true',
+      element instanceof HTMLElement &&
+      !element.hidden &&
+      element.getAttribute('aria-hidden') !== 'true' &&
+      (typeof element.checkVisibility !== 'function' || element.checkVisibility()),
   )
 
 /**

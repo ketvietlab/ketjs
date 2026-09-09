@@ -271,12 +271,12 @@ try {
     {
       key: 'submenu-demo-vi',
       path: '/demo2?theme=light',
-      selector: '[data-demo-submenu]',
+      selector: '[data-ui="navigation-branch"][data-level="1"][open]',
     },
     {
       key: 'submenu-demo-crm-vi',
       path: '/demo2?theme=light&module=crm&child=1',
-      selector: '[data-demo-submenu-trigger][data-active="true"]',
+      selector: '[data-ui="navigation-branch"][data-level="2"][data-active="true"][open]',
     },
     {
       key: 'connected-demo-record-vi',
@@ -339,44 +339,46 @@ try {
         const submenuAudit: Json = await evaluate<Json>(
           cdp,
           `(() => {
-            const submenu = document.querySelector('[data-demo-submenu]')
-            const trigger = submenu?.querySelector('[data-demo-submenu-trigger]')
-            const tabs = submenu?.querySelector('[data-ui="tabs"]')
-            if (trigger instanceof HTMLElement && trigger.getAttribute('aria-expanded') !== 'true') trigger.click()
-            const panel = submenu?.querySelector('[data-demo-submenu-children]')
-            const rect = panel instanceof HTMLElement ? panel.getBoundingClientRect() : null
-            const tabsRect = tabs instanceof HTMLElement ? tabs.getBoundingClientRect() : null
-            document.body.click()
-            const outsideClosed = trigger?.getAttribute('aria-expanded') === 'false' && panel instanceof HTMLElement && panel.hidden
-            if (trigger instanceof HTMLElement) trigger.click()
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-            const escapeClosed = trigger?.getAttribute('aria-expanded') === 'false' && panel instanceof HTMLElement && panel.hidden
-            const focusRestored = document.activeElement === trigger
-            if (trigger instanceof HTMLElement) trigger.click()
+            const navigation = document.querySelector('[data-navigation-id="enterprise-navigation"]')
+            const mobileTrigger = navigation?.querySelector(':scope > [data-ui="navigation-trigger"]')
+            if (${JSON.stringify(viewport.key)} === 'mobile' && navigation instanceof HTMLDetailsElement && !navigation.open)
+              mobileTrigger?.click()
+            const topBranches = [...document.querySelectorAll('[data-ui="navigation-branch"][data-level="1"]')]
+            const overview = topBranches[0]
+            const crm = topBranches[1]
+            const crmTrigger = crm?.querySelector(':scope > [data-ui="navigation-branch-trigger"]')
+            if (crm instanceof HTMLDetailsElement && !crm.open) crmTrigger?.click()
+            const children = crm?.querySelector(':scope > [data-ui="navigation-children"]')
+            const childBranch = children?.querySelector(':scope > [data-ui="navigation-branch"]')
+            const childTrigger = childBranch?.querySelector(':scope > [data-ui="navigation-branch-trigger"]')
+            if (childBranch instanceof HTMLDetailsElement && !childBranch.open) childTrigger?.click()
+            const triggerRect = crmTrigger instanceof HTMLElement ? crmTrigger.getBoundingClientRect() : null
+            const childrenRect = children instanceof HTMLElement ? children.getBoundingClientRect() : null
             return {
-              navigationItems: document.querySelectorAll('[data-ui="navigation-item"]').length,
-              tabs: document.querySelectorAll('[data-demo-submenu] [data-ui="tab"]').length,
-              topItems: document.querySelectorAll('[data-demo-submenu] :is([data-ui="tab"], [data-demo-submenu-trigger])').length,
-              nestedItems: document.querySelectorAll('[data-demo-submenu-child]').length,
-              submenuOpen: trigger?.getAttribute('aria-expanded') === 'true' && !(panel instanceof HTMLElement && panel.hidden),
-              outsideClosed,
-              escapeClosed,
-              focusRestored,
-              panelBelowTabs: Boolean(rect && tabsRect && rect.top >= tabsRect.bottom - 1),
-              panelInsideViewport: Boolean(rect && rect.left >= 0 && rect.right <= innerWidth),
+              topBranches: topBranches.length,
+              openTopBranches: topBranches.filter((branch) => branch instanceof HTMLDetailsElement && branch.open).length,
+              crmOpen: crm instanceof HTMLDetailsElement && crm.open,
+              overviewClosed: overview instanceof HTMLDetailsElement && !overview.open,
+              directChildren: children?.querySelectorAll(':scope > [data-ui="navigation-item"]').length,
+              nestedBranches: children?.querySelectorAll(':scope > [data-ui="navigation-branch"]').length,
+              grandchildItems: childBranch?.querySelectorAll(':scope > [data-ui="navigation-children"] > [data-ui="navigation-item"]').length,
+              childBranchOpen: childBranch instanceof HTMLDetailsElement && childBranch.open,
+              panelBelowParent: Boolean(triggerRect && childrenRect && childrenRect.top >= triggerRect.bottom - 1),
+              horizontalSubmenuRemoved: document.querySelector('[data-demo-submenu]') === null,
             }
           })()`,
         )
-        assert.equal(submenuAudit.navigationItems, 18)
-        assert.equal(submenuAudit.tabs, 4)
-        assert.equal(submenuAudit.topItems, 5)
-        assert.equal(submenuAudit.nestedItems, 3)
-        assert.equal(submenuAudit.submenuOpen, true)
-        assert.equal(submenuAudit.outsideClosed, true)
-        assert.equal(submenuAudit.escapeClosed, true)
-        assert.equal(submenuAudit.focusRestored, true)
-        assert.equal(submenuAudit.panelBelowTabs, true)
-        assert.equal(submenuAudit.panelInsideViewport, true)
+        assert.equal(submenuAudit.topBranches, 18)
+        assert.equal(submenuAudit.openTopBranches, 1)
+        assert.equal(submenuAudit.crmOpen, true)
+        assert.equal(submenuAudit.overviewClosed, true)
+        assert.equal(submenuAudit.directChildren, 4)
+        assert.equal(submenuAudit.nestedBranches, 1)
+        assert.equal(submenuAudit.grandchildItems, 3)
+        assert.equal(submenuAudit.childBranchOpen, true)
+        assert.equal(submenuAudit.panelBelowParent, true)
+        assert.equal(submenuAudit.horizontalSubmenuRemoved, true)
+        if (viewport.key === 'mobile') await delay(300)
       }
       if (review.key === 'application-structure-en') {
         const navigationAudit: Json = await evaluate<Json>(

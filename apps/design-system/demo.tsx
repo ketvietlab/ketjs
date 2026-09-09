@@ -33,7 +33,7 @@ import {
   Tag,
   WorkspacePage,
 } from '@ketvietlab/design-system'
-import type { FieldProps, Tone } from '@ketvietlab/design-system'
+import type { FieldProps, NavigationItemData, Tone } from '@ketvietlab/design-system'
 import type { IncomingMessage } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { demoStyles } from './demo-styles.ts'
@@ -321,97 +321,73 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
       ? q.get('focus')!
       : 'today'
     const selectedSection = Math.max(0, Math.min(3, Number(q.get('section')) || 0))
-    const moduleValues: Record<string, string> =
-      activeModule.id === 'sales'
+    const moduleValuesFor = (module: DemoModule): Record<string, string> =>
+      module.id === 'sales'
         ? { view: 'orders' }
-        : activeModule.id === 'delivery'
+        : module.id === 'delivery'
           ? { view: 'board' }
-          : activeModule.id === 'overview'
+          : module.id === 'overview'
             ? {}
-            : { module: activeModule.id }
-    const submenuItems = activeModule.sections.slice(0, 4).map((label, index) => {
-      if (activeModule.id === 'overview') {
-        const target = overviewTargets[index]
-        return {
-          id: target,
-          label,
-          href: `${href(target === 'today' ? {} : { focus: target })}#${target}`,
-          active: overviewFocus === target && !q.has('child'),
+            : { module: module.id }
+    const moduleValues = moduleValuesFor(activeModule)
+    const moduleMenuItems = (module: DemoModule): readonly NavigationItemData[] => {
+      const values = moduleValuesFor(module)
+      const moduleActive = activeModule.id === module.id
+      const primary = module.sections.slice(0, 4).map((label, index): NavigationItemData => {
+        if (module.id === 'overview') {
+          const target = overviewTargets[index]
+          return {
+            id: `${module.id}-${target}`,
+            label,
+            href: `${href(target === 'today' ? {} : { focus: target })}#${target}`,
+            active: moduleActive && overviewFocus === target && !q.has('child'),
+          }
         }
-      }
-      if (activeModule.id === 'sales' || activeModule.id === 'delivery') {
-        const stage = index === 0 ? null : stages[index - 1]
-        return {
-          id: stage ?? 'all',
-          label,
-          count: stage ? orders.filter((order) => order.stage === stage).length : orders.length,
-          href: href({ ...moduleValues, ...(stage ? { status: stage } : {}) }),
-          active: status === stage && !q.has('child'),
+        if (module.id === 'sales' || module.id === 'delivery') {
+          const stage = index === 0 ? null : stages[index - 1]
+          return {
+            id: `${module.id}-${stage ?? 'all'}`,
+            label,
+            count: stage ? orders.filter((order) => order.stage === stage).length : orders.length,
+            href: href({ ...values, ...(stage ? { status: stage } : {}) }),
+            active: moduleActive && status === stage && !q.has('child'),
+          }
         }
-      }
-      return {
-        id: `${activeModule.id}-${index}`,
-        label,
-        href: href({ module: activeModule.id, section: String(index) }),
-        active: selectedSection === index && !q.has('child'),
-      }
-    })
-    const submenuExpanded =
-      q.has('child') || ((activeModule.id === 'sales' || activeModule.id === 'delivery') && status === 'done')
-    const submenuPanelId = `${activeModule.id}-submenu-panel`
-    const submenuExtension = (
-      <button
-        type="button"
-        data-demo-submenu-trigger
-        data-active={submenuExpanded ? 'true' : null}
-        aria-expanded={submenuExpanded ? 'true' : 'false'}
-        aria-controls={submenuPanelId}
-      >
-        <span class="demo-submenu-trigger">
-          {activeModule.sections[4]} {icon('chevron-down')}
-        </span>
-      </button>
-    )
-    const submenuChildren = (
-      <nav
-        id={submenuPanelId}
-        data-demo-submenu-children
-        aria-label={`${activeModule.sections[4]} ${activeModule.label}`}
-        hidden={submenuExpanded ? undefined : true}
-      >
-        {activeModule.children.map((label, index) => {
-          const active =
-            (activeModule.id === 'sales' || activeModule.id === 'delivery') && index === 0
-              ? status === 'done'
-              : q.get('child') === String(index)
-          return (
-            <a
-              data-demo-submenu-child
-              data-active={active ? 'true' : null}
-              href={
-                (activeModule.id === 'sales' || activeModule.id === 'delivery') && index === 0
-                  ? href({ ...moduleValues, status: 'done' })
-                  : href({ ...moduleValues, child: String(index) })
-              }
-              aria-current={active ? 'page' : null}
-            >
-              {label}
-            </a>
-          )
-        })}
-      </nav>
-    )
+        return {
+          id: `${module.id}-${index}`,
+          label,
+          href: href({ module: module.id, section: String(index) }),
+          active: moduleActive && selectedSection === index && !q.has('child'),
+        }
+      })
+      const nestedActive =
+        moduleActive &&
+        (q.has('child') || ((module.id === 'sales' || module.id === 'delivery') && status === 'done'))
+      return [
+        ...primary,
+        {
+          id: `${module.id}-more`,
+          label: module.sections[4],
+          active: nestedActive,
+          expanded: nestedActive,
+          children: module.children.map((label, index) => ({
+            id: `${module.id}-child-${index}`,
+            label,
+            href:
+              (module.id === 'sales' || module.id === 'delivery') && index === 0
+                ? href({ ...values, status: 'done' })
+                : href({ ...values, child: String(index) }),
+            active:
+              moduleActive &&
+              ((module.id === 'sales' || module.id === 'delivery') && index === 0
+                ? status === 'done'
+                : q.get('child') === String(index)),
+          })),
+        },
+      ]
+    }
     const context =
-      contextMode === 'submenu' ? (
-        <div data-demo-submenu>
-          <Tabs
-            label={`Điều hướng ${activeModule.label}`}
-            items={submenuItems}
-            extension={submenuExtension}
-          />
-          {submenuChildren}
-        </div>
-      ) : (
+      contextMode === 'submenu' ? undefined : (
         <Inline
           items={[
             'An Việt Trading',
@@ -1268,16 +1244,10 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
                             .map((module) => ({
                               id: module.id,
                               label: module.label,
-                              href:
-                                module.id === 'overview'
-                                  ? href()
-                                  : module.id === 'sales'
-                                    ? href({ view: 'orders' })
-                                    : module.id === 'delivery'
-                                      ? href({ view: 'board' })
-                                      : href({ module: module.id }),
                               active: activeModule.id === module.id,
+                              expanded: activeModule.id === module.id,
                               leading: icon(module.icon),
+                              children: moduleMenuItems(module),
                               ...(module.id === 'sales' ? { count: orders.length } : {}),
                             })),
                         }))
