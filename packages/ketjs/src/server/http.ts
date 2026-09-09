@@ -286,7 +286,10 @@ const withThemeTokens = (body: string, css: string): string => {
 const bootstrapDocument = (body: string, force = false): string => {
   const isDocument = body.includes('</body>') || /<!doctype html|<html(?:\s|>)/i.test(body)
   if (
-    ((!force || !isDocument) && !body.includes('<ket-island') && !body.includes('data-ket-slot=')) ||
+    ((!force || !isDocument) &&
+      !body.includes('<ket-island') &&
+      !body.includes('data-ket-island') &&
+      !body.includes('data-ket-slot=')) ||
     body.includes('src="/_ket/islands.js"')
   )
     return body
@@ -304,6 +307,7 @@ const browserBootstrap = (
 ): string => `import {
   createIslandManager,
   domHost,
+  ISLAND_SELECTOR,
 } from ${JSON.stringify(viewRuntimeUrl)}
 
 const definitions = ${JSON.stringify(clients)}
@@ -331,7 +335,7 @@ const loadFactory = async (name) => {
   try { return await pending } finally { loading.delete(name) }
 }
 const loadPlaced = async (root, requireKnown = false) => {
-  const names = new Set(Array.from(root.querySelectorAll('ket-island'), (element) => element.getAttribute('data-island')).filter(Boolean))
+  const names = new Set(Array.from(root.querySelectorAll(ISLAND_SELECTOR), (element) => element.getAttribute('data-island')).filter(Boolean))
   if (requireKnown) {
     const unknown = Array.from(names).find((name) => !knownIslands.has(name))
     if (unknown) throw new Error('navigation fragment contains unknown island "' + unknown + '"')
@@ -579,7 +583,10 @@ const send = async (
     const body =
       typeof result.body === 'string' &&
       (result.type ?? 'text/html').toLowerCase().startsWith('text/html') &&
-      (forceBootstrap || result.body.includes('<ket-island') || result.body.includes('data-ket-slot='))
+      (forceBootstrap ||
+        result.body.includes('<ket-island') ||
+        result.body.includes('data-ket-island') ||
+        result.body.includes('data-ket-slot='))
         ? bootstrapDocument(result.body, forceBootstrap)
         : result.body
     res.writeHead(result.status ?? 200, {

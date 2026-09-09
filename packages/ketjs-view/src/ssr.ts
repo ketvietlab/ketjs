@@ -13,6 +13,7 @@ import type { TplEl, TplNode } from './template.ts'
 import { EVENT_PREFIX, isResult, isEach } from './render.ts'
 import type { EachResult, TemplateResult } from './render.ts'
 import { escapeHtml } from './host.ts'
+import { ISLAND_HOST_ATTRIBUTE, ISLAND_TAG } from './island-protocol.ts'
 
 export const HOLE_MARKER = 'k'
 export const HOLE_OPEN = 'k['
@@ -35,7 +36,17 @@ const VOID = new Set([
 
 export function renderToString(result: TemplateResult): string {
   const out: string[] = []
-  writeResult(result, out)
+  writeResult(result, out, true)
+  return out.join('')
+}
+
+/**
+ * Render inert document markup without hydration comments. Explicit island hosts
+ * remain hydratable, so their descendants keep the marker protocol they need.
+ */
+export function renderToStaticString(result: TemplateResult): string {
+  const out: string[] = []
+  writeResult(result, out, false)
   return out.join('')
 }
 
@@ -61,18 +72,18 @@ const MARKUP_TAG = Symbol.for('ket.markup')
 /** Only for output a sandboxed compiler produced. Never for user data. */
 export const trustedMarkup = (html: string): Markup => ({ html, [MARKUP_TAG]: true }) as unknown as Markup
 
-function writeValue(value: unknown, out: string[]): void {
+function writeValue(value: unknown, out: string[], hydratable: boolean): void {
   if (isMarkup(value)) {
     out.push(value.html)
     return
   }
   if (isResult(value)) {
-    writeResult(value, out)
+    writeResult(value, out, hydratable)
     return
   }
   if (isEach(value)) {
     const list = value as EachResult
-    for (let i = 0; i < list.items.length; i++) writeResult(list.render(list.items[i], i), out)
+    for (let i = 0; i < list.items.length; i++) writeResult(list.render(list.items[i], i), out, hydratable)
     return
   }
   if (value == null || value === false) return
@@ -90,9 +101,9 @@ function writeValue(value: unknown, out: string[]): void {
  */
 const RCDATA = new Set(['title', 'textarea'])
 
-function writeResult(result: TemplateResult, out: string[]): void {
+function writeResult(result: TemplateResult, out: string[], hydratable: boolean): void {
   const tpl = templateFor(result.strings)
-  const write = (node: TplNode, raw = false): void => {
+  const write = (node: TplNode, raw = false, hydrate = hydratable): void => {
     if (node.type === 'text') {
       out.push(node.value)
       return
@@ -102,12 +113,12 @@ function writeResult(result: TemplateResult, out: string[]): void {
       // builds too; the opening one exists because an HTML parser merges adjacent
       // text, so "giá trị " and "5" would arrive as a single node and the walk would
       // be one node short. A comment cannot merge, so it keeps them apart.
-      if (raw) {
-        writeValue(result.values[node.index], out)
+      if (raw || !hydrate) {
+        writeValue(result.values[node.index], out, hydrate)
         return
       }
       out.push(`<!--${HOLE_OPEN}-->`)
-      writeValue(result.values[node.index], out)
+      writeValue(result.values[node.index], out, hydrate)
       out.push(`<!--${HOLE_MARKER}-->`)
       return
     }
@@ -126,7 +137,15 @@ function writeResult(result: TemplateResult, out: string[]): void {
     out.push('>')
     if (VOID.has(el.tag)) return
     const rcdata = raw || RCDATA.has(el.tag)
-    for (const c of el.children) write(c, rcdata)
+    const standardHost =
+      el.tag === 'div' &&
+      el.attrs.some((attribute) => {
+        if (attribute.name !== ISLAND_HOST_ATTRIBUTE) return false
+        const value = attribute.hole == null ? attribute.value : result.values[attribute.hole]
+        return value != null && value !== false
+      })
+    const hydrateChildren = hydrate || el.tag === ISLAND_TAG || standardHost
+    for (const c of el.children) write(c, rcdata, hydrateChildren)
     out.push(`</${el.tag}>`)
   }
   for (const n of tpl.children) write(n)
