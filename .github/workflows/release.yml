@@ -27,6 +27,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag }}
+          # The design-system release audit compares the tagged source with
+          # origin/develop to reject new deprecated page consumers.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
