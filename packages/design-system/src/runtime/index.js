@@ -65,6 +65,71 @@ export const attachDesignSystemInteractions = (root = document) => {
 
   /** @param {KeyboardEvent} event */
   const onKeydown = (event) => {
+    const treeItem = document.activeElement?.closest('[data-ui="tree"] [role="treeitem"]')
+    if (treeItem instanceof HTMLElement) {
+      const tree = treeItem.closest('[data-ui="tree"]')
+      const items = /** @type {HTMLElement[]} */ (
+        tree
+          ? [...tree.querySelectorAll('[role="treeitem"]')].filter((item) => item instanceof HTMLElement)
+          : []
+      )
+      const activeIndex = items.indexOf(treeItem)
+      let nextIndex = -1
+      if (event.key === 'ArrowDown') nextIndex = Math.min(items.length - 1, activeIndex + 1)
+      else if (event.key === 'ArrowUp') nextIndex = Math.max(0, activeIndex - 1)
+      else if (event.key === 'Home') nextIndex = 0
+      else if (event.key === 'End') nextIndex = items.length - 1
+      else if (event.key === 'ArrowRight') {
+        const level = Number(treeItem.getAttribute('aria-level'))
+        if (
+          treeItem.getAttribute('aria-expanded') === 'true' &&
+          Number(items[activeIndex + 1]?.getAttribute('aria-level')) > level
+        )
+          nextIndex = activeIndex + 1
+      } else if (event.key === 'ArrowLeft') {
+        const level = Number(treeItem.getAttribute('aria-level'))
+        if (level > 1)
+          nextIndex = items.findLastIndex(
+            (item, index) => index < activeIndex && Number(item.getAttribute('aria-level')) < level,
+          )
+      }
+      if (nextIndex >= 0 && items[nextIndex]) {
+        for (const item of items) item.tabIndex = -1
+        items[nextIndex].tabIndex = 0
+        items[nextIndex].focus()
+        event.preventDefault()
+        return
+      }
+    }
+    const treeGridRow = document.activeElement?.closest('[data-ui="tree-grid-row"]')
+    if (treeGridRow instanceof HTMLElement) {
+      const grid = treeGridRow.closest('[data-ui="tree-grid"]')
+      const rows = /** @type {HTMLElement[]} */ (
+        grid
+          ? [...grid.querySelectorAll('[data-ui="tree-grid-row"]')].filter(
+              (row) => row instanceof HTMLElement,
+            )
+          : []
+      )
+      const activeIndex = rows.indexOf(treeGridRow)
+      const nextIndex =
+        event.key === 'ArrowDown'
+          ? Math.min(rows.length - 1, activeIndex + 1)
+          : event.key === 'ArrowUp'
+            ? Math.max(0, activeIndex - 1)
+            : event.key === 'Home'
+              ? 0
+              : event.key === 'End'
+                ? rows.length - 1
+                : -1
+      if (nextIndex >= 0 && rows[nextIndex]) {
+        for (const row of rows) row.tabIndex = -1
+        rows[nextIndex].tabIndex = 0
+        rows[nextIndex].focus()
+        event.preventDefault()
+        return
+      }
+    }
     const openMenu = document.activeElement?.closest('[data-ui="menu"][open]')
     if (openMenu instanceof HTMLDetailsElement) {
       const trigger = openMenu.querySelector('[data-ui="menu-trigger"]')

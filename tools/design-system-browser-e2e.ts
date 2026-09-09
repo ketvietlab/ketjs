@@ -185,8 +185,8 @@ try {
     assert.equal(audit.mainCount, 1, `${viewport.key} must have one main landmark`)
     assert.equal(audit.navItems, 3, `${viewport.key} documentation navigation changed`)
     assert.ok(Number(audit.rows) >= 350, `${viewport.key} inventory rows are incomplete`)
-    assert.match(String(audit.text), /Public exports[\s\S]*132/u)
-    assert.match(String(audit.text), /Planned catalog[\s\S]*22/u)
+    assert.match(String(audit.text), /Public exports[\s\S]*156/u)
+    assert.match(String(audit.text), /Planned catalog[\s\S]*11/u)
     if (viewport.mobile) assert.equal(audit.localTableOverflow, false)
 
     for (const position of ['top', 'registry'] as const) {
@@ -228,6 +228,11 @@ try {
       key: 'form-controls-en',
       path: '/components/form-controls?theme=light&density=default',
       selector: '#form-controls',
+    },
+    {
+      key: 'data-operations-en',
+      path: '/components/data-operations?theme=light&density=compact',
+      selector: '#data-operations',
     },
     { key: 'list-en', path: '/surfaces?kind=list&lang=en&theme=light', selector: '[data-ui="list-page"]' },
     { key: 'list-vi', path: '/surfaces?kind=list&lang=vi&theme=light', selector: '[data-ui="list-page"]' },
@@ -315,6 +320,26 @@ try {
         assert.equal(interactionAudit.focusRestored, true)
         assert.equal(interactionAudit.popoverPositioned, 'true')
         assert.match(String(interactionAudit.popoverPlacement), /^(?:top|bottom)-(?:start|end)$/u)
+      }
+      if (review.key === 'data-operations-en' && viewport.key === 'desktop') {
+        const hierarchyAudit: Json = await evaluate<Json>(
+          cdp,
+          `(() => {
+            const treeItem = document.querySelector('[data-ui="tree"] [role="treeitem"][tabindex="0"]')
+            treeItem?.focus()
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+            const nextTreeItem = document.activeElement?.textContent?.trim()
+            const firstRow = document.querySelector('[data-ui="tree-grid-row"][tabindex="0"]')
+            firstRow?.focus()
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+            return {
+              nextTreeItem,
+              nextTreeGridRow: document.activeElement?.textContent?.trim(),
+            }
+          })()`,
+        )
+        assert.match(String(hierarchyAudit.nextTreeItem), /Reports/u)
+        assert.match(String(hierarchyAudit.nextTreeGridRow), /110 · Cash/u)
       }
       const captured: Json = await cdp.send('Page.captureScreenshot', {
         format: 'png',

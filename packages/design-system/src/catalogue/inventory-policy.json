@@ -1,6 +1,41 @@
 {
   "schemaVersion": "ketjs.design-system-inventory-policy.v1",
   "publicModules": {
+    "./data-display/data-grid/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
+    "./data-display/resource-list/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-029"
+    },
+    "./data-display/tree/index.tsx": {
+      "owner": "Data display",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-032"
+    },
+    "./data-operations/inline-edit/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-033"
+    },
+    "./data-operations/list-controls/index.tsx": {
+      "owner": "Data operations",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 4,
+      "gapTask": "DS-027"
+    },
     "./contract/index.ts": {
       "owner": "Governance",
       "maturity": "stable",
@@ -481,72 +516,6 @@
     }
   },
   "plannedComponents": [
-    {
-      "name": "SearchBar",
-      "owner": "Data operations",
-      "wave": 4,
-      "gapTask": "DS-027"
-    },
-    {
-      "name": "FilterBar",
-      "owner": "Data operations",
-      "wave": 4,
-      "gapTask": "DS-027"
-    },
-    {
-      "name": "AppliedFilters",
-      "owner": "Data operations",
-      "wave": 4,
-      "gapTask": "DS-027"
-    },
-    {
-      "name": "SortMenu",
-      "owner": "Data operations",
-      "wave": 4,
-      "gapTask": "DS-027"
-    },
-    {
-      "name": "SavedViews",
-      "owner": "Data operations",
-      "wave": 4,
-      "gapTask": "DS-028"
-    },
-    {
-      "name": "ViewSettings",
-      "owner": "Data operations",
-      "wave": 4,
-      "gapTask": "DS-028"
-    },
-    {
-      "name": "ResourceList",
-      "owner": "Data display",
-      "wave": 4,
-      "gapTask": "DS-029"
-    },
-    {
-      "name": "DataGrid",
-      "owner": "Data display",
-      "wave": 4,
-      "gapTask": "DS-031"
-    },
-    {
-      "name": "Tree",
-      "owner": "Data display",
-      "wave": 4,
-      "gapTask": "DS-032"
-    },
-    {
-      "name": "TreeGrid",
-      "owner": "Data display",
-      "wave": 4,
-      "gapTask": "DS-032"
-    },
-    {
-      "name": "InlineEdit",
-      "owner": "Data operations",
-      "wave": 4,
-      "gapTask": "DS-033"
-    },
     {
       "name": "DescriptionList",
       "owner": "Record",

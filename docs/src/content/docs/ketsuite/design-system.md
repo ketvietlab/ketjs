@@ -124,6 +124,19 @@ values stay as civil `YYYY-MM-DD` text, and local date-time values are not impli
 UTC. File controls use the native input for submission while the application owns transport, storage,
 limits, and authorization. Every control keeps the left-label/right-control form layout at narrow widths.
 
+### Data operations
+
+Wave 4 adds composable search, filters, applied filters, sorting, saved views, view settings, resource
+lists, bounded data grids, trees, tree grids, and inline editing. `withQueryState` updates named URL keys
+while preserving unrelated search state. Saved-view renderers carry version tokens but do not read or
+write persistence, and inline edit keeps the rejected input and a native form submission path.
+
+`ResourceList` gives each row one keyboard destination. `DataGrid` supports explicit column order,
+visibility, pinning, and density, and caps rendered rows (500 by default) instead of rendering an
+unbounded dataset. Use `Tree` for navigation hierarchy; use `TreeGrid` only when the hierarchy has
+independently useful tabular columns. Every large or spatial surface owns its local overflow on narrow
+screens.
+
 ## Maturity and compatibility
 
 The registry uses `planned`, `stable`, `compatibility`, and `deprecated` maturity states. Planned
