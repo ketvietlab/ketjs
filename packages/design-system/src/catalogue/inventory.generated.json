@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 76,
     "cssFiles": 68,
-    "cssLines": 13045
+    "cssLines": 13050
   },
   "rows": [
     {
@@ -8222,6 +8222,7 @@
         "test/backend-ui.test.ts",
         "test/crm-configuration-screen.test.tsx",
         "test/design-system-atlas.test.ts",
+        "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
         "test/events.test.ts",
         "test/flow-board-screen.test.tsx",
@@ -8383,6 +8384,7 @@
       "tests": "present",
       "testFiles": [
         "test/backend-ui.test.ts",
+        "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
         "test/hr-attendance-my-work-screen.test.tsx",
         "test/identity-engine.test.ts",
@@ -8835,7 +8837,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/grouped/styles.css",
-      "lines": 126,
+      "lines": 131,
       "hooks": [
         "-context",
         "-header",

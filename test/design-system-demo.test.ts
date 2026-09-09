@@ -43,6 +43,15 @@ test('sales demo: mobile page actions share the available width evenly', () => {
   assert.match(styles, /\[data-ui="action"\] \{\s*width: 100%/)
 })
 
+test('sales demo: overview columns use the same grouped surface hierarchy', () => {
+  const html = String(createDemoRoutes()['/demo'](new URL('http://localhost/demo?theme=light')).body).replace(
+    /<!--k\[?-->/gu,
+    '',
+  )
+  assert.match(html, /data-ui="surface"[\s\S]*data-ui="surface-title"[\s\S]*?Ưu tiên hôm nay/)
+  assert.doesNotMatch(html, /data-ui="section-title">Ưu tiên hôm nay/)
+})
+
 test('sales demo: collection paging belongs to ListChrome above the table', () => {
   const routes = createDemoRoutes()
   for (const query of ['', '&page=2', '&q=missing']) {
