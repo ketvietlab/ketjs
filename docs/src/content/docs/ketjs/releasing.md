@@ -29,6 +29,10 @@ account supports that transition.
 Update the root and all workspace package versions together. Also update every internal dependency and the
 version used by `ket new`. The release checker rejects drift between any of these locations.
 
+The design-system inventory reads tracked files and non-ignored new source files when Git metadata is
+available. Generated or ignored local bundles must not influence the committed inventory or release gate.
+Source archives without Git metadata use the same deterministic directory walk over their packaged files.
+
 The first coordinated scoped release was `0.1.1`. The unscoped `ketjs-view@0.1.0` was published during the
 initial bootstrap attempt and is not part of the supported package set. Preview releases follow semantic
 versioning but do not promise API stability before 1.0.
@@ -73,7 +77,7 @@ No publish command is part of either local script.
    required checks pass.
 3. Merge the release pull request into `master`. The resulting `master` commit is the immutable KetJS source
    used by downstream applications; `develop` must never be used as a production dependency pin.
-4. Create and publish GitHub release `v0.1.11` at that exact `master` commit.
+4. Create and publish GitHub release `v0.1.12` at that exact `master` commit.
 5. Approve the protected `npm` environment when prompted.
 6. Confirm all five packages and provenance attestations on npm.
 7. Update each downstream repository to pin the exact released `master` commit SHA, then run that
@@ -82,7 +86,7 @@ No publish command is part of either local script.
 
 ```bash
 # Run from: /path/to/projects
-npx -y @ketvietlab/ketjs@0.1.11 new public_smoke
+npx -y @ketvietlab/ketjs@0.1.12 new public_smoke
 cd public_smoke
 npm install
 npm test

@@ -16,6 +16,36 @@ const outputPath = join(designRoot, 'src/catalogue/inventory.generated.ts')
 const jsonOutputPath = join(designRoot, 'src/catalogue/inventory.generated.json')
 const check = process.argv.includes('--check')
 
+// A working tree can contain ignored build products such as KetSuite's bundled
+// design-system.css. Include tracked files and non-ignored new source files, but
+// never let those local products change the committed inventory. Source archives
+// have no Git metadata, so they retain the deterministic directory-walk fallback.
+const repositorySourceFiles = (() => {
+  try {
+    return new Set(
+      execFileSync(
+        'git',
+        [
+          'ls-files',
+          '--cached',
+          '--others',
+          '--exclude-standard',
+          '-z',
+          '--',
+          'packages/design-system/src',
+          'packages/ketsuite/src/modules',
+          'test',
+        ],
+        { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      )
+        .split('\0')
+        .filter(Boolean),
+    )
+  } catch {
+    return undefined
+  }
+})()
+
 /** @param {string} path */
 const read = (path) => readFileSync(path, 'utf8')
 /** @param {string} path */
@@ -32,7 +62,11 @@ const walk = (directory, extensions) => {
     if (name === 'node_modules' || name === 'dist' || name === '.build' || name === '.git') continue
     const path = join(directory, name)
     if (statSync(path).isDirectory()) files.push(...walk(path, extensions))
-    else if (extensions.some((extension) => name.endsWith(extension))) files.push(path)
+    else if (
+      extensions.some((extension) => name.endsWith(extension)) &&
+      (!repositorySourceFiles || repositorySourceFiles.has(slash(relative(root, path))))
+    )
+      files.push(path)
   }
   return files
 }
