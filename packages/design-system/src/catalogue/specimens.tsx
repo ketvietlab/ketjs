@@ -6,7 +6,8 @@ import { Field } from '../primitives/field.tsx'
 import { NavList, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
 import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
-import { AppShell } from '../layouts/shell.tsx'
+import { AppShell, Page } from '../layouts/shell.tsx'
+import { AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
 import { ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
@@ -99,10 +100,29 @@ const demoNavItems = (active: DemoLayout) => [
 ]
 
 const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
-  <div data-ui="shell-demo-sidebar">
-    <strong>KétSuite</strong>
-    <NavList label="Workspace layouts" items={demoNavItems(props.active)} />
-  </div>
+  <AppNavigation
+    id={`demo-navigation-${props.active}`}
+    label="KétSuite workspace"
+    identity="KétSuite"
+    context="Operations workspace"
+    menuLabel="Workspace menu"
+    groups={[
+      {
+        id: `demo-primary-${props.active}`,
+        label: 'Workspace',
+        items: demoNavItems(props.active).map((item) => ({
+          ...item,
+          id: `${props.active}-${item.href.slice(1)}`,
+        })),
+      },
+      {
+        id: `demo-manage-${props.active}`,
+        label: 'Manage',
+        items: [{ id: `${props.active}-settings`, label: 'Settings', href: '#app-navigation', leading: '⚙' }],
+      },
+    ]}
+    footer="Signed in · Duy Kieu"
+  />
 )
 
 const DemoRail = (props: {
@@ -644,9 +664,34 @@ export const componentGroups: readonly ComponentGroup[] = [
   {
     id: 'application-structure',
     name: 'Application structure',
-    description:
-      'Four practical layouts inside the same shell: collection, record, flow workspace and canvas workspace.',
+    description: 'Responsive application navigation and four practical layouts inside the same shell.',
     examples: [
+      {
+        id: 'app-navigation',
+        name: 'Responsive application navigation',
+        description:
+          'One navigation model becomes a persistent desktop sidebar and an accessible mobile drawer.',
+        render: () => (
+          <DemoShell
+            active="collection"
+            main={
+              <Page
+                title="Operations overview"
+                description="Resize below 768 px to review the mobile trigger and drawer."
+                body={
+                  <Grid
+                    columns={2}
+                    items={[
+                      <Metric label="Open orders" value="148" detail="12 need attention" />,
+                      <Metric label="Ready to invoice" value="91" detail="Updated just now" />,
+                    ]}
+                  />
+                }
+              />
+            }
+          />
+        ),
+      },
       {
         id: 'app-shell',
         name: 'Collection shell',

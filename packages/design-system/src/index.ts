@@ -105,6 +105,19 @@ export {
   Surface,
 } from './layouts/layout/index.tsx'
 export { AppShell, Page, PageHeader, RecordCanvas, RecordSection } from './layouts/shell/index.tsx'
+export {
+  AppNavigation,
+  NavigationDrawer,
+  NavigationGroup,
+  NavigationHeader,
+  NavigationItem,
+  NavigationTrigger,
+} from './layouts/app-navigation/index.tsx'
+export type {
+  AppNavigationProps,
+  NavigationGroupData,
+  NavigationItemData,
+} from './layouts/app-navigation/index.tsx'
 
 export { DataTable } from './patterns/data-table/index.tsx'
 export type {

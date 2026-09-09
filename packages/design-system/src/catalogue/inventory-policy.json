@@ -132,6 +132,12 @@
       "decision": "refactor",
       "gapTask": "DS-009"
     },
+    "./layouts/app-navigation/index.tsx": {
+      "owner": "Navigation",
+      "maturity": "stable",
+      "decision": "build",
+      "gapTask": "DS-009"
+    },
     "./layouts/shell/index.tsx": {
       "owner": "Shell",
       "maturity": "stable",

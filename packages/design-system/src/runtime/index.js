@@ -35,6 +35,118 @@ export const attachDesignSystemInteractions = (root = document) => {
     ;(first instanceof HTMLElement ? first : modal).focus()
   }
 
+  const navigationMedia = window.matchMedia('(max-width: 48rem)')
+  const navigationRoot = document.documentElement
+  const priorNavigationOpen = navigationRoot.dataset.kvNavigationOpen
+  const navigations = /** @type {HTMLDetailsElement[]} */ (
+    [...root.querySelectorAll('[data-ui="app-navigation"]')].filter(
+      (navigation) => navigation instanceof HTMLDetailsElement,
+    )
+  )
+  const navigationStates = new Map()
+
+  /** @param {HTMLDetailsElement} navigation */
+  const restoreNavigationTargets = (navigation) => {
+    const state = navigationStates.get(navigation)
+    if (!state?.targets) return
+    for (const { element, inert } of state.targets) element.inert = inert
+    state.targets = null
+  }
+
+  const syncNavigationLock = () => {
+    const hasOpenNavigation = navigationMedia.matches && navigations.some((navigation) => navigation.open)
+    if (hasOpenNavigation) navigationRoot.dataset.kvNavigationOpen = 'true'
+    else if (priorNavigationOpen === undefined) delete navigationRoot.dataset.kvNavigationOpen
+    else navigationRoot.dataset.kvNavigationOpen = priorNavigationOpen
+  }
+
+  /** @param {HTMLDetailsElement} navigation */
+  const syncNavigation = (navigation) => {
+    const trigger = navigation.querySelector('[data-ui="navigation-trigger"]')
+    const drawer = navigation.querySelector('[data-ui="navigation-drawer"]')
+    if (!(trigger instanceof HTMLElement) || !(drawer instanceof HTMLElement)) return
+    const mobile = navigationMedia.matches
+    trigger.dataset.open = String(mobile && navigation.open)
+    if (!mobile) {
+      drawer.removeAttribute('role')
+      drawer.removeAttribute('aria-modal')
+      drawer.removeAttribute('aria-label')
+      restoreNavigationTargets(navigation)
+      syncNavigationLock()
+      return
+    }
+    drawer.setAttribute('role', 'dialog')
+    drawer.setAttribute('aria-modal', 'true')
+    drawer.setAttribute('aria-label', drawer.dataset.navigationLabel ?? 'Navigation')
+    if (!navigation.open) {
+      restoreNavigationTargets(navigation)
+      syncNavigationLock()
+      return
+    }
+    const state = navigationStates.get(navigation) ?? {}
+    if (!state.targets) {
+      const shell = navigation.closest('[data-ui="app-shell"]')
+      const targets = shell
+        ? [...shell.querySelectorAll(':scope > [data-ui="app-main"], :scope > [data-ui="app-right-rail"]')]
+            .filter((element) => element instanceof HTMLElement)
+            .map((element) => ({ element, inert: element.inert }))
+        : []
+      for (const { element } of targets) element.inert = true
+      state.targets = targets
+      state.returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : trigger
+      navigationStates.set(navigation, state)
+      queueMicrotask(() => {
+        if (!navigation.open || !navigationMedia.matches) return
+        const activeItem = drawer.querySelector('[data-ui="navigation-item"][aria-current="page"]')
+        const first = focusables(drawer)[0]
+        const focusTarget = activeItem instanceof HTMLElement ? activeItem : first
+        ;(focusTarget instanceof HTMLElement ? focusTarget : drawer).focus()
+      })
+    }
+    syncNavigationLock()
+  }
+
+  /** @param {HTMLDetailsElement} navigation @param {boolean} [returnFocus] */
+  const closeNavigation = (navigation, returnFocus = true) => {
+    const state = navigationStates.get(navigation)
+    navigation.open = false
+    syncNavigation(navigation)
+    if (returnFocus && state?.returnFocus instanceof HTMLElement && state.returnFocus.isConnected)
+      state.returnFocus.focus()
+    navigationStates.delete(navigation)
+  }
+
+  const navigationCleanups = navigations.map((navigation) => {
+    const onToggle = () => syncNavigation(navigation)
+    /** @param {MouseEvent} event */
+    const onClick = (event) => {
+      if (!navigationMedia.matches || !navigation.open) return
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (
+        target.closest('[data-ui="navigation-close"]') ||
+        target.closest('[data-ui="navigation-backdrop"]') ||
+        target.closest('[data-ui="navigation-item"]')
+      )
+        closeNavigation(navigation)
+    }
+    navigation.addEventListener('toggle', onToggle)
+    navigation.addEventListener('click', onClick)
+    syncNavigation(navigation)
+    return () => {
+      navigation.removeEventListener('toggle', onToggle)
+      navigation.removeEventListener('click', onClick)
+      restoreNavigationTargets(navigation)
+    }
+  })
+  const onNavigationMediaChange = () => {
+    for (const navigation of navigations) {
+      if (navigation.open) closeNavigation(navigation, false)
+      else syncNavigation(navigation)
+    }
+  }
+  navigationMedia.addEventListener('change', onNavigationMediaChange)
+
   for (const popover of root.querySelectorAll('[data-ui="popover"][data-open="true"]')) {
     const trigger = popover.querySelector('[data-ui="popover-trigger"]')
     const panel = popover.querySelector('[data-ui="popover-panel"]')
@@ -65,6 +177,35 @@ export const attachDesignSystemInteractions = (root = document) => {
 
   /** @param {KeyboardEvent} event */
   const onKeydown = (event) => {
+    const openNavigation = navigations.find((navigation) => navigationMedia.matches && navigation.open)
+    if (openNavigation instanceof HTMLDetailsElement) {
+      const drawer = openNavigation.querySelector('[data-ui="navigation-drawer"]')
+      if (event.key === 'Escape') {
+        closeNavigation(openNavigation)
+        event.preventDefault()
+        return
+      }
+      if (event.key === 'Tab' && drawer instanceof HTMLElement) {
+        const items = focusables(drawer)
+        const first = items[0]
+        const last = items.at(-1)
+        if (!items.length) {
+          event.preventDefault()
+          drawer.focus()
+          return
+        }
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === drawer)) {
+          event.preventDefault()
+          if (last instanceof HTMLElement) last.focus()
+          return
+        }
+        if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          if (first instanceof HTMLElement) first.focus()
+          return
+        }
+      }
+    }
     const treeItem = document.activeElement?.closest('[data-ui="tree"] [role="treeitem"]')
     if (treeItem instanceof HTMLElement) {
       const tree = treeItem.closest('[data-ui="tree"]')
@@ -199,6 +340,10 @@ export const attachDesignSystemInteractions = (root = document) => {
 
   return () => {
     document.removeEventListener('keydown', onKeydown)
+    navigationMedia.removeEventListener('change', onNavigationMediaChange)
+    for (const cleanup of navigationCleanups) cleanup()
+    if (priorNavigationOpen === undefined) delete navigationRoot.dataset.kvNavigationOpen
+    else navigationRoot.dataset.kvNavigationOpen = priorNavigationOpen
     if (appShell instanceof HTMLElement) appShell.inert = priorInert
     if (activeBeforeOpen?.isConnected) activeBeforeOpen.focus()
   }

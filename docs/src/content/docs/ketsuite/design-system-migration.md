@@ -21,18 +21,26 @@ permissions, validation, or localized copy.
 
 ## Component migration order
 
-1. Replace local overlay mechanics with `attachDesignSystemInteractions`; keep route and unsaved-change
+1. Replace dashboard sidebar and mobile-menu forks with `AppNavigation` inside `AppShell.sidebar`.
+   Keep one grouped navigation-item model for both breakpoints; the design-system runtime owns drawer
+   focus, Escape, backdrop, scroll lock, and responsive dialog semantics.
+2. Replace local overlay mechanics with `attachDesignSystemInteractions`; keep route and unsaved-change
    decisions in the application.
-2. Replace raw scalar fields and local pickers with typed form exports. Pass rejected text back unchanged,
+3. Replace raw scalar fields and local pickers with typed form exports. Pass rejected text back unchanged,
    and supply query/permission-filtered relation results.
-3. Replace collection toolbars and local rows with data-operation exports. Preserve unrelated URL keys,
+4. Replace collection toolbars and local rows with data-operation exports. Preserve unrelated URL keys,
    version saved views, and cap grid results before considering virtualization.
-4. Replace record facts, activity, audit, attachments, and media with public renderers. Pass only authorized
+5. Replace record facts, activity, audit, attachments, and media with public renderers. Pass only authorized
    and redacted results; keep storage and mutations in the application.
 
 The public component package owns markup, `data-ui`, component CSS, tokens, accessibility semantics, and
 browser mechanics. The application owns business state, persistence, permissions, validation, queries,
 storage, timezones, translations, and deployment.
+
+`AppNavigation` renders progressive native markup by itself. Load the package's `runtime/auto.js` asset or
+call `attachDesignSystemInteractions()` once after the page loads to receive the complete mobile drawer
+contract. Do not add a second application-owned hamburger controller or maintain separate desktop/mobile
+item arrays.
 
 ## Release and rollback
 
