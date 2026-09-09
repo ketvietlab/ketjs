@@ -38,26 +38,26 @@
     --kv-ref-text-disabled: #505862;
     --kv-ref-text-inverse: #111318;
 
-    /* Reference: brand. */
+    /* Reference: brand — Indigo #5968df. */
     --kv-ref-accent-100: #efe9e7;
-    --kv-ref-primary-50: #eef2ff;
-    --kv-ref-primary-100: #e0e7ff;
-    --kv-ref-primary-200: #c7d2fe;
-    --kv-ref-primary-300: #a5b4fc;
-    --kv-ref-primary-400: #818cf8;
-    --kv-ref-primary-500: #6366f1;
-    --kv-ref-primary-600: #5563df;
-    --kv-ref-primary-700: #4753c7;
-    --kv-ref-primary-800: #3944a5;
-    --kv-ref-primary-900: #303a83;
+    --kv-ref-primary-50: #eef0fb;
+    --kv-ref-primary-100: #dde2f7;
+    --kv-ref-primary-200: #c3cdf0;
+    --kv-ref-primary-300: #aab6ed;
+    --kv-ref-primary-400: #7485e8;
+    --kv-ref-primary-500: #5968df;
+    --kv-ref-primary-600: #4f5ed0;
+    --kv-ref-primary-700: #4557bc;
+    --kv-ref-primary-800: #394985;
+    --kv-ref-primary-900: #2f3a5f;
     --kv-ref-primary: #5968df;
-    --kv-ref-primary-hover: #6875ea;
-    --kv-ref-primary-active: #4c59c9;
+    --kv-ref-primary-hover: #7485e8;
+    --kv-ref-primary-active: #4f5ed0;
     --kv-ref-primary-subtle: rgb(89 104 223 / 14%);
     --kv-ref-primary-muted: rgb(89 104 223 / 22%);
-    --kv-ref-primary-border: rgb(112 126 240 / 32%);
-    --kv-ref-nav-selected: rgb(76 93 190 / 52%);
-    --kv-ref-nav-selected-hover: rgb(83 101 204 / 62%);
+    --kv-ref-primary-border: rgb(89 104 223 / 32%);
+    --kv-ref-nav-selected: rgb(79 94 208 / 52%);
+    --kv-ref-nav-selected-hover: rgb(89 104 223 / 62%);
 
     /* Reference: semantic colour families. */
     --kv-ref-success: #40c97b;
@@ -72,9 +72,9 @@
     --kv-ref-danger-hover: #f1766d;
     --kv-ref-danger-bg: rgb(239 102 92 / 13%);
     --kv-ref-danger-border: rgb(239 102 92 / 28%);
-    --kv-ref-info: #5794f2;
-    --kv-ref-info-bg: rgb(87 148 242 / 13%);
-    --kv-ref-info-border: rgb(87 148 242 / 25%);
+    --kv-ref-info: #5968df;
+    --kv-ref-info-bg: rgb(89 104 223 / 13%);
+    --kv-ref-info-border: rgb(89 104 223 / 25%);
     --kv-ref-status-todo-text: #aab1bc;
     --kv-ref-status-todo-bg: rgb(170 177 188 / 10%);
     --kv-ref-status-progress-text: #6f9cf8;
@@ -108,13 +108,13 @@
     --kv-interactive-hover: light-dark(#f7f5f5, var(--kv-ref-control-hover));
     --kv-interactive-active: light-dark(#efedee, var(--kv-ref-control-active));
     --kv-interactive-disabled: light-dark(#efedee, var(--kv-ref-control-disabled));
-    --kv-accent: light-dark(#5167c4, var(--kv-ref-primary));
-    --kv-accent-hover: light-dark(#45579f, var(--kv-ref-primary-hover));
+    --kv-accent: light-dark(#4f5ed0, var(--kv-ref-primary));
+    --kv-accent-hover: light-dark(#4557bc, var(--kv-ref-primary-hover));
     --kv-accent-active: light-dark(#394985, var(--kv-ref-primary-active));
     --kv-accent-subtle: light-dark(#eef0fb, var(--kv-ref-primary-subtle));
     --kv-accent-muted: light-dark(#dde2f7, var(--kv-ref-primary-muted));
     --kv-accent-border: light-dark(#c3cdf0, var(--kv-ref-primary-border));
-    --kv-focus-border: light-dark(#637ad5, #6474e8);
+    --kv-focus-border: light-dark(#5968df, #7485e8);
     --kv-focus-ring: 0 0 0 3px light-dark(#dde2f7, rgb(89 104 223 / 16%));
     --kv-on-accent: var(--kv-ref-white);
     --kv-positive: light-dark(#1d5d3b, var(--kv-ref-success));
@@ -133,13 +133,13 @@
     --kv-danger-hover: light-dark(#912018, var(--kv-ref-danger-hover));
     --kv-danger-bg: light-dark(#fef3f2, var(--kv-ref-danger-bg));
     --kv-danger-border: light-dark(#fecdca, var(--kv-ref-danger-border));
-    --kv-info: light-dark(#315f8e, var(--kv-ref-info));
-    --kv-info-bg: light-dark(#eaf2fb, var(--kv-ref-info-bg));
-    --kv-info-border: light-dark(#c7dcf0, var(--kv-ref-info-border));
+    --kv-info: light-dark(#4557bc, var(--kv-ref-info));
+    --kv-info-bg: light-dark(#eef0fb, var(--kv-ref-info-bg));
+    --kv-info-border: light-dark(#c3cdf0, var(--kv-ref-info-border));
     --kv-nav-selected: light-dark(#dde2f7, var(--kv-ref-nav-selected));
     --kv-nav-selected-hover: light-dark(#cfd6f5, var(--kv-ref-nav-selected-hover));
     --kv-nav-selected-text: light-dark(#394985, #dce2ff);
-    --kv-tab-active-text: light-dark(#45579f, #8c9aff);
+    --kv-tab-active-text: light-dark(#4557bc, #aab6ed);
 
     /* Compatibility names used by the first public component slice. */
     --kv-color-canvas: var(--kv-page-bg);
