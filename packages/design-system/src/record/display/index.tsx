@@ -71,7 +71,7 @@ export const AvatarGroup = (props: {
         ),
       )}
       {remaining > 0 && (
-        <span role="img" aria-label={`${remaining} more people`}>
+        <span role="img" aria-label={`${remaining} more people`} title={`${remaining} more people`}>
           +{String(remaining)}
         </span>
       )}

@@ -1326,7 +1326,7 @@ test('design system: record composition covers facts, activity, redaction and me
         max={1}
       />,
     ),
-    /aria-label="1 more people"/,
+    /title="1 more people"/,
   )
   assert.match(renderToString(<Status label="Ready" tone="positive" />), /data-ui="status"/)
 
