@@ -267,6 +267,12 @@ try {
       selector: '[data-pattern="workspace"]',
     },
     { key: 'connected-demo-vi', path: '/demo?theme=light', selector: '[data-ui="app-shell"]' },
+    { key: 'connected-demo-dark-vi', path: '/demo?theme=dark', selector: '[data-ui="app-shell"]' },
+    {
+      key: 'connected-demo-record-vi',
+      path: '/demo?theme=light&view=record&id=SO-1041',
+      selector: '[data-ui="record-page-layout"]',
+    },
   ] as const
   for (const viewport of viewports) {
     await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -302,6 +308,23 @@ try {
       )
       assert.equal(audit.mainCount, 1, `${review.key}/${viewport.key} must have one main landmark`)
       assert.ok(Number(audit.textLength) > 100, `${review.key}/${viewport.key} content is incomplete`)
+      if (review.key === 'connected-demo-dark-vi') {
+        const themeAudit: Json = await evaluate<Json>(
+          cdp,
+          `(() => {
+            const root = document.querySelector('[data-demo-app]')
+            const main = document.querySelector('[data-ui="app-main"]')
+            return {
+              theme: root?.getAttribute('data-theme'),
+              rootScheme: root instanceof HTMLElement ? getComputedStyle(root).colorScheme : null,
+              mainScheme: main instanceof HTMLElement ? getComputedStyle(main).colorScheme : null,
+            }
+          })()`,
+        )
+        assert.equal(themeAudit.theme, 'dark')
+        assert.equal(themeAudit.rootScheme, 'dark')
+        assert.equal(themeAudit.mainScheme, 'dark')
+      }
       if (review.key === 'application-structure-en') {
         const navigationAudit: Json = await evaluate<Json>(
           cdp,

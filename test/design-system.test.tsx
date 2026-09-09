@@ -263,7 +263,7 @@ test('design system: flat workspace is opt-in and keeps sidebar styling independ
 test('design system: grouped workspace keeps a grey canvas and borderless context contents', () => {
   const grouped = readFileSync('packages/design-system/src/layouts/grouped/styles.css', 'utf8')
   assert.match(grouped, /\[data-kv-design-system\]\[data-presentation="grouped"\]/)
-  assert.match(grouped, /color-scheme: light/)
+  assert.doesNotMatch(grouped, /color-scheme: light/)
   assert.match(grouped, /--kv-page-bg: light-dark\(#f6f6f7,/)
   assert.match(grouped, /--kv-sidebar-bg: light-dark\(#f7f5f5,/)
   assert.match(grouped, /--kv-sidebar-border: light-dark\(#e9e7e8,/)
@@ -284,6 +284,10 @@ test('design system: grouped workspace keeps a grey canvas and borderless contex
   )
   assert.match(grouped, /padding: var\(--kv-space-3\) var\(--kv-page-padding-x\)/)
   assert.match(grouped, /\[data-ui="record-page-aside"\] \[data-ui="metric"\]/)
+  assert.match(
+    grouped,
+    /\[data-ui="record-page-aside"\] \{[\s\S]*?margin: var\(--kv-space-3\) var\(--kv-space-3\) var\(--kv-space-3\) 0;[\s\S]*?border-radius: var\(--kv-radius-md\)/,
+  )
   assert.doesNotMatch(grouped, /\[data-ui="app-sidebar"\]/)
   assert.match(readFileSync('packages/design-system/src/styles.css', 'utf8'), /layouts\/grouped\/styles\.css/)
 })

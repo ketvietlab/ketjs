@@ -755,7 +755,7 @@ export function createDemoRoutes() {
                 <Grid
                   columns={2}
                   items={[
-                    <Section
+                    <Surface
                       title="Ưu tiên hôm nay"
                       body={
                         <Stack
