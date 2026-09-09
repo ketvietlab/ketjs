@@ -9,6 +9,7 @@ import {
   AppShell,
   Avatar,
   Badge,
+  Breadcrumbs,
   Button,
   ContentCard,
   DataTable,
@@ -33,7 +34,7 @@ import {
   Tag,
   WorkspacePage,
 } from '@ketvietlab/design-system'
-import type { FieldProps, NavigationItemData, Tone } from '@ketvietlab/design-system'
+import type { BreadcrumbItem, FieldProps, NavigationItemData, Tone } from '@ketvietlab/design-system'
 import type { IncomingMessage } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { demoStyles } from './demo-styles.ts'
@@ -385,8 +386,54 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
         },
       ]
     }
+    const nestedChildIndex = Math.max(0, Math.min(2, Number(q.get('child')) || 0))
+    const moduleHref = href(moduleValues)
+    const breadcrumbItems: BreadcrumbItem[] = [
+      { id: 'workspace', label: 'An Việt', href: href() },
+      { id: 'module', label: activeModule.label, href: moduleHref },
+    ]
+    if (view === 'record') {
+      breadcrumbItems.push(
+        { id: 'orders', label: 'Đơn hàng', href: href({ view: 'orders' }) },
+        { id: 'record', label: selected.id, href: undefined },
+      )
+    } else if (
+      q.has('child') ||
+      ((activeModule.id === 'sales' || activeModule.id === 'delivery') && status === 'done')
+    ) {
+      breadcrumbItems.push(
+        { id: 'section', label: activeModule.sections[4], href: undefined },
+        {
+          id: 'child',
+          label:
+            (activeModule.id === 'sales' || activeModule.id === 'delivery') && status === 'done'
+              ? activeModule.children[0]
+              : activeModule.children[nestedChildIndex],
+          href: undefined,
+        },
+      )
+    } else {
+      const sectionIndex =
+        activeModule.id === 'overview'
+          ? Math.max(
+              0,
+              Math.min(3, overviewTargets.indexOf(overviewFocus as (typeof overviewTargets)[number])),
+            )
+          : activeModule.id === 'sales' || activeModule.id === 'delivery'
+            ? status === null
+              ? 0
+              : Math.min(3, stages.indexOf(status) + 1)
+            : selectedSection
+      breadcrumbItems.push({
+        id: 'section',
+        label: activeModule.sections[sectionIndex],
+        href: undefined,
+      })
+    }
     const context =
-      contextMode === 'submenu' ? undefined : (
+      contextMode === 'submenu' ? (
+        <Breadcrumbs label="Vị trí hiện tại" items={breadcrumbItems} />
+      ) : (
         <Inline
           items={[
             'An Việt Trading',

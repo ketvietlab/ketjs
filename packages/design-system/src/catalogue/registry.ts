@@ -58,6 +58,7 @@ export const componentRegistry: readonly ComponentRegistration[] = [
     'invalid',
     'responsive',
   ]),
+  entry('Breadcrumbs', 'Navigation', 'primitives/navigation', 'navigation', 'navigation-items'),
   entry('NavItem', 'Navigation', 'primitives/navigation', 'navigation', 'navigation-items'),
   entry('NavList', 'Navigation', 'primitives/navigation', 'navigation', 'navigation-items'),
   entry('Tabs', 'Navigation', 'primitives/navigation', 'navigation', 'navigation-items'),

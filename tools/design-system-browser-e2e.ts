@@ -185,7 +185,7 @@ try {
     assert.equal(audit.mainCount, 1, `${viewport.key} must have one main landmark`)
     assert.equal(audit.navItems, 3, `${viewport.key} documentation navigation changed`)
     assert.ok(Number(audit.rows) >= 350, `${viewport.key} inventory rows are incomplete`)
-    assert.match(String(audit.text), /Public exports[\s\S]*187/u)
+    assert.match(String(audit.text), /Public exports[\s\S]*189/u)
     assert.match(String(audit.text), /Planned catalog[\s\S]*0/u)
     if (viewport.mobile) assert.equal(audit.localTableOverflow, false)
 
@@ -378,6 +378,8 @@ try {
               childBranchOpen: childBranch instanceof HTMLDetailsElement && childBranch.open,
               panelBelowParent: Boolean(triggerRect && childrenRect && childrenRect.top >= triggerRect.bottom - 1),
               horizontalSubmenuRemoved: document.querySelector('[data-demo-submenu]') === null,
+              breadcrumbs: document.querySelectorAll('[data-ui="breadcrumbs"]').length,
+              currentCrumb: document.querySelector('[data-ui="breadcrumb"] [aria-current="page"]')?.textContent?.trim(),
             }
           })()`,
         )
@@ -395,6 +397,11 @@ try {
         assert.equal(submenuAudit.childBranchOpen, true)
         assert.equal(submenuAudit.panelBelowParent, true)
         assert.equal(submenuAudit.horizontalSubmenuRemoved, true)
+        assert.equal(submenuAudit.breadcrumbs, 1)
+        assert.equal(
+          submenuAudit.currentCrumb,
+          review.key === 'submenu-demo-vi' ? 'Hôm nay' : 'Nguồn khách hàng',
+        )
         if (viewport.key === 'mobile') await delay(300)
       }
       if (review.key === 'application-structure-en') {

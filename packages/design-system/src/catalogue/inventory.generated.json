@@ -7,17 +7,17 @@
     "packages/ketsuite/src/ui/index.ts"
   ],
   "summary": {
-    "publicExports": 187,
-    "runtimeExports": 110,
-    "registeredComponents": 105,
+    "publicExports": 189,
+    "runtimeExports": 111,
+    "registeredComponents": 106,
     "compatibilityExports": 222,
     "compatibilityModules": 38,
     "plannedComponents": 0,
-    "publicGaps": 81,
+    "publicGaps": 82,
     "runtimeGaps": 5,
-    "typeGaps": 76,
+    "typeGaps": 77,
     "cssFiles": 68,
-    "cssLines": 13086
+    "cssLines": 13137
   },
   "rows": [
     {
@@ -400,6 +400,45 @@
       "tests": "gap",
       "testFiles": [],
       "gapTask": "DS-044"
+    },
+    {
+      "scope": "public",
+      "name": "BreadcrumbItem",
+      "imported": "BreadcrumbItem",
+      "kind": "type",
+      "source": "./primitives/navigation/index.tsx",
+      "owner": "Navigation",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 0,
+      "consumers": 0,
+      "specimen": "not-applicable",
+      "specimenFiles": [],
+      "tests": "gap",
+      "testFiles": [],
+      "gapTask": "DS-009"
+    },
+    {
+      "scope": "public",
+      "name": "Breadcrumbs",
+      "imported": "Breadcrumbs",
+      "kind": "runtime",
+      "source": "./primitives/navigation/index.tsx",
+      "owner": "Navigation",
+      "maturity": "stable",
+      "decision": "keep",
+      "target": "@ketvietlab/design-system",
+      "wave": 0,
+      "consumers": 0,
+      "specimen": "present",
+      "specimenFiles": [
+        "packages/design-system/src/catalogue/registry.ts",
+        "packages/design-system/src/catalogue/specimens.tsx"
+      ],
+      "tests": "present",
+      "testFiles": ["test/design-system.test.tsx"],
+      "gapTask": "DS-009"
     },
     {
       "scope": "public",
@@ -4035,8 +4074,8 @@
       "consumers": 13,
       "specimen": "not-applicable",
       "specimenFiles": [],
-      "tests": "gap",
-      "testFiles": [],
+      "tests": "present",
+      "testFiles": ["test/design-system.test.tsx"],
       "gapTask": "DS-009"
     },
     {
@@ -6511,6 +6550,7 @@
         "test/calendar-screen.test.tsx",
         "test/crm-case-detail-screen.test.tsx",
         "test/crm-pipeline-screen.test.tsx",
+        "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
         "test/flow-board-screen.test.tsx",
         "test/flow-epic-map-routes.test.ts",
@@ -9273,8 +9313,10 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/primitives/navigation/styles.css",
-      "lines": 99,
+      "lines": 150,
       "hooks": [
+        "breadcrumb",
+        "breadcrumbs",
         "nav-item",
         "nav-item-count",
         "nav-item-label",

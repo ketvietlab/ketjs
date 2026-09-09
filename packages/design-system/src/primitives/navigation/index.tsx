@@ -2,6 +2,8 @@ import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 
 export const HOOKS = [
+  'breadcrumbs',
+  'breadcrumb',
   'nav-list',
   'nav-item',
   'nav-item-leading',
@@ -11,6 +13,32 @@ export const HOOKS = [
   'tab',
   'tab-count',
 ] as const
+
+export type BreadcrumbItem = {
+  id?: string
+  label: string
+  href?: string
+}
+
+export const Breadcrumbs = (props: { label: string; items: readonly BreadcrumbItem[] }): TemplateResult => (
+  <nav data-ui="breadcrumbs" aria-label={props.label}>
+    <ol>
+      {each(
+        props.items,
+        (item, index) => item.id ?? `${index}:${item.label}`,
+        (item, index) => (
+          <li data-ui="breadcrumb">
+            {item.href !== undefined && index < props.items.length - 1 ? (
+              <a href={item.href}>{item.label}</a>
+            ) : (
+              <span aria-current={index === props.items.length - 1 ? 'page' : null}>{item.label}</span>
+            )}
+          </li>
+        ),
+      )}
+    </ol>
+  </nav>
+)
 
 export type NavItemProps = {
   label: string
