@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12 — reproducible inventory release
+
+- Excluded ignored local build products from generated inventory inputs while preserving non-ignored new source files.
+- Kept source-archive generation deterministic when Git metadata is unavailable.
+
+This patch has no public component API changes and supersedes the unpublished npm attempts for 0.1.10 and 0.1.11.
+
 ## 0.1.11 — component system Waves 0–6
 
 - Added a deterministic public/compatibility inventory and governance checks.
