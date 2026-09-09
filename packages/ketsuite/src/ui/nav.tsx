@@ -3,38 +3,24 @@
 import { each } from '@ketvietlab/ketjs-view'
 import type { JSXChild, TemplateResult } from '@ketvietlab/ketjs-view'
 import type { MenuNode, Translator } from '@ketvietlab/ketjs'
-import { IconButton } from '@ketvietlab/design-system'
+import {
+  AppNavigation,
+  IconButton,
+  NavigationGroup,
+  type NavigationGroupData,
+  type NavigationItemData,
+} from '@ketvietlab/design-system'
 import { hasIcon, icon } from './icons.ts'
 import { initials } from './primitives.tsx'
 
 export const HOOKS = [
   'sidebar',
   'sidebar-main',
-  'sidebar-header',
-  'sidebar-brand',
-  'sidebar-brand-name',
-  'sidebar-brand-chevron',
   'sidebar-search',
   'sidebar-search-icon',
   'sidebar-search-input',
-  'sidebar-nav',
-  'sidebar-section-label',
   'sidebar-empty',
-  'app-list',
-  'app-entry',
-  'app-icon',
   'app-monogram',
-  'app-name',
-  'menu',
-  'menu-item-wrap',
-  'menu-item',
-  'menu-icon',
-  'menu-label',
-  'menu-dot',
-  'menu-section',
-  'menu-section-title',
-  'menu-section-text',
-  'menu-section-children',
   'sidebar-foot',
   'sidebar-tools',
   'indicators',
@@ -93,6 +79,10 @@ export type SidebarOptions = {
   footItems?: JSXChild
 }
 
+const NAVIGATION_ID = 'backend-navigation'
+const NAVIGATION_DRAWER_ID = `${NAVIGATION_ID}-drawer`
+const NAVIGATION_BRANCH_GROUP = `${NAVIGATION_DRAWER_ID}-branches`
+
 const destination = (node: MenuNode): string => {
   if (node.path) return node.path
   for (const child of node.children) {
@@ -102,51 +92,42 @@ const destination = (node: MenuNode): string => {
   return '#'
 }
 
-/**
- * A group is a label. Nothing in the sidebar folds any more.
- *
- * Collapsing existed because the sidebar carried every screen a person could
- * read, and that list was long enough to need hiding. Once it carries the work
- * they actually do, folding costs a click to reveal six rows — and a group that
- * starts closed is a group nobody finds.
- *
- * Deeper nesting still renders, as labels within labels. No shipped menu goes
- * that deep, and a tree that did would be telling us something about itself.
- */
-const menuItem = (node: MenuNode, depth: number): TemplateResult =>
-  node.children.length ? (
-    <li data-ui="menu-item-wrap" data-depth={String(depth)}>
-      <div data-ui="menu-section">
-        <p data-ui="menu-section-title">
-          {node.icon && hasIcon(node.icon) ? <span data-ui="menu-icon">{icon(node.icon)}</span> : ''}
-          <span data-ui="menu-section-text">{node.label}</span>
-        </p>
-        <ul data-ui="menu-section-children">
-          {each(
-            node.children,
-            (child) => child.id,
-            (child) => menuItem(child, depth + 1),
-          )}
-        </ul>
-      </div>
-    </li>
-  ) : (
-    <li data-ui="menu-item-wrap" data-depth={String(depth)}>
-      <a data-ui="menu-item" data-active={String(node.active)} href={destination(node)}>
-        {node.icon && hasIcon(node.icon) ? (
-          <span data-ui="menu-icon">{icon(node.icon)}</span>
-        ) : (
-          <span data-ui="menu-dot" aria-hidden="true" />
-        )}
-        <span data-ui="menu-label">{node.label}</span>
-      </a>
-    </li>
-  )
+const navigationLeading = (node: MenuNode, root: boolean): JSXChild | undefined => {
+  if (node.icon && hasIcon(node.icon)) return icon(node.icon)
+  if (root) return <span data-ui="app-monogram">{node.label.slice(0, 1)}</span>
+  return undefined
+}
+
+const navigationItem = (node: MenuNode, root = false): NavigationItemData => {
+  const leading = navigationLeading(node, root)
+  if (node.children.length)
+    return {
+      id: node.id,
+      label: node.label,
+      ...(leading === undefined ? {} : { leading }),
+      children: node.children.map((child) => navigationItem(child)),
+      expanded: node.active,
+    }
+  return {
+    id: node.id,
+    label: node.label,
+    ...(leading === undefined ? {} : { leading }),
+    href: destination(node),
+    active: node.active,
+  }
+}
+
+const groupId = (label: string): string =>
+  `extension-${label
+    .toLocaleLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')}`
 
 /**
  * A group of entries a module contributes through `backend:nav.items`.
  *
- * The shell draws the app list and the active app's menu; a module with
+ * The shell draws the module accordion and its nested menu; a module with
  * navigation the menu tree cannot express — anything scoped to the record
  * currently open, whose path is only known at request time — fills that joint
  * instead. It gets the same rows the menu above it uses, because two sets of
@@ -154,18 +135,11 @@ const menuItem = (node: MenuNode, depth: number): TemplateResult =>
  * agree.
  */
 export const navGroup = (o: { label: string; items: readonly MenuNode[] }): TemplateResult => (
-  <>
-    <p data-ui="sidebar-section-label" data-scope="app">
-      {o.label}
-    </p>
-    <ul data-ui="menu" aria-label={o.label}>
-      {each(
-        o.items,
-        (item) => item.id,
-        (item) => menuItem(item, 0),
-      )}
-    </ul>
-  </>
+  <NavigationGroup
+    id={groupId(o.label)}
+    label={o.label}
+    items={o.items.map((item) => navigationItem(item))}
+  />
 )
 
 /**
@@ -179,82 +153,80 @@ export const navGroup = (o: { label: string; items: readonly MenuNode[] }): Temp
 const working = (nodes: readonly MenuNode[]): MenuNode[] =>
   nodes.filter((node) => !node.secondary).map((node) => ({ ...node, children: working(node.children) }))
 
-export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateResult => {
-  const { navItems } = options
+const navigationModel = (
+  _: Translator,
+  options: SidebarOptions,
+): { groups: NavigationGroupData[]; supplementary?: JSXChild } => {
   const menu = working(options.menu)
   const app = menu.find((item) => item.active) ?? menu[0] ?? null
   const rootList = options.rootList ?? 'auto'
   const showRoots = menu.length > 0 && (rootList === 'always' || (rootList === 'auto' && menu.length > 1))
+  const items = showRoots
+    ? menu.map((item) => navigationItem(item, true))
+    : (app?.children.map((item) => navigationItem(item)) ?? (app ? [navigationItem(app, true)] : []))
+  const supplementary =
+    menu.length === 0 || options.navItems !== undefined ? (
+      <>
+        {menu.length === 0 && <p data-ui="sidebar-empty">{_('backend.nav.noMatch')}</p>}
+        {options.navItems ?? ''}
+      </>
+    ) : undefined
+  return { groups: [{ id: 'modules', items }], supplementary }
+}
+
+const sidebarSearch = (_: Translator, options: SidebarOptions): TemplateResult => (
+  <form data-ui="sidebar-search" method="get" role="search">
+    <span data-ui="sidebar-search-icon">{icon('search')}</span>
+    <input
+      data-ui="sidebar-search-input"
+      type="search"
+      name="menu"
+      value={options.menuFilter ?? ''}
+      placeholder={_('backend.nav.search')}
+      aria-label={_('backend.nav.search')}
+      autocomplete="off"
+    />
+  </form>
+)
+
+/** The replaceable contents of the stable navigation scroll region. */
+export const sidebarNavigationContent = (_: Translator, options: SidebarOptions): TemplateResult => {
+  const model = navigationModel(_, options)
   return (
     <>
-      <div data-ui="sidebar-header">
-        <a data-ui="sidebar-brand" href="/admin" title={_('backend.nav.sections')}>
-          <span data-ui="sidebar-brand-name">{app ? app.label : _('backend.nav.sections')}</span>
-          <span data-ui="sidebar-brand-chevron">{icon('chevron-down')}</span>
-        </a>
-      </div>
-
-      <form data-ui="sidebar-search" method="get" role="search">
-        <span data-ui="sidebar-search-icon">{icon('search')}</span>
-        <input
-          data-ui="sidebar-search-input"
-          type="search"
-          name="menu"
-          value={options.menuFilter ?? ''}
-          placeholder={_('backend.nav.search')}
-          aria-label={_('backend.nav.search')}
-          autocomplete="off"
-        />
-      </form>
-
-      <nav data-ui="sidebar-nav">
-        {menu.length === 0 && <p data-ui="sidebar-empty">{_('backend.nav.noMatch')}</p>}
-        {showRoots && <p data-ui="sidebar-section-label">{_('backend.nav.sections')}</p>}
-        {showRoots && (
-          <ul data-ui="app-list">
-            {each(
-              menu,
-              (item) => item.id,
-              (item) => (
-                <li>
-                  <a
-                    data-ui="app-entry"
-                    data-active={String(item.active)}
-                    href={destination(item)}
-                    title={item.label}
-                  >
-                    <span data-ui="app-icon">
-                      {item.icon && hasIcon(item.icon) ? (
-                        icon(item.icon)
-                      ) : (
-                        <span data-ui="app-monogram">{item.label.slice(0, 1)}</span>
-                      )}
-                    </span>
-                    <span data-ui="app-name">{item.label}</span>
-                  </a>
-                </li>
-              ),
-            )}
-          </ul>
-        )}
-
-        {!!app && app.children.length > 0 && (
-          <>
-            <p data-ui="sidebar-section-label" data-scope="app">
-              {app.label}
-            </p>
-            <ul data-ui="menu" aria-label={app.label}>
-              {each(
-                app.children,
-                (child) => child.id,
-                (child) => menuItem(child, 0),
-              )}
-            </ul>
-          </>
-        )}
-        {navItems ?? ''}
-      </nav>
+      {each(
+        model.groups,
+        (group) => group.id,
+        (group) => (
+          <NavigationGroup
+            {...group}
+            id={`${NAVIGATION_DRAWER_ID}-${group.id}`}
+            branchGroup={NAVIGATION_BRANCH_GROUP}
+          />
+        ),
+      )}
+      {model.supplementary !== undefined && (
+        <div data-ui="navigation-supplementary">{model.supplementary}</div>
+      )}
     </>
+  )
+}
+
+export const sidebarMain = (_: Translator, options: SidebarOptions): TemplateResult => {
+  const model = navigationModel(_, options)
+  return (
+    <AppNavigation
+      id={NAVIGATION_ID}
+      label={_('backend.nav.sections')}
+      identity={_('backend.brand')}
+      context={sidebarSearch(_, options)}
+      groups={model.groups}
+      supplementary={model.supplementary}
+      footer={sidebarFoot(_, options)}
+      menuLabel={_('backend.nav.open')}
+      closeLabel={_('backend.nav.close')}
+      navigationSlot="backend.sidebar-main"
+    />
   )
 }
 
@@ -347,10 +319,7 @@ export const sidebarFoot = (_: Translator, options: SidebarOptions): TemplateRes
 export const sidebar = (_: Translator, options: SidebarOptions): TemplateResult => {
   return (
     <aside data-ui="sidebar">
-      <div data-ui="sidebar-main" data-ket-slot="backend.sidebar-main">
-        {sidebarMain(_, options)}
-      </div>
-      {sidebarFoot(_, options)}
+      <div data-ui="sidebar-main">{sidebarMain(_, options)}</div>
     </aside>
   )
 }

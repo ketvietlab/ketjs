@@ -1,5 +1,6 @@
 import { installUserWorkflow } from './user-workflow.ts'
 import type { BrowserBehavior, BrowserNavigation } from '@ketvietlab/ketjs'
+import { attachDesignSystemInteractions } from '@ketvietlab/design-system'
 
 const themeStorageKey = 'ket.backend.theme'
 const dismissibleDropdown = [
@@ -479,6 +480,7 @@ const installRouteModal = (signal: AbortSignal, navigation: BrowserNavigation): 
 }
 
 export const backendShell: BrowserBehavior = ({ navigation, lifetime }) => {
+  const cleanupDesignSystem = attachDesignSystemInteractions(document)
   const cleanupUserWorkflow = installUserWorkflow(lifetime)
   installThemeToggle(lifetime)
   installTableSelection(lifetime, navigation)
@@ -487,6 +489,7 @@ export const backendShell: BrowserBehavior = ({ navigation, lifetime }) => {
   const cleanupRouteModal = installRouteModal(lifetime, navigation)
   const cleanupLiveRegion = installLiveRegion(lifetime, navigation)
   return () => {
+    cleanupDesignSystem()
     cleanupLiveRegion?.()
     cleanupRouteModal()
     cleanupUserWorkflow()
