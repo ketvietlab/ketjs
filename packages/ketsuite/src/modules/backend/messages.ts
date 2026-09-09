@@ -30,6 +30,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'menu.setup': 'Thiết lập',
     'nav.search': 'Tìm phân hệ, menu…',
     'nav.noMatch': 'Không có phân hệ hoặc menu nào khớp.',
+    'nav.open': 'Mở menu ứng dụng',
+    'nav.close': 'Đóng menu ứng dụng',
     // What a person reads when the answer is no. The code stays on the page —
     // it is what they will be asked for — but it is not the headline, because
     // "E_FN_NOT_PERMITTED" tells them nothing they can act on.
@@ -154,6 +156,8 @@ export const messages: Record<string, Record<string, Message>> = {
     'error.back': 'Back to the start',
     'nav.search': 'Search modules and menus…',
     'nav.noMatch': 'No module or menu matches.',
+    'nav.open': 'Open application menu',
+    'nav.close': 'Close application menu',
     'nav.pages': 'Pages',
     brand: 'KetSuite',
     switchCompany: 'Switch company',

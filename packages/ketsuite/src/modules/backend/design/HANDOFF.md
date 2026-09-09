@@ -240,23 +240,24 @@ Các selector này đã có baseline trong `auth.css` và nằm trong `@layer ke
 Việc đổi công ty/chi nhánh dùng `context-switcher` trên thanh trên. Footer chỉ hiển
 thị ngữ cảnh hiện tại trong menu tài khoản để giữ hàng systray gọn như KétViệt cũ.
 
-## Điều hướng hai cấp
+## Điều hướng phân cấp
 
-Sidebar giờ có hai tầng: danh sách ứng dụng, rồi menu bên trong ứng dụng đang mở.
+Sidebar dùng `AppNavigation` của design system: mỗi phân hệ cấp một mở menu con ngay
+bên dưới chính nó. Chỉ một phân hệ mở tại một thời điểm; bấm lại phân hệ đang mở không
+đóng nó. Trạng thái active chỉ nằm trên link con dẫn tới trang hiện tại, không nằm trên
+phân hệ và không dùng badge đếm hay mũi tên trang trí.
 Cây menu do module khai báo (xem D42) và **đã được lọc trước khi tới CSS** — cái gì
 chưa cài, hoặc người đang đăng nhập không có quyền gọi, thì không có trong HTML.
 Không cần CSS ẩn gì cả.
 
 | hook | ý nghĩa |
 | --- | --- |
-| `[data-ui="app-switch"]`, `[data-ui="app-current"]` | tên ứng dụng đang mở, trên cùng |
-| `[data-ui="app-list"]`, `[data-ui="app-list-title"]` | danh sách ứng dụng và nhãn của nó |
-| `[data-ui="app-entry"][data-active]` | một ứng dụng; `true` là cái đang mở |
-| `[data-ui="app-icon"]`, `[data-ui="app-name"]` | dấu hiệu và tên bên trong `app-entry` |
-| `[data-ui="menu"]`, `[data-ui="menu-app"]` | menu của ứng dụng đang mở, và tên nó |
-| `[data-ui="menu-item"][data-active]` | một mục dẫn tới trang; `true` là trang đang xem |
-| `[data-ui="menu-section"][open]` | một nhóm — là `<details>`, gập được không cần JavaScript |
-| `[data-ui="menu-section-title"]` | `<summary>` của nhóm đó |
+| `[data-ui="app-navigation"]`, `[data-ui="navigation-drawer"]` | cùng một navigation model cho desktop và drawer mobile mở từ trái |
+| `[data-ui="navigation-groups"]` | vùng cuộn; header và footer đứng yên |
+| `[data-ui="navigation-branch"]`, `[data-ui="navigation-branch-trigger"]` | phân hệ hoặc nhóm con có thể mở tại chỗ |
+| `[data-ui="navigation-children"]` | menu con, có đường kẻ dọc để biểu thị độ sâu |
+| `[data-ui="navigation-item"][data-active="true"]` | link lá của trang đang xem; đây là nơi duy nhất có active |
+| `[data-ui="navigation-trigger"]`, `[data-ui="navigation-backdrop"]` | hamburger mobile và vùng click-ra-ngoài để đóng drawer |
 
 `[data-ui="nav-item"]` vẫn còn, nhưng chỉ dành cho module khác chèn thêm qua joint
 `backend:nav.items`. Màn hình không tự sinh ra nó nữa.
@@ -382,22 +383,20 @@ hình vài trăm pixel.
 Icon Lucide (ISC) được **chép vào** `icons.ts`, không cài package — giống hệt cách
 theme the domain contract làm. Mỗi module tự chọn tên icon ngữ nghĩa trên bất kỳ `MenuDef` nào;
 design system sở hữu glyph. Tên app không có glyph thì rơi về monogram (chữ đầu),
-tên menu con không có glyph thì rơi về dot; cả hai đều không làm mất dòng.
+tên menu con không có glyph thì chỉ dùng nhãn; cả hai đều không làm mất dòng.
 
 `[data-ui="icon"]` mặc định `1em`. Hộp nào cỡ cố định thì tự khai báo cho `<svg>`
 bên trong đầy hộp — đừng đặt `width:100%` ở mức chung.
 
 | hook | ý nghĩa |
 | --- | --- |
-| `[data-ui="sidebar-header"]`, `[data-ui="sidebar-brand"]` | hàng thương hiệu / tên app đang mở |
+| `[data-ui="navigation-header"]`, `[data-ui="navigation-identity"]` | thương hiệu và nút đóng drawer |
 | `[data-ui="sidebar-search"]`, `[data-ui="sidebar-search-input"]` | **tìm menu** (khác ô tìm bản ghi ở control panel) |
-| `[data-ui="sidebar-nav"]` | vùng cuộn; brand, search và chân đứng yên |
-| `[data-ui="sidebar-section-label"][data-scope="app"]` | nhãn nhóm; `data-scope="app"` là nhãn của app đang mở |
+| `[data-ui="navigation-groups"]` | vùng cuộn; brand, search và chân đứng yên |
 | `[data-ui="sidebar-empty"]` | không tìm thấy gì |
-| `[data-ui="app-entry"][data-active]`, `[data-ui="app-icon"]`, `[data-ui="app-monogram"]` | một app |
-| `[data-ui="menu-item-wrap"][data-depth]` | một mục, kèm độ sâu |
-| `[data-ui="menu-section-chevron"]`, `[data-ui="menu-section-text"]`, `[data-ui="menu-section-children"]` | nhóm; con có đường kẻ dọc bên trái |
-| `[data-ui="menu-item"][data-active]`, `[data-ui="menu-icon"]`, `[data-ui="menu-dot"]`, `[data-ui="menu-label"]` | một mục lá; icon do module chọn, dot là fallback |
+| `[data-ui="navigation-item-leading"]`, `[data-ui="app-monogram"]` | icon do module chọn; monogram là fallback của phân hệ |
+| `[data-ui="navigation-branch"][data-level]` | một nhóm và độ sâu của nó |
+| `[data-ui="navigation-item"][data-level]` | một link lá và độ sâu của nó |
 
 ## Form và media
 

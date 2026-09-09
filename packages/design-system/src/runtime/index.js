@@ -30,7 +30,7 @@ const focusables = (root) =>
 export const attachDesignSystemInteractions = (root = document) => {
   const activeBeforeOpen = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const modal = root.querySelector('[data-ui="modal-layer"][data-route-modal="true"] [role="dialog"]')
-  const appShell = root.querySelector('[data-ui="app-shell"]')
+  const appShell = root.querySelector('[data-ui="app-shell"], [data-ui="shell"]')
   const priorInert = appShell instanceof HTMLElement ? appShell.inert : false
   if (modal instanceof HTMLElement) {
     if (appShell instanceof HTMLElement && !appShell.contains(modal)) appShell.inert = true
@@ -88,9 +88,13 @@ export const attachDesignSystemInteractions = (root = document) => {
     }
     const state = navigationStates.get(navigation) ?? {}
     if (!state.targets) {
-      const shell = navigation.closest('[data-ui="app-shell"]')
+      const shell = navigation.closest('[data-ui="app-shell"], [data-ui="shell"]')
       const targets = shell
-        ? [...shell.querySelectorAll(':scope > [data-ui="app-main"], :scope > [data-ui="app-right-rail"]')]
+        ? [
+            ...shell.querySelectorAll(
+              ':scope > [data-ui="app-main"], :scope > [data-ui="main"], :scope > [data-ui="app-right-rail"]',
+            ),
+          ]
             .filter((element) => element instanceof HTMLElement)
             .map((element) => ({ element, inert: element.inert }))
         : []
