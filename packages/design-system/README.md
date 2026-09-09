@@ -50,6 +50,10 @@ inside the shell.
 
 The catalogue is isolated behind `@ketvietlab/design-system/catalogue`, so the
 production entry point does not load its specimen data or catalogue chrome.
+Its registry connects every public component to an owner, maturity, supported
+states and a rendered specimen. Component implementation and selector-bearing CSS
+live below per-component-family directories; consumers still import only from the
+package root.
 
 Run the component catalogue from the repository root:
 
@@ -71,6 +75,7 @@ Regenerate and verify its source snapshot with:
 # Run from: ketjs/
 npm run design:inventory
 npm run design:inventory:check
+npm run design:governance:check
 ```
 
 ### Operational demo

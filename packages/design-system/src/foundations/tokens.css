@@ -219,12 +219,18 @@
     --kv-control-height: var(--kv-control-height-md);
     --kv-control-height-compact: var(--kv-control-height-sm);
     --kv-control-height-prominent: var(--kv-control-height-lg);
+    --kv-density-control-height: var(--kv-control-height-md);
+    --kv-density-row-height: 3.25rem;
+    --kv-density-content-gap: var(--kv-space-4);
     --kv-sidebar-width: 13.5rem;
     --kv-right-rail-width: 21.25rem;
     --kv-sidebar-item-height: 1.875rem;
     --kv-table-row-height: 3.25rem;
     --kv-table-header-height: 2.625rem;
     --kv-row-height: var(--kv-table-row-height);
+    --kv-container-field-narrow: 42rem;
+    --kv-container-rail-collapse: 64rem;
+    --kv-container-page-wide: 80rem;
     --kv-radius-xs: 0.1875rem;
     --kv-radius-sm: 0.3125rem;
     --kv-radius-md: 0.4375rem;
@@ -252,6 +258,12 @@
     --kv-z-popover: 50;
     --kv-z-modal: 100;
     --kv-z-toast: 200;
+    --kv-layer-base: var(--kv-z-base);
+    --kv-layer-sticky: var(--kv-z-sticky);
+    --kv-layer-menu: var(--kv-z-dropdown);
+    --kv-layer-popover: var(--kv-z-popover);
+    --kv-layer-dialog: var(--kv-z-modal);
+    --kv-layer-toast: var(--kv-z-toast);
 
     /* Component roles. */
     /* Page chrome and the canvas remain quiet; individual surfaces own their
@@ -295,12 +307,27 @@
   }
 
   [data-kv-design-system][data-density="compact"] {
-    --kv-control-height: var(--kv-control-height-sm);
-    --kv-row-height: 2.5rem;
+    --kv-density-control-height: var(--kv-control-height-sm);
+    --kv-density-row-height: 2.5rem;
+    --kv-density-content-gap: var(--kv-space-3);
   }
 
   [data-kv-design-system][data-density="comfortable"] {
-    --kv-control-height: var(--kv-control-height-lg);
-    --kv-row-height: 3.75rem;
+    --kv-density-control-height: var(--kv-control-height-lg);
+    --kv-density-row-height: 3.75rem;
+    --kv-density-content-gap: var(--kv-space-5);
+  }
+
+  [data-kv-design-system] {
+    --kv-control-height: var(--kv-density-control-height);
+    --kv-row-height: var(--kv-density-row-height);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-kv-design-system] {
+      --kv-duration-fast: 0.01ms;
+      --kv-duration-normal: 0.01ms;
+      --kv-duration-slow: 0.01ms;
+    }
   }
 }
