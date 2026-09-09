@@ -16,21 +16,57 @@ const outputPath = join(designRoot, 'src/catalogue/inventory.generated.ts')
 const jsonOutputPath = join(designRoot, 'src/catalogue/inventory.generated.json')
 const check = process.argv.includes('--check')
 
+// A working tree can contain ignored build products such as KetSuite's bundled
+// design-system.css. Include tracked files and non-ignored new source files, but
+// never let those local products change the committed inventory. Source archives
+// have no Git metadata, so they retain the deterministic directory-walk fallback.
+const repositorySourceFiles = (() => {
+  try {
+    return new Set(
+      execFileSync(
+        'git',
+        [
+          'ls-files',
+          '--cached',
+          '--others',
+          '--exclude-standard',
+          '-z',
+          '--',
+          'packages/design-system/src',
+          'packages/ketsuite/src/modules',
+          'test',
+        ],
+        { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      )
+        .split('\0')
+        .filter(Boolean),
+    )
+  } catch {
+    return undefined
+  }
+})()
+
 /** @param {string} path */
 const read = (path) => readFileSync(path, 'utf8')
 /** @param {string} path */
 const slash = (path) => path.replaceAll('\\', '/')
 /** @template Value @param {Value[]} values @returns {Value[]} */
 const unique = (values) => [...new Set(values)].sort()
+/** @param {string} left @param {string} right */
+const lexical = (left, right) => (left < right ? -1 : left > right ? 1 : 0)
 /** @param {string} directory @param {string[]} extensions @returns {string[]} */
 const walk = (directory, extensions) => {
   /** @type {string[]} */
   const files = []
-  for (const name of readdirSync(directory).sort((a, b) => a.localeCompare(b, 'en'))) {
+  for (const name of readdirSync(directory).sort(lexical)) {
     if (name === 'node_modules' || name === 'dist' || name === '.build' || name === '.git') continue
     const path = join(directory, name)
     if (statSync(path).isDirectory()) files.push(...walk(path, extensions))
-    else if (extensions.some((extension) => name.endsWith(extension))) files.push(path)
+    else if (
+      extensions.some((extension) => name.endsWith(extension)) &&
+      (!repositorySourceFiles || repositorySourceFiles.has(slash(relative(root, path))))
+    )
+      files.push(path)
   }
   return files
 }
@@ -55,7 +91,7 @@ const parseExports = (source) => {
   }
   for (const match of source.matchAll(/export\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]/gu))
     entries.push({ name: match[1], imported: '*', kind: 'runtime', source: match[2] })
-  return entries.sort((a, b) => a.name.localeCompare(b.name, 'en') || a.kind.localeCompare(b.kind, 'en'))
+  return entries.sort((a, b) => lexical(a.name, b.name) || lexical(a.kind, b.kind))
 }
 
 /** @type {InventoryPolicy} */
@@ -184,7 +220,7 @@ const plannedRows = policy.plannedComponents
     testFiles: [],
     gapTask: entry.gapTask,
   }))
-  .sort((a, b) => a.wave - b.wave || a.name.localeCompare(b.name, 'en'))
+  .sort((a, b) => a.wave - b.wave || lexical(a.name, b.name))
 
 const cssFiles = [
   ...walk(join(designRoot, 'src'), ['.css']).map((path) => ({ layer: 'public', path })),

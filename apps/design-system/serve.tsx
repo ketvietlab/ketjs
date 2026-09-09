@@ -18,7 +18,7 @@ import {
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createDemoRoutes } from './demo.tsx'
+import { createDemo2Routes, createDemoRoutes } from './demo.tsx'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const designSystemSrc = (dir: string): string => {
@@ -45,6 +45,7 @@ const app = await createKetServer({
   assets: { prefix: '/design-system/', dir: ASSETS },
   routes: {
     ...createDemoRoutes(),
+    ...createDemo2Routes(),
     '/_ket/health': () => json({ ok: true, app: 'design-system' }),
     '/specimens/bulk': (url) => {
       if (url.searchParams.has('intent'))
@@ -187,6 +188,8 @@ console.log(`
     dark       http://127.0.0.1:${port}/?theme=dark
     compact    http://127.0.0.1:${port}/?density=compact
     inventory  http://127.0.0.1:${port}/inventory
+    app demo   http://127.0.0.1:${port}/demo
+    submenu    http://127.0.0.1:${port}/demo2
 
   Package source:
     ${ASSETS}

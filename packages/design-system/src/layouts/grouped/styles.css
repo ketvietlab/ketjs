@@ -30,7 +30,6 @@
   }
 
   [data-kv-design-system][data-presentation="grouped"] :is([data-ui="app-main"], [data-ui="modal-layer"]) {
-    color-scheme: light;
     --kv-page-chrome-bg: var(--kv-page-bg);
     color: var(--kv-text-main);
   }
@@ -92,24 +91,30 @@
   }
 
   [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] {
+    margin: var(--kv-space-3) var(--kv-space-3) var(--kv-space-3) 0;
     padding: var(--kv-space-3);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
   }
 
   [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] > [data-ui="stack"] {
     gap: var(--kv-space-3);
   }
 
-  [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] {
-    background: var(--kv-panel-bg);
-  }
-
-  /* The context column already owns its white background. */
+  /* The context surface already owns its background. */
   [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] [data-ui="metric"] {
     padding: 0;
     min-height: 0;
     border: 0;
     border-radius: 0;
     background: transparent;
+  }
+
+  @media (max-width: 63.9375rem) {
+    [data-kv-design-system][data-presentation="grouped"] [data-ui="record-page-aside"] {
+      margin: 0 var(--kv-space-3) var(--kv-space-3);
+    }
   }
 
   [data-kv-design-system][data-presentation="grouped"] [data-ui="surface"] [data-ui="disclosure"] {

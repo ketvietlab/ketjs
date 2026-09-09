@@ -1,12 +1,15 @@
 import { document, page, text, withHeaders } from '@ketvietlab/ketjs'
 import { html } from '@ketvietlab/ketjs-view'
 import type { JSXChild } from '@ketvietlab/ketjs-view'
+import type { RouteResult } from '@ketvietlab/ketjs'
 import { icon } from '@ketvietlab/ketsuite/ui'
 import {
   ActionGroup,
+  AppNavigation,
   AppShell,
   Avatar,
   Badge,
+  Breadcrumbs,
   Button,
   ContentCard,
   DataTable,
@@ -19,7 +22,6 @@ import {
   ListPage,
   Metric,
   ModalSheet,
-  NavList,
   Notice,
   Pipeline,
   Progress,
@@ -32,7 +34,7 @@ import {
   Tag,
   WorkspacePage,
 } from '@ketvietlab/design-system'
-import type { FieldProps, Tone } from '@ketvietlab/design-system'
+import type { BreadcrumbItem, FieldProps, NavigationItemData, Tone } from '@ketvietlab/design-system'
 import type { IncomingMessage } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { demoStyles } from './demo-styles.ts'
@@ -56,6 +58,166 @@ const products = [
   { id: 'CF-02', name: 'Cà phê Robusta Đắk Lắk · 1 kg', price: 195000 },
   { id: 'TE-01', name: 'Trà ô long Bảo Lộc · 500 g', price: 245000 },
 ]
+type DemoModule = {
+  id: string
+  label: string
+  icon: string
+  group: 'workspace' | 'operations' | 'finance' | 'administration'
+  sections: readonly [string, string, string, string, string]
+  children: readonly [string, string, string]
+}
+const demoModules: readonly DemoModule[] = [
+  {
+    id: 'overview',
+    label: 'Tổng quan',
+    icon: 'layout-dashboard',
+    group: 'workspace',
+    sections: ['Hôm nay', 'Luồng xử lý', 'Đơn gần đây', 'Ưu tiên', 'Phân tích'],
+    children: ['Hiệu suất tuần', 'So sánh chi nhánh', 'Cảnh báo vận hành'],
+  },
+  {
+    id: 'crm',
+    label: 'CRM',
+    icon: 'users',
+    group: 'workspace',
+    sections: ['Khách hàng', 'Cơ hội', 'Lead', 'Hoạt động', 'Phân tích'],
+    children: ['Phễu chuyển đổi', 'Nguồn khách hàng', 'Hiệu suất đội ngũ'],
+  },
+  {
+    id: 'sales',
+    label: 'Bán hàng',
+    icon: 'shopping-bag',
+    group: 'workspace',
+    sections: ['Tất cả đơn', 'Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Thêm'],
+    children: ['Hoàn tất', 'Doanh số', 'Biên lợi nhuận'],
+  },
+  {
+    id: 'purchase',
+    label: 'Mua hàng',
+    icon: 'shopping-cart',
+    group: 'workspace',
+    sections: ['Yêu cầu mua', 'Hỏi giá', 'Đơn mua', 'Nhận hàng', 'Báo cáo'],
+    children: ['Chi tiêu theo kỳ', 'Hiệu suất nhà cung cấp', 'Chênh lệch giá'],
+  },
+  {
+    id: 'products',
+    label: 'Sản phẩm',
+    icon: 'package',
+    group: 'workspace',
+    sections: ['Danh mục', 'Biến thể', 'Bảng giá', 'Combo', 'Phân tích'],
+    children: ['Sản phẩm bán chạy', 'Lợi nhuận sản phẩm', 'Vòng đời danh mục'],
+  },
+  {
+    id: 'inventory',
+    label: 'Tồn kho',
+    icon: 'warehouse',
+    group: 'operations',
+    sections: ['Tồn hiện tại', 'Dự báo', 'Kiểm kê', 'Bổ sung hàng', 'Báo cáo'],
+    children: ['Tuổi tồn kho', 'Luân chuyển hàng', 'Chênh lệch kiểm kê'],
+  },
+  {
+    id: 'warehouse',
+    label: 'Kho vận',
+    icon: 'warehouse',
+    group: 'operations',
+    sections: ['Kho hàng', 'Vị trí', 'Điều chuyển', 'Đóng gói', 'Báo cáo'],
+    children: ['Năng suất kho', 'Công suất vị trí', 'Thời gian xử lý'],
+  },
+  {
+    id: 'delivery',
+    label: 'Giao hàng',
+    icon: 'truck',
+    group: 'operations',
+    sections: ['Tất cả chuyến', 'Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Thêm'],
+    children: ['Hoàn tất', 'Đúng hạn', 'Chi phí giao hàng'],
+  },
+  {
+    id: 'projects',
+    label: 'Dự án',
+    icon: 'layout-grid',
+    group: 'operations',
+    sections: ['Danh sách', 'Bảng công việc', 'Mốc tiến độ', 'Nguồn lực', 'Báo cáo'],
+    children: ['Tiến độ dự án', 'Sử dụng nguồn lực', 'Lợi nhuận dự án'],
+  },
+  {
+    id: 'support',
+    label: 'Chăm sóc khách hàng',
+    icon: 'check-circle',
+    group: 'operations',
+    sections: ['Yêu cầu mới', 'Đang xử lý', 'Chờ khách hàng', 'SLA', 'Báo cáo'],
+    children: ['Thời gian phản hồi', 'Mức độ hài lòng', 'Chủ đề hỗ trợ'],
+  },
+  {
+    id: 'accounting',
+    label: 'Kế toán',
+    icon: 'file-text',
+    group: 'finance',
+    sections: ['Bút toán', 'Sổ cái', 'Công nợ phải thu', 'Công nợ phải trả', 'Báo cáo'],
+    children: ['Bảng cân đối', 'Kết quả kinh doanh', 'Lưu chuyển tiền tệ'],
+  },
+  {
+    id: 'cashflow',
+    label: 'Dòng tiền',
+    icon: 'banknote',
+    group: 'finance',
+    sections: ['Tổng quan', 'Thu tiền', 'Chi tiền', 'Dự báo', 'Phân tích'],
+    children: ['Dòng tiền theo ngày', 'Dự báo 13 tuần', 'Sai lệch kế hoạch'],
+  },
+  {
+    id: 'expenses',
+    label: 'Chi phí',
+    icon: 'wallet',
+    group: 'finance',
+    sections: ['Đề nghị chi', 'Tạm ứng', 'Hoàn ứng', 'Phê duyệt', 'Báo cáo'],
+    children: ['Chi phí theo bộ phận', 'Chi phí theo dự án', 'Vi phạm chính sách'],
+  },
+  {
+    id: 'billing',
+    label: 'Hóa đơn',
+    icon: 'receipt-text',
+    group: 'finance',
+    sections: ['Hóa đơn bán', 'Hóa đơn mua', 'Điều chỉnh', 'Thuế', 'Báo cáo'],
+    children: ['Doanh thu ghi nhận', 'Tuổi nợ', 'Tình trạng phát hành'],
+  },
+  {
+    id: 'reports',
+    label: 'Báo cáo',
+    icon: 'file-text',
+    group: 'finance',
+    sections: ['Yêu thích', 'Vận hành', 'Bán hàng', 'Tài chính', 'Quản lý'],
+    children: ['Báo cáo đã lưu', 'Lịch gửi báo cáo', 'Nguồn dữ liệu'],
+  },
+  {
+    id: 'people',
+    label: 'Nhân sự',
+    icon: 'building-2',
+    group: 'administration',
+    sections: ['Nhân viên', 'Chấm công', 'Nghỉ phép', 'Lịch làm việc', 'Báo cáo'],
+    children: ['Biến động nhân sự', 'Năng suất', 'Chi phí nhân sự'],
+  },
+  {
+    id: 'marketing',
+    label: 'Marketing',
+    icon: 'globe',
+    group: 'administration',
+    sections: ['Chiến dịch', 'Tệp đối tượng', 'Nội dung', 'Tự động hóa', 'Phân tích'],
+    children: ['Hiệu quả chiến dịch', 'Chi phí chuyển đổi', 'Đóng góp doanh thu'],
+  },
+  {
+    id: 'settings',
+    label: 'Thiết lập',
+    icon: 'sliders-horizontal',
+    group: 'administration',
+    sections: ['Tổ chức', 'Người dùng', 'Vai trò', 'Tích hợp', 'Giám sát'],
+    children: ['Trạng thái dịch vụ', 'Lịch sử thay đổi', 'Quyền truy cập'],
+  },
+]
+const demoModuleGroups = [
+  { id: 'workspace', label: 'Kinh doanh' },
+  { id: 'operations', label: 'Vận hành' },
+  { id: 'finance', label: 'Tài chính' },
+  { id: 'administration', label: 'Quản trị' },
+] as const
 type Order = {
   id: string
   customer: string
@@ -108,7 +270,25 @@ const total = (order: Order) => productOf(order).price * order.quantity
 const money = (value: number) => `${new Intl.NumberFormat('vi-VN').format(value)} ₫`
 const redirect = (href: string) => withHeaders(text('', { status: 303 }), { location: href })
 
-export function createDemoRoutes() {
+type DemoBasePath = '/demo' | '/demo2'
+type DemoRouteOptions<Base extends DemoBasePath> = {
+  basePath?: Base
+  context?: 'identity' | 'submenu'
+}
+
+type DemoRoutes<Base extends DemoBasePath> = {
+  [Path in Base]: (url: URL) => RouteResult
+} & {
+  [Path in `${Base}/styles.css` | `${Base}/client.js` | `${Base}/export`]: (url?: URL) => RouteResult
+} & {
+  [Path in `${Base}/action`]: (url: URL, request: IncomingMessage) => Promise<RouteResult>
+}
+
+export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
+  options: DemoRouteOptions<Base> = {},
+): DemoRoutes<Base> {
+  const basePath = (options.basePath ?? '/demo') as Base
+  const contextMode = options.context ?? 'identity'
   const orders = seed()
   let nextId = 1043
 
@@ -118,7 +298,8 @@ export function createDemoRoutes() {
     const view = ['orders', 'record', 'board'].includes(q.get('view') ?? '') ? q.get('view')! : 'overview'
     const selected = orders.find((order) => order.id === q.get('id')) ?? orders[0]
     const tab = ['activity', 'documents'].includes(q.get('tab') ?? '') ? q.get('tab')! : 'details'
-    const href = (values: Record<string, string> = {}) => `/demo?${new URLSearchParams({ theme, ...values })}`
+    const href = (values: Record<string, string> = {}) =>
+      `${basePath}?${new URLSearchParams({ theme, ...values })}`
     const current = Object.fromEntries(q)
     const here = href(current)
     const returnTo = href({ ...current, modal: '' })
@@ -126,22 +307,152 @@ export function createDemoRoutes() {
     const createHref = href({ ...current, modal: 'create' })
     const recordHref = (order: Order) => href({ view: 'record', id: order.id })
     const stateBadge = (order: Order) => <Badge label={stageLabel[order.stage]} tone={tones[order.stage]} />
-    const context = (
-      <Inline
-        items={[
-          'An Việt Trading',
-          <span class="demo-muted">Chi nhánh Thảo Điền</span>,
-          <Badge label="Dữ liệu mẫu" />,
-        ]}
-      />
-    )
+    const status = stages.includes(q.get('status') as Stage) ? (q.get('status') as Stage) : null
+    const requestedModule = demoModules.find((module) => module.id === q.get('module')) ?? demoModules[0]
+    const activeModule =
+      contextMode === 'submenu'
+        ? view === 'orders' || view === 'record'
+          ? demoModules.find((module) => module.id === 'sales')!
+          : view === 'board'
+            ? demoModules.find((module) => module.id === 'delivery')!
+            : requestedModule
+        : demoModules[0]
+    const overviewTargets = ['today', 'workflow', 'recent', 'priority', 'updates'] as const
+    const overviewFocus = overviewTargets.includes(q.get('focus') as (typeof overviewTargets)[number])
+      ? q.get('focus')!
+      : 'today'
+    const selectedSection = Math.max(0, Math.min(3, Number(q.get('section')) || 0))
+    const moduleValuesFor = (module: DemoModule): Record<string, string> =>
+      module.id === 'sales'
+        ? { view: 'orders' }
+        : module.id === 'delivery'
+          ? { view: 'board' }
+          : module.id === 'overview'
+            ? {}
+            : { module: module.id }
+    const moduleValues = moduleValuesFor(activeModule)
+    const moduleMenuItems = (module: DemoModule): readonly NavigationItemData[] => {
+      const values = moduleValuesFor(module)
+      const moduleActive = activeModule.id === module.id
+      const primary = module.sections.slice(0, 4).map((label, index): NavigationItemData => {
+        if (module.id === 'overview') {
+          const target = overviewTargets[index]
+          return {
+            id: `${module.id}-${target}`,
+            label,
+            href: `${href(target === 'today' ? {} : { focus: target })}#${target}`,
+            active: moduleActive && overviewFocus === target && !q.has('child'),
+          }
+        }
+        if (module.id === 'sales' || module.id === 'delivery') {
+          const stage = index === 0 ? null : stages[index - 1]
+          return {
+            id: `${module.id}-${stage ?? 'all'}`,
+            label,
+            count: stage ? orders.filter((order) => order.stage === stage).length : orders.length,
+            href: href({ ...values, ...(stage ? { status: stage } : {}) }),
+            active: moduleActive && status === stage && !q.has('child'),
+          }
+        }
+        return {
+          id: `${module.id}-${index}`,
+          label,
+          href: href({ module: module.id, section: String(index) }),
+          active: moduleActive && selectedSection === index && !q.has('child'),
+        }
+      })
+      const nestedActive =
+        moduleActive &&
+        (q.has('child') || ((module.id === 'sales' || module.id === 'delivery') && status === 'done'))
+      return [
+        ...primary,
+        {
+          id: `${module.id}-more`,
+          label: module.sections[4],
+          expanded: nestedActive,
+          children: module.children.map((label, index) => ({
+            id: `${module.id}-child-${index}`,
+            label,
+            href:
+              (module.id === 'sales' || module.id === 'delivery') && index === 0
+                ? href({ ...values, status: 'done' })
+                : href({ ...values, child: String(index) }),
+            active:
+              moduleActive &&
+              ((module.id === 'sales' || module.id === 'delivery') && index === 0
+                ? status === 'done'
+                : q.get('child') === String(index)),
+          })),
+        },
+      ]
+    }
+    const nestedChildIndex = Math.max(0, Math.min(2, Number(q.get('child')) || 0))
+    const moduleHref = href(moduleValues)
+    const breadcrumbItems: BreadcrumbItem[] = [
+      { id: 'workspace', label: 'An Việt', href: href() },
+      { id: 'module', label: activeModule.label, href: moduleHref },
+    ]
+    if (view === 'record') {
+      breadcrumbItems.push(
+        { id: 'orders', label: 'Đơn hàng', href: href({ view: 'orders' }) },
+        { id: 'record', label: selected.id, href: undefined },
+      )
+    } else if (
+      q.has('child') ||
+      ((activeModule.id === 'sales' || activeModule.id === 'delivery') && status === 'done')
+    ) {
+      breadcrumbItems.push(
+        { id: 'section', label: activeModule.sections[4], href: undefined },
+        {
+          id: 'child',
+          label:
+            (activeModule.id === 'sales' || activeModule.id === 'delivery') && status === 'done'
+              ? activeModule.children[0]
+              : activeModule.children[nestedChildIndex],
+          href: undefined,
+        },
+      )
+    } else {
+      const sectionIndex =
+        activeModule.id === 'overview'
+          ? Math.max(
+              0,
+              Math.min(3, overviewTargets.indexOf(overviewFocus as (typeof overviewTargets)[number])),
+            )
+          : activeModule.id === 'sales' || activeModule.id === 'delivery'
+            ? status === null
+              ? 0
+              : Math.min(3, stages.indexOf(status) + 1)
+            : selectedSection
+      breadcrumbItems.push({
+        id: 'section',
+        label: activeModule.sections[sectionIndex],
+        href: undefined,
+      })
+    }
+    const context =
+      contextMode === 'submenu' ? (
+        <Breadcrumbs label="Vị trí hiện tại" items={breadcrumbItems} />
+      ) : (
+        <Inline
+          items={[
+            'An Việt Trading',
+            <span class="demo-muted">Chi nhánh Thảo Điền</span>,
+            <Badge label="Dữ liệu mẫu" />,
+          ]}
+        />
+      )
     const create = (
       <LinkButton label="Tạo đơn hàng" href={createHref} variant="primary" leading={icon('plus')} />
     )
     const actions = (
       <ActionGroup
         actions={[
-          <LinkButton label="Xuất CSV" href={`/demo/export?theme=${theme}`} leading={icon('download')} />,
+          <LinkButton
+            label="Xuất CSV"
+            href={`${basePath}/export?theme=${theme}`}
+            leading={icon('download')}
+          />,
           create,
         ]}
       />
@@ -291,7 +602,7 @@ export function createDemoRoutes() {
     const orderForm = (order?: Order) => (
       <RecordForm
         id="order-form"
-        action="/demo/action"
+        action={`${basePath}/action`}
         fields={fields(order)}
         submitLabel={order ? 'Lưu thay đổi' : 'Tạo đơn hàng'}
         cancelHref={returnTo}
@@ -343,7 +654,7 @@ export function createDemoRoutes() {
           controls={
             <ListChrome
               search={{
-                action: '/demo',
+                action: basePath,
                 label: 'Tìm đơn hàng',
                 placeholder: 'Mã đơn hoặc tên khách hàng',
                 submitLabel: 'Tìm kiếm',
@@ -386,7 +697,7 @@ export function createDemoRoutes() {
           body={
             <Stack
               items={[
-                <form id="bulk-form" action="/demo/action" method="post">
+                <form id="bulk-form" action={`${basePath}/action`} method="post">
                   <input type="hidden" name="return" value={here} />
                 </form>,
                 ...(flash ? [flash] : []),
@@ -491,7 +802,7 @@ export function createDemoRoutes() {
                           title="Ghi nhận trao đổi"
                           body={
                             <RecordForm
-                              action="/demo/action"
+                              action={`${basePath}/action`}
                               fields={[
                                 {
                                   id: 'message',
@@ -515,7 +826,7 @@ export function createDemoRoutes() {
                           actions={
                             <LinkButton
                               label="Xuất bảng kê"
-                              href={`/demo/export?id=${selected.id}`}
+                              href={`${basePath}/export?id=${selected.id}`}
                               leading={icon('download')}
                             />
                           }
@@ -570,6 +881,8 @@ export function createDemoRoutes() {
         />
       )
     } else if (view === 'board') {
+      const boardStages = status ? [status] : stages
+      const visibleOrders = status ? orders.filter((order) => order.stage === status) : orders
       main = (
         <WorkspacePage
           title="Bảng giao hàng"
@@ -582,7 +895,7 @@ export function createDemoRoutes() {
             <Inline
               items={[
                 <Badge
-                  label={`${orders.filter((order) => order.stage !== 'done').length} đơn đang xử lý`}
+                  label={`${visibleOrders.filter((order) => order.stage !== 'done').length} đơn đang xử lý`}
                   tone="info"
                 />,
                 <LinkButton label="Xem danh sách" href={href({ view: 'orders' })} leading={icon('list')} />,
@@ -590,52 +903,129 @@ export function createDemoRoutes() {
             />
           }
           body={
-            <Grid
-              columns={4}
-              items={stages.map((stage) => (
-                <Section
-                  title={stageLabel[stage]}
+            <div data-demo-board data-filtered={status ? 'true' : null}>
+              <Grid
+                columns={status ? 2 : 4}
+                items={boardStages.map((stage) => (
+                  <Section
+                    title={stageLabel[stage]}
+                    actions={
+                      <Badge
+                        label={String(orders.filter((order) => order.stage === stage).length)}
+                        tone={tones[stage]}
+                      />
+                    }
+                    body={
+                      <Stack
+                        items={orders
+                          .filter((order) => order.stage === stage)
+                          .map((order) => (
+                            <ContentCard
+                              title={order.id}
+                              summary={order.customer}
+                              href={recordHref(order)}
+                              body={
+                                <Stack
+                                  gap="compact"
+                                  items={[
+                                    <strong>{money(total(order))}</strong>,
+                                    productOf(order).name,
+                                    <Inline
+                                      items={[<Avatar name={order.owner} size="small" />, order.owner]}
+                                    />,
+                                  ]}
+                                />
+                              }
+                              meta={
+                                <Inline
+                                  items={[
+                                    order.date.split('-').reverse().join('/'),
+                                    ...(order.priority ? [<Badge label="Ưu tiên" tone="warning" />] : []),
+                                  ]}
+                                />
+                              }
+                            />
+                          ))}
+                      />
+                    }
+                  />
+                ))}
+              />
+            </div>
+          }
+        />
+      )
+    } else if (contextMode === 'submenu' && activeModule.id !== 'overview') {
+      const childIndex = Math.max(0, Math.min(2, Number(q.get('child')) || 0))
+      const sectionLabel = q.has('child')
+        ? activeModule.children[childIndex]
+        : activeModule.sections[selectedSection]
+      main = (
+        <WorkspacePage
+          title={activeModule.label}
+          description={`Điều hành ${activeModule.label.toLocaleLowerCase('vi')} tại tất cả chi nhánh.`}
+          context={context}
+          variant="operational"
+          actions={
+            <ActionGroup
+              actions={[
+                <LinkButton label="Xuất dữ liệu" href={`${basePath}/export`} leading={icon('download')} />,
+                <LinkButton label="Tạo mới" href={createHref} variant="primary" leading={icon('plus')} />,
+              ]}
+            />
+          }
+          body={
+            <Stack
+              gap="loose"
+              items={[
+                <Grid
+                  columns={4}
+                  items={[
+                    <Metric label="Cần xử lý" value="18" detail="5 mục đã quá hạn" tone="warning" />,
+                    <Metric label="Đang thực hiện" value="42" detail="Tại 3 chi nhánh" tone="info" />,
+                    <Metric
+                      label="Hoàn tất hôm nay"
+                      value="27"
+                      detail="Tăng 12% so với hôm qua"
+                      tone="positive"
+                    />,
+                    <Metric label="Tổng giá trị" value="286,4 tr ₫" detail="Trong kỳ hiện tại" />,
+                  ]}
+                />,
+                <Notice
+                  title={`${sectionLabel}: 5 mục cần chú ý`}
+                  message={`Đây là không gian mẫu cho submenu “${sectionLabel}” thuộc phân hệ ${activeModule.label}.`}
+                  tone="info"
+                />,
+                <Surface
+                  title={sectionLabel}
                   actions={
-                    <Badge
-                      label={String(orders.filter((order) => order.stage === stage).length)}
-                      tone={tones[stage]}
-                    />
+                    <LinkButton label="Xem tất cả" href={href({ ...moduleValues })} variant="tertiary" />
                   }
                   body={
-                    <Stack
-                      items={orders
-                        .filter((order) => order.stage === stage)
-                        .map((order) => (
-                          <ContentCard
-                            title={order.id}
-                            summary={order.customer}
-                            href={recordHref(order)}
-                            body={
-                              <Stack
-                                gap="compact"
-                                items={[
-                                  <strong>{money(total(order))}</strong>,
-                                  productOf(order).name,
-                                  <Inline
-                                    items={[<Avatar name={order.owner} size="small" />, order.owner]}
-                                  />,
-                                ]}
-                              />
-                            }
-                            meta={
-                              <Inline
-                                items={[
-                                  order.date.split('-').reverse().join('/'),
-                                  ...(order.priority ? [<Badge label="Ưu tiên" tone="warning" />] : []),
-                                ]}
-                              />
-                            }
-                          />
-                        ))}
+                    <Grid
+                      columns={3}
+                      items={[
+                        <ContentCard
+                          title="Việc cần xử lý"
+                          summary="Các hồ sơ đang chờ xác nhận hoặc phê duyệt."
+                          meta={<Badge label="8 mục" tone="warning" />}
+                        />,
+                        <ContentCard
+                          title="Hoạt động gần đây"
+                          summary="Thay đổi mới nhất từ đội ngũ vận hành."
+                          meta={<Badge label="24 cập nhật" tone="info" />}
+                        />,
+                        <ContentCard
+                          title="Kế hoạch tuần"
+                          summary="Khối lượng dự kiến và các mốc cần hoàn thành."
+                          meta={<Badge label="Đúng tiến độ" tone="positive" />}
+                        />,
+                      ]}
                     />
                   }
-                />
-              ))}
+                />,
+              ]}
             />
           }
         />
@@ -658,38 +1048,40 @@ export function createDemoRoutes() {
               gap="loose"
               items={[
                 ...(flash ? [flash] : []),
-                <Grid
-                  columns={4}
-                  items={[
-                    <Metric
-                      label="Giá trị đơn hàng"
-                      value={money(orders.reduce((sum, order) => sum + total(order), 0))}
-                      detail={`${orders.length} đơn hàng`}
-                      href={href({ view: 'orders' })}
-                    />,
-                    <Metric
-                      label="Chờ xác nhận"
-                      value={pending.length}
-                      detail="Cần kiểm tra trước khi xuất kho"
-                      tone="warning"
-                      href={href({ view: 'orders', status: 'draft' })}
-                    />,
-                    <Metric
-                      label="Đang giao"
-                      value={orders.filter((order) => order.stage === 'shipping').length}
-                      detail="Theo dõi bàn giao cho khách"
-                      tone="info"
-                      href={href({ view: 'orders', status: 'shipping' })}
-                    />,
-                    <Metric
-                      label="Hoàn tất"
-                      value={orders.filter((order) => order.stage === 'done').length}
-                      detail="Đã hoàn thành giao hàng"
-                      tone="positive"
-                      href={href({ view: 'orders', status: 'done' })}
-                    />,
-                  ]}
-                />,
+                <div id="today">
+                  <Grid
+                    columns={4}
+                    items={[
+                      <Metric
+                        label="Giá trị đơn hàng"
+                        value={money(orders.reduce((sum, order) => sum + total(order), 0))}
+                        detail={`${orders.length} đơn hàng`}
+                        href={href({ view: 'orders' })}
+                      />,
+                      <Metric
+                        label="Chờ xác nhận"
+                        value={pending.length}
+                        detail="Cần kiểm tra trước khi xuất kho"
+                        tone="warning"
+                        href={href({ view: 'orders', status: 'draft' })}
+                      />,
+                      <Metric
+                        label="Đang giao"
+                        value={orders.filter((order) => order.stage === 'shipping').length}
+                        detail="Theo dõi bàn giao cho khách"
+                        tone="info"
+                        href={href({ view: 'orders', status: 'shipping' })}
+                      />,
+                      <Metric
+                        label="Hoàn tất"
+                        value={orders.filter((order) => order.stage === 'done').length}
+                        detail="Đã hoàn thành giao hàng"
+                        tone="positive"
+                        href={href({ view: 'orders', status: 'done' })}
+                      />,
+                    ]}
+                  />
+                </div>,
                 <Notice
                   title={`${pending.length} đơn đang chờ xác nhận`}
                   message="Kiểm tra địa chỉ nhận hàng và lịch giao trước khi chuyển sang chuẩn bị."
@@ -702,7 +1094,7 @@ export function createDemoRoutes() {
                     />
                   }
                 />,
-                <div class="demo-overview-grid">
+                <div class="demo-overview-grid" id="workflow">
                   <Surface
                     title="Luồng xử lý"
                     body={
@@ -741,64 +1133,71 @@ export function createDemoRoutes() {
                     }
                   />
                 </div>,
-                table(
-                  orders.slice(0, 5),
-                  false,
-                  'Đơn hàng gần đây',
-                  <LinkButton
-                    label="Tất cả đơn hàng"
-                    href={href({ view: 'orders' })}
-                    variant="tertiary"
-                    leading={icon('chevron-right')}
-                  />,
-                ),
-                <Grid
-                  columns={2}
-                  items={[
-                    <Section
-                      title="Ưu tiên hôm nay"
-                      body={
-                        <Stack
-                          items={orders
-                            .filter((order) => order.priority && order.stage !== 'done')
-                            .map((order) => (
-                              <ContentCard
-                                title={`${order.id} · ${order.customer}`}
-                                summary={
-                                  order.note ||
-                                  `Chuẩn bị ${order.quantity} gói cho lịch giao ${order.date.split('-').reverse().join('/')}`
-                                }
-                                href={recordHref(order)}
-                                meta={stateBadge(order)}
-                              />
-                            ))}
-                        />
-                      }
+                <div id="recent">
+                  {table(
+                    orders.slice(0, 5),
+                    false,
+                    'Đơn hàng gần đây',
+                    <LinkButton
+                      label="Tất cả đơn hàng"
+                      href={href({ view: 'orders' })}
+                      variant="tertiary"
+                      leading={icon('chevron-right')}
                     />,
-                    <Surface
-                      title="Cập nhật vận hành"
-                      body={
-                        <Stack
-                          gap="loose"
-                          items={[
-                            activity(selected),
-                            <Progress
-                              label="Tiến độ hoàn tất đơn hàng"
-                              value={
-                                (orders.filter((order) => order.stage === 'done').length / orders.length) *
-                                100
-                              }
-                            />,
-                            <Disclosure
-                              summary="Lịch vận hành kho"
-                              body="Nhận đơn: 08:00–17:00. Chuyến giao sáng: 09:00. Chuyến giao chiều: 14:00. Kho Thảo Điền làm việc từ thứ Hai đến thứ Bảy."
-                            />,
-                          ]}
+                  )}
+                </div>,
+                <div id="priority">
+                  <Grid
+                    columns={2}
+                    items={[
+                      <Surface
+                        title="Ưu tiên hôm nay"
+                        body={
+                          <Stack
+                            items={orders
+                              .filter((order) => order.priority && order.stage !== 'done')
+                              .map((order) => (
+                                <ContentCard
+                                  title={`${order.id} · ${order.customer}`}
+                                  summary={
+                                    order.note ||
+                                    `Chuẩn bị ${order.quantity} gói cho lịch giao ${order.date.split('-').reverse().join('/')}`
+                                  }
+                                  href={recordHref(order)}
+                                  meta={stateBadge(order)}
+                                />
+                              ))}
+                          />
+                        }
+                      />,
+                      <div id="updates" class="demo-surface-fill">
+                        <Surface
+                          title="Cập nhật vận hành"
+                          body={
+                            <Stack
+                              gap="loose"
+                              items={[
+                                activity(selected),
+                                <Progress
+                                  label="Tiến độ hoàn tất đơn hàng"
+                                  value={
+                                    (orders.filter((order) => order.stage === 'done').length /
+                                      orders.length) *
+                                    100
+                                  }
+                                />,
+                                <Disclosure
+                                  summary="Lịch vận hành kho"
+                                  body="Nhận đơn: 08:00–17:00. Chuyến giao sáng: 09:00. Chuyến giao chiều: 14:00. Kho Thảo Điền làm việc từ thứ Hai đến thứ Bảy."
+                                />,
+                              ]}
+                            />
+                          }
                         />
-                      }
-                    />,
-                  ]}
-                />,
+                      </div>,
+                    ]}
+                  />
+                </div>,
               ]}
             />
           }
@@ -844,7 +1243,7 @@ export function createDemoRoutes() {
             />
           }
           actions={
-            <form action="/demo/action" method="post">
+            <form action={`${basePath}/action`} method="post">
               <input type="hidden" name="intent" value="advance" />
               <input type="hidden" name="id" value={selected.id} />
               <input type="hidden" name="return" value={returnTo} />
@@ -868,61 +1267,97 @@ export function createDemoRoutes() {
       body: document({
         lang: 'vi',
         title: 'An Việt · Bán hàng',
-        head: html`<link rel="stylesheet" href="/design-system/styles.css"><link rel="stylesheet" href="/demo/styles.css"><script type="module" src="/design-system/runtime/auto.js"></script><script type="module" src="/demo/client.js"></script>`,
+        head: html`<link rel="stylesheet" href="/design-system/styles.css"><link rel="stylesheet" href=${`${basePath}/styles.css`}><script type="module" src="/design-system/runtime/auto.js"></script><script type="module" src=${`${basePath}/client.js`}></script>`,
         body: (
           <div data-kv-design-system data-theme={theme} data-presentation="grouped" data-demo-app>
             <AppShell
               sidebar={
-                <div class="demo-sidebar">
-                  <div class="demo-brand">
-                    {icon('package')}
-                    <div>
-                      <strong>An Việt</strong>
-                      <span>Sales workspace</span>
+                <AppNavigation
+                  id={contextMode === 'submenu' ? 'enterprise-navigation' : 'sales-navigation'}
+                  label="Điều hướng ứng dụng"
+                  menuLabel="Mở điều hướng"
+                  closeLabel="Đóng điều hướng"
+                  identity="An Việt"
+                  context={
+                    contextMode === 'submenu' ? '18 phân hệ · Thảo Điền' : 'Sales workspace · Thảo Điền'
+                  }
+                  groups={
+                    contextMode === 'submenu'
+                      ? demoModuleGroups.map((group) => ({
+                          ...group,
+                          items: demoModules
+                            .filter((module) => module.group === group.id)
+                            .map((module) => ({
+                              id: module.id,
+                              label: module.label,
+                              expanded: activeModule.id === module.id,
+                              leading: icon(module.icon),
+                              children: moduleMenuItems(module),
+                            })),
+                        }))
+                      : [
+                          {
+                            id: 'workspace',
+                            label: 'Không gian làm việc',
+                            items: [
+                              {
+                                id: 'overview',
+                                label: 'Tổng quan',
+                                href: href(),
+                                active: view === 'overview',
+                                leading: icon('layout-dashboard'),
+                              },
+                              {
+                                id: 'orders',
+                                label: 'Đơn hàng',
+                                href: href({ view: 'orders' }),
+                                active: view === 'orders' || view === 'record',
+                                leading: icon('shopping-cart'),
+                                count: orders.length,
+                              },
+                              {
+                                id: 'delivery-board',
+                                label: 'Bảng giao hàng',
+                                href: href({ view: 'board' }),
+                                active: view === 'board',
+                                leading: icon('layout-grid'),
+                              },
+                            ],
+                          },
+                          {
+                            id: 'reference',
+                            label: 'Tham khảo',
+                            items: [
+                              {
+                                id: 'design-system',
+                                label: 'Design system',
+                                href: '/',
+                                leading: icon('package'),
+                              },
+                            ],
+                          },
+                        ]
+                  }
+                  footer={
+                    <div class="demo-navigation-footer">
+                      <LinkButton
+                        label={theme === 'light' ? 'Giao diện tối' : 'Giao diện sáng'}
+                        href={href({ ...current, theme: theme === 'light' ? 'dark' : 'light' })}
+                        variant="tertiary"
+                        leading={icon(theme === 'light' ? 'moon' : 'sun')}
+                      />
+                      <Inline
+                        items={[
+                          <Avatar name="Ngọc Linh" size="small" />,
+                          <div>
+                            <strong>Ngọc Linh</strong>
+                            <div class="demo-muted">Quản lý bán hàng</div>
+                          </div>,
+                        ]}
+                      />
                     </div>
-                  </div>
-                  <NavList
-                    label="Điều hướng chính"
-                    items={[
-                      {
-                        label: 'Tổng quan',
-                        href: href(),
-                        active: view === 'overview',
-                        leading: icon('layout-dashboard'),
-                      },
-                      {
-                        label: 'Đơn hàng',
-                        href: href({ view: 'orders' }),
-                        active: view === 'orders' || view === 'record',
-                        leading: icon('shopping-cart'),
-                        count: orders.length,
-                      },
-                      {
-                        label: 'Bảng giao hàng',
-                        href: href({ view: 'board' }),
-                        active: view === 'board',
-                        leading: icon('layout-grid'),
-                      },
-                    ]}
-                  />
-                  <div class="demo-sidebar-foot">
-                    <LinkButton
-                      label={theme === 'light' ? 'Sidebar tối' : 'Sidebar sáng'}
-                      href={href({ ...current, theme: theme === 'light' ? 'dark' : 'light' })}
-                      variant="tertiary"
-                      leading={icon(theme === 'light' ? 'moon' : 'sun')}
-                    />
-                    <Inline
-                      items={[
-                        <Avatar name="Ngọc Linh" />,
-                        <div>
-                          <strong>Ngọc Linh</strong>
-                          <div class="demo-muted">Quản lý bán hàng</div>
-                        </div>,
-                      ]}
-                    />
-                  </div>
-                </div>
+                  }
+                />
               }
               main={main}
             />
@@ -934,11 +1369,11 @@ export function createDemoRoutes() {
   }
 
   return {
-    '/demo': (url: URL) => render(url),
-    '/demo/styles.css': () => text(demoStyles, { type: 'text/css' }),
-    '/demo/client.js': () =>
+    [basePath]: (url: URL) => render(url),
+    [`${basePath}/styles.css`]: () => text(demoStyles, { type: 'text/css' }),
+    [`${basePath}/client.js`]: () =>
       text(readFileSync(new URL('./demo-client.js', import.meta.url), 'utf8'), { type: 'text/javascript' }),
-    '/demo/export': (url: URL) => {
+    [`${basePath}/export`]: (url: URL) => {
       const rows = orders.filter(
         (order) => !url.searchParams.has('id') || order.id === url.searchParams.get('id'),
       )
@@ -963,7 +1398,7 @@ export function createDemoRoutes() {
         { 'content-disposition': 'attachment; filename="orders.csv"' },
       )
     },
-    '/demo/action': async (url: URL, req: IncomingMessage) => {
+    [`${basePath}/action`]: async (url: URL, req: IncomingMessage) => {
       if (req.method !== 'POST') return text('Method not allowed', { status: 405 })
       if (req.headers.origin && req.headers.origin !== url.origin) return text('Forbidden', { status: 403 })
       let body = ''
@@ -972,8 +1407,8 @@ export function createDemoRoutes() {
         if (body.length > 32768) return text('Request too large', { status: 413 })
       }
       const data = new URLSearchParams(body)
-      const target = new URL(data.get('return') ?? '/demo', url)
-      if (target.origin !== url.origin || target.pathname !== '/demo')
+      const target = new URL(data.get('return') ?? basePath, url)
+      if (target.origin !== url.origin || target.pathname !== basePath)
         return text('Invalid return URL', { status: 400 })
       target.searchParams.delete('modal')
       const intent = data.get('intent')
@@ -1043,5 +1478,7 @@ export function createDemoRoutes() {
       target.searchParams.set('saved', '1')
       return redirect(target.pathname + target.search)
     },
-  }
+  } as DemoRoutes<Base>
 }
+
+export const createDemo2Routes = () => createDemoRoutes({ basePath: '/demo2', context: 'submenu' })
