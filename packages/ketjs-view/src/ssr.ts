@@ -53,10 +53,10 @@ export function renderToStaticString(result: TemplateResult): string {
 /**
  * Markup that has already been escaped by something trusted to do it.
  *
- * The only producer is the KTL compiler, which escapes every interpolation and
- * cannot run code — so what arrives here is a string of markup rather than a
- * string of data. Escaping it again would render the tags as text, which is what
- * a plain string value correctly does and why this needs its own kind.
+ * Framework-owned producers use this only after constructing or validating the
+ * complete markup — for example KTL compiler output and an island rendered from a
+ * trusted view factory. Escaping it again would render the tags as text, which is
+ * what a plain string value correctly does and why this needs its own kind.
  *
  * Branded, so it cannot be made from an arbitrary string without saying so. Same
  * move as RouteResult: the dangerous construction has one name and one place.
@@ -69,7 +69,7 @@ export const isMarkup = (v: unknown): v is Markup =>
   typeof (v as { html?: unknown }).html === 'string' &&
   MARKUP_TAG in (v as object)
 const MARKUP_TAG = Symbol.for('ket.markup')
-/** Only for output a sandboxed compiler produced. Never for user data. */
+/** Only for markup a trusted producer constructed or validated. Never for user data. */
 export const trustedMarkup = (html: string): Markup => ({ html, [MARKUP_TAG]: true }) as unknown as Markup
 
 function writeValue(value: unknown, out: string[], hydratable: boolean): void {
