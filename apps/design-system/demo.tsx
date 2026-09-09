@@ -1248,7 +1248,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
                               expanded: activeModule.id === module.id,
                               leading: icon(module.icon),
                               children: moduleMenuItems(module),
-                              ...(module.id === 'sales' ? { count: orders.length } : {}),
                             })),
                         }))
                       : [
