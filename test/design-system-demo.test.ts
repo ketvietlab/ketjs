@@ -45,7 +45,8 @@ test('submenu demo: keeps the original demo intact and exposes 18 dense applicat
   assert.match(html, /data-demo-submenu/)
   assert.equal([...html.matchAll(/data-ui="navigation-item"/g)].length, 18)
   assert.equal([...html.matchAll(/data-ui="navigation-group"/g)].length, 4)
-  assert.equal([...html.matchAll(/data-ui="tab"/g)].length, 5)
+  assert.equal([...html.matchAll(/data-ui="tab"/g)].length, 4)
+  assert.equal([...html.matchAll(/data-ui="menu-trigger"/g)].length, 1)
   assert.equal([...html.matchAll(/data-ui="menu-item"/g)].length, 3)
   assert.match(html, /Điều hướng Tổng quan/)
   assert.match(html, /Phân tích Tổng quan/)
@@ -54,7 +55,7 @@ test('submenu demo: keeps the original demo intact and exposes 18 dense applicat
   assert.doesNotMatch(html, /(?:href|action)="\/demo(?:[?/]|&quot;)/)
 })
 
-test('submenu demo: every main module owns five submenus and three nested destinations', () => {
+test('submenu demo: every main module owns four links and one submenu with three nested destinations', () => {
   const modules = [
     'overview',
     'crm',
@@ -86,7 +87,8 @@ test('submenu demo: every main module owns five submenus and three nested destin
             ? '?view=board'
             : `?module=${module}`
     const html = String(route(new URL(`http://localhost/demo2${query}`)).body)
-    assert.equal([...html.matchAll(/data-ui="tab"/g)].length, 5, module)
+    assert.equal([...html.matchAll(/data-ui="tab"/g)].length, 4, module)
+    assert.equal([...html.matchAll(/data-ui="menu-trigger"/g)].length, 1, module)
     assert.equal([...html.matchAll(/data-ui="menu-item"/g)].length, 3, module)
     assert.equal([...html.matchAll(/data-ui="navigation-item"[^>]*data-active="true"/g)].length, 1, module)
   }

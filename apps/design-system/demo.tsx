@@ -72,7 +72,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Tổng quan',
     icon: 'layout-dashboard',
     group: 'workspace',
-    sections: ['Hôm nay', 'Luồng xử lý', 'Đơn gần đây', 'Ưu tiên', 'Cập nhật'],
+    sections: ['Hôm nay', 'Luồng xử lý', 'Đơn gần đây', 'Ưu tiên', 'Phân tích'],
     children: ['Hiệu suất tuần', 'So sánh chi nhánh', 'Cảnh báo vận hành'],
   },
   {
@@ -80,7 +80,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'CRM',
     icon: 'users',
     group: 'workspace',
-    sections: ['Khách hàng', 'Cơ hội', 'Lead', 'Hoạt động', 'Phân khúc'],
+    sections: ['Khách hàng', 'Cơ hội', 'Lead', 'Hoạt động', 'Phân tích'],
     children: ['Phễu chuyển đổi', 'Nguồn khách hàng', 'Hiệu suất đội ngũ'],
   },
   {
@@ -88,15 +88,15 @@ const demoModules: readonly DemoModule[] = [
     label: 'Bán hàng',
     icon: 'shopping-bag',
     group: 'workspace',
-    sections: ['Tất cả đơn', 'Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Hoàn tất'],
-    children: ['Doanh số', 'Biên lợi nhuận', 'Hiệu suất nhân viên'],
+    sections: ['Tất cả đơn', 'Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Thêm'],
+    children: ['Hoàn tất', 'Doanh số', 'Biên lợi nhuận'],
   },
   {
     id: 'purchase',
     label: 'Mua hàng',
     icon: 'shopping-cart',
     group: 'workspace',
-    sections: ['Yêu cầu mua', 'Hỏi giá', 'Đơn mua', 'Nhận hàng', 'Trả hàng'],
+    sections: ['Yêu cầu mua', 'Hỏi giá', 'Đơn mua', 'Nhận hàng', 'Báo cáo'],
     children: ['Chi tiêu theo kỳ', 'Hiệu suất nhà cung cấp', 'Chênh lệch giá'],
   },
   {
@@ -104,7 +104,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Sản phẩm',
     icon: 'package',
     group: 'workspace',
-    sections: ['Danh mục', 'Biến thể', 'Bảng giá', 'Combo', 'Thuộc tính'],
+    sections: ['Danh mục', 'Biến thể', 'Bảng giá', 'Combo', 'Phân tích'],
     children: ['Sản phẩm bán chạy', 'Lợi nhuận sản phẩm', 'Vòng đời danh mục'],
   },
   {
@@ -112,7 +112,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Tồn kho',
     icon: 'warehouse',
     group: 'operations',
-    sections: ['Tồn hiện tại', 'Dự báo', 'Kiểm kê', 'Bổ sung hàng', 'Lô và serial'],
+    sections: ['Tồn hiện tại', 'Dự báo', 'Kiểm kê', 'Bổ sung hàng', 'Báo cáo'],
     children: ['Tuổi tồn kho', 'Luân chuyển hàng', 'Chênh lệch kiểm kê'],
   },
   {
@@ -120,7 +120,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Kho vận',
     icon: 'warehouse',
     group: 'operations',
-    sections: ['Kho hàng', 'Vị trí', 'Điều chuyển', 'Đóng gói', 'Quy tắc xuất kho'],
+    sections: ['Kho hàng', 'Vị trí', 'Điều chuyển', 'Đóng gói', 'Báo cáo'],
     children: ['Năng suất kho', 'Công suất vị trí', 'Thời gian xử lý'],
   },
   {
@@ -128,15 +128,15 @@ const demoModules: readonly DemoModule[] = [
     label: 'Giao hàng',
     icon: 'truck',
     group: 'operations',
-    sections: ['Tất cả chuyến', 'Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Hoàn tất'],
-    children: ['Đúng hạn', 'Chi phí giao hàng', 'Hiệu suất tuyến'],
+    sections: ['Tất cả chuyến', 'Chờ xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Thêm'],
+    children: ['Hoàn tất', 'Đúng hạn', 'Chi phí giao hàng'],
   },
   {
     id: 'projects',
     label: 'Dự án',
     icon: 'layout-grid',
     group: 'operations',
-    sections: ['Danh sách', 'Bảng công việc', 'Mốc tiến độ', 'Nguồn lực', 'Timesheet'],
+    sections: ['Danh sách', 'Bảng công việc', 'Mốc tiến độ', 'Nguồn lực', 'Báo cáo'],
     children: ['Tiến độ dự án', 'Sử dụng nguồn lực', 'Lợi nhuận dự án'],
   },
   {
@@ -144,7 +144,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Chăm sóc khách hàng',
     icon: 'check-circle',
     group: 'operations',
-    sections: ['Yêu cầu mới', 'Đang xử lý', 'Chờ khách hàng', 'SLA', 'Kho tri thức'],
+    sections: ['Yêu cầu mới', 'Đang xử lý', 'Chờ khách hàng', 'SLA', 'Báo cáo'],
     children: ['Thời gian phản hồi', 'Mức độ hài lòng', 'Chủ đề hỗ trợ'],
   },
   {
@@ -152,7 +152,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Kế toán',
     icon: 'file-text',
     group: 'finance',
-    sections: ['Bút toán', 'Sổ cái', 'Công nợ phải thu', 'Công nợ phải trả', 'Đối soát'],
+    sections: ['Bút toán', 'Sổ cái', 'Công nợ phải thu', 'Công nợ phải trả', 'Báo cáo'],
     children: ['Bảng cân đối', 'Kết quả kinh doanh', 'Lưu chuyển tiền tệ'],
   },
   {
@@ -160,7 +160,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Dòng tiền',
     icon: 'banknote',
     group: 'finance',
-    sections: ['Tổng quan', 'Thu tiền', 'Chi tiền', 'Dự báo', 'Tài khoản ngân hàng'],
+    sections: ['Tổng quan', 'Thu tiền', 'Chi tiền', 'Dự báo', 'Phân tích'],
     children: ['Dòng tiền theo ngày', 'Dự báo 13 tuần', 'Sai lệch kế hoạch'],
   },
   {
@@ -168,7 +168,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Chi phí',
     icon: 'wallet',
     group: 'finance',
-    sections: ['Đề nghị chi', 'Tạm ứng', 'Hoàn ứng', 'Phê duyệt', 'Chính sách'],
+    sections: ['Đề nghị chi', 'Tạm ứng', 'Hoàn ứng', 'Phê duyệt', 'Báo cáo'],
     children: ['Chi phí theo bộ phận', 'Chi phí theo dự án', 'Vi phạm chính sách'],
   },
   {
@@ -176,7 +176,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Hóa đơn',
     icon: 'receipt-text',
     group: 'finance',
-    sections: ['Hóa đơn bán', 'Hóa đơn mua', 'Điều chỉnh', 'Thuế', 'Mẫu hóa đơn'],
+    sections: ['Hóa đơn bán', 'Hóa đơn mua', 'Điều chỉnh', 'Thuế', 'Báo cáo'],
     children: ['Doanh thu ghi nhận', 'Tuổi nợ', 'Tình trạng phát hành'],
   },
   {
@@ -184,7 +184,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Báo cáo',
     icon: 'file-text',
     group: 'finance',
-    sections: ['Yêu thích', 'Vận hành', 'Bán hàng', 'Tài chính', 'Tùy chỉnh'],
+    sections: ['Yêu thích', 'Vận hành', 'Bán hàng', 'Tài chính', 'Quản lý'],
     children: ['Báo cáo đã lưu', 'Lịch gửi báo cáo', 'Nguồn dữ liệu'],
   },
   {
@@ -192,7 +192,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Nhân sự',
     icon: 'building-2',
     group: 'administration',
-    sections: ['Nhân viên', 'Chấm công', 'Nghỉ phép', 'Lịch làm việc', 'Đánh giá'],
+    sections: ['Nhân viên', 'Chấm công', 'Nghỉ phép', 'Lịch làm việc', 'Báo cáo'],
     children: ['Biến động nhân sự', 'Năng suất', 'Chi phí nhân sự'],
   },
   {
@@ -200,7 +200,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Marketing',
     icon: 'globe',
     group: 'administration',
-    sections: ['Chiến dịch', 'Tệp đối tượng', 'Nội dung', 'Tự động hóa', 'Ngân sách'],
+    sections: ['Chiến dịch', 'Tệp đối tượng', 'Nội dung', 'Tự động hóa', 'Phân tích'],
     children: ['Hiệu quả chiến dịch', 'Chi phí chuyển đổi', 'Đóng góp doanh thu'],
   },
   {
@@ -208,7 +208,7 @@ const demoModules: readonly DemoModule[] = [
     label: 'Thiết lập',
     icon: 'sliders-horizontal',
     group: 'administration',
-    sections: ['Tổ chức', 'Người dùng', 'Vai trò', 'Tích hợp', 'Nhật ký hệ thống'],
+    sections: ['Tổ chức', 'Người dùng', 'Vai trò', 'Tích hợp', 'Giám sát'],
     children: ['Trạng thái dịch vụ', 'Lịch sử thay đổi', 'Quyền truy cập'],
   },
 ]
@@ -321,7 +321,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
     const overviewFocus = overviewTargets.includes(q.get('focus') as (typeof overviewTargets)[number])
       ? q.get('focus')!
       : 'today'
-    const selectedSection = Math.max(0, Math.min(4, Number(q.get('section')) || 0))
+    const selectedSection = Math.max(0, Math.min(3, Number(q.get('section')) || 0))
     const moduleValues: Record<string, string> =
       activeModule.id === 'sales'
         ? { view: 'orders' }
@@ -330,7 +330,7 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
           : activeModule.id === 'overview'
             ? {}
             : { module: activeModule.id }
-    const submenuItems = activeModule.sections.map((label, index) => {
+    const submenuItems = activeModule.sections.slice(0, 4).map((label, index) => {
       if (activeModule.id === 'overview') {
         const target = overviewTargets[index]
         return {
@@ -357,17 +357,26 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
         active: selectedSection === index && !q.has('child'),
       }
     })
+    const submenuDropdownActive =
+      q.has('child') || ((activeModule.id === 'sales' || activeModule.id === 'delivery') && status === 'done')
     const submenuExtension = (
-      <div data-demo-submenu-more data-active={q.has('child') ? 'true' : null}>
+      <div data-demo-submenu-more data-active={submenuDropdownActive ? 'true' : null}>
         <Menu
           id={`${activeModule.id}-insights`}
-          label={`Phân tích ${activeModule.label}`}
+          label={`${activeModule.sections[4]} ${activeModule.label}`}
           align="end"
-          trigger={<span class="demo-submenu-trigger">Phân tích {icon('chevron-down')}</span>}
+          trigger={
+            <span class="demo-submenu-trigger">
+              {activeModule.sections[4]} {icon('chevron-down')}
+            </span>
+          }
           items={activeModule.children.map((label, index) => ({
             id: `${activeModule.id}-child-${index}`,
             label,
-            href: href({ ...moduleValues, child: String(index) }),
+            href:
+              (activeModule.id === 'sales' || activeModule.id === 'delivery') && index === 0
+                ? href({ ...moduleValues, status: 'done' })
+                : href({ ...moduleValues, child: String(index) }),
           }))}
         />
       </div>
