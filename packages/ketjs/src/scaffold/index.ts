@@ -13,7 +13,7 @@
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const VERSION = '0.1.13'
+const VERSION = '0.1.14'
 const TEMPLATES = new URL('./templates/', import.meta.url)
 
 /** Template file → path it is written to, relative to the new project's directory. */
