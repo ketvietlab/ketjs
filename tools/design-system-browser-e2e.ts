@@ -6,6 +6,8 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { NavigationItem } from '@ketvietlab/design-system'
+import { renderToString } from '@ketvietlab/ketjs-view'
 
 type Json = Record<string, unknown>
 
@@ -139,6 +141,43 @@ try {
   await cdp.send('Page.enable')
   await cdp.send('Runtime.enable')
 
+  const standaloneNavigation = renderToString(
+    NavigationItem({
+      id: 'reports',
+      label: 'Reports',
+      expanded: true,
+      children: [
+        {
+          id: 'finance',
+          label: 'Finance',
+          expanded: true,
+          children: [{ id: 'profit', label: 'Profit', href: '/reports/profit', active: true }],
+        },
+      ],
+    }),
+  )
+  const standaloneUrl = `data:text/html;charset=utf-8,${encodeURIComponent(standaloneNavigation)}`
+  await cdp.send('Page.navigate', { url: standaloneUrl })
+  await waitFor(
+    () => evaluate<boolean>(cdp!, `document.readyState === 'complete'`),
+    'Standalone NavigationItem did not render',
+  )
+  const standaloneAudit = await evaluate<Json>(
+    cdp,
+    `(() => ({
+      branches: [...document.querySelectorAll('[data-ui="navigation-branch"]')].map((branch) => ({
+        name: branch.getAttribute('name'),
+        open: branch instanceof HTMLDetailsElement && branch.open,
+      })),
+      current: document.querySelector('[data-ui="navigation-item"][aria-current="page"]')?.textContent?.trim(),
+    }))()`,
+  )
+  assert.deepEqual(standaloneAudit.branches, [
+    { name: 'reports-root-branches', open: true },
+    { name: 'reports-branches', open: true },
+  ])
+  assert.equal(standaloneAudit.current, 'Profit')
+
   const viewports = [
     { key: 'desktop', width: 1440, height: 1000, mobile: false },
     { key: 'mobile', width: 390, height: 844, mobile: true },
@@ -185,7 +224,7 @@ try {
     assert.equal(audit.mainCount, 1, `${viewport.key} must have one main landmark`)
     assert.equal(audit.navItems, 3, `${viewport.key} documentation navigation changed`)
     assert.ok(Number(audit.rows) >= 350, `${viewport.key} inventory rows are incomplete`)
-    assert.match(String(audit.text), /Public exports[\s\S]*178/u)
+    assert.match(String(audit.text), /Public exports[\s\S]*189/u)
     assert.match(String(audit.text), /Planned catalog[\s\S]*0/u)
     if (viewport.mobile) assert.equal(audit.localTableOverflow, false)
 
@@ -219,6 +258,11 @@ try {
 
   const reviewRoutes = [
     { key: 'catalogue-en', path: '/?theme=light&density=default', selector: '[data-ui="catalogue"]' },
+    {
+      key: 'application-structure-en',
+      path: '/components/application-structure?theme=light&density=default',
+      selector: '#application-structure',
+    },
     {
       key: 'interactions-en',
       path: '/components/interactions?theme=light&density=default',
@@ -262,6 +306,23 @@ try {
       selector: '[data-pattern="workspace"]',
     },
     { key: 'connected-demo-vi', path: '/demo?theme=light', selector: '[data-ui="app-shell"]' },
+    { key: 'connected-demo-dark-vi', path: '/demo?theme=dark', selector: '[data-ui="app-shell"]' },
+    {
+      key: 'submenu-demo-vi',
+      path: '/demo2?theme=light',
+      selector: '[data-ui="navigation-branch"][data-level="1"][open]',
+    },
+    {
+      key: 'submenu-demo-crm-vi',
+      path: '/demo2?theme=light&module=crm&child=1',
+      selector:
+        '[data-ui="navigation-branch"][data-level="2"][open] [data-ui="navigation-item"][aria-current="page"]',
+    },
+    {
+      key: 'connected-demo-record-vi',
+      path: '/demo?theme=light&view=record&id=SO-1041',
+      selector: '[data-ui="record-page-layout"]',
+    },
   ] as const
   for (const viewport of viewports) {
     await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -297,6 +358,162 @@ try {
       )
       assert.equal(audit.mainCount, 1, `${review.key}/${viewport.key} must have one main landmark`)
       assert.ok(Number(audit.textLength) > 100, `${review.key}/${viewport.key} content is incomplete`)
+      if (review.key === 'connected-demo-dark-vi') {
+        const themeAudit: Json = await evaluate<Json>(
+          cdp,
+          `(() => {
+            const root = document.querySelector('[data-demo-app]')
+            const main = document.querySelector('[data-ui="app-main"]')
+            return {
+              theme: root?.getAttribute('data-theme'),
+              rootScheme: root instanceof HTMLElement ? getComputedStyle(root).colorScheme : null,
+              mainScheme: main instanceof HTMLElement ? getComputedStyle(main).colorScheme : null,
+            }
+          })()`,
+        )
+        assert.equal(themeAudit.theme, 'dark')
+        assert.equal(themeAudit.rootScheme, 'dark')
+        assert.equal(themeAudit.mainScheme, 'dark')
+      }
+      if (review.key === 'submenu-demo-vi' || review.key === 'submenu-demo-crm-vi') {
+        const submenuAudit: Json = await evaluate<Json>(
+          cdp,
+          `(() => {
+            const navigation = document.querySelector('[data-navigation-id="enterprise-navigation"]')
+            const mobileTrigger = navigation?.querySelector(':scope > [data-ui="navigation-trigger"]')
+            if (${JSON.stringify(viewport.key)} === 'mobile' && navigation instanceof HTMLDetailsElement && !navigation.open)
+              mobileTrigger?.click()
+            const topBranches = [...document.querySelectorAll('[data-ui="navigation-branch"][data-level="1"]')]
+            const overview = topBranches[0]
+            const crm = topBranches[1]
+            const inventory = topBranches[5]
+            const crmTrigger = crm?.querySelector(':scope > [data-ui="navigation-branch-trigger"]')
+            if (crm instanceof HTMLDetailsElement && !crm.open) crmTrigger?.click()
+            const children = crm?.querySelector(':scope > [data-ui="navigation-children"]')
+            const childBranch = children?.querySelector(':scope > [data-ui="navigation-branch"]')
+            const childTrigger = childBranch?.querySelector(':scope > [data-ui="navigation-branch-trigger"]')
+            if (childBranch instanceof HTMLDetailsElement && !childBranch.open) childTrigger?.click()
+            const triggerRect = crmTrigger instanceof HTMLElement ? crmTrigger.getBoundingClientRect() : null
+            const childrenRect = children instanceof HTMLElement ? children.getBoundingClientRect() : null
+            crmTrigger?.click()
+            const resistsCollapse = crm instanceof HTMLDetailsElement && crm.open
+            inventory?.querySelector(':scope > [data-ui="navigation-branch-trigger"]')?.click()
+            const globalAccordion =
+              inventory instanceof HTMLDetailsElement && inventory.open &&
+              crm instanceof HTMLDetailsElement && !crm.open
+            crmTrigger?.click()
+            return {
+              topBranches: topBranches.length,
+              openTopBranches: topBranches.filter((branch) => branch instanceof HTMLDetailsElement && branch.open).length,
+              crmOpen: crm instanceof HTMLDetailsElement && crm.open,
+              overviewClosed: overview instanceof HTMLDetailsElement && !overview.open,
+              resistsCollapse,
+              globalAccordion,
+              branchIndicators: document.querySelectorAll('[data-ui="navigation-branch-indicator"]').length,
+              activeBranches: document.querySelectorAll('[data-ui="navigation-branch"][data-active="true"]').length,
+              directChildren: children?.querySelectorAll(':scope > [data-ui="navigation-item"]').length,
+              nestedBranches: children?.querySelectorAll(':scope > [data-ui="navigation-branch"]').length,
+              grandchildItems: childBranch?.querySelectorAll(':scope > [data-ui="navigation-children"] > [data-ui="navigation-item"]').length,
+              childBranchOpen: childBranch instanceof HTMLDetailsElement && childBranch.open,
+              panelBelowParent: Boolean(triggerRect && childrenRect && childrenRect.top >= triggerRect.bottom - 1),
+              horizontalSubmenuRemoved: document.querySelector('[data-demo-submenu]') === null,
+              breadcrumbs: document.querySelectorAll('[data-ui="breadcrumbs"]').length,
+              currentCrumb: document.querySelector('[data-ui="breadcrumb"] [aria-current="page"]')?.textContent?.trim(),
+            }
+          })()`,
+        )
+        assert.equal(submenuAudit.topBranches, 18)
+        assert.equal(submenuAudit.openTopBranches, 1)
+        assert.equal(submenuAudit.crmOpen, true)
+        assert.equal(submenuAudit.overviewClosed, true)
+        assert.equal(submenuAudit.resistsCollapse, true)
+        assert.equal(submenuAudit.globalAccordion, true)
+        assert.equal(submenuAudit.branchIndicators, 0)
+        assert.equal(submenuAudit.activeBranches, 0)
+        assert.equal(submenuAudit.directChildren, 4)
+        assert.equal(submenuAudit.nestedBranches, 1)
+        assert.equal(submenuAudit.grandchildItems, 3)
+        assert.equal(submenuAudit.childBranchOpen, true)
+        assert.equal(submenuAudit.panelBelowParent, true)
+        assert.equal(submenuAudit.horizontalSubmenuRemoved, true)
+        assert.equal(submenuAudit.breadcrumbs, 1)
+        assert.equal(
+          submenuAudit.currentCrumb,
+          review.key === 'submenu-demo-vi' ? 'Hôm nay' : 'Nguồn khách hàng',
+        )
+        if (viewport.key === 'mobile') await delay(300)
+      }
+      if (review.key === 'application-structure-en') {
+        const navigationAudit: Json = await evaluate<Json>(
+          cdp,
+          `(() => new Promise((resolve) => {
+            const example = document.querySelector('#app-navigation')
+            const navigation = example?.querySelector('[data-ui="app-navigation"]')
+            const trigger = navigation?.querySelector('[data-ui="navigation-trigger"]')
+            const drawer = navigation?.querySelector('[data-ui="navigation-drawer"]')
+            const active = navigation?.querySelector('[data-ui="navigation-item"][aria-current="page"]')
+            if (!(navigation instanceof HTMLDetailsElement) || !(trigger instanceof HTMLElement) || !(drawer instanceof HTMLElement)) {
+              resolve({ found: false })
+              return
+            }
+            const initial = {
+              found: true,
+              attached: document.documentElement.dataset.kvInteractions,
+              triggerDisplay: getComputedStyle(trigger).display,
+              drawerDisplay: getComputedStyle(drawer).display,
+              drawerRole: drawer.getAttribute('role'),
+              activeVisible: active instanceof HTMLElement && active.checkVisibility(),
+            }
+            if (${JSON.stringify(viewport.key)} === 'desktop') {
+              resolve(initial)
+              return
+            }
+            trigger.focus()
+            trigger.click()
+            setTimeout(() => {
+              const opened = {
+                open: navigation.open,
+                expanded: trigger.getAttribute('data-open'),
+                drawerRole: drawer.getAttribute('role'),
+                ariaModal: drawer.getAttribute('aria-modal'),
+                scrollLocked: document.documentElement.dataset.kvNavigationOpen,
+                mainInert: navigation.closest('[data-ui="app-shell"]')?.querySelector(':scope > [data-ui="app-main"]')?.inert,
+                focusedInside: drawer.contains(document.activeElement),
+                activeVisibleOnOpen: active instanceof HTMLElement && active.checkVisibility(),
+              }
+              document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+              requestAnimationFrame(() => resolve({
+                ...initial,
+                ...opened,
+                closed: !navigation.open,
+                focusRestored: document.activeElement === trigger,
+                scrollReleased: document.documentElement.dataset.kvNavigationOpen !== 'true',
+              }))
+            }, 50)
+          }))()`,
+        )
+        assert.equal(navigationAudit.found, true)
+        assert.equal(navigationAudit.attached, 'attached')
+        if (viewport.key === 'desktop') {
+          assert.equal(navigationAudit.activeVisible, true)
+          assert.equal(navigationAudit.triggerDisplay, 'none')
+          assert.equal(navigationAudit.drawerDisplay, 'flex')
+          assert.equal(navigationAudit.drawerRole, null)
+        } else {
+          assert.equal(navigationAudit.activeVisible, false)
+          assert.equal(navigationAudit.activeVisibleOnOpen, true)
+          assert.equal(navigationAudit.open, true)
+          assert.equal(navigationAudit.expanded, 'true')
+          assert.equal(navigationAudit.drawerRole, 'dialog')
+          assert.equal(navigationAudit.ariaModal, 'true')
+          assert.equal(navigationAudit.scrollLocked, 'true')
+          assert.equal(navigationAudit.mainInert, true)
+          assert.equal(navigationAudit.focusedInside, true)
+          assert.equal(navigationAudit.closed, true)
+          assert.equal(navigationAudit.focusRestored, true)
+          assert.equal(navigationAudit.scrollReleased, true)
+        }
+      }
       if (review.key === 'interactions-en' && viewport.key === 'desktop') {
         const interactionAudit: Json = await evaluate<Json>(
           cdp,
@@ -308,10 +525,14 @@ try {
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
             const keyboardItem = document.activeElement?.textContent?.trim()
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+            const menuEscapeClosed = menu instanceof HTMLDetailsElement && !menu.open
+            trigger?.click()
+            document.body.click()
             const positioned = document.querySelector('[data-ui="popover-panel"]')
             return {
               attached: document.documentElement.dataset.kvInteractions,
-              menuClosed: menu instanceof HTMLDetailsElement && !menu.open,
+              menuClosed: menuEscapeClosed,
+              menuOutsideClosed: menu instanceof HTMLDetailsElement && !menu.open,
               menuKeyboard: keyboardItem,
               focusRestored: document.activeElement === trigger,
               popoverPositioned: positioned?.getAttribute('data-runtime-positioned'),
@@ -321,6 +542,7 @@ try {
         )
         assert.equal(interactionAudit.attached, 'attached')
         assert.equal(interactionAudit.menuClosed, true)
+        assert.equal(interactionAudit.menuOutsideClosed, true)
         assert.match(String(interactionAudit.menuKeyboard), /Duplicate/u)
         assert.equal(interactionAudit.focusRestored, true)
         assert.equal(interactionAudit.popoverPositioned, 'true')
@@ -345,6 +567,22 @@ try {
         )
         assert.match(String(hierarchyAudit.nextTreeItem), /Reports/u)
         assert.match(String(hierarchyAudit.nextTreeGridRow), /110 · Cash/u)
+      }
+      if (review.key === 'application-structure-en') {
+        if (viewport.key === 'mobile') {
+          await evaluate(
+            cdp,
+            `(() => new Promise((resolve) => {
+              const trigger = document.querySelector('#app-navigation [data-ui="navigation-trigger"]')
+              trigger?.focus()
+              trigger?.click()
+              setTimeout(resolve, 250)
+            }))()`,
+          )
+        } else {
+          await evaluate(cdp, `document.querySelector('#app-navigation')?.scrollIntoView({ block: 'start' })`)
+          await delay(100)
+        }
       }
       const captured: Json = await cdp.send('Page.captureScreenshot', {
         format: 'png',

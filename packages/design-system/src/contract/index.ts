@@ -28,6 +28,7 @@ import { HOOKS as activityHooks } from '../record/activity/index.tsx'
 import { HOOKS as mediaHooks } from '../record/media/index.tsx'
 import { HOOKS as layoutHooks } from '../layouts/layout/index.tsx'
 import { HOOKS as shellHooks } from '../layouts/shell/index.tsx'
+import { HOOKS as appNavigationHooks } from '../layouts/app-navigation/index.tsx'
 import { HOOKS as tableHooks } from '../patterns/data-table/index.tsx'
 import { HOOKS as listChromeHooks } from '../patterns/list-chrome/index.tsx'
 import { HOOKS as listPageHooks } from '../patterns/list-page/index.tsx'
@@ -70,6 +71,7 @@ const GROUPS = {
   media: mediaHooks,
   layouts: layoutHooks,
   shell: shellHooks,
+  appNavigation: appNavigationHooks,
   table: tableHooks,
   listChrome: listChromeHooks,
   listPage: listPageHooks,

@@ -15,6 +15,7 @@ import {
 import type { KetError } from '@ketvietlab/ketjs'
 import {
   ISLAND_TAG,
+  ISLAND_HOST_ATTRIBUTE,
   createIslandManager,
   domHost,
   html,
@@ -210,8 +211,34 @@ test('browser behavior: a document gets the shell bootstrap without contaminatin
     assert.equal(bootstrapResponse.headers.get('x-ket-build'), 'release-test')
     const bootstrap = await bootstrapResponse.text()
     assert.match(bootstrap, /const buildId = "release-test"/)
+    assert.match(bootstrap, /ISLAND_SELECTOR/)
     assert.match(bootstrap, /reportBehaviorError/)
     assert.match(bootstrap, /mounted\.dispose/)
+  } finally {
+    await server.close()
+    await adapter.close()
+  }
+})
+
+test('island: a standard div host causes the server to publish the island bootstrap', async () => {
+  const adapter = sqliteAdapter()
+  await adapter.open()
+  const server = await createKetServer({
+    manifest: compose([]),
+    adapter,
+    islandNames: ['standard'],
+    routes: {
+      '/': async () =>
+        page({
+          body: html`<html><body><div data-ket-island="" data-island="standard"></div></body></html>`,
+        }),
+    },
+  })
+  const port = await server.listen(0)
+  try {
+    const markup = await fetch(`http://127.0.0.1:${port}`).then((response) => response.text())
+    assert.match(markup, /<div data-ket-island="" data-island="standard">/)
+    assert.match(markup, /<script type="module" src="\/_ket\/islands\.js"><\/script>/)
   } finally {
     await server.close()
     await adapter.close()
@@ -245,6 +272,61 @@ test('island: only the island hydrates; the rest of the page stays inert', () =>
   live[0]!.dispose()
   button.fire('click')
   assert.equal(button.innerHTML.replace(/<!--k\[?-->/g, ''), 'Giỏ (3)', 'and stops when disposed')
+})
+
+test('island: a standard div host renders and hydrates beside the legacy host', () => {
+  const factory = (props: IslandProps) => {
+    const count = signal(Number(props.initial))
+    return () => html`<button on:click=${() => count.set((value) => value + 1)}>${count()}</button>`
+  }
+  const legacy = renderIsland('legacy-counter', factory, { initial: 1 })
+  const standard = renderIsland('standard-counter', factory, { initial: 2 }, { tag: 'div' })
+  assert.match(legacy, /^<ket-island /)
+  assert.match(standard, /^<div data-ket-island="" /)
+
+  const container = parseFragment(legacy + standard)
+  const div = container.querySelectorAll('div')[0]!
+  assert.equal(div.getAttribute(ISLAND_HOST_ATTRIBUTE), '')
+  const live = hydrateIslands(domHost(document), container as never, {
+    'legacy-counter': factory,
+    'standard-counter': factory,
+  })
+  assert.equal(live.length, 2)
+  assert.deepEqual(
+    live.map((instance) => instance.name),
+    ['legacy-counter', 'standard-counter'],
+  )
+
+  const buttons = container.querySelectorAll('button')
+  buttons[1]!.fire('click')
+  assert.equal(buttons[1]!.innerHTML.replace(/<!--k\[?-->/g, ''), '3')
+
+  const root = parseFragment(standard).querySelectorAll('div')[0]!
+  const rootLive = hydrateIslands(domHost(document), root as never, {
+    'standard-counter': factory,
+  })
+  assert.equal(rootLive.length, 1, 'a standard host can itself be the hydration root')
+})
+
+test('island: unsupported host tags fail instead of becoming markup', () => {
+  let constructed = false
+  assert.throws(
+    () =>
+      renderIsland(
+        'unsafe-host',
+        () => {
+          constructed = true
+          return () => html`<p>x</p>`
+        },
+        {},
+        { tag: 'script' as never },
+      ),
+    (error: unknown) =>
+      error instanceof Error &&
+      'code' in error &&
+      (error as Error & { code: string }).code === 'E_ISLAND_HOST_TAG',
+  )
+  assert.equal(constructed, false)
 })
 
 test('island: a controller owns browser cleanup and server instances are finalized', () => {

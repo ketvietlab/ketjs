@@ -1,6 +1,6 @@
 {
   "name": "@ketvietlab/design-system",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Két Việt's public, server-rendered operational design system.",
   "type": "module",
   "license": "MIT",
@@ -46,12 +46,13 @@
     "./catalogue/inventory.json": "./dist/catalogue/inventory.generated.json",
     "./atlas/profile.json": "./dist/atlas/profile.json",
     "./atlas/adapter.schema.json": "./dist/atlas/adapter.schema.json",
+    "./runtime/auto.js": "./dist/runtime/auto.js",
     "./styles.css": "./dist/styles.css",
     "./tokens.css": "./dist/foundations/tokens.css",
     "./catalogue/styles.css": "./dist/catalogue/styles.css"
   },
   "dependencies": {
-    "@ketvietlab/ketjs-view": "0.1.12"
+    "@ketvietlab/ketjs-view": "0.1.13"
   },
   "publishConfig": {
     "access": "public",

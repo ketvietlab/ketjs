@@ -155,6 +155,31 @@ dependencies and DOM behavior before surfacing the error.
 Write valid explicit HTML structure on both server and client. Do not suppress a mismatch caused by
 different input.
 
+## Static document rendering
+
+Use `renderToStaticString()` when the result is final document markup rather than a root that the
+browser will hydrate. It walks the template directly without emitting and then stripping comments:
+
+```ts
+// File: tools/render-static.ts
+import { html, renderToStaticString } from '@ketvietlab/ketjs-view'
+
+const markup = renderToStaticString(html`
+  <main>
+    <h1>${page.title}</h1>
+    <p>${page.description}</p>
+  </main>
+`)
+```
+
+Interpolated values are still escaped, and nested templates, conditions, and keyed lists inherit the
+static mode. Do not pass this output to `hydrateRoot()` or `mountHydrated()`: ordinary holes no longer
+have the anchors those APIs require.
+
+Explicit island boundaries are the exception. Descendants of both the legacy `<ket-island>` host and
+the standard `<div data-ket-island>` host keep hydration markers automatically. This lets a static
+document remain inert and comment-free outside the small regions that `hydrateIslands()` adopts.
+
 ## JSX authoring
 
 Configure TypeScript's automatic runtime:
@@ -233,6 +258,25 @@ and `update()` input on one TypeScript contract; a broad registry annotation era
 
 The browser client export must create the same view for the same props. KetJS publishes a tenant-aware
 island bootstrap and serves the module under `/_ket/asset/<module>/`.
+
+Low-level callers may render an island into a standard `div`:
+
+```ts
+// File: tools/render-static.ts
+import { renderIsland } from '@ketvietlab/ketjs-view'
+
+const counter = renderIsland(
+  'cart.counter',
+  islands['cart.counter'].view,
+  { cartId: 'cart-1', initial: 0 },
+  { key: ['cartId'], tag: 'div' },
+)
+```
+
+The result uses `<div data-ket-island="" data-island="cart.counter">`. Omitting `tag` keeps emitting
+`<ket-island>` for compatibility. Hydration, reconciliation, fragment loading, and server bootstrap
+recognize both forms. `data-ket-island` marks the host boundary; `data-island` remains the registry
+name and must not be replaced with an opaque numeric flag.
 
 ### Persistent identity
 
@@ -357,8 +401,9 @@ manager.reconcile(contentSlot, nextTemplate.content)
 manager.dispose(contentSlot)
 ```
 
-Only `<ket-island>` elements hydrate. Headings, layout, and other server HTML remain inert. Unknown
-islands fail in strict mode; `{ strict: false }` leaves intentionally server-only islands untouched.
+Only `<ket-island>` and `<div data-ket-island>` elements hydrate. Headings, layout, and other server
+HTML remain inert. Unknown islands fail in strict mode; `{ strict: false }` leaves intentionally
+server-only islands untouched.
 `hydrateIslands()` remains the compatibility wrapper for applications that do not reconcile slots.
 
 ## Fragment navigation and persistent islands

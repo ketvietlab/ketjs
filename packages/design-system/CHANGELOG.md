@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.13 — application navigation
+
+- Added the responsive `AppNavigation` shell for dense desktop sidebars and mobile drawers.
+- Added nested navigation branches with a single expanded top-level group and active state on leaf items.
+- Kept application breadcrumbs visible while navigation context changes.
+- Added a complete application demo and browser coverage for desktop, mobile, theme switching, and nested standalone navigation.
+
+Released as part of the coordinated KetJS 0.1.13 package set.
+
 ## 0.1.12 — reproducible inventory release
 
 - Excluded ignored local build products from generated inventory inputs while preserving non-ignored new source files.

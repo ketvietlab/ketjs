@@ -3,10 +3,11 @@ import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actio
 import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
-import { NavList, Tabs } from '../primitives/navigation.tsx'
+import { Breadcrumbs, NavList, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
 import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
-import { AppShell } from '../layouts/shell.tsx'
+import { AppShell, Page } from '../layouts/shell.tsx'
+import { AppNavigation } from '../layouts/app-navigation.tsx'
 import { DataTable } from '../patterns/data-table.tsx'
 import { ListChrome } from '../patterns/list-chrome.tsx'
 import { BoardPage } from '../patterns/board-page.tsx'
@@ -99,10 +100,40 @@ const demoNavItems = (active: DemoLayout) => [
 ]
 
 const DemoSidebar = (props: { active: DemoLayout }): TemplateResult => (
-  <div data-ui="shell-demo-sidebar">
-    <strong>KétSuite</strong>
-    <NavList label="Workspace layouts" items={demoNavItems(props.active)} />
-  </div>
+  <AppNavigation
+    id={`demo-navigation-${props.active}`}
+    label="KétSuite workspace"
+    identity="KétSuite"
+    context="Operations workspace"
+    menuLabel="Workspace menu"
+    groups={[
+      {
+        id: `demo-primary-${props.active}`,
+        label: 'Workspace',
+        items: demoNavItems(props.active).map((item) => ({
+          ...item,
+          id: `${props.active}-${item.href.slice(1)}`,
+        })),
+      },
+      {
+        id: `demo-manage-${props.active}`,
+        label: 'Manage',
+        items: [
+          { id: `${props.active}-settings`, label: 'Settings', href: '#app-navigation', leading: '⚙' },
+          {
+            id: `${props.active}-reports`,
+            label: 'Reports',
+            leading: '▤',
+            children: [
+              { id: `${props.active}-sales-report`, label: 'Sales', href: '#data-table' },
+              { id: `${props.active}-stock-report`, label: 'Inventory', href: '#metric' },
+            ],
+          },
+        ],
+      },
+    ]}
+    footer="Signed in · Duy Kieu"
+  />
 )
 
 const DemoRail = (props: {
@@ -644,9 +675,34 @@ export const componentGroups: readonly ComponentGroup[] = [
   {
     id: 'application-structure',
     name: 'Application structure',
-    description:
-      'Four practical layouts inside the same shell: collection, record, flow workspace and canvas workspace.',
+    description: 'Responsive application navigation and four practical layouts inside the same shell.',
     examples: [
+      {
+        id: 'app-navigation',
+        name: 'Responsive application navigation',
+        description:
+          'One navigation model becomes a persistent desktop sidebar and an accessible mobile drawer.',
+        render: () => (
+          <DemoShell
+            active="collection"
+            main={
+              <Page
+                title="Operations overview"
+                description="Resize below 768 px to review the mobile trigger and drawer."
+                body={
+                  <Grid
+                    columns={2}
+                    items={[
+                      <Metric label="Open orders" value="148" detail="12 need attention" />,
+                      <Metric label="Ready to invoice" value="91" detail="Updated just now" />,
+                    ]}
+                  />
+                }
+              />
+            }
+          />
+        ),
+      },
       {
         id: 'app-shell',
         name: 'Collection shell',
@@ -942,6 +998,14 @@ export const componentGroups: readonly ComponentGroup[] = [
         render: () => (
           <Stack
             items={[
+              <Breadcrumbs
+                label="Current location"
+                items={[
+                  { label: 'Workspace', href: '#navigation-items' },
+                  { label: 'Sales', href: '#navigation-items' },
+                  { label: 'Orders' },
+                ]}
+              />,
               <NavList
                 label="Product"
                 items={[
@@ -957,6 +1021,11 @@ export const componentGroups: readonly ComponentGroup[] = [
                   { id: 'activity', label: 'Activity', href: '#navigation-items', count: 8 },
                   { id: 'files', label: 'Files', href: '#navigation-items', count: 3 },
                 ]}
+                extension={
+                  <a data-ui="tab" href="#navigation-items">
+                    Extension
+                  </a>
+                }
               />,
             ]}
           />
