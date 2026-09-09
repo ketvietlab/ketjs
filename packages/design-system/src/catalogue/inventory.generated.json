@@ -17,7 +17,7 @@
     "runtimeGaps": 5,
     "typeGaps": 76,
     "cssFiles": 68,
-    "cssLines": 13044
+    "cssLines": 13045
   },
   "rows": [
     {
@@ -6916,6 +6916,7 @@
         "test/crm-leaderboard-screen.test.tsx",
         "test/crm-ux.test.ts",
         "test/decimal-exact.test.ts",
+        "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
         "test/flow-all-epics-screen.test.tsx",
         "test/flow-all-pages-screen.test.tsx",
@@ -8293,6 +8294,7 @@
         "test/authui.test.ts",
         "test/backend-ui.test.ts",
         "test/collaboration-backend-e2e.test.ts",
+        "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
         "test/flow-board-screen.test.tsx",
         "test/flow-inbox.test.ts",
@@ -8776,7 +8778,7 @@
     {
       "layer": "public",
       "file": "packages/design-system/src/layouts/app-navigation/styles.css",
-      "lines": 297,
+      "lines": 298,
       "hooks": [
         "app-navigation",
         "navigation-backdrop",

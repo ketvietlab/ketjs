@@ -378,6 +378,25 @@ test('design system: application navigation shares one semantic model across bre
   assert.equal(packageJson.exports['./runtime/auto.js'], './dist/runtime/auto.js')
 })
 
+test('design system: application navigation stays dense enough for operational menus', () => {
+  const navigationCss = readFileSync(
+    'packages/design-system/src/layouts/app-navigation/styles.css',
+    'utf8',
+  )
+  const itemRule =
+    navigationCss.match(/\[data-ui="navigation-item"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
+  assert.match(itemRule, /min-height: var\(--kv-sidebar-item-height\)/)
+  assert.match(itemRule, /padding: var\(--kv-space-1\) var\(--kv-space-2\)/)
+  assert.match(itemRule, /font-size: var\(--kv-text-md\)/)
+
+  const mobileLayer = navigationCss.match(
+    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n  \}\n\n  @keyframes/,
+  )?.groups?.body
+  assert.match(mobileLayer ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
+  assert.match(mobileLayer ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)
+  assert.match(mobileLayer ?? '', /\[data-ui="navigation-backdrop"\] \{\s*display: block;\s*grid-column: 2/)
+})
+
 test('design system: a stacked FormPage rail keeps space above its content', () => {
   assert.match(
     css,

@@ -105,6 +105,9 @@ const CatalogueRail = (props: {
         <span>Components</span>
         <span data-ui="catalogue-nav-count">{String(componentRegistry.length)}</span>
       </a>
+      <a data-ui="catalogue-nav-group" href={`/demo?theme=${props.theme}`}>
+        <span>Application demo</span>
+      </a>
       <span data-ui="catalogue-nav-section">Component groups</span>
       {each(
         componentGroups,
@@ -186,6 +189,11 @@ const Overview = (props: {
           variant="primary"
         />
         <LinkButton label="Review inventory" href="/inventory" variant="secondary" />
+        <LinkButton
+          label="Open application demo"
+          href={`/demo?theme=${props.theme === 'system' ? 'light' : props.theme}`}
+          variant="secondary"
+        />
       </div>
       <CataloguePreferences path="/" theme={props.theme} density={props.density} />
     </header>
