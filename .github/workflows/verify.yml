@@ -38,8 +38,12 @@ jobs:
     name: quality contracts
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DESIGN_SYSTEM_AUDIT_BASE: ${{ github.event.pull_request.base.sha || 'origin/develop' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "26"

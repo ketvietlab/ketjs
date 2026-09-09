@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ketatlas.dev/schemas/design-system-adapter.v1.json",
+  "title": "KetAtlas design-system adapter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "materializer", "document", "assets", "composition", "stateOwnership"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "ketatlas.design-system-adapter.v1" },
+    "id": { "type": "string", "minLength": 1 },
+    "materializer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "writeArguments", "checkArguments", "lockFile"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "writeArguments": { "$ref": "#/$defs/arguments" },
+        "checkArguments": { "$ref": "#/$defs/arguments" },
+        "lockFile": { "type": "string", "minLength": 1 }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rootAttribute", "scriptMode"],
+      "properties": {
+        "rootAttribute": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "value": { "type": "string" }
+          }
+        },
+        "scriptMode": { "enum": ["classic", "module", "none"] }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path", "load"],
+        "properties": {
+          "kind": { "enum": ["stylesheet", "script", "font", "image", "other"] },
+          "path": { "type": "string", "minLength": 1 },
+          "load": { "enum": ["head", "body-start", "body-end", "manual"] }
+        }
+      }
+    },
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["global", "templatesProperty", "attachProperty", "slotPattern", "hookAttribute"],
+      "properties": {
+        "global": { "type": "string", "minLength": 1 },
+        "templatesProperty": { "type": "string", "minLength": 1 },
+        "attachProperty": { "type": "string", "minLength": 1 },
+        "slotPattern": { "type": "string", "pattern": "\\{NAME\\}" },
+        "hookAttribute": { "type": "string", "minLength": 1 }
+      }
+    },
+    "inventory": { "type": "string" },
+    "stateOwnership": { "enum": ["url", "memory", "storage", "host"] },
+    "rules": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "arguments": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "contains": { "const": "{atlasDirectory}" }
+    }
+  }
+}

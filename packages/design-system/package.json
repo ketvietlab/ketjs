@@ -27,6 +27,9 @@
   "scripts": {
     "prepack": "npm run build --prefix ../.."
   },
+  "bin": {
+    "ket-design-system-atlas": "./dist/atlas-cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -40,6 +43,9 @@
       "types": "./dist/catalogue/index.d.ts",
       "default": "./dist/catalogue/index.js"
     },
+    "./catalogue/inventory.json": "./dist/catalogue/inventory.generated.json",
+    "./atlas/profile.json": "./dist/atlas/profile.json",
+    "./atlas/adapter.schema.json": "./dist/atlas/adapter.schema.json",
     "./styles.css": "./dist/styles.css",
     "./tokens.css": "./dist/foundations/tokens.css",
     "./catalogue/styles.css": "./dist/catalogue/styles.css"
