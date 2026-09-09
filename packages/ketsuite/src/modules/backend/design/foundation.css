@@ -89,7 +89,7 @@
      counts and the settings link sat eight hundred pixels below the fold, and you
      scrolled the whole page to reach them. Sticky at 100dvh keeps the document the
      scroller, so the browser's own scrollbar and the navigation runtime's scroll
-     restoration go on working; `sidebar-nav` takes the overflow inside. */
+     restoration go on working; `navigation-groups` takes the overflow inside. */
   [data-ui="sidebar"] {
     z-index: 20;
     display: flex;
@@ -115,43 +115,17 @@
     overflow: hidden;
   }
 
-  [data-ui="sidebar-header"] {
-    flex-shrink: 0;
-    padding: 0.75rem 0.75rem 0.5rem;
-  }
-
-  [data-ui="sidebar-brand"] {
-    display: flex;
-    inline-size: 100%;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.5rem;
-    border-radius: var(--admin-radius-sm);
-    color: var(--admin-ink);
-    font-size: 0.875rem;
-    font-weight: 600;
-    text-decoration: none;
-    transition: background-color var(--admin-motion-fast);
-  }
-
-  [data-ui="sidebar-brand"]:hover {
-    background: var(--admin-surface);
-  }
-
-  [data-ui="sidebar-brand-name"] {
-    overflow: hidden;
-    min-inline-size: 0;
+  [data-ui="sidebar-main"] > [data-ui="app-navigation"] {
     flex: 1 1 auto;
-    text-overflow: ellipsis;
+    min-block-size: 0;
   }
 
-  [data-ui="sidebar-brand-chevron"] {
-    display: grid;
-    inline-size: 0.75rem;
-    block-size: 0.75rem;
-    flex-shrink: 0;
-    place-items: center;
-    color: var(--admin-ink-muted);
+  [data-ui="navigation-context"] [data-ui="sidebar-search"] {
+    margin: 0.5rem 0 0;
+  }
+
+  [data-ui="navigation-footer"] {
+    padding: 0;
   }
 
   /* The menu search, not the record search. This one narrows the sidebar; the
@@ -200,105 +174,11 @@
     box-shadow: 0 0 0 3px var(--admin-focus-ring);
   }
 
-  /* The scroll lives here, not on the sidebar: the brand, the search and the
-     foot stay put while forty menu entries move under them. */
-  [data-ui="sidebar-nav"] {
-    flex: 1 1 auto;
-    padding: 0 0.5rem 0.75rem;
-    overflow-x: hidden;
-    overflow-y: auto;
-    scrollbar-width: none;
-  }
-
-  [data-ui="sidebar-nav"]::-webkit-scrollbar {
-    display: none;
-  }
-
-  [data-ui="sidebar-section-label"] {
-    margin: 0.875rem 0.5rem 0.375rem;
-    color: var(--admin-ink-secondary);
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    line-height: 1.2;
-    text-transform: uppercase;
-  }
-
-  [data-ui="sidebar-section-label"]:first-child {
-    margin-block-start: 0;
-  }
-
-  [data-ui="sidebar-section-label"][data-scope="app"] {
-    margin-block-start: 1.125rem;
-    padding-block-start: 0.75rem;
-    border-block-start: 1px solid var(--admin-line);
-  }
-
   [data-ui="sidebar-empty"] {
     margin: 0.5rem;
     color: var(--admin-ink-muted);
     font-size: 0.75rem;
     white-space: normal;
-  }
-
-  [data-ui="app-list"],
-  [data-ui="menu"],
-  [data-ui="menu-section-children"] {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  [data-ui="app-entry"],
-  [data-ui="menu-item"] {
-    display: flex;
-    min-inline-size: 0;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.3125rem 0.5rem;
-    border-radius: var(--admin-radius-sm);
-    color: var(--admin-ink);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    line-height: 1.35;
-    text-decoration: none;
-    transition:
-      background-color var(--admin-motion-fast),
-      color var(--admin-motion-fast);
-  }
-
-  [data-ui="app-entry"]:hover,
-  [data-ui="menu-item"]:hover {
-    background: var(--admin-surface);
-  }
-
-  [data-ui="app-entry"][data-active="true"],
-  [data-ui="menu-item"][data-active="true"] {
-    background: var(--admin-nav-selected);
-    color: light-dark(var(--admin-accent-text), #dce2ff);
-    font-weight: 600;
-  }
-
-  [data-ui="app-icon"] {
-    display: grid;
-    inline-size: 1.125rem;
-    block-size: 1.125rem;
-    flex-shrink: 0;
-    place-items: center;
-    color: var(--admin-ink-secondary);
-  }
-
-  [data-ui="menu-icon"] {
-    display: grid;
-    inline-size: 1rem;
-    block-size: 1rem;
-    flex-shrink: 0;
-    place-items: center;
-    color: var(--admin-ink-secondary);
-  }
-
-  [data-ui="app-entry"][data-active="true"] [data-ui="app-icon"] {
-    color: var(--admin-focus-border);
   }
 
   [data-ui="app-monogram"] {
@@ -312,23 +192,12 @@
     font-weight: 700;
   }
 
-  [data-ui="app-name"],
-  [data-ui="menu-label"] {
-    overflow: hidden;
-    min-inline-size: 0;
-    flex: 1 1 auto;
-    text-overflow: ellipsis;
-  }
-
   [data-ui="icon"] {
     display: block;
     inline-size: 1em;
     block-size: 1em;
   }
 
-  [data-ui="app-icon"] > [data-ui="icon"],
-  [data-ui="menu-icon"] > [data-ui="icon"],
-  [data-ui="sidebar-brand-chevron"] > [data-ui="icon"],
   [data-ui="sidebar-search-icon"] > [data-ui="icon"],
   [data-ui="chrome-search-icon"] > [data-ui="icon"],
   [data-ui="chrome-search-toggle"] > [data-ui="icon"],
@@ -363,61 +232,5 @@
     inline-size: 1rem;
     block-size: 1rem;
     place-items: center;
-  }
-
-  /* ── The open app's menu ───────────────────────────────────────────────── */
-
-  [data-ui="menu-item-wrap"] {
-    display: block;
-  }
-
-  /* A group is a label rather than a control: nothing folds, so nothing invites
-   * a click or answers one. */
-  [data-ui="menu-section-title"] {
-    display: flex;
-    inline-size: 100%;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.5rem 0.25rem;
-    margin-block-start: 0.5rem;
-    list-style: none;
-  }
-
-  [data-ui="menu-section-text"] {
-    overflow: hidden;
-    color: var(--admin-ink-secondary);
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-  }
-
-  /* A rule down the side, so depth is legible without counting indents. */
-  [data-ui="menu-section-children"] {
-    margin-inline-start: 1rem;
-    padding-inline-start: 0.75rem;
-    border-inline-start: 1px solid var(--admin-line);
-  }
-
-  [data-ui="menu-item-wrap"][data-depth="1"] > * > [data-ui="menu-section-children"],
-  [data-ui="menu-item-wrap"][data-depth="2"] > * > [data-ui="menu-section-children"] {
-    margin-inline-start: 0.75rem;
-  }
-
-  [data-ui="menu-dot"] {
-    inline-size: 0.25rem;
-    block-size: 0.25rem;
-    flex-shrink: 0;
-    border-radius: 50%;
-    background: var(--admin-ink-muted);
-  }
-
-  [data-ui="menu-item"][data-active="true"] [data-ui="menu-dot"] {
-    background: var(--admin-focus-border);
-  }
-
-  [data-ui="menu-item"][data-active="true"] [data-ui="menu-icon"] {
-    color: var(--admin-focus-border);
   }
 }

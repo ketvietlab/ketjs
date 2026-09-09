@@ -18,6 +18,7 @@ export const HOOKS = [
   'navigation-group',
   'navigation-group-label',
   'navigation-items',
+  'navigation-supplementary',
   'navigation-item',
   'navigation-branch',
   'navigation-branch-trigger',
@@ -56,7 +57,9 @@ export type AppNavigationProps = {
   identity: JSXChild
   groups: readonly NavigationGroupData[]
   context?: JSXChild
+  supplementary?: JSXChild
   footer?: JSXChild
+  navigationSlot?: string
   menuLabel?: string
   closeLabel?: string
   open?: boolean
@@ -183,20 +186,25 @@ export const NavigationDrawer = (props: {
   identity: JSXChild
   groups: readonly NavigationGroupData[]
   context?: JSXChild
+  supplementary?: JSXChild
   footer?: JSXChild
+  navigationSlot?: string
   closeLabel: string
 }): TemplateResult => (
   <div data-ui="navigation-layer">
     <button data-ui="navigation-backdrop" type="button" aria-label={props.closeLabel} tabIndex={-1} />
     <div data-ui="navigation-drawer" id={props.id} data-navigation-label={props.label} tabIndex={-1}>
       <NavigationHeader identity={props.identity} context={props.context} closeLabel={props.closeLabel} />
-      <nav data-ui="navigation-groups" aria-label={props.label}>
+      <nav data-ui="navigation-groups" aria-label={props.label} data-ket-slot={props.navigationSlot}>
         {each(
           props.groups,
           (group) => group.id,
           (group) => (
             <NavigationGroup {...group} id={`${props.id}-${group.id}`} branchGroup={`${props.id}-branches`} />
           ),
+        )}
+        {props.supplementary !== undefined && (
+          <div data-ui="navigation-supplementary">{props.supplementary}</div>
         )}
       </nav>
       {props.footer !== undefined && <footer data-ui="navigation-footer">{props.footer}</footer>}
@@ -221,7 +229,9 @@ export const AppNavigation = (props: AppNavigationProps): TemplateResult => {
         identity={props.identity}
         groups={props.groups}
         context={props.context}
+        supplementary={props.supplementary}
         footer={props.footer}
+        navigationSlot={props.navigationSlot}
         closeLabel={closeLabel}
       />
     </details>
