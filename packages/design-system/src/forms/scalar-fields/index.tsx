@@ -59,7 +59,6 @@ export const Switch = (props: SwitchProps): TemplateResult => {
             id={props.id}
             type="checkbox"
             role="switch"
-            aria-checked={String(props.checked ?? props.value === '1')}
             name={props.name}
             value={props.value ?? '1'}
             checked={checked}
