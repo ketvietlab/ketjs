@@ -8338,7 +8338,6 @@
         "test/collaboration-backend-e2e.test.ts",
         "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
-        "test/flow-board-screen.test.tsx",
         "test/flow-inbox.test.ts",
         "test/list-chrome.test.ts",
         "test/menu.test.ts",

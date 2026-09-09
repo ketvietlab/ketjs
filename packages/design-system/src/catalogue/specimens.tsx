@@ -510,7 +510,7 @@ export const componentGroups: readonly ComponentGroup[] = [
                     name: 'color',
                     label: 'Calendar colour',
                     type: 'color',
-                    value: '#5167c4',
+                    value: '#5968df',
                   },
                   {
                     id: 'settings-billing',
