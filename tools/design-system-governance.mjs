@@ -29,7 +29,10 @@ const publicIndex = read(join(designRoot, 'index.ts'))
 const runtimeExports = [...publicIndex.matchAll(/export\s+\{([\s\S]*?)\}\s+from\s+['"][^'"]+['"]/gu)]
   .flatMap((match) => match[1].split(',').map((name) => name.trim()))
   .filter(Boolean)
-  .filter((name) => !['HOOKS', 'OWNERS', 'attachDesignSystemInteractions', 'initials'].includes(name))
+  .filter(
+    (name) =>
+      !['HOOKS', 'OWNERS', 'attachDesignSystemInteractions', 'initials', 'withQueryState'].includes(name),
+  )
   .sort()
 const publicSources = [...publicIndex.matchAll(/from\s+['"]([^'"]+)['"]/gu)]
   .map((match) => match[1])
