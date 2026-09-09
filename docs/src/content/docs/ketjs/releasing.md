@@ -93,7 +93,8 @@ npm test
 ```
 
 The workflow also supports manual dispatch for an existing tag. It refuses a tag that does not exactly match
-the coordinated package version.
+the coordinated package version. Release checkout retains full Git history so the design-system admission
+gate can compare the tagged source with `origin/develop` before publishing.
 
 ## Failure and recovery
 
