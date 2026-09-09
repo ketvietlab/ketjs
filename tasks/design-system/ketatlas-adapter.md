@@ -4,10 +4,10 @@
 
 KetAtlas remains independent of KetJS, Ketsuite, React and any design-system vendor. Integration uses a
 portable descriptor with schema version `ketatlas.design-system-adapter.v1`. A design-system package owns
-its adapter and materializer; KetAtlas only discovers the descriptor, includes the declared assets and
-follows its composition/state contract.
+its adapter; KetAtlas only discovers the descriptor, includes the declared assets and consumes the
+capabilities it actually declares.
 
-The descriptor declares:
+Every descriptor declares an identity and one or more assets. It may also declare:
 
 - a materialize command, a non-mutating check command and a generated lock path;
 - CSS, JavaScript, font, image or other assets and their document load positions;
@@ -15,9 +15,12 @@ The descriptor declares:
 - optional template, slot, attach and public-hook contracts;
 - whether interactive state belongs to the URL, memory, storage or the host.
 
-`{atlasDirectory}` is the only command placeholder in version 1. An adapter must generate deterministic,
-self-contained assets under the target atlas and a lock containing its identity, source version and file
-hashes. KetAtlas projects do not install the design system or carry a custom bundler.
+`{atlasDirectory}` is the only command placeholder in version 1. When a materializer is declared, it must
+generate deterministic, self-contained assets under the target atlas and a lock containing its identity,
+source version and file hashes. Without one, asset paths resolve relative to the descriptor and may be
+absolute URLs. Document, composition and state fields are optional so CSS-only libraries, Web Components,
+server renderers and JavaScript component systems can all use the protocol. KetAtlas projects do not
+install the design system or carry a custom bundler.
 
 ## Két implementation
 
