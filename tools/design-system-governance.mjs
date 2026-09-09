@@ -87,7 +87,16 @@ for (const path of componentFiles) {
 const componentCss = walk(designRoot).filter(
   (path) =>
     path.endsWith('.css') &&
-    ['/primitives/', '/interactions/', '/layouts/', '/patterns/'].some((segment) => path.includes(segment)) &&
+    [
+      '/primitives/',
+      '/interactions/',
+      '/forms/',
+      '/data-display/',
+      '/data-operations/',
+      '/record/',
+      '/layouts/',
+      '/patterns/',
+    ].some((segment) => path.includes(segment)) &&
     !['primitives.css', 'layouts.css', 'shell.css', 'flat.css', 'grouped.css', 'patterns.css'].some(
       (legacy) => path.endsWith(`/${legacy}`),
     ),
@@ -96,7 +105,9 @@ for (const path of componentCss) {
   const hooks = [...read(path).matchAll(/data-ui(?:[~|^$*]?=)["']([^"']+)["']/gu)].map((match) => match[1])
   if (hooks.length)
     assert(
-      /\/(?:primitives|interactions|layouts|patterns)\/[^/]+\/[^/]+\.css$/u.test(path),
+      /\/(?:primitives|interactions|forms|data-display|data-operations|record|layouts|patterns)\/[^/]+\/[^/]+\.css$/u.test(
+        path,
+      ),
       `Selectors must live below an owning component directory: ${relative(root, path)}`,
     )
 }

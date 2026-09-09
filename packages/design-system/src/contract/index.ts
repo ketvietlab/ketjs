@@ -21,6 +21,11 @@ import { HOOKS as inlineEditHooks } from '../data-operations/inline-edit/index.t
 import { HOOKS as resourceListHooks } from '../data-display/resource-list/index.tsx'
 import { HOOKS as dataGridHooks } from '../data-display/data-grid/index.tsx'
 import { HOOKS as treeHooks } from '../data-display/tree/index.tsx'
+import { HOOKS as recordDisplayHooks } from '../record/display/index.tsx'
+import { HOOKS as formattedValueHooks } from '../record/formatted-values/index.tsx'
+import { HOOKS as recordCompositionHooks } from '../record/composition/index.tsx'
+import { HOOKS as activityHooks } from '../record/activity/index.tsx'
+import { HOOKS as mediaHooks } from '../record/media/index.tsx'
 import { HOOKS as layoutHooks } from '../layouts/layout/index.tsx'
 import { HOOKS as shellHooks } from '../layouts/shell/index.tsx'
 import { HOOKS as tableHooks } from '../patterns/data-table/index.tsx'
@@ -58,6 +63,11 @@ const GROUPS = {
   resourceList: resourceListHooks,
   dataGrid: dataGridHooks,
   tree: treeHooks,
+  recordDisplay: recordDisplayHooks,
+  formattedValues: formattedValueHooks,
+  recordComposition: recordCompositionHooks,
+  activity: activityHooks,
+  media: mediaHooks,
   layouts: layoutHooks,
   shell: shellHooks,
   table: tableHooks,

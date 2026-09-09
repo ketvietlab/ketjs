@@ -240,6 +240,41 @@
       "decision": "refactor",
       "gapTask": "DS-035"
     },
+    "./record/activity/index.tsx": {
+      "owner": "Activity",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-037"
+    },
+    "./record/composition/index.tsx": {
+      "owner": "Record",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-036"
+    },
+    "./record/display/index.tsx": {
+      "owner": "Record",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    "./record/formatted-values/index.tsx": {
+      "owner": "Formatted values",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    "./record/media/index.tsx": {
+      "owner": "Media",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 5,
+      "gapTask": "DS-038"
+    },
     "./runtime/index.js": {
       "owner": "Interaction runtime",
       "maturity": "stable",
@@ -515,72 +550,5 @@
       "gapTask": "DS-007"
     }
   },
-  "plannedComponents": [
-    {
-      "name": "DescriptionList",
-      "owner": "Record",
-      "wave": 5,
-      "gapTask": "DS-035"
-    },
-    {
-      "name": "KeyValue",
-      "owner": "Record",
-      "wave": 5,
-      "gapTask": "DS-035"
-    },
-    {
-      "name": "FormattedDate",
-      "owner": "Formatted values",
-      "wave": 5,
-      "gapTask": "DS-035"
-    },
-    {
-      "name": "FormattedNumber",
-      "owner": "Formatted values",
-      "wave": 5,
-      "gapTask": "DS-035"
-    },
-    {
-      "name": "FormattedMoney",
-      "owner": "Formatted values",
-      "wave": 5,
-      "gapTask": "DS-035"
-    },
-    {
-      "name": "Person",
-      "owner": "Record",
-      "wave": 5,
-      "gapTask": "DS-035"
-    },
-    {
-      "name": "AvatarGroup",
-      "owner": "Record",
-      "wave": 5,
-      "gapTask": "DS-035"
-    },
-    {
-      "name": "RecordSummary",
-      "owner": "Record",
-      "wave": 5,
-      "gapTask": "DS-036"
-    },
-    {
-      "name": "ActivityTimeline",
-      "owner": "Activity",
-      "wave": 5,
-      "gapTask": "DS-037"
-    },
-    {
-      "name": "AuditLog",
-      "owner": "Activity",
-      "wave": 5,
-      "gapTask": "DS-037"
-    },
-    {
-      "name": "MediaGallery",
-      "owner": "Media",
-      "wave": 5,
-      "gapTask": "DS-038"
-    }
-  ]
+  "plannedComponents": []
 }

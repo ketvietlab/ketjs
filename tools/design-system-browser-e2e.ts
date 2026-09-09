@@ -185,8 +185,8 @@ try {
     assert.equal(audit.mainCount, 1, `${viewport.key} must have one main landmark`)
     assert.equal(audit.navItems, 3, `${viewport.key} documentation navigation changed`)
     assert.ok(Number(audit.rows) >= 350, `${viewport.key} inventory rows are incomplete`)
-    assert.match(String(audit.text), /Public exports[\s\S]*156/u)
-    assert.match(String(audit.text), /Planned catalog[\s\S]*11/u)
+    assert.match(String(audit.text), /Public exports[\s\S]*178/u)
+    assert.match(String(audit.text), /Planned catalog[\s\S]*0/u)
     if (viewport.mobile) assert.equal(audit.localTableOverflow, false)
 
     for (const position of ['top', 'registry'] as const) {
@@ -233,6 +233,11 @@ try {
       key: 'data-operations-en',
       path: '/components/data-operations?theme=light&density=compact',
       selector: '#data-operations',
+    },
+    {
+      key: 'record-workspace-en',
+      path: '/components/record-workspace?theme=light&density=default',
+      selector: '#record-workspace',
     },
     { key: 'list-en', path: '/surfaces?kind=list&lang=en&theme=light', selector: '[data-ui="list-page"]' },
     { key: 'list-vi', path: '/surfaces?kind=list&lang=vi&theme=light', selector: '[data-ui="list-page"]' },
