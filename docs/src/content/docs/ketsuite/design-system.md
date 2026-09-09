@@ -111,6 +111,19 @@ Without JavaScript, menu disclosure still works, action links navigate, form com
 controlled overlay close/open URLs remain usable. Applications decide when an overlay exists and own
 unsaved-change policy; the adapter only enforces browser mechanics around the rendered state.
 
+### Typed forms and pickers
+
+Wave 3 keeps `Field` compatibility while separating its native control renderer and adding typed scalar,
+selection, combobox, civil date/time, upload, and relation-picker APIs. A visual error can be supplied
+directly or resolved from a `{ path, message }` issue list; validation remains an application concern and
+rejected submissions can render the original text unchanged.
+
+Combobox query, open state, result set, and selected values are controlled. `RelationPicker` receives
+permission-filtered records and mapping functions; it never queries data or decides permissions. Date
+values stay as civil `YYYY-MM-DD` text, and local date-time values are not implicitly converted through
+UTC. File controls use the native input for submission while the application owns transport, storage,
+limits, and authorization. Every control keeps the left-label/right-control form layout at narrow widths.
+
 ## Maturity and compatibility
 
 The registry uses `planned`, `stable`, `compatibility`, and `deprecated` maturity states. Planned

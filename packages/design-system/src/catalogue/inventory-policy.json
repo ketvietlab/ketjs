@@ -7,6 +7,41 @@
       "decision": "keep",
       "gapTask": "DS-011"
     },
+    "./forms/combobox/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-021"
+    },
+    "./forms/date-time/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-022"
+    },
+    "./forms/relation-picker/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-024"
+    },
+    "./forms/scalar-fields/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    "./forms/upload/index.tsx": {
+      "owner": "Forms",
+      "maturity": "stable",
+      "decision": "build",
+      "wave": 3,
+      "gapTask": "DS-023"
+    },
     "./interactions/dialog/index.tsx": {
       "owner": "Overlays",
       "maturity": "stable",
@@ -446,114 +481,6 @@
     }
   },
   "plannedComponents": [
-    {
-      "name": "TextField",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "TextArea",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "NumberField",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "MoneyField",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "SearchField",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "Checkbox",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "RadioGroup",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "Switch",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "Select",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-020"
-    },
-    {
-      "name": "Combobox",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-021"
-    },
-    {
-      "name": "MultiCombobox",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-021"
-    },
-    {
-      "name": "TagPicker",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-021"
-    },
-    {
-      "name": "DateRangePicker",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-022"
-    },
-    {
-      "name": "DateTimePicker",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-022"
-    },
-    {
-      "name": "TimePicker",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-022"
-    },
-    {
-      "name": "FileUpload",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-023"
-    },
-    {
-      "name": "DropZone",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-023"
-    },
-    {
-      "name": "RelationPicker",
-      "owner": "Forms",
-      "wave": 3,
-      "gapTask": "DS-024"
-    },
     {
       "name": "SearchBar",
       "owner": "Data operations",
