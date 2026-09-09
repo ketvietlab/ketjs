@@ -6,6 +6,17 @@ body { margin: 0; }
 .demo-navigation-footer { display: grid; gap: var(--kv-space-4); }
 .demo-navigation-footer [data-ui="inline"] { flex-wrap: nowrap; }
 .demo-navigation-footer strong { display: block; color: var(--kv-text-main); font-size: var(--kv-text-sm); }
+[data-demo-submenu] { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+[data-demo-submenu] [data-ui="tabs"] { min-width: 0; border-bottom: 0; }
+[data-demo-submenu-more] { position: relative; height: var(--kv-table-header-height); border-left: 1px solid var(--kv-panel-divider); }
+[data-demo-submenu-more] [data-ui="menu-trigger"] { position: relative; height: var(--kv-table-header-height); min-height: 0; padding-inline: var(--kv-space-4); border: 0; border-radius: 0; background: transparent; color: var(--kv-text-muted); }
+[data-demo-submenu-more][data-active="true"] [data-ui="menu-trigger"] { color: var(--kv-tab-active-text); }
+[data-demo-submenu-more][data-active="true"] [data-ui="menu-trigger"]::after { position: absolute; right: var(--kv-space-4); bottom: 0; left: var(--kv-space-4); height: 2px; border-radius: 2px 2px 0 0; background: var(--kv-accent); content: ""; }
+.demo-submenu-trigger { display: inline-flex; align-items: center; gap: var(--kv-space-1); white-space: nowrap; }
+.demo-submenu-trigger [data-ui="icon"] { width: 14px; height: 14px; flex-basis: 14px; }
+.demo-surface-fill, .demo-surface-fill > [data-ui="surface"] { height: 100%; }
+[data-demo-board][data-filtered="true"] > [data-ui="grid"] { grid-template-columns: minmax(0, 1fr); }
+:is(#today, #workflow, #recent, #priority, #updates) { scroll-margin-top: var(--kv-space-4); }
 .demo-overview-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--kv-space-2); align-items: stretch; }
 .demo-bars { display: grid; gap: var(--kv-space-4); }
 .demo-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--kv-space-1) var(--kv-space-2); font-size: var(--kv-text-sm); }
