@@ -1,4 +1,8 @@
 @layer ket.reset {
+  html[data-kv-navigation-open="true"] {
+    overflow: hidden;
+  }
+
   :where([data-kv-design-system]),
   :where([data-kv-design-system]) *,
   :where([data-kv-design-system]) *::before,

@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   AppShell,
+  AppNavigation,
   ActionMenu,
   ActivityTimeline,
   AppliedFilters,
@@ -321,6 +322,60 @@ test('design system: application regions are square while independent objects ar
   const shell = renderToString(<AppShell sidebar="Menu" main="Content" rightRail="Context" />)
   assert.match(shell, /data-has-right-rail="true"/)
   assert.match(shell, /data-ui="app-right-rail"/)
+})
+
+test('design system: application navigation shares one semantic model across breakpoints', () => {
+  const navigation = renderToString(
+    <AppNavigation
+      id="workspace-navigation"
+      label="Workspace"
+      identity="KétSuite"
+      context="Công ty Mùa Hạ"
+      menuLabel="Open workspace menu"
+      closeLabel="Close workspace menu"
+      groups={[
+        {
+          id: 'operations',
+          label: 'Operations',
+          items: [
+            {
+              id: 'orders',
+              label: 'Sales orders',
+              description: 'Review and fulfil',
+              href: '/orders',
+              leading: 'O',
+              count: 7,
+              active: true,
+            },
+          ],
+        },
+      ]}
+      footer="Signed in"
+    />,
+  )
+  assert.match(navigation, /data-ui="app-navigation"/)
+  assert.match(navigation, /data-ui="navigation-trigger"[^>]*aria-controls="workspace-navigation-drawer"/)
+  assert.match(navigation, /data-open="false"/)
+  assert.match(navigation, /data-ui="navigation-drawer"[^>]*id="workspace-navigation-drawer"/)
+  assert.match(
+    navigation,
+    /data-ui="navigation-group"[^>]*aria-labelledby="workspace-navigation-drawer-operations-label"/,
+  )
+  assert.match(navigation, /aria-current="page"/)
+  assert.match(navigation, /Review and fulfil/)
+  assert.match(navigation, /data-ui="navigation-item-count"[\s\S]*7/)
+  assert.match(navigation, /aria-label="Close workspace menu"/)
+  assert.match(navigation, /data-ui="navigation-footer"[\s\S]*Signed in/)
+  assert.doesNotMatch(navigation, /role="dialog"/)
+
+  const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
+  assert.match(navigationCss, /@media \(max-width: 48rem\)/)
+  assert.match(navigationCss, /position: fixed/)
+  assert.match(navigationCss, /var\(--kv-layer-dialog\)/)
+  const packageJson = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8')) as {
+    exports: Record<string, unknown>
+  }
+  assert.equal(packageJson.exports['./runtime/auto.js'], './dist/runtime/auto.js')
 })
 
 test('design system: a stacked FormPage rail keeps space above its content', () => {
@@ -1409,7 +1464,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 99)
+  assert.equal(names.length, 105)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1446,8 +1501,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 178)
-  assert.equal(designSystemInventory.summary.runtimeExports, 104)
+  assert.equal(designSystemInventory.summary.publicExports, 187)
+  assert.equal(designSystemInventory.summary.runtimeExports, 110)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 38)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)

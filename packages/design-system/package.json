@@ -46,6 +46,7 @@
     "./catalogue/inventory.json": "./dist/catalogue/inventory.generated.json",
     "./atlas/profile.json": "./dist/atlas/profile.json",
     "./atlas/adapter.schema.json": "./dist/atlas/adapter.schema.json",
+    "./runtime/auto.js": "./dist/runtime/auto.js",
     "./styles.css": "./dist/styles.css",
     "./tokens.css": "./dist/foundations/tokens.css",
     "./catalogue/styles.css": "./dist/catalogue/styles.css"
