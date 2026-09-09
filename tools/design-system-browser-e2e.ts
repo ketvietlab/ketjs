@@ -276,7 +276,8 @@ try {
     {
       key: 'submenu-demo-crm-vi',
       path: '/demo2?theme=light&module=crm&child=1',
-      selector: '[data-ui="navigation-branch"][data-level="2"][data-active="true"][open]',
+      selector:
+        '[data-ui="navigation-branch"][data-level="2"][open] [data-ui="navigation-item"][aria-current="page"]',
     },
     {
       key: 'connected-demo-record-vi',
@@ -346,6 +347,7 @@ try {
             const topBranches = [...document.querySelectorAll('[data-ui="navigation-branch"][data-level="1"]')]
             const overview = topBranches[0]
             const crm = topBranches[1]
+            const inventory = topBranches[5]
             const crmTrigger = crm?.querySelector(':scope > [data-ui="navigation-branch-trigger"]')
             if (crm instanceof HTMLDetailsElement && !crm.open) crmTrigger?.click()
             const children = crm?.querySelector(':scope > [data-ui="navigation-children"]')
@@ -354,11 +356,22 @@ try {
             if (childBranch instanceof HTMLDetailsElement && !childBranch.open) childTrigger?.click()
             const triggerRect = crmTrigger instanceof HTMLElement ? crmTrigger.getBoundingClientRect() : null
             const childrenRect = children instanceof HTMLElement ? children.getBoundingClientRect() : null
+            crmTrigger?.click()
+            const resistsCollapse = crm instanceof HTMLDetailsElement && crm.open
+            inventory?.querySelector(':scope > [data-ui="navigation-branch-trigger"]')?.click()
+            const globalAccordion =
+              inventory instanceof HTMLDetailsElement && inventory.open &&
+              crm instanceof HTMLDetailsElement && !crm.open
+            crmTrigger?.click()
             return {
               topBranches: topBranches.length,
               openTopBranches: topBranches.filter((branch) => branch instanceof HTMLDetailsElement && branch.open).length,
               crmOpen: crm instanceof HTMLDetailsElement && crm.open,
               overviewClosed: overview instanceof HTMLDetailsElement && !overview.open,
+              resistsCollapse,
+              globalAccordion,
+              branchIndicators: document.querySelectorAll('[data-ui="navigation-branch-indicator"]').length,
+              activeBranches: document.querySelectorAll('[data-ui="navigation-branch"][data-active="true"]').length,
               directChildren: children?.querySelectorAll(':scope > [data-ui="navigation-item"]').length,
               nestedBranches: children?.querySelectorAll(':scope > [data-ui="navigation-branch"]').length,
               grandchildItems: childBranch?.querySelectorAll(':scope > [data-ui="navigation-children"] > [data-ui="navigation-item"]').length,
@@ -372,6 +385,10 @@ try {
         assert.equal(submenuAudit.openTopBranches, 1)
         assert.equal(submenuAudit.crmOpen, true)
         assert.equal(submenuAudit.overviewClosed, true)
+        assert.equal(submenuAudit.resistsCollapse, true)
+        assert.equal(submenuAudit.globalAccordion, true)
+        assert.equal(submenuAudit.branchIndicators, 0)
+        assert.equal(submenuAudit.activeBranches, 0)
         assert.equal(submenuAudit.directChildren, 4)
         assert.equal(submenuAudit.nestedBranches, 1)
         assert.equal(submenuAudit.grandchildItems, 3)

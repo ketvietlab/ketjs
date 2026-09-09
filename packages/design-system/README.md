@@ -53,7 +53,10 @@ place it in `AppShell.sidebar`; it is a persistent sidebar above 768px and a nat
 `details` drawer below that breakpoint. The markup remains usable without JavaScript.
 Items may contain recursive `children`; a parent expands its submenu directly below
 the parent row, and an active descendant opens the complete path on first render.
-Use `expanded` when a branch should start open without an active descendant.
+Only leaf links expose the active state. Top-level branches form one accordion across
+the complete sidebar, and the interaction adapter keeps the open branch from being
+collapsed without choosing another branch. Use `expanded` when a branch should start
+open without an active descendant.
 The optional interaction adapter adds mobile dialog semantics, Escape/backdrop/link
 closing, focus trapping and restoration, background inertness, and scroll locking.
 

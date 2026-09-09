@@ -21,7 +21,6 @@ export const HOOKS = [
   'navigation-item',
   'navigation-branch',
   'navigation-branch-trigger',
-  'navigation-branch-indicator',
   'navigation-children',
   'navigation-item-leading',
   'navigation-item-copy',
@@ -37,13 +36,12 @@ type NavigationItemBase = {
   leading?: JSXChild
   description?: string
   count?: number
-  active?: boolean
 }
 
 export type NavigationItemData = NavigationItemBase &
   (
-    | { href: string; children?: never; expanded?: never }
-    | { href?: never; children: readonly NavigationItemData[]; expanded?: boolean }
+    | { href: string; active?: boolean; children?: never; expanded?: never }
+    | { href?: never; active?: never; children: readonly NavigationItemData[]; expanded?: boolean }
   )
 
 export type NavigationGroupData = {
@@ -101,7 +99,7 @@ export const NavigationHeader = (props: {
   </header>
 )
 
-const NavigationItemContent = (props: { item: NavigationItemData; branch?: boolean }): TemplateResult => (
+const NavigationItemContent = (props: { item: NavigationItemData }): TemplateResult => (
   <>
     {props.item.leading !== undefined && (
       <span data-ui="navigation-item-leading" aria-hidden="true">
@@ -117,7 +115,6 @@ const NavigationItemContent = (props: { item: NavigationItemData; branch?: boole
     {props.item.count !== undefined && (
       <span data-ui="navigation-item-count">{String(props.item.count)}</span>
     )}
-    {props.branch && <span data-ui="navigation-branch-indicator" aria-hidden="true" />}
   </>
 )
 
@@ -132,15 +129,9 @@ const renderNavigationItem = (
   if (props.children !== undefined) {
     const open = props.expanded === true || hasActiveItem(props)
     return (
-      <details
-        data-ui="navigation-branch"
-        data-active={props.active === true ? 'true' : null}
-        data-level={String(level)}
-        name={branchGroup}
-        open={open}
-      >
+      <details data-ui="navigation-branch" data-level={String(level)} name={branchGroup} open={open}>
         <summary data-ui="navigation-branch-trigger">
-          <NavigationItemContent item={props} branch />
+          <NavigationItemContent item={props} />
         </summary>
         <div data-ui="navigation-children" data-level={String(level + 1)}>
           {each(
@@ -169,7 +160,7 @@ export const NavigationItem = (props: NavigationItemData): TemplateResult => (
   <>{renderNavigationItem(props, `${props.id}-branches`, 1)}</>
 )
 
-export const NavigationGroup = (props: NavigationGroupData): TemplateResult => (
+export const NavigationGroup = (props: NavigationGroupData & { branchGroup?: string }): TemplateResult => (
   <section data-ui="navigation-group" aria-labelledby={props.label ? `${props.id}-label` : null}>
     {props.label !== undefined && (
       <h2 data-ui="navigation-group-label" id={`${props.id}-label`}>
@@ -180,7 +171,7 @@ export const NavigationGroup = (props: NavigationGroupData): TemplateResult => (
       {each(
         props.items,
         (item) => item.id,
-        (item) => renderNavigationItem(item, `${props.id}-branches`, 1),
+        (item) => renderNavigationItem(item, props.branchGroup ?? `${props.id}-branches`, 1),
       )}
     </div>
   </section>
@@ -204,7 +195,7 @@ export const NavigationDrawer = (props: {
           props.groups,
           (group) => group.id,
           (group) => (
-            <NavigationGroup {...group} id={`${props.id}-${group.id}`} />
+            <NavigationGroup {...group} id={`${props.id}-${group.id}`} branchGroup={`${props.id}-branches`} />
           ),
         )}
       </nav>
