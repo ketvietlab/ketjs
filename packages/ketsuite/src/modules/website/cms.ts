@@ -404,18 +404,46 @@ export const cmsFunctions: Record<string, FnSpec> = {
 
   listSites: defineFn({
     input: { active: 'bool?' },
-    output: { id: 'id', name: 'text', title: 'text', defaultLocale: 'text', theme: 'text', active: 'bool' },
-    effects: ['read:website.Site', 'read:website.SiteMember'],
+    output: {
+      id: 'id',
+      name: 'text',
+      title: 'text',
+      defaultLocale: 'text',
+      theme: 'text',
+      siteGroup: 'text?',
+      activePublicationId: 'id?',
+      active: 'bool',
+      primaryHost: 'text?',
+      domainCount: 'int?',
+      role: 'text?',
+    },
+    effects: ['read:website.Site', 'read:website.SiteMember', 'read:website.SiteDomain'],
     agent: true,
     handler: async (ctx: Ctx, args) => {
       const Site = ctx.table('website.Site')
       let query = from(Site).orderBy(asc(Site.name))
       if (args.active != null) query = query.where(eq(Site.active, args.active))
       const sites = await ctx.db.all(query)
-      if (!ctx.actor) return sites
-      const memberships = await ctx.db.select('website.SiteMember', { userId: ctx.actor })
-      const allowed = new Set(memberships.map((row) => row.siteId))
-      return sites.filter((site) => allowed.has(site.id))
+      const memberships = ctx.actor ? await ctx.db.select('website.SiteMember', { userId: ctx.actor }) : []
+      const roleBySite = new Map(memberships.map((row) => [String(row.siteId), String(row.role)]))
+      const allowed = new Set(roleBySite.keys())
+      const visible = ctx.actor ? sites.filter((site) => allowed.has(String(site.id))) : sites
+      const domains = await ctx.db.select('website.SiteDomain')
+      const domainsBySite = new Map<string, typeof domains>()
+      for (const domain of domains) {
+        const key = String(domain.siteId)
+        domainsBySite.set(key, [...(domainsBySite.get(key) ?? []), domain])
+      }
+      return visible.map((site) => {
+        const siteDomains = domainsBySite.get(String(site.id)) ?? []
+        const primary = siteDomains.find((domain) => domain.primary === true) ?? null
+        return {
+          ...site,
+          primaryHost: primary ? String(primary.host) : null,
+          domainCount: siteDomains.length,
+          role: roleBySite.get(String(site.id)) ?? null,
+        }
+      })
     },
   }),
 
