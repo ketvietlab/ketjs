@@ -1,0 +1,65 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="tooltip"] {
+    position: relative;
+    display: inline-flex;
+  }
+
+  :where([data-kv-design-system]) [data-ui="tooltip-trigger"] {
+    display: inline-flex;
+  }
+
+  :where([data-kv-design-system]) [data-ui="tooltip-content"] {
+    position: absolute;
+    z-index: var(--kv-layer-popover);
+    bottom: calc(100% + var(--kv-space-2));
+    left: 50%;
+    width: max-content;
+    max-width: 16rem;
+    padding: var(--kv-space-1-5) var(--kv-space-2);
+    border-radius: var(--kv-radius-sm);
+    opacity: 0;
+    background: var(--kv-text-main);
+    color: var(--kv-panel-bg);
+    font-size: var(--kv-text-xs);
+    pointer-events: none;
+    transform: translate(-50%, var(--kv-space-1));
+    transition:
+      opacity var(--kv-motion-fast),
+      transform var(--kv-motion-fast);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tooltip"][data-placement="bottom"] [data-ui="tooltip-content"] {
+    top: calc(100% + var(--kv-space-2));
+    bottom: auto;
+    transform: translate(-50%, calc(-1 * var(--kv-space-1)));
+  }
+
+  :where([data-kv-design-system]) [data-ui="tooltip"][data-placement="left"] [data-ui="tooltip-content"] {
+    top: 50%;
+    right: calc(100% + var(--kv-space-2));
+    bottom: auto;
+    left: auto;
+    transform: translate(var(--kv-space-1), -50%);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tooltip"][data-placement="right"] [data-ui="tooltip-content"] {
+    top: 50%;
+    bottom: auto;
+    left: calc(100% + var(--kv-space-2));
+    transform: translate(calc(-1 * var(--kv-space-1)), -50%);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tooltip"]:is(:hover, :focus-within) [data-ui="tooltip-content"] {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="tooltip"][data-placement="left"]:is(:hover, :focus-within)
+    [data-ui="tooltip-content"],
+  :where([data-kv-design-system])
+    [data-ui="tooltip"][data-placement="right"]:is(:hover, :focus-within)
+    [data-ui="tooltip-content"] {
+    transform: translate(0, -50%);
+  }
+}

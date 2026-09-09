@@ -1,0 +1,11 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="dialog"] {
+    display: contents;
+  }
+
+  :where([data-kv-design-system]) [data-ui="confirm-dialog-message"] {
+    max-width: 42rem;
+    margin: 0;
+    color: var(--kv-text-secondary);
+  }
+}

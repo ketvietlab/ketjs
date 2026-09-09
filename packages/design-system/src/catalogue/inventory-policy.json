@@ -7,6 +7,55 @@
       "decision": "keep",
       "gapTask": "DS-011"
     },
+    "./interactions/dialog/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-015"
+    },
+    "./interactions/menu/index.tsx": {
+      "owner": "Actions",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-013"
+    },
+    "./interactions/popover/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-014"
+    },
+    "./interactions/skeleton/index.tsx": {
+      "owner": "Feedback",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-016"
+    },
+    "./interactions/spinner/index.tsx": {
+      "owner": "Feedback",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-016"
+    },
+    "./interactions/toast/index.tsx": {
+      "owner": "Feedback",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-016"
+    },
+    "./interactions/tooltip/index.tsx": {
+      "owner": "Overlays",
+      "maturity": "stable",
+      "decision": "keep",
+      "wave": 2,
+      "gapTask": "DS-014"
+    },
     "./layouts/layout/index.tsx": {
       "owner": "Layout",
       "maturity": "stable",
@@ -120,6 +169,12 @@
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-035"
+    },
+    "./runtime/index.js": {
+      "owner": "Interaction runtime",
+      "maturity": "stable",
+      "decision": "keep",
+      "gapTask": "DS-017"
     }
   },
   "compatibilityModules": {
@@ -391,55 +446,245 @@
     }
   },
   "plannedComponents": [
-    { "name": "Menu", "owner": "Actions", "wave": 2, "gapTask": "DS-013" },
-    { "name": "ActionMenu", "owner": "Actions", "wave": 2, "gapTask": "DS-013" },
-    { "name": "Popover", "owner": "Overlays", "wave": 2, "gapTask": "DS-014" },
-    { "name": "Tooltip", "owner": "Overlays", "wave": 2, "gapTask": "DS-014" },
-    { "name": "Dialog", "owner": "Overlays", "wave": 2, "gapTask": "DS-015" },
-    { "name": "ConfirmDialog", "owner": "Overlays", "wave": 2, "gapTask": "DS-015" },
-    { "name": "ToastRegion", "owner": "Feedback", "wave": 2, "gapTask": "DS-016" },
-    { "name": "Toast", "owner": "Feedback", "wave": 2, "gapTask": "DS-016" },
-    { "name": "Spinner", "owner": "Feedback", "wave": 2, "gapTask": "DS-016" },
-    { "name": "Skeleton", "owner": "Feedback", "wave": 2, "gapTask": "DS-016" },
-    { "name": "TextField", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "TextArea", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "NumberField", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "MoneyField", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "SearchField", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "Checkbox", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "RadioGroup", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "Switch", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "Select", "owner": "Forms", "wave": 3, "gapTask": "DS-020" },
-    { "name": "Combobox", "owner": "Forms", "wave": 3, "gapTask": "DS-021" },
-    { "name": "MultiCombobox", "owner": "Forms", "wave": 3, "gapTask": "DS-021" },
-    { "name": "TagPicker", "owner": "Forms", "wave": 3, "gapTask": "DS-021" },
-    { "name": "DateRangePicker", "owner": "Forms", "wave": 3, "gapTask": "DS-022" },
-    { "name": "DateTimePicker", "owner": "Forms", "wave": 3, "gapTask": "DS-022" },
-    { "name": "TimePicker", "owner": "Forms", "wave": 3, "gapTask": "DS-022" },
-    { "name": "FileUpload", "owner": "Forms", "wave": 3, "gapTask": "DS-023" },
-    { "name": "DropZone", "owner": "Forms", "wave": 3, "gapTask": "DS-023" },
-    { "name": "RelationPicker", "owner": "Forms", "wave": 3, "gapTask": "DS-024" },
-    { "name": "SearchBar", "owner": "Data operations", "wave": 4, "gapTask": "DS-027" },
-    { "name": "FilterBar", "owner": "Data operations", "wave": 4, "gapTask": "DS-027" },
-    { "name": "AppliedFilters", "owner": "Data operations", "wave": 4, "gapTask": "DS-027" },
-    { "name": "SortMenu", "owner": "Data operations", "wave": 4, "gapTask": "DS-027" },
-    { "name": "SavedViews", "owner": "Data operations", "wave": 4, "gapTask": "DS-028" },
-    { "name": "ViewSettings", "owner": "Data operations", "wave": 4, "gapTask": "DS-028" },
-    { "name": "ResourceList", "owner": "Data display", "wave": 4, "gapTask": "DS-029" },
-    { "name": "DataGrid", "owner": "Data display", "wave": 4, "gapTask": "DS-031" },
-    { "name": "Tree", "owner": "Data display", "wave": 4, "gapTask": "DS-032" },
-    { "name": "TreeGrid", "owner": "Data display", "wave": 4, "gapTask": "DS-032" },
-    { "name": "InlineEdit", "owner": "Data operations", "wave": 4, "gapTask": "DS-033" },
-    { "name": "DescriptionList", "owner": "Record", "wave": 5, "gapTask": "DS-035" },
-    { "name": "KeyValue", "owner": "Record", "wave": 5, "gapTask": "DS-035" },
-    { "name": "FormattedDate", "owner": "Formatted values", "wave": 5, "gapTask": "DS-035" },
-    { "name": "FormattedNumber", "owner": "Formatted values", "wave": 5, "gapTask": "DS-035" },
-    { "name": "FormattedMoney", "owner": "Formatted values", "wave": 5, "gapTask": "DS-035" },
-    { "name": "Person", "owner": "Record", "wave": 5, "gapTask": "DS-035" },
-    { "name": "AvatarGroup", "owner": "Record", "wave": 5, "gapTask": "DS-035" },
-    { "name": "RecordSummary", "owner": "Record", "wave": 5, "gapTask": "DS-036" },
-    { "name": "ActivityTimeline", "owner": "Activity", "wave": 5, "gapTask": "DS-037" },
-    { "name": "AuditLog", "owner": "Activity", "wave": 5, "gapTask": "DS-037" },
-    { "name": "MediaGallery", "owner": "Media", "wave": 5, "gapTask": "DS-038" }
+    {
+      "name": "TextField",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "TextArea",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "NumberField",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "MoneyField",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "SearchField",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "Checkbox",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "RadioGroup",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "Switch",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "Select",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-020"
+    },
+    {
+      "name": "Combobox",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-021"
+    },
+    {
+      "name": "MultiCombobox",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-021"
+    },
+    {
+      "name": "TagPicker",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-021"
+    },
+    {
+      "name": "DateRangePicker",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-022"
+    },
+    {
+      "name": "DateTimePicker",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-022"
+    },
+    {
+      "name": "TimePicker",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-022"
+    },
+    {
+      "name": "FileUpload",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-023"
+    },
+    {
+      "name": "DropZone",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-023"
+    },
+    {
+      "name": "RelationPicker",
+      "owner": "Forms",
+      "wave": 3,
+      "gapTask": "DS-024"
+    },
+    {
+      "name": "SearchBar",
+      "owner": "Data operations",
+      "wave": 4,
+      "gapTask": "DS-027"
+    },
+    {
+      "name": "FilterBar",
+      "owner": "Data operations",
+      "wave": 4,
+      "gapTask": "DS-027"
+    },
+    {
+      "name": "AppliedFilters",
+      "owner": "Data operations",
+      "wave": 4,
+      "gapTask": "DS-027"
+    },
+    {
+      "name": "SortMenu",
+      "owner": "Data operations",
+      "wave": 4,
+      "gapTask": "DS-027"
+    },
+    {
+      "name": "SavedViews",
+      "owner": "Data operations",
+      "wave": 4,
+      "gapTask": "DS-028"
+    },
+    {
+      "name": "ViewSettings",
+      "owner": "Data operations",
+      "wave": 4,
+      "gapTask": "DS-028"
+    },
+    {
+      "name": "ResourceList",
+      "owner": "Data display",
+      "wave": 4,
+      "gapTask": "DS-029"
+    },
+    {
+      "name": "DataGrid",
+      "owner": "Data display",
+      "wave": 4,
+      "gapTask": "DS-031"
+    },
+    {
+      "name": "Tree",
+      "owner": "Data display",
+      "wave": 4,
+      "gapTask": "DS-032"
+    },
+    {
+      "name": "TreeGrid",
+      "owner": "Data display",
+      "wave": 4,
+      "gapTask": "DS-032"
+    },
+    {
+      "name": "InlineEdit",
+      "owner": "Data operations",
+      "wave": 4,
+      "gapTask": "DS-033"
+    },
+    {
+      "name": "DescriptionList",
+      "owner": "Record",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    {
+      "name": "KeyValue",
+      "owner": "Record",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    {
+      "name": "FormattedDate",
+      "owner": "Formatted values",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    {
+      "name": "FormattedNumber",
+      "owner": "Formatted values",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    {
+      "name": "FormattedMoney",
+      "owner": "Formatted values",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    {
+      "name": "Person",
+      "owner": "Record",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    {
+      "name": "AvatarGroup",
+      "owner": "Record",
+      "wave": 5,
+      "gapTask": "DS-035"
+    },
+    {
+      "name": "RecordSummary",
+      "owner": "Record",
+      "wave": 5,
+      "gapTask": "DS-036"
+    },
+    {
+      "name": "ActivityTimeline",
+      "owner": "Activity",
+      "wave": 5,
+      "gapTask": "DS-037"
+    },
+    {
+      "name": "AuditLog",
+      "owner": "Activity",
+      "wave": 5,
+      "gapTask": "DS-037"
+    },
+    {
+      "name": "MediaGallery",
+      "owner": "Media",
+      "wave": 5,
+      "gapTask": "DS-038"
+    }
   ]
 }

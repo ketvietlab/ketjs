@@ -185,8 +185,8 @@ try {
     assert.equal(audit.mainCount, 1, `${viewport.key} must have one main landmark`)
     assert.equal(audit.navItems, 3, `${viewport.key} documentation navigation changed`)
     assert.ok(Number(audit.rows) >= 350, `${viewport.key} inventory rows are incomplete`)
-    assert.match(String(audit.text), /Public exports[\s\S]*85/u)
-    assert.match(String(audit.text), /Planned catalog[\s\S]*50/u)
+    assert.match(String(audit.text), /Public exports[\s\S]*102/u)
+    assert.match(String(audit.text), /Planned catalog[\s\S]*40/u)
     if (viewport.mobile) assert.equal(audit.localTableOverflow, false)
 
     for (const position of ['top', 'registry'] as const) {
@@ -219,6 +219,11 @@ try {
 
   const reviewRoutes = [
     { key: 'catalogue-en', path: '/?theme=light&density=default', selector: '[data-ui="catalogue"]' },
+    {
+      key: 'interactions-en',
+      path: '/components/interactions?theme=light&density=default',
+      selector: '#interactions',
+    },
     { key: 'list-en', path: '/surfaces?kind=list&lang=en&theme=light', selector: '[data-ui="list-page"]' },
     { key: 'list-vi', path: '/surfaces?kind=list&lang=vi&theme=light', selector: '[data-ui="list-page"]' },
     {
@@ -277,6 +282,35 @@ try {
       )
       assert.equal(audit.mainCount, 1, `${review.key}/${viewport.key} must have one main landmark`)
       assert.ok(Number(audit.textLength) > 100, `${review.key}/${viewport.key} content is incomplete`)
+      if (review.key === 'interactions-en' && viewport.key === 'desktop') {
+        const interactionAudit: Json = await evaluate<Json>(
+          cdp,
+          `(() => {
+            const menu = document.querySelector('[data-ui="menu"][open]')
+            const trigger = menu?.querySelector('[data-ui="menu-trigger"]')
+            trigger?.focus()
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+            const keyboardItem = document.activeElement?.textContent?.trim()
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+            const positioned = document.querySelector('[data-ui="popover-panel"]')
+            return {
+              attached: document.documentElement.dataset.kvInteractions,
+              menuClosed: menu instanceof HTMLDetailsElement && !menu.open,
+              menuKeyboard: keyboardItem,
+              focusRestored: document.activeElement === trigger,
+              popoverPositioned: positioned?.getAttribute('data-runtime-positioned'),
+              popoverPlacement: positioned?.getAttribute('data-runtime-placement'),
+            }
+          })()`,
+        )
+        assert.equal(interactionAudit.attached, 'attached')
+        assert.equal(interactionAudit.menuClosed, true)
+        assert.match(String(interactionAudit.menuKeyboard), /Duplicate/u)
+        assert.equal(interactionAudit.focusRestored, true)
+        assert.equal(interactionAudit.popoverPositioned, 'true')
+        assert.match(String(interactionAudit.popoverPlacement), /^(?:top|bottom)-(?:start|end)$/u)
+      }
       const captured: Json = await cdp.send('Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
