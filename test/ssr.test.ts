@@ -9,6 +9,7 @@ import {
   each,
   html,
   hydrateRoot,
+  renderToStaticString,
   renderToString,
   when,
 } from '@ketvietlab/ketjs-view'
@@ -45,6 +46,47 @@ function tracingDoc() {
 test('ssr: fences every hole so adjacent text cannot merge', () => {
   const out = renderToString(html`<p class="a" title=${'xin chào'}>${'nội dung'}</p>`)
   assert.equal(out, '<p class="a" title="xin chào"><!--k[-->nội dung<!--k--></p>')
+})
+
+test('static rendering: omits hydration markers through nested templates and lists', () => {
+  const out = renderToStaticString(
+    html`<main>${html`<h1>${'Cửa hàng'}</h1>`}${list([
+      { id: 1, name: 'a' },
+      { id: 2, name: 'b' },
+    ])}</main>`,
+  )
+  assert.equal(
+    out,
+    '<main><h1>Cửa hàng</h1><ul class="l"><li data-id="1">a</li><li data-id="2">b</li></ul></main>',
+  )
+})
+
+test('static rendering: keeps markers only inside legacy and standard island hosts', () => {
+  const out = renderToStaticString(html`
+    <header>${'Tĩnh'}</header>
+    <ket-island data-island="legacy"><button>${1}</button></ket-island>
+    <div data-ket-island="" data-island="standard"><button>${2}</button></div>
+    <footer>${'Tĩnh'}</footer>
+  `)
+  assert.doesNotMatch(out, /<header><!--k/)
+  assert.match(out, /<ket-island[^>]*><button><!--k\[-->1<!--k--><\/button><\/ket-island>/)
+  assert.match(
+    out,
+    /<div data-ket-island="" data-island="standard"><button><!--k\[-->2<!--k--><\/button><\/div>/,
+  )
+  assert.doesNotMatch(out, /<footer><!--k/)
+  assert.equal(
+    renderToStaticString(html`<div data-ket-island=${false}>${3}</div>`),
+    '<div>3</div>',
+    'a false boundary attribute does not retain markers',
+  )
+})
+
+test('static rendering: escapes values without relying on marker removal', () => {
+  assert.equal(
+    renderToStaticString(html`<p title=${'"><script>'}>${'<script>alert(1)</script>'}</p>`),
+    '<p title="&quot;&gt;&lt;script&gt;">&lt;script&gt;alert(1)&lt;/script&gt;</p>',
+  )
 })
 
 test('ssr: escapes interpolated values, in text and in attributes', () => {

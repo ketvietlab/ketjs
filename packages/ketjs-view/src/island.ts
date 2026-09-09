@@ -11,8 +11,11 @@ import { escapeHtml } from './host.ts'
 import type { Host, HostNode } from './host.ts'
 import type { TemplateResult } from './render.ts'
 import { mountHydrated } from './mount.ts'
+import { ISLAND_HOST_ATTRIBUTE, ISLAND_SELECTOR, ISLAND_TAG } from './island-protocol.ts'
+import type { IslandHostTag } from './island-protocol.ts'
 
-export const ISLAND_TAG = 'ket-island'
+export { ISLAND_HOST_ATTRIBUTE, ISLAND_SELECTOR, ISLAND_TAG } from './island-protocol.ts'
+export type { IslandHostTag } from './island-protocol.ts'
 
 // The view layer carries its own errors rather than reaching into the kernel for
 // them. That single import was the only thing pointing out of this layer, and it
@@ -34,7 +37,7 @@ export type IslandProps = Record<string, unknown>
 export type IslandView = () => TemplateResult
 /** Browser-only resources available after the server tree has been adopted. */
 export type IslandMountContext = {
-  /** The stable `<ket-island>` element that owns this instance's DOM. */
+  /** The stable island host element that owns this instance's DOM. */
   root: IslandElement
   /** Aborted before reactive and controller cleanup starts. */
   lifetime: AbortSignal
@@ -65,6 +68,11 @@ export type IslandDefinition<Props extends IslandProps = IslandProps> = {
 /** Heterogeneous registry entry; prefer defineIsland<Props>() when authoring one. */
 export type AnyIslandDefinition = IslandDefinition
 export type IslandRegistry = Record<string, IslandFactory>
+export type RenderIslandOptions = {
+  key?: readonly string[]
+  /** Use `div` for standard HTML. The legacy `ket-island` host remains the default. */
+  tag?: IslandHostTag
+}
 
 /**
  * Preserve one props type across its schema, identity key, and server factory.
@@ -147,16 +155,24 @@ export function renderIsland(
   name: string,
   factory: IslandFactory,
   props: IslandProps,
-  options: { key?: readonly string[] } = {},
+  options: RenderIslandOptions = {},
 ): string {
+  const tag = options.tag ?? ISLAND_TAG
+  if (tag !== ISLAND_TAG && tag !== 'div')
+    throw new IslandError({
+      code: 'E_ISLAND_HOST_TAG',
+      message: `island "${name}" received unsupported host tag "${String(tag)}"`,
+      hint: 'use "div" or omit tag to keep the legacy "ket-island" host',
+    })
   const { raw, revived } = jsonProps(name, props)
   const key = islandKey(name, revived, options.key)
   const controller = controllerOf(factory(revived))
+  const hostMarker = tag === 'div' ? ` ${ISLAND_HOST_ATTRIBUTE}=""` : ''
   try {
     return (
-      `<${ISLAND_TAG} data-island="${escapeHtml(name)}" data-key="${escapeHtml(key)}" data-props="${escapeHtml(raw)}">` +
+      `<${tag}${hostMarker} data-island="${escapeHtml(name)}" data-key="${escapeHtml(key)}" data-props="${escapeHtml(raw)}">` +
       renderToString(controller.view()) +
-      `</${ISLAND_TAG}>`
+      `</${tag}>`
     )
   } finally {
     controller.dispose?.()
@@ -196,8 +212,12 @@ const elementsOf = (root: IslandElement): IslandElement[] => {
   const nodeName =
     (root as unknown as { nodeName?: string; tagName?: string }).nodeName ??
     (root as unknown as { tagName?: string }).tagName
-  if (nodeName?.toLowerCase() === ISLAND_TAG) out.push(root)
-  out.push(...root.querySelectorAll(ISLAND_TAG))
+  if (
+    nodeName?.toLowerCase() === ISLAND_TAG ||
+    (nodeName?.toLowerCase() === 'div' && root.getAttribute(ISLAND_HOST_ATTRIBUTE) !== null)
+  )
+    out.push(root)
+  out.push(...root.querySelectorAll(ISLAND_SELECTOR))
   return out
 }
 

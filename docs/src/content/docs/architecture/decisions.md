@@ -1167,6 +1167,12 @@ comment marker per hole — nothing else. Everything but a hole has a length the
 template already knows, so the hydration walk can count nodes instead of reading
 markers for them.
 
+**Static output is a separate contract.** `renderToStaticString()` walks the same
+escaped template structure but omits markers outside explicit island hosts. It
+keeps them below either `<ket-island>` or `<div data-ket-island>` because only those
+subtrees are later adopted. This is decided from declared hydration boundaries,
+not guessed from whether a current interpolation happens to contain a signal.
+
 **Hydration adopts, it does not rebuild:** verified in a real browser, hydrating
 twenty server-rendered rows creates **zero** nodes and keeps the same node objects,
 and the first update afterwards also creates zero.
