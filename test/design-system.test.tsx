@@ -12,6 +12,7 @@ import {
   AuditLog,
   AvatarGroup,
   Badge,
+  Breadcrumbs,
   BoardPage,
   Button,
   ConfirmDialog,
@@ -396,6 +397,19 @@ test('design system: application navigation shares one semantic model across bre
     exports: Record<string, unknown>
   }
   assert.equal(packageJson.exports['./runtime/auto.js'], './dist/runtime/auto.js')
+})
+
+test('design system: breadcrumbs expose linked ancestors and one current location', () => {
+  const breadcrumbs = renderToString(
+    <Breadcrumbs
+      label="Current location"
+      items={[{ label: 'Workspace', href: '/' }, { label: 'Sales', href: '/sales' }, { label: 'Orders' }]}
+    />,
+  )
+  assert.match(breadcrumbs, /data-ui="breadcrumbs"[^>]*aria-label="Current location"/)
+  assert.match(breadcrumbs, /data-ui="breadcrumb"[\s\S]*href="\/"/)
+  assert.match(breadcrumbs, /href="\/sales"/)
+  assert.match(breadcrumbs, /aria-current="page"[^>]*>[^<]*<!--k\[-->Orders/)
 })
 
 test('design system: application navigation stays dense enough for operational menus', () => {
@@ -1503,7 +1517,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 105)
+  assert.equal(names.length, 106)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1540,8 +1554,8 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 187)
-  assert.equal(designSystemInventory.summary.runtimeExports, 110)
+  assert.equal(designSystemInventory.summary.publicExports, 189)
+  assert.equal(designSystemInventory.summary.runtimeExports, 111)
   assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 38)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)

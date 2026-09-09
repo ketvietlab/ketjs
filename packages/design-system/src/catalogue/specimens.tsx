@@ -3,7 +3,7 @@ import { ActionGroup, Button, IconButton, LinkButton } from '../primitives/actio
 import { Avatar, Badge, Code, CountBadge, Tag } from '../primitives/status.tsx'
 import { EmptyState, LoadingState, Notice } from '../primitives/feedback.tsx'
 import { Field } from '../primitives/field.tsx'
-import { NavList, Tabs } from '../primitives/navigation.tsx'
+import { Breadcrumbs, NavList, Tabs } from '../primitives/navigation.tsx'
 import { Progress } from '../primitives/progress.tsx'
 import { ContentCard, Disclosure, Grid, Inline, Metric, Section, Stack, Surface } from '../layouts/index.tsx'
 import { AppShell, Page } from '../layouts/shell.tsx'
@@ -998,6 +998,14 @@ export const componentGroups: readonly ComponentGroup[] = [
         render: () => (
           <Stack
             items={[
+              <Breadcrumbs
+                label="Current location"
+                items={[
+                  { label: 'Workspace', href: '#navigation-items' },
+                  { label: 'Sales', href: '#navigation-items' },
+                  { label: 'Orders' },
+                ]}
+              />,
               <NavList
                 label="Product"
                 items={[
