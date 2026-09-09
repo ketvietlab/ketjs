@@ -62,7 +62,7 @@ export const AvatarGroup = (props: {
   const visible = props.people.slice(0, props.max ?? 4)
   const remaining = props.people.length - visible.length
   return (
-    <span data-ui="avatar-group" aria-label={props.label}>
+    <span data-ui="avatar-group" role="group" aria-label={props.label}>
       {each(
         visible,
         (person) => person.id,
@@ -70,7 +70,11 @@ export const AvatarGroup = (props: {
           <Avatar name={person.name} />
         ),
       )}
-      {remaining > 0 && <span aria-label={`${remaining} more people`}>+{String(remaining)}</span>}
+      {remaining > 0 && (
+        <span role="img" aria-label={`${remaining} more people`}>
+          +{String(remaining)}
+        </span>
+      )}
     </span>
   )
 }
