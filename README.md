@@ -35,9 +35,23 @@ otherwise reuse that project's locally installed CLI instead of downloading the 
 
 Install the framework into an existing project with `npm install @ketvietlab/ketjs`. Optional
 packages are `@ketvietlab/ketjs-postgres` for PostgreSQL, `@ketvietlab/ketsuite` for business
-modules, and `@ketvietlab/ketjs-view` when consuming the view layer directly. See the
+modules, and `@ketvietlab/ketjs-view` when consuming the view layer directly. Static HTML projects
+use `@ketvietlab/ketjs-view-tools` and the `@ketvietlab/create-view` generator. See the
 [KetJS quick start](docs/src/content/docs/ketjs/quick-start.md) for the generated layout and next
 commands.
+
+To scaffold a static site that delivers HTML, CSS, and JavaScript without a Ket server:
+
+```bash
+# Run from: /path/to/projects
+npm create @ketvietlab/view@latest my-site
+cd my-site
+npm install
+npm run dev
+```
+
+`npm run build` writes the deployable site to `dist`. Ordinary page markup has no hydration
+comments; only explicit islands retain the markers their client code needs.
 
 To scaffold the complete KetSuite business application instead:
 
@@ -245,6 +259,8 @@ the revision and hardware you care about.
 ```
 packages/
   ketjs-view/      signals, surgical DOM, SSR, hydration, islands — browser-safe, 0 deps
+  ketjs-view-tools/ static page builder, asset bundler, development and preview server
+  create-view/     runnable static-site scaffold
   ketjs/           kernel, data, server, theme, agent, codegen — depends only on ketjs-view
   ketjs-postgres/  the one package permitted a driver, and the reason it is a package
   ketsuite/        KetSuite — business modules, using only the public entry

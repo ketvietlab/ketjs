@@ -1,0 +1,22 @@
+{
+  "name": "__NAME__",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "ket-view dev",
+    "build": "ket-view build",
+    "preview": "ket-view preview",
+    "check": "tsc --noEmit && ket-view check"
+  },
+  "dependencies": {
+    "@ketvietlab/ketjs-view": "__VERSION__"
+  },
+  "devDependencies": {
+    "@ketvietlab/ketjs-view-tools": "__VERSION__",
+    "typescript": "^7.0.2"
+  }
+}
