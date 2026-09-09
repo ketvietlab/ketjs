@@ -354,7 +354,7 @@ try {
           })()`,
         )
         assert.equal(submenuAudit.navigationItems, 18)
-        assert.equal(submenuAudit.tabs, 5)
+        assert.equal(submenuAudit.tabs, 4)
         assert.equal(submenuAudit.nestedItems, 3)
         assert.equal(submenuAudit.menuOpen, true)
         assert.equal(submenuAudit.panelInsideViewport, true)
