@@ -7,115 +7,115 @@
       "decision": "keep",
       "gapTask": "DS-011"
     },
-    "./layouts/index.tsx": {
+    "./layouts/layout/index.tsx": {
       "owner": "Layout",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-009"
     },
-    "./layouts/shell.tsx": {
+    "./layouts/shell/index.tsx": {
       "owner": "Shell",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-009"
     },
-    "./patterns/board-page.tsx": {
+    "./patterns/board-page/index.tsx": {
       "owner": "Page recipes",
       "maturity": "deprecated",
       "decision": "recipe",
       "gapTask": "DS-044"
     },
-    "./patterns/dashboard-page.tsx": {
+    "./patterns/dashboard-page/index.tsx": {
       "owner": "Page recipes",
       "maturity": "deprecated",
       "decision": "recipe",
       "gapTask": "DS-044"
     },
-    "./patterns/data-table.tsx": {
+    "./patterns/data-table/index.tsx": {
       "owner": "Data display",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-030"
     },
-    "./patterns/form-page.tsx": {
+    "./patterns/form-page/index.tsx": {
       "owner": "Page recipes",
       "maturity": "deprecated",
       "decision": "recipe",
       "gapTask": "DS-044"
     },
-    "./patterns/list-chrome.tsx": {
+    "./patterns/list-chrome/index.tsx": {
       "owner": "Data operations",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-027"
     },
-    "./patterns/list-page.tsx": {
+    "./patterns/list-page/index.tsx": {
       "owner": "Page patterns",
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-009"
     },
-    "./patterns/modal-sheet.tsx": {
+    "./patterns/modal-sheet/index.tsx": {
       "owner": "Overlays",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-015"
     },
-    "./patterns/pipeline.tsx": {
+    "./patterns/pipeline/index.tsx": {
       "owner": "Data display",
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-009"
     },
-    "./patterns/record-form.tsx": {
+    "./patterns/record-form/index.tsx": {
       "owner": "Forms",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-019"
     },
-    "./patterns/record-page.tsx": {
+    "./patterns/record-page/index.tsx": {
       "owner": "Page patterns",
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-009"
     },
-    "./patterns/workspace-page.tsx": {
+    "./patterns/workspace-page/index.tsx": {
       "owner": "Page patterns",
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-009"
     },
-    "./primitives/actions.tsx": {
+    "./primitives/actions/index.tsx": {
       "owner": "Actions",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-013"
     },
-    "./primitives/feedback.tsx": {
+    "./primitives/feedback/index.tsx": {
       "owner": "Feedback",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-016"
     },
-    "./primitives/field.tsx": {
+    "./primitives/field/index.tsx": {
       "owner": "Forms",
       "maturity": "stable",
       "decision": "refactor",
       "gapTask": "DS-019"
     },
-    "./primitives/navigation.tsx": {
+    "./primitives/navigation/index.tsx": {
       "owner": "Navigation",
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-009"
     },
-    "./primitives/progress.tsx": {
+    "./primitives/progress/index.tsx": {
       "owner": "Feedback",
       "maturity": "stable",
       "decision": "keep",
       "gapTask": "DS-009"
     },
-    "./primitives/status.tsx": {
+    "./primitives/status/index.tsx": {
       "owner": "Status",
       "maturity": "stable",
       "decision": "refactor",

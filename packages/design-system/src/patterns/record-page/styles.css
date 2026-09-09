@@ -1,0 +1,228 @@
+@layer ket.app {
+  /* RecordPage is the canonical public record surface. FormPage keeps this same
+     rhythm as a compatibility adapter, but the hooks must remain distinct so
+     application audits can tell new record screens from legacy form screens. */
+  :where([data-kv-design-system]) [data-ui="record-page"] {
+    display: grid;
+    min-width: 0;
+    background: var(--kv-page-content-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page"][data-variant="operational"] {
+    gap: 0;
+    padding: 0 0 var(--kv-space-10);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="record-page"][data-variant="operational"]
+    [data-ui="record-page-context"] {
+    display: flex;
+    min-width: 0;
+    min-height: var(--kv-table-header-height);
+    align-items: center;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-header"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-4) var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="record-page"][data-variant="operational"]
+    [data-ui="record-page-header"] {
+    background: var(--kv-page-chrome-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-title-row"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-heading"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-title"] {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--kv-text-main);
+    font-size: var(--kv-page-title-size);
+    font-weight: var(--kv-weight-semibold);
+    letter-spacing: 0;
+    line-height: var(--kv-leading-tight);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-status"] {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-subline"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-description"] {
+    max-width: 48rem;
+    margin: 0;
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-sm);
+    line-height: var(--kv-leading-normal);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-actions"] {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-meta"] {
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-controller"] {
+    min-width: 0;
+    padding-inline: var(--kv-page-padding-x);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-controller"]:empty {
+    display: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-navigation"] {
+    min-width: 0;
+    padding-inline: var(--kv-page-padding-x);
+    border-bottom: 1px solid var(--kv-panel-divider);
+    background: var(--kv-page-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-layout"] {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="record-page"][data-has-aside="false"]
+    [data-ui="record-page-layout"] {
+    grid-template-columns: minmax(0, 56rem);
+  }
+
+  :where([data-kv-design-system])
+    [data-ui="record-page"][data-has-aside="false"][data-width="wide"]
+    [data-ui="record-page-layout"] {
+    grid-template-columns: minmax(0, calc(68.75rem + var(--kv-page-padding-x) * 2));
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-body"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-6);
+    padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10);
+    background: var(--kv-page-content-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-body"] > [data-ui="stack"] {
+    gap: var(--kv-space-6);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-page-aside"] {
+    position: sticky;
+    top: 0;
+    display: grid;
+    min-width: 0;
+    max-height: 100dvh;
+    align-content: start;
+    padding: var(--kv-space-5) var(--kv-page-padding-x) var(--kv-space-10) var(--kv-space-5);
+    overflow-y: auto;
+    border-left: 1px solid var(--kv-panel-divider);
+    background: var(--kv-panel-bg-subtle);
+  }
+
+  @media (max-width: 63.9375rem) {
+    :where([data-kv-design-system]) [data-ui="record-page-layout"] {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: var(--kv-space-5);
+    }
+
+    :where([data-kv-design-system]) [data-ui="record-page-aside"] {
+      position: static;
+      max-height: none;
+      padding-top: var(--kv-space-5);
+      overflow: visible;
+      border-top: 1px solid var(--kv-panel-divider);
+      border-left: 0;
+    }
+  }
+
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="record-page"][data-variant="operational"] {
+      padding-bottom: var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="record-page"][data-variant="operational"]
+      [data-ui="record-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="record-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="record-page-title-row"] {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+      gap: var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="record-page-title"] {
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system]) [data-ui="record-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="record-page-actions"]
+      > :is([data-ui="action-group"], [data-ui="form-cluster"]) {
+      width: 100%;
+    }
+
+    :where([data-kv-design-system]) [data-ui="record-page-meta"] {
+      padding-left: 0;
+    }
+
+    :where([data-kv-design-system]) [data-ui="record-page-navigation"] {
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system]) [data-ui="record-page-body"],
+    :where([data-kv-design-system]) [data-ui="record-page-aside"],
+    :where([data-kv-design-system]) [data-ui="record-page-controller"] {
+      padding-inline: var(--kv-space-4);
+    }
+  }
+}

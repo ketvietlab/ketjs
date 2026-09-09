@@ -83,7 +83,7 @@ const evaluate = async <Value>(cdp: Cdp, expression: string): Promise<Value> => 
 const appPort = await freePort()
 const debugPort = await freePort()
 const chromeProfile = await mkdtemp(join(tmpdir(), 'ketjs-design-system-browser-'))
-const evidenceDir = await mkdtemp(join(tmpdir(), 'ketjs-design-system-inventory-'))
+const evidenceDir = await mkdtemp(join(tmpdir(), 'ketjs-design-system-'))
 const chromePath =
   process.env.KET_BROWSER_BIN ??
   (process.platform === 'darwin'
@@ -216,10 +216,88 @@ try {
       })
     }
   }
+
+  const reviewRoutes = [
+    { key: 'catalogue-en', path: '/?theme=light&density=default', selector: '[data-ui="catalogue"]' },
+    { key: 'list-en', path: '/surfaces?kind=list&lang=en&theme=light', selector: '[data-ui="list-page"]' },
+    { key: 'list-vi', path: '/surfaces?kind=list&lang=vi&theme=light', selector: '[data-ui="list-page"]' },
+    {
+      key: 'record-en',
+      path: '/surfaces?kind=record&lang=en&theme=light',
+      selector: '[data-ui="record-page"]',
+    },
+    {
+      key: 'record-vi',
+      path: '/surfaces?kind=record&lang=vi&theme=light',
+      selector: '[data-ui="record-page"]',
+    },
+    {
+      key: 'workspace-en',
+      path: '/surfaces?kind=flow&lang=en&theme=light',
+      selector: '[data-pattern="workspace"]',
+    },
+    {
+      key: 'workspace-vi',
+      path: '/surfaces?kind=flow&lang=vi&theme=light',
+      selector: '[data-pattern="workspace"]',
+    },
+    { key: 'connected-demo-vi', path: '/demo?theme=light', selector: '[data-ui="app-shell"]' },
+  ] as const
+  for (const viewport of viewports) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: 1,
+      mobile: viewport.mobile,
+    })
+    for (const review of reviewRoutes) {
+      const url = `http://127.0.0.1:${appPort}${review.path}`
+      await cdp.send('Page.navigate', { url })
+      await waitFor(
+        () =>
+          evaluate<boolean>(
+            cdp!,
+            `location.href === ${JSON.stringify(url)} && document.readyState === 'complete' && Boolean(document.querySelector(${JSON.stringify(review.selector)}))`,
+          ),
+        `${review.key} did not render at ${viewport.key}`,
+      )
+      const audit: Json = await evaluate<Json>(
+        cdp,
+        `(() => ({
+          horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+          mainCount: document.querySelectorAll('main, [role="main"]').length,
+          title: document.title,
+          textLength: document.body.innerText.length,
+        }))()`,
+      )
+      assert.equal(
+        audit.horizontalOverflow,
+        false,
+        `${review.key}/${viewport.key} page overflows horizontally`,
+      )
+      assert.equal(audit.mainCount, 1, `${review.key}/${viewport.key} must have one main landmark`)
+      assert.ok(Number(audit.textLength) > 100, `${review.key}/${viewport.key} content is incomplete`)
+      const captured: Json = await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: false,
+      })
+      const bytes: Buffer = Buffer.from(String(captured.data), 'base64')
+      assert.ok(bytes.length > 10_000, `${review.key}/${viewport.key} screenshot is too small`)
+      const path = join(evidenceDir, `${review.key}-${viewport.key}.png`)
+      await writeFile(path, bytes)
+      results.push({
+        route: review.key,
+        viewport: viewport.key,
+        width: viewport.width,
+        height: viewport.height,
+        bytes: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+        path,
+      })
+    }
+  }
   for (const result of results) assert.ok((await readFile(String(result.path))).length > 10_000)
-  process.stdout.write(
-    `${JSON.stringify({ event: 'design_system_inventory_browser_e2e', evidenceDir, results })}\n`,
-  )
+  process.stdout.write(`${JSON.stringify({ event: 'design_system_browser_e2e', evidenceDir, results })}\n`)
 } finally {
   cdp?.close()
   app.kill('SIGTERM')

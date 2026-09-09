@@ -1,11 +1,27 @@
+@layer ket.reset, ket.theme, ket.app, ket.user;
+
 @import "./foundations/tokens.css";
 @import "./foundations/reset.css";
-@import "./primitives/primitives.css";
-@import "./primitives/navigation.css";
-@import "./primitives/progress.css";
-@import "./layouts/layouts.css";
-@import "./layouts/shell.css";
+@import "./primitives/actions/styles.css";
+@import "./primitives/status/styles.css";
+@import "./primitives/feedback/styles.css";
+@import "./primitives/field/styles.css";
+@import "./primitives/navigation/styles.css";
+@import "./primitives/progress/styles.css";
+@import "./layouts/layout/styles.css";
+@import "./layouts/shell/styles.css";
 /* FormPage rail contract: desktop content is 2:1; narrow screens stack. */
-@import "./patterns/patterns.css";
-@import "./layouts/flat.css";
-@import "./layouts/grouped.css";
+@import "./patterns/list-page/styles.css";
+@import "./patterns/data-table/styles.css";
+@import "./patterns/list-chrome/styles.css";
+@import "./patterns/record-form/styles.css";
+@import "./patterns/modal-sheet/styles.css";
+@import "./patterns/list-page/responsive.css";
+@import "./patterns/pipeline/styles.css";
+@import "./patterns/board-page/styles.css";
+@import "./patterns/dashboard-page/styles.css";
+@import "./patterns/form-page/styles.css";
+@import "./patterns/record-page/styles.css";
+@import "./patterns/workspace-page/styles.css";
+@import "./layouts/flat/styles.css";
+@import "./layouts/grouped/styles.css";

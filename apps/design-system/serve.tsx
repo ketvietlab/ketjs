@@ -120,6 +120,45 @@ const app = await createKetServer({
           ),
         }),
       }),
+    '/components': (url) => {
+      const theme = oneOf(url.searchParams.get('theme'), ['light', 'dark', 'system'] as const, 'light')
+      const density = oneOf(
+        url.searchParams.get('density'),
+        ['compact', 'default', 'comfortable'] as const,
+        'default',
+      )
+      return page({
+        body: document({
+          lang: 'en',
+          title: 'Components · Két Việt Design System',
+          head: CatalogueHead(),
+          body: <CataloguePage theme={theme} density={density} mode="components" path="/components" />,
+        }),
+      })
+    },
+    '/components/{groupId}': (url, _request, params) => {
+      const theme = oneOf(url.searchParams.get('theme'), ['light', 'dark', 'system'] as const, 'light')
+      const density = oneOf(
+        url.searchParams.get('density'),
+        ['compact', 'default', 'comfortable'] as const,
+        'default',
+      )
+      return page({
+        body: document({
+          lang: 'en',
+          title: 'Component group · Két Việt Design System',
+          head: CatalogueHead(),
+          body: (
+            <CataloguePage
+              theme={theme}
+              density={density}
+              groupId={params.groupId}
+              path={`/components/${params.groupId}`}
+            />
+          ),
+        }),
+      })
+    },
     '/': (url) => {
       const theme = oneOf(url.searchParams.get('theme'), ['light', 'dark', 'system'] as const, 'light')
       const density = oneOf(
@@ -132,7 +171,7 @@ const app = await createKetServer({
           lang: 'en',
           title: 'Két Việt Design System',
           head: CatalogueHead(),
-          body: <CataloguePage theme={theme} density={density} />,
+          body: <CataloguePage theme={theme} density={density} mode="overview" path="/" />,
         }),
       })
     },
