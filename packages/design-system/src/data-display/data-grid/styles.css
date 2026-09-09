@@ -1,0 +1,49 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="data-grid-scroll"] {
+    max-width: 100%;
+    overflow: auto;
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-grid"] {
+    width: 100%;
+    min-width: max-content;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--kv-text-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-grid-cap"] {
+    position: sticky;
+    left: 0;
+    margin: 0;
+    padding: var(--kv-space-2);
+    background: var(--kv-warning-bg);
+    color: var(--kv-color-warning);
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-grid"] :is(th, [data-ui="data-grid-cell"]) {
+    height: var(--kv-table-row-height);
+    padding: var(--kv-space-2) var(--kv-space-3);
+    border-right: 1px solid var(--kv-panel-border);
+    border-bottom: 1px solid var(--kv-panel-border);
+    background: var(--kv-panel-bg);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-grid-cell"][data-pinned="start"],
+  :where([data-kv-design-system]) [data-ui="data-grid"] th[data-pinned="start"] {
+    position: sticky;
+    z-index: 1;
+    left: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="data-grid-cell"][data-pinned="end"],
+  :where([data-kv-design-system]) [data-ui="data-grid"] th[data-pinned="end"] {
+    position: sticky;
+    z-index: 1;
+    right: 0;
+  }
+}

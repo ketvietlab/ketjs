@@ -1,0 +1,63 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="description-list"] {
+    display: grid;
+    grid-template-columns: repeat(var(--kv-description-columns, 2), minmax(0, 1fr));
+    gap: var(--kv-space-3) var(--kv-space-5);
+    margin: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="description-list"][data-columns="1"] {
+    --kv-description-columns: 1;
+  }
+  :where([data-kv-design-system]) [data-ui="description-list"][data-columns="3"] {
+    --kv-description-columns: 3;
+  }
+
+  :where([data-kv-design-system]) [data-ui="key-value"] {
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="key-value-label"] {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+    font-weight: var(--kv-weight-medium);
+  }
+
+  :where([data-kv-design-system]) [data-ui="key-value-value"] {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-kv-design-system]) [data-ui="person"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="person-body"] {
+    display: grid;
+    gap: 1px;
+  }
+
+  :where([data-kv-design-system]) [data-ui="avatar-group"] {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  :where([data-kv-design-system]) [data-ui="avatar-group"] > * + * {
+    margin-left: calc(var(--kv-space-2) * -1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="status"] {
+    display: inline-flex;
+  }
+
+  @container (max-width: 34rem) {
+    :where([data-kv-design-system]) [data-ui="description-list"] {
+      --kv-description-columns: 1;
+    }
+  }
+}

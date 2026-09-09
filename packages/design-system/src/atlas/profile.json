@@ -1,0 +1,43 @@
+{
+  "$schema": "./adapter.schema.json",
+  "schemaVersion": "ketatlas.design-system-adapter.v1",
+  "id": "@ketvietlab/design-system",
+  "materializer": {
+    "command": "ket-design-system-atlas",
+    "writeArguments": ["materialize", "{atlasDirectory}"],
+    "checkArguments": ["check", "{atlasDirectory}"],
+    "lockFile": "design-system.lock.json"
+  },
+  "document": {
+    "rootAttribute": { "name": "data-kv-design-system" },
+    "scriptMode": "classic"
+  },
+  "assets": [
+    { "kind": "stylesheet", "path": "assets/ket-design-system.css", "load": "head" },
+    {
+      "kind": "script",
+      "path": "assets/ket-design-system-contracts.js",
+      "load": "body-end"
+    },
+    {
+      "kind": "script",
+      "path": "assets/ket-design-system-runtime.js",
+      "load": "body-end"
+    }
+  ],
+  "composition": {
+    "global": "ATLAS_DESIGN_SYSTEM",
+    "templatesProperty": "templates",
+    "attachProperty": "attach",
+    "slotPattern": "__ATLAS_SLOT_{NAME}__",
+    "hookAttribute": "data-ui"
+  },
+  "inventory": "@ketvietlab/design-system/catalogue/inventory.json",
+  "stateOwnership": "url",
+  "rules": [
+    "Compose screens from generated page contracts and public hooks.",
+    "Keep business copy and domain-specific layout in the atlas.",
+    "Do not copy upstream component markup or override semantic design tokens.",
+    "Commit the generated lock and verify it before review."
+  ]
+}

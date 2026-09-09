@@ -1,0 +1,82 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="menu"] {
+    position: relative;
+    display: inline-block;
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-trigger"] {
+    min-height: var(--kv-control-height);
+    padding: 0 var(--kv-space-3);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-interactive-bg);
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-sm);
+    font-weight: var(--kv-weight-medium);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-trigger"]::-webkit-details-marker {
+    display: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-panel"] {
+    position: absolute;
+    z-index: var(--kv-layer-menu);
+    top: calc(100% + var(--kv-space-1));
+    left: 0;
+    display: grid;
+    min-width: 13rem;
+    padding: var(--kv-space-1);
+    border: 1px solid var(--kv-border-default);
+    border-radius: var(--kv-radius-md);
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-popover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu"][data-align="end"] [data-ui="menu-panel"] {
+    right: 0;
+    left: auto;
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-item"] {
+    display: flex;
+    width: 100%;
+    min-height: var(--kv-control-height);
+    align-items: center;
+    gap: var(--kv-space-2);
+    padding: var(--kv-space-2) var(--kv-space-3);
+    border: 0;
+    border-radius: var(--kv-radius-sm);
+    background: transparent;
+    color: var(--kv-text-main);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-item"]:hover {
+    background: var(--kv-interactive-hover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-item"][aria-disabled="true"] {
+    color: var(--kv-text-disabled);
+    cursor: not-allowed;
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-item"][data-destructive="true"] {
+    color: var(--kv-danger);
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-item-copy"] {
+    display: grid;
+    gap: var(--kv-space-0-5);
+  }
+
+  :where([data-kv-design-system]) [data-ui="menu-item-copy"] small {
+    color: var(--kv-text-muted);
+    font-size: var(--kv-text-xs);
+  }
+}

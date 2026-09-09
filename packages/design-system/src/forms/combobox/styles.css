@@ -1,0 +1,76 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="combobox"] {
+    position: relative;
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="combobox-input-row"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--kv-control-height);
+  }
+
+  :where([data-kv-design-system]) [data-ui="combobox-input-row"] [data-ui="field-control"] {
+    border-radius: var(--kv-radius-sm) 0 0 var(--kv-radius-sm);
+  }
+
+  :where([data-kv-design-system]) [data-ui="combobox-toggle"] {
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--kv-field-border);
+    border-left: 0;
+    border-radius: 0 var(--kv-radius-sm) var(--kv-radius-sm) 0;
+    color: var(--kv-text-secondary);
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="combobox-listbox"] {
+    position: absolute;
+    z-index: var(--kv-layer-popover);
+    top: calc(100% + var(--kv-space-1));
+    right: 0;
+    left: 0;
+    max-height: 15rem;
+    overflow: auto;
+    padding: var(--kv-space-1);
+    border: 1px solid var(--kv-panel-border);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-popover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="combobox-option"] {
+    display: grid;
+    gap: 2px;
+    padding: var(--kv-space-2);
+    border-radius: var(--kv-radius-xs);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :where([data-kv-design-system]) [data-ui="combobox-option"]:hover,
+  :where([data-kv-design-system]) [data-ui="combobox-option"][aria-selected="true"] {
+    background: var(--kv-interactive-hover);
+  }
+
+  :where([data-kv-design-system]) [data-ui="combobox-empty"] {
+    margin: 0;
+    padding: var(--kv-space-2);
+    color: var(--kv-text-muted);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tag-picker"] {
+    display: grid;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="tag-picker"] > a {
+    width: fit-content;
+    padding: var(--kv-space-1) var(--kv-space-2);
+    border-radius: 999px;
+    background: var(--kv-interactive-bg);
+    color: inherit;
+    font-size: var(--kv-text-xs);
+    text-decoration: none;
+  }
+}

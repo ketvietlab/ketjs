@@ -50,6 +50,10 @@ inside the shell.
 
 The catalogue is isolated behind `@ketvietlab/design-system/catalogue`, so the
 production entry point does not load its specimen data or catalogue chrome.
+Its registry connects every public component to an owner, maturity, supported
+states and a rendered specimen. Component implementation and selector-bearing CSS
+live below per-component-family directories; consumers still import only from the
+package root.
 
 Run the component catalogue from the repository root:
 
@@ -59,6 +63,20 @@ npm run design:system
 ```
 
 Then open `http://127.0.0.1:4100`.
+
+Open `http://127.0.0.1:4100/inventory` for the documentation-style governance
+registry. It lists current public exports, the KetSuite compatibility kit, and
+the planned component catalog with ownership, maturity, Wave, evidence posture,
+and promotion decisions. Filters are URL-owned and work without client JavaScript.
+
+Regenerate and verify its source snapshot with:
+
+```bash
+# Run from: ketjs/
+npm run design:inventory
+npm run design:inventory:check
+npm run design:governance:check
+```
 
 ### Operational demo
 
@@ -143,6 +161,27 @@ open automatically. Give repeated search/sort controls unique IDs. Loading links
 are disabled, and empty query rows do not occupy space.
 
 Route-modal focus trapping, background inertness, Escape, focus restoration and
-unsaved-change confirmation belong to the route runtime. ARIA metadata alone
-does not implement those interactions. See the backend development guide for the
-full composition and integration contract.
+anchored positioning are provided by the optional `attachDesignSystemInteractions`
+adapter. Route state, unsaved-change decisions and submit outcomes remain application
+responsibilities. Menu, popover, tooltip, dialog, toast, spinner and skeleton renderers
+retain native links/forms and useful no-script behavior. See the backend development
+guide for the full composition and integration contract.
+
+Typed form exports cover scalar and selection fields, controlled combobox/tag pickers,
+civil date and local-time values, native file inputs, and a generic relation renderer.
+Applications retain validation, query, permission, timezone, upload, and persistence
+ownership; renderers preserve submitted text and expose native fallbacks.
+
+Data-operation exports compose URL-owned search/filter/sort/view state, one-link
+resource rows, bounded grids, hierarchy, and inline native forms. The package renders
+state and carries version tokens; application adapters own persistence, conflicts,
+permissions, cross-page selection, and dataset queries.
+
+Record composition exports cover facts, people, formatted values, one identity summary,
+one neutral rail, activity/audit, attachments, and media. Applications pass authorized,
+redacted results and retain storage and mutation ownership. Catalogue recipes vary slots
+within `ListPage`, `RecordPage`, and `WorkspacePage`; they do not add a fourth page pattern.
+
+Before release, run `npm run design:release:check` from the repository root. It
+requires zero planned components, current migration/rollback notes, and locked
+deprecation admission. Publishing remains a post-merge operation from `master`.

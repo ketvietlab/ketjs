@@ -1,0 +1,30 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="record-summary"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--kv-space-4);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-summary-main"] {
+    display: grid;
+    gap: var(--kv-space-1);
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-summary-main"] :is(h2, p) {
+    margin: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-summary"] > [data-ui="description-list"] {
+    grid-column: 1 / -1;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-actions"] {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  :where([data-kv-design-system]) [data-ui="record-rail"] {
+    min-width: 0;
+  }
+}

@@ -1,0 +1,140 @@
+@layer ket.app {
+  @media (max-width: 42rem) {
+    :where([data-kv-design-system]) [data-ui="list-page"] {
+      gap: var(--kv-space-3);
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-header"] {
+      padding-bottom: var(--kv-space-1);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-actions"] {
+      justify-content: flex-start;
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-toolbar"] {
+      gap: var(--kv-space-2);
+      padding: var(--kv-space-2);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page-controls"] {
+      min-width: 0;
+      flex-basis: 15rem;
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] {
+      padding: 0 0 var(--kv-space-8);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-context"] {
+      min-height: 2.75rem;
+      padding-inline: var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-header"] {
+      padding: var(--kv-space-4) var(--kv-space-4) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-heading"] {
+      display: flex;
+      flex-direction: column;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-title-row"] {
+      display: contents;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-title"] {
+      order: 1;
+      font-size: var(--kv-text-lg);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-description"] {
+      order: 2;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"],
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"]
+      > [data-ui="inline"] {
+      width: 100%;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"] {
+      order: 3;
+      margin-top: var(--kv-space-2);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-actions"]
+      [data-ui="action"][data-variant="primary"] {
+      min-height: 2.75rem;
+      flex: 1 1 auto;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-toolbar"] {
+      padding: var(--kv-space-3) var(--kv-space-4);
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      :is([data-ui="list-page-body"], [data-ui="list-page-footer"]) {
+      margin-inline: var(--kv-space-4);
+      padding-inline: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="list-page-footer"] {
+      padding: var(--kv-space-2-5) var(--kv-space-3);
+    }
+
+    :where([data-kv-design-system]) [data-ui="list-page"][data-variant="operational"] [data-ui="table"] {
+      min-width: 0;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
+      [data-ui="table"]
+      :is(th, td):is([data-priority="secondary"], [data-priority="tertiary"]) {
+      display: none;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table-scroll"]:not([data-responsive="stack"])
+      [data-ui="table"]
+      :is(th, td)[data-priority="primary"][data-align="end"] {
+      width: 7rem;
+    }
+
+    :where([data-kv-design-system])
+      [data-ui="list-page"][data-variant="operational"]
+      [data-ui="table"]
+      :is([data-ui="col"], [data-ui="cell"]) {
+      padding-inline: var(--kv-space-2);
+    }
+  }
+}

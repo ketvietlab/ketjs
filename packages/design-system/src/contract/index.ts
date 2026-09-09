@@ -1,21 +1,43 @@
-import { HOOKS as actionHooks } from '../primitives/actions.tsx'
-import { HOOKS as feedbackHooks } from '../primitives/feedback.tsx'
-import { HOOKS as fieldHooks } from '../primitives/field.tsx'
-import { HOOKS as statusHooks } from '../primitives/status.tsx'
-import { HOOKS as navigationHooks } from '../primitives/navigation.tsx'
-import { HOOKS as progressHooks } from '../primitives/progress.tsx'
-import { HOOKS as layoutHooks } from '../layouts/index.tsx'
-import { HOOKS as shellHooks } from '../layouts/shell.tsx'
-import { HOOKS as tableHooks } from '../patterns/data-table.tsx'
-import { HOOKS as listChromeHooks } from '../patterns/list-chrome.tsx'
-import { HOOKS as listPageHooks } from '../patterns/list-page.tsx'
-import { HOOKS as formPageHooks } from '../patterns/form-page.tsx'
-import { HOOKS as recordPageHooks } from '../patterns/record-page.tsx'
-import { HOOKS as dashboardPageHooks } from '../patterns/dashboard-page.tsx'
-import { HOOKS as boardPageHooks } from '../patterns/board-page.tsx'
-import { HOOKS as modalHooks } from '../patterns/modal-sheet.tsx'
-import { HOOKS as pipelineHooks } from '../patterns/pipeline.tsx'
-import { HOOKS as formHooks } from '../patterns/record-form.tsx'
+import { HOOKS as actionHooks } from '../primitives/actions/index.tsx'
+import { HOOKS as feedbackHooks } from '../primitives/feedback/index.tsx'
+import { HOOKS as fieldHooks } from '../primitives/field/index.tsx'
+import { HOOKS as statusHooks } from '../primitives/status/index.tsx'
+import { HOOKS as navigationHooks } from '../primitives/navigation/index.tsx'
+import { HOOKS as progressHooks } from '../primitives/progress/index.tsx'
+import { HOOKS as menuHooks } from '../interactions/menu/index.tsx'
+import { HOOKS as popoverHooks } from '../interactions/popover/index.tsx'
+import { HOOKS as tooltipHooks } from '../interactions/tooltip/index.tsx'
+import { HOOKS as dialogHooks } from '../interactions/dialog/index.tsx'
+import { HOOKS as toastHooks } from '../interactions/toast/index.tsx'
+import { HOOKS as spinnerHooks } from '../interactions/spinner/index.tsx'
+import { HOOKS as skeletonHooks } from '../interactions/skeleton/index.tsx'
+import { HOOKS as scalarFieldHooks } from '../forms/scalar-fields/index.tsx'
+import { HOOKS as comboboxHooks } from '../forms/combobox/index.tsx'
+import { HOOKS as dateTimeHooks } from '../forms/date-time/index.tsx'
+import { HOOKS as uploadHooks } from '../forms/upload/index.tsx'
+import { HOOKS as relationPickerHooks } from '../forms/relation-picker/index.tsx'
+import { HOOKS as listControlHooks } from '../data-operations/list-controls/index.tsx'
+import { HOOKS as inlineEditHooks } from '../data-operations/inline-edit/index.tsx'
+import { HOOKS as resourceListHooks } from '../data-display/resource-list/index.tsx'
+import { HOOKS as dataGridHooks } from '../data-display/data-grid/index.tsx'
+import { HOOKS as treeHooks } from '../data-display/tree/index.tsx'
+import { HOOKS as recordDisplayHooks } from '../record/display/index.tsx'
+import { HOOKS as formattedValueHooks } from '../record/formatted-values/index.tsx'
+import { HOOKS as recordCompositionHooks } from '../record/composition/index.tsx'
+import { HOOKS as activityHooks } from '../record/activity/index.tsx'
+import { HOOKS as mediaHooks } from '../record/media/index.tsx'
+import { HOOKS as layoutHooks } from '../layouts/layout/index.tsx'
+import { HOOKS as shellHooks } from '../layouts/shell/index.tsx'
+import { HOOKS as tableHooks } from '../patterns/data-table/index.tsx'
+import { HOOKS as listChromeHooks } from '../patterns/list-chrome/index.tsx'
+import { HOOKS as listPageHooks } from '../patterns/list-page/index.tsx'
+import { HOOKS as formPageHooks } from '../patterns/form-page/index.tsx'
+import { HOOKS as recordPageHooks } from '../patterns/record-page/index.tsx'
+import { HOOKS as dashboardPageHooks } from '../patterns/dashboard-page/index.tsx'
+import { HOOKS as boardPageHooks } from '../patterns/board-page/index.tsx'
+import { HOOKS as modalHooks } from '../patterns/modal-sheet/index.tsx'
+import { HOOKS as pipelineHooks } from '../patterns/pipeline/index.tsx'
+import { HOOKS as formHooks } from '../patterns/record-form/index.tsx'
 
 const GROUPS = {
   actions: actionHooks,
@@ -24,6 +46,28 @@ const GROUPS = {
   status: statusHooks,
   navigation: navigationHooks,
   progress: progressHooks,
+  menu: menuHooks,
+  popover: popoverHooks,
+  tooltip: tooltipHooks,
+  dialog: dialogHooks,
+  toast: toastHooks,
+  spinner: spinnerHooks,
+  skeleton: skeletonHooks,
+  scalarFields: scalarFieldHooks,
+  combobox: comboboxHooks,
+  dateTime: dateTimeHooks,
+  upload: uploadHooks,
+  relationPicker: relationPickerHooks,
+  listControls: listControlHooks,
+  inlineEdit: inlineEditHooks,
+  resourceList: resourceListHooks,
+  dataGrid: dataGridHooks,
+  tree: treeHooks,
+  recordDisplay: recordDisplayHooks,
+  formattedValues: formattedValueHooks,
+  recordComposition: recordCompositionHooks,
+  activity: activityHooks,
+  media: mediaHooks,
   layouts: layoutHooks,
   shell: shellHooks,
   table: tableHooks,
