@@ -336,10 +336,20 @@ export const attachDesignSystemInteractions = (root = document) => {
       if (first instanceof HTMLElement) first.focus()
     }
   }
+  /** @param {MouseEvent} event */
+  const onDocumentClick = (event) => {
+    const target = event.target
+    if (!(target instanceof Node)) return
+    for (const menu of root.querySelectorAll('[data-ui="menu"][open]')) {
+      if (menu instanceof HTMLDetailsElement && !menu.contains(target)) menu.open = false
+    }
+  }
   document.addEventListener('keydown', onKeydown)
+  document.addEventListener('click', onDocumentClick)
 
   return () => {
     document.removeEventListener('keydown', onKeydown)
+    document.removeEventListener('click', onDocumentClick)
     navigationMedia.removeEventListener('change', onNavigationMediaChange)
     for (const cleanup of navigationCleanups) cleanup()
     if (priorNavigationOpen === undefined) delete navigationRoot.dataset.kvNavigationOpen

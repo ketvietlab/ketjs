@@ -5,7 +5,10 @@
   }
 
   :where([data-kv-design-system]) [data-ui="menu-trigger"] {
+    display: inline-flex;
     min-height: var(--kv-control-height);
+    align-items: center;
+    justify-content: center;
     padding: 0 var(--kv-space-3);
     border: 1px solid var(--kv-border-default);
     border-radius: var(--kv-radius-sm);
