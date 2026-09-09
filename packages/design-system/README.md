@@ -176,3 +176,8 @@ Data-operation exports compose URL-owned search/filter/sort/view state, one-link
 resource rows, bounded grids, hierarchy, and inline native forms. The package renders
 state and carries version tokens; application adapters own persistence, conflicts,
 permissions, cross-page selection, and dataset queries.
+
+Record composition exports cover facts, people, formatted values, one identity summary,
+one neutral rail, activity/audit, attachments, and media. Applications pass authorized,
+redacted results and retain storage and mutation ownership. Catalogue recipes vary slots
+within `ListPage`, `RecordPage`, and `WorkspacePage`; they do not add a fourth page pattern.

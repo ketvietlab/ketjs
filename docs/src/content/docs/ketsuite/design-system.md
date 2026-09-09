@@ -79,6 +79,19 @@ label on the left and the control on the right, including narrow panels; only th
 a row collapses. Canvas workspaces keep spatial columns and use local horizontal scrolling on small
 screens.
 
+### Record and workspace composition
+
+Wave 5 adds description lists, people, avatar groups, status, formatted values, record summaries,
+actions, neutral rails, activity, audit, attachments, and media. Applications provide already-
+authorized and already-redacted results; storage URLs, uploads, deletions, queries, and permission
+decisions stay outside the renderers. Activity and media families cover loading, empty, error, and
+redacted outcomes without inventing domain behavior.
+
+The catalogue documents worklist, analytical list, settings, master-detail, board, schedule, and
+timeline recipes by composing `ListPage`, `RecordPage`, or `WorkspacePage`. These are slot recipes,
+not additional page-pattern exports. Canvas recipes are reserved for spatial work and keep their own
+horizontal overflow contract on narrow screens.
+
 ## JavaScript delivery
 
 Public renderers are pure SSR. Native links, forms, disclosure elements, and URL-owned state must remain

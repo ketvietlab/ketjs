@@ -5,7 +5,11 @@ import { renderToString } from '@ketvietlab/ketjs-view'
 import {
   AppShell,
   ActionMenu,
+  ActivityTimeline,
   AppliedFilters,
+  Attachments,
+  AuditLog,
+  AvatarGroup,
   Badge,
   BoardPage,
   Button,
@@ -17,11 +21,15 @@ import {
   DashboardPage,
   DataTable,
   DataGrid,
+  DescriptionList,
   Disclosure,
   Field,
   FileUpload,
   FilterBar,
   FormPage,
+  FormattedDate,
+  FormattedMoney,
+  FormattedNumber,
   HOOKS,
   IconButton,
   LinkButton,
@@ -33,16 +41,21 @@ import {
   ListPage,
   ModalSheet,
   NavList,
+  Person,
   Progress,
   Popover,
   RadioGroup,
   RelationPicker,
   ResourceList,
+  RecordActions,
   RecordForm,
   RecordPage,
+  RecordRail,
+  RecordSummary,
   Surface,
   Skeleton,
   Spinner,
+  Status,
   Switch,
   TagPicker,
   Tabs,
@@ -54,6 +67,7 @@ import {
   Tree,
   TreeGrid,
   ViewSettings,
+  MediaGallery,
   withQueryState,
 } from '@ketvietlab/design-system'
 import {
@@ -1282,6 +1296,77 @@ test('design system: data operations preserve URL state and bounded rendering', 
   assert.match(edit, /aria-invalid="true"/)
 })
 
+test('design system: record composition covers facts, activity, redaction and media states', () => {
+  const facts = renderToString(
+    <DescriptionList
+      items={[
+        { id: 'date', label: 'Date', value: <FormattedDate value="2026-09-08" locale="en-GB" /> },
+        { id: 'count', label: 'Count', value: <FormattedNumber value={1200} locale="en-US" /> },
+        { id: 'total', label: 'Total', value: <FormattedMoney value={1200} currency="VND" /> },
+      ]}
+    />,
+  )
+  assert.match(facts, /datetime="2026-09-08"/)
+  const invalidDate = renderToString(
+    <FormattedDate value="2026-02-31" locale="en-GB" emptyLabel="Invalid date" />,
+  )
+  assert.match(invalidDate, />[\s\S]*Invalid date[\s\S]*<\/time>/)
+  assert.doesNotMatch(invalidDate, /datetime=/)
+  assert.match(facts, /value="1200"/)
+  assert.match(facts, /data-currency="VND"/)
+  assert.match(renderToString(<Person name="Ngọc Linh" detail="Owner" />), /data-ui="person"/)
+  assert.match(
+    renderToString(
+      <AvatarGroup
+        label="People"
+        people={[
+          { id: '1', name: 'A' },
+          { id: '2', name: 'B' },
+        ]}
+        max={1}
+      />,
+    ),
+    /aria-label="1 more people"/,
+  )
+  assert.match(renderToString(<Status label="Ready" tone="positive" />), /data-ui="status"/)
+
+  const summary = renderToString(
+    <RecordSummary
+      title="SO-1042"
+      person={{ name: 'Ngọc Linh' }}
+      status={{ label: 'Ready', tone: 'positive' }}
+    />,
+  )
+  assert.match(summary, /data-ui="record-summary"/)
+  assert.match(
+    renderToString(<RecordActions actions={[<Button label="Save" />]} />),
+    /aria-label="Record actions"/,
+  )
+  assert.match(
+    renderToString(<RecordRail sections={[{ id: 'one', title: 'Owner', body: 'Ngọc Linh' }]} />),
+    /data-ui="record-rail"/,
+  )
+
+  const item = {
+    id: 'a1',
+    actor: 'System',
+    action: 'changed a protected value',
+    datetime: '2026-09-08T12:00:00+07:00',
+    timeLabel: '12:00',
+    redacted: true,
+  }
+  assert.match(renderToString(<ActivityTimeline label="Activity" items={[item]} />), /Details redacted/)
+  assert.match(renderToString(<AuditLog label="Audit" items={[item]} />), /Change redacted/)
+  assert.match(
+    renderToString(<Attachments label="Files" items={[{ id: 'secret', name: 'Secret', redacted: true }]} />),
+    /data-ui="attachment"[\s\S]*Secret/,
+  )
+  assert.match(
+    renderToString(<MediaGallery label="Media" items={[{ id: 'secret', alt: '', redacted: true }]} />),
+    /role="img" aria-label="Media redacted"/,
+  )
+})
+
 test('design system: catalogue renders every registered specimen', () => {
   const catalogue = renderToString(<CataloguePage theme="dark" density="compact" mode="all" />)
   const designSystemVersion = JSON.parse(readFileSync('packages/design-system/package.json', 'utf8'))
@@ -1315,7 +1400,7 @@ test('design system: catalogue renders every registered specimen', () => {
 
 test('design system: governance connects public components to owners and specimens', () => {
   const names = componentRegistry.map((component) => component.name)
-  assert.equal(names.length, 84)
+  assert.equal(names.length, 99)
   assert.equal(new Set(names).size, names.length)
   const examples = new Set(componentGroups.flatMap((group) => group.examples.map((example) => example.id)))
   assert.deepEqual(
@@ -1352,9 +1437,9 @@ test('design system: density, layer, focus, motion and container tokens are cont
 })
 
 test('design system: inventory classifies every public and compatibility export', () => {
-  assert.equal(designSystemInventory.summary.publicExports, 156)
-  assert.equal(designSystemInventory.summary.runtimeExports, 89)
-  assert.equal(designSystemInventory.summary.plannedComponents, 11)
+  assert.equal(designSystemInventory.summary.publicExports, 178)
+  assert.equal(designSystemInventory.summary.runtimeExports, 104)
+  assert.equal(designSystemInventory.summary.plannedComponents, 0)
   assert.equal(designSystemInventory.summary.compatibilityModules, 38)
   assert.ok(designSystemInventory.rows.length > designSystemInventory.summary.publicExports)
   assert.deepEqual(
