@@ -50,6 +50,8 @@ test('submenu demo: keeps the original demo intact and exposes 18 dense applicat
     [...html.matchAll(/data-ui="navigation-branch"[^>]*data-level="1"[^>]*open="true"/g)].length,
     1,
   )
+  assert.doesNotMatch(html, /data-ui="navigation-branch"[^>]*data-active=/)
+  assert.doesNotMatch(html, /data-ui="navigation-branch-indicator"/)
   assert.match(html, /data-ui="navigation-item-label"[^>]*>[^<]*<!--k\[-->Hôm nay/)
   assert.doesNotMatch(html, /data-ui="dashboard-page-context"/)
   assert.match(html, /href="\/demo2\?theme=light&amp;module=crm&amp;section=0"/)
@@ -92,11 +94,7 @@ test('submenu demo: every sidebar module owns four links and one nested branch w
     assert.equal([...html.matchAll(/data-ui="navigation-branch"[^>]*data-level="1"/g)].length, 18, module)
     assert.equal([...html.matchAll(/data-ui="navigation-branch"[^>]*data-level="2"/g)].length, 18, module)
     assert.equal(
-      [
-        ...html.matchAll(
-          /data-ui="navigation-branch"[^>]*data-active="true"[^>]*data-level="1"[^>]*open="true"/g,
-        ),
-      ].length,
+      [...html.matchAll(/data-ui="navigation-branch"[^>]*data-level="1"[^>]*open="true"/g)].length,
       1,
       module,
     )
@@ -107,8 +105,8 @@ test('submenu demo: every sidebar module owns four links and one nested branch w
 test('submenu demo: nested selection is URL-owned and the board submenu filters its columns', () => {
   const routes = createDemo2Routes()
   const nested = String(routes['/demo2'](new URL('http://localhost/demo2?module=inventory&child=1')).body)
-  assert.match(nested, /data-ui="navigation-branch" data-active="true" data-level="1"[^>]*open="true"/)
-  assert.match(nested, /data-ui="navigation-branch" data-active="true" data-level="2"[^>]*open="true"/)
+  assert.match(nested, /data-ui="navigation-branch" data-level="1"[^>]*open="true"/)
+  assert.match(nested, /data-ui="navigation-branch" data-level="2"[^>]*open="true"/)
   assert.match(nested, /data-ui="navigation-item" data-active="true" data-level="3"[^>]*aria-current="page"/)
   assert.match(nested, /Luân chuyển hàng: 5 mục cần chú ý/)
 

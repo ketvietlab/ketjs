@@ -368,7 +368,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
         {
           id: `${module.id}-more`,
           label: module.sections[4],
-          active: nestedActive,
           expanded: nestedActive,
           children: module.children.map((label, index) => ({
             id: `${module.id}-child-${index}`,
@@ -1244,7 +1243,6 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
                             .map((module) => ({
                               id: module.id,
                               label: module.label,
-                              active: activeModule.id === module.id,
                               expanded: activeModule.id === module.id,
                               leading: icon(module.icon),
                               children: moduleMenuItems(module),

@@ -123,9 +123,15 @@ export const attachDesignSystemInteractions = (root = document) => {
     const onToggle = () => syncNavigation(navigation)
     /** @param {MouseEvent} event */
     const onClick = (event) => {
-      if (!navigationMedia.matches || !navigation.open) return
       const target = event.target
       if (!(target instanceof Element)) return
+      const branchTrigger = target.closest('[data-ui="navigation-branch-trigger"]')
+      const branch = branchTrigger?.closest('[data-ui="navigation-branch"]')
+      if (branch instanceof HTMLDetailsElement && branch.open) {
+        event.preventDefault()
+        return
+      }
+      if (!navigationMedia.matches || !navigation.open) return
       if (
         target.closest('[data-ui="navigation-close"]') ||
         target.closest('[data-ui="navigation-backdrop"]') ||

@@ -375,8 +375,13 @@ test('design system: application navigation shares one semantic model across bre
   assert.match(navigation, /aria-current="page"/)
   assert.match(navigation, /Review and fulfil/)
   assert.match(navigation, /data-ui="navigation-item-count"[\s\S]*7/)
-  assert.match(navigation, /data-ui="navigation-branch"[^>]*open="true"/)
+  assert.match(
+    navigation,
+    /data-ui="navigation-branch"[^>]*name="workspace-navigation-drawer-branches"[^>]*open="true"/,
+  )
   assert.match(navigation, /data-ui="navigation-branch-trigger"/)
+  assert.doesNotMatch(navigation, /data-ui="navigation-branch-indicator"/)
+  assert.doesNotMatch(navigation, /data-ui="navigation-branch"[^>]*data-active=/)
   assert.match(navigation, /data-ui="navigation-children"[^>]*data-level="2"/)
   assert.match(navigation, /href="\/reports\/sales"/)
   assert.match(navigation, /aria-label="Close workspace menu"/)
