@@ -59,7 +59,7 @@ export const MediaGallery = (props: {
   if (!props.items.length)
     return <EmptyState title={props.emptyTitle ?? 'No media'} message="No media is available." />
   return (
-    <div data-ui="media-gallery" aria-label={props.label}>
+    <div data-ui="media-gallery" role="group" aria-label={props.label}>
       {each(
         props.items,
         (item) => item.id,
