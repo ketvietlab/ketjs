@@ -43,6 +43,7 @@ import {
   ListPage,
   ModalSheet,
   NavList,
+  NavigationItem,
   Person,
   Progress,
   Popover,
@@ -410,6 +411,30 @@ test('design system: breadcrumbs expose linked ancestors and one current locatio
   assert.match(breadcrumbs, /data-ui="breadcrumb"[\s\S]*href="\/"/)
   assert.match(breadcrumbs, /href="\/sales"/)
   assert.match(breadcrumbs, /aria-current="page"[^>]*>[^<]*<!--k\[-->Orders/)
+})
+
+test('design system: standalone navigation items keep nested accordion groups independent', () => {
+  const navigation = renderToString(
+    <NavigationItem
+      id="reports"
+      label="Reports"
+      expanded
+      children={[
+        {
+          id: 'finance',
+          label: 'Finance',
+          expanded: true,
+          children: [{ id: 'profit', label: 'Profit', href: '/reports/profit', active: true }],
+        },
+      ]}
+    />,
+  )
+  const names = [...navigation.matchAll(/data-ui="navigation-branch"[^>]*name="([^"]+)"/g)].map(
+    (match) => match[1],
+  )
+  assert.deepEqual(names, ['reports-root-branches', 'reports-branches'])
+  assert.equal([...navigation.matchAll(/open="true"/g)].length, 2)
+  assert.match(navigation, /href="\/reports\/profit"[^>]*aria-current="page"/)
 })
 
 test('design system: application navigation stays dense enough for operational menus', () => {

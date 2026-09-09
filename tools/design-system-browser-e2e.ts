@@ -6,6 +6,8 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { NavigationItem } from '@ketvietlab/design-system'
+import { renderToString } from '@ketvietlab/ketjs-view'
 
 type Json = Record<string, unknown>
 
@@ -138,6 +140,43 @@ try {
   cdp = await Cdp.connect(String(target.webSocketDebuggerUrl))
   await cdp.send('Page.enable')
   await cdp.send('Runtime.enable')
+
+  const standaloneNavigation = renderToString(
+    NavigationItem({
+      id: 'reports',
+      label: 'Reports',
+      expanded: true,
+      children: [
+        {
+          id: 'finance',
+          label: 'Finance',
+          expanded: true,
+          children: [{ id: 'profit', label: 'Profit', href: '/reports/profit', active: true }],
+        },
+      ],
+    }),
+  )
+  const standaloneUrl = `data:text/html;charset=utf-8,${encodeURIComponent(standaloneNavigation)}`
+  await cdp.send('Page.navigate', { url: standaloneUrl })
+  await waitFor(
+    () => evaluate<boolean>(cdp!, `document.readyState === 'complete'`),
+    'Standalone NavigationItem did not render',
+  )
+  const standaloneAudit = await evaluate<Json>(
+    cdp,
+    `(() => ({
+      branches: [...document.querySelectorAll('[data-ui="navigation-branch"]')].map((branch) => ({
+        name: branch.getAttribute('name'),
+        open: branch instanceof HTMLDetailsElement && branch.open,
+      })),
+      current: document.querySelector('[data-ui="navigation-item"][aria-current="page"]')?.textContent?.trim(),
+    }))()`,
+  )
+  assert.deepEqual(standaloneAudit.branches, [
+    { name: 'reports-root-branches', open: true },
+    { name: 'reports-branches', open: true },
+  ])
+  assert.equal(standaloneAudit.current, 'Profit')
 
   const viewports = [
     { key: 'desktop', width: 1440, height: 1000, mobile: false },

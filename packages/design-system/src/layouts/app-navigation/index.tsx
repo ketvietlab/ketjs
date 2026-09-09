@@ -157,7 +157,7 @@ const renderNavigationItem = (
 }
 
 export const NavigationItem = (props: NavigationItemData): TemplateResult => (
-  <>{renderNavigationItem(props, `${props.id}-branches`, 1)}</>
+  <>{renderNavigationItem(props, `${props.id}-root-branches`, 1)}</>
 )
 
 export const NavigationGroup = (props: NavigationGroupData & { branchGroup?: string }): TemplateResult => (
