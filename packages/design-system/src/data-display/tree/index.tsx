@@ -43,6 +43,7 @@ const nodes = (items: readonly TreeNode[], level: number, tabbableId: string | u
               {item.label}
             </a>
           ) : (
+            // biome-ignore lint/a11y/useFocusableInteractive: the serialized lowercase tabindex is the explicit focus contract for this treeitem.
             <span
               data-ui="tree-link"
               role="treeitem"
@@ -78,6 +79,7 @@ export const TreeGrid = <Row,>(props: {
   primary: (row: Row) => JSXChild
   columns: readonly TreeGridColumn<Row>[]
 }): TemplateResult => (
+  // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: ARIA treegrid intentionally augments the native table model with expandable hierarchical rows.
   <table data-ui="tree-grid" role="treegrid" aria-label={props.label}>
     <thead>
       <tr>
@@ -98,7 +100,6 @@ export const TreeGrid = <Row,>(props: {
         (item) => (
           <tr
             data-ui="tree-grid-row"
-            role="row"
             tabindex={
               props.id(item.row) === (props.rows[0] ? props.id(props.rows[0].row) : null) ? '0' : '-1'
             }
