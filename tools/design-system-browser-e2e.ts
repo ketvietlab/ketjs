@@ -269,6 +269,16 @@ try {
     { key: 'connected-demo-vi', path: '/demo?theme=light', selector: '[data-ui="app-shell"]' },
     { key: 'connected-demo-dark-vi', path: '/demo?theme=dark', selector: '[data-ui="app-shell"]' },
     {
+      key: 'submenu-demo-vi',
+      path: '/demo2?theme=light',
+      selector: '[data-demo-submenu]',
+    },
+    {
+      key: 'submenu-demo-crm-vi',
+      path: '/demo2?theme=light&module=crm&child=1',
+      selector: '[data-demo-submenu-more][data-active="true"]',
+    },
+    {
       key: 'connected-demo-record-vi',
       path: '/demo?theme=light&view=record&id=SO-1041',
       selector: '[data-ui="record-page-layout"]',
@@ -324,6 +334,30 @@ try {
         assert.equal(themeAudit.theme, 'dark')
         assert.equal(themeAudit.rootScheme, 'dark')
         assert.equal(themeAudit.mainScheme, 'dark')
+      }
+      if (review.key === 'submenu-demo-vi' || review.key === 'submenu-demo-crm-vi') {
+        const submenuAudit: Json = await evaluate<Json>(
+          cdp,
+          `(() => {
+            const menu = document.querySelector('[data-demo-submenu] [data-ui="menu"]')
+            const trigger = menu?.querySelector('[data-ui="menu-trigger"]')
+            if (menu instanceof HTMLDetailsElement && trigger instanceof HTMLElement) trigger.click()
+            const panel = menu?.querySelector('[data-ui="menu-panel"]')
+            const rect = panel instanceof HTMLElement ? panel.getBoundingClientRect() : null
+            return {
+              navigationItems: document.querySelectorAll('[data-ui="navigation-item"]').length,
+              tabs: document.querySelectorAll('[data-demo-submenu] [data-ui="tab"]').length,
+              nestedItems: document.querySelectorAll('[data-demo-submenu] [data-ui="menu-item"]').length,
+              menuOpen: menu instanceof HTMLDetailsElement && menu.open,
+              panelInsideViewport: Boolean(rect && rect.left >= 0 && rect.right <= innerWidth),
+            }
+          })()`,
+        )
+        assert.equal(submenuAudit.navigationItems, 18)
+        assert.equal(submenuAudit.tabs, 5)
+        assert.equal(submenuAudit.nestedItems, 3)
+        assert.equal(submenuAudit.menuOpen, true)
+        assert.equal(submenuAudit.panelInsideViewport, true)
       }
       if (review.key === 'application-structure-en') {
         const navigationAudit: Json = await evaluate<Json>(
