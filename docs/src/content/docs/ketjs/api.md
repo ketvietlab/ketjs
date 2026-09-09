@@ -207,14 +207,16 @@ The entrypoint also exports `TestDeployment`, `CreateTestDeploymentOptions`, `Te
 | `isResult`, `isEach`, `isMarkup` | Type guards for the three values the renderer understands. |
 | `createRoot`, `hydrateRoot` | Create or hydrate a rendering root. |
 | `mount`, `mountHydrated` | Mount component-style view functions. |
-| `renderToString`, `trustedMarkup` | Server rendering and explicit trusted markup. |
+| `renderToString`, `renderToStaticString`, `trustedMarkup` | Hydratable server rendering, static document rendering, and explicit trusted markup. |
 | `HydrationMismatch`, `HOLE_MARKER`, `HOLE_OPEN` | Hydration diagnostics and the pair of protocol markers. |
 | `EVENT_PREFIX` | The attribute prefix that makes an attribute a listener rather than markup. |
-| `defineIsland`, `renderIsland`, `hydrateIslands`, `createIslandManager`, `IslandError`, `ISLAND_TAG` | Typed island declarations, serialization, hydration, reconciliation, disposal, and failures. |
+| `defineIsland`, `renderIsland`, `hydrateIslands`, `createIslandManager`, `IslandError` | Typed island declarations, serialization, hydration, reconciliation, disposal, and failures. |
+| `ISLAND_TAG`, `ISLAND_HOST_ATTRIBUTE`, `ISLAND_SELECTOR` | Legacy and standard-element island host protocol constants. |
 | `countingHost`, `domHost`, `escapeHtml` | Host implementations and escaping primitive. |
 
 The view entrypoint also exports `EachResult`, `IslandDefinition`, `IslandFactory`,
-`IslandController`, `IslandMountContext`, `IslandManager`, and their related prop/instance types.
+`IslandController`, `IslandMountContext`, `IslandManager`, `IslandHostTag`, `RenderIslandOptions`, and
+their related prop/instance types.
 
 `@ketvietlab/ketjs` re-exports this entrypoint whole, so an application that installs both packages
 may import any of these names from either one.
