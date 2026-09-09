@@ -22,11 +22,13 @@ const read = (path) => readFileSync(path, 'utf8')
 const slash = (path) => path.replaceAll('\\', '/')
 /** @template Value @param {Value[]} values @returns {Value[]} */
 const unique = (values) => [...new Set(values)].sort()
+/** @param {string} left @param {string} right */
+const lexical = (left, right) => (left < right ? -1 : left > right ? 1 : 0)
 /** @param {string} directory @param {string[]} extensions @returns {string[]} */
 const walk = (directory, extensions) => {
   /** @type {string[]} */
   const files = []
-  for (const name of readdirSync(directory).sort((a, b) => a.localeCompare(b, 'en'))) {
+  for (const name of readdirSync(directory).sort(lexical)) {
     if (name === 'node_modules' || name === 'dist' || name === '.build' || name === '.git') continue
     const path = join(directory, name)
     if (statSync(path).isDirectory()) files.push(...walk(path, extensions))
@@ -55,7 +57,7 @@ const parseExports = (source) => {
   }
   for (const match of source.matchAll(/export\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]/gu))
     entries.push({ name: match[1], imported: '*', kind: 'runtime', source: match[2] })
-  return entries.sort((a, b) => a.name.localeCompare(b.name, 'en') || a.kind.localeCompare(b.kind, 'en'))
+  return entries.sort((a, b) => lexical(a.name, b.name) || lexical(a.kind, b.kind))
 }
 
 /** @type {InventoryPolicy} */
@@ -184,7 +186,7 @@ const plannedRows = policy.plannedComponents
     testFiles: [],
     gapTask: entry.gapTask,
   }))
-  .sort((a, b) => a.wave - b.wave || a.name.localeCompare(b.name, 'en'))
+  .sort((a, b) => a.wave - b.wave || lexical(a.name, b.name))
 
 const cssFiles = [
   ...walk(join(designRoot, 'src'), ['.css']).map((path) => ({ layer: 'public', path })),
