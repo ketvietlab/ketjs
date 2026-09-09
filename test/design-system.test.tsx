@@ -379,10 +379,7 @@ test('design system: application navigation shares one semantic model across bre
 })
 
 test('design system: application navigation stays dense enough for operational menus', () => {
-  const navigationCss = readFileSync(
-    'packages/design-system/src/layouts/app-navigation/styles.css',
-    'utf8',
-  )
+  const navigationCss = readFileSync('packages/design-system/src/layouts/app-navigation/styles.css', 'utf8')
   const itemRule =
     navigationCss.match(/\[data-ui="navigation-item"\]\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? ''
   assert.match(itemRule, /min-height: var\(--kv-sidebar-item-height\)/)
