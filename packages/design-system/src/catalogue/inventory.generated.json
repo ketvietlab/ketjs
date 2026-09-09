@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ketjs.design-system-inventory.v1",
-  "version": "0.1.5",
+  "version": "0.1.13",
   "generatedFrom": [
     "packages/design-system/src/index.ts",
     "packages/design-system/src/catalogue/inventory-policy.json",
@@ -8338,7 +8338,6 @@
         "test/collaboration-backend-e2e.test.ts",
         "test/design-system-demo.test.ts",
         "test/design-system.test.tsx",
-        "test/flow-board-screen.test.tsx",
         "test/flow-inbox.test.ts",
         "test/list-chrome.test.ts",
         "test/menu.test.ts",

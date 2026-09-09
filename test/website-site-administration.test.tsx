@@ -26,6 +26,7 @@ import {
   siteDomainsScreen,
   siteFormScreen,
   siteMembersScreen,
+  sitesScreen,
 } from '../packages/ketsuite/src/modules/website_backend/screens/index.tsx'
 
 const translate = ((key: string) => key) as Translator
@@ -33,7 +34,14 @@ translate.locale = 'en'
 translate.has = () => true
 translate.resolves = () => true
 
-const site = { id: 'site1', name: 'moc', title: 'Moc', active: true } as never
+const site = {
+  id: 'site1',
+  name: 'moc',
+  title: 'Moc',
+  defaultLocale: 'vi',
+  theme: 'theme_paper',
+  active: true,
+}
 
 const members = (rows: MemberRow[] = []) => renderToString(siteMembersScreen(translate, site, rows, {}))
 const domains = (rows: DomainRow[] = []) => renderToString(siteDomainsScreen(translate, site, rows, {}))
@@ -64,6 +72,32 @@ test('members: each member shows the role, which is what decides what they may c
   assert.match(html, /mai/u)
   assert.match(html, /role\.editor/u)
   assert.match(html, /\/admin\/website\/sites\/site1\/members\/m1\/remove/u)
+})
+
+test('sites: the list names primary host and current role from the screen map', () => {
+  const html = renderToString(
+    sitesScreen(
+      translate,
+      [
+        {
+          id: 'site1',
+          name: 'moc',
+          title: 'Moc',
+          defaultLocale: 'vi',
+          theme: 'theme_paper',
+          active: true,
+          primaryHost: 'moc.test',
+          domainCount: 1,
+          role: 'administrator',
+        },
+      ],
+      {},
+    ),
+  )
+  assert.match(html, /sites\.primaryHost/u)
+  assert.match(html, /sites\.yourRole/u)
+  assert.match(html, /moc\.test/u)
+  assert.match(html, /role\.administrator/u)
 })
 
 test('domains: the primary is marked, because canonical and the sitemap publish it', () => {
@@ -112,6 +146,34 @@ test('index: a stale index is called stale rather than shown as a number', () =>
 test('index: a rebuild that did not finish says so instead of claiming it did', () => {
   assert.match(index({}, { written: 200, done: false }), /index\.rebuilding/u)
   assert.match(index({}, { written: 12, done: true }), /index\.rebuilt/u)
+})
+
+test('site form: the creation screen carries company, timezone and initial setup guidance', () => {
+  const html = renderToString(siteFormScreen(translate, {} as never, [], {}))
+  assert.match(html, /sites\.company/u)
+  assert.match(html, /sites\.timezone/u)
+  assert.match(html, /sites\.initialSetup/u)
+  assert.match(html, /sites\.step2/u)
+})
+
+test('site form: the existing site exposes readiness and capability status', () => {
+  const html = renderToString(
+    siteFormScreen(translate, { ...site, primaryHost: 'moc.test', domainCount: 1 }, [], {}),
+  )
+  assert.match(html, /sites\.readinessTitle/u)
+  assert.match(html, /sites\.capabilityTitle/u)
+  assert.match(html, /sites\.capability\.binding/u)
+})
+
+test('domains: the screen shows Platform evidence, TLS and DNS challenge guidance', () => {
+  const html = domains([
+    { id: 'd1', siteId: 'site1', host: 'moc.test', primary: true, redirectToPrimary: false },
+  ])
+  assert.match(html, /domains\.pendingEvidence/u)
+  assert.match(html, /domains\.tls/u)
+  assert.match(html, /domains\.challenge/u)
+  assert.match(html, /domains\.nextStep/u)
+  assert.match(html, /domains\.requestVerification/u)
 })
 
 test('site form: the sub-screens appear only once the site exists', () => {
