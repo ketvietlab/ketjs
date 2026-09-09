@@ -18,16 +18,13 @@ import { WorkspacePage } from '../patterns/workspace-page.tsx'
 import { ModalSheet } from '../patterns/modal-sheet.tsx'
 import { Pipeline } from '../patterns/pipeline.tsx'
 import { RecordForm } from '../patterns/record-form.tsx'
-
-export { PageSurfacePreview, surfaceKinds, surfaceStates } from './page-surfaces.tsx'
-export {
-  InventoryPage,
-  inventoryDecisions,
-  inventoryKinds,
-  inventoryScopes,
-} from './inventory.tsx'
-export type { InventoryPageProps } from './inventory.tsx'
-export { designSystemInventory } from './inventory.generated.ts'
+import { ActionMenu, Menu } from '../interactions/menu/index.tsx'
+import { Popover } from '../interactions/popover/index.tsx'
+import { Tooltip } from '../interactions/tooltip/index.tsx'
+import { ConfirmDialog, Dialog } from '../interactions/dialog/index.tsx'
+import { ToastRegion } from '../interactions/toast/index.tsx'
+import { Spinner } from '../interactions/spinner/index.tsx'
+import { Skeleton } from '../interactions/skeleton/index.tsx'
 
 export type ComponentExample = {
   id: string
@@ -1362,6 +1359,119 @@ export const componentGroups: readonly ComponentGroup[] = [
                 ]}
               />
             }
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'interactions',
+    name: 'Interaction essentials',
+    description: 'Controlled SSR state with native fallbacks and one optional runtime adapter.',
+    examples: [
+      {
+        id: 'menu',
+        name: 'Menu and action menu',
+        description: 'Native disclosure supports links, submit actions, descriptions and disabled state.',
+        render: () => (
+          <Inline
+            items={[
+              <Menu
+                id="record-menu"
+                label="Record actions"
+                open
+                items={[
+                  { id: 'open', label: 'Open record', href: '#record-page' },
+                  { id: 'duplicate', label: 'Duplicate', value: 'duplicate' },
+                  { id: 'archive', label: 'Archive', value: 'archive', destructive: true },
+                ]}
+              />,
+              <ActionMenu
+                id="more-actions"
+                label="More actions"
+                items={[{ id: 'export', label: 'Export report', href: '#data-table' }]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'popover',
+        name: 'Popover and tooltip',
+        description: 'Popover state remains URL-owned; tooltips contain descriptive text only.',
+        render: () => (
+          <Inline
+            items={[
+              <Popover
+                id="owner-popover"
+                label="Record owner"
+                trigger={<Badge label="Show owner" />}
+                body={<p>Nguyễn Ngọc Linh · Sales operations</p>}
+                open
+                openHref="#popover"
+                closeHref="#popover"
+                closeLabel="Close owner details"
+              />,
+              <Tooltip
+                id="sync-tip"
+                text="Last synchronized two minutes ago"
+                trigger={<Badge label="Synced" tone="positive" />}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'dialog',
+        name: 'Dialog and confirmation',
+        description: 'Named modal semantics with native close and submit paths.',
+        render: () => (
+          <Grid
+            columns={2}
+            items={[
+              <Dialog
+                id="details-dialog"
+                mode="embedded"
+                title="Review assignment"
+                description="The current owner keeps access."
+                closeHref="#dialog"
+                closeLabel="Close dialog"
+                body={<p>Assign this record to the operations queue.</p>}
+              />,
+              <ConfirmDialog
+                id="archive-dialog"
+                mode="embedded"
+                title="Archive record?"
+                message="The record leaves active worklists but remains available in history."
+                closeHref="#dialog"
+                closeLabel="Cancel"
+                confirmLabel="Archive"
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'feedback-runtime',
+        name: 'Transient feedback and loading',
+        description: 'Live-region toasts, compact progress and content skeletons share state rules.',
+        render: () => (
+          <Stack
+            items={[
+              <Inline items={[<Spinner label="Saving record" />, <span>Saving record</span>]} />,
+              <Skeleton label="Loading customer summary" lines={3} />,
+              <ToastRegion
+                label="Notifications"
+                toasts={[
+                  {
+                    id: 'saved',
+                    title: 'Record saved',
+                    message: 'All changes are synchronized.',
+                    tone: 'positive',
+                  },
+                ]}
+              />,
+            ]}
           />
         ),
       },

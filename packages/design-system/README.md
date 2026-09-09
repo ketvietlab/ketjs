@@ -161,6 +161,8 @@ open automatically. Give repeated search/sort controls unique IDs. Loading links
 are disabled, and empty query rows do not occupy space.
 
 Route-modal focus trapping, background inertness, Escape, focus restoration and
-unsaved-change confirmation belong to the route runtime. ARIA metadata alone
-does not implement those interactions. See the backend development guide for the
-full composition and integration contract.
+anchored positioning are provided by the optional `attachDesignSystemInteractions`
+adapter. Route state, unsaved-change decisions and submit outcomes remain application
+responsibilities. Menu, popover, tooltip, dialog, toast, spinner and skeleton renderers
+retain native links/forms and useful no-script behavior. See the backend development
+guide for the full composition and integration contract.

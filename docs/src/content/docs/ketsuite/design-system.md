@@ -94,6 +94,23 @@ Browser behavior has two explicit delivery paths:
 The documentation and design-system roots are not hydrated as one client application. A component may
 not create a private runtime merely to support its catalogue specimen.
 
+### Interaction runtime
+
+Wave 2 adds `Menu`, `ActionMenu`, `Popover`, `Tooltip`, `Dialog`, `ConfirmDialog`, `ToastRegion`,
+`Toast`, `Spinner`, and `Skeleton`. Their state stays explicit in renderer props and URLs. Menus use
+native disclosure, actions remain links or native form submissions, tooltip content is text-only, and
+dialogs always have an accessible name and close path.
+
+`attachDesignSystemInteractions(root)` is the optional document adapter. It owns Escape handling,
+modal focus containment and restoration, background inertness, menu focus restoration, and collision-
+aware popover positioning. It returns cleanup and does not own business state. The catalogue loads the
+same adapter from `runtime/auto.js`, so specimens exercise the production behavior rather than a private
+documentation runtime.
+
+Without JavaScript, menu disclosure still works, action links navigate, form commands submit, and
+controlled overlay close/open URLs remain usable. Applications decide when an overlay exists and own
+unsaved-change policy; the adapter only enforces browser mechanics around the rendered state.
+
 ## Maturity and compatibility
 
 The registry uses `planned`, `stable`, `compatibility`, and `deprecated` maturity states. Planned

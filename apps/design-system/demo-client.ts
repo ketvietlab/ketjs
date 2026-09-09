@@ -31,35 +31,6 @@ if (app) {
   })
   updateSelection()
 
-  const modal = app.querySelector<HTMLElement>('[data-ui="modal-sheet"]')
-  if (modal) {
-    const shell = app.querySelector<HTMLElement>('[data-ui="app-shell"]')!
-    shell.inert = true
-    document.body.style.overflow = 'hidden'
-    const focusable = () => [
-      ...modal.querySelectorAll<HTMLElement>(
-        'a[href], button:not(:disabled), input:not([type="hidden"]):not(:disabled), select, textarea, [tabindex="0"]',
-      ),
-    ]
-    ;(focusable().find((element) => element.matches('input, select, textarea')) ?? modal).focus()
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        modal.querySelector<HTMLAnchorElement>('[data-ui="modal-close"]')?.click()
-      }
-      if (event.key !== 'Tab') return
-      const elements = focusable()
-      const first = elements[0],
-        last = elements.at(-1)
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === modal)) {
-        event.preventDefault()
-        last?.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first?.focus()
-      }
-    })
-  }
   const form = app.querySelector<HTMLFormElement>('#order-form')
   let dirty = false
   form?.addEventListener('input', () => {

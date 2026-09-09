@@ -29,7 +29,7 @@ const publicIndex = read(join(designRoot, 'index.ts'))
 const runtimeExports = [...publicIndex.matchAll(/export\s+\{([\s\S]*?)\}\s+from\s+['"][^'"]+['"]/gu)]
   .flatMap((match) => match[1].split(',').map((name) => name.trim()))
   .filter(Boolean)
-  .filter((name) => !['HOOKS', 'OWNERS', 'initials'].includes(name))
+  .filter((name) => !['HOOKS', 'OWNERS', 'attachDesignSystemInteractions', 'initials'].includes(name))
   .sort()
 const publicSources = [...publicIndex.matchAll(/from\s+['"]([^'"]+)['"]/gu)]
   .map((match) => match[1])
@@ -84,7 +84,7 @@ for (const path of componentFiles) {
 const componentCss = walk(designRoot).filter(
   (path) =>
     path.endsWith('.css') &&
-    ['/primitives/', '/layouts/', '/patterns/'].some((segment) => path.includes(segment)) &&
+    ['/primitives/', '/interactions/', '/layouts/', '/patterns/'].some((segment) => path.includes(segment)) &&
     !['primitives.css', 'layouts.css', 'shell.css', 'flat.css', 'grouped.css', 'patterns.css'].some(
       (legacy) => path.endsWith(`/${legacy}`),
     ),
@@ -93,7 +93,7 @@ for (const path of componentCss) {
   const hooks = [...read(path).matchAll(/data-ui(?:[~|^$*]?=)["']([^"']+)["']/gu)].map((match) => match[1])
   if (hooks.length)
     assert(
-      /\/(?:primitives|layouts|patterns)\/[^/]+\/[^/]+\.css$/u.test(path),
+      /\/(?:primitives|interactions|layouts|patterns)\/[^/]+\/[^/]+\.css$/u.test(path),
       `Selectors must live below an owning component directory: ${relative(root, path)}`,
     )
 }
