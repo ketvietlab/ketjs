@@ -19,7 +19,6 @@ import {
   LinkButton,
   ListChrome,
   ListPage,
-  Menu,
   Metric,
   ModalSheet,
   Notice,
@@ -357,35 +356,60 @@ export function createDemoRoutes<Base extends DemoBasePath = '/demo'>(
         active: selectedSection === index && !q.has('child'),
       }
     })
-    const submenuDropdownActive =
+    const submenuExpanded =
       q.has('child') || ((activeModule.id === 'sales' || activeModule.id === 'delivery') && status === 'done')
+    const submenuPanelId = `${activeModule.id}-submenu-panel`
     const submenuExtension = (
-      <div data-demo-submenu-more data-active={submenuDropdownActive ? 'true' : null}>
-        <Menu
-          id={`${activeModule.id}-insights`}
-          label={`${activeModule.sections[4]} ${activeModule.label}`}
-          align="end"
-          trigger={
-            <span class="demo-submenu-trigger">
-              {activeModule.sections[4]} {icon('chevron-down')}
-            </span>
-          }
-          items={activeModule.children.map((label, index) => ({
-            id: `${activeModule.id}-child-${index}`,
-            label,
-            href:
-              (activeModule.id === 'sales' || activeModule.id === 'delivery') && index === 0
-                ? href({ ...moduleValues, status: 'done' })
-                : href({ ...moduleValues, child: String(index) }),
-          }))}
-        />
-      </div>
+      <button
+        type="button"
+        data-demo-submenu-trigger
+        data-active={submenuExpanded ? 'true' : null}
+        aria-expanded={submenuExpanded ? 'true' : 'false'}
+        aria-controls={submenuPanelId}
+      >
+        <span class="demo-submenu-trigger">
+          {activeModule.sections[4]} {icon('chevron-down')}
+        </span>
+      </button>
+    )
+    const submenuChildren = (
+      <nav
+        id={submenuPanelId}
+        data-demo-submenu-children
+        aria-label={`${activeModule.sections[4]} ${activeModule.label}`}
+        hidden={submenuExpanded ? undefined : true}
+      >
+        {activeModule.children.map((label, index) => {
+          const active =
+            (activeModule.id === 'sales' || activeModule.id === 'delivery') && index === 0
+              ? status === 'done'
+              : q.get('child') === String(index)
+          return (
+            <a
+              data-demo-submenu-child
+              data-active={active ? 'true' : null}
+              href={
+                (activeModule.id === 'sales' || activeModule.id === 'delivery') && index === 0
+                  ? href({ ...moduleValues, status: 'done' })
+                  : href({ ...moduleValues, child: String(index) })
+              }
+              aria-current={active ? 'page' : null}
+            >
+              {label}
+            </a>
+          )
+        })}
+      </nav>
     )
     const context =
       contextMode === 'submenu' ? (
         <div data-demo-submenu>
-          <Tabs label={`Điều hướng ${activeModule.label}`} items={submenuItems} />
-          {submenuExtension}
+          <Tabs
+            label={`Điều hướng ${activeModule.label}`}
+            items={submenuItems}
+            extension={submenuExtension}
+          />
+          {submenuChildren}
         </div>
       ) : (
         <Inline

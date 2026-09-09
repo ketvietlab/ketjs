@@ -31,6 +31,26 @@ if (app) {
   })
   updateSelection()
 
+  const submenu = app.querySelector<HTMLElement>('[data-demo-submenu]')
+  const submenuTrigger = submenu?.querySelector<HTMLButtonElement>('[data-demo-submenu-trigger]')
+  const submenuPanel = submenu?.querySelector<HTMLElement>('[data-demo-submenu-children]')
+  const setSubmenuOpen = (open: boolean) => {
+    if (!submenuTrigger || !submenuPanel) return
+    submenuTrigger.setAttribute('aria-expanded', String(open))
+    submenuPanel.hidden = !open
+  }
+  submenuTrigger?.addEventListener('click', () => {
+    setSubmenuOpen(submenuTrigger.getAttribute('aria-expanded') !== 'true')
+  })
+  document.addEventListener('click', (event) => {
+    if (event.target instanceof Node && submenu && !submenu.contains(event.target)) setSubmenuOpen(false)
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || submenuTrigger?.getAttribute('aria-expanded') !== 'true') return
+    setSubmenuOpen(false)
+    submenuTrigger.focus()
+  })
+
   const form = app.querySelector<HTMLFormElement>('#order-form')
   let dirty = false
   form?.addEventListener('input', () => {
