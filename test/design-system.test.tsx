@@ -449,7 +449,7 @@ test('design system: application navigation stays dense enough for operational m
   assert.match(navigationCss, /\[data-ui="navigation-children"\][\s\S]*border-left/)
 
   const mobileLayer = navigationCss.match(
-    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n  \}\n\n  @keyframes/,
+    /@media \(max-width: 48rem\) \{(?<body>[\s\S]+?)\n {2}\}\n\n {2}@keyframes/,
   )?.groups?.body
   assert.match(mobileLayer ?? '', /grid-template-columns: min\(20rem, 86vw\) minmax\(0, 1fr\)/)
   assert.match(mobileLayer ?? '', /\[data-ui="navigation-drawer"\] \{\s*grid-column: 1/)

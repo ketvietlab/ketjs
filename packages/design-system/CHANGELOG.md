@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.14 — KetSuite application navigation
+
+- Migrated the KetSuite administration shell to the public `AppNavigation` contract.
+- Kept dense desktop navigation scrollable with a pinned account footer and exposed the same hierarchy through a left-side mobile drawer.
+- Preserved menu search, nested branches, one expanded top-level group, breadcrumbs, localization, and active state on leaf destinations only.
+- Added a stable navigation slot so progressive fragment responses can refresh menu content without replacing the long-lived application shell.
+
+Released as part of the coordinated KetJS 0.1.14 package set.
+
 ## 0.1.13 — application navigation
 
 - Added the responsive `AppNavigation` shell for dense desktop sidebars and mobile drawers.
