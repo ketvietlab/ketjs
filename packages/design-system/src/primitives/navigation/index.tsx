@@ -57,7 +57,11 @@ export type TabItem = {
   active?: boolean
 }
 
-export const Tabs = (props: { label: string; items: readonly TabItem[] }): TemplateResult => (
+export const Tabs = (props: {
+  label: string
+  items: readonly TabItem[]
+  extension?: JSXChild
+}): TemplateResult => (
   <nav data-ui="tabs" aria-label={props.label}>
     {each(
       props.items,
@@ -74,5 +78,6 @@ export const Tabs = (props: { label: string; items: readonly TabItem[] }): Templ
         </a>
       ),
     )}
+    {props.extension}
   </nav>
 )

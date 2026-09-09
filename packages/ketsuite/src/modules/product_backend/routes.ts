@@ -22,7 +22,6 @@ import {
   attributesScreen,
   favoriteModal,
   newProductScreen,
-  PRODUCT_DETAIL_TABS,
   productDetailScreen,
   productsScreen,
   VARIANT_DETAIL_TABS,
@@ -36,7 +35,7 @@ import {
   categoryControl,
   uomControl,
 } from './relation-control.ts'
-import type { ProductDetailTab, TemplateRow, VariantDetailTab, View } from './screens/index.ts'
+import type { TemplateRow, VariantDetailTab, View } from './screens/index.ts'
 import { PAGE_SIZE, colsHref, colsOf, pager, withParam } from '../backend/paging.ts'
 import type { SearchMenu, TableGroup, TableSelection } from '../../ui/index.ts'
 import { backendPage, modalWorkspace } from '../../ui/index.ts'
@@ -87,12 +86,7 @@ const refusePost = (req: Parameters<Route>[1], accepts = 'POST') =>
       ? text('Forbidden', { status: 403 })
       : null
 
-const productTabOf = (url: URL): ProductDetailTab => {
-  const asked = url.searchParams.get('tab')
-  return (PRODUCT_DETAIL_TABS as readonly string[]).includes(asked ?? '')
-    ? (asked as ProductDetailTab)
-    : 'general'
-}
+const productTabOf = (url: URL): string => url.searchParams.get('tab') || 'general'
 const MEDIA_VARIANT_PAGE_SIZE = 25
 const VARIANT_PAGE_SIZE = 10
 const positivePage = (value: string | null): number => {
@@ -111,7 +105,7 @@ const variantTabOf = (url: URL): VariantDetailTab => {
 }
 const isProductPartial = (req: Parameters<Route>[1], scope = 'product-detail'): boolean =>
   req.headers['x-ket-partial'] === scope
-const seeProduct = (id: string, url: URL, tab: ProductDetailTab = productTabOf(url)) =>
+const seeProduct = (id: string, url: URL, tab: string = productTabOf(url)) =>
   withHeaders(text('', { status: 303 }), {
     location: inLocale(url, `/admin/product/templates/${id}?tab=${tab}`),
   })
@@ -987,6 +981,8 @@ export const routes: Record<string, RouteEntry> = {
         live.functions['account.getProductTax'] && live.functions['account.setProductTax'],
       )
       const activeTab = productTabOf(url)
+      const locale = localeQuery(url)
+      const querySuffix = locale ? locale.replace(/^\?/, '&') : ''
       let savedPartial = false
       if (req.method === 'POST') {
         if (crossSite(req)) return text('Forbidden', { status: 403 })
@@ -1278,7 +1274,23 @@ export const routes: Record<string, RouteEntry> = {
             ? ''
             : await ctx.joint(url, req, 'product_backend:template.actions', {
                 templateId: row.id,
-                locale: localeQuery(url),
+                locale,
+              }),
+          tabs: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:template.tabs', {
+                templateId: row.id,
+                activeTab,
+                locale,
+                querySuffix,
+              }),
+          panel: savedPartial
+            ? ''
+            : await ctx.joint(url, req, 'product_backend:template.panel', {
+                templateId: row.id,
+                activeTab,
+                locale,
+                querySuffix,
               }),
           controls: {
             uom: await uomControl(ctx, url, req, _, {
@@ -1326,7 +1338,7 @@ export const routes: Record<string, RouteEntry> = {
               lang,
             }),
         savedPartial ? {} : await frameOf(ctx, url, req),
-        localeQuery(url),
+        locale,
         activeTab,
         savedPartial,
       )

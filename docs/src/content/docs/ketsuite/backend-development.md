@@ -488,6 +488,14 @@ Publish a joint when another module has a legitimate structural contribution to 
 typed props in the owner, and let dependent modules provide fills. Do not create an empty joint for a
 hypothetical extension or use CSS selectors as an extension API.
 
+Product Template records publish `product_backend:template.tabs` and
+`product_backend:template.panel` as one coordinated extension boundary. A contributing module renders
+its tab through the first joint and renders content through the second only when its own tab is active.
+Both joints receive `templateId`, `activeTab`, `locale`, and `querySuffix`; extensions must preserve the
+locale suffix in their links and must use the shared `data-ui="tab"` contract. The Product screen keeps
+the tabs inside the design-system `Tabs` navigation and owns the record page around the contributed
+panel.
+
 Cover shared components with contract tests and a representative rendered screen. Generated visual
 artifacts may be used locally for inspection, but they are not source documentation and should not be
 committed as PR evidence.
