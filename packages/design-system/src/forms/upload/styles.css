@@ -1,0 +1,21 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="file-upload"],
+  :where([data-kv-design-system]) [data-ui="drop-zone"] {
+    grid-column: 2;
+    display: grid;
+    min-width: 0;
+    gap: var(--kv-space-2);
+  }
+
+  :where([data-kv-design-system]) [data-ui="drop-zone"] {
+    padding: var(--kv-space-4);
+    border: 1px dashed var(--kv-field-border);
+    border-radius: var(--kv-radius-sm);
+    background: var(--kv-interactive-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="upload-status"] {
+    color: var(--kv-text-secondary);
+    font-size: var(--kv-text-xs);
+  }
+}

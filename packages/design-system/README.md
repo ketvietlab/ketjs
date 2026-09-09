@@ -166,3 +166,8 @@ adapter. Route state, unsaved-change decisions and submit outcomes remain applic
 responsibilities. Menu, popover, tooltip, dialog, toast, spinner and skeleton renderers
 retain native links/forms and useful no-script behavior. See the backend development
 guide for the full composition and integration contract.
+
+Typed form exports cover scalar and selection fields, controlled combobox/tag pickers,
+civil date and local-time values, native file inputs, and a generic relation renderer.
+Applications retain validation, query, permission, timezone, upload, and persistence
+ownership; renderers preserve submitted text and expose native fallbacks.

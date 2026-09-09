@@ -15,6 +15,11 @@
 @import "./interactions/toast/styles.css";
 @import "./interactions/spinner/styles.css";
 @import "./interactions/skeleton/styles.css";
+@import "./forms/scalar-fields/styles.css";
+@import "./forms/combobox/styles.css";
+@import "./forms/date-time/styles.css";
+@import "./forms/upload/styles.css";
+@import "./forms/relation-picker/styles.css";
 @import "./layouts/layout/styles.css";
 @import "./layouts/shell/styles.css";
 /* FormPage rail contract: desktop content is 2:1; narrow screens stack. */

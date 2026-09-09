@@ -1,0 +1,52 @@
+@layer ket.app {
+  :where([data-kv-design-system]) [data-ui="switch-control"] {
+    grid-column: 2;
+    display: inline-flex;
+    width: fit-content;
+    min-height: var(--kv-control-height);
+    align-items: center;
+    cursor: pointer;
+  }
+
+  :where([data-kv-design-system]) [data-ui="switch-control"] input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+  }
+
+  :where([data-kv-design-system]) [data-ui="switch-track"] {
+    position: relative;
+    width: 2.25rem;
+    height: 1.25rem;
+    border: 1px solid var(--kv-field-border);
+    border-radius: 999px;
+    background: var(--kv-interactive-bg);
+  }
+
+  :where([data-kv-design-system]) [data-ui="switch-track"]::after {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 50%;
+    background: var(--kv-panel-bg);
+    box-shadow: var(--kv-shadow-sm);
+    content: "";
+    transition: transform var(--kv-motion-fast);
+  }
+
+  :where([data-kv-design-system]) [data-ui="switch-control"] input:checked + [data-ui="switch-track"] {
+    border-color: var(--kv-color-accent);
+    background: var(--kv-color-accent);
+  }
+
+  :where([data-kv-design-system]) [data-ui="switch-control"] input:checked + [data-ui="switch-track"]::after {
+    transform: translateX(1rem);
+  }
+
+  :where([data-kv-design-system]) [data-ui="switch-control"] input:focus-visible + [data-ui="switch-track"] {
+    box-shadow: var(--kv-focus-ring);
+  }
+}

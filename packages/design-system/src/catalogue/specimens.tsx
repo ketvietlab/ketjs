@@ -25,6 +25,22 @@ import { ConfirmDialog, Dialog } from '../interactions/dialog/index.tsx'
 import { ToastRegion } from '../interactions/toast/index.tsx'
 import { Spinner } from '../interactions/spinner/index.tsx'
 import { Skeleton } from '../interactions/skeleton/index.tsx'
+import {
+  Checkbox,
+  CheckboxGroup,
+  MoneyField,
+  NumberField,
+  RadioGroup,
+  SearchField,
+  Select,
+  Switch,
+  TextArea,
+  TextField,
+} from '../forms/scalar-fields/index.tsx'
+import { Combobox, MultiCombobox, TagPicker } from '../forms/combobox/index.tsx'
+import { DatePicker, DateRangePicker, DateTimePicker, TimePicker } from '../forms/date-time/index.tsx'
+import { DropZone, FileUpload } from '../forms/upload/index.tsx'
+import { RelationPicker } from '../forms/relation-picker/index.tsx'
 
 export type ComponentExample = {
   id: string
@@ -1472,6 +1488,201 @@ export const componentGroups: readonly ComponentGroup[] = [
                 ]}
               />,
             ]}
+          />
+        ),
+      },
+    ],
+  },
+  {
+    id: 'form-controls',
+    name: 'Form controls and pickers',
+    description: 'Typed, server-rendered controls preserve user input and native submission semantics.',
+    examples: [
+      {
+        id: 'scalar-fields',
+        name: 'Scalar fields',
+        description: 'Text, long text, search, exact numeric and money values share one field contract.',
+        render: () => (
+          <Grid
+            columns={2}
+            items={[
+              <TextField id="customer" name="customer" label="Customer" value="An Việt" required />,
+              <SearchField id="reference" name="reference" label="Reference" value="SO-1042" />,
+              <NumberField id="quantity" name="quantity" label="Quantity" value="12" min="0" />,
+              <MoneyField id="total" name="total" label="Total" value="18450000.00" />,
+              <TextArea
+                id="note"
+                name="note"
+                label="Internal note"
+                value="Deliver before 17:00."
+                span="full"
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'selection-controls',
+        name: 'Selection controls',
+        description: 'Native checkbox, group, radio, switch and select states remain submit-capable.',
+        render: () => (
+          <Stack
+            items={[
+              <Checkbox id="priority" name="priority" label="Priority order" value />,
+              <CheckboxGroup
+                id="channels"
+                name="channels"
+                label="Channels"
+                options={[
+                  { value: 'email', label: 'Email', checked: true },
+                  { value: 'sms', label: 'SMS' },
+                ]}
+              />,
+              <RadioGroup
+                id="delivery"
+                name="delivery"
+                label="Delivery"
+                value="standard"
+                options={[
+                  { value: 'standard', label: 'Standard' },
+                  { value: 'express', label: 'Express' },
+                ]}
+              />,
+              <Switch id="notify" name="notify" label="Notify owner" checked />,
+              <Select
+                id="warehouse"
+                name="warehouse"
+                label="Warehouse"
+                value="hn"
+                options={[
+                  { value: 'hn', label: 'Hà Nội' },
+                  { value: 'hcm', label: 'Hồ Chí Minh' },
+                ]}
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'comboboxes',
+        name: 'Combobox and tags',
+        description: 'Query, open state and selected values remain controlled by URL or application state.',
+        render: () => {
+          const options = [
+            { value: 'linh', label: 'Ngọc Linh', description: 'Sales operations' },
+            { value: 'minh', label: 'Minh Anh', description: 'Fulfilment' },
+          ]
+          return (
+            <Stack
+              items={[
+                <Combobox
+                  id="owner"
+                  name="owner"
+                  label="Owner"
+                  query="Ngọc"
+                  value="linh"
+                  options={options}
+                  open
+                  openHref="#comboboxes"
+                  closeHref="#comboboxes"
+                />,
+                <MultiCombobox
+                  id="watchers"
+                  name="watchers"
+                  label="Watchers"
+                  query=""
+                  options={options}
+                  values={['linh']}
+                  open={false}
+                  openHref="#comboboxes"
+                  closeHref="#comboboxes"
+                  removeHref={() => '#comboboxes'}
+                />,
+                <TagPicker
+                  id="tags"
+                  name="tags"
+                  label="Tags"
+                  query=""
+                  options={[{ value: 'urgent', label: 'Urgent' }]}
+                  values={['urgent']}
+                  open={false}
+                  openHref="#comboboxes"
+                  closeHref="#comboboxes"
+                  removeHref={() => '#comboboxes'}
+                />,
+              ]}
+            />
+          )
+        },
+      },
+      {
+        id: 'date-time',
+        name: 'Civil date and local time',
+        description: 'Civil dates and local times submit their source text without implicit UTC conversion.',
+        render: () => (
+          <Stack
+            items={[
+              <DatePicker id="date" name="date" label="Delivery date" value="2026-09-08" />,
+              <DateRangePicker
+                id="range"
+                label="Reporting period"
+                start={{ id: 'from', name: 'from', value: '2026-09-01' }}
+                end={{ id: 'to', name: 'to', value: '2026-09-30' }}
+                startLabel="From"
+                endLabel="To"
+              />,
+              <DateTimePicker
+                id="appointment"
+                name="appointment"
+                label="Appointment"
+                value="2026-09-08T14:30"
+              />,
+              <TimePicker id="cutoff" name="cutoff" label="Cut-off" value="17:00" />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'uploads',
+        name: 'File upload and drop zone',
+        description: 'Native file input owns submission; the application owns transport and storage.',
+        render: () => (
+          <Stack
+            items={[
+              <FileUpload id="invoice" name="invoice" label="Invoice" accept="application/pdf" />,
+              <DropZone
+                id="photos"
+                name="photos"
+                label="Delivery photos"
+                accept="image/*"
+                multiple
+                status="Up to 10 files · 8 MB each"
+              />,
+            ]}
+          />
+        ),
+      },
+      {
+        id: 'relation-picker',
+        name: 'Relation picker',
+        description: 'The renderer only receives permission-filtered records from the application adapter.',
+        render: () => (
+          <RelationPicker
+            id="partner"
+            name="partner"
+            label="Partner"
+            query="An"
+            value="an-viet"
+            results={[
+              { id: 'an-viet', name: 'An Việt', city: 'Hà Nội' },
+              { id: 'anh-duong', name: 'Ánh Dương', city: 'Đà Nẵng' },
+            ]}
+            getValue={(partner) => partner.id}
+            getLabel={(partner) => partner.name}
+            getDescription={(partner) => partner.city}
+            open
+            openHref="#relation-picker"
+            closeHref="#relation-picker"
           />
         ),
       },
