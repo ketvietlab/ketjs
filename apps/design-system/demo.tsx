@@ -4,6 +4,7 @@ import type { JSXChild } from '@ketvietlab/ketjs-view'
 import { icon } from '@ketvietlab/ketsuite/ui'
 import {
   ActionGroup,
+  AppNavigation,
   AppShell,
   Avatar,
   Badge,
@@ -19,7 +20,6 @@ import {
   ListPage,
   Metric,
   ModalSheet,
-  NavList,
   Notice,
   Pipeline,
   Progress,
@@ -873,56 +873,75 @@ export function createDemoRoutes() {
           <div data-kv-design-system data-theme={theme} data-presentation="grouped" data-demo-app>
             <AppShell
               sidebar={
-                <div class="demo-sidebar">
-                  <div class="demo-brand">
-                    {icon('package')}
-                    <div>
-                      <strong>An Việt</strong>
-                      <span>Sales workspace</span>
+                <AppNavigation
+                  id="sales-navigation"
+                  label="Điều hướng ứng dụng"
+                  menuLabel="Mở điều hướng"
+                  closeLabel="Đóng điều hướng"
+                  identity="An Việt"
+                  context="Sales workspace · Thảo Điền"
+                  groups={[
+                    {
+                      id: 'workspace',
+                      label: 'Không gian làm việc',
+                      items: [
+                        {
+                          id: 'overview',
+                          label: 'Tổng quan',
+                          href: href(),
+                          active: view === 'overview',
+                          leading: icon('layout-dashboard'),
+                        },
+                        {
+                          id: 'orders',
+                          label: 'Đơn hàng',
+                          href: href({ view: 'orders' }),
+                          active: view === 'orders' || view === 'record',
+                          leading: icon('shopping-cart'),
+                          count: orders.length,
+                        },
+                        {
+                          id: 'delivery-board',
+                          label: 'Bảng giao hàng',
+                          href: href({ view: 'board' }),
+                          active: view === 'board',
+                          leading: icon('layout-grid'),
+                        },
+                      ],
+                    },
+                    {
+                      id: 'reference',
+                      label: 'Tham khảo',
+                      items: [
+                        {
+                          id: 'design-system',
+                          label: 'Design system',
+                          href: '/',
+                          leading: icon('package'),
+                        },
+                      ],
+                    },
+                  ]}
+                  footer={
+                    <div class="demo-navigation-footer">
+                      <LinkButton
+                        label={theme === 'light' ? 'Giao diện tối' : 'Giao diện sáng'}
+                        href={href({ ...current, theme: theme === 'light' ? 'dark' : 'light' })}
+                        variant="tertiary"
+                        leading={icon(theme === 'light' ? 'moon' : 'sun')}
+                      />
+                      <Inline
+                        items={[
+                          <Avatar name="Ngọc Linh" size="small" />,
+                          <div>
+                            <strong>Ngọc Linh</strong>
+                            <div class="demo-muted">Quản lý bán hàng</div>
+                          </div>,
+                        ]}
+                      />
                     </div>
-                  </div>
-                  <NavList
-                    label="Điều hướng chính"
-                    items={[
-                      {
-                        label: 'Tổng quan',
-                        href: href(),
-                        active: view === 'overview',
-                        leading: icon('layout-dashboard'),
-                      },
-                      {
-                        label: 'Đơn hàng',
-                        href: href({ view: 'orders' }),
-                        active: view === 'orders' || view === 'record',
-                        leading: icon('shopping-cart'),
-                        count: orders.length,
-                      },
-                      {
-                        label: 'Bảng giao hàng',
-                        href: href({ view: 'board' }),
-                        active: view === 'board',
-                        leading: icon('layout-grid'),
-                      },
-                    ]}
-                  />
-                  <div class="demo-sidebar-foot">
-                    <LinkButton
-                      label={theme === 'light' ? 'Sidebar tối' : 'Sidebar sáng'}
-                      href={href({ ...current, theme: theme === 'light' ? 'dark' : 'light' })}
-                      variant="tertiary"
-                      leading={icon(theme === 'light' ? 'moon' : 'sun')}
-                    />
-                    <Inline
-                      items={[
-                        <Avatar name="Ngọc Linh" />,
-                        <div>
-                          <strong>Ngọc Linh</strong>
-                          <div class="demo-muted">Quản lý bán hàng</div>
-                        </div>,
-                      ]}
-                    />
-                  </div>
-                </div>
+                  }
+                />
               }
               main={main}
             />

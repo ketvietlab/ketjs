@@ -187,6 +187,7 @@ console.log(`
     dark       http://127.0.0.1:${port}/?theme=dark
     compact    http://127.0.0.1:${port}/?density=compact
     inventory  http://127.0.0.1:${port}/inventory
+    app demo   http://127.0.0.1:${port}/demo
 
   Package source:
     ${ASSETS}

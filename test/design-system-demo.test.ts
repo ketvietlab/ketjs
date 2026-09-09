@@ -29,8 +29,18 @@ test('sales demo: public page compositions use one canonical pattern', () => {
     assert.match(String(response.body), /data-presentation="grouped"/)
     assert.equal([...String(response.body).matchAll(/data-pattern="/g)].length, 1)
     assert.match(String(response.body), /type="module" src="\/demo\/client.js"/)
+    assert.match(String(response.body), /data-ui="app-navigation"/)
+    assert.match(String(response.body), /data-ui="navigation-drawer"/)
+    assert.match(String(response.body), /data-ui="navigation-item"/)
+    assert.doesNotMatch(String(response.body), /class="demo-sidebar"/)
     assert.doesNotMatch(String(response.body), /catalogue-specimen/)
   }
+})
+
+test('sales demo: mobile page actions share the available width evenly', () => {
+  const styles = String(createDemoRoutes()['/demo/styles.css']().body)
+  assert.match(styles, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
+  assert.match(styles, /\[data-ui="action"\] \{\s*width: 100%/)
 })
 
 test('sales demo: collection paging belongs to ListChrome above the table', () => {
