@@ -276,7 +276,7 @@ try {
     {
       key: 'submenu-demo-crm-vi',
       path: '/demo2?theme=light&module=crm&child=1',
-      selector: '[data-demo-submenu-more][data-active="true"]',
+      selector: '[data-demo-submenu-trigger][data-active="true"]',
     },
     {
       key: 'connected-demo-record-vi',
@@ -339,24 +339,43 @@ try {
         const submenuAudit: Json = await evaluate<Json>(
           cdp,
           `(() => {
-            const menu = document.querySelector('[data-demo-submenu] [data-ui="menu"]')
-            const trigger = menu?.querySelector('[data-ui="menu-trigger"]')
-            if (menu instanceof HTMLDetailsElement && trigger instanceof HTMLElement) trigger.click()
-            const panel = menu?.querySelector('[data-ui="menu-panel"]')
+            const submenu = document.querySelector('[data-demo-submenu]')
+            const trigger = submenu?.querySelector('[data-demo-submenu-trigger]')
+            const tabs = submenu?.querySelector('[data-ui="tabs"]')
+            if (trigger instanceof HTMLElement && trigger.getAttribute('aria-expanded') !== 'true') trigger.click()
+            const panel = submenu?.querySelector('[data-demo-submenu-children]')
             const rect = panel instanceof HTMLElement ? panel.getBoundingClientRect() : null
+            const tabsRect = tabs instanceof HTMLElement ? tabs.getBoundingClientRect() : null
+            document.body.click()
+            const outsideClosed = trigger?.getAttribute('aria-expanded') === 'false' && panel instanceof HTMLElement && panel.hidden
+            if (trigger instanceof HTMLElement) trigger.click()
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+            const escapeClosed = trigger?.getAttribute('aria-expanded') === 'false' && panel instanceof HTMLElement && panel.hidden
+            const focusRestored = document.activeElement === trigger
+            if (trigger instanceof HTMLElement) trigger.click()
             return {
               navigationItems: document.querySelectorAll('[data-ui="navigation-item"]').length,
               tabs: document.querySelectorAll('[data-demo-submenu] [data-ui="tab"]').length,
-              nestedItems: document.querySelectorAll('[data-demo-submenu] [data-ui="menu-item"]').length,
-              menuOpen: menu instanceof HTMLDetailsElement && menu.open,
+              topItems: document.querySelectorAll('[data-demo-submenu] :is([data-ui="tab"], [data-demo-submenu-trigger])').length,
+              nestedItems: document.querySelectorAll('[data-demo-submenu-child]').length,
+              submenuOpen: trigger?.getAttribute('aria-expanded') === 'true' && !(panel instanceof HTMLElement && panel.hidden),
+              outsideClosed,
+              escapeClosed,
+              focusRestored,
+              panelBelowTabs: Boolean(rect && tabsRect && rect.top >= tabsRect.bottom - 1),
               panelInsideViewport: Boolean(rect && rect.left >= 0 && rect.right <= innerWidth),
             }
           })()`,
         )
         assert.equal(submenuAudit.navigationItems, 18)
         assert.equal(submenuAudit.tabs, 4)
+        assert.equal(submenuAudit.topItems, 5)
         assert.equal(submenuAudit.nestedItems, 3)
-        assert.equal(submenuAudit.menuOpen, true)
+        assert.equal(submenuAudit.submenuOpen, true)
+        assert.equal(submenuAudit.outsideClosed, true)
+        assert.equal(submenuAudit.escapeClosed, true)
+        assert.equal(submenuAudit.focusRestored, true)
+        assert.equal(submenuAudit.panelBelowTabs, true)
         assert.equal(submenuAudit.panelInsideViewport, true)
       }
       if (review.key === 'application-structure-en') {

@@ -46,16 +46,17 @@ test('submenu demo: keeps the original demo intact and exposes 18 dense applicat
   assert.equal([...html.matchAll(/data-ui="navigation-item"/g)].length, 18)
   assert.equal([...html.matchAll(/data-ui="navigation-group"/g)].length, 4)
   assert.equal([...html.matchAll(/data-ui="tab"/g)].length, 4)
-  assert.equal([...html.matchAll(/data-ui="menu-trigger"/g)].length, 1)
-  assert.equal([...html.matchAll(/data-ui="menu-item"/g)].length, 3)
+  assert.equal([...html.matchAll(/data-demo-submenu-trigger/g)].length, 1)
+  assert.equal([...html.matchAll(/data-demo-submenu-child="true"/g)].length, 3)
   assert.match(html, /Điều hướng Tổng quan/)
-  assert.match(html, /Phân tích Tổng quan/)
+  assert.match(html, /aria-label="Phân tích Tổng quan"/)
+  assert.match(html, /data-demo-submenu-children="true"[^>]*hidden/)
   assert.match(html, /href="\/demo2\?theme=light&amp;module=crm"/)
   assert.match(html, /href="\/demo2\?theme=light&amp;view=orders"/)
   assert.doesNotMatch(html, /(?:href|action)="\/demo(?:[?/]|&quot;)/)
 })
 
-test('submenu demo: every main module owns four links and one submenu with three nested destinations', () => {
+test('submenu demo: every main module owns four links and one expanding submenu with three destinations', () => {
   const modules = [
     'overview',
     'crm',
@@ -88,8 +89,8 @@ test('submenu demo: every main module owns four links and one submenu with three
             : `?module=${module}`
     const html = String(route(new URL(`http://localhost/demo2${query}`)).body)
     assert.equal([...html.matchAll(/data-ui="tab"/g)].length, 4, module)
-    assert.equal([...html.matchAll(/data-ui="menu-trigger"/g)].length, 1, module)
-    assert.equal([...html.matchAll(/data-ui="menu-item"/g)].length, 3, module)
+    assert.equal([...html.matchAll(/data-demo-submenu-trigger/g)].length, 1, module)
+    assert.equal([...html.matchAll(/data-demo-submenu-child="true"/g)].length, 3, module)
     assert.equal([...html.matchAll(/data-ui="navigation-item"[^>]*data-active="true"/g)].length, 1, module)
   }
 })
@@ -97,7 +98,9 @@ test('submenu demo: every main module owns four links and one submenu with three
 test('submenu demo: nested selection is URL-owned and the board submenu filters its columns', () => {
   const routes = createDemo2Routes()
   const nested = String(routes['/demo2'](new URL('http://localhost/demo2?module=inventory&child=1')).body)
-  assert.match(nested, /data-demo-submenu-more="true" data-active="true"/)
+  assert.match(nested, /data-demo-submenu-trigger="true" data-active="true"[^>]*aria-expanded="true"/)
+  assert.doesNotMatch(nested, /data-demo-submenu-children="true"[^>]*hidden/)
+  assert.match(nested, /data-demo-submenu-child="true" data-active="true"/)
   assert.match(nested, /Luân chuyển hàng: 5 mục cần chú ý/)
 
   const board = String(routes['/demo2'](new URL('http://localhost/demo2?view=board&status=shipping')).body)
