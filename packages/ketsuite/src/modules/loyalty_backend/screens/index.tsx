@@ -183,6 +183,7 @@ export const dashboardScreen = (
     ledger?: number | null
   },
 ): TemplateResult => {
+  type DashboardCard = { id: string; title: string; value: number | null; href: string }
   const cards = [
     Object.hasOwn(stats, 'programs')
       ? {
@@ -216,7 +217,7 @@ export const dashboardScreen = (
           href: '/admin/loyalty/ledger',
         }
       : null,
-  ].filter((card): card is NonNullable<typeof card> => card !== null)
+  ].filter((card): card is DashboardCard => card !== null)
   return shell(
     _,
     _('loyalty_backend.dashboard.title'),
