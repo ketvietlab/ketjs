@@ -11,6 +11,7 @@ import { messages } from './messages.ts'
 import {
   dashboardScreen,
   ledgerScreen,
+  membershipsScreen,
   tiersScreen,
   orderLoyaltyScreen,
   portalScreen,
@@ -160,20 +161,27 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
     (ctx): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      const [programs, wallets, memberships, ledger] = await Promise.all([
-        ctx.call('loyalty.program.list', {}, url, req) as Promise<AnyRow[]>,
-        ctx.call('loyalty.wallet.list', {}, url, req) as Promise<AnyRow[]>,
-        ctx.call('loyalty.membership.list', { limit: 1000 }, url, req) as Promise<AnyRow[]>,
-        ctx.call('loyalty.ledger.list', { limit: 1000 }, url, req) as Promise<AnyRow[]>,
-      ])
+      const [programs, wallets, memberships, ledger] = await Promise.all(
+        [
+          ['loyalty.program.list', 'loyalty.program.stats', 'total'],
+          ['loyalty.wallet.list', 'loyalty.wallet.stats', 'total'],
+          ['loyalty.membership.list', 'loyalty.membership.stats', 'total'],
+          ['loyalty.ledger.list', 'loyalty.ledger.stats', 'entries'],
+        ].map(async ([listFunction, statsFunction, field]) => {
+          if (!(await ctx.allows(listFunction!, url, req))) return undefined
+          if (!(await ctx.allows(statsFunction!, url, req))) return null
+          const result = (await ctx.call(statsFunction!, {}, url, req)) as AnyRow
+          return Number(result[field!] ?? 0)
+        }),
+      )
       return adminPage(ctx, url, req, {
         title: 'loyalty_backend.dashboard.title',
         body: (_, frame) =>
           dashboardScreen(_, frame, {
-            programs: programs.length,
-            wallets: wallets.length,
-            members: memberships.length,
-            ledger: ledger.length,
+            ...(programs === undefined ? {} : { programs }),
+            ...(wallets === undefined ? {} : { wallets }),
+            ...(memberships === undefined ? {} : { members: memberships }),
+            ...(ledger === undefined ? {} : { ledger }),
           }),
       })
     },
@@ -609,10 +617,60 @@ const routes: NonNullable<Parameters<typeof defineModule>[0]['routes']> = {
     },
 
   '/admin/loyalty/memberships':
-    (_ctx): Route =>
+    (ctx): Route =>
     async (url, req) => {
       if (req.method !== 'GET') return text('GET', { status: 405 })
-      return seeOther(inLocale(url, '/admin/loyalty/tiers'))
+      const page = pageOf(url)
+      const tierId = url.searchParams.get('tier') ?? undefined
+      const state = url.searchParams.get('state') ?? undefined
+      const filters = {
+        ...(tierId ? { tierId } : {}),
+        ...(state ? { state } : {}),
+      }
+      const [rows, totals, tiers] = await Promise.all([
+        ctx.call(
+          'loyalty.membership.list',
+          { ...filters, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE },
+          url,
+          req,
+        ) as Promise<AnyRow[]>,
+        ctx.call('loyalty.membership.stats', filters, url, req) as Promise<AnyRow>,
+        ctx.call('loyalty.tier.list', { includeArchived: true }, url, req) as Promise<AnyRow[]>,
+      ])
+      const tierNames = new Map(tiers.map((tier) => [String(tier.id), String(tier.name)]))
+      return adminPage(ctx, url, req, {
+        title: 'loyalty_backend.members.title',
+        body: (_, frame) =>
+          membershipsScreen(
+            _,
+            {
+              ...frame,
+              chrome: {
+                section: _('loyalty_backend.menu.app'),
+                tailMenus: [
+                  filterMenu(url, 'state', _('loyalty_backend.field.activity'), 'state', state, [
+                    { value: 'active', label: _('loyalty_backend.state.active') },
+                    { value: 'dormant', label: _('loyalty_backend.state.dormant') },
+                  ]),
+                  filterMenu(
+                    url,
+                    'tier',
+                    _('loyalty_backend.field.tier'),
+                    'tier',
+                    tierId,
+                    tiers.map((tier) => ({ value: String(tier.id), label: String(tier.name) })),
+                  ),
+                ],
+                pager: pager(url, page, rows.length, Number(totals.total ?? 0)),
+              },
+            },
+            rows.map((row) => ({
+              ...row,
+              tierName: row.tierName ?? tierNames.get(String(row.tierId)),
+            })),
+            totals,
+          ),
+      })
     },
 
   '/admin/loyalty/tiers':
@@ -890,8 +948,15 @@ export default defineModule({
     'loyalty.memberships': {
       parent: 'loyalty',
       label: 'menu.memberships',
-      path: '/admin/loyalty/tiers',
+      path: '/admin/loyalty/memberships',
       sequence: 30,
+      needs: 'loyalty.membership.list',
+    },
+    'loyalty.tiers': {
+      parent: 'loyalty',
+      label: 'menu.tiers',
+      path: '/admin/loyalty/tiers',
+      sequence: 31,
       needs: 'loyalty.tier.list',
     },
     'loyalty.ledger': {
