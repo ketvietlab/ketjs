@@ -176,9 +176,48 @@ const channelsOf = (_: Translator, program: AnyRow): string =>
 export const dashboardScreen = (
   _: Translator,
   frame: Frame,
-  stats: { programs: number; wallets: number; members: number; ledger: number },
-): TemplateResult =>
-  shell(
+  stats: {
+    programs?: number | null
+    wallets?: number | null
+    members?: number | null
+    ledger?: number | null
+  },
+): TemplateResult => {
+  const cards = [
+    Object.hasOwn(stats, 'programs')
+      ? {
+          id: 'programs',
+          title: _('loyalty_backend.menu.programs'),
+          value: stats.programs,
+          href: '/admin/loyalty/programs',
+        }
+      : null,
+    Object.hasOwn(stats, 'wallets')
+      ? {
+          id: 'wallets',
+          title: _('loyalty_backend.menu.wallets'),
+          value: stats.wallets,
+          href: '/admin/loyalty/wallets',
+        }
+      : null,
+    Object.hasOwn(stats, 'members')
+      ? {
+          id: 'members',
+          title: _('loyalty_backend.menu.memberships'),
+          value: stats.members,
+          href: '/admin/loyalty/memberships',
+        }
+      : null,
+    Object.hasOwn(stats, 'ledger')
+      ? {
+          id: 'ledger',
+          title: _('loyalty_backend.menu.ledger'),
+          value: stats.ledger,
+          href: '/admin/loyalty/ledger',
+        }
+      : null,
+  ].filter((card): card is NonNullable<typeof card> => card !== null)
+  return shell(
     _,
     _('loyalty_backend.dashboard.title'),
     <DashboardPage
@@ -187,34 +226,15 @@ export const dashboardScreen = (
       title={_('loyalty_backend.dashboard.title')}
       body={stack([
         <CardGrid
-          items={[
-            {
-              id: 'programs',
-              title: _('loyalty_backend.menu.programs'),
-              value: stats.programs,
-              href: '/admin/loyalty/programs',
-            },
-            {
-              id: 'wallets',
-              title: _('loyalty_backend.menu.wallets'),
-              value: stats.wallets,
-              href: '/admin/loyalty/wallets',
-            },
-            {
-              id: 'members',
-              title: _('loyalty_backend.menu.memberships'),
-              value: stats.members,
-              href: '/admin/loyalty/tiers',
-            },
-            {
-              id: 'ledger',
-              title: _('loyalty_backend.menu.ledger'),
-              value: stats.ledger,
-              href: '/admin/loyalty/ledger',
-            },
-          ]}
+          items={cards}
           id={(item) => item.id}
-          card={(item) => <Metric label={item.title} value={String(item.value)} href={item.href} />}
+          card={(item) => (
+            <Metric
+              label={item.title}
+              value={item.value === null ? '—' : figure(item.value)}
+              href={item.href}
+            />
+          )}
         />,
         <Notice
           title={_('loyalty_backend.dashboard.ledgerTitle')}
@@ -225,6 +245,7 @@ export const dashboardScreen = (
     />,
     { ...frame, topbar: false },
   )
+}
 
 /**
  * The programs, and where each one stands today.
@@ -789,6 +810,97 @@ export const ledgerScreen = (_: Translator, frame: Frame, rows: AnyRow[], totals
         },
       ]),
       rows.length ? ledgerTable(_, rows) : empty(_),
+    ])}
+  />
+)
+
+/**
+ * A bounded window over the member base. Imported memberships are historical
+ * evidence, so this screen never refreshes or rewrites them as a side effect of
+ * reading. Archived partners stay visible and are labelled instead of revived.
+ */
+export const membershipsScreen = (
+  _: Translator,
+  frame: Frame,
+  rows: AnyRow[],
+  totals: AnyRow,
+): TemplateResult => (
+  <ListScreenFrame
+    translator={_}
+    title={_('loyalty_backend.members.title')}
+    subtitle={_('loyalty_backend.members.hint')}
+    frame={frame}
+    body={stack([
+      statRow([
+        {
+          id: 'members',
+          label: _('loyalty_backend.stat.members'),
+          value: figure(totals.total),
+        },
+        {
+          id: 'active',
+          label: _('loyalty_backend.stat.membersActive'),
+          value: figure(totals.active),
+        },
+        {
+          id: 'dormant',
+          label: _('loyalty_backend.stat.membersDormant'),
+          value: figure(totals.dormant),
+        },
+        {
+          id: 'spend',
+          label: _('loyalty_backend.stat.spend'),
+          value: figure(totals.spend),
+        },
+      ]),
+      rows.length
+        ? dataTable(_, {
+            rows,
+            id: (row) => String(row.id),
+            rowHref: (row) => `/admin/partner/partners/${encodeURIComponent(String(row.partnerId))}`,
+            responsive: 'stack',
+            columns: [
+              {
+                key: 'partner',
+                label: _('loyalty_backend.field.partner'),
+                cell: (row) => String(row.partnerName ?? row.partnerId),
+                priority: 'primary',
+              },
+              {
+                key: 'phone',
+                label: _('loyalty_backend.field.phone'),
+                cell: (row) => String(row.partnerPhone ?? '—'),
+              },
+              {
+                key: 'tier',
+                label: _('loyalty_backend.field.tier'),
+                cell: (row) => String(row.tierName ?? row.tierCode ?? '—'),
+              },
+              {
+                key: 'spend',
+                label: _('loyalty_backend.field.rollingSpend'),
+                cell: (row) => figure(row.rollingSpend),
+                align: 'end',
+                kind: 'number',
+              },
+              {
+                key: 'activity',
+                label: _('loyalty_backend.field.activity'),
+                cell: (row) =>
+                  n(row.rollingSpend) > 0
+                    ? badge(_('loyalty_backend.state.active'), 'positive', 'active')
+                    : badge(_('loyalty_backend.state.dormant'), 'neutral', 'dormant'),
+                kind: 'status',
+              },
+              {
+                key: 'partnerState',
+                label: _('loyalty_backend.field.partnerState'),
+                cell: (row) => activeBadge(_, row.partnerActive),
+                kind: 'status',
+              },
+            ],
+          })
+        : empty(_),
     ])}
   />
 )
