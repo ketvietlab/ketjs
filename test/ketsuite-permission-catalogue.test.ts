@@ -74,7 +74,6 @@ test('public production permission catalogue covers every function owned by its 
     'account_partner',
     'calendar_activity',
     'calendar_mail_transport',
-    'loyalty_sale',
     'mail_inbound',
     'product_activity_backend',
     'product_variant_activity_backend',

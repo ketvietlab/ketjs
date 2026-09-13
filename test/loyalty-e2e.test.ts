@@ -337,6 +337,87 @@ test('loyalty HTTP E2E: each tier owns its spend period and modal', async (t) =>
   assert.doesNotMatch(english, /loyalty(?:_backend)?\.[A-Za-z]/)
 })
 
+test('loyalty HTTP E2E: member administration is paged, exact and read-only', async (t) => {
+  const { e2e, call } = await bootLoyalty(t)
+  const saved = await call<Row>('loyalty.tier.save', {
+    id: 'gold',
+    name: 'Vàng',
+    code: 'gold',
+    sequence: 30,
+    minimumSpend: '10000000',
+    windowMonths: 120,
+    redeemPercent: '5',
+    active: true,
+  })
+  assert.equal(saved.ok, true)
+
+  const count = 1_001
+  await e2e.fixture.withTenant('', async ({ adapter }) => {
+    for (let start = 0; start < count; start += 200) {
+      const end = Math.min(count, start + 200)
+      const partnerValues: string[] = []
+      const partnerParams: unknown[] = []
+      const membershipValues: string[] = []
+      const membershipParams: unknown[] = []
+      for (let i = start; i < end; i += 1) {
+        const partnerId = `member-${i}`
+        partnerValues.push('(?, ?, ?, ?)')
+        partnerParams.push(
+          partnerId,
+          'person',
+          `Khách Loyalty ${String(i).padStart(4, '0')}`,
+          i === 1000 ? 0 : 1,
+        )
+        membershipValues.push('(?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        membershipParams.push(
+          'acme',
+          `membership-${i}`,
+          partnerId,
+          'gold',
+          String(i),
+          '0',
+          120,
+          '2026-09-13T00:00:00.000Z',
+          1,
+        )
+      }
+      await adapter.run(
+        `INSERT INTO partner_partner (id, kind, name, active) VALUES ${partnerValues.join(', ')}`,
+        partnerParams,
+      )
+      await adapter.run(
+        `INSERT INTO loyalty_membership ("companyId", id, "partnerId", "tierId", "rollingSpend", points, "windowMonths", "refreshedAt", version) VALUES ${membershipValues.join(', ')}`,
+        membershipParams,
+      )
+    }
+  })
+
+  const dashboard = await (await e2e.client.get('/admin/loyalty')).text()
+  assert.match(dashboard, />1\.001</, 'dashboard uses the aggregate instead of the 1,000-row list cap')
+
+  const members = await (await e2e.client.get('/admin/loyalty/memberships')).text()
+  assert.match(members, /Khách Loyalty 1000/)
+  assert.match(members, /Đã lưu trữ/)
+  assert.equal(
+    new Set([...members.matchAll(/\/admin\/partner\/partners\/(member-\d+)/g)].map((match) => match[1])).size,
+    30,
+  )
+  assert.match(members, /[?&amp;]page=2/)
+  assert.match(members, /\/admin\/partner\/partners\/member-1000/)
+
+  const dormant = await (await e2e.client.get('/admin/loyalty/memberships?state=dormant')).text()
+  assert.match(dormant, /Khách Loyalty 0000/)
+  assert.doesNotMatch(dormant, /Khách Loyalty 1000/)
+
+  await e2e.fixture.withTenant('', async ({ adapter }) => {
+    const rows = await adapter.all(
+      'SELECT COUNT(*) AS count, SUM(version) AS versions FROM loyalty_membership',
+    )
+    assert.equal(Number(rows[0]?.count), count)
+    assert.equal(Number(rows[0]?.versions), count, 'opening the screen never refreshes imported memberships')
+  })
+})
+
 test('loyalty HTTP E2E: reservation, concurrent redeem, finalize retry and reversal keep ledger correct', async (t) => {
   const { call } = await bootLoyalty(t)
   assert.equal((await saveProgram(call)).ok, true)
