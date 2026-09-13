@@ -140,8 +140,9 @@ const download =
   (ctx: ServeContext): Route =>
   async (url, req, params) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return text('GET or HEAD', { status: 405 })
-    const sessions = await ctx.sessionsOf(url, req)
-    const authenticated = sessions ? Boolean(await sessions.of(req)) : true
+    // Use the same resolved identity and permission boundary as every function
+    // call. A verified gateway identity need not have a local session cookie.
+    const authenticated = await ctx.allows('storage.getAttachment', url, req)
     const publicAttachment = (await ctx
       .call('storage.getPublicAttachment', { id: params.id }, url, req)
       .catch((error: unknown) => {
