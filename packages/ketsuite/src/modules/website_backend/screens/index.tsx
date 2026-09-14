@@ -3,6 +3,8 @@ import type { TemplateResult } from '@ketvietlab/ketjs-view'
 import {
   badge,
   code,
+  columns,
+  ContentCard,
   dataTable,
   emptyState,
   RecordScreen,
@@ -20,6 +22,13 @@ import type { FormOption, Frame, Pager } from '../../../ui/index.ts'
 import { FormScreenFrame, ListScreenFrame } from './page-frame.tsx'
 
 export type SiteRow = {
+  /** The company/profile this site belongs to, used only as a display hint when present. */
+  siteGroup?: string | null
+  /** Domain summary used by the administration list/readiness rail. */
+  primaryHost?: string | null
+  domainCount?: number | null
+  /** Current actor's effective role on this site, when the screen is rendered for a staff user. */
+  role?: string | null
   /** Per-site overrides of the theme's own tokens, rendered into `ket.app`. */
   tokens?: Record<string, string> | null
   id: string
@@ -116,6 +125,162 @@ const activeFilter = (_: Translator, href: (state: string) => string, chosen: st
     }),
   ])
 
+const roleLabel = (_: Translator, role?: string | null): string => {
+  if (!role) return _('website_backend.sites.roleUnknown')
+  const key = `website_backend.role.${role}`
+  return _.has?.(key) ? _(key) : role
+}
+
+const companyLabel = (_: Translator, frame: Frame, row?: Partial<SiteRow>): string => {
+  const viewer = frame.viewer as
+    | { companyName?: string | null; branchName?: string | null }
+    | null
+    | undefined
+  return (
+    row?.siteGroup || viewer?.companyName || viewer?.branchName || _('website_backend.sites.companyCurrent')
+  )
+}
+
+const primaryHost = (_: Translator, row: Pick<SiteRow, 'primaryHost' | 'domainCount'>): string =>
+  row.primaryHost ||
+  (row.domainCount ? _('website_backend.sites.noPrimary') : _('website_backend.sites.noDomain'))
+
+const domainEvidenceBadge = (
+  _: Translator,
+  row: Pick<SiteRow, 'primaryHost' | 'domainCount'>,
+): TemplateResult =>
+  row.primaryHost
+    ? badge(_('website_backend.domains.pendingEvidence'), 'warning')
+    : row.domainCount
+      ? badge(_('website_backend.sites.noPrimary'), 'warning')
+      : badge(_('website_backend.sites.noDomain'), 'neutral')
+
+const siteFacts = (_: Translator, items: Array<[string, string | TemplateResult]>): TemplateResult =>
+  dataTable(_, {
+    rows: items.map(([term, value], index) => ({ id: String(index), term, value })),
+    id: (item) => item.id,
+    columns: [
+      {
+        key: 'term',
+        label: _('website_backend.sites.setting'),
+        cell: (item) => item.term,
+        priority: 'primary',
+      },
+      { key: 'value', label: _('website_backend.sites.value'), cell: (item) => item.value },
+    ],
+    responsive: 'stack',
+  })
+
+const setupChecklist = (_: Translator): TemplateResult => (
+  <Surface
+    tone="subtle"
+    body={siteFacts(_, [
+      [_('website_backend.sites.step1'), _('website_backend.sites.step1Hint')],
+      [_('website_backend.sites.step2'), _('website_backend.sites.step2Hint')],
+      [_('website_backend.sites.step3'), _('website_backend.sites.step3Hint')],
+      [_('website_backend.sites.step4'), _('website_backend.sites.step4Hint')],
+    ])}
+  />
+)
+
+const siteReadiness = (_: Translator, row: Partial<SiteRow>, frame: Frame): TemplateResult => {
+  const host = row.primaryHost || _('website_backend.sites.noDomain')
+  return (
+    <Section
+      title={_('website_backend.sites.readinessTitle')}
+      description={_('website_backend.sites.readinessHint')}
+      body={stack([
+        <Surface
+          body={siteFacts(_, [
+            [_('website_backend.sites.company'), companyLabel(_, frame, row)],
+            [_('website_backend.sites.publicUrl'), host],
+            [_('website_backend.domains.title'), domainEvidenceBadge(_, row)],
+            [_('website_backend.field.theme'), code(String(row.theme ?? ''))],
+            [_('website_backend.sites.homepage'), `/${row.defaultLocale ?? 'vi'}`],
+            [
+              _('website_backend.sites.missingSettings'),
+              row.primaryHost
+                ? badge(_('website_backend.sites.needsPlatform'), 'warning')
+                : badge(_('website_backend.sites.needsDomain'), 'warning'),
+            ],
+          ])}
+        />,
+      ])}
+    />
+  )
+}
+
+const siteCapabilityPanel = (_: Translator, row: Partial<SiteRow>): TemplateResult => (
+  <Section
+    title={_('website_backend.sites.capabilityTitle')}
+    description={_('website_backend.sites.capabilityHint')}
+    body={dataTable(_, {
+      rows: [
+        {
+          key: 'public',
+          setting: row.primaryHost || _('website_backend.sites.noDomain'),
+          state: row.primaryHost ? 'pending' : 'missing',
+        },
+        { key: 'realm', setting: _('website_backend.sites.realmAuto'), state: 'ready' },
+        { key: 'theme', setting: String(row.theme ?? ''), state: row.theme ? 'ready' : 'missing' },
+        { key: 'binding', setting: _('website_backend.sites.bindingDeployment'), state: 'pending' },
+      ],
+      id: (item) => item.key,
+      columns: [
+        {
+          key: 'capability',
+          label: _('website_backend.sites.capability'),
+          cell: (item) => _(`website_backend.sites.capability.${item.key}`),
+          priority: 'primary',
+        },
+        { key: 'setting', label: _('website_backend.sites.setting'), cell: (item) => item.setting },
+        {
+          key: 'state',
+          label: _('website_backend.field.status'),
+          kind: 'status',
+          cell: (item) =>
+            item.state === 'ready'
+              ? badge(_('website_backend.sites.ready'), 'positive')
+              : item.state === 'pending'
+                ? badge(_('website_backend.sites.pending'), 'warning')
+                : badge(_('website_backend.sites.missing'), 'danger'),
+        },
+      ],
+    })}
+  />
+)
+
+const domainStateSummary = (_: Translator, row: DomainRow): TemplateResult => (
+  <Surface
+    tone="subtle"
+    body={siteFacts(_, [
+      [
+        _('website_backend.domains.ownership'),
+        badge(_('website_backend.domains.pendingEvidence'), 'warning'),
+      ],
+      [_('website_backend.domains.tls'), badge(_('website_backend.domains.pendingEvidence'), 'warning')],
+      [
+        _('website_backend.domains.primary'),
+        row.primary
+          ? badge(_('website_backend.state.yes'), 'positive')
+          : badge(_('website_backend.state.no'), 'neutral'),
+      ],
+      [_('website_backend.domains.operation'), row.operationId || _('website_backend.domains.noOperation')],
+    ])}
+  />
+)
+
+const domainInstructions = (_: Translator, site: SiteRow, row: DomainRow): TemplateResult => (
+  <Surface
+    body={siteFacts(_, [
+      [_('website_backend.domains.siteTarget'), site.title],
+      [_('website_backend.domains.normalizedHost'), code(row.host)],
+      [_('website_backend.domains.challenge'), _('website_backend.domains.challengeHint')],
+      [_('website_backend.domains.nextStep'), _('website_backend.domains.nextStepHint')],
+    ])}
+  />
+)
+
 export const sitesScreen = (
   _: Translator,
   rows: SiteRow[],
@@ -153,34 +318,38 @@ export const sitesScreen = (
             rowHref: (row) => `/admin/website/sites/${row.id}${locale}`,
             columns: [
               {
-                key: 'name',
-                label: _('website_backend.field.name'),
+                key: 'site',
+                label: _('website_backend.sites.site'),
                 priority: 'primary',
-                cell: (row) => row.name,
+                cell: (row) => `${row.title} · ${companyLabel(_, frame, row)}`,
               },
               {
-                key: 'title',
-                label: _('website_backend.field.siteTitle'),
+                key: 'primaryHost',
+                label: _('website_backend.sites.primaryHost'),
                 priority: 'primary',
-                cell: (row) => row.title,
+                cell: (row) => primaryHost(_, row),
               },
               {
                 key: 'locale',
                 label: _('website_backend.field.locale'),
                 cell: (row) => code(row.defaultLocale),
               },
-              { key: 'theme', label: _('website_backend.field.theme'), cell: (row) => code(row.theme) },
               {
                 key: 'state',
                 label: _('website_backend.field.status'),
                 kind: 'status',
                 cell: (row) =>
-                  badge(
-                    row.active ? _('website_backend.state.active') : _('website_backend.state.inactive'),
-                    row.active ? 'positive' : 'neutral',
-                  ),
+                  row.active
+                    ? domainEvidenceBadge(_, row)
+                    : badge(_('website_backend.state.inactive'), 'neutral'),
+              },
+              {
+                key: 'role',
+                label: _('website_backend.sites.yourRole'),
+                cell: (row) => roleLabel(_, row.role),
               },
             ],
+            responsive: 'stack',
           }),
     ])}
   />
@@ -194,102 +363,152 @@ export const siteFormScreen = (
   options: { errors?: string[]; locale?: string } = {},
 ): TemplateResult => {
   const existing = !!row.id
+  const locale = options.locale ?? ''
+  const form = (
+    <Section
+      eyebrow={_('website_backend.sites.eyebrow')}
+      title={existing ? String(row.title ?? row.name) : _('website_backend.sites.newTitle')}
+      description={_('website_backend.sites.formHint')}
+      body={
+        <Surface
+          body={
+            <RecordForm
+              action={
+                existing ? `/admin/website/sites/${row.id}${locale}` : `/admin/website/sites/new${locale}`
+              }
+              fields={[
+                {
+                  name: 'title',
+                  label: _('website_backend.field.siteTitle'),
+                  value: row.title,
+                  required: true,
+                },
+                { name: 'name', label: _('website_backend.field.name'), value: row.name, required: true },
+                {
+                  name: 'companyContext',
+                  label: _('website_backend.sites.company'),
+                  value: companyLabel(_, frame, row),
+                  disabled: true,
+                  help: _('website_backend.sites.companyHint'),
+                },
+                {
+                  name: 'defaultLocale',
+                  label: _('website_backend.field.locale'),
+                  type: 'select',
+                  value: row.defaultLocale ?? 'vi',
+                  options: [
+                    { value: 'vi', label: 'Tiếng Việt' },
+                    { value: 'en', label: 'English' },
+                  ],
+                  required: true,
+                },
+                {
+                  name: 'timezone',
+                  label: _('website_backend.sites.timezone'),
+                  value: 'Asia/Ho_Chi_Minh',
+                  disabled: true,
+                  help: _('website_backend.sites.timezoneHint'),
+                },
+                {
+                  name: 'theme',
+                  label: _('website_backend.field.theme'),
+                  type: 'select',
+                  value: row.theme,
+                  options: themes,
+                  required: true,
+                },
+                {
+                  name: 'description',
+                  label: _('website_backend.field.description'),
+                  type: 'textarea',
+                  value: '',
+                  placeholder: _('website_backend.sites.descriptionPlaceholder'),
+                  disabled: true,
+                  help: _('website_backend.sites.descriptionHint'),
+                  span: 'full',
+                },
+                {
+                  // The layer order already puts a site above its theme, so these
+                  // override rather than replace: a site that sets nothing looks
+                  // exactly as it did.
+                  name: 'tokens',
+                  label: _('website_backend.field.tokens'),
+                  type: 'textarea',
+                  value: JSON.stringify(row.tokens ?? {}, null, 2),
+                  help: _('website_backend.field.tokensHint'),
+                  span: 'full',
+                },
+                {
+                  name: 'active',
+                  label: _('website_backend.field.active'),
+                  type: 'checkbox',
+                  value: row.active ?? true,
+                  span: 'full',
+                },
+              ]}
+              submit={_('website_backend.action.save')}
+              submitVariant="primary"
+              errors={options.errors}
+              cancelHref={`/admin/website/sites${locale}`}
+              cancelLabel={_('website_backend.action.cancel')}
+            />
+          }
+        />
+      }
+    />
+  )
   return (
     <FormScreenFrame
       translator={_}
       title={existing ? String(row.title ?? row.name) : _('website_backend.sites.newTitle')}
       frame={frame}
+      width="wide"
       body={stack([
-        // Only on a site that exists: membership, domains and the index all
-        // need something to hang off, and offering them while creating would
-        // be offering to configure a thing that is not there yet.
         ...(existing
           ? [
               inline([
                 linkButton({
-                  label: _('website_backend.members.title'),
-                  href: `/admin/website/sites/${row.id}/members${options.locale ?? ''}`,
+                  label: _('website_backend.sites.generalTab'),
+                  href: `/admin/website/sites/${row.id}${locale}`,
+                  variant: 'secondary',
                 }),
                 linkButton({
                   label: _('website_backend.domains.title'),
-                  href: `/admin/website/sites/${row.id}/domains${options.locale ?? ''}`,
+                  href: `/admin/website/sites/${row.id}/domains${locale}`,
+                }),
+                linkButton({
+                  label: _('website_backend.members.title'),
+                  href: `/admin/website/sites/${row.id}/members${locale}`,
+                }),
+                linkButton({
+                  label: _('website_backend.sites.themeTab'),
+                  href: `/admin/website/sites/${row.id}${locale}`,
+                  disabled: true,
+                }),
+                linkButton({
+                  label: _('website_backend.sites.customerTab'),
+                  href: `/admin/website/sites/${row.id}${locale}`,
+                  disabled: true,
                 }),
                 linkButton({
                   label: _('website_backend.index.title'),
-                  href: `/admin/website/sites/${row.id}/index${options.locale ?? ''}`,
+                  href: `/admin/website/sites/${row.id}/index${locale}`,
                 }),
               ]),
             ]
           : []),
-        <Section
-          eyebrow={_('website_backend.sites.eyebrow')}
-          title={existing ? String(row.title ?? row.name) : _('website_backend.sites.newTitle')}
-          description={_('website_backend.sites.formHint')}
-          body={
-            <Surface
-              body={
-                <RecordForm
-                  action={
-                    existing
-                      ? `/admin/website/sites/${row.id}${options.locale ?? ''}`
-                      : `/admin/website/sites/new${options.locale ?? ''}`
-                  }
-                  fields={[
-                    { name: 'name', label: _('website_backend.field.name'), value: row.name, required: true },
-                    {
-                      name: 'title',
-                      label: _('website_backend.field.siteTitle'),
-                      value: row.title,
-                      required: true,
-                    },
-                    {
-                      name: 'defaultLocale',
-                      label: _('website_backend.field.locale'),
-                      type: 'select',
-                      value: row.defaultLocale ?? 'vi',
-                      options: [
-                        { value: 'vi', label: 'Tiếng Việt' },
-                        { value: 'en', label: 'English' },
-                      ],
-                      required: true,
-                    },
-                    {
-                      name: 'theme',
-                      label: _('website_backend.field.theme'),
-                      type: 'select',
-                      value: row.theme,
-                      options: themes,
-                      required: true,
-                    },
-                    {
-                      // The layer order already puts a site above its theme, so
-                      // these override rather than replace: a site that sets
-                      // nothing looks exactly as it did.
-                      name: 'tokens',
-                      label: _('website_backend.field.tokens'),
-                      type: 'textarea',
-                      value: JSON.stringify(row.tokens ?? {}, null, 2),
-                      help: _('website_backend.field.tokensHint'),
-                      span: 'full',
-                    },
-                    {
-                      name: 'active',
-                      label: _('website_backend.field.active'),
-                      type: 'checkbox',
-                      value: row.active ?? true,
-                      span: 'full',
-                    },
-                  ]}
-                  submit={_('website_backend.action.save')}
-                  submitVariant="primary"
-                  errors={options.errors}
-                  cancelHref={`/admin/website/sites${options.locale ?? ''}`}
-                  cancelLabel={_('website_backend.action.cancel')}
-                />
-              }
-            />
-          }
-        />,
+        existing
+          ? stack([form, columns([siteCapabilityPanel(_, row), siteReadiness(_, row, frame)], 'loose')])
+          : stack([
+              form,
+              columns(
+                [
+                  <Section title={_('website_backend.sites.initialSetup')} body={setupChecklist(_)} />,
+                  siteReadiness(_, row, frame),
+                ],
+                'loose',
+              ),
+            ]),
       ])}
     />
   )
@@ -2259,6 +2478,10 @@ export type DomainRow = {
   host: string
   primary: boolean
   redirectToPrimary: boolean
+  /** Platform-owned evidence is not stored yet; the screen renders this as pending until it is. */
+  ownershipState?: string | null
+  tlsState?: string | null
+  operationId?: string | null
 }
 export type RedirectRow = {
   id: string
@@ -2402,6 +2625,30 @@ export const siteDomainsScreen = (
 ): TemplateResult => {
   const editing = options.editing ?? null
   const values = options.values ?? {}
+  const locale = options.locale ?? ''
+  const primary = rows.find((row) => row.primary) ?? null
+  const domainCards = rows.map((row) => (
+    <ContentCard
+      title={row.host}
+      summary={
+        row.primary ? _('website_backend.domains.primarySummary') : _('website_backend.domains.aliasSummary')
+      }
+      body={stack([domainStateSummary(_, row), domainInstructions(_, site, row)], 'compact')}
+      actions={inline([
+        linkButton({
+          label: _('website_backend.domains.requestVerification'),
+          href: `/admin/website/health${locale}`,
+          size: 'compact',
+          variant: 'primary',
+        }),
+        linkButton({
+          label: _('website_backend.action.edit'),
+          href: `/admin/website/sites/${site.id}/domains?edit=${encodeURIComponent(row.id)}${locale ? `&${locale.slice(1)}` : ''}`,
+          size: 'compact',
+        }),
+      ])}
+    />
+  ))
   return (
     <ListScreenFrame
       translator={_}
@@ -2411,17 +2658,32 @@ export const siteDomainsScreen = (
         inline([
           linkButton({
             label: _('website_backend.action.backToSite'),
-            href: `/admin/website/sites/${site.id}${options.locale ?? ''}`,
+            href: `/admin/website/sites/${site.id}${locale}`,
           }),
           ...(editing
             ? [
                 linkButton({
                   label: _('website_backend.action.cancel'),
-                  href: `/admin/website/sites/${site.id}/domains${options.locale ?? ''}`,
+                  href: `/admin/website/sites/${site.id}/domains${locale}`,
                 }),
               ]
             : []),
         ]),
+        rows.length === 0
+          ? Notice({
+              tone: 'warning',
+              title: _('website_backend.domains.noPrimaryTitle'),
+              message: _('website_backend.domains.noPrimaryMessage'),
+            })
+          : Notice({
+              tone: primary ? 'warning' : 'danger',
+              title: primary
+                ? _('website_backend.domains.pendingTitle')
+                : _('website_backend.domains.noPrimaryTitle'),
+              message: primary
+                ? _('website_backend.domains.pendingMessage')
+                : _('website_backend.domains.noPrimaryMessage'),
+            }),
         <Section
           title={editing ? _('website_backend.domains.edit') : _('website_backend.domains.add')}
           description={_('website_backend.domains.addHint')}
@@ -2430,7 +2692,7 @@ export const siteDomainsScreen = (
               padding="compact"
               body={
                 <RecordForm
-                  action={`/admin/website/sites/${site.id}/domains${editing ? `/${editing.id}` : ''}${options.locale ?? ''}`}
+                  action={`/admin/website/sites/${site.id}/domains${editing ? `/${editing.id}` : ''}${locale}`}
                   layout="inline"
                   fields={[
                     {
@@ -2438,6 +2700,7 @@ export const siteDomainsScreen = (
                       label: _('website_backend.domains.host'),
                       value: values.host ?? editing?.host,
                       required: true,
+                      help: _('website_backend.domains.hostHint'),
                     },
                     {
                       name: 'primary',
@@ -2466,62 +2729,105 @@ export const siteDomainsScreen = (
         />,
         rows.length === 0
           ? emptyState(_('website_backend.domains.empty'), _('website_backend.domains.emptyHint'))
-          : dataTable(_, {
-              rows,
-              id: (row) => row.id,
-              columns: [
-                {
-                  key: 'host',
-                  label: _('website_backend.domains.host'),
-                  priority: 'primary',
-                  cell: (row) => row.host,
-                },
-                {
-                  key: 'primary',
-                  label: _('website_backend.domains.primary'),
-                  cell: (row) =>
-                    row.primary
-                      ? badge(_('website_backend.state.yes'), 'positive')
-                      : badge(_('website_backend.state.no'), 'neutral'),
-                },
-                {
-                  key: 'redirect',
-                  label: _('website_backend.domains.redirect'),
-                  cell: (row) =>
-                    badge(
-                      row.redirectToPrimary ? _('website_backend.state.yes') : _('website_backend.state.no'),
-                      'neutral',
-                    ),
-                },
-                {
-                  key: 'edit',
-                  label: _('website_backend.action.edit'),
-                  cell: (row) =>
-                    linkButton({
-                      label: _('website_backend.action.edit'),
-                      href: `/admin/website/sites/${site.id}/domains?edit=${encodeURIComponent(row.id)}${options.locale ? `&${options.locale.slice(1)}` : ''}`,
-                      size: 'compact',
+          : columns(
+              [
+                stack(domainCards),
+                <Section
+                  title={_('website_backend.domains.readinessTitle')}
+                  description={_('website_backend.domains.readinessHint')}
+                  body={stack([
+                    <Surface
+                      body={siteFacts(_, [
+                        [_('website_backend.domains.siteTarget'), site.title],
+                        [
+                          _('website_backend.sites.primaryHost'),
+                          primary?.host ?? _('website_backend.sites.noPrimary'),
+                        ],
+                        [_('website_backend.domains.lastCheck'), _('website_backend.domains.noOperation')],
+                        [
+                          _('website_backend.domains.tls'),
+                          badge(_('website_backend.domains.pendingEvidence'), 'warning'),
+                        ],
+                        [
+                          _('website_backend.domains.aliases'),
+                          String(Math.max(0, rows.length - (primary ? 1 : 0))),
+                        ],
+                      ])}
+                    />,
+                    Notice({
+                      tone: 'info',
+                      title: _('website_backend.domains.keepOldTitle'),
+                      message: _('website_backend.domains.keepOldMessage'),
                     }),
-                },
-                {
-                  key: 'remove',
-                  label: _('website_backend.action.remove'),
-                  cell: (row) => (
-                    <RecordActions
-                      action={`/admin/website/sites/${site.id}/domains/${row.id}/remove${options.locale ?? ''}`}
-                      size="compact"
-                      actions={[
-                        {
-                          value: 'remove',
-                          label: _('website_backend.action.remove'),
-                          variant: 'destructive',
-                        },
-                      ]}
-                    />
-                  ),
-                },
+                  ])}
+                />,
               ],
-            }),
+              'loose',
+            ),
+        rows.length === 0 ? (
+          <></>
+        ) : (
+          dataTable(_, {
+            rows,
+            id: (row) => row.id,
+            columns: [
+              {
+                key: 'host',
+                label: _('website_backend.domains.host'),
+                priority: 'primary',
+                cell: (row) => row.host,
+              },
+              {
+                key: 'evidence',
+                label: _('website_backend.domains.evidence'),
+                kind: 'status',
+                cell: () => badge(_('website_backend.domains.pendingEvidence'), 'warning'),
+              },
+              {
+                key: 'tls',
+                label: _('website_backend.domains.tls'),
+                kind: 'status',
+                cell: () => badge(_('website_backend.domains.pendingEvidence'), 'warning'),
+              },
+              {
+                key: 'primary',
+                label: _('website_backend.domains.primary'),
+                cell: (row) =>
+                  row.primary
+                    ? badge(_('website_backend.state.yes'), 'positive')
+                    : badge(_('website_backend.state.no'), 'neutral'),
+              },
+              {
+                key: 'edit',
+                label: _('website_backend.action.edit'),
+                cell: (row) =>
+                  linkButton({
+                    label: _('website_backend.action.edit'),
+                    href: `/admin/website/sites/${site.id}/domains?edit=${encodeURIComponent(row.id)}${locale ? `&${locale.slice(1)}` : ''}`,
+                    size: 'compact',
+                  }),
+              },
+              {
+                key: 'remove',
+                label: _('website_backend.action.remove'),
+                cell: (row) => (
+                  <RecordActions
+                    action={`/admin/website/sites/${site.id}/domains/${row.id}/remove${locale}`}
+                    size="compact"
+                    actions={[
+                      {
+                        value: 'remove',
+                        label: _('website_backend.action.remove'),
+                        variant: 'destructive',
+                      },
+                    ]}
+                  />
+                ),
+              },
+            ],
+            responsive: 'stack',
+          })
+        ),
       ])}
     />
   )
