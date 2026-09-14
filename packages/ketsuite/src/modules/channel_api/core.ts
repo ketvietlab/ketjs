@@ -12,7 +12,7 @@ import type {
 export const CHANNEL_API_VERSION = '1.0.0'
 export const CHANNEL_PROFILES = ['customer', 'staff', 'pos', 'integration'] as const
 export type ChannelProfile = (typeof CHANNEL_PROFILES)[number]
-export type ChannelIdentityPresentation = 'cookie' | 'bearer'
+export type ChannelIdentityPresentation = 'cookie' | 'bearer' | 'gateway'
 
 export const profilePrefix = (profile: ChannelProfile): string => `/api/${profile}/v1/`
 
